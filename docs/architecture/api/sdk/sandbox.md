@@ -293,7 +293,16 @@ keeps the container's name, else "its record does not name its container
 (`docker ps -a` lists them)". A Sandbox whose record names a run folder this
 home does not give it (an earlier build's `lfs-` name) is also `already_gone`:
 its records go, and `left` names that run folder and its daemon process,
-neither touched, with the `kill`/`rm -rf` that removes them. A lost answer keeps the record with the `op` uncertain
+neither touched, with the `rm -rf` that removes the folder (one shell word)
+and a `kill` of the process only while the process its record identifies
+(id, start time and boot) still runs; otherwise it says the process is gone
+(RV3 FAIL 4). Two more cases go by their records alone, with no signal sent,
+and answer `already_gone` with `left`: a local record this build does not
+read (a field a 2.0 record always has missing or of another shape, or a
+native record on Linux; every other call refuses it with the fix
+`layerfs sandbox remove <sandbox>`; RV3 FAIL 2, 3), and a Sandbox on a
+machine whose record has no 2.0 name, whose worker is not asked either
+(RV3 FAIL 1). A lost answer keeps the record with the `op` uncertain
 (`broken` `unresolved`) until another `remove`; any other refusal leaves the
 Sandbox as it was ([`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs)).
 It was `sandbox.close`, removed with no alias.

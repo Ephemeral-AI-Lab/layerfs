@@ -716,7 +716,7 @@ Progress phases: `check`, `delete`.
 | Refusal | When |
 | --- | --- |
 | `Busy` | a live process's create or remove holds it |
-| `InUse` | sqlite Stores, Sandboxes or old Firecracker records are on it (`detail.related`); the next fields `stores`, `sandboxes`, `machines` name each kind. Held by Sandboxes alone, the `fix` removes them, then the machine (`layerfs sandbox remove a && layerfs machine remove <m>`); a machine its record says is stopped gets no fix, since `sandbox remove` cannot reach a daemon on it, and the message says so ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine`) |
+| `InUse` | sqlite Stores, Sandboxes or old Firecracker records are on it (`detail.related`); the next fields `stores`, `sandboxes`, `machines` name each kind. Held by Sandboxes alone, the `fix` removes them, then the machine (`layerfs sandbox remove a && layerfs machine remove <m>`); a machine its record says is stopped gets no fix, since `sandbox remove` cannot reach a daemon on it, and the message says so. A machine whose record has no 2.0 name (`vm_name`) gets the whole chain whatever holds it: each Sandbox's remove, each Store's, each old Firecracker record's, then the machine's, every one of them records-only (RV3 FAIL 1) ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine`) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back |
 | `Unknown` | the provider timed out: `op` kept, uncertain; read `machine get --with live`, then remove again |
 

@@ -40,7 +40,7 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
 | [`store.remove_auth`](#storeremove_auth) | PostgreSQL | `{ ok }` | `admin` |
 | [`store.update`](#storeupdate) | PostgreSQL | `{ ok }` | `admin` |
 | [`store.move`](#storemove) | sqlite | `{ moved_bytes }` | `admin` |
-| [`store.remove`](#storeremove) | sqlite | `{ ok }` | `admin` |
+| [`store.remove`](#storeremove) | sqlite | `{ ok }`, or `{ left }` | `admin` |
 | [`store.compact`](#storecompact) | both | `{ freed_bytes }` | `admin` |
 | [`store.doctor`](#storedoctor) | both | the doctor report | `admin` |
 
@@ -513,8 +513,8 @@ Python  layerfs.store.remove(store)
 
 | Answer | Keys |
 | --- | --- |
-| short | `ok` |
-| long | `ok, outcome, store` |
+| short | `ok`; `left` when only its records went |
+| long | `ok, outcome, store, left` |
 | call | writes one call-log line; MCP `admin` |
 
 Deletes a sqlite Store, wherever its file is, with every project in it; also
@@ -523,7 +523,12 @@ file with its `-wal` and `-shm`, `store/<name>/` in the home (record and
 project entries), its folder under a worker's root, and a partial copy a
 move left elsewhere. What stays: its backups in their buckets
 ([`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs)).
-The long form is `ok, outcome ("removed"), store`.
+The long form is `ok, outcome ("removed"), store, left`. Two cases take
+the Store's records alone and answer `left`, each sentence about what may
+remain: a record this build does not read (its kept Store file, with the
+`rm -f` line that removes it), and a Store on a machine whose record has
+no 2.0 name (its file stays on that machine, which no call reaches; RV3
+FAIL 1).
 
 | Refusal | When |
 | --- | --- |

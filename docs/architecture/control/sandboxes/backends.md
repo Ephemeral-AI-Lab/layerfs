@@ -69,11 +69,15 @@ Capabilities "describe support, not qualification"
 | Enum | Variants | Methods |
 | --- | --- | --- |
 | `Runtime`: one deployment's choice | `HostProcess(HostProcessProvider)` (macOS), `Namespaces(NamespaceProvider)` (Linux) | `backend`, `capabilities`, `local_directory`, `native_paths`, `launch`, `launch_with_binds`, `reopen`, `reopen_stopped` |
-| `Sandbox`: the launched owner | `HostProcess` (macOS and Linux), `Namespaces(Box<_>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `run_in`, `exec_stop`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
+| `Sandbox`: the launched owner | `HostProcess` (macOS), `Namespaces(Box<_>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `run_in`, `exec_stop`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
 
-On Linux, `Sandbox::HostProcess` exists only to reopen, stop and delete a
-native Sandbox recorded before 2.0; Linux starts no native Sandbox
-([`host_process/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/mod.rs)).
+The host-process backend is macOS only: Linux starts no native Sandbox
+(#533 O27), and a native record found there is refused with the
+records-only `sandbox remove` as its fix (RV3 FAIL 3,
+[`host_process/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/mod.rs)).
+A reopened namespaces Sandbox runs the helper copy in its own `bin/`; one
+without it (an earlier build's) refuses a command with that fix
+(`namespaces::NO_HELPER_COPY`).
 `reopen` starts nothing and checks the recorded identity; `reopen_stopped`
 admits only one Delete. `endpoint` of a Sandbox whose daemon (or init) exited
 is the stopped observation (`WireFailure::container_stopped`). `inspect`

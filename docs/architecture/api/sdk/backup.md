@@ -82,7 +82,9 @@ bucket, provider, url, access_key`, with `outcome` `connected`.
 
 Connected again under a taken name at the same URL (the same provider,
 bucket and prefix after parsing, with r2's account and `?jurisdiction=`
-and an endpoint's scheme and host; `BucketRecord::same_place`), it replaces
+and an endpoint's scheme and host, the host and r2's account in lower
+case and an endpoint's default port left out; `BucketRecord::same_place`),
+it replaces
 the key (spec v21): the one listing proves the new key first, and on
 `Unavailable` the old secret and the record stay byte for byte. Then, under
 the home lock, the secret is saved by one rename and the record's
