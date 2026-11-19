@@ -17,7 +17,13 @@ use std::path::Path;
 /// does not refuse it; a live one's is `Busy`.
 pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     let record = record::StoreRecord::of(home, name)?;
-    let store_ref = record.store_ref()?;
+    let Ok(store_ref) = record.store_ref() else {
+        record::forget_unread(home, name, related)?;
+        return Ok(SdkValue::map([
+            ("outcome", SdkValue::text("removed")),
+            ("store", SdkValue::text(name)),
+        ]));
+    };
     if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",

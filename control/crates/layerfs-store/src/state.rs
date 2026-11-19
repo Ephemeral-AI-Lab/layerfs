@@ -102,7 +102,10 @@ pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<Sta
         return Ok(state);
     }
     match record.store_ref() {
-        Err(_) => return Ok(State::broken(Reason::Unsupported, None)),
+        Err(_) => {
+            let fix = crate::record::unread_fix(record.name());
+            return Ok(State::broken(Reason::Unsupported, Some(&fix)));
+        }
         Ok(StoreRef::Sqlite { machine, .. }) => {
             if let Some(blocked) = under.and_then(|state| state.blocks("machine", machine)) {
                 return Ok(blocked);

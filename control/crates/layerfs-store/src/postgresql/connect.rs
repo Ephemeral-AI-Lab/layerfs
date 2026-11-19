@@ -355,6 +355,11 @@ pub fn refuse_settings(name: &str, request: &StoreConnect) -> Result<()> {
 /// data stays. Refused `InUse` while a process holds it or a Sandbox of its
 /// projects exists; a sqlite Store is `InvalidInput`, naming `store remove`.
 pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcome {
+    // a record this build does not read: its records alone go
+    if StoreRecord::read(home_dir, name)?.is_some_and(|record| record.store_ref().is_err()) {
+        crate::record::forget_unread(home_dir, name, related)?;
+        return Ok(disconnected(name, None));
+    }
     let _lock = home::lock::take(home_dir)?;
     let _store = crate::record::lock(home_dir, name)?;
     let record = StoreRecord::read(home_dir, name)?

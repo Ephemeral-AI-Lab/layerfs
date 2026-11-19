@@ -28,8 +28,8 @@ pub fn kind_of(record: &SdkValue) -> Result<StoreKind> {
 }
 
 /// A PostgreSQL Store's server, as its record names it (no password: the
-/// record holds only a reference, resolved per call). A field the record
-/// lacks is refused only by the step that needs it.
+/// record names its saved login, `auth`, put into the URL per call). A
+/// field the record lacks is refused only by the step that needs it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PgServer {
     pub schema: Option<String>,
@@ -83,19 +83,28 @@ pub enum StoreRef {
     },
 }
 
+/// The fix of Store `name` whose record this build does not read (no
+/// `kind`, one it does not know, or a `machine` that is not text):
+/// `store remove`, which then removes its records alone.
+pub fn unread_fix(name: &str) -> String {
+    format!("layerfs store remove {name}")
+}
+
 impl StoreRef {
     /// Parses Store `name`'s record; its kind, or a sqlite Store's
-    /// `machine` that is not text, refuses it.
+    /// `machine` that is not text, refuses it, naming [`unread_fix`].
     pub fn from_record(name: &str, record: &SdkValue) -> Result<Self> {
+        let unread = |refusal| with_fix(refusal, unread_fix(name));
+        let kind = kind_of(record).map_err(unread)?;
         let name = name.to_owned();
-        Ok(match kind_of(record)? {
+        Ok(match kind {
             StoreKind::Sqlite => Self::Sqlite {
-                name,
                 machine: match record.get("machine") {
                     None => "native".to_owned(),
                     Some(SdkValue::Text(machine)) => machine.clone(),
-                    Some(_) => return Err(refused("InvalidInput", "Store record machine")),
+                    Some(_) => return Err(unread(refused("InvalidInput", "Store record machine"))),
                 },
+                name,
             },
             StoreKind::Postgresql => Self::Postgres {
                 name,
@@ -500,4 +509,31 @@ pub fn stores(home: &Path) -> Result<Vec<StoreRecord>> {
         found.extend(StoreRecord::read(home, &store)?);
     }
     Ok(found)
+}
+
+/// Removes the records of Store `name` whose record this build does not
+/// read (no `kind`, one it does not know, or a `machine` that is not text):
+/// under the home lock and the Store's, once nothing uses it, its record
+/// and its projects' records go. Nothing it names is opened or deleted: any
+/// other file in its folder (a Store file) stays where it is.
+pub(crate) fn forget_unread(home: &Path, name: &str, related: crate::Related) -> Result<()> {
+    let _lock = home::lock::take(home)?;
+    let _store = lock(home, name)?;
+    let now = StoreRecord::of(home, name)?;
+    if now.store_ref().is_ok() {
+        return Err(refused(
+            "Conflict",
+            format!("Store {name}'s record changed meanwhile; nothing was removed"),
+        ));
+    }
+    (related.store_idle)(home, name)?;
+    std::fs::remove_file(paths::store_record(home, name)).map_err(failed)?;
+    let projects = paths::store_dir(home, name).join("project");
+    match std::fs::remove_dir_all(projects) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(failed(error)),
+    }
+    layerfs_home::home::generation::moved(home);
+    Ok(())
 }
