@@ -20,20 +20,6 @@ mod update;
 
 use crate::calls::Calls;
 
-/// A machine call in the guest worker's build (no `machine` feature): no
-/// machine adapter runs inside a machine, so it is refused before any
-/// effect.
-#[cfg(not(feature = "machine"))]
-fn host_only(
-    _context: &mut crate::calls::Context<'_>,
-    _args: &layerfs_bridge::control::SdkValue,
-) -> layerfs_home::outcome::Outcome {
-    Err(layerfs_home::outcome::refused(
-        "Unsupported",
-        "the machine calls run on the host",
-    ))
-}
-
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {
     &[

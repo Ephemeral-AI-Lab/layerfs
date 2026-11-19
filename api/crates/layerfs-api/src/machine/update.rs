@@ -64,7 +64,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     layerfs_control::machine::update(&context.home, &request)
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-use super::host_only as run;
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("update");

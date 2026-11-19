@@ -907,3 +907,20 @@ fn every_argument_the_old_name_list_redacted_is_flagged_on_its_entry() {
         }
     }
 }
+
+/// The guest worker's build (no `machine` feature) refuses each machine call
+/// that runs on the host, naming it.
+#[cfg(not(feature = "machine"))]
+#[test]
+fn a_guest_build_refuses_a_machine_call_naming_it() {
+    for (name, args) in [
+        ("machine.list", SdkValue::Null),
+        ("machine.stop", map(&[("machine", t("dev"))])),
+    ] {
+        let (outcome, _) = run(name, args);
+        assert_eq!(
+            outcome.unwrap_err(),
+            ("Unsupported".to_owned(), format!("{name} runs on the host"))
+        );
+    }
+}

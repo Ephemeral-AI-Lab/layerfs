@@ -90,7 +90,6 @@ fn dropped(report: &SdkValue) -> (SdkValue, SdkValue) {
     layerfs_home::helpers::shown(all, 0, false)
 }
 
-/// Without the `machine` feature (the guest worker's build) it is
-/// refused before any effect.
-#[cfg(not(feature = "machine"))]
-use super::host_only as run;
+// without the `machine` feature (the guest worker's build) it is
+// refused before any effect
+crate::calls::host_only::host_only!("load_image");
