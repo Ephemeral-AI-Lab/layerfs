@@ -31,6 +31,11 @@ pub const MAIN: &str = "main";
 /// Serials one merge reservation takes.
 const MERGE_SERIALS: u64 = 64;
 
+/// The conflicting paths a merge's `Conflict` names in `paths`, in order:
+/// the call surface's inline list (its first 20), whatever the byte window
+/// of `conflicts` held; `total` counts them all.
+const CONFLICT_PATHS: usize = 20;
+
 /// One merge side by name.
 fn side(
     store: &Arc<Store>,
@@ -408,6 +413,18 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
                     "conflicts",
                     layerfs_bridge::sdk_values::conflicts(&merged.conflicts),
                 ),
+                (
+                    "paths",
+                    SdkValue::List(
+                        (merged.conflicts.iter().take(CONFLICT_PATHS))
+                            .map(|conflict| SdkValue::text(&conflict.path))
+                            .collect(),
+                    ),
+                ),
+                (
+                    "total",
+                    SdkValue::Int(i64::try_from(merged.conflicts.len()).unwrap_or(i64::MAX)),
+                ),
                 ("lww", lww),
                 (
                     "conflictsTruncated",
@@ -550,7 +567,11 @@ pub fn publish(
             let name = branch.name.as_str();
             match super::listing::held(store, name, branch_node(branch), node)? {
                 NodeId::Commit(commit) => commit,
-                NodeId::Layer(_) => return Err(invalid("publish takes a Commit")),
+                NodeId::Layer(_) => {
+                    return Err(invalid(format!(
+                        "{at} is one of main's publications, which main already holds: --at takes a Commit of {name} (`layerfs commit list` lists them)"
+                    )))
+                }
             }
         }
         None => branch.head_commit.ok_or_else(|| {

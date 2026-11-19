@@ -13,20 +13,21 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 const KIND: &str = "bucket";
 
 /// Bucket `bucket`'s secret; a missing or empty one is `Failed`, naming the
-/// call that keeps it again.
-pub fn read(home: &Path, bucket: &str) -> Result<String> {
+/// call that keeps it again, with `again` (that call) as its fix.
+pub fn read(home: &Path, bucket: &str, again: impl FnOnce() -> String) -> Result<String> {
     let kept = read_secret(home, KIND, bucket)?;
-    match kept.as_ref().and_then(|value| value.get_text("secret")) {
-        Some(text) if !text.is_empty() => Ok(text.to_owned()),
-        Some(_) => Err(refused(
+    let refusal = match kept.as_ref().and_then(|value| value.get_text("secret")) {
+        Some(text) if !text.is_empty() => return Ok(text.to_owned()),
+        Some(_) => refused(
             "Failed",
-            format!("the home's secret {KIND}/{bucket} is empty"),
-        )),
-        None => Err(refused(
+            format!("the home's secret {KIND}/{bucket} is empty; connect it again at its URL with its key"),
+        ),
+        None => refused(
             "Failed",
             format!("the home keeps no secret {KIND}/{bucket}; connect it again at its URL with its key"),
-        )),
-    }
+        ),
+    };
+    Err(layerfs_home::outcome::with_fix(refusal, again()))
 }
 
 /// Keeps `secret` as bucket `bucket`'s secret, replacing one kept before.

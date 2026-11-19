@@ -147,7 +147,11 @@ fn a_mount_without_a_name_takes_its_branch_s_made_valid() {
     assert_eq!(fix, "layerfs workspace mount one __ --name <name>");
     let (code, fix) = mount("main");
     assert_eq!(code, "InvalidInput");
-    assert_eq!(fix, "layerfs branch fork shop/app <name> main");
+    // a runnable line, no placeholder (RC-A N5)
+    assert_eq!(
+        fix,
+        "layerfs branch fork shop/app work && layerfs workspace mount one work"
+    );
     // `Feature/Login` gets past the name check, to the Sandbox itself
     let (code, _) = mount("Feature/Login");
     assert_eq!(code, "NotFound");

@@ -53,8 +53,12 @@ pub fn call(
                 (force, expected.as_deref()),
                 (
                     &mut |id, name| {
-                        let (found, head) = branch_of(&home, events, &target, name?).ok()?;
-                        (found == id).then_some(head)
+                        let op = StoreOp::ListBranches {
+                            name: Some(name?),
+                            page: Page::default(),
+                        };
+                        let listed = store_call(&home, events, &target, &op).ok()?;
+                        serve::listed_head(&listed, id)
                     },
                     &mut |text| {
                         let get = CommitGet {

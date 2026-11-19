@@ -180,9 +180,11 @@ impl BucketRecord {
                 self.connect_again(),
             ));
         };
+        // a missing or empty secret has the same fix (V21-4; RC-A F4)
+        let secret_key = secret::read(home, &self.name, || self.connect_again())?;
         Ok(Credentials {
             access_key: access_key.to_owned(),
-            secret_key: secret::read(home, &self.name)?,
+            secret_key,
         })
     }
 
