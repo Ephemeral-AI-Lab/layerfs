@@ -79,8 +79,9 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   with `K`, `M` or `G`.
 - Each VM machine has one VM named `layerfs-<first 8 digits of the home
   id>-<name>` (recorded as `vm_name`; a record without one, from an earlier
-  build, is refused with the fix `layerfs machine remove <name>`, which
-  removes the record alone, by every call that needs its VM), one data disk mounted at `/layerfs/data` that
+  build, reads `broken` and is refused with the fix `layerfs machine remove
+  <name>`, which removes the record alone, by every call that needs its VM;
+  the built-in `docker` is then recorded again), one data disk mounted at `/layerfs/data` that
   holds many Stores, and one worker. A VM name keeps no punctuation, so a
   name that differs from another machine's only in `.`, `_` or `-` is
   refused `Exists`; a new machine's name is at most 46 characters (the VM

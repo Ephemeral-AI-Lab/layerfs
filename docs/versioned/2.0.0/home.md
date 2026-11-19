@@ -192,11 +192,11 @@ worker's root:
   `layerfs-<id8>-<sandbox>`. Every `machine create`, and a new home's
   `docker` machine, records the name as `vm_name`. No name starts with
   `lfs-`, and none is computed for a record (owner, 2026-11-19): a machine
-  record without `vm_name`, made by an earlier build, keeps its recorded
-  state, and every call that needs its VM or container is refused `Failed`
-  with the fix `layerfs machine remove <machine>`, which removes the record
-  alone (the built-in `docker` gets `layerfs machine doctor docker`);
-  nothing outside the home is touched.
+  record without `vm_name`, made by an earlier build, reads `broken`
+  `outdated`, and every call that needs its VM or container is refused
+  `Failed` with the fix `layerfs machine remove <machine>`, which removes the
+  record alone (the built-in `docker` is then recorded again with its 2.0
+  name by the next call); nothing outside the home is touched.
   Because a VM name keeps no punctuation, a new machine whose VM name
   another machine has is refused `Exists` (`a.b` after `a_b`). A new
   machine's name is at most 46 characters (a VM name is at most 63, the

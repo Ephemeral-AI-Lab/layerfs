@@ -290,7 +290,10 @@ retired docker backend is also `already_gone`: its records go, and `left`
 says its container of the retired docker backend was not touched, with
 "`docker rm -f <container>` removes its container" when its daemon record
 keeps the container's name, else "its record does not name its container
-(`docker ps -a` lists them)". A lost answer keeps the record with the `op` uncertain
+(`docker ps -a` lists them)". A Sandbox whose record names a run folder this
+home does not give it (an earlier build's `lfs-` name) is also `already_gone`:
+its records go, and `left` names that run folder and its daemon process,
+neither touched, with the `kill`/`rm -rf` that removes them. A lost answer keeps the record with the `op` uncertain
 (`broken` `unresolved`) until another `remove`; any other refusal leaves the
 Sandbox as it was ([`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs)).
 It was `sandbox.close`, removed with no alias.

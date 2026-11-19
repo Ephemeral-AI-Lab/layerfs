@@ -338,12 +338,19 @@ Owner, verbatim: "can we just remove them, and drop layerfs home leftovers".
   `access_key` fails `bucket.credentials` with its disconnect and connect fix and sends nothing.
   An unresolved op named `store.push` or `store.pull` is not mapped: `layerfs store get <store>
   --with live` clears it, and that is its fix.
-- **V20-8** No `lfs-` names. A machine record with no `vm_name` keeps its recorded state word;
-  every call that needs its VM or container is refused `Failed` (its record has no `vm_name`, and
-  no call repairs it) before the provider is asked. Its fix is `layerfs machine remove <machine>`,
-  which then removes the record alone and touches no VM; the built-in `docker`, never removed,
-  gets `layerfs machine doctor docker`. A Sandbox of the retired docker backend names its container only when its record keeps
-  the name.
+- **V20-8** No `lfs-` names. A machine record with no `vm_name` (the built-in `docker` included)
+  reads `broken` `outdated`; every call that needs its VM or container is refused `Failed` (its
+  record has no `vm_name`, and no call repairs it) before the provider is asked. Its fix, on the
+  state, the refusal and `machine doctor`'s finding, is `layerfs machine remove <machine>`, which
+  removes the record alone and touches no VM. For the built-in `docker` the next call records it
+  again with its 2.0 name, as a new home's is. A Sandbox of the retired docker backend names its
+  container only when its record keeps the name. A Sandbox record whose name this home does not
+  give it (an `lfs-` run folder) is refused with the fix `layerfs sandbox remove <sandbox>`, which
+  removes its records alone (`already_gone`, `left` naming its run folder and daemon process).
+- **V20-8a** A Store record that is not read (no `kind`, or a `machine` that is not text) is
+  `broken` `unsupported` with the fix `layerfs store remove <store>`, and calls that need it are
+  refused with that fix. `store.remove` and `store.disconnect` remove such a record alone (its
+  folder's `record.json` and `project/`), touching no Store file or database.
 - **V20-9** `forgotten` is gone. `machine.remove` of a machine of a removed platform answers
   `removed` with a `message` that only its record went; `sandbox.remove` of a Sandbox of the retired
   docker backend answers `already_gone`, with `left` saying its container was not touched. The
@@ -356,7 +363,15 @@ Owner, verbatim: "can we just remove them, and drop layerfs home leftovers".
   reasonless `failed` reads `stopped`.
 - **V20-12** Two 2.0 behaviour fixes ride with the cut: a Store with no record in a worker root no
   longer resolves through the old identity path (it misfired on 2.0 worker roots), and a
-  PostgreSQL Store's `synchronous_commit` is `local` on connect as on open (connect used `off`).
+  PostgreSQL Store record with no `synchronous_commit` falls back to `local` when a connect dials
+  it, as an open does (the connect path fell back to `off`). Only that fallback changed; a
+  recorded `synchronous_commit` is used as before.
+- **V20-13** (coordinator ruling on the CUT review, FAIL 1) The removed answer keys
+  `machine.remove` `forgotten`, `sandbox.remove` `container` and `fix`, and `home.init`
+  `converted` only ever carried values for old state. They are part of the owner's cut ("cut
+  should be aggressive, do not have compactibility against the old"; "cut and cleanup old
+  incompatible aggressively, no lfs, and fallback to old 2.0 or 1.x") and stay removed; no
+  2.0-on-2.0 answer loses a key.
 
 ## Coordinator rulings after the 3080 pass
 
