@@ -1,7 +1,7 @@
 //! `home.init` and `home.get`: setting a home up on purpose, and reading what
 //! this build would use with it without changing anything. `init` opens the
-//! home as every call does (created when empty; an older LayerFS's home is
-//! refused with the fix that moves it aside) and says which it did
+//! home as every call does (created when empty; a folder that is not a
+//! LayerFS 2.0 home is refused with the fix that moves it aside) and says which it did
 //! (`outcome`: `created` or `unchanged`).
 //! `get` reads files only: no process, Docker, network, lock or log line, so a
 //! client can poll it, and it answers for a home that does not exist yet.
@@ -37,7 +37,7 @@ pub const BUILD_MARKER: &[u8] = b"layerfs-build-identity:";
 enum Found {
     Missing,
     Current,
-    Older,
+    Foreign,
 }
 
 /// The sections `home.get` adds when asked (`--with`).
@@ -57,15 +57,16 @@ const INIT: &str = "layerfs home init";
 fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_bridge::control::SdkRefusal> {
     Ok(match detect(home)? {
         Layout::Empty => (Found::Missing, None),
-        Layout::Older => (Found::Older, None),
+        Layout::Foreign => (Found::Foreign, None),
         Layout::Current(file) => (Found::Current, Some(file.layout)),
     })
 }
 
 /// `home.init`: the home ready for calls, as the first call of any other
 /// kind makes it: `{ home, unchanged, outcome, layout, version }`. Refused
-/// inside a machine's worker root, which is not a home, and for an older
-/// LayerFS's home (`Unsupported`, with the fix that moves it aside).
+/// inside a machine's worker root, which is not a home, and for a folder
+/// that is not a LayerFS 2.0 home (`Unsupported`, with the fix that moves
+/// it aside).
 pub fn init(home: &Path) -> Outcome {
     if layerfs_home::home::guest::is_root(home) {
         return Err(refused(
@@ -107,13 +108,13 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             layout,
             Some(format!("no LayerFS home at {shown}; `{INIT}` creates it")),
         ),
-        Ok((Found::Older, layout)) => (
+        Ok((Found::Foreign, layout)) => (
             State::broken(
                 Reason::Outdated,
-                Some(&layerfs_home::home::layout::older_fix(home)),
+                Some(&layerfs_home::home::layout::foreign_fix(home)),
             ),
             layout,
-            Some(layerfs_home::home::layout::older(home).message),
+            Some(layerfs_home::home::layout::foreign(home).message),
         ),
         Err(refusal) => (
             State::broken(Reason::Failed, None),

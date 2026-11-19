@@ -379,7 +379,7 @@ pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
     match home::detect(home)? {
         home::Layout::Current(file) => Ok(Some(file.id)),
         home::Layout::Empty => Ok(None),
-        home::Layout::Older => Err(home::layout::older(home)),
+        home::Layout::Foreign => Err(home::layout::foreign(home)),
     }
 }
 

@@ -1,11 +1,11 @@
 //! `home.init` and `home.get`: a home is set up on purpose, and read without
 //! being changed. `home.get` answers for a home that does not exist, creates
 //! nothing and writes no log line; `home.init` says whether it created the
-//! home and leaves a current one alone; an older LayerFS's home is refused
-//! with the fix that moves it aside, and never written. Both answer in the
-//! call surface's forms (2.0): `home.get` its `state` with `reason` and
-//! `fix`, the build's `version` and the home's `generation`; `home.init` its
-//! `outcome` and the build's `version`.
+//! home and leaves a current one alone; a folder that is not a LayerFS 2.0
+//! home is refused with the fix that moves it aside, and never written.
+//! Both answer in the call surface's forms (2.0): `home.get` its `state`
+//! with `reason` and `fix`, the build's `version` and the home's
+//! `generation`; `home.init` its `outcome` and the build's `version`.
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -126,37 +126,45 @@ fn the_mode_is_answered_as_it_is() {
 }
 
 #[test]
-fn an_older_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
-    let home = place();
-    std::fs::DirBuilder::new()
-        .mode(0o700)
-        .create(&home)
-        .unwrap();
-    let older = r#"{"layout":2,"id":"0123456789abcdef0123456789abcdef"}"#;
-    std::fs::write(home.join("layerfs.json"), older).unwrap();
-    let shown = home.display().to_string();
-    let fix = format!("mv {shown} {shown}.old && layerfs home init");
-    let got = get(&home);
-    assert_eq!(got.get_text("state"), Some("broken"));
-    assert_eq!(got.get_text("reason"), Some("outdated"));
-    assert_eq!(got.get_text("fix"), Some(fix.as_str()));
-    let refused =
-        layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();
-    assert_eq!(refused.code, "Unsupported", "{}", refused.message);
-    assert_eq!(refused.detail.get_text("fix"), Some(fix.as_str()));
-    // any other call is refused the same way, and nothing is written, not
-    // even the call log
-    let other =
-        layerfs_api::call(Some(&home), "machine.list", SdkValue::Null, &mut |_| {}).unwrap_err();
-    assert_eq!(other.code, "Unsupported", "{}", other.message);
-    let file = std::fs::read_to_string(home.join("layerfs.json")).unwrap();
-    assert_eq!(file, older);
-    let mut names: Vec<String> = (std::fs::read_dir(&home).unwrap())
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    assert_eq!(names, ["layerfs.json"]);
-    let _ = std::fs::remove_dir_all(&home);
+fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
+    // a `layerfs.json` of another layout, and a stray file with none
+    let cases = [
+        (
+            "layerfs.json",
+            r#"{"layout":2,"id":"0123456789abcdef0123456789abcdef"}"#,
+        ),
+        ("notes.txt", "kept"),
+    ];
+    for (name, text) in cases {
+        let home = place();
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&home)
+            .unwrap();
+        std::fs::write(home.join(name), text).unwrap();
+        let shown = home.display().to_string();
+        let fix = format!("mv {shown} {shown}.old && layerfs home init");
+        let got = get(&home);
+        assert_eq!(got.get_text("state"), Some("broken"), "{name}");
+        assert_eq!(got.get_text("reason"), Some("outdated"), "{name}");
+        assert_eq!(got.get_text("fix"), Some(fix.as_str()), "{name}");
+        let refused =
+            layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();
+        assert_eq!(refused.code, "Unsupported", "{}", refused.message);
+        assert_eq!(refused.detail.get_text("fix"), Some(fix.as_str()));
+        // any other call is refused the same way, and nothing is written, not
+        // even the call log
+        let other = layerfs_api::call(Some(&home), "machine.list", SdkValue::Null, &mut |_| {})
+            .unwrap_err();
+        assert_eq!(other.code, "Unsupported", "{}", other.message);
+        assert_eq!(std::fs::read_to_string(home.join(name)).unwrap(), text);
+        let mut names: Vec<String> = (std::fs::read_dir(&home).unwrap())
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, [name]);
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }
 
 #[test]
