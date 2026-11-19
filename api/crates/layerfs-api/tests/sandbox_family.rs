@@ -162,6 +162,28 @@ fn named_sandboxes_on_native() {
         ],
     );
     assert_eq!(taken.unwrap_err().0, "Exists");
+    // `--mount` of a Branch that is not there: the Sandbox stays, and the
+    // fix forks the Branch before it mounts it (LF2 review: only for a
+    // missing Branch)
+    let missing = layerfs_api::call(
+        Some(&home),
+        "sandbox.create",
+        SdkValue::map([
+            ("project", t("shop/api")),
+            ("name", t("t2")),
+            ("machine", t("native")),
+            ("mount", t("ghost")),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(missing.code, "NotFound", "{missing:?}");
+    assert_eq!(
+        missing.detail.get_text("fix"),
+        Some("layerfs branch fork shop/api ghost && layerfs workspace mount t2 ghost"),
+        "{missing:?}"
+    );
+    ok(&home, "sandbox.remove", &[("sandbox", t("t2"))]);
     let listed = ok(&home, "sandbox.list", &[]);
     assert!(layerfs_api::json::print(&listed).contains("\"t1\""));
 

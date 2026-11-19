@@ -129,6 +129,16 @@ pub fn with_fix(mut refusal: SdkRefusal, fix: impl Into<String>) -> SdkRefusal {
     refusal
 }
 
+/// `text` as one shell word in a fix line: as it is when a shell takes
+/// every character literally, else single-quoted.
+pub fn shell_word(text: &str) -> String {
+    let plain = |c: char| c.is_ascii_alphanumeric() || "/._-+:@%,=".contains(c);
+    match !text.is_empty() && text.chars().all(plain) {
+        true => text.to_owned(),
+        false => format!("'{}'", text.replace('\'', "'\\''")),
+    }
+}
+
 /// `refusal` with one field the caller's next call needs, answered flat
 /// beside `error` and `message`: the head as `commit` on a `Conflict`, the
 /// `op` on a `Busy` or `Unresolved`, the `paths` on a `Dirty`.

@@ -352,16 +352,23 @@ impl NativeDaemon {
 
 /// `refusal` of a Sandbox start whose daemon (its detail's `daemon`) is the
 /// native machine's and of another build than `build`, or names no build
-/// at all (one older than the build marker, or no daemon): it says so, and its `fix`
+/// at all (one older than the build marker): it says so, and its `fix`
 /// records this build's daemon when [`own_daemon`] finds one, else runs
 /// `layerfs home doctor`, which names the daemon and its build. Any other
-/// refusal comes back as it is.
+/// refusal comes back as it is; one whose detail names no `daemon` (no
+/// start failed) without reading anything.
 pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRefusal {
-    let started = refusal.detail.get_text("daemon").map(Path::new);
-    let Some(daemon) = NativeDaemon::of(home).filter(|d| Some(d.path.as_path()) == started) else {
+    let Some(started) = refusal
+        .detail
+        .get_text("daemon")
+        .map(std::path::PathBuf::from)
+    else {
         return refusal;
     };
     let Some(ours) = build.commit else {
+        return refusal;
+    };
+    let Some(daemon) = NativeDaemon::of(home).filter(|d| d.path == started) else {
         return refusal;
     };
     let said = match &daemon.stamp {
