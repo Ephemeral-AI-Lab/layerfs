@@ -10,7 +10,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::Provider;
 use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_bucket::bucket::r2::R2Settings;
-use layerfs_bucket::bucket::{pieces, CredentialRef, Credentials, Driver, RemoteError};
+use layerfs_bucket::bucket::{pieces, Credentials, Driver, RemoteError};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{refused, View};
@@ -122,16 +122,27 @@ impl BucketRecord {
     }
 
     /// The bucket's key: its id from the record and its secret from the
-    /// home's secret folder, or the key reference an older record names.
-    pub fn credentials(&self, home: &Path) -> Result<CredentialRef> {
-        match self.fields.get_text("access_key") {
-            Some(access_key) => Ok(CredentialRef::Given(Credentials {
-                access_key: access_key.to_owned(),
-                secret_key: secret::read(home, &secret_name(&self.name))?,
-            })),
-            None => CredentialRef::parse(self.fields.get_text("key").unwrap_or(""))
-                .map_err(remote_error),
-        }
+    /// home's secret folder. A record with no key id (written before 2.0)
+    /// is refused with the fix that connects it again.
+    pub fn credentials(&self, home: &Path) -> Result<Credentials> {
+        let Some(access_key) = self.fields.get_text("access_key") else {
+            let name = &self.name;
+            let refusal = refused(
+                "Failed",
+                format!("bucket {name}'s record names no access key; disconnect it and connect it again"),
+            );
+            return Err(layerfs_home::outcome::with_fix(
+                refusal,
+                format!(
+                    "layerfs backup disconnect {name} && layerfs backup connect {name} {} --access-key <key> --key-stdin",
+                    layerfs_home::outcome::shell_word(&self.url())
+                ),
+            ));
+        };
+        Ok(Credentials {
+            access_key: access_key.to_owned(),
+            secret_key: secret::read(home, &secret_name(&self.name))?,
+        })
     }
 
     /// The driver of this bucket. Reads its key now; sends nothing.
@@ -140,7 +151,7 @@ impl BucketRecord {
     }
 
     /// The driver of this bucket with key `credentials`; sends nothing.
-    pub fn driver_with(&self, credentials: CredentialRef) -> Result<Box<dyn Driver>> {
+    pub fn driver_with(&self, credentials: Credentials) -> Result<Box<dyn Driver>> {
         provider(&self.fields, credentials)?
             .driver()
             .map_err(remote_error)
@@ -150,7 +161,7 @@ impl BucketRecord {
     /// `credentials`; sends nothing.
     pub fn diagnostic_client(
         &self,
-        credentials: CredentialRef,
+        credentials: Credentials,
     ) -> Result<layerfs_bucket::bucket::s3_api::S3Client> {
         match provider(&self.fields, credentials)? {
             Provider::Minio(settings) => {
@@ -159,10 +170,6 @@ impl BucketRecord {
             Provider::R2(settings) => {
                 layerfs_bucket::bucket::r2::connect(&settings).map_err(remote_error)
             }
-            Provider::LocalFolder(_) => Err(refused(
-                "Unsupported",
-                "a bucket's checks need an S3-compatible provider",
-            )),
         }
     }
 
@@ -190,21 +197,17 @@ pub struct BucketConnect {
 
 impl BucketConnect {
     /// The key it names.
-    pub fn credentials(&self) -> CredentialRef {
-        CredentialRef::Given(Credentials {
+    pub fn credentials(&self) -> Credentials {
+        Credentials {
             access_key: self.access_key.clone(),
             secret_key: self.secret_key.clone(),
-        })
+        }
     }
 }
 
-fn provider(record: &SdkValue, credentials: CredentialRef) -> Result<Provider> {
+fn provider(record: &SdkValue, credentials: Credentials) -> Result<Provider> {
     let text = |name: &str| record.get_text(name).unwrap_or("").to_owned();
-    // a record from before 2.0 may name its own piece size
-    let part_size = record
-        .get_int("part_size")
-        .map(|n| n as u64)
-        .unwrap_or(DEFAULT_PART_SIZE);
+    let part_size = DEFAULT_PART_SIZE;
     let provider = match record.get_text("provider") {
         Some("minio") => Provider::Minio(MinioSettings {
             endpoint: text("endpoint"),

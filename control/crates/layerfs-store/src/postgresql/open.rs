@@ -14,20 +14,18 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::Path;
 
+/// The `synchronous_commit` a Store connected without one uses (the
+/// default since 2026-11-17, #732; `store.connect`'s row).
+pub const DEFAULT_SYNCHRONOUS_COMMIT: &str = "local";
+
 /// `synchronous_commit` as the call or record names it: off, local (the
-/// default since 2026-11-17), remote_write, on or remote_apply. A record
-/// keeps the value it was connected with.
+/// default), remote_write, on or remote_apply
+/// ([`crate::postgresql::connect::synchronous_commit`]). A record keeps the
+/// value it was connected with.
 pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
-    let given = given.unwrap_or("local");
-    match given {
-        "off" | "local" | "remote_write" | "on" | "remote_apply" => Ok(given.to_owned()),
-        other => Err(refused(
-            "InvalidInput",
-            format!(
-                "synchronousCommit is off, local, remote_write, on or remote_apply, not {other}"
-            ),
-        )),
-    }
+    let given = given.unwrap_or(DEFAULT_SYNCHRONOUS_COMMIT);
+    crate::postgresql::connect::synchronous_commit(given)?;
+    Ok(given.to_owned())
 }
 
 /// The schema a call names: `[a-z_][a-z0-9_]*`, at most 63 bytes.

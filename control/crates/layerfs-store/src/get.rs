@@ -9,7 +9,7 @@
 //! `synchronous_commit`; the other engine's keys are null.
 use crate::backup::record::StoreLink;
 use crate::intent;
-use crate::record::{Placement, StoreRecord, StoreRef};
+use crate::record::{StoreRecord, StoreRef};
 use crate::state;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -112,38 +112,10 @@ fn last_transfer(record: &StoreRecord) -> SdkValue {
     ])
 }
 
-/// A PostgreSQL Store's `connections`: the Store's own address (no
-/// `machine`: every machine without its own uses it), then each machine's
-/// own, in record order. Never a password.
-fn connections(record: &StoreRecord) -> SdkValue {
-    let store_url = record.text("url");
-    let mut rows = vec![SdkValue::map([
-        ("machine", SdkValue::Null),
-        ("url", SdkValue::opt_text(store_url)),
-    ])];
-    // an entry holding only a password reference (before saved logins)
-    // is no address of its own: not answered
-    let own = record.own_connections().into_iter();
-    for (machine, own) in own.filter(|(_, own)| own.url.is_some()) {
-        rows.push(SdkValue::map([
-            ("machine", SdkValue::text(machine)),
-            ("url", SdkValue::opt_text(own.url.as_deref().or(store_url))),
-        ]));
-    }
-    SdkValue::List(rows)
-}
-
 /// The machine a sqlite Store's record places it on (`native` when a
-/// record names none); null for a PostgreSQL Store and for one whose
-/// machine a 1.1.0 home did not tell.
+/// record names none); null for a PostgreSQL Store.
 fn placed(record: &StoreRecord) -> SdkValue {
-    match record.store_ref() {
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Machine(machine),
-            ..
-        }) => SdkValue::text(machine),
-        _ => SdkValue::Null,
-    }
+    crate::state::placed(record).map_or(SdkValue::Null, SdkValue::text)
 }
 
 /// The names of Store `store`'s projects, sorted.
@@ -188,7 +160,10 @@ pub fn summary(
             "auth",
             SdkValue::opt_text(crate::postgresql::login::auth_of(record)),
         ),
-        ("connections", only(postgresql, connections(record))),
+        (
+            "connections",
+            only(postgresql, crate::postgresql::connect::connections(record)),
+        ),
         ("projects", shown),
         ("projects_count", shown_count),
         ("backups", SdkValue::List(backups.collect())),

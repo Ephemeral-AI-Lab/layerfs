@@ -32,10 +32,9 @@ pub const BACKUP: &str = "backup.create";
 /// A restore from a bucket over the Store.
 pub const RESTORE: &str = "backup.restore";
 
-/// Whether `name` is a move: `store.move`, or the `store.push` or
-/// `store.pull` a build before the 2.0 call surface recorded.
+/// Whether `name` is a move, `store.move`.
 pub fn is_move(name: &str) -> bool {
-    matches!(name, MOVE | "store.push" | "store.pull")
+    name == MOVE
 }
 
 /// Whether operation `name` holds the Store to itself, so no lease is
@@ -81,8 +80,6 @@ pub fn shown(op: &Op) -> SdkValue {
 pub fn clearing(op: &Op, store: &str) -> String {
     match (op.name(), op.args().get_text("to")) {
         (name, Some(to)) if is_move(name) => format!("store move {store} {to}"),
-        // a `store.pull` a build before 2.0 recorded with no sides
-        (name, None) if is_move(name) => format!("store move {store} native"),
         (REMOVE | CREATE, _) => format!("store remove {store}"),
         (COMPACT, _) => format!("store compact {store}"),
         _ => format!("store get {store} --with live"),

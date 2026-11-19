@@ -11,7 +11,7 @@ use layerfs_home::outcome::{failed, refused, with_fix, with_next};
 use layerfs_home::state::State;
 use layerfs_machine::record::MachineRecord;
 use layerfs_store::lease;
-use layerfs_store::record::{Placement, StoreRef};
+use layerfs_store::record::StoreRef;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -66,8 +66,7 @@ pub fn stores_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     let mut on = Vec::new();
     for store in stores(home)? {
         if let StoreRef::Sqlite {
-            machine: Placement::Machine(placed),
-            ..
+            machine: placed, ..
         } = store.store_ref()?
         {
             if placed == machine {

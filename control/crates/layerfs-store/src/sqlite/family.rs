@@ -21,63 +21,17 @@
 use crate::intent;
 use crate::lease;
 use crate::place::Executor;
-use crate::record::{self, StoreDerived, StoreRecord};
+use crate::record::{self, StoreRecord};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
-use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-pub fn record_of(home: &Path, name: &str) -> Result<StoreRecord> {
-    StoreRecord::of(home, name)
-}
-
-/// A Store's record as the PostgreSQL calls not yet on the 2.0 call
-/// surface answer it, with its projects: never the cursor key.
-pub fn public(home: &Path, record: &StoreRecord) -> Outcome {
-    let projects = paths::names(&paths::store_dir(home, record.name()).join("project"));
-    let derived = StoreDerived {
-        projects: projects.map_err(failed)?,
-    };
-    record.to_sdk(&derived)
-}
-
-/// A Store's record view ([`public`]) by name: what `store.connect` and
-/// `store.update` answer until they move to the 2.0 call surface.
-/// `store.get` answers [`crate::get::get`].
-pub fn get(home: &Path, name: &StoreName) -> Outcome {
-    public(home, &record_of(home, name)?)
-}
-
-/// `store.create`: an empty sqlite Store on this computer, or made on
-/// `machine` directly.
-pub fn create(home: &Path, name: &StoreName, machine: Option<&MachineName>) -> Outcome {
-    crate::sqlite::create::create(home, name, machine.map(|machine| machine.as_str()))
-}
-
-/// `store.remove`: a Store no Sandbox uses, with its file.
-pub fn remove(home: &Path, name: &StoreName, related: Related) -> Outcome {
-    crate::sqlite::remove::remove(home, name, related)
-}
-
-/// `store.move`: a sqlite Store from the machine that holds it to
-/// `machine`, one of the two being this computer. The names are checked in
-/// its check phase.
-pub fn move_to(
-    home: &Path,
-    events: &mut Events<'_>,
-    name: &str,
-    machine: &str,
-    related: Related,
-) -> Outcome {
-    crate::sqlite::transfer::phases::move_to(home, events, name, machine, related)
-}
 
 /// One step on the machine that holds a Store's file: in this process, or
 /// its worker's `store.file` frame.
@@ -149,7 +103,7 @@ pub fn begin<T>(
 ) -> Result<T> {
     let _lock = home::lock::take(home)?;
     let _store = record::lock(home, name)?;
-    let record = record_of(home, name)?;
+    let record = StoreRecord::of(home, name)?;
     let answer = check(&record)?;
     (related.store_idle)(home, name)?;
     record.with(op::FIELD, op.to_record().clone()).write(home)?;

@@ -75,7 +75,7 @@ pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
     .unwrap();
     // made on native, then its file placed under the worker's root
     let shop = StoreName::parse("shop").unwrap();
-    layerfs_store::sqlite::family::create(&home, &shop, None).unwrap();
+    layerfs_store::sqlite::create::create(&home, &shop, None).unwrap();
     let (from, to) = (
         paths::store_dir(&home, "shop"),
         paths::store_dir(&root, "shop"),

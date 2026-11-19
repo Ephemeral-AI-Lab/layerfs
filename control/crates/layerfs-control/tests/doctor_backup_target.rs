@@ -10,7 +10,6 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
 use peer::{Mode, Server};
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -239,15 +238,8 @@ fn a_key_the_home_does_not_keep_blocks_all_network() {
 }
 
 #[test]
-fn a_record_from_before_2_0_still_reads_its_key_reference() {
+fn a_record_from_before_2_0_with_no_access_key_fails_credentials_and_sends_nothing() {
     let f = Fixture::new(Mode::default());
-    let credentials = f.home.join("credentials");
-    std::fs::write(
-        &credentials,
-        "access_key=mock-access-key\nsecret_key=mock-secret-key\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&credentials, std::fs::Permissions::from_mode(0o600)).unwrap();
     write_entity(
         &paths::bucket_record(&f.home, "production"),
         &SdkValue::map([
@@ -257,16 +249,14 @@ fn a_record_from_before_2_0_still_reads_its_key_reference() {
             ("bucket", SdkValue::text("bucket")),
             ("prefix", SdkValue::text("saved/prefix")),
             ("region", SdkValue::text("us-east-1")),
-            (
-                "key",
-                SdkValue::text(format!("file:{}", credentials.display())),
-            ),
+            ("key", SdkValue::text("file:/no/such/credentials")),
         ]),
     )
     .unwrap();
     let report = f.report(false);
-    outcome(&report, "bucket.credentials", "pass");
-    outcome(&report, "bucket.list", "pass");
+    outcome(&report, "bucket.credentials", "fail");
+    absent(&report, "bucket.list");
+    assert!(f.server.state.lock().unwrap().requests.is_empty());
 }
 
 #[test]

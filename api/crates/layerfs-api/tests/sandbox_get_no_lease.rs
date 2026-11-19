@@ -28,7 +28,7 @@
 //! capacity model, and the worker is this build's own server on a scratch
 //! root. Each home has a Store record and no Store file, so a get that
 //! opened the Store would be refused. While a get runs, the test holds the
-//! Store's lock and the Store's record carries a running `store.push`
+//! Store's lock and the Store's record carries a running `store.move`
 //! intent, as a push does while it checks that the Store is idle.
 #![cfg(unix)]
 use layerfs_api::home::{self, lease, paths, read_record, write_record};
@@ -470,10 +470,10 @@ fn settle(home: &Path) {
 }
 
 /// A Store being pushed, as far as another call can see it: its record
-/// carries a running `store.push` intent and its lock is held. The lock is
+/// carries a running `store.move` intent and its lock is held. The lock is
 /// released when the answer drops.
 fn pushing(home: &Path) -> impl Drop {
-    let op = layerfs_home::op::Op::begin("store.push", "check", SdkValue::Null).unwrap();
+    let op = layerfs_home::op::Op::begin("store.move", "check", SdkValue::Null).unwrap();
     let record = layerfs_store::record::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();

@@ -37,7 +37,7 @@ pub fn selection_at(record: &StoreRecord, url: String) -> PgSelection {
         synchronous_commit: Some(
             record
                 .text("synchronous_commit")
-                .unwrap_or("off")
+                .unwrap_or(crate::postgresql::open::DEFAULT_SYNCHRONOUS_COMMIT)
                 .to_owned(),
         ),
     }

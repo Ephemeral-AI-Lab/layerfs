@@ -25,17 +25,12 @@ pub struct StoreUpdate {
     pub synchronous_commit: Option<String>,
 }
 
-/// `record` with the request's fields in place of its own; a login named
-/// now replaces a password reference an older record held.
+/// `record` with the request's fields in place of its own.
 fn changed(record: StoreRecord, request: &StoreUpdate) -> StoreRecord {
     let fields = [
         ("auth", &request.auth),
         ("synchronous_commit", &request.synchronous_commit),
     ];
-    let record = match request.auth {
-        Some(_) => record.without("password"),
-        None => record,
-    };
     fields
         .into_iter()
         .fold(record, |record, (field, value)| match value {

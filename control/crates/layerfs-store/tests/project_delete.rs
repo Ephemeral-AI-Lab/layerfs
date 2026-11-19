@@ -71,7 +71,6 @@ struct Fake {
     outcomes: VecDeque<Deletion>,
     seen: Vec<(LayerStackId, i64)>,
     states: Vec<IntentState>,
-    prepared: usize,
     fail_removal: bool,
     /// What `admit` refuses with, before registering anything.
     refuse: Option<SdkRefusal>,
@@ -98,7 +97,6 @@ impl Fake {
             outcomes: outcomes.into(),
             seen: Vec::new(),
             states: Vec::new(),
-            prepared: 0,
             fail_removal: false,
             refuse: None,
             mark_refusal: None,
@@ -133,11 +131,6 @@ impl Fake {
 }
 
 impl Effects for Fake {
-    fn prepare(&mut self) -> Result<(), SdkRefusal> {
-        self.prepared += 1;
-        Ok(())
-    }
-
     fn admit(
         &mut self,
         stack: LayerStackId,
@@ -226,7 +219,6 @@ fn a_fresh_delete_marks_then_removes_the_entry_and_unlinks_the_intent() {
     assert_eq!(fake.seen[0].0, stack);
     assert_eq!(fake.pending_retries, [false], "a fresh delete is no retry");
     // the identity save precedes the intent, and the intent precedes the mark
-    assert_eq!(fake.prepared, 1);
     assert_eq!(fake.states, [IntentState::Pending]);
     // the project scope was admitted after the sidecar and released after
     assert_eq!(fake.admitted.len(), 1);
@@ -260,7 +252,6 @@ fn a_refused_admission_keeps_a_pending_sidecar_and_writes_no_marker() {
     assert_eq!(refusal.code, "MountsActive");
     assert!(refusal.detail.get("holders").is_some());
     // the identity save and the sidecar precede the admission; no marker
-    assert_eq!(fake.prepared, 1);
     assert!(fake.seen.is_empty(), "{:?}", fake.seen);
     let pending = Intent::read(&refused_home, store, project)
         .unwrap()
@@ -288,7 +279,6 @@ fn a_refused_admission_keeps_a_pending_sidecar_and_writes_no_marker() {
     let mut fake = Fake::new(&busy_home, store, project, Vec::new()).refusing("Busy", conflict);
     let refusal = delete_with(&busy_home, store, project, Some(stack), &mut fake).unwrap_err();
     assert_eq!(refusal.code, "Busy");
-    assert_eq!(fake.prepared, 1);
     assert!(fake.seen.is_empty());
     assert_eq!(
         Intent::read(&busy_home, store, project)
@@ -559,10 +549,6 @@ fn a_stale_intent_does_not_delete_a_project_the_listing_names_again() {
     assert_eq!(refusal.code, "NoSuchProject", "{refusal:?}");
     assert!(fake.seen.is_empty(), "a stale intent marks nothing");
     assert!(fake.admitted.is_empty(), "a stale intent admits nothing");
-    assert_eq!(
-        fake.prepared, 0,
-        "nothing of the re-created project is touched"
-    );
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -604,7 +590,6 @@ fn an_untracked_record_with_no_stack_is_no_such_project() {
     let refusal = delete_with(&home, store, project, None, &mut fake).unwrap_err();
     assert_eq!(refusal.code, "NoSuchProject");
     assert!(fake.seen.is_empty());
-    assert_eq!(fake.prepared, 0);
     assert!(paths::project_dir(&home, store, project).is_dir());
 
     // no record and no intent is NoSuchProject too

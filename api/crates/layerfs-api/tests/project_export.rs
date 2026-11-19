@@ -1267,7 +1267,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
 
     // 2. During an in-flight `project.export`:
     //    - same-Store `file.read` and a second concurrent `project.export` succeed;
-    //    - exclusive Store operations (`store.remove`, `store.push`) are refused `InUse`;
+    //    - exclusive Store operations (`store.remove`, `store.move`) are refused `InUse`;
     //    - `project.delete` retires the Stack (its marker keeps packs/objects),
     //      leaving the in-flight pinned export intact while refusing later exports.
     let first_dest = area.join("first");
@@ -1309,7 +1309,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
                 );
                 assert_eq!(second_res.get_int("file_count"), Some(2));
 
-                // Exclusive Store operations (`store.remove`, `store.push`) are refused `InUse`
+                // Exclusive Store operations (`store.remove`, `store.move`) are refused `InUse`
                 let (rm_code, rm_msg) =
                     call(&home, "store.remove", &[("store", t("shop"))]).unwrap_err();
                 assert_eq!(rm_code, "InUse", "{rm_msg}");
@@ -1368,7 +1368,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
         "op",
         SdkValue::map([
             ("id", t("op-00000000000000ab")),
-            ("name", t("store.push")),
+            ("name", t("store.move")),
             ("phase", t("record")),
             ("owner", SdkValue::map([("pid", SdkValue::Int(1))])),
             ("uncertain", SdkValue::Bool(false)),
@@ -1394,7 +1394,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
         "op",
         SdkValue::map([
             ("id", t("op-00000000000000ab")),
-            ("name", t("store.push")),
+            ("name", t("store.move")),
             ("phase", t("record")),
             ("owner", SdkValue::map([("pid", SdkValue::Int(99_999_999))])),
             ("uncertain", SdkValue::Bool(true)),

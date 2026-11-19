@@ -258,8 +258,8 @@ pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     let machine = copy.machine;
     let Some(free) = there.get_int("free") else {
         return Err(refused(
-            "Unsupported",
-            format!("machine {machine}'s worker does not report its free disk (an older bundle)"),
+            "Failed",
+            format!("machine {machine}'s worker answered no free disk"),
         ));
     };
     let headroom = crate::sqlite::transfer::phases::HEADROOM.max(total / 10);

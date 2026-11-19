@@ -20,7 +20,7 @@
 use crate::get::ATTEMPT;
 use crate::intent;
 use crate::place;
-use crate::record::{self, Placement, StoreRecord, StoreRef};
+use crate::record::{self, StoreRecord, StoreRef};
 use crate::sqlite::family::step_on;
 use crate::sqlite::transfer::step::StoreStep;
 use crate::state;
@@ -221,14 +221,6 @@ pub fn read(home: &Path, record: StoreRecord, machines: state::Machines) -> Resu
     };
     let found = match (&recorded, record.store_ref()) {
         (State::Blocked(_), _) | (_, Err(_)) => None,
-        // a 1.1.0 Store whose machine its record does not tell: nowhere to read
-        (
-            _,
-            Ok(StoreRef::Sqlite {
-                machine: Placement::Unknown,
-                ..
-            }),
-        ) => None,
         (_, Ok(StoreRef::Postgres { .. })) => Some(postgresql(&record)),
         (_, Ok(store_ref)) => Some(sqlite(home, &record, store_ref)),
     };

@@ -1,26 +1,20 @@
-//! Pull: download the remote Store file `FILE` to a temporary sibling of the local
-//! Store (on its filesystem, so the swap is one rename), verify its sha256
-//! (and each piece's), check it opens with the Store's binding, then rename
-//! it over the local Store, which happens only when no opener holds it. The
-//! whole Store is replaced, with every project in it.
-//!
-//! A load (`load`, #509; a clone before) is the same download into a new
-//! Store: the destination must be absent, the binding comes from the remote
-//! file, and the file is linked into place so a Store that appeared
-//! meanwhile is never replaced. Both name the remote file explicitly: the
-//! file a local Store links to, whatever the Store's own name.
+//! Load (#509): download the remote Store file `FILE` to a temporary
+//! sibling of the new Store (on its filesystem), verify its sha256 (and
+//! each piece's), check it opens with the binding the remote file records,
+//! then link it into place, so a Store that appeared meanwhile is never
+//! replaced.
 //!
 //! Like the sealed-Store install (`install.rs`), the destination must pass
 //! the kernel guard and the installer must be the daemons' user. One
 //! attempt: a failure keeps the temporary file it left, named in its report.
 //!
 //! The downloaded Store's history heads digest is read before it is
-//! installed (#506 E2). Progress (#506 E4) reports `check` (pull only),
-//! `download` (bytes received), `verify` and `install`.
+//! installed (#506 E2). Progress (#506 E4) reports `download` (bytes
+//! received), `verify` and `install`.
 use crate::backup::create::BINDING;
 use crate::backup::heads::heads;
 use crate::backup::link::store_object;
-use crate::bucket::pieces::{self, hex};
+use crate::bucket::pieces;
 use crate::bucket::{progress, Driver};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::ReservationBlocks;
@@ -35,18 +29,6 @@ use std::path::{Path, PathBuf};
 /// both. (macOS's system SQLite keeps empty ones; the kernel guard refuses
 /// a pull there before this check.)
 const SIDECARS: [&str; 2] = ["-wal", "-shm"];
-
-/// What a pull installed.
-#[derive(Debug)]
-pub struct Pulled {
-    pub bytes: u64,
-    pub sha256: [u8; 32],
-    pub pieces: u64,
-    /// Whether a local Store was replaced (else the destination was absent).
-    pub replaced: bool,
-    /// The installed Store's history heads digest, when it could be read.
-    pub heads: Option<[u8; 32]>,
-}
 
 /// What a load installed: a new Store and the binding it opens with.
 #[derive(Debug)]
@@ -63,7 +45,7 @@ pub struct Loaded {
     pub sqlite: Option<String>,
 }
 
-/// A failed pull or load: its cause and the temporary file it left, if any.
+/// A failed load: its cause and the temporary file it left, if any.
 #[derive(Debug)]
 pub struct PullFailure {
     pub cause: String,
@@ -72,7 +54,7 @@ pub struct PullFailure {
 
 impl std::fmt::Display for PullFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Store pull: {}", self.cause)?;
+        write!(f, "Store load: {}", self.cause)?;
         if let Some(left) = &self.left {
             write!(f, " (left {})", left.display())?;
         }
@@ -111,27 +93,6 @@ fn refuse_open(target: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Pulls the remote Store file `file` from `driver` into `destination` (a Store
-/// volume's `global/store.sqlite`), which opens with `binding` and
-/// `cursor_key`. An existing local Store is replaced only when no opener
-/// holds it, checked before the download and again before the rename;
-/// nothing here prevents a new opener in between.
-pub fn pull(
-    driver: &dyn Driver,
-    file: &str,
-    destination: &Path,
-    binding: &[u8],
-    cursor_key: [u8; 32],
-) -> Result<Pulled, PullFailure> {
-    fetch(driver, file, destination, Some(binding), cursor_key).map(|(fetched, replaced)| Pulled {
-        bytes: fetched.bytes,
-        sha256: fetched.sha256,
-        pieces: fetched.pieces,
-        replaced,
-        heads: fetched.heads,
-    })
-}
-
 /// Loads the remote Store file `file` from `driver` into the new Store
 /// `destination`, which must not exist. The binding comes from the remote
 /// file (recorded by push); `cursor_key` is the new Store's own cursor
@@ -143,10 +104,10 @@ pub fn load(
     destination: &Path,
     cursor_key: [u8; 32],
 ) -> Result<Loaded, PullFailure> {
-    fetch(driver, file, destination, None, cursor_key).map(|(fetched, _)| fetched)
+    fetch(driver, file, destination, cursor_key)
 }
 
-/// The remote copy's recorded SQLite version, if push recorded one.
+/// The remote copy's recorded SQLite version, if its upload recorded one.
 fn remote_sqlite(metadata: &crate::bucket::Metadata) -> Option<String> {
     metadata
         .get(crate::backup::create::SQLITE_VERSION)
@@ -154,7 +115,7 @@ fn remote_sqlite(metadata: &crate::bucket::Metadata) -> Option<String> {
         .cloned()
 }
 
-/// The remote copy's recorded binding, if push recorded one.
+/// The remote copy's recorded binding, if its upload recorded one.
 fn remote_binding(metadata: &crate::bucket::Metadata) -> Result<Option<Vec<u8>>, String> {
     let Some(text) = metadata.get(BINDING) else {
         return Ok(None);
@@ -172,16 +133,13 @@ fn remote_binding(metadata: &crate::bucket::Metadata) -> Result<Option<Vec<u8>>,
         .ok_or_else(|| format!("the remote Store's {BINDING} is malformed"))
 }
 
-/// Downloads, verifies, opens and installs. With `binding`, replaces an
-/// unopened local Store (pull); without it, installs a new Store (load).
-/// Returns what was installed and whether a Store was replaced.
+/// Downloads, verifies, opens and installs a new Store.
 fn fetch(
     driver: &dyn Driver,
     name: &str,
     destination: &Path,
-    binding: Option<&[u8]>,
     cursor_key: [u8; 32],
-) -> Result<(Loaded, bool), PullFailure> {
+) -> Result<Loaded, PullFailure> {
     let mut left = None;
     let result = (|| {
         let text = |error: io::Error| error.to_string();
@@ -191,38 +149,21 @@ fn fetch(
         // this call made
         prepare(destination)?;
         let (target, _) = paths(destination).map_err(text)?;
-        let cloning = binding.is_none();
-        if cloning && exists(&target).map_err(text)? {
+        if exists(&target).map_err(text)? {
             return Err(format!(
-                "a Store exists at {}; a load makes a new Store (pull replaces one)",
+                "a Store exists at {}; a load makes a new Store",
                 target.display()
             ));
         }
         refuse_open(&target)?;
-        if !cloning {
-            progress::begin("check", None);
-        }
-        // the file's recorded binding: a load's, and a pull's early refusal
+        // the file's recorded binding
         let stat = driver
             .stat(&object)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("no Store {name} on the remote: remote file missing"))?;
-        let recorded = remote_binding(&stat.metadata)?;
-        let binding = match (binding, recorded) {
-            (Some(expected), Some(recorded)) if recorded != expected => {
-                return Err(format!(
-                    "the remote Store {name} has another binding ({}), not this Store's",
-                    hex(&recorded)
-                ));
-            }
-            (Some(expected), _) => expected.to_vec(),
-            (None, Some(recorded)) => recorded,
-            (None, None) => {
-                return Err(format!(
-                    "the remote Store {name} records no {BINDING}; push it again to load it"
-                ));
-            }
-        };
+        let binding = remote_binding(&stat.metadata)?.ok_or_else(|| {
+            format!("the remote Store {name} records no {BINDING}; back it up again to load it")
+        })?;
         let temporary = sidecar(&target, ".pulling");
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -256,41 +197,29 @@ fn fetch(
             }
         }
         progress::begin("install", None);
-        let replaced = if cloning {
-            // a link fails if anything appeared at the target: never replaced
-            fs::hard_link(&temporary, &target).map_err(|error| {
-                format!(
-                    "the new Store {} could not be placed: {error}",
-                    target.display()
-                )
-            })?;
-            left = None;
-            fs::remove_file(&temporary).map_err(|error| {
-                format!(
-                    "the Store is installed at {}, but its temporary name {} remains: {error}",
-                    target.display(),
-                    temporary.display()
-                )
-            })?;
-            false
-        } else {
-            let replaced = exists(&target).map_err(text)?;
-            refuse_open(&target)?;
-            fs::rename(&temporary, &target).map_err(text)?;
-            left = None;
-            replaced
-        };
-        Ok((
-            Loaded {
-                binding,
-                bytes: moved.bytes,
-                sha256: moved.sha256,
-                pieces: moved.pieces,
-                heads: digest,
-                sqlite: remote_sqlite(&stat.metadata),
-            },
-            replaced,
-        ))
+        // a link fails if anything appeared at the target: never replaced
+        fs::hard_link(&temporary, &target).map_err(|error| {
+            format!(
+                "the new Store {} could not be placed: {error}",
+                target.display()
+            )
+        })?;
+        left = None;
+        fs::remove_file(&temporary).map_err(|error| {
+            format!(
+                "the Store is installed at {}, but its temporary name {} remains: {error}",
+                target.display(),
+                temporary.display()
+            )
+        })?;
+        Ok(Loaded {
+            binding,
+            bytes: moved.bytes,
+            sha256: moved.sha256,
+            pieces: moved.pieces,
+            heads: digest,
+            sqlite: remote_sqlite(&stat.metadata),
+        })
     })();
     result.map_err(|cause: String| PullFailure {
         cause,

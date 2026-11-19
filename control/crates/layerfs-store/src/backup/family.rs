@@ -121,12 +121,8 @@ pub fn hex(bytes: &[u8; 32]) -> SdkValue {
     SdkValue::text(pieces::hex(bytes))
 }
 
-/// The Store's link to `bucket` after a transfer.
-pub fn save_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
-    write_link(home, store, bucket, link)
-}
-
-/// [`save_link`], under the Store's lock (the caller does not hold it).
+/// The Store's link to `bucket` after a transfer, under the Store's lock
+/// (the caller does not hold it).
 pub fn write_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
     let _store = crate::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?

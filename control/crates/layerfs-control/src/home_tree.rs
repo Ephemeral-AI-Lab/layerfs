@@ -22,7 +22,7 @@ use layerfs_home::outcome::{failed, Outcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
-use layerfs_store::record::{Placement, StoreRecord, StoreRef};
+use layerfs_store::record::{StoreRecord, StoreRef};
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -174,10 +174,7 @@ fn size(recorded: Option<i64>) -> SdkValue {
 /// this build reads.
 fn placed(record: &StoreRecord) -> Option<String> {
     match record.store_ref() {
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Machine(on),
-            ..
-        }) => Some(on.clone()),
+        Ok(StoreRef::Sqlite { machine: on, .. }) => Some(on.clone()),
         _ => None,
     }
 }
@@ -269,15 +266,7 @@ pub fn tree(home: &Path) -> Outcome {
     }
     // a Store on no machine: PostgreSQL, or one whose placement is not read
     let mut elsewhere: Vec<SdkValue> = (stores.iter())
-        .filter(|record| {
-            !matches!(
-                record.store_ref(),
-                Ok(StoreRef::Sqlite {
-                    machine: Placement::Machine(_),
-                    ..
-                })
-            )
-        })
+        .filter(|record| !matches!(record.store_ref(), Ok(StoreRef::Sqlite { .. })))
         .map(|record| store(home, record, None))
         .collect();
     elsewhere.extend(

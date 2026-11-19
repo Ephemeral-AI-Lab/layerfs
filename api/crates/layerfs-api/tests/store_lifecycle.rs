@@ -92,13 +92,13 @@ fn set_op(home: &Path, value: SdkValue) {
     write_record(&path, &home::with_field(record(home), "op", value)).unwrap();
 }
 
-/// A `store.push` intent of this process, its start time moved by `skew`
+/// A `store.move` intent of this process, its start time moved by `skew`
 /// (a moved start time names a process that is gone).
 fn this_process_pushing(skew: u64, uncertain: bool) -> SdkValue {
     let me = LocalProcess::observe(std::process::id()).unwrap();
     SdkValue::map([
         ("id", t("op-00000000000000ab")),
-        ("name", t("store.push")),
+        ("name", t("store.move")),
         ("phase", t("record")),
         (
             "args",
@@ -137,7 +137,7 @@ fn a_store_call_during_a_push_is_busy_even_from_the_pushers_process() {
     set_op(&home, this_process_pushing(0, false));
     let (code, message) = read(&home).unwrap_err();
     assert_eq!(code, "Busy", "{message}");
-    assert!(message.contains("store.push"), "{message}");
+    assert!(message.contains("store.move"), "{message}");
     assert_eq!(
         lease::hold(&home, "shop").err().map(|r| r.code).as_deref(),
         Some("Busy")
@@ -338,11 +338,11 @@ fn a_live_read_is_blocked_first_even_over_a_held_op() {
 }
 
 #[test]
-fn remove_refuses_a_store_whose_machine_is_unknown() {
+fn remove_refuses_a_store_whose_machine_is_not_text() {
     let home = home_with_stopped(SdkValue::Null);
     let (code, message) = call(&home, "store.remove", &[("store", t("shop"))]).unwrap_err();
-    assert_eq!(code, "Unavailable", "{message}");
-    assert!(message.contains("import-env"), "{message}");
+    assert_eq!(code, "InvalidInput", "{message}");
+    assert!(message.contains("Store record machine"), "{message}");
     assert!(paths::store_record(&home, "shop").is_file(), "records kept");
     std::fs::remove_dir_all(home).unwrap();
 }

@@ -21,8 +21,9 @@ use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
 use layerfs_store::identity::{self, Identity};
+use layerfs_store::intent::clearing as clearing_call;
 use layerfs_store::place::{self, Executor};
-use layerfs_store::record::{clearing_call, StoreRecord, StoreRef};
+use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;
 use std::time::{Duration, Instant};
 

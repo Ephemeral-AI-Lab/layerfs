@@ -8,10 +8,6 @@
 use layerfs_bridge::control::SdkValue;
 use layerfs_persistence::{CompactPath, CompactReceipt, CompactStatus};
 
-/// How many `delta_base_references` the answer shows; the count beside
-/// them, only when there were more, says how many the run found.
-pub const REFERENCES_SHOWN: usize = layerfs_home::helpers::SHOWN;
-
 /// The key of this answer a §11 report field (`wire`, as the engine names
 /// it) is answered under: what a `zero_reasons` entry names.
 fn key_of(wire: &str) -> &str {

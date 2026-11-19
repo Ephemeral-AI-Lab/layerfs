@@ -41,5 +41,9 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .get_text("machine")
         .map(MachineName::parse)
         .transpose()?;
-    layerfs_store::sqlite::family::create(&context.home, &name, machine.as_ref())
+    layerfs_store::sqlite::create::create(
+        &context.home,
+        &name,
+        machine.as_ref().map(|m| m.as_str()),
+    )
 }

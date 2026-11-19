@@ -13,7 +13,7 @@
 //! `ready`. `unknown` is never derived here: only a live read that could
 //! not be made answers it (`live`).
 use crate::intent;
-use crate::record::{Placement, StoreRecord, StoreRef};
+use crate::record::{StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::state::{Reason, State};
@@ -93,26 +93,24 @@ pub fn seen(record: &StoreRecord) -> Option<State> {
 /// Store `record`'s state from the home's records, `under` being its
 /// machine's state for a sqlite Store on a machine (none for a PostgreSQL
 /// Store, which is on no machine; a sqlite Store given none is not
-/// blocked). A record this build cannot place is `broken`: a kind it
-/// does not read is `unsupported`, a sqlite Store whose machine a 1.1.0
-/// home did not tell is `missing`.
+/// blocked). A record this build cannot place (a kind it does not read)
+/// is `broken` `unsupported`; a PostgreSQL Store naming no saved login (one
+/// connected before saved logins) is `broken` `outdated`, with the fix
+/// that saves one and names it.
 pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<State> {
     if let Some(state) = held(record) {
         return Ok(state);
     }
     match record.store_ref() {
         Err(_) => return Ok(State::broken(Reason::Unsupported, None)),
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Unknown,
-            ..
-        }) => return Ok(State::broken(Reason::Missing, None)),
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Machine(machine),
-            ..
-        }) => {
+        Ok(StoreRef::Sqlite { machine, .. }) => {
             if let Some(blocked) = under.and_then(|state| state.blocks("machine", machine)) {
                 return Ok(blocked);
             }
+        }
+        Ok(StoreRef::Postgres { .. }) if record.text("auth").is_none() => {
+            let fix = crate::postgresql::login::no_auth_fix(record.name());
+            return Ok(State::broken(Reason::Outdated, Some(&fix)));
         }
         Ok(StoreRef::Postgres { .. }) => {}
     }
@@ -122,10 +120,7 @@ pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<Sta
 /// The machine a sqlite Store's record places it on, if it names one.
 pub fn placed(record: &StoreRecord) -> Option<&str> {
     match record.store_ref() {
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Machine(machine),
-            ..
-        }) => Some(machine),
+        Ok(StoreRef::Sqlite { machine, .. }) => Some(machine),
         _ => None,
     }
 }
@@ -138,10 +133,4 @@ pub fn recorded(home: &Path, record: &StoreRecord, machines: Machines) -> Result
         None => None,
     };
     recorded_under(record, under.as_ref())
-}
-
-/// Store `store`'s records-only state by name; a bad name is
-/// `InvalidInput`, no record `NotFound`.
-pub fn of(home: &Path, store: &str, machines: Machines) -> Result<State> {
-    recorded(home, &StoreRecord::of(home, store)?, machines)
 }

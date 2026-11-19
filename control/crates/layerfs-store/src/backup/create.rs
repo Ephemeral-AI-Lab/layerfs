@@ -308,7 +308,6 @@ fn check(
         }
     }
     let ok = match (expected, &found) {
-        (remote::Expected::Any, _) => true,
         (remote::Expected::Absent, None) => true,
         (remote::Expected::Sha256(want), Some(meta)) => {
             meta.metadata

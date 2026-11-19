@@ -8,9 +8,7 @@
 use crate::intent;
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
-use crate::sqlite::family::{
-    advance, begin, ended, progress, record_of, settle, step_observed, step_on,
-};
+use crate::sqlite::family::{advance, begin, ended, progress, settle, step_observed, step_on};
 use crate::sqlite::transfer::resolve::{note_incoming, retired};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
@@ -116,7 +114,7 @@ fn run(
         "check",
         super::resolve::resolve(&home, name, target, related),
     )?;
-    let record = at("check", record_of(&home, name))?;
+    let record = at("check", StoreRecord::of(&home, name))?;
     at("check", record.unheld())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
     // what holds the Store is refused before any machine is reached
@@ -184,8 +182,8 @@ fn reach(home: &Path, name: &str, from: &str, to: &str) -> Result<(Executor, Exe
     let bytes = size("bytes").saturating_add(size("wal_bytes"));
     let Some(free) = there.get_int("free") else {
         return Err(refused(
-            "Unsupported",
-            format!("machine {to}'s worker does not report its free disk (an older bundle)"),
+            "Failed",
+            format!("machine {to}'s worker answered no free disk"),
         ));
     };
     let headroom = HEADROOM.max(bytes / 10);
@@ -235,7 +233,9 @@ fn phases(
     let home = home.to_path_buf();
     // the Store's record travels with the snapshot: a crashed opener's
     // leftover write-ahead log is checkpointed through its binding
-    let store_record = at("snapshot", record_of(&home, name))?.to_record().clone();
+    let store_record = at("snapshot", StoreRecord::of(&home, name))?
+        .to_record()
+        .clone();
     enter(&home, events, op, name, "snapshot", None)?;
     let snapshot = at(
         "snapshot",
@@ -345,7 +345,7 @@ fn phases(
         "record",
         (|| {
             let _store = record::lock(&home, name)?;
-            let record = record_of(&home, name)?.with("machine", SdkValue::text(to));
+            let record = StoreRecord::of(&home, name)?.with("machine", SdkValue::text(to));
             let record = record.with("last_transfer", last.clone());
             record.with(op::FIELD, retiring.clone()).write(&home)
         })(),

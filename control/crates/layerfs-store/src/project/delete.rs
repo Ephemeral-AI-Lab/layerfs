@@ -1,8 +1,7 @@
 //! `project.delete`: a project is retired in its Store and its home entry is
 //! removed (spec §4, §4.2, §5.1 and §10).
 //!
-//! The marker is the commit point. The caller first saves the legacy
-//! own-project identity, then writes the durable intent
+//! The marker is the commit point. The caller first writes the durable intent
 //! `store/<store>/delete/<project>.json` with
 //! `{store, project, stack_id, deleted_ms, attempt_ms, state, op_id?}`, then marks the
 //! Stack, then removes only its own home entry and unlinks the intent. A
@@ -26,8 +25,8 @@
 //! optional context fields are the ones the retired
 //! `project.remove` call sent: the worker opens the Store under its own root
 //! with the caller's `store_record`, and the project name lets its reply and
-//! its own home entry name the project. The worker saves the legacy
-//! own-project identity, writes the marker, removes its own entry and replies
+//! its own home entry name the project. The worker writes the marker,
+//! removes its own entry and replies
 //! `{kind, project, stack_id, deleted_ms, retired?}`; the caller removes its
 //! own entry and echoes `home_entry_removed`.
 //!
@@ -62,7 +61,7 @@ use crate::project::frame::{
 };
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
-use crate::{identity, lease, service};
+use crate::{lease, service};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::sdk_values::{hex, unhex};
@@ -298,10 +297,6 @@ impl Admission {
 /// The Store side of one `project.delete` attempt and the caller's entry
 /// removal, as one seam so the home path is testable without a Store.
 pub trait Effects {
-    /// Saves the legacy own-project identity before the intent and the
-    /// marker; idempotent on a retry.
-    fn prepare(&mut self) -> Result<()>;
-
     /// Takes the project-scope admission under `op`, the identity the sidecar
     /// recorded before this call: a live mount is `MountsActive` with its
     /// holders, a live operation `Busy`, an uncertain owner `Unresolved`. A
@@ -517,7 +512,6 @@ pub fn delete_with(
             // admission and no second marker (spec §5.1). The worker's own
             // entry goes first, then the caller's home entry; a failed home
             // removal leaves the sidecar `marked` for the next retry.
-            effects.prepare()?;
             effects.settle(stack)?;
             let removed_entry = effects
                 .remove_entry(&paths::project_dir(home, store, project))
@@ -534,7 +528,6 @@ pub fn delete_with(
         if settled.state == IntentState::Done {
             // The done sidecar needs no Store call: the marker is already
             // there and only the home entry is removed.
-            effects.prepare()?;
             let removed_entry = effects
                 .remove_entry(&paths::project_dir(home, store, project))
                 .is_ok();
@@ -546,12 +539,10 @@ pub fn delete_with(
         }
     }
 
-    // The identity save, then the sidecar with its operation identity, then
-    // the admission, then the marker. Writing the sidecar first means a crash
-    // between the registered row and its reply leaves the identity on disk
-    // for the retry; a refusal keeps the pending sidecar and writes no
-    // marker.
-    effects.prepare()?;
+    // The sidecar with its operation identity, then the admission, then the
+    // marker. Writing the sidecar first means a crash between the registered
+    // row and its reply leaves it on disk for the retry; a refusal keeps the
+    // pending sidecar and writes no marker.
     let mut current = match intent {
         Some(intent) => intent,
         None => Intent {
@@ -625,22 +616,11 @@ fn remove_tree(entry: &Path) -> Result<()> {
 
 /// The Store-side opens of `project.delete` in this process.
 struct Local {
-    home: PathBuf,
-    store: String,
     project: String,
     open: OpenArgs,
 }
 
 impl Effects for Local {
-    fn prepare(&mut self) -> Result<()> {
-        if self.project != self.store || !identity::legacy(&self.home, &self.store)? {
-            return Ok(());
-        }
-        let id = identity::identity(&self.open)?;
-        layerfs_home::home::private_dir(&identity::store_dir(&self.home, &self.store)?)?;
-        identity::save_record(&self.home, &self.store, &id)
-    }
-
     fn admit(&mut self, stack: LayerStackId, op: [u8; 16], project: &str) -> Result<Admission> {
         let intent = store_admission::project_removal_at(stack, op, Some(project));
         service::with_service(&self.open, |service| {
@@ -732,7 +712,7 @@ pub fn delete(
             let _lease = lease::hold(&home, store)?;
             match place::plan(&home, &store_ref)? {
                 Executor::Local => {
-                    let open = open_args(&home, store, name, Some(&record))?;
+                    let open = open_args(&home, store, name, &record)?;
                     // Resolve the project by the Stack its Store lists now,
                     // never by the home record alone: a fresh delete of a
                     // retired project is `NoSuchProject`, and a stale record
@@ -745,8 +725,6 @@ pub fn delete(
                         None
                     };
                     let mut effects = Local {
-                        home: home.clone(),
-                        store: store.to_owned(),
                         project: name.to_owned(),
                         open,
                     };
@@ -769,26 +747,7 @@ pub fn delete(
                 }
             }
         }
-        None => {
-            // A Store made by its own project's Init has no Store record: its
-            // identity lives in the project entry, and saving it before that
-            // entry goes is exactly the legacy own-project identity save.
-            if name != store || project_record.is_none() {
-                return Err(refused("NoSuchStore", format!("no Store named {store}")));
-            }
-            let open = open_args(&home, store, name, None)?;
-            let stack = match stack {
-                Some(stack) => Some(stack),
-                None => listed_stack(&open, name)?,
-            };
-            let mut effects = Local {
-                home: home.clone(),
-                store: store.to_owned(),
-                project: name.to_owned(),
-                open,
-            };
-            delete_with(&home, store, name, stack, &mut effects)
-        }
+        None => Err(refused("NoSuchStore", format!("no Store named {store}"))),
     }
 }
 
@@ -900,8 +859,7 @@ pub fn release_project(root: &Path, frame: &DeleteReleaseFrame) -> Outcome {
     })
 }
 
-/// The worker's `project.delete` on a Store under `root`: save the legacy
-/// own-project identity, write the marker, remove the worker's own entry and
+/// The worker's `project.delete` on a Store under `root`: write the marker, remove the worker's own entry and
 /// answer `{kind, project, stack_id, deleted_ms}`. The marker reuses the
 /// caller's admission operation identity when its frame carries one, so the
 /// caller's admitted row is excluded from its own scan; without one the
@@ -913,14 +871,6 @@ pub fn delete_project(root: &Path, frame: &DeleteFrame) -> Outcome {
         .clone()
         .ok_or_else(|| refused("InvalidInput", "project.delete needs the Store's record"))?;
     let open = worker_open(root, store, frame.project.clone(), store_record);
-    // The legacy own-project entry carries the Store's identity until the
-    // marker; save it first, idempotently.
-    let own = frame.project.as_deref() == Some(store) && identity::legacy(root, store)?;
-    if own {
-        let id = identity::identity(&open)?;
-        layerfs_home::home::private_dir(&identity::store_dir(root, store)?)?;
-        identity::save_record(root, store, &id)?;
-    }
     let op = frame.op_id.unwrap_or_else(store_admission::op_id);
     let requested = frame.deleted_ms.unwrap_or_else(now_ms);
     let deletion = service::with_service(&open, |service| {

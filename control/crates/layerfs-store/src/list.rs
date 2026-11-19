@@ -4,7 +4,7 @@
 //! unless `--with stats` asks for sizes.
 use crate::get::summary;
 use crate::place;
-use crate::record::{Placement, StoreRecord, StoreRef};
+use crate::record::StoreRecord;
 use crate::sqlite::family::step_on;
 use crate::sqlite::transfer::step::StoreStep;
 use crate::state;
@@ -15,23 +15,12 @@ use layerfs_home::state::State;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// The machine a sqlite Store's record places it on, if it tells one.
-fn machine_of(record: &StoreRecord) -> Option<&str> {
-    match record.store_ref() {
-        Ok(StoreRef::Sqlite {
-            machine: Placement::Machine(machine),
-            ..
-        }) => Some(machine),
-        _ => None,
-    }
-}
-
 /// The bytes of a sqlite Store's file with its write-ahead log, from one
 /// `stat` on its machine, starting nothing; none for a PostgreSQL Store
 /// and for a machine that does not answer (which is not asked again for
 /// its other Stores).
 fn size(home: &Path, record: &StoreRecord, unanswered: &mut Vec<String>) -> SdkValue {
-    let Some(machine) = machine_of(record) else {
+    let Some(machine) = state::placed(record) else {
         return SdkValue::Null;
     };
     if unanswered.iter().any(|gone| gone == machine) {
@@ -61,7 +50,7 @@ pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Ma
     let mut unanswered = Vec::new();
     let mut items = Vec::new();
     for record in crate::record::stores(home)? {
-        let on = machine_of(&record);
+        let on = state::placed(&record);
         if machine.is_some_and(|wanted| on != Some(wanted)) {
             continue;
         }

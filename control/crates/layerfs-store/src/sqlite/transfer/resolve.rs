@@ -18,13 +18,11 @@
 //! [`note_incoming`]). The doctor reports that copy's bytes through
 //! [`partial_on`], and the next `store move` or `store remove` deletes it
 //! there.
-//!
-//! A record a build before the 2.0 call surface wrote names its move
-//! `store.push` or `store.pull`; both are read as the move they were.
+
 use crate::intent;
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord, StoreRef};
-use crate::sqlite::family::{begin, ended, record_of, step_on};
+use crate::sqlite::family::{begin, ended, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -158,7 +156,7 @@ pub fn partial_on(record: &StoreRecord) -> Option<String> {
 /// `store remove` clears it (see [`leftover`]).
 pub fn note_incoming(home: &Path, name: &str, to: &str) -> Result<()> {
     let _store = record::lock(home, name)?;
-    record_of(home, name)?
+    StoreRecord::of(home, name)?
         .with("incoming_on", SdkValue::text(to))
         .write(home)
 }
@@ -173,18 +171,13 @@ pub fn note_incoming(home: &Path, name: &str, to: &str) -> Result<()> {
 /// (#535 D11). A failure puts the ended intent back, so the copy stays this
 /// call's to delete next time.
 pub fn resolve(home: &Path, name: &str, to: &str, related: Related) -> Result<()> {
-    let record = record_of(home, name)?;
+    let record = StoreRecord::of(home, name)?;
     let held = record.op();
     if let Some(op) = held
         .as_ref()
         .filter(|op| op.standing() == Standing::Unresolved)
     {
-        // a `store.pull` a build before 2.0 recorded went to `native`
-        let went = match op.name() {
-            "store.pull" => Some(NATIVE),
-            _ => op.args().get_text("to"),
-        };
-        if !intent::is_move(op.name()) || went != Some(to) {
+        if !intent::is_move(op.name()) || op.args().get_text("to") != Some(to) {
             return record.unheld();
         }
     }
@@ -229,7 +222,7 @@ pub fn resolve(home: &Path, name: &str, to: &str, related: Related) -> Result<()
 /// and marks a `last_transfer` not yet retired as retired.
 pub fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
     let _store = record::lock(home, name)?;
-    let mut now = record_of(home, name)?;
+    let mut now = StoreRecord::of(home, name)?;
     if now.op().is_some_and(|held| held.id() == id) {
         now = now.without(layerfs_home::op::FIELD);
     }

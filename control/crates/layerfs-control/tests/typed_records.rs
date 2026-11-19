@@ -7,49 +7,10 @@ use layerfs_home::json::{parse, print};
 use layerfs_home::outcome::View;
 use layerfs_store::backup::record::BucketRecord;
 use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreDerived, StoreRecord};
+use layerfs_store::record::StoreRecord;
 
 fn value(text: &str) -> SdkValue {
     parse(text).unwrap()
-}
-
-fn projects(names: &[&str]) -> StoreDerived {
-    StoreDerived {
-        projects: names.iter().map(|n| n.to_string()).collect(),
-    }
-}
-
-#[test]
-fn a_store_shows_its_record_without_secrets_then_its_projects() {
-    let record = StoreRecord::from_record(
-        "shop",
-        value(
-            r#"{"v":1,"binding":"b","name":"old","cursor":"c","kind":"sqlite","machine":"box",
-               "profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},
-               "op":{"id":"op-1","name":"store.push","phase":"send","args":{"to":"box"},
-                     "owner":{"pid":0},"started":3,"updated":4,"uncertain":true},
-               "last_transfer":{"from":"native","to":"box"}}"#,
-        ),
-    );
-    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"op":{"id":"op-1","name":"store.push","phase":"send","started":3,"uncertain":true},"last_transfer":{"from":"native","to":"box"},"projects":["api","web"]}"#;
-    let shown = record.to_sdk(&projects(&["api", "web"])).unwrap();
-    assert_eq!(print(&shown), want);
-    // the record itself is written back as read, `v` and all
-    assert_eq!(record.to_record().get("v"), Some(&SdkValue::Int(1)));
-}
-
-#[test]
-fn a_store_record_of_an_unknown_kind_still_shows() {
-    let record = StoreRecord::from_record("odd", value(r#"{"kind":"oracle"}"#));
-    let shown = record.to_sdk(&projects(&[])).unwrap();
-    assert_eq!(
-        print(&shown),
-        r#"{"name":"odd","kind":"oracle","projects":[]}"#
-    );
-    let broken = StoreRecord::from_record("odd", SdkValue::Text("x".into()));
-    let refusal = broken.to_sdk(&projects(&[])).unwrap_err();
-    assert_eq!(refusal.code, "Failed");
-    assert_eq!(refusal.message, "Store odd's record is not a record");
 }
 
 #[test]
@@ -310,7 +271,7 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     // a live operation (this process) wins over everything, named by its
     // call word; a gone one's uncertain outcome is unresolved with the call
     // that clears it, its certain one is ignored
-    let live = Op::begin("store.push", "send", SdkValue::Null).unwrap();
+    let live = Op::begin("store.move", "send", SdkValue::Null).unwrap();
     let with = |op: SdkValue| StoreRecord::from_record("s", SdkValue::map([("op", op)]));
     let busy = held(&with(live.to_record().clone())).unwrap();
     assert!(matches!(&busy, State::Busy { name, phase, .. } if name == "move" && phase == "send"));
@@ -327,6 +288,18 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
         ))
     );
     assert_eq!(held(&with(gone(false))), None);
+    // a name this build has no call for (a build before 2.0's `store.push`)
+    // is cleared by the live read, which is the fix it shows
+    let old = value(
+        r#"{"id":"op-3","name":"store.push","phase":"send","args":{"to":"box"},"owner":{"pid":0},"uncertain":true}"#,
+    );
+    assert_eq!(
+        held(&with(old)),
+        Some(State::broken(
+            Reason::Unresolved,
+            Some("layerfs store get s --with live")
+        ))
+    );
     std::fs::remove_dir_all(&home).unwrap();
 }
 

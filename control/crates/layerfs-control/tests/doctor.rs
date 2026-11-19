@@ -539,7 +539,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
 /// A copy a move left on the machine its record does not name is one
 /// warning, read from the record with no machine asked: a target's whole or
 /// partial copy (a certain failure's `incoming_on`, or a gone process's move
-/// from `native` past `send`, named `store.push` by a build before 2.0) and
+/// from `native` past `send`) and
 /// a source's copy a move did not retire.
 #[test]
 fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
@@ -551,11 +551,11 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     let mut failed = sqlite("failed", "native");
     failed.push(("incoming_on", t("box")));
     store(&home, "failed", failed);
-    // an old build's push whose process ended at `send`
+    // a move whose process ended at `send`
     let mut pushed = sqlite("pushed", "native");
     let push = SdkValue::map([
         ("id", t("op-00000000000000bb")),
-        ("name", t("store.push")),
+        ("name", t("store.move")),
         ("phase", t("send")),
         (
             "args",

@@ -84,7 +84,7 @@ pub fn create(
         ));
     }
     // the Store's place, a move and the name are checked under the lock
-    // that claims the name, so a store.push or pull cannot pass between them
+    // that claims the name, so a store.move cannot pass between them
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
