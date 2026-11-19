@@ -20,7 +20,7 @@ the command has `worker` (a machine's worker process), `help` and
 ## How a call is written
 
 ```
-layerfs <family> <call> <positionals> [--options] [--text]
+layerfs <family> <call> <positionals> [--options] [--text | --json]
 ```
 
 ```js
@@ -1637,13 +1637,28 @@ every check was made and nothing was found; otherwise `findings` and
 
 ## Results
 
-- **stdout** carries the call's result as one line of JSON.
-- **`--text`** prints a readable form instead: a file's text as it is; a
-  result's list of records as a table with upper-case headers; other fields
-  as `key  value` lines. It is one generic form, not a layout per call. A
-  row whose short form left `state: ready` out shows `ready` in its STATE
-  column (the column stays when every row is ready); any other value a row
-  leaves out shows `-`.
+- **stdout** carries the call's result as one line of JSON when it is not
+  a terminal (a pipe, a file, a program), or with `--json`.
+- **On a terminal**, or with `--text`, it prints a readable form instead:
+  a file's text as it is; `done` for a result that only says it worked;
+  aligned `label  value` lines (`memory_used_bytes` reads `memory used`,
+  byte counts as sizes, a Commit id by its first 14 characters, which every
+  lookup takes); a map as an indented block under its label; a list of
+  records as a table with upper-case headers (a list other than `items`
+  under its label); a list of plain values one per line. A row whose short
+  form left `state: ready` out shows `ready` in its STATE column, which
+  also says the row's reason (`broken: outdated`) and what blocks it
+  (`blocked by machine docker (outdated)`); a row's `fix` and `message`
+  are lines under the table (`fix <name>: <command>`); any other value a
+  row leaves out shows `-`. A `*_not_listed` flag is a note under
+  the table. The next page or line window is printed on stderr as the
+  command line that reads it (`more: … --cursor <c>`, `--line <n>`).
+  Three calls read their own way: `workspace exec` writes the command's
+  stdout and stderr as they are; `file blame` is one row per range of
+  lines with its Commit and message; `commit diff --with patch` is each
+  path with its change as a letter (`A`, `M`, `D`) and its `-` and `+`
+  lines. Bold headings and red and green diff lines appear only on a
+  terminal without `NO_COLOR`.
 - Every call answers its short form, or its long form with `--detail`
   ([the form of an answer](#the-form-of-an-answer)); its lists carry `items`
   and `next_cursor`, passed back as `cursor`. 1.x's `page`, `page_size`,
@@ -1659,16 +1674,20 @@ every check was made and nothing was found; otherwise `findings` and
 | --- | --- |
 | 0 | the call succeeded; a doctor exits 0 once its report is made, whatever it found |
 | 2 | the command line is wrong (wrong number of positionals, unknown option, a required option missing, a `--with` section the call does not take, a value that is not a whole number or not `true`/`false`, bad JSON, an unreadable `--from` file); nothing was called |
-| 125 | LayerFS refused or failed the call; the refusal is JSON on stderr |
+| 125 | LayerFS refused or failed the call; the refusal is on stderr, as JSON or readably, the form the result would take |
 
 `workspace exec` exits with the command's own code in every form (0 for a
 result with no exit code, 1 for a code outside 0 to 255) and prints its
-result JSON on stdout (`--stream` prints the output instead); 125 still
+result JSON on stdout (readably, and with `--stream`, the command's own
+output instead); 125 still
 means LayerFS refused or failed, with the refusal on stderr and nothing on
 stdout. `layerfs help` and `layerfs --version` need no
 home.
 
-A refusal is one line of JSON: `{"error", "message"}`, then `fix` when
+A wrong command line names what is wrong, then the call's usage line and
+`layerfs help <family> <call>`. A refusal is one line of JSON (read on a
+terminal as `error: <message>  (<code>)`, then `fix:` and the fields, one
+per line): `{"error", "message"}`, then `fix` when
 LayerFS knows one runnable shell line that clears it, then the fields the
 next call needs, flat (a `Conflict` names the head as `commit`, a `Busy` or
 `Unresolved` its `op`, a `Dirty` its paths). `--detail` asks for its long
@@ -1680,7 +1699,9 @@ also keeps them in `fields`). Run:
 
 ```console
 $ layerfs file read shop/api
-layerfs: file.read takes 3 positional arguments, not 1
+layerfs: file read is missing <branch> <path>
+usage: layerfs file read <project> <branch> <path> [--at C] [--line 1] [--limit 2000]
+`layerfs help file read` for more
 $ echo $?
 2
 
@@ -1744,7 +1765,9 @@ the request was sent and no answer settled it, and its message says so
 
 | Switch | Calls | Does |
 | --- | --- | --- |
-| `--text` | all | a readable result instead of JSON |
+| `--text` | all | the readable form, also when stdout is not a terminal |
+| `--json` | all | one line of JSON, also on a terminal; not with `--text` |
+| `-h`, `--help` | all | help: after a family its calls, after a call its arguments, options, answer and an example |
 | `--detail` | all | the long form of the answer, and of a refusal ([the form of an answer](#the-form-of-an-answer)) |
 | `--with <a,b>` | `home get` (`platforms`, `tree`), `project list` (`stats`), `commit diff` (`patch`), `sandbox get` (`stats`), `machine list` and `machine get` (`live`), `machine images` (`docker`), `machine stats` (`space`), `store list` (`stats`), `store get` (`live`, `stats`) | adds the named sections to the answer; a name the call does not take is exit 2 |
 | `--progress` | `home doctor`, `project init`, `project export`, `project doctor`, `sandbox create`, `sandbox remove`, `sandbox doctor`, `workspace exec`, `machine load-image`, `machine start`, `machine stop`, `machine create`, `machine remove`, `machine doctor`, `store move`, `store compact`, `store doctor`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}` (a doctor adds `node`; `workspace exec` adds `exec` to its one `start` event). On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase; `LAYERFS_PROGRESS_JSON` set keeps the JSON lines on a terminal. `backup doctor` sends no progress |

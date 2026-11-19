@@ -173,7 +173,7 @@ fn the_cli_reads_a_sandbox_s_daemon_log_by_cursor_and_logs_no_line() {
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
     let (_, family, _) = run_cli(&home, &["help", "sandbox"]);
-    assert!(family.contains(usage), "{family}");
+    assert!(lists(&family, "log"), "{family}");
     // a wrong command line is exit 2 and calls nothing; the old name is
     // gone, with no alias
     for usage in [
@@ -255,7 +255,7 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
     let (_, family, _) = run_cli(&home, &["help", "sandbox"]);
-    assert!(family.contains(usage), "{family}");
+    assert!(lists(&family, "files"), "{family}");
     // a wrong command line is exit 2 and calls nothing
     for usage in [
         &["sandbox", "files"][..],
@@ -341,7 +341,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     assert_eq!(code, Some(0));
     assert!(out.starts_with(usage), "{out}");
     let (_, family, _) = run_cli(&home, &["help", "machine"]);
-    assert!(family.contains(usage), "{family}");
+    assert!(lists(&family, "files"), "{family}");
     // a wrong command line is exit 2 and calls nothing
     for usage in [
         &["machine", "files"][..],
@@ -443,4 +443,9 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     // none of it wrote a call-log line: only `sandbox list` did
     assert_eq!(lines(&home).len(), 1);
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// Whether a family's help lists call `call` on a line of its own.
+fn lists(family: &str, call: &str) -> bool {
+    (family.lines()).any(|line| line.split_whitespace().next() == Some(call))
 }

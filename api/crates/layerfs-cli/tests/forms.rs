@@ -177,7 +177,7 @@ fn home_get_prints_the_form_asked_and_a_refusal_is_one_line_on_stderr() {
         help.contains("--detail") && help.contains("--with"),
         "{help}"
     );
-    assert!(help.contains("--text prints a readable form"), "{help}");
+    assert!(help.contains("--text, --json"), "{help}");
     // --text still renders a migrated call's result
     let piped = run_with_stdin(&mut layerfs(&home, &["home", "get", "--text"]), b"");
     assert_eq!(piped.status.code(), Some(0), "{}", text(&piped.stderr));

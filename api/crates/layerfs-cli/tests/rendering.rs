@@ -147,3 +147,97 @@ fn a_ready_row_prints_ready_in_a_list_s_text() {
     let shown = readable(&value, None);
     assert!(shown.lines().nth(2).unwrap().ends_with("  -"), "{shown}");
 }
+
+/// The readable form of a record: `done` for a bare success, aligned
+/// labels, sizes for byte counts, Commit ids by a 14-character prefix,
+/// nested maps indented under their label, a list of plain values one per
+/// line, and a `*_not_listed` flag as a note under its table.
+#[test]
+fn records_read_as_aligned_labels() {
+    use layerfs_cli::output::{readable, refusal_text};
+    let t = |text: &str| SdkValue::text(text);
+    assert_eq!(
+        readable(&SdkValue::map([("ok", SdkValue::Bool(true))]), None),
+        "done\n"
+    );
+    let id = format!("12{}", "ab".repeat(32));
+    let record = SdkValue::map([
+        ("commit", t(&id)),
+        ("file_count", SdkValue::Int(4)),
+        ("memory_used_bytes", SdkValue::Int(2048)),
+        ("bundle", SdkValue::map([("source", t("runtime"))])),
+    ]);
+    assert_eq!(
+        readable(&record, None),
+        format!(
+            "commit       {}\nfile count   4\nmemory used  2 KiB\nbundle\n  source  runtime\n",
+            &id[..14]
+        )
+    );
+    let paths = SdkValue::map([("items", SdkValue::List(vec![t("/a"), t("/b")]))]);
+    assert_eq!(readable(&paths, None), "/a\n/b\n");
+    let none = SdkValue::map([("items", SdkValue::List(Vec::new()))]);
+    assert_eq!(readable(&none, None), "(none)\n");
+    let flagged = SdkValue::map([(
+        "items",
+        SdkValue::List(vec![
+            SdkValue::map([
+                ("sandbox", t("sb1")),
+                ("workspaces_not_listed", SdkValue::Bool(true)),
+            ]),
+            SdkValue::map([("sandbox", t("sb2"))]),
+        ]),
+    )]);
+    let shown = readable(&flagged, None);
+    assert_eq!(
+        shown, "SANDBOX\nsb1\nsb2\nWorkspaces kept on the machine (`layerfs workspace list` reads them): sb1\n",
+        "{shown}"
+    );
+    let refusal = SdkValue::map([
+        ("error", t("InUse")),
+        ("message", t("Store s1 has running Sandboxes: sb2")),
+        ("fix", t("layerfs sandbox remove sb2")),
+        ("sandboxes", SdkValue::List(vec![t("sb2")])),
+    ]);
+    assert_eq!(
+        refusal_text(&refusal),
+        "error: Store s1 has running Sandboxes: sb2  (InUse)\n  fix: layerfs sandbox remove sb2\n  sandboxes: sb2\n"
+    );
+}
+
+/// A row's reason and what blocks it read in its STATE cell; its fix is a
+/// line under the table, named by the row, so the table stays narrow.
+#[test]
+fn a_row_s_reason_reads_in_state_and_its_fix_under_the_table() {
+    use layerfs_cli::output::readable;
+    let t = |text: &str| SdkValue::text(text);
+    let rows = SdkValue::map([(
+        "items",
+        SdkValue::List(vec![
+            SdkValue::map([("store", t("a"))]),
+            SdkValue::map([
+                ("store", t("pg")),
+                ("state", t("broken")),
+                ("reason", t("outdated")),
+                ("fix", t("layerfs store update pg --auth x")),
+            ]),
+            SdkValue::map([
+                ("store", t("s")),
+                ("state", t("blocked")),
+                (
+                    "blocked_by",
+                    SdkValue::map([("machine", t("docker")), ("reason", t("outdated"))]),
+                ),
+            ]),
+        ]),
+    )]);
+    assert_eq!(
+        readable(&rows, None),
+        "STORE  STATE\n\
+         a      ready\n\
+         pg     broken: outdated\n\
+         s      blocked by machine docker (outdated)\n\
+         \n\
+         fix pg: layerfs store update pg --auth x\n"
+    );
+}
