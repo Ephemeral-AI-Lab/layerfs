@@ -189,27 +189,66 @@ fn a_home_it_cannot_read_is_broken_not_refused() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// A real 2.0 home whose `layerfs.json` the system refuses to read
-/// (EACCES here) is `failed` with the OS error, and is never advised to be
-/// moved aside (RC-8, RV5).
-#[test]
-fn a_home_the_system_refuses_to_read_is_failed_with_no_move_aside() {
-    let home = place();
-    call(&home, "home.init");
+/// `home.get` of `home` while `stage` makes the system refuse to read its
+/// `layerfs.json` (restored by `unstage`): `broken` `failed` with the OS
+/// error `expected` as its message and no fix, then `ready` again.
+fn refused_read(
+    home: &Path,
+    stage: impl FnOnce(&Path),
+    unstage: impl FnOnce(&Path),
+    expected: &str,
+) {
     let file = home.join("layerfs.json");
-    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
-    let got = get(&home);
-    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    stage(&file);
+    let got = get(home);
+    unstage(&file);
     assert_eq!(got.get_text("state"), Some("broken"));
     assert_eq!(got.get_text("reason"), Some("failed"));
     assert_eq!(got.get("fix"), Some(&SdkValue::Null));
     let message = got.get_text("message").expect("message");
-    assert_eq!(
-        message,
-        format!("{}: Permission denied (os error 13)", file.display())
-    );
+    assert_eq!(message, format!("{}: {expected}", file.display()));
     // the home is as it was, and reads as ready again
-    assert_eq!(get(&home).get_text("state"), Some("ready"));
+    assert_eq!(get(home).get_text("state"), Some("ready"));
+}
+
+/// A real 2.0 home whose `layerfs.json` the system refuses to read (EISDIR
+/// for every user, EACCES when not root) is `failed` with the OS error, and
+/// is never advised to be moved aside (RC-8, RV5).
+#[test]
+fn a_home_the_system_refuses_to_read_is_failed_with_no_move_aside() {
+    let home = place();
+    call(&home, "home.init");
+    // a `layerfs.json` that is a folder: opened, then its read refused with
+    // EISDIR, for root too (`records::read_record`'s `unreadable` path)
+    let aside = home.join("layerfs.json.aside");
+    refused_read(
+        &home,
+        |file| {
+            std::fs::rename(file, &aside).unwrap();
+            std::fs::create_dir(file).unwrap();
+        },
+        |file| {
+            std::fs::remove_dir(file).unwrap();
+            std::fs::rename(&aside, file).unwrap();
+        },
+        "Is a directory (os error 21)",
+    );
+    // a `layerfs.json` with no read permission: EACCES, which root bypasses
+    if nix::unistd::geteuid().is_root() {
+        eprintln!("uid 0 reads a mode 000 file: the EACCES case is not staged, EISDIR above stands for it");
+    } else {
+        let mode = |mode| {
+            move |file: &Path| {
+                std::fs::set_permissions(file, std::fs::Permissions::from_mode(mode)).unwrap()
+            }
+        };
+        refused_read(
+            &home,
+            mode(0o000),
+            mode(0o600),
+            "Permission denied (os error 13)",
+        );
+    }
     let _ = std::fs::remove_dir_all(&home);
 }
 
