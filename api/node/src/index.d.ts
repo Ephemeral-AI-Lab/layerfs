@@ -734,7 +734,7 @@ export interface StoreFamily {
   create(name: string, options?: StoreCreateOptions): Promise<Result>;
   /** connect a PostgreSQL database as a Store, or set an address of a connected one */
   connect(store: string, url: string, options?: StoreConnectOptions): Promise<Result>;
-  /** forget a PostgreSQL Store, or one machine's own address; its data stays */
+  /** forget a PostgreSQL Store, or one machine's own address and reach; its data stays */
   disconnect(store: string, options?: StoreDisconnectOptions): Promise<Result>;
   /** save a PostgreSQL login in the home; saving again rotates it */
   save_auth(auth: string, options: StoreSaveAuthOptions): Promise<Result>;

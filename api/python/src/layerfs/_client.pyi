@@ -844,7 +844,7 @@ class StoreFamily:
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """forget a PostgreSQL Store, or one machine's own address; its data stays"""
+        """forget a PostgreSQL Store, or one machine's own address and reach; its data stays"""
     def save_auth(
         self,
         auth: str,
