@@ -318,3 +318,64 @@ fn what_is_not_there_is_refused_and_no_home_is_made() {
     assert!(refused.starts_with("InvalidInput: "), "{refused}");
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// A Store whose record alone makes it broken (UI pass 2, F6): the doctor's
+/// finding carries the fix its state gives in `store.list`. A PostgreSQL
+/// Store naming no saved login fails `store.connection` with the save-auth
+/// fix, its `--user` the one its URL names, before anything is dialled; a
+/// record of a kind this build does not read fails `store.record` with
+/// `store remove`.
+#[test]
+fn a_store_s_broken_record_gives_its_state_s_fix() {
+    let home = tempdir("store-fix");
+    short(&home, "home.init", &[]);
+    write_entity(
+        &paths::store_record(&home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgresql://owner@db.invalid:5432/layerfs_db")),
+            ("schema", t("layerfs")),
+            ("synchronous_commit", t("local")),
+            ("binding", SdkValue::Bytes(vec![1; 16])),
+            ("cursor", SdkValue::Bytes(vec![7; 32])),
+        ]),
+    )
+    .unwrap();
+    write_entity(
+        &paths::store_record(&home, "odd"),
+        &SdkValue::map([("name", t("odd")), ("kind", t("mysql"))]),
+    )
+    .unwrap();
+    let listed = short(&home, "store.list", &[]);
+    let item = |name: &str| {
+        (list(&listed, "items").iter())
+            .find(|item| item.get_text("store") == Some(name))
+            .cloned()
+            .unwrap_or_else(|| panic!("{name}: {listed:?}"))
+    };
+    let pg_fix = "layerfs store save-auth <auth> --user owner --password-stdin && layerfs store update pg --auth <auth>";
+    assert_eq!(item("pg").get_text("reason"), Some("outdated"));
+    assert_eq!(item("pg").get_text("fix"), Some(pg_fix));
+    assert_eq!(
+        item("odd").get_text("fix"),
+        Some("layerfs store remove odd")
+    );
+
+    for (store, check, fix) in [
+        ("pg", "store.connection", pg_fix),
+        ("odd", "store.record", "layerfs store remove odd"),
+    ] {
+        let short_form = short(&home, "store.doctor", &[("store", t(store))]);
+        let long_form = long(&home, "store.doctor", &[("store", t(store))]);
+        check_pair(&short_form, &long_form);
+        for report in [&short_form, &long_form] {
+            let found = (list(report, "findings").iter())
+                .find(|f| f.get_text("check") == Some(check))
+                .unwrap_or_else(|| panic!("{store}: {report:?}"));
+            assert_eq!(found.get_text("store"), Some(store), "{found:?}");
+            assert_eq!(found.get_text("fix"), Some(fix), "{found:?}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(home);
+}

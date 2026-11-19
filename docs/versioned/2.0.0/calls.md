@@ -1268,6 +1268,11 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   0700 folder) and moves the home's `generation`; the password is read from
   stdin only and never answered, logged or traced. Short `{"ok":true}`;
   long `ok, outcome (saved or rotated), auth, user, stores, stores_count`.
+  A Store recorded before saved logins (no `auth`) is `broken` `outdated`
+  with the fix `layerfs store save-auth <auth> --user <user>
+  --password-stdin && layerfs store update <store> --auth <auth>`, its
+  `--user` the one its URL names when it names one; `store doctor`'s
+  `store.connection` gives the same fix.
   A Store records only the login's name (`auth`); its URL holds host,
   port, database and TLS settings, and one naming a user or holding a
   password is refused `InvalidInput`. The login goes into the URL only

@@ -10,7 +10,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::{map_of, shown_names};
 use layerfs_home::home;
 use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret, secret_names};
-use layerfs_home::outcome::{refused, with_fix, with_next, Outcome};
+use layerfs_home::outcome::{refused, shell_word, with_fix, with_next, Outcome};
 use layerfs_home::time::iso;
 use std::path::Path;
 
@@ -75,11 +75,10 @@ pub fn auth_of(record: &StoreRecord) -> Option<&str> {
 /// fix that saves one and names it.
 pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
     let Some(auth) = record.text("auth") else {
-        let name = record.name();
-        let message = format!("PostgreSQL Store {name} names no saved login");
+        let message = format!("PostgreSQL Store {} names no saved login", record.name());
         return Err(with_fix(
             refused("InvalidInput", message),
-            no_auth_fix(name),
+            no_auth_fix(record),
         ));
     };
     let home = record.home().ok_or_else(|| {
@@ -95,11 +94,15 @@ pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
     layerfs_home::secrets::with_login(url, &login.user, login.password())
 }
 
-/// The fix of PostgreSQL Store `store` naming no saved login: save one,
-/// then name it.
-pub fn no_auth_fix(store: &str) -> String {
+/// The fix of PostgreSQL Store `record` naming no saved login: save one,
+/// then name it. `--user` is the user its URL names when it names one (a
+/// record from before saved logins), shell-quoted, else `<user>`.
+pub fn no_auth_fix(record: &StoreRecord) -> String {
+    let user = record.text("url").and_then(super::connect::url_user);
+    let user = user.map_or_else(|| "<user>".to_owned(), |user| shell_word(&user));
     format!(
-        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update {store} --auth <auth>"
+        "layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store update {} --auth <auth>",
+        record.name()
     )
 }
 

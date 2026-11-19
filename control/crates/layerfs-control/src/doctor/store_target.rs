@@ -117,6 +117,8 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
                 error.message
             ),
         );
+        // the fix its `broken` `unsupported` state gives (V20-8a)
+        checks.fix(RECORD, layerfs_store::record::unread_fix(name));
         return None;
     }
     match identity::identity_in(&record) {
@@ -423,6 +425,9 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
                 CONNECTION,
                 SdkValue::map([("step", SdkValue::text("login"))]),
             );
+            // a refusal before any dial carries its own fix: a record
+            // naming no saved login gives its `outdated` state's (V20-7)
+            fix_of(&error, checks);
         }
         _ => fold(record, &seen, checks),
     }
@@ -536,10 +541,21 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
                     Ok(_) => {
                         checks.pass(CONNECTION, format!("machine {machine} reaches the server"))
                     }
-                    Err(refusal) => checks.fail(CONNECTION, refusal.message),
+                    Err(refusal) => {
+                        checks.fail(CONNECTION, refusal.message.clone());
+                        fix_of(&refusal, checks);
+                    }
                 }
             }
         }
         checks.from(CONNECTION, machine);
+    }
+}
+
+/// The last `store.connection` observation with `refusal`'s `fix`, when
+/// it carries one.
+fn fix_of(refusal: &SdkRefusal, checks: &mut Checks) {
+    if let Some(fix) = refusal.detail.get_text("fix") {
+        checks.fix(CONNECTION, fix);
     }
 }
