@@ -12,7 +12,10 @@
 //! A record this build does not read (a field missing, here `boot`) is
 //! refused with `sandbox remove` as its fix, and that remove, forced or
 //! not, takes its records alone with no signal sent (RV3 FAIL 2). The
-//! native runtime is macOS only (RV3 FAIL 3), and so are these tests.
+//! native runtime is macOS only (RV3 FAIL 3), and so are these tests. A
+//! forwarded record (a worker's Sandbox: forward, name, runtime, platform,
+//! image) names no local daemon and is never read as an unread local one
+//! (B10, the CUT3 regression).
 //!
 //! Nothing runs a daemon: a record names this test's own process.
 #![cfg(target_os = "macos")]
@@ -281,4 +284,34 @@ fn a_record_this_build_does_not_read_is_removed_by_its_records_without_a_signal(
         assert!(LocalProcess::observe(me).is_ok());
         std::fs::remove_dir_all(home).unwrap();
     }
+}
+
+/// A forwarded record holds no directory, container, pid, port or labels:
+/// it is not a local record, so `unread` never sends its remove down the
+/// records-only path (B10). The same fields with no forward are unread.
+#[test]
+fn a_forwarded_record_is_not_an_unread_local_one() {
+    use layerfs_sandbox::host::Started;
+    use layerfs_sandbox::record::Forward;
+    use layerfs_sandbox::reopen::unread;
+    let started = Started {
+        name: Some("layerfs-00000000-s1".to_owned()),
+        runtime: Some("namespaces".to_owned()),
+        platform: Some("docker".to_owned()),
+        image: Some(format!("sha256:{}", "a".repeat(64))),
+        ..Started::default()
+    };
+    let address = "127.0.0.1:4100".parse().unwrap();
+    let forwarded = DaemonRecord::forwarded(Forward::new(address, "box", None), &started);
+    assert_eq!(unread(&forwarded), None);
+    let encoded = forwarded.to_record();
+    let SdkValue::Map(fields) = encoded else {
+        panic!("{encoded:?}")
+    };
+    let local = SdkValue::Map(fields.into_iter().filter(|(n, _)| n != "forward").collect());
+    let local = DaemonRecord::decode(&local).unwrap();
+    assert!(
+        unread(&local).is_some(),
+        "a local record missing its fields"
+    );
 }

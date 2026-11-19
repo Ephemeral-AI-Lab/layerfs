@@ -107,7 +107,8 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     }
     // a local record this build does not read (RV3 FAIL 2, 3): its
     // identity cannot be checked, so nothing is signalled and no Store or
-    // daemon is resolved
+    // daemon is resolved. A forwarded record is not local (`unread` answers
+    // `None`): it goes on to its worker below
     if let Some(daemon) = found.daemon() {
         if let Some(why) = crate::reopen::unread(daemon) {
             let first = crate::lifecycle::unread_left(daemon, &why);

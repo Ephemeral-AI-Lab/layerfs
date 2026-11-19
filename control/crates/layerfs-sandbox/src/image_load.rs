@@ -265,7 +265,7 @@ pub fn load_held(
     // the bytes it already staged once
     let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
     capacity(&machine, &probe, id, inspected.size, staged)?;
-    let home_id = ensure_home_id(target.home())?;
+    let home_id = home_id(target.home())?;
     phase(events, "export", None);
     lock.at("export");
     let container = ExportContainer::create(docker, &home_id, &machine, id)?;
@@ -384,14 +384,13 @@ pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
     }
 }
 
-/// Returns `home`'s 32-hex id, creating `layerfs.json` under the home lock when
-/// `home` is an empty folder (such as an isolated test home).
-fn ensure_home_id(home: &Path) -> Result<String> {
-    if let Some(id) = existing_home_id(home)? {
-        return Ok(id);
-    }
-    let _guard = home::lock::take(home)?;
-    Ok(home::ensure(home)?.id)
+/// Returns `home`'s 32-hex id. Called under the image lock, whose record
+/// is in the home by then: a folder with no `layerfs.json` is not empty and
+/// is refused as foreign, so no home is created here (the branch that made
+/// one could not be reached since MIG; lp176_image_lock
+/// `a_folder_that_is_no_home_is_refused_before_an_export`).
+fn home_id(home: &Path) -> Result<String> {
+    existing_home_id(home)?.ok_or_else(|| home::layout::foreign(home))
 }
 
 fn export_nonce() -> Result<String> {

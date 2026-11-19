@@ -211,7 +211,13 @@ fn home_with(tag: &str, worker: SocketAddr) -> PathBuf {
     let record = |path: PathBuf, value: SdkValue| write_record(&path, &value).unwrap();
     record(
         paths::machine_record(&home, "box"),
-        SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        // a 2.0 record names its VM: one without is an earlier build's,
+        // whose Sandboxes a remove forgets without reaching the worker
+        SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     );
     record(
         paths::worker_record(&home, "box"),
