@@ -136,8 +136,7 @@ fn postgresql(record: &StoreRecord) -> Option<State> {
             Some(&login::no_auth_fix(record)),
         ));
     };
-    let home = record.home()?;
-    if login::is_missing(home, auth) {
+    if record.home().is_some_and(|home| login::is_missing(home, auth)) {
         return Some(State::broken(
             Reason::Missing,
             Some(&login::missing_fix(record, auth)),

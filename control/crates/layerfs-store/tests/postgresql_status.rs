@@ -293,7 +293,9 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
             user.split(':').next().unwrap_or(user)
         });
     layerfs_store::postgresql::login::save(&home, "pg", user, "unused").unwrap();
-    StoreRecord::connected("pgs", &url, "layerfs", "off", Some("pg"))
+    // the record keeps the address alone; the user is the saved login's
+    let address = layerfs_store::postgresql::connect::without_login(&url);
+    StoreRecord::connected("pgs", &address, "layerfs", "off", Some("pg"))
         .write(&home)
         .unwrap();
     let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
