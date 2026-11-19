@@ -107,8 +107,9 @@ each old name):
   not `exitCode`).
 - **Settings.** Only `LAYERFS_HOME` and the trace and measurement settings
   are read; a 1.1.0 environment is not imported.
-- **Homes.** An older LayerFS's home (1.1.0, or 2.0 layout 2) is not
-  converted (owner, 2026-11-19): every call refuses it with the fix
+- **Homes.** A folder that is not a LayerFS 2.0 home (an older LayerFS's
+  home among them) is not converted (owner, 2026-11-19): every call
+  refuses it with the fix
   `mv <home> <home>.old && layerfs home init`. See
   [the home](home.md#an-older-home).
 

@@ -1,9 +1,9 @@
 //! The home doctor's records check (`home.records`, #536 H7): a home with
 //! one of each problem gives one finding each, naming the thing it is about
 //! and the one runnable line that fixes it (none where no line does, the
-//! message then saying what to do by hand); a clean home has no findings; a layout 2 home
-//! reports what refuses its conversion; and the doctor writes nothing in
-//! the home. The check reads records only: it dials no worker or daemon.
+//! message then saying what to do by hand); a clean home has no findings; a foreign
+//! home (a `layerfs.json` of another layout) fails its layout check with the
+//! move fix; and the doctor writes nothing in the home. The check reads records only: it dials no worker or daemon.
 #[path = "support/doctor_own.rs"]
 mod doctor_own;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -609,8 +609,8 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
 }
 
 #[test]
-fn a_layout_2_home_fails_its_layout_check_with_the_move_fix_and_is_left() {
-    let home = new_home("layout2");
+fn a_foreign_home_fails_its_layout_check_with_the_move_fix_and_is_left() {
+    let home = new_home("foreign");
     private_dir(&home).unwrap();
     let file = SdkValue::map([
         ("layout", SdkValue::Int(2)),
