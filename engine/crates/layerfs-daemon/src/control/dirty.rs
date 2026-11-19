@@ -9,7 +9,8 @@
 //! directory whose mode differs from the base to its own. Two kinds of row are
 //! no change: an inode created locally that no name binds any more, and a
 //! base directory whose mode equals the base, since its names are their own
-//! rows and Commit ignores its mtime. A path is found among the active
+//! rows and Commit ignores its mtime. A file a Commit kept for its newer
+//! mtime alone is no row of the window at all. A path is found among the active
 //! bindings first, then by a bounded walk of the local base. Both indexed
 //! windows are streamed to the end in bounded pages and only paths are
 //! retained, so the number of no-op rows is not a cap on the check. At most

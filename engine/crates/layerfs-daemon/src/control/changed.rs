@@ -10,8 +10,9 @@
 //! another inode is `modified`; a folder renamed or removed is that one
 //! entry. A changed file the base holds is `modified`; a base folder whose
 //! mode changed is `modified`. A row that is no change (an inode created
-//! and unbound again, a base folder whose mode equals the base) is no
-//! entry. `under` keeps the entries at or below one folder, filtered within
+//! and unbound again, a base folder whose mode equals the base, a file a
+//! Commit kept for its newer mtime alone, which the overlay leaves out of
+//! its window) is no entry. `under` keeps the entries at or below one folder, filtered within
 //! the same read. Paths are found as the Dirty check finds them.
 use super::dirty::{join, Names, WALK};
 use super::{Failure, Service};
