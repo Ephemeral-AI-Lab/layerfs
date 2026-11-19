@@ -48,7 +48,7 @@ never up. `layerfs-machine` reaches `layerfs-platform` only through its
 
 | Topic | Crates | What it covers | Pages |
 | --- | --- | --- | --- |
-| [Home](home/README.md) | `layerfs-home` | Layout, record files, locks, the `op` intent, names, secrets, traces and the call log | [Migration](home/migration.md) |
+| [Home](home/README.md) | `layerfs-home` | Opening a home, layout, record files, locks, the `op` intent, names, secrets, traces and the call log; the inventory of relationships | none |
 | [Machines](machines/README.md) | `layerfs-machine`, `layerfs-platform` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
 | [Stores and projects](stores-and-projects/README.md) | `layerfs-store` (but `backup/`) | Store and project records, placement, leases, the open-Store cache, Store calls | [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md), [Projects](stores-and-projects/projects.md) |
 | [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |

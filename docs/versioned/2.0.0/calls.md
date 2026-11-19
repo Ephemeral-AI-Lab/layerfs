@@ -191,15 +191,16 @@ $ echo $?
 - **`init`**, short: `{ home }`, with `unchanged: true` when the home was
   already current. Long: `home, unchanged, outcome, layout, version`:
   `outcome` is `created` or `unchanged`, and `version` is this build's.
-  An older LayerFS's home (layout 2, or 1.1.0's records) is never
-  converted: it is refused `Unsupported` with the fix
+  A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another
+  layout, or files and no `layerfs.json`) is never converted: it is
+  refused `Unsupported` with the fix
   `mv <home> <home>.old && layerfs home init`, and nothing in it is written.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
-  home there, fixed by `layerfs home init`; `outdated`: an older
-  LayerFS's home, fixed by `mv <home> <home>.old && layerfs home init`;
-  `failed`: `layerfs.json` cannot be read, or is of a
-  newer layout; the long form's `message` says which). Long:
+  home there, fixed by `layerfs home init`; `outdated`: a folder that is
+  not a LayerFS 2.0 home, fixed by `mv <home> <home>.old && layerfs home init`;
+  `failed`: `layerfs.json` cannot be read; the long form's `message` says
+  why). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are

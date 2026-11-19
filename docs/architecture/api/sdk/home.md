@@ -14,7 +14,7 @@ call to list or remove it. `home.doctor` is one of
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/home`](../../../../api/crates/layerfs-api/src/home) (one file per call), [`layerfs-control/src/home.rs`](../../../../control/crates/layerfs-control/src/home.rs), [`layerfs-control/src/home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs), [`layerfs-home/src/logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs), [`layerfs-home/src/home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs) |
 | Runs by default | the caller's process; `doctor` also asks each running machine's worker. `init`, `get` and `doctor` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, the others never do. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
-| Design | [Home](../../control/home/README.md), [Migration](../../control/home/migration.md), [Doctors](../../control/doctor/README.md) |
+| Design | [Home](../../control/home/README.md), [opening a home](../../control/home/README.md#opening-a-home), [Doctors](../../control/doctor/README.md) |
 | Clients | `layerfs.home` is this family (`layerfs.home.get()`, `layerfs.home.init()`); a client's home is the one given to `client()` and is no field of it |
 
 ## Calls
@@ -70,11 +70,12 @@ records it writes move the generation. Nothing is converted (owner,
 2026-11-19).
 
 Refused `InvalidInput` inside a machine's worker root (not a home);
-`Unsupported` for an older LayerFS's home (layout 2, or 1.1.0's records with
-no `layerfs.json`), with the fix `mv <home> <home>.old && layerfs home init`,
-writing nothing; and as opening a home is refused otherwise (a newer layout
-is `Unsupported`, an unreadable `layerfs.json` `Failed`)
-([Migration](../../control/home/migration.md)).
+`Unsupported` for a folder that is not a LayerFS 2.0 home (a `layerfs.json`
+of another layout, or anything but `layerfs.lock`, the integration folders
+and `.DS_Store` with no `layerfs.json`),
+with the fix `mv <home> <home>.old && layerfs home init`, writing nothing;
+and as opening a home is refused otherwise (an unreadable `layerfs.json` is
+`Failed`) ([opening a home](../../control/home/README.md#opening-a-home)).
 
 ```console
 $ layerfs home init
@@ -106,11 +107,11 @@ and it answers for a home that does not exist yet, creating nothing.
 | Field | Meaning |
 | --- | --- |
 | `home` | the home's path |
-| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no `layerfs.json` and no 1.1.0 record; `layerfs home init`), `outdated` (an older LayerFS's home: layout 2, or 1.1.0's records; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read, or a newer layout than it knows; `message` says which; no fix line) |
+| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`, the integration folders `runtime/`, `job/`, `stat/`, `preset/` and `.DS_Store`; `layerfs home init`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or other files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
 | `version` | this build's version |
 | `generation` | the home's [generation](../../control/home/README.md#the-generation-counter): a number that moves when a record is written or removed and never for a read. Null unless the home is ready |
 | `message` | a sentence saying what is wrong, null when ready |
-| `layout`, `mode` | the layout `layerfs.json` records, and the folder's permission bits as text (`"0700"`); `layout` is null for a missing or older home, `mode` when there is no folder. Whether the mode is owner-only is the doctor's finding, not this call's |
+| `layout`, `mode` | the layout `layerfs.json` records, and the folder's permission bits as text (`"0700"`); `layout` is null for a missing or foreign home, `mode` when there is no folder. Whether the mode is owner-only is the doctor's finding, not this call's |
 | `bundle` | The Linux bundle this build would deploy: `{ path, source, present, commit, dirty, matches }`; `source` is `env:LAYERFS_BUNDLE` or `cache` (`<cache>/layerfs/bundle/<version>/linux-<arch>`); `commit` and `dirty` from `bundle.json` `source` |
 | `daemon` | macOS: native's daemon, `{ path, source, present, commit, dirty, matches }`, `source` `recorded` (native's record) or `default` (beside the macOS bundle). Null elsewhere |
 | `cache` | `{ path }`: `XDG_CACHE_HOME`, else `~/.cache` |
@@ -337,6 +338,6 @@ removal is a line of `log/sweep.jsonl`
 
 ## Related
 
-- [Home](../../control/home/README.md), [Migration](../../control/home/migration.md).
+- [Home](../../control/home/README.md), [opening a home](../../control/home/README.md#opening-a-home).
 - [Doctors](../../control/doctor/README.md), [checks](../../control/doctor/checks.md).
 - [Calls: the call log](../calls/README.md#the-call-log).

@@ -25,9 +25,10 @@ The home is `LAYERFS_HOME` (default `~/.layerfs`), or the `home` of
 
 `init` creates the home and leaves a current home as it is. Short:
 `{ home }`, with `unchanged: true` for a current home; long `outcome` is
-`created` or `unchanged`. The home of an older LayerFS is not converted: it
-is refused `Unsupported` with the `fix` `mv <home> <home>.old && layerfs
-home init`, which moves it aside and makes a new home.
+`created` or `unchanged`. A folder that is not a LayerFS 2.0 home (an older
+LayerFS's included) is not converted or written: it is refused `Unsupported`
+with the `fix` `mv <home> <home>.old && layerfs home init`, which moves it
+aside and makes a new home.
 
 `get` answers the home's state and build. Short: `{ home, state, version }`,
 with `generation` when ready (a counter that moves each time a record of the

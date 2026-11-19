@@ -3,10 +3,9 @@
 //! A home holds a `layerfs.json` of this build's layout (#536 §5, Sandboxes
 //! at `sandbox/<name>/`). The id is 16 random bytes in hex, written once;
 //! the `docker` machine names its containers with it (O33) and backups
-//! record it as where they were exported from. A home of an older layout
-//! (layout 2, or 1.1.0's records with no `layerfs.json`) is refused with a
-//! fix that moves it aside: this build converts nothing. Reading never
-//! changes anything.
+//! record it as where they were exported from. A folder that is not such a
+//! home, and is not empty, is refused with a fix that moves it aside: this
+//! build writes nothing in it. Reading never changes anything.
 use super::records::{private_dir, read_record, write_record};
 use crate::outcome::{refused, shell_word, with_fix};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -24,67 +23,69 @@ pub struct HomeFile {
     pub id: String,
 }
 
-/// The 1.1.0 records at the top of a home; `<p>/project.record` marks one
-/// too. A folder with one of them and no `layerfs.json` is an older home,
-/// never written over; one with none of them is new, whatever else is in
-/// it (such as the `layerfs.lock` the first call takes).
-const OLD: [&str; 9] = [
-    ".stores",
-    "stores.json",
-    "stores.v1.json",
-    "stores.json.lock",
-    "remotes",
-    "remote-state",
-    ".runtime",
-    "worker",
-    "traces",
-];
-
 /// Which layout a home has.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
-    /// No `layerfs.json` and no 1.1.0 record: a new home.
+    /// No folder, or one holding only what 2.0's layout allows before its
+    /// `layerfs.json` ([`own_only`]): a new home.
     Empty,
-    /// An older LayerFS's home (layout 2, or 1.1.0's records): refused
-    /// ([`older`]).
-    Older,
+    /// Not a home of this build: a `layerfs.json` of another layout, or
+    /// anything else in a folder with no `layerfs.json`. Refused
+    /// ([`foreign`]) and never written.
+    Foreign,
     /// The current layout, with its `layerfs.json`.
     Current(HomeFile),
 }
 
-/// The home's layout, read only. A `layerfs.json` this build cannot read,
-/// or of a newer layout, is refused.
+/// The home's layout, read only. A `layerfs.json` that cannot be read, has
+/// no layout number, or names this layout with a bad id is refused
+/// `Failed`.
 pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
-    let file = home.join("layerfs.json");
-    match read_record(&file)? {
-        Some(value) => parse(&value).map(|file| match file.layout {
-            LAYOUT_VERSION => Layout::Current(file),
-            _ => Layout::Older,
-        }),
-        None => match old_records(home) {
-            Ok(true) => Ok(Layout::Older),
-            Ok(false) => Ok(Layout::Empty),
+    match read_record(&home.join("layerfs.json"))? {
+        Some(value) => match value.get_int("layout") {
+            Some(LAYOUT_VERSION) => parse(&value).map(Layout::Current),
+            Some(_) => Ok(Layout::Foreign),
+            None => Err(bad("no layout version")),
+        },
+        None => match own_only(home) {
+            Ok(true) => Ok(Layout::Empty),
+            Ok(false) => Ok(Layout::Foreign),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Layout::Empty),
             Err(error) => Err(refused("Failed", format!("{}: {error}", home.display()))),
         },
     }
 }
 
-/// Whether `home` holds a 1.1.0 record.
-fn old_records(home: &Path) -> std::io::Result<bool> {
+/// The top-level folders the home reserves for integrations (the Home
+/// README's top-level names). LayerFS creates none of them, but an
+/// integration may make them before the home's first call, as
+/// `@layerfs/runtime` does with `runtime/`.
+const INTEGRATION: [&str; 4] = ["runtime", "job", "stat", "preset"];
+
+/// Whether `home` holds nothing but what 2.0's own layout allows before its
+/// `layerfs.json`: the home lock [`open`] takes first, `layerfs.lock`; the
+/// temporary `layerfs.json` is renamed from (`.layerfs.json.<pid>.<n>.tmp`,
+/// [`write_record`]), which another process may see mid-write or a killed
+/// one may leave; the [`INTEGRATION`] folders; and macOS's `.DS_Store`.
+fn own_only(home: &Path) -> std::io::Result<bool> {
     for entry in std::fs::read_dir(home)? {
         let entry = entry?;
         let name = entry.file_name();
-        if OLD.iter().any(|old| name == *old) || entry.path().join("project.record").is_file() {
-            return Ok(true);
+        let name = name.to_string_lossy();
+        let own = name == "layerfs.lock"
+            || name == ".DS_Store"
+            || (name.starts_with(".layerfs.json.") && name.ends_with(".tmp"))
+            || (INTEGRATION.contains(&name.as_ref()) && entry.path().is_dir());
+        if !own {
+            return Ok(false);
         }
     }
-    Ok(false)
+    Ok(true)
 }
 
-/// The fix for an older home: move it aside, then make a new one at its
-/// path.
-pub fn older_fix(home: &Path) -> String {
+/// The fix for a folder that is not a home of this build: move it aside,
+/// then make a new home at its path.
+pub fn foreign_fix(home: &Path) -> String {
     let shown = home.display().to_string();
     format!(
         "mv {} {} && layerfs home init",
@@ -93,38 +94,27 @@ pub fn older_fix(home: &Path) -> String {
     )
 }
 
-/// The refusal of an older home: `Unsupported`, with [`older_fix`].
-pub fn older(home: &Path) -> SdkRefusal {
+/// The refusal of a folder that is not a home of this build:
+/// `Unsupported`, with [`foreign_fix`].
+pub fn foreign(home: &Path) -> SdkRefusal {
     let refusal = refused(
         "Unsupported",
         format!(
-            "{} is the home of an older LayerFS; this build does not convert it: move it aside and make a new home",
+            "{} is not a LayerFS 2.0 home; this build writes nothing in it: move it aside and make a new home",
             home.display()
         ),
     );
-    with_fix(refusal, older_fix(home))
+    with_fix(refusal, foreign_fix(home))
 }
 
+/// A `layerfs.json` of this layout: its id must be 32 hex digits.
 fn parse(value: &SdkValue) -> Result<HomeFile, SdkRefusal> {
-    let layout = value
-        .get_int("layout")
-        .ok_or_else(|| bad("no layout version"))?;
     let id = value.get_text("id").ok_or_else(|| bad("no home id"))?;
     if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(bad("the home id is not 32 hex digits"));
     }
-    if layout > LAYOUT_VERSION {
-        return Err(refused(
-            "Unsupported",
-            format!("this home has layout {layout}; this build reads layout {LAYOUT_VERSION}"),
-        ));
-    }
-    // `layerfs.json` began at layout 2 (2.0)
-    if layout < 2 {
-        return Err(bad(&format!("unknown layout {layout}")));
-    }
     Ok(HomeFile {
-        layout,
+        layout: LAYOUT_VERSION,
         id: id.to_owned(),
     })
 }
@@ -133,19 +123,19 @@ fn bad(why: &str) -> SdkRefusal {
     refused("Failed", format!("layerfs.json: {why}"))
 }
 
-/// The home's `layerfs.json`, written for an empty home; an older home is
-/// refused ([`older`]).
+/// The home's `layerfs.json`, written for an empty home; any other folder
+/// is refused ([`foreign`]).
 pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
     match detect(home)? {
         Layout::Current(file) => Ok(file),
-        Layout::Older => Err(older(home)),
+        Layout::Foreign => Err(foreign(home)),
         Layout::Empty => create(home),
     }
 }
 
 /// The home ready for calls, as every call opens it first: created under
-/// the home lock when empty, an older home refused ([`older`]). Answers its
-/// `layerfs.json`. A worker's root is not a home: it answers the id its
+/// the home lock when empty, any other folder refused ([`foreign`]).
+/// Answers its `layerfs.json`. A worker's root is not a home: it answers the id its
 /// caller sent, and nothing is written.
 pub fn open(home: &Path) -> Result<HomeFile, SdkRefusal> {
     if crate::home::guest::is_root(home) {
@@ -153,7 +143,7 @@ pub fn open(home: &Path) -> Result<HomeFile, SdkRefusal> {
     }
     let file = match detect(home)? {
         Layout::Current(file) => file,
-        Layout::Older => return Err(older(home)),
+        Layout::Foreign => return Err(foreign(home)),
         Layout::Empty => {
             let _lock = crate::home::lock::take(home)?;
             ensure(home)?

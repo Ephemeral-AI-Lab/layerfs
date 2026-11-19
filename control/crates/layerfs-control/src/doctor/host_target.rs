@@ -52,7 +52,7 @@ fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::sc
         checks.fail(
             LAYOUT,
             format!(
-                "{}'s layerfs.json is unreadable, malformed or of a layout this build does not know; repair it by hand",
+                "{}'s layerfs.json is unreadable or malformed; repair it by hand",
                 home.display()
             ),
         );
@@ -61,12 +61,12 @@ fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::sc
     match layout {
         // a home not made yet: nothing to read
         Layout::Empty => None,
-        Layout::Older => {
+        Layout::Foreign => {
             checks.fail(
                 LAYOUT,
-                "the home of an older LayerFS: this build does not convert it; move it aside and make a new home",
+                "not a LayerFS 2.0 home: this build writes nothing in it; move it aside and make a new home",
             );
-            checks.fix(LAYOUT, layerfs_home::home::layout::older_fix(home));
+            checks.fix(LAYOUT, layerfs_home::home::layout::foreign_fix(home));
             None
         }
         Layout::Current(_) => {

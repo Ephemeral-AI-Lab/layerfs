@@ -55,7 +55,7 @@ pub fn tag(tag: &str) -> Option<String> {
 
 /// Appends `line` to the call log of `home`, best effort. Nothing is
 /// written in a folder that is not a home of this build's layout (one with
-/// no `layerfs.json`, or an older LayerFS's home, whose calls are refused),
+/// no `layerfs.json`, or a foreign folder, whose calls are refused),
 /// and the home itself is never created here.
 pub fn append(home: &Path, line: &SdkValue) {
     if !matches!(detect(home), Ok(Layout::Current(_))) {

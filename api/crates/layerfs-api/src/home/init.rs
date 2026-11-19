@@ -1,5 +1,6 @@
 //! `home.init`: creates an empty home and leaves a current home as it is;
-//! an older LayerFS's home is refused with the fix that moves it aside.
+//! a folder that is not a LayerFS 2.0 home is refused with the fix that
+//! moves it aside.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form};
 use layerfs_bridge::control::SdkValue;

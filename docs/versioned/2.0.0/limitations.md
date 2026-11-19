@@ -59,8 +59,7 @@ for this manual.
 | `machine` calls in a build without the `machine` feature (the guest worker's build) | names the #533 step |
 | A `native` Sandbox on Linux started by a non-root user | namespaces need root for FUSE |
 | A Store made without the acquisition tables projects are added through | LayerFS adds no tables to an existing Store |
-| A home whose `layerfs.json` has a newer layout | names the layout this build reads |
-| An older LayerFS's home (layout 2, or 1.1.0's records) | not converted (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
+| A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or files and no `layerfs.json`) | not converted or written (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
 
 Also not built:
 

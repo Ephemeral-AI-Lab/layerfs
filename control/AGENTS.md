@@ -25,7 +25,7 @@ behalf of the engine:
   checks it); a host operation's local runner is passed in (`route::Local`).
 - `crates/layerfs-control`: what spans entities (#536; moved here from
   `api/crates` by #101 D-2): the worker server, `inventory`, `doctor`,
-  `migrate`, and the machine, Store, project and backup calls with the
+  and the machine, Store, project and backup calls with the
   `Related` reads they need from other entities. The call machinery
   (`calls/`) and `Context` are `layerfs-api`'s (#107): control functions
   take the home and, when they emit, `layerfs-home`'s `Events`.
@@ -60,7 +60,7 @@ design and the [compute plane 2.0 spec](https://github.com/Ephemeral-AI-Lab/laye
   layerfs-sandbox-backend`; `layerfs-store ──► layerfs-bucket`. Edges that skip
   down the chain are allowed (`layerfs-control` and `layerfs-sandbox` reach
   `layerfs-machine` and `layerfs-store` directly, and `layerfs-control`
-  reads the old backup layout through `layerfs-bucket` in `migrate`);
+  reaches `layerfs-bucket` for the backup doctor);
   nothing points up. `layerfs-machine
   ──► layerfs-platform` only through its optional `machine` feature, which
   `layerfs-control` and `layerfs-api` pass through; `layerfs-platform ──►
