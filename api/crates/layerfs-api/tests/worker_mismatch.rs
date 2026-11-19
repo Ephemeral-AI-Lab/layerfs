@@ -28,7 +28,11 @@ fn a_store_call_to_an_old_worker_names_stop_then_start_and_sends_nothing() {
     write_record(&paths::store_record(&home, "shop"), &store).unwrap();
     let project = SdkValue::map([("name", t("api"))]);
     write_record(&paths::project_record(&home, "shop", "api"), &project).unwrap();
-    let machine = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
+    let machine = SdkValue::map([
+        ("name", t("box")),
+        ("platform", t("lima")),
+        ("vm_name", t("layerfs-00000000-box")),
+    ]);
     write_record(&paths::machine_record(&home, "box"), &machine).unwrap();
 
     // an old worker: its hello is `{ ready: true }`, with no protocol

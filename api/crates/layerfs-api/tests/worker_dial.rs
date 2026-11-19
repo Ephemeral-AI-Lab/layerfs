@@ -33,7 +33,11 @@ fn home_on_box(tag: &str, address: SocketAddr) -> PathBuf {
     home::open(&home).unwrap();
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     write_record(

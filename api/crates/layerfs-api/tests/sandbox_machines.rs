@@ -599,7 +599,11 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         &paths::machine_record(&home, "box"),
         // docker runs on macOS and Linux hosts, so the support table passes
         // this machine on either
-        &SdkValue::map([("name", t("box")), ("platform", t("docker"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("docker")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     home::write_record(

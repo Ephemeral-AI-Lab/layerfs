@@ -14,6 +14,7 @@ fn stopped_machine_images_is_unavailable_and_preserves_state() {
         SdkValue::map([
             ("name", SdkValue::text("image-test")),
             ("platform", SdkValue::text("lima")),
+            ("vm_name", SdkValue::text("layerfs-00000000-image-test")),
             ("state", SdkValue::text("stopped")),
         ]),
     );

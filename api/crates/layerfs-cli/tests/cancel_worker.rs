@@ -125,7 +125,11 @@ fn home_with_sandbox(tag: &str, seen: Seen) -> PathBuf {
     let address = worker(seen);
     write_record(
         &paths::machine_record(&home, "docker"),
-        &SdkValue::map([("name", t("docker")), ("platform", t("docker"))]),
+        &SdkValue::map([
+            ("name", t("docker")),
+            ("platform", t("docker")),
+            ("vm_name", t("layerfs-00000000-docker")),
+        ]),
     )
     .unwrap();
     write_record(

@@ -920,7 +920,11 @@ fn worker_sqlite_export_and_midstream_disconnect_cleanup() {
     let root = tempdir("wk-guest");
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
 
@@ -1033,7 +1037,11 @@ fn synthetic_case_or_duplicate_collision_maps_already_exists_to_conflict_and_cle
     ok(&home, "store.create", &[("name", t("shop"))]);
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     place_store(&home, "shop", "box");
@@ -1240,7 +1248,11 @@ fn shared_store_lease_and_concurrent_remove_admission() {
     let home = private_home("adm-home");
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     ok(&home, "store.create", &[("name", t("shop"))]);

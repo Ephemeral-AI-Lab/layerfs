@@ -166,7 +166,11 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
         .len();
     home::write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", text("box")), ("platform", text("lima"))]),
+        &SdkValue::map([
+            ("name", text("box")),
+            ("platform", text("lima")),
+            ("vm_name", text("layerfs-00000000-box")),
+        ]),
     )
     .unwrap();
     let endpoint = serve(&root);
