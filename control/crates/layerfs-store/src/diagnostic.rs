@@ -61,14 +61,24 @@ pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal>
         identity.cursor_key,
     )
     .map(drop)
-    .map_err(|error| refused("Unavailable", crate::words::persistence(&error)))
+    .map_err(open_refusal)
 }
 
 /// Whether the sqlite Store file at `path` records this Store's id, read
 /// without the schema checks [`sqlite_schema`] adds.
 pub fn sqlite_identity(path: &Path, identity: &Identity) -> Result<bool, SdkRefusal> {
     layerfs_persistence::SqliteHandles::diagnostic_identity(path, &identity.binding)
-        .map_err(|error| refused("Unavailable", crate::words::persistence(&error)))
+        .map_err(open_refusal)
+}
+
+/// A diagnostic open's refusal: `Busy` when another writer holds the file
+/// (it says nothing of its schema or id), else `Unavailable` with its text.
+fn open_refusal(error: layerfs_storage::port::PersistenceError) -> SdkRefusal {
+    let code = match error {
+        layerfs_storage::port::PersistenceError::Busy => "Busy",
+        _ => "Unavailable",
+    };
+    refused(code, crate::words::persistence(&error))
 }
 
 /// Diagnoses a registered PostgreSQL Store, resolving credentials only here.

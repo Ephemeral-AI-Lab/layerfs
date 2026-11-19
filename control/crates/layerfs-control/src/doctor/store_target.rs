@@ -253,6 +253,13 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         CONNECTION,
         format!("its file is reached on machine {machine}"),
     );
+    // a file another writer holds: its id and schema were not read, so
+    // both are `busy` (`not_checked`), not failed
+    if let Some(why) = text("busy") {
+        checks.busy(IDENTITY, why.clone());
+        checks.busy(SCHEMA, why);
+        return;
+    }
     // a file of another Store is `store.identity`, and its schema is then
     // not checked; a file of this Store that does not open is `store.schema`
     // (conformance R4 F4)
@@ -308,8 +315,9 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 }
 
 /// The shallow cut of the sqlite file at `path`, as this process or a
-/// worker makes it: `{ found, compaction, unsupported, identity_error,
-/// schema_error, heads, heads_error }`, `compaction` the run its `<store>.compact-op` records
+/// worker makes it: `{ found, compaction, unsupported, busy,
+/// identity_error, schema_error, heads, heads_error }` (`busy`: another
+/// writer holds the file), `compaction` the run its `<store>.compact-op` records
 /// (`report::compact_status`), its heads read only when `heads` and the
 /// schema check passed.
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
@@ -324,6 +332,9 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
         Err(error) if error.code == "Unsupported" => {
             fields.push(("unsupported", SdkValue::Text(error.message)))
         }
+        // another writer holds the file: neither its id nor its schema
+        // could be read, which says nothing wrong of either
+        Err(error) if error.code == "Busy" => fields.push(("busy", SdkValue::Text(error.message))),
         Err(error) => match diagnostic::sqlite_identity(path, identity) {
             Ok(false) => fields.push(("identity_error", SdkValue::Text(error.message))),
             _ => fields.push(("schema_error", SdkValue::Text(error.message))),
