@@ -229,7 +229,7 @@
     {
       "call": "branch.merge",
       "badge": "reshaped",
-      "note": "merges <code>from</code> into <code>branch</code>; <code>--into NEW</code> writes the result to a new Branch and changes neither, as today; rules come from <code>branch</code>'s <code>/.lww</code>; <code>--units</code> is kept; <code>--expected</code> guards <code>branch</code>'s head in both forms; a conflict is the refusal <code>Conflict</code>, which lists the <code>conflicts</code> and changes nothing; <code>fast_forward</code> when one side held the other and no Commit was made; <code>overwritten</code> lists the paths a newer-write-wins rule decided; <code>parent</code> and <code>second_parent</code> are the two heads merged",
+      "note": "merges <code>from</code> into <code>branch</code>; <code>--into NEW</code> writes the result to a new Branch and changes neither, as today; rules come from <code>branch</code>'s <code>/.lww</code>; <code>--units</code> is kept; <code>--expected</code> guards <code>branch</code>'s head in both forms; a conflict is the refusal <code>Conflict</code>, which lists the <code>conflicts</code> and changes nothing; <code>fast_forward</code> when one side held the other and no Commit was made; <code>overwritten</code> lists the paths a newer-write-wins rule decided; <code>parent</code> and <code>second_parent</code> are the two heads merged; a merge into <code>main</code> with no <code>--into</code> is refused <code>InvalidInput</code> (main moves only by <code>branch publish</code>) with the <code>fix</code> <code>layerfs branch publish &lt;project&gt; &lt;from&gt;</code> (V22-7)",
       "today": [
         "branch.merge"
       ],

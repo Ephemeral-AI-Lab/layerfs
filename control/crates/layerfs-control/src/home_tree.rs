@@ -172,6 +172,31 @@ fn size(recorded: Option<i64>) -> SdkValue {
 
 /// The machine a sqlite Store's record places it on, if it names one
 /// this build reads.
+/// What the records already read say is on machine `name`, as
+/// [`inventory::Held`]: its Sandboxes, and for a record with no 2.0 name
+/// its sqlite Stores and the old Firecracker records it hosted too, whose
+/// removes its fix runs first.
+fn held(
+    name: &str,
+    record: Option<&MachineRecord>,
+    (machines, stores, sandboxes): (&[MachineRecord], &[StoreRecord], &[SandboxRecord]),
+) -> inventory::Held {
+    let on = sandboxes.iter().filter(|s| s.machine() == name);
+    let mut held = inventory::Held {
+        sandboxes: on.map(|s| s.name().to_owned()).collect(),
+        ..inventory::Held::default()
+    };
+    if record.is_some_and(MachineRecord::nameless) {
+        let on = stores.iter().filter(|s| placed(s).as_deref() == Some(name));
+        held.stores = on.map(|s| s.name().to_owned()).collect();
+        let hosted = machines
+            .iter()
+            .filter(|m| matches!(m.field("host"), Some(SdkValue::Text(host)) if host == name));
+        held.hosted = hosted.map(|m| m.name().to_owned()).collect();
+    }
+    held
+}
+
 fn placed(record: &StoreRecord) -> Option<String> {
     match record.store_ref() {
         Ok(StoreRef::Sqlite { machine: on, .. }) => Some(on.clone()),
@@ -257,10 +282,13 @@ pub fn tree(home: &Path) -> Outcome {
     let mut machines = Vec::new();
     for name in &names {
         let record = recorded.iter().find(|record| record.name() == name);
-        let on = sandboxes.iter().filter(|s| s.machine() == name).count();
         let state = match unread.contains(name) {
             true => unreadable(),
-            false => inventory::machine_state_with(name, record, on),
+            false => inventory::machine_state_with(
+                name,
+                record,
+                held(name, record, (&recorded, &stores, &sandboxes)).holders(),
+            ),
         };
         machines.push(machine(home, (name, record, state), &stores, &sandboxes));
     }

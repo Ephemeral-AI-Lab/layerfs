@@ -54,13 +54,37 @@ pub fn no_vm_name(name: &str) -> String {
     )
 }
 
+/// What is recorded on a machine, by name, as its remove's `InUse`
+/// refusal names them: its Sandboxes, its sqlite Stores and the old
+/// Firecracker machine records it hosted. Read by the caller
+/// (`layerfs-control`'s inventory) from the records it already holds.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Holders<'a> {
+    /// The Sandboxes whose record names the machine.
+    pub sandboxes: &'a [String],
+    /// The sqlite Stores whose record names the machine.
+    pub stores: &'a [String],
+    /// The old Firecracker machine records naming it as their host.
+    pub hosted: &'a [String],
+}
+
 /// The fix of a machine whose record has no `vm_name`: `machine remove`,
 /// which then removes its record alone (a built-in `docker` is recorded
-/// again, with its 2.0 name, by the next call). While Stores or Sandboxes
-/// are recorded on it, that remove is refused `InUse` with the line that
-/// forgets them first (their removes take their records alone too).
-pub fn no_vm_name_fix(name: &str) -> String {
-    format!("layerfs machine remove {}", shell_word(name))
+/// again, with its 2.0 name, by the next call). While things are recorded
+/// on it (`held`), that remove is refused `InUse`, so the line forgets
+/// them first, each of whose removes takes its records alone too:
+/// Sandboxes first (they hold their projects' Stores), then the Stores and
+/// the old Firecracker records, then the machine. The one builder of that
+/// line: the `InUse` refusal, the machine's state and the doctor's finding
+/// show it alike (RT5 note 3).
+pub fn no_vm_name_fix(name: &str, held: Holders<'_>) -> String {
+    let sandboxes = held.sandboxes.iter().map(|s| ("sandbox", s.as_str()));
+    let stores = held.stores.iter().map(|s| ("store", s.as_str()));
+    let hosted = held.hosted.iter().map(|m| ("machine", m.as_str()));
+    let steps = (sandboxes.chain(stores).chain(hosted))
+        .chain(std::iter::once(("machine", name)))
+        .map(|(family, name)| format!("layerfs {family} remove {}", shell_word(name)));
+    steps.collect::<Vec<_>>().join(" && ")
 }
 
 /// One machine's record as read (fields kept whole and in order).
@@ -119,7 +143,7 @@ impl MachineRecord {
     /// older name.
     pub fn provider_name(&self) -> Result<&str> {
         self.text("vm_name").ok_or_else(|| {
-            let fix = no_vm_name_fix(&self.name);
+            let fix = no_vm_name_fix(&self.name, Holders::default());
             with_fix(refused("Failed", no_vm_name(&self.name)), fix)
         })
     }
@@ -275,5 +299,12 @@ impl MachineRecord {
     /// record's platform checked against the ones removed in 2.0.
     pub fn recorded(&self, sandboxes: usize) -> layerfs_home::state::State {
         self.status(self.removed().is_some(), sandboxes)
+    }
+
+    /// [`Self::recorded`] with what is recorded on the machine named
+    /// ([`Self::status_held`]): the state `machine list` and `machine get`
+    /// show.
+    pub fn recorded_held(&self, held: Holders<'_>) -> layerfs_home::state::State {
+        self.status_held(self.removed().is_some(), held)
     }
 }

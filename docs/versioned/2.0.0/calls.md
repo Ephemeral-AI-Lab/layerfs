@@ -1106,7 +1106,14 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   `not_answering`, `outdated`, `missing`, `failed`, `unresolved` and
   `unsupported`. A records-only read answers the last state word and
   reason a start or a live read recorded, and `observed_at` from the last
-  live read.
+  live read. A record with no `vm_name` (an earlier build's, `outdated`)
+  that still holds Sandboxes, sqlite Stores or old Firecracker records has
+  as its `fix` the chain its remove's `InUse` refusal carries, built from
+  the records already read: `layerfs sandbox remove <s> && … && layerfs
+  store remove <st> && layerfs machine remove <m>`, shell-quoted, in that
+  order (each step takes records alone); with nothing on it, `layerfs
+  machine remove <m>`. `home get --with tree` and `machine doctor` show the
+  same line.
 - **`--with live`** probes the provider and says hello to the worker once
   (`list`: every machine at the same time), within 10 s, starting nothing.
   The state, its companion, `message` and `observed_at` then come from the
@@ -1142,8 +1149,13 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   starts a worker refuse `Unavailable`, before anything starts, a Linux
   bundle whose `bundle.json` `source.head` is not the commit this build was
   compiled from (a build that names no commit cannot tell and uses it): a
-  worker started from it would not answer this build's calls. Point
-  `LAYERFS_BUNDLE` at this build's bundle or rebuild it.
+  worker started from it would not answer this build's calls. Its `fix`
+  reaches this build's own bundle when another place the CLI looks holds
+  one: `unset LAYERFS_BUNDLE` when `LAYERFS_BUNDLE` named the refused
+  bundle and the runtime's (else the cache's) is this build's; `export
+  LAYERFS_BUNDLE=<folder>` when only a later place holds it (the runtime's
+  bundle refused, the cache's this build's). With none there is no `fix`,
+  and the message says so: rebuild it.
 - **An outdated worker.** `start` refuses a worker of another build and
   leaves the machine `broken`/`outdated`, with `fix: layerfs machine stop
   <m> && layerfs machine start <m>`, or `layerfs machine stop <m> --force &&

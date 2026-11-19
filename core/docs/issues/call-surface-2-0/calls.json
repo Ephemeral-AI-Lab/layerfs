@@ -76,7 +76,7 @@
  "exit_codes": {
   "0": "done; a doctor exits 0 once its report is made, whatever it found",
   "2": "wrong command line; nothing was called",
-  "125": "refused or failed; the refusal is one line of JSON on stderr",
+  "125": "refused or failed; the refusal is on stderr, one line of JSON when stdout gets JSON, else readable error: and fix: lines (V22)",
   "command": "workspace exec exits with the command's own code (0 when it has none, 1 for a code outside 0 to 255) and prints its result JSON on stdout; a refusal still exits 125 with {\"error\",...} on stderr and nothing on stdout"
  },
  "with_values": [
@@ -119,7 +119,15 @@
    "cli": "--text",
    "node": null,
    "python": null,
-   "help": "a readable result instead of JSON; shell only, as today"
+   "help": "the readable form, the default when stdout is a terminal (V22); shell only"
+  },
+  {
+   "name": "json",
+   "kind": "Bool",
+   "cli": "--json",
+   "node": null,
+   "python": null,
+   "help": "one line of JSON, the default when stdout is a pipe, a file or a program, also on a terminal; with --text it is exit 2 (V22); shell only"
   },
   {
    "name": "log_tag",

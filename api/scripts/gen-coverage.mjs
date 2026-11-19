@@ -2,7 +2,7 @@
 // from the four front ends' own call lists:
 //   Node    the package's `table` and its bound functions
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
-//   CLI     `layerfs help <family>`, one usage line per call
+//   CLI     `layerfs help <family> <call>`, whose first line is the call's usage
 //   MCP     the generated tool list of api/mcp, and the profile that lists it
 //   node api/scripts/gen-coverage.mjs          rewrite the generated block
 //   node api/scripts/gen-coverage.mjs --check  exit 1 when the block is not what the front ends give,
@@ -74,10 +74,15 @@ export async function collect({ python, cli }) {
   view.python = JSON.parse(run.stdout);
   view.cli = {};
   for (const family of node.families) {
+    // the family's help lists its calls (`  <call>  <what it does>`); each
+    // call's own help starts with its usage line (V22)
     const help = spawnSync(cli, ["help", family], { encoding: "utf8", timeout: 60_000 });
     if (help.error || help.status !== 0) throw new Error(`layerfs help ${family} failed: ${help.error ?? help.stderr}`);
-    for (const line of help.stdout.split("\n")) {
-      const found = line.match(/^layerfs (\S+) (\S+)(.*)$/);
+    const calls = help.stdout.split("\n").flatMap((line) => line.match(/^  (\S+)  /)?.[1] ?? []);
+    for (const call of calls) {
+      const one = spawnSync(cli, ["help", family, call], { encoding: "utf8", timeout: 60_000 });
+      if (one.error || one.status !== 0) throw new Error(`layerfs help ${family} ${call} failed: ${one.error ?? one.stderr}`);
+      const found = one.stdout.split("\n")[0].match(/^layerfs (\S+) (\S+)(.*)$/);
       if (!found) continue;
       // a call's shell name has `-` for its `_` (`machine load-image`)
       const name = `${found[1]}.${found[2].replaceAll("-", "_")}`;

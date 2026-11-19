@@ -131,13 +131,21 @@ pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded>
     }
 }
 /// Why a local Sandbox record (`runtime` `native` or `namespaces`) is not
-/// one this build reads, or `None` when it is, or is not local: a native
+/// one this build reads, or `None` when it is, or is not local. A record
+/// with a `forward` is not local whatever its `runtime` says: the caller's
+/// home keeps only the forward to a worker's Sandbox (its name, runtime,
+/// platform and image), and the worker reads its own local record (B10:
+/// checking it here sent every Sandbox remove on a machine down the
+/// records-only path). A local record is unread when it is a native
 /// record anywhere but macOS (Linux starts none, #533 O27), or a field a
 /// 2.0 record always has that is missing or of another shape (`directory`,
 /// `name`, `container`, `pid`, `boot`, `start`, `port`, `labels`; a
 /// namespaces record's `image`). Its identity cannot be checked, so
 /// nothing is signalled through it.
 pub fn unread(value: &DaemonRecord) -> Option<String> {
+    if value.forward().is_some() {
+        return None;
+    }
     let runtime = value.runtime()?;
     if runtime == NATIVE && !cfg!(target_os = "macos") {
         return Some("a native Sandbox, which this build runs on macOS only".to_owned());

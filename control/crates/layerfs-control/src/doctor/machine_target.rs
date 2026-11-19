@@ -267,12 +267,24 @@ impl Machine<'_> {
                 Ok(spec)
             }
             Err(refusal) => {
-                let fix = refusal.detail.get_text("fix").map(str::to_owned);
+                let mut fix = refusal.detail.get_text("fix").map(str::to_owned);
+                // a record with no 2.0 name: the line that removes what is
+                // on it first, as its remove's `InUse` refusal carries
+                if record.nameless() {
+                    if let Ok(held) = crate::inventory::Held::read(self.home, self.name) {
+                        let chain = layerfs_machine::record::no_vm_name_fix;
+                        fix = Some(chain(self.name, held.holders()));
+                    }
+                }
                 self.checks.fail(ID, refusal.message);
                 if let Some(fix) = fix {
                     self.checks.fix(ID, fix);
                 }
-                Err(Some("failed"))
+                // what is on it is blocked for the reason its state says
+                match record.nameless() {
+                    true => Err(Some("outdated")),
+                    false => Err(Some("failed")),
+                }
             }
         }
     }

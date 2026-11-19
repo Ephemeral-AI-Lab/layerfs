@@ -196,7 +196,10 @@ worker's root:
   `outdated`, and every call that needs its VM or container is refused
   `Failed` with the fix `layerfs machine remove <machine>`, which removes the
   record alone (the built-in `docker` is then recorded again with its 2.0
-  name by the next call); nothing outside the home is touched.
+  name by the next call); nothing outside the home is touched. While
+  Sandboxes or Stores are recorded on it, that remove is refused `InUse`,
+  and the machine's state shows the refusal's chain as its fix, which
+  removes them first.
   Because a VM name keeps no punctuation, a new machine whose VM name
   another machine has is refused `Exists` (`a.b` after `a_b`). A new
   machine's name is at most 46 characters (a VM name is at most 63, the

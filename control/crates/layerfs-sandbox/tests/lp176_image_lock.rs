@@ -262,6 +262,29 @@ fn setup(name: &str) -> (Scratch, Standin, PathBuf) {
     (scratch, standin, home)
 }
 
+/// A folder with no `layerfs.json`: by the time a copy needs the home's
+/// id the image lock's record is in it, so it is no empty home and the
+/// copy is refused as foreign, creating no home and nothing in Docker.
+#[test]
+fn a_folder_that_is_no_home_is_refused_before_an_export() {
+    let scratch = Scratch::new("lp176-no-home");
+    let standin = Standin::new(&scratch.base.join("standin"));
+    let home = scratch.base.join("home");
+    fs::create_dir_all(&home).unwrap();
+    standin.image(ID, &["demo/app:1"], architecture(), 4000);
+    standin.export(&filtered(&export()));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let refusal = copy(&standin.docker(), &home, "docker", "demo/app:1", &events).unwrap_err();
+    assert_eq!(refusal.code, "Unsupported", "{refusal:?}");
+    assert!(
+        refusal.message.contains("not a LayerFS 2.0 home"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(standin.creates(), 0, "an export container was made");
+    assert!(!home.join("layerfs.json").exists(), "a home was created");
+}
+
 #[test]
 fn one_copy_of_an_image_per_machine() {
     let (_scratch, standin, home) = setup("lp176-one-writer");
