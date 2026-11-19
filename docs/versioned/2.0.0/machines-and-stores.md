@@ -114,18 +114,6 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   `<cache>` is `XDG_CACHE_HOME`, else `~/.cache`. Without it the create is
   `Unsupported` with `detail.missing` = `bundle:<folder>`. Fetching the
   bundle is not built; a build places it.
-- **Which bundle.** `LAYERFS_BUNDLE` (internal) names the Linux bundle's
-  folder when set. Otherwise the `layerfs` command first looks beside its
-  own executable, symlinks resolved: an installed runtime laid out as
-  `<runtime>/bin/layerfs` and `<runtime>/bundle/<os>-<arch>/` uses that
-  bundle when its `bundle.json` names this version, this worker protocol
-  and the command's own build (`source.head` and `source.dirty` equal to
-  `layerfs --version --json`'s `commit` and `dirty`). A bundle of another
-  build there is passed over, and the cache folder above is used, so an
-  older cache bundle never stands in for the runtime's own.
-  `layerfs home get --detail` names the folder and its `source`
-  (`env:LAYERFS_BUNDLE`, `beside` or `cache`). The Node and Python
-  packages name no build and use `LAYERFS_BUNDLE` or the cache.
 - From the claim until the outcome is recorded, the record holds the
   create's `op` (`create`): its id, phase and process (process id, start
   time and boot); the machine reads `busy` with `op {name, phase,

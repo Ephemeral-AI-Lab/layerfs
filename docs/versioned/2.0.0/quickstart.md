@@ -143,11 +143,7 @@ the Workspace lists it as removed; see
   mount. On Linux it uses namespaces and needs root.
 - The `native` daemon is the native machine record's `daemon` (set by
   `layerfs machine update native --daemon <path>`, as on the scratch home
-  here), else `layerfs-daemon` in the bundle folder for this host
-  (`<os>-<arch>`: beside an installed runtime's `bin/layerfs` when sealed
-  from the same build, else
-  `~/.cache/layerfs/bundle/<version>/<os>-<arch>/`; see
-  [which bundle](machines-and-stores.md)).
+  here), else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon`.
   `layerfs home get --detail` shows which one this build would use.
 - `workspace mount` answers the Workspace's handle, `<sandbox>:<name>`; its
   name is the Branch's unless `--name` gives one. Pass the handle to the

@@ -208,10 +208,14 @@ fn optional(text: Option<&str>) -> SdkValue {
 }
 
 fn bundle_value(build: Build<'_>) -> SdkValue {
-    let Ok((dir, source)) = layerfs_machine::bundle::located("linux") else {
+    let Ok(dir) = layerfs_machine::bundle_dir("linux") else {
         return SdkValue::Null;
     };
-    let source = source.word();
+    let source = if std::env::var_os("LAYERFS_BUNDLE").is_some_and(|d| !d.is_empty()) {
+        "env:LAYERFS_BUNDLE"
+    } else {
+        "cache"
+    };
     let manifest = read_record(&dir.join("bundle.json")).ok().flatten();
     let origin = manifest.as_ref().and_then(|m| m.get("source"));
     let commit = origin.and_then(|s| s.get_text("head"));

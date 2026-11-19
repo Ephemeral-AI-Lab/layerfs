@@ -20,11 +20,5 @@ fn main() -> std::process::ExitCode {
             Err(word) => return run::wrong(format!("argument {at} is not valid UTF-8: {word:?}")),
         }
     }
-    // the bundle of this build beside the executable (an installed
-    // runtime's `../bundle/<os>-<arch>/`) comes before the cache
-    layerfs_api::this_build(
-        env!("LAYERFS_BUILD_COMMIT"),
-        env!("LAYERFS_BUILD_DIRTY") == "true",
-    );
     run::main(words)
 }
