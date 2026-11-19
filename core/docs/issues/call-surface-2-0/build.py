@@ -1,4 +1,4 @@
-"""Build the frozen LayerFS 2.0 call-surface spec (version 22).
+"""Build the frozen LayerFS 2.0 call-surface spec (version 23).
 
   python3 -I build.py <spec-src>                  check families/*.json against SCHEMA.md and
                                                   DECISIONS.md; write calls.json, pairs.html and
@@ -26,7 +26,7 @@ import re
 import subprocess
 import sys
 
-VERSION = 22
+VERSION = 23
 FROZEN = "2026-11-19"
 BASE = "caff58a43b"
 ORDER = ["project", "file", "sandbox", "workspace", "branch", "commit", "home", "machine", "store", "backup"]
