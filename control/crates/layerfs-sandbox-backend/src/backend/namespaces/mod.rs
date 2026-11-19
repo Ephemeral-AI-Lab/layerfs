@@ -35,17 +35,12 @@ mod sandbox;
 
 pub(crate) use adapter::ADAPTER;
 
-/// Why a command cannot run in a namespaces Sandbox whose folder has no
-/// helper copy of its own (`bin/layerfs-sandbox-helper`): an earlier build
-/// made it, and this one runs no other helper in its place. The caller
-/// names the records-only `sandbox remove` as the fix.
-#[cfg(target_os = "linux")]
-pub const NO_HELPER_COPY: &str = "this namespaces Sandbox has no helper copy in its own folder \
-     (an earlier build made it), and this build runs no other helper in its place";
 #[cfg(target_os = "linux")]
 pub(crate) use cgroup::ExecGroup;
 #[cfg(target_os = "linux")]
 pub use cgroup::{give_controllers, leaf, split};
+#[cfg(target_os = "linux")]
+pub use exec::NO_HELPER_COPY;
 #[cfg(target_os = "linux")]
 pub use provider::NamespaceProvider;
 #[cfg(target_os = "linux")]

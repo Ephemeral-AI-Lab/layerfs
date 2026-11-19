@@ -47,13 +47,21 @@ fn home_with_project() -> (PathBuf, PathBuf, PathBuf) {
     let home = tempdir("home");
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     home::open(&home).unwrap();
-    for (name, platform) in [("native", "native"), ("box", "lima")] {
-        write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([("name", t(name)), ("platform", t(platform))]),
-        )
-        .unwrap();
-    }
+    write_record(
+        &paths::machine_record(&home, "native"),
+        &SdkValue::map([("name", t("native")), ("platform", t("native"))]),
+    )
+    .unwrap();
+    // a 2.0 record names its VM (one without is an earlier build's)
+    write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
+    )
+    .unwrap();
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();

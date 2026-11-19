@@ -20,6 +20,13 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// Why a command cannot run in a namespaces Sandbox whose folder has no
+/// helper copy of its own (`bin/layerfs-sandbox-helper`): an earlier build
+/// made it, and this one runs no other helper in its place. The caller
+/// names the records-only `sandbox remove` as the fix.
+pub const NO_HELPER_COPY: &str = "this namespaces Sandbox has no helper copy in its own folder \
+     (an earlier build made it), and this build runs no other helper in its place";
+
 impl Sandbox {
     /// [`Sandbox::run_in`] with no exec id: the command joins the Sandbox's
     /// own group.
@@ -108,7 +115,7 @@ impl Sandbox {
             Ok(metadata) if metadata.is_file() && metadata.len() > 0 => {}
             _ => {
                 return Err(WireFailure::local(RuntimeError::Unsupported(
-                    super::NO_HELPER_COPY,
+                    NO_HELPER_COPY,
                 )))
             }
         }

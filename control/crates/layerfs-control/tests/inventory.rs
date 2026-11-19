@@ -46,7 +46,8 @@ fn home() -> PathBuf {
     );
     record(
         &paths::machine_record(&home, "dev"),
-        r#"{"platform":"lima"}"#,
+        // a 2.0 record names its VM (one without is an earlier build's)
+        r#"{"platform":"lima","vm_name":"layerfs-00000000-dev"}"#,
     );
     record(
         &paths::machine_record(&home, "fc"),
@@ -301,7 +302,10 @@ fn a_move_checks_the_stores_side() {
 fn a_stopped_machine_offers_no_sandbox_removal() {
     let home = home();
     let machine = paths::machine_record(&home, "box");
-    record(&machine, r#"{"platform":"lima","state":"running"}"#);
+    record(
+        &machine,
+        r#"{"platform":"lima","vm_name":"layerfs-00000000-box","state":"running"}"#,
+    );
     record(
         &paths::sandbox_record(&home, "s1"),
         r#"{"v":1,"name":"s1","project":"docs/web","machine":"box"}"#,
@@ -312,7 +316,10 @@ fn a_stopped_machine_offers_no_sandbox_removal() {
         refusal.detail.get_text("fix"),
         Some("layerfs sandbox remove s1 && layerfs machine remove box")
     );
-    record(&machine, r#"{"platform":"lima","state":"stopped"}"#);
+    record(
+        &machine,
+        r#"{"platform":"lima","vm_name":"layerfs-00000000-box","state":"stopped"}"#,
+    );
     let refusal = inventory::can_remove_machine(&home, "box").unwrap_err();
     assert_eq!(refusal.code, "InUse");
     assert!(
