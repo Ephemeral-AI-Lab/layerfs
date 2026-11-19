@@ -174,6 +174,27 @@ pub fn head(
     Ok(page.records.first().map(|record| record.id))
 }
 
+/// The id of Branch `name` of project `project` in the Store `args` names,
+/// read with `project.list_branches`' exact name lookup.
+pub fn branch_named(
+    args: &OpenArgs,
+    project: &str,
+    name: &str,
+) -> Result<layerfs_history::BranchId, SdkRefusal> {
+    let asked = SdkValue::map([
+        ("project", SdkValue::text(project)),
+        ("name", SdkValue::text(name)),
+    ]);
+    let listed = with_service(args, |_| call("project.list_branches", args, asked))?;
+    let id = match listed.get("items") {
+        Some(SdkValue::List(items)) => items.first().and_then(|item| item.get_text("id")),
+        _ => None,
+    };
+    id.and_then(layerfs_bridge::sdk_values::unhex)
+        .and_then(|bytes| layerfs_history::BranchId::from_slice(&bytes).ok())
+        .ok_or_else(|| refused("NoSuchBranch", format!("no Branch {name} in {project}")))
+}
+
 /// Ends the mount intent Workspace `workspace` of Branch `branch` left in
 /// the Store `args` names, if one remains: a forced `sandbox.remove` calls
 /// it once the Sandbox whose daemon owned the intent is stopped, so the

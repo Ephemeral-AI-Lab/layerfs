@@ -57,6 +57,8 @@ pub mod launch;
 pub mod lifecycle;
 mod list;
 #[doc(hidden)]
+pub mod mount_intents;
+#[doc(hidden)]
 pub mod output;
 #[doc(hidden)]
 pub mod record;

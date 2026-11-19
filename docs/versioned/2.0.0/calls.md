@@ -875,10 +875,14 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   (`next.workspaces` lists their handles). With `force`, each running
   command is cancelled first (a cancel not confirmed refuses it `Unknown`),
   then the Sandbox is stopped anyway: `unmounted` lists the Workspaces it
-  ended, whose uncommitted changes end with it. Once its daemon is
-  stopped, each mount intent those Workspaces still hold in the Store is
-  ended; one that could not be is a sentence of `left`, since `store
-  compact` is refused while it remains. `outcome` (long form) is
+  ended, whose uncommitted changes end with it. Once its runtime is
+  confirmed stopped, the mount intent each of those Workspaces held in the
+  Store is ended, once each. One it could not end (its Store could not be
+  opened, say) is a sentence of `left` that says why: `branch remove` of
+  its Branch and `store compact` are refused while it remains, and only the
+  Store's admission ends it later, once it can prove the owner gone (for a
+  sqlite Store on a machine, after that machine's kernel restarts; never on
+  macOS `native` or a PostgreSQL Store). `outcome` (long form) is
   `removed`, `already_gone` (its runtime was gone, or it never recorded
   one, or it was a Sandbox of the retired docker backend; `left` says what
   may remain). A lost answer keeps the record with the `op` uncertain
@@ -1426,9 +1430,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   unknown (both `fix: layerfs store compact <store>`); `InUse` while
   Workspaces are mounted; `Failed` on a machine whose record has no
   `vm_name`, with the chain of removes of what is on it as its fix. A
-  sqlite Store's compaction on this computer first ends the mount intents
-  that Sandboxes this home no longer records left behind (their remove
-  stopped the daemon that held them). While a compaction runs on a machine, a move's or
+  compaction ends no mount intent itself: it settles only an intent whose
+  owner the Store's admission proves gone, and a mount whose Sandbox this
+  home no longer records still holds it. While a compaction runs on a machine, a move's or
   remove's steps there are `Busy` naming it.
 
 Run (macOS, native; rerun at `61960e3f5f` on a fresh scratch home, all but
@@ -1629,10 +1633,8 @@ every check was made and nothing was found; otherwise `findings` and
   outcome unknown is an error whose `fix` is the call that clears it; for a
   sqlite Store it also reads the compaction record beside the file through
   its machine: a run live there passes, one left unresolved is an error
-  with `fix: layerfs store compact <store>`; on this computer a mount
-  intent a Sandbox this home no longer records left is a warning with the
-  same fix; under a machine that is not ready it waits with
-  `store.connection`),
+  with `fix: layerfs store compact <store>`; under a machine that is not
+  ready it waits with `store.connection`),
   `store.connection` (a sqlite Store's file is where its record says,
   read through its machine; a PostgreSQL Store's server answers this
   computer with the saved login), `store.identity` (the Store's id is the

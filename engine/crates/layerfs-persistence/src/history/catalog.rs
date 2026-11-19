@@ -343,8 +343,4 @@ impl HistoryCatalog for HistoryProvider {
     fn gc_intents(&self, scope_kind: GcScopeKind, scope_id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
         super::admission::intents(self, scope_kind, scope_id)
     }
-
-    fn gc_all_intents(&self) -> HistoryResult<Vec<GcIntent>> {
-        super::admission::all_intents(self)
-    }
 }

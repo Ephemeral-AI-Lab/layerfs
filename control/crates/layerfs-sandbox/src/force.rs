@@ -4,6 +4,7 @@
 //! `native` stops each Sandbox's runtime the same way ([`native_host`],
 //! `Recorded::stop_now`).
 use crate::host::{Deploy, Host, Message};
+use crate::mount_intents::{Bound, Branch};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -54,6 +55,8 @@ pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
 /// mounts and processes; its Delete independently checks the physical
 /// detach before the runtime goes. Answers each recorded or `held`
 /// Workspace as `unknown`: its uncommitted changes end with the Sandbox.
+/// Once the runtime is stopped, each Workspace's mount intent is ended
+/// once (`crate::mount_intents`); one it could not end is in `left`.
 /// A record this build does not read never reaches it: `sandbox.remove`
 /// forgets it first (`crate::reopen::unread`).
 pub fn close(host: &Host, held: &[String]) -> Outcome {
@@ -62,18 +65,17 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
     let _guard = layerfs_store::project::discovery::guard(&directory)?;
     let value = crate::files::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("no Sandbox {id} is recorded")))?;
-    let mut unknown = crate::files::workspaces(&directory)?
+    let mut bound = crate::files::workspaces(&directory)?
         .into_iter()
-        .map(|(path, record)| {
-            record
-                .path()
-                .map(str::to_owned)
-                .unwrap_or_else(|| path.display().to_string())
+        .map(|(path, record)| Bound {
+            path: (record.path().map(str::to_owned)).unwrap_or_else(|| path.display().to_string()),
+            bound: recorded_bound(&record),
         })
         .collect::<Vec<_>>();
     for path in held {
-        if !unknown.contains(path) {
-            unknown.push(path.to_owned());
+        if !bound.iter().any(|known| &known.path == path) {
+            let path = path.to_owned();
+            bound.push(Bound { path, bound: None });
         }
     }
     // its running commands are each marked and cancelled first (D-10), so
@@ -92,6 +94,13 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .stopped()
         .delete()
         .map_err(|error| after_stop(crate::daemon::values::wire(error)))?;
+    // their owner is stopped: each Workspace's mount intent is ended once
+    let record = crate::record::SandboxRecord::read(&host.home, &id).map_err(after_stop)?;
+    let open = match &record {
+        Some(record) => crate::mount_intents::store_of(&host.home, record),
+        None => Err(format!("no Sandbox {id} is recorded")),
+    };
+    let left = crate::mount_intents::end(open.as_ref().map_err(String::as_str), &bound);
     // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()
@@ -104,7 +113,16 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         ("sandbox", SdkValue::text(id)),
         (
             "unknown",
-            SdkValue::List(unknown.into_iter().map(SdkValue::Text).collect()),
+            SdkValue::List(bound.into_iter().map(|b| SdkValue::Text(b.path)).collect()),
         ),
+        ("left", SdkValue::List(left)),
     ]))
+}
+
+/// The Workspace id and Branch name a Workspace record keeps, when both
+/// are readable.
+fn recorded_bound(record: &crate::record::WorkspaceRecord) -> Option<([u8; 32], Branch)> {
+    let id = layerfs_bridge::sdk_values::unhex(record.id()?)?;
+    let branch = Branch::Named(record.branch()?.to_owned());
+    Some((id.try_into().ok()?, branch))
 }

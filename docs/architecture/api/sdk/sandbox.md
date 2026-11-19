@@ -281,9 +281,17 @@ command this home records), `stop` and `delete`. With `--force`, each
 running command is cancelled first (SIGTERM, then SIGKILL after 5 s), then
 the Sandbox is stopped anyway: `unmounted` lists the Workspaces it ended,
 whose uncommitted changes end with it. On `native` a forced remove works
-from the Sandbox's own records: it opens no Store and calls no daemon,
-checks the runtime's identity and ends its mounts and processes
+from the Sandbox's own records: it calls no daemon, checks the runtime's
+identity and ends its mounts and processes
 ([`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs)).
+Once the runtime is confirmed stopped, either forced path ends the mount
+intent each of its Workspaces held in the Store, once each (by the Branch
+name and Workspace id their records keep on `native`; by the bound ids its
+worker holds on a machine), and each one it could not end is a `left`
+sentence naming why and what ends it there
+([`mount_intents.rs`](../../../../control/crates/layerfs-sandbox/src/mount_intents.rs)).
+Nothing else ends a mount intent: `store compact` and the other GC calls
+settle only an intent the Store's admission proves unowned.
 `outcome` (long form) is `removed`, `already_gone` (its runtime was gone, or
 it never recorded one; `left` says what may remain). A Sandbox of the
 retired docker backend is also `already_gone`: its records go, and `left`

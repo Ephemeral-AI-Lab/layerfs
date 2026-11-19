@@ -226,8 +226,15 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                 Some(SdkValue::List(paths)) => texts(paths).map(&handle_of).collect(),
                 _ => Vec::new(),
             };
+            // a mount intent its stop could not end says what ends it
+            // where this Sandbox ran
             let left = match value.get("left") {
-                Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
+                Some(SdkValue::List(items)) if !items.is_empty() => {
+                    let remedy = crate::mount_intents::remedy(&home, &record);
+                    texts(items)
+                        .map(|said| format!("{said}; {remedy}"))
+                        .collect()
+                }
                 _ => Vec::new(),
             };
             done(events);
