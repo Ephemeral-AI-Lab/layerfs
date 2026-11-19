@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>DSH LayerCache</title>
+  <rect width="128" height="128" rx="24" fill="#132333"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6">
+    <path d="M28 39 64 21 100 39 64 57Z" stroke="#8dd9cc"/>
+    <path d="m28 56 36 18 36-18M28 73l36 18 36-18" stroke="#65b9e9"/>
+    <path d="M64 91v13m0-7H38v9m26-9h26v9" stroke="#f3c878"/>
+  </g>
+  <g fill="#f3c878"><circle cx="38" cy="108" r="5"/><circle cx="90" cy="108" r="5"/></g>
+</svg>
