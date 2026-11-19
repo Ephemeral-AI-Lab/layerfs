@@ -295,6 +295,9 @@ The workflow's §5 keeps the cache-credit failure these rules came from.
   and bounded output before any rerun, and report it. Write tests that cannot
   wait forever (bounded waits; a thread's exit must not depend on another
   thread finishing without panicking). The §3 budgets stay stricter.
+- **Scope each loop's tests to the change.** After a fix, run what the diff
+  can reach; run the full covering checks once, at final identity. How to
+  select and group them: [test speed-ups](docs/general/test-speed.md).
 - **CI reports; it never gates** (owner, 2026-10-23). `.github/workflows/ci.yml`
   runs fmt, guards, Clippy and the fast tests after a push or pull request,
   `nightly.yml` the slow and FUSE mount tests, `format.yml` the Ruff check;

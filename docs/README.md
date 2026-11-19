@@ -83,6 +83,7 @@
 - [Code review and triage policy](policy/code-review.md): PR tiers P0–P3, gate risks, evidence, issue priority and labels
 - [Development workspace cleanup](general/cleanup.md): ownership checks, verified recovery, evidence retention, and disk-space reporting
 - [Parallel worktree development](general/parallel-worktrees.md): private Cargo resources, prepared dependencies, pinned SDK builds, and per-run Docker E2E state
+- [Test speed-ups](general/test-speed.md): loop runs scoped to the diff, the full run once at final identity, grouped test commands and warm caches
 - [Plugin listings](plugins/README.md): how a plugin built on LayerFS is listed in `plugins/<plugin-id>/`, with the template to copy and the checker
 
 ## Explore
