@@ -241,7 +241,13 @@ fn init_on_worker(
     send::room(&mut worker, &copy, total)?;
     // the lease is taken under the Store's lock with the record read there
     let (lease, record) = lease::claim(&home, store)?;
-    op::phase(&home, store.as_str(), name, "send")?;
+    // the copy is named on the Init's `op`, so the call that settles an
+    // Init whose owner is gone (`project delete`) removes it (spec v20)
+    let left = SdkValue::map([
+        ("copy", SdkValue::text(&copy.id)),
+        ("machine", SdkValue::text(machine)),
+    ]);
+    op::phase_with(&home, store.as_str(), name, "send", left)?;
     send::send(events, &worker, &copy, total)?;
     let request = InitFrame {
         store: store.clone(),
@@ -267,9 +273,8 @@ fn init_on_worker(
                 "{}; the worker removes its copy {left} when its Init ends",
                 refusal.message
             );
-            // the worker's Init ends by its own deadline, counted from when
-            // it read this request, moments after this: the hour `home.prune`
-            // waits past the recorded deadline covers the difference
+            // the worker's Init removes its copy when it ends; while it runs
+            // it holds the copy, so `project delete` leaves it alone
             let left = send::Left {
                 store,
                 project: name,

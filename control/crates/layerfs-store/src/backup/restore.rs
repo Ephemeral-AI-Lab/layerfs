@@ -86,6 +86,8 @@ pub fn restore(
                 replaceable(&home, store, bucket, record, related)?;
             }
             _lease = Some(lease::hold(&home, store)?);
+            // what a killed `backup create` of it left goes (spec v20)
+            super::create::stale_on_native(&home, store);
             let args = SdkValue::map([
                 ("bucket", SdkValue::text(bucket)),
                 ("file", SdkValue::text(&file)),

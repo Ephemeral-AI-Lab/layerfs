@@ -1,4 +1,4 @@
-<!-- totals short=5490 long=29124 pairs=85 -->
+<!-- totals short=5242 long=28617 pairs=83 -->
       <h3>project</h3>
       <div class="pair">
         <div class="pair-head"><span class="call">project.init</span><code>layerfs project init &lt;project&gt; &lt;folder&gt; [--timeout 3600000]</code></div>
@@ -255,16 +255,6 @@
         <div class="pair-head"><span class="call">home.doctor</span><code>layerfs home doctor</code></div>
         <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">11 B</span></div><pre>{"ok":true}</pre></div>
         <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">1,723 B</span></div><pre>{"ok":true,"findings":[],"not_checked":[],"status":"ok","counts":{"ok":5,"notice":0,"warning":0,"error":0,"not_checked":0},"observed_at":"2026-11-18T09:16:59Z","tree":{"home":"/Users/me/.layerfs","status":"ok","coverage":"shallow","checks":[{"check":"home.build","outcome":"pass","from":null},{"check":"home.prerequisites","outcome":"pass","from":null},{"check":"home.layout","outcome":"pass","from":null},{"check":"home.records","outcome":"pass","from":null},{"check":"home.bundle","outcome":"pass","from":null},{"check":"home.native_daemon","outcome":"pass","from":null},{"check":"home.capacity","outcome":"pass","from":null}],"blocked_by":null,"reason":null,"machines":[{"machine":"native","status":"ok","coverage":"shallow","checks":[{"check":"machine.record","outcome":"pass","from":null},{"check":"machine.state","outcome":"pass","from":null}],"blocked_by":null,"reason":null},{"machine":"docker","status":"ok","coverage":"shallow","checks":[{"check":"machine.record","outcome":"pass","from":null},{"check":"machine.state","outcome":"pass","from":null}],"blocked_by":null,"reason":null}],"stores":[{"store":"demo-experiments","status":"ok","coverage":"shallow","checks":[{"check":"store.record","outcome":"pass","from":null},{"check":"store.schema","outcome":"pass","from":null},{"check":"store.connection","outcome":"pass","from":null}],"blocked_by":null,"reason":null}],"buckets":[{"bucket":"r2-main","status":"ok","coverage":"shallow","checks":[{"check":"bucket.configuration","outcome":"pass","from":null},{"check":"bucket.credentials","outcome":"pass","from":null},{"check":"bucket.transport","outcome":"pass","from":null},{"check":"bucket.list","outcome":"pass","from":null}],"blocked_by":null,"reason":null}]}}</pre></div>
-      </div>
-      <div class="pair">
-        <div class="pair-head"><span class="call">home.leftovers</span><code>layerfs home leftovers [--machine M]</code></div>
-        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">224 B</span></div><pre>{"items":[{"leftover":"native:run_folder:tests-5f0c7a1e","modified_at":"2026-11-18T09:02:11Z","size":11833344},{"leftover":"dev:init_copy:shop-9a1f","modified_at":"2026-11-18T09:02:11Z","size":524288000,"report_only":true}]}</pre></div>
-        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">306 B</span></div><pre>{"items":[{"leftover":"native:run_folder:tests-5f0c7a1e","modified_at":"2026-11-18T09:02:11Z","size":11833344,"report_only":false,"removable_at":null,"kind":"run_folder","machine":"native","path":"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e"}],"not_listed":[],"observed_at":"2026-11-18T09:16:59Z"}</pre></div>
-      </div>
-      <div class="pair">
-        <div class="pair-head"><span class="call">home.prune</span><code>layerfs home prune &lt;leftover&gt;</code></div>
-        <div class="side"><div class="side-l"><span class="tag">Short · agents</span><span class="bytes">24 B</span></div><pre>{"freed_bytes":11833344}</pre></div>
-        <div class="side long"><div class="side-l"><span class="tag">Long · UI · --detail</span><span class="bytes">201 B</span></div><pre>{"ok":true,"freed_bytes":11833344,"outcome":"removed","leftover":"native:run_folder:tests-5f0c7a1e","kind":"run_folder","machine":"native","path":"/Users/me/.layerfs/machine/native/run/tests-5f0c7a1e"}</pre></div>
       </div>
       <h3>machine</h3>
       <div class="pair">

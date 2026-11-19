@@ -105,6 +105,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         }
         false => paths::store_dir(&home, store).join("backup.staging"),
     };
+    stale_staging(&home, (store, &machine), &local, &step);
     let mut staged_any = false;
     let result = (|| {
         check(driver.as_ref(), &object, expected, &home_id)?;
@@ -180,12 +181,57 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     ]))
 }
 
+/// Removes what a killed create of this Store left (spec v20): the copy
+/// fetched from a worker (`store/<s>/backup.staging` in the home), the
+/// snapshot this create stages at `local`, and the snapshot staged beside
+/// the Store on its machine (the `unstage` step). The caller holds the
+/// Store's lease and its [`Creating`] lock, so no create uses any of them
+/// now. One attempt each: what was removed, and a removal that failed, is
+/// a line of the home's `log/sweep.jsonl`; nothing here fails the create.
+fn stale_staging(home: &Path, (store, machine): (&str, &str), local: &Path, step: &Step<'_>) {
+    let log = |path: &Path, outcome| home::log_swept(home, "backup_staging", path, &outcome);
+    let fetched = paths::store_dir(home, store).join("backup.staging");
+    for path in [fetched.as_path(), local] {
+        match std::fs::remove_file(path) {
+            Ok(()) => log(path, Ok(None)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => log(path, Err(error.to_string())),
+        }
+    }
+    let staged = format!("store/{store}/store.sqlite.backup on machine {machine}");
+    match step(StoreStep::Unstage) {
+        Ok(out) if out.get_bool("removed") => log(Path::new(&staged), Ok(None)),
+        Ok(_) => {}
+        Err(refusal) => log(Path::new(&staged), Err(refusal.message)),
+    }
+}
+
+/// What a killed create left of Store `store` on `native`, removed by a
+/// restore that replaces it (spec v20): its two staged snapshots in the
+/// home, under the create lock taken without waiting. The caller holds the
+/// Store's lease. A create that runs keeps them; nothing here fails the
+/// restore, and each removal is a line of `log/sweep.jsonl`.
+pub(crate) fn stale_on_native(home: &Path, store: &str) {
+    let Ok(_creating) = Creating::take(home, store) else {
+        return;
+    };
+    let mut file = paths::store_file(home, store).into_os_string();
+    file.push(".backup");
+    let dir = paths::store_dir(home, store);
+    for path in [dir.join("backup.staging"), std::path::PathBuf::from(file)] {
+        match std::fs::remove_file(&path) {
+            Ok(()) => home::log_swept(home, "backup_staging", &path, &Ok(None)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => home::log_swept(home, "backup_staging", &path, &Err(error.to_string())),
+        }
+    }
+}
+
 /// One create of a Store at a time in a home, since each stages its snapshot
 /// at the same path: an `flock` on `store/<s>/backup.lock`, taken without
 /// waiting and held until the create ends (a killed create's goes with it).
-///
-/// `home.prune` takes it the same way before it removes a staged snapshot an
-/// interrupted create left (layerfs-project#180).
+/// A create that takes it removes what a killed one left
+/// ([`stale_staging`]); so does a restore that replaces the Store.
 pub struct Creating(std::fs::File);
 
 impl Creating {

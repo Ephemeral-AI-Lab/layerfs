@@ -69,14 +69,14 @@ links it and holds the build and type scripts.
 
 | Test | Checks |
 | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | ten families and 85 calls, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | ten families and 83 calls, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
 | [`events.mjs`](../../../../api/node/test/events.mjs), [`progress.mjs`](../../../../api/node/test/progress.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
 | [`values.mjs`](../../../../api/node/test/values.mjs) | exact `bigint`, refused values, bytes and the one-key map |
 | [`native.mjs`](../../../../api/node/test/native.mjs) | a missing addon is one clear error; `LAYERFS_NATIVE` wins; no fallback is tried |
 | [`package.mjs`](../../../../api/node/test/package.mjs) | licence, file list, `engines`, and `index.d.ts` equal to what the table generates |
 | [`close.mjs`](../../../../api/node/test/close.mjs) | `close()`, the one function outside the table |
-| [`doctor.mjs`](../../../../api/node/test/doctor.mjs) | `home.doctor` and its siblings as table calls that change nothing; `home.leftovers` and `home.prune` |
+| [`doctor.mjs`](../../../../api/node/test/doctor.mjs) | `home.doctor` and its siblings as table calls that change nothing; `home.leftovers` and `home.prune` are gone |
 | [`coverage.mjs`](../../../../api/node/test/coverage.mjs), [`contract.mjs`](../../../../api/node/test/contract.mjs) | the [coverage matrix](../calls/coverage.md) and cross-front-end answers |
 
 Build the addon first; run one file at a time, for example
@@ -125,7 +125,7 @@ the repository's, ships in the wheel and the source distribution), Python
 | [`test_flow.py`](../../../../api/python/test/test_flow.py) | a mountless file and history flow through `aio`, read through both packages alike |
 | [`test_progress.py`](../../../../api/python/test/test_progress.py), [`test_project_export.py`](../../../../api/python/test/test_project_export.py) | progress delivery and handler failures; export events |
 | [`test_stubs.py`](../../../../api/python/test/test_stubs.py) | committed stubs equal `gen_stubs.py`'s output; licence; `mypy --strict` on `typed_samples/` (skipped without mypy) |
-| [`test_native_missing.py`](../../../../api/python/test/test_native_missing.py), [`test_doctor.py`](../../../../api/python/test/test_doctor.py), [`test_disabled_platforms.py`](../../../../api/python/test/test_disabled_platforms.py) | a clear `ImportError` without `_native`; the doctors as table calls, `home.leftovers` and `home.prune`; removed platforms refused |
+| [`test_native_missing.py`](../../../../api/python/test/test_native_missing.py), [`test_doctor.py`](../../../../api/python/test/test_doctor.py), [`test_disabled_platforms.py`](../../../../api/python/test/test_disabled_platforms.py) | a clear `ImportError` without `_native`; the doctors as table calls; `home.leftovers` and `home.prune` gone; removed platforms refused |
 
 Build with `cargo +1.85.1 build --locked -p layerfs-python -p layerfs-cli`,
 copy `target/debug/lib_native.dylib` (`.so` on Linux) to

@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **85 calls in 10 families**, the same names and arguments in JavaScript, Python, the MCP server and the `layerfs` command, one page per family.
+Every call a program can make: **83 calls in 10 families**, the same names and arguments in JavaScript, Python, the MCP server and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
@@ -44,7 +44,7 @@ against the built table.
  |           status cancel   |  Branch  | file    read ... write apply  |
  +---------------------------+          +-------------------------------+
  backup: buckets <-> sqlite Store files      home: the home's state, call
-                                                   log, doctor, leftovers
+                                                   log, doctor
  each of home, project, sandbox, machine, store, backup has its doctor
 ```
 
@@ -52,7 +52,7 @@ against the built table.
 
 | Family | Calls, in help order | Runs by default | Source |
 | --- | --- | --- | --- |
-| [`home`](home.md) (7) | [`init`](home.md#homeinit), [`get`](home.md#homeget), [`log`](home.md#homelog), [`clear_log`](home.md#homeclear_log), [`doctor`](home.md#homedoctor), [`leftovers`](home.md#homeleftovers), [`prune`](home.md#homeprune) | the caller's process; `get` reads files only and never opens the home; `doctor` and `leftovers` ask running machines' workers, `prune` runs on its leftover's machine | [`home/`](../../../../api/crates/layerfs-api/src/home) |
+| [`home`](home.md) (5) | [`init`](home.md#homeinit), [`get`](home.md#homeget), [`log`](home.md#homelog), [`clear_log`](home.md#homeclear_log), [`doctor`](home.md#homedoctor) | the caller's process; `get` reads files only and never opens the home; `doctor` asks running machines' workers | [`home/`](../../../../api/crates/layerfs-api/src/home) |
 | [`project`](project.md) (8) | [`init`](project.md#projectinit), [`list`](project.md#projectlist), [`get`](project.md#projectget), [`stats`](project.md#projectstats), [`export`](project.md#projectexport), [`delete`](project.md#projectdelete), [`hide_path`](project.md#projecthide_path), [`doctor`](project.md#projectdoctor) | `list`, `get`: home records, then each ready Store's own list; the rest where the Store's calls run | [`project/`](../../../../api/crates/layerfs-api/src/project) |
 | [`branch`](branch.md) (6) | [`list`](branch.md#branchlist), [`get`](branch.md#branchget), [`fork`](branch.md#branchfork), [`merge`](branch.md#branchmerge), [`publish`](branch.md#branchpublish), [`remove`](branch.md#branchremove) | where the Store's calls run | [`branch/`](../../../../api/crates/layerfs-api/src/branch) |
 | [`commit`](commit.md) (3) | [`list`](commit.md#commitlist), [`get`](commit.md#commitget), [`diff`](commit.md#commitdiff) | where the Store's calls run | [`commit/`](../../../../api/crates/layerfs-api/src/commit) |
@@ -106,7 +106,8 @@ The 1.x names below are gone in 2.0; nothing answers to them.
 | `machine.load`, `machine.status`, `machine.space`, `machine.platforms` | `machine.load_image`, `machine.get --with live`, `machine.stats --with space`, `home.get --with platforms` |
 | `store.status`, `store.stats`, `store.push`, `store.pull` | `store.get --with live`, `store.get --with stats`, `store.move` |
 | the `logs` family (`logs.*`, among them `logs.machine` and `logs.sandbox`) | `home.log`, `home.clear_log`, `machine.log`, `sandbox.log` |
-| `doctor.fix` and the shell's `layerfs doctor` | `home.prune`; the six family doctors |
+| `doctor.fix` and the shell's `layerfs doctor` | the six family doctors; leftovers are removed by LayerFS itself (v20) |
+| `home.leftovers`, `home.prune` (v20) | none: LayerFS removes what interrupted operations left ([Checks: leftovers](../../control/doctor/checks.md#leftovers)) |
 | paging by `page`, `page_size`, `page_pos`, `has_more`, `next_page_pos`, `continuation` | `--limit N --cursor C` in, `{items, next_cursor}` out |
 
 ## Invariants
@@ -140,7 +141,7 @@ The 1.x names below are gone in 2.0; nothing answers to them.
 
 | Page | What it covers |
 | --- | --- |
-| [home](home.md) | the home's state, call log, doctor and leftovers |
+| [home](home.md) | the home's state, call log and doctor |
 | [project](project.md) | Init, project records and state, stats, export, delete, hidden paths, the project doctor |
 | [branch](branch.md) | Branches: fork, merge, publish, remove |
 | [commit](commit.md) | a Branch's Commits, one Commit, comparisons |

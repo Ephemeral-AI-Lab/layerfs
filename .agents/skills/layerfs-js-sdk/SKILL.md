@@ -5,7 +5,7 @@ description: Use when building, editing, testing or inspecting a project through
 
 # LayerFS: working on a project
 
-> **Status:** Current general guide for the LayerFS 2.0 call surface: 85
+> **Status:** Current general guide for the LayerFS 2.0 call surface: 83
 > calls in 10 families. Sources: the built call table (`layerfs help --json`;
 > one file per call, `api/crates/layerfs-api/src/<family>/<call>.rs`), the
 > frozen spec rows
@@ -350,13 +350,13 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-85 calls in ten families. Each family's page has arguments, answers,
+83 calls in ten families. Each family's page has arguments, answers,
 refusals and examples. Every option object may also carry `detail`, `with`
 (only where listed) and `log_tag`.
 
 | Family | Calls |
 | --- | --- |
-| [home](references/methods/home.md) | `init()`, `get({ with: ["platforms", "tree"] })`, `log({ call, project, client, tag, outcome, since, limit, cursor })`, `clear_log()`, `doctor({ on_progress })`, `leftovers({ machine })`, `prune(leftover)` |
+| [home](references/methods/home.md) | `init()`, `get({ with: ["platforms", "tree"] })`, `log({ call, project, client, tag, outcome, since, limit, cursor })`, `clear_log()`, `doctor({ on_progress })` |
 | [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list({ store, limit, cursor, with: ["stats"] })`, `get(project)`, `stats(project, { branch, at })`, `export(project, destination, { branch, at, on_progress })`, `delete(project)`, `hide_path(project, path)`, `doctor(project, { full, on_progress })` |
 | [branch](references/methods/branch.md) | `list(project, { prefix, exclude_prefix, limit, cursor })`, `get(project, branch)`, `fork(project, name, from?, { at })`, `merge(project, branch, from, { into, units, expected, message })`, `publish(project, branch, { at, expected, force })`, `remove(project, branch)` |
 | [commit](references/methods/commit.md) | `list(project, branch, { at, limit, cursor })`, `get(project, commit, { branch })`, `diff(project, ref, { from, path, limit, cursor, with: ["patch"] })` |
@@ -397,7 +397,7 @@ function; the shell has no such command).
 | `ws` (`<sandbox>:<path>`), `kind: "UpToDate"`, `lww` | `workspace` (`<sandbox>:<name>`), `unchanged: true`, `overwritten` |
 | `logs.list`, `logs.reset` | `home.log`, `home.clear_log` |
 | `logs.sandbox`, `logs.machine` | `sandbox.log`, `machine.log` |
-| `layerfs doctor` / `doctor()`, `doctor.fix(id)` | `home.doctor()` and the other five doctors; `home.leftovers()`, `home.prune(leftover)` |
+| `layerfs doctor` / `doctor()`, `doctor.fix(id)` | `home.doctor()` and the other five doctors; leftovers are removed by LayerFS itself |
 | `machine.status`, `machine.space`, `machine.load`, `machine.platforms` | `machine.get(m, { with: ["live"] })`, `machine.stats(m, { with: ["space"] })`, `machine.load_image`, `home.get({ with: ["platforms"] })` |
 | `store.status`, `store.stats`, `store.push`, `store.pull` | `store.get(s, { with: ["live"] })`, `store.get(s, { with: ["stats"] })`, `store.move(s, machine)` |
 | `page`, `page_size`, `page_pos`, `has_more`, `next_page_pos`, `continuation` | `{ limit, cursor }` in, `{ items, next_cursor }` out |

@@ -331,8 +331,8 @@ pub fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
     step(&Side::Worker(root), args)
 }
 
-/// One step of an image copy on `side`: `probe`, `write`, `publish` or
-/// `discard`.
+/// One step of an image copy on `side`: `probe`, `write`, `publish`,
+/// `discard`, or `sweep` (what killed copies left, [`crate::image_sweep`]).
 pub fn step(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let root = match side {
         Side::Home(root) | Side::Worker(root) => *root,
@@ -360,6 +360,8 @@ pub fn step(side: &Side<'_>, args: &SdkValue) -> Outcome {
             let id = id.ok_or_else(|| refused("InvalidInput", "image id"))?;
             publish(&cache, id, args)
         }
+        // what killed copies left in this cache (spec v20)
+        "sweep" => Ok(crate::image_sweep::temporaries(root, &cache, args)),
         "discard" => {
             let hex = hex.ok_or_else(|| refused("InvalidInput", "image id"))?;
             match fs::remove_file(part(&cache, hex)) {

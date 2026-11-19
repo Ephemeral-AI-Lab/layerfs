@@ -55,9 +55,8 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   families.
 - The doctors are table calls of their families (`layerfs.home.doctor()`,
   `layerfs.machine.doctor(machine)` and so on; [the doctors](calls.md#the-doctors)),
-  and there is no `layerfs.doctor`. The leftovers are
-  `layerfs.home.leftovers()`, and `layerfs.home.prune(leftover)` removes one
-  ([`home`](calls.md#home-7)).
+  and there is no `layerfs.doctor`. There is no call for leftovers: LayerFS
+  removes what interrupted operations left itself ([`home`](calls.md#home-5)).
 - `layerfs.close()` (also a named export), outside the table, closes every
   Store this process holds open with no call running, which drops its
   leases; it answers how many it closed. A process calls it before it
@@ -113,9 +112,7 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 - `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the ten
   families; each family, `home` included, is a module attribute.
 - As in Node, the doctors are their families' `doctor` calls and there is
-  no `layerfs.doctor`; `layerfs.home.leftovers()` and
-  `layerfs.home.prune(leftover)` (and their `layerfs.aio` forms) list and
-  remove leftovers.
+  no `layerfs.doctor`, and no leftover calls.
 - `layerfs.close()` is Node's `close()`: it closes this process's open
   Stores, dropping their leases, and returns how many.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
@@ -141,7 +138,7 @@ asyncio.run(main())
 
 See [`project.export`](../../architecture/api/sdk/project.md#projectexport)
 for destination validation, fidelity, routing, refusal codes and result fields.
-The table has 85 calls, eight in the `project` family.
+The table has 83 calls, eight in the `project` family.
 
 ```js
 // /exports exists; the destination is absent or empty on this host.

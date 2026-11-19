@@ -138,11 +138,10 @@ Six calls check one thing each and change nothing: `home.doctor`,
 `backup.doctor`. Each answers `{"ok":true}` when nothing was found, else
 `findings` and `not_checked`; the long form adds the checked `tree`. See the
 `layerfs-js-sdk` skill's [doctors page](../../layerfs-js-sdk/references/methods/doctor.md).
-`home.leftovers` lists what interrupted operations left behind.
+What interrupted operations left behind LayerFS removes itself; each
+removal is a line of the home's `log/sweep.jsonl`.
 
 ```bash
 $ layerfs home doctor
 {"ok":true}
-$ layerfs home leftovers
-{"items":[],"not_listed":[{"machine":"docker","blocked_by":{"machine":"docker","reason":"stopped"},"message":"machine docker is stopped"}]}
 ```

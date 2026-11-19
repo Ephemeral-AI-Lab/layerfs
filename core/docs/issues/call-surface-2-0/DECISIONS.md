@@ -19,7 +19,8 @@ cleanness", "Doctor page"). Every one below is binding on the frozen spec.
   thing at any depth.
 - **R5** `layerfs backup doctor <bucket> --full` (not `--with write`). `--with` only ever adds a section.
 - **R6** `layerfs home leftovers [--machine M]` is its own call (85 calls in all);
-  `layerfs home prune <leftover>` removes one it listed. `home get` has no `--with leftovers`.
+  `layerfs home prune <leftover>` removes one it listed. `home get` has no `--with leftovers`. Superseded by version 20: both calls
+  are removed, with no alias, and LayerFS removes leftovers itself.
 - **R7** `layerfs workspace cancel <workspace> [--exec E]`: every running command by default.
   `workspace.list` joins the agent profile. A worker that does not answer: the short form answers
   `{"unknown":true}` (decide the exact key in the row and state it).
@@ -88,8 +89,9 @@ the project record check is not new (and its finding is a notice with a fix, not
 
 ## Totals after the freeze
 
-85 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 7,
-machine 14, store 13, backup 6.
+83 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 5,
+machine 14, store 13, backup 6. (85 at the freeze, with home 7; version 20 removed `home leftovers`
+and `home prune`.)
 
 ## Fixes from the exit review
 
@@ -284,3 +286,51 @@ Coordinator rulings on the R4 conformance review, applied to the rows by package
   checks; the `home doctor` example's `old-run` finding is now an error. A machine that only a Sandbox
   or Store record names has no record of its own: `machine doctor <m>` answers `NotFound` and the
   record that names it reports the dangling reference.
+
+## Version 20 (owner 2026-11-19): leftovers removed
+
+Owner, verbatim: "can we just remove them, and drop layerfs home leftovers".
+
+- **V20-1** `home.leftovers` and `home.prune` leave the table with no alias (ruling R1): their names
+  are refused like every removed 1.x name (exit 2 on the command line). 85 calls become 83; `home`
+  has 5. Today's `doctor.fix`, which `home.prune` replaced, is removed with no successor. The
+  worker operation that served `home.prune` is gone; an older caller that sends it gets the worker's
+  unknown-operation refusal.
+- **V20-2** LayerFS removes leftovers itself, only where it can prove nothing owns them: no record
+  names it, no live daemon or process holds it, no lock is held. One attempt, no retry; a removal
+  that fails is a line of `log/sweep.jsonl` (the home's, or the machine's beside `worker.log`) and is
+  left for the next sweep, never reported as success. A sweep runs inside the bounded walk the list
+  used (20,000 entries or 2 s) and never fails the call it rides on. Per kind:
+  - `run_folder`, `empty_root`: a worker sweeps its run root when it starts (`machine start`) and
+    before each `sandbox create` it runs; this process sweeps `native`'s before a `sandbox create`
+    there starts its daemon. A run folder goes only when no Sandbox record names it (nor a create in
+    flight), its `owner` marker is older than a minute, the record that marker names has no live
+    daemon, and nothing is mounted at or under it; an empty private root only when its run folder is
+    gone and it is not a mount point.
+  - `image_tmp`, `export_container`: `machine load-image` and `sandbox create --image`, when they
+    copy an image, sweep under the machine's prune gate for every image whose copy lock is free, not
+    only the one being copied: this home's labelled export containers (`docker rm -v` under that
+    image's lock) and the machine's unpack temporaries (under their unpack lock).
+    `machine prune --unused` keeps removing `.tmp-*`. Unlabelled export containers of builds before
+    the labels name no home and are left alone.
+  - `backup_staging`: the next `backup create` of that Store, holding the Store's lease and its
+    create lock, removes the staged snapshots a killed create left (in the home and on the Store's
+    machine); a `backup restore` that replaces the Store removes those in the home, under the lease
+    and the create lock taken without waiting.
+  - `init_copy`: never removed by a guess. A worker's Init removes its copy when it ends, and holds
+    it while it reads it. An Init whose owner is gone leaves its project `broken` `unresolved` with
+    the fix `layerfs project delete <project>`; the Init's `op` names its copy and machine, and the
+    `project delete` that settles it removes the copy there, unless that Init still holds it.
+- **V20-3** Space stays visible without a list: `machine stats --with space` keeps counting
+  `other_runs`.
+- **V20-4** The doctors are unchanged: no leftover check is added.
+
+## Coordinator rulings after the 3080 pass
+
+- **R-LF2-1** An `InUse` refusal may carry the next fields `sandboxes`, `stores` and `machines`,
+  naming what holds the thing, with a fix.
+- **R-LF2-2** `machine stop`'s `InUse` keeps the removal chain as its fix; `--force` is named in the
+  message, not offered as the fix. A fix may join more than two commands.
+- **R-LF3-1** An uncertain refusal (a request was sent and its outcome is not known) carries
+  `attempted: true` as a flat next field and also in `detail`, so the short form keeps the
+  uncertainty.

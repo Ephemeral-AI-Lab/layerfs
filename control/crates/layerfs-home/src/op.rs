@@ -115,6 +115,13 @@ impl Op {
         }
     }
 
+    /// The intent with `args` recorded in place of what it recorded.
+    pub fn with_args(self, args: SdkValue) -> Self {
+        Self {
+            fields: home::with_field(self.fields, "args", args),
+        }
+    }
+
     /// The intent marked uncertain.
     pub fn as_uncertain(self) -> Self {
         let fields = home::with_field(self.fields, "uncertain", SdkValue::Bool(true));

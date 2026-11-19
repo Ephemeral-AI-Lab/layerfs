@@ -96,7 +96,7 @@ Each call belongs to exactly one bucket: `work` (listed by both profiles) or
 table entry (`form.profile`: `agent` is `work`, `full` is `admin`), and
 [`profiles.js`](../../../../api/mcp/src/profiles.js) reads only that; it names
 calls only to give some a longer line in the table below. 17 calls are in
-`work` and 68 in `admin` only.
+`work` and 66 in `admin` only.
 
 | Bucket | Calls |
 | --- | --- |
@@ -116,17 +116,15 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-85 calls: 17 in `work` (the table's `agent` profile), 68 in `admin` only (`full`); `--profile admin` lists 85.
+83 calls: 17 in `work` (the table's `agent` profile), 66 in `admin` only (`full`); `--profile admin` lists 83.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
-| `home.init` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
-| `home.get` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
-| `home.log` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
-| `home.clear_log` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
-| `home.doctor` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
-| `home.leftovers` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
-| `home.prune` | admin | admin | set the home up, read its state and call log, check it and prune its leftovers; the `full` profile (administration) |
+| `home.init` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
+| `home.get` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
+| `home.log` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
+| `home.clear_log` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
+| `home.doctor` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
 | `project.init` | admin | admin | import a host folder into a Store; the `full` profile (administration) |
 | `project.list` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.get` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |

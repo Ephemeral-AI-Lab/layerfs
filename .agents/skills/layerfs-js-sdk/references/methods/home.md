@@ -5,7 +5,7 @@
 > `layerfs` command on a throwaway home on 2026-11-18 (the home's path is
 > `/tmp/demo/home`); the rest is from the table, the spec rows and the
 > manual. 1.x `logs.list` and `logs.reset` are `home.log` and
-> `home.clear_log`; `doctor.fix` is `home.prune`; the `logs` and `doctor`
+> `home.clear_log`; `doctor.fix` is gone (LayerFS removes leftovers itself); the `logs` and `doctor`
 > families are gone, with no alias. An agent working on a project rarely
 > needs this family; a folder scope refuses it.
 
@@ -15,8 +15,6 @@ home.get({ with: ["platforms", "tree"] })
 home.log({ call, project, client, tag, outcome, since, limit, cursor })
 home.clear_log()
 home.doctor({ on_progress })
-home.leftovers({ machine })
-home.prune(leftover)
 ```
 
 The home is `LAYERFS_HOME` (default `~/.layerfs`), or the `home` of
@@ -81,8 +79,8 @@ stale (`InvalidInput`). `get`, `log` and `clear_log` write no line of their
 own.
 
 ```bash
-$ layerfs home log --limit 3                                                   # seen
-{"items":[{"call":"home.leftovers","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:32Z"}],"next_cursor":"eyJmb3Ii…"}
+$ layerfs home log --limit 3                                           # seen 2026-11-19
+{"items":[{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"}],"next_cursor":"eyJmb3Ii…"}
 ```
 
 ```js
@@ -113,26 +111,13 @@ $ layerfs home doctor                                                          #
 {"ok":true}
 ```
 
-## `home.leftovers` and `home.prune`
+## Leftovers
 
-`leftovers` lists what interrupted operations left behind: one bounded walk
-of the home's own folders on `native`, and one through the worker of each
-running machine (`machine` walks one). Nothing is started: a machine that is
-stopped, busy or does not answer is named in `not_listed`. An item's short
-form is `{ leftover, modified_at }`, with `size` and `report_only`; long adds
-`removable_at`, `kind`, `machine` and `path`. `leftover` is its id,
-`<machine>:<kind>:<name>`; the kinds are `run_folder`, `empty_root`,
-`init_copy`, `backup_staging`, `image_tmp` and `export_container`.
-
-```bash
-$ layerfs home leftovers                                                       # seen
-{"items":[],"not_listed":[{"machine":"docker","blocked_by":{"machine":"docker","reason":"stopped"},"message":"machine docker is stopped"}]}
-```
-
-`prune(leftover)` removes the one leftover whose id it is given, once, under
-that kind's guard. Short: `{ freed_bytes }`, or `{"ok":true}` when the size
-was not measured; long adds `outcome ("removed"), leftover, kind, machine,
-path`. Refusals: `InUse` (the kind's guard does not hold; nothing removed),
-`NotFound` (no leftover has that id now), `InvalidInput` (an `init_copy`
-that is only reported), `Unavailable` (the machine is stopped), `Unknown` (the worker's
-answer was lost; nothing is sent again).
+There is no call for them: `home.leftovers` and `home.prune` were removed
+in spec v20 (owner 2026-11-19) with no alias, and `layerfs home leftovers`
+and `layerfs home prune` exit 2. LayerFS removes what interrupted operations
+left (a Sandbox's run folder or empty private root, an image unpack
+temporary or export container, a staged backup snapshot, an Init's folder
+copy on a machine) itself, at fixed points in later calls and only where it
+can prove nothing owns it; each removal is a line of `log/sweep.jsonl`
+([Checks: leftovers](../../../../../docs/architecture/control/doctor/checks.md#leftovers)).

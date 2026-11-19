@@ -45,6 +45,14 @@ pub fn in_worker(root: &Path, frame: &InitFrame) -> Outcome {
             format!("no folder copy at {}", staged.display()),
         ));
     }
+    // held while the add reads it, so a `project delete` that settles this
+    // Init meanwhile leaves the copy to it (spec v20)
+    let Some(_held) = super::staged::hold(&staged)? else {
+        return Err(refused(
+            "Failed",
+            format!("the folder copy at {} is being removed", staged.display()),
+        ));
+    };
     let add = || {
         let _lease = crate::lease::hold_locked(root, &frame.store)?;
         crate::project::add::add_project(&ProjectAdd {

@@ -340,6 +340,11 @@ fn host_op(
     let choice = deploy::choose(&home, machine, image.as_deref())?;
     match executor {
         Executor::Local => {
+            // before a daemon starts on `native`, what earlier starts and
+            // removals left in its run root goes (spec v20)
+            if op == Op::SandboxCreate {
+                crate::sweep::run_root(&home);
+            }
             let key = store_path(&home, &target.store, &target.record, kind);
             if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
                 reach_check(
@@ -478,6 +483,11 @@ pub fn in_worker(
         )?;
         layerfs_home::trace::step("host_args");
         return runner(host, call);
+    }
+    // before a daemon starts on this machine, what earlier starts and
+    // removals left in its run root goes (spec v20)
+    if op == Op::SandboxCreate {
+        crate::sweep::run_root(root);
     }
     // written only when it changed (#535 R5): most calls find it as it is
     let thin = StoreRecord::from_record(

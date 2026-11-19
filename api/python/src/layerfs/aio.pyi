@@ -57,24 +57,6 @@ class AsyncHomeFamily:
         log_tag: str | None = None,
     ) -> Result:
         """check the home, then each machine, PostgreSQL Store and bucket, shallowly"""
-    async def leftovers(
-        self,
-        *,
-        machine: str | None = None,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """what earlier runs left behind on this computer and on each running machine"""
-    async def prune(
-        self,
-        leftover: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """remove one leftover that home leftovers listed"""
 
 class AsyncProjectFamily:
     async def init(

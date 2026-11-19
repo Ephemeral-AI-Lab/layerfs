@@ -103,7 +103,9 @@ output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
 
 Every host-side address is loopback; the secret guards the worker on every
 bind address. `layerfs worker` reads its two settings, makes its root
-(`/layerfs/data`, or `LAYERFS_WORKER_ROOT` in tests) `0701` and serves
+(`/layerfs/data`, or `LAYERFS_WORKER_ROOT` in tests) `0701`, sweeps its run
+root of what interrupted Sandbox starts and removals left (once, before it
+accepts; [Checks: leftovers](../doctor/checks.md#leftovers)) and serves
 until `machine.stop`: it never stops by itself
 ([`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs)).
 
@@ -162,9 +164,8 @@ waits at most 10 s; other operations wait as long as they run
 | `store.compact` | one sqlite Store's compaction on `store/<name>/store.sqlite` under the root, holding the Store's lease there; `{ store, store_record }`, each phase sent as a `progress` event; an event that cannot be written does not end the run (spec S6, #42 D5) |
 | `store.file` | one step of a `store.move` (either direction), `store.remove`, stat or backup, with `progress` events for hashing steps |
 | `store.reach` | the check of this machine's connection to a PostgreSQL Store, for `store.update --machine` |
-| `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |
-| `home.prune` | the internal op behind the `home.prune` call: removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
-| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
+| `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
+| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |
 | `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.delete`, `project.delete.admit`, `project.delete.entry`, `project.delete.release` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; admit, mark, remove the entry of and release a project's deletion |
 | anything else | `InvalidInput`, "the worker has no operation …" |

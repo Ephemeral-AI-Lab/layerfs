@@ -380,9 +380,9 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
   lost answer is `Unknown`, names the copy that may remain (in its message
   and in a line of `log/uncertain.jsonl`, with the Init's deadline), and
   keeps the project `broken` `unresolved` (`project delete` clears it).
-  `layerfs home leftovers` lists such a copy and `layerfs home prune`
-  ([`home`](calls.md#home-7)) removes it an hour after that deadline. Not
-  run on a real VM.
+  `project delete` sends the worker a discard of that copy, which removes
+  it unless an Init still holds it ([`home`](calls.md#home-5)). Not run on
+  a real VM.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores

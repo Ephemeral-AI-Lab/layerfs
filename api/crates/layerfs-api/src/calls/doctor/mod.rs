@@ -1,7 +1,8 @@
 //! The answer the six doctor calls share (`answer`): `home`, `machine`,
 //! `store`, `project`, `sandbox` and `backup doctor`, each an entry of its
 //! own family, reached as `crate::doctor`. There is no `doctor` family
-//! (call surface 2.0): the leftover repair it held is `home.prune`.
+//! (call surface 2.0); the leftover repair it held is gone with
+//! `home.prune` (spec v20): LayerFS removes leftovers itself.
 pub(crate) mod answer;
 
 // the six doctor entries live with their families; declared here, so each

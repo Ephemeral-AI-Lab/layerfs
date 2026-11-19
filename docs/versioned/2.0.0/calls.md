@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 85 calls in ten families: `home` 7, `project` 8, `branch` 6,
+There are 83 calls in ten families: `home` 5, `project` 8, `branch` 6,
 `commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 13
 and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
 prints one family or one call, and `layerfs help --json` prints the whole
@@ -57,7 +57,7 @@ works with, and the MCP server's default `work` profile lists only them:
 `branch.fork`, `commit.list`, `commit.diff`, `file.read`, `file.list`,
 `file.glob`, `file.grep`, `file.write`, `file.edit`, `file.rm`, `file.mv`,
 `sandbox.create`, `workspace.list`, `workspace.exec`, `workspace.cancel`,
-`workspace.commit` and `workspace.status`. The other 68 are `full`: the MCP
+`workspace.commit` and `workspace.status`. The other 66 are `full`: the MCP
 `admin` profile lists them with the 17. Every call is in the shell, Node
 and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `quiet` calls write no line to the home's call log:
 `home.get`, `home.log`, `home.clear_log`, `sandbox.files`, `sandbox.log`,
@@ -174,7 +174,7 @@ $ echo $?
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `home` (7)
+### `home` (5)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -183,13 +183,11 @@ $ echo $?
 | `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit` (200), `cursor` | the calls made against this home, newest first |
 | `clear_log` | — | — | clears this home's call log |
 | `doctor` | — | `on_progress` | checks the home, then each machine, PostgreSQL Store and bucket, shallowly ([the doctors](#the-doctors)) |
-| `leftovers` | — | `machine` | what earlier runs left behind on this computer and on each running machine |
-| `prune` | `leftover` | — | removes one leftover that `leftovers` listed |
 
-- `init`, `get`, `doctor` and `leftovers` are not opened by the
-  dispatcher: `init` opens or creates the home itself, and the others never
-  open it. `get`, `log` and `clear_log` write no line to the call log, and
-  all seven are `admin` in the MCP server.
+- `init`, `get` and `doctor` are not opened by the dispatcher: `init`
+  opens or creates the home itself, and the others never open it. `get`,
+  `log` and `clear_log` write no line to the call log, and all five are
+  `admin` in the MCP server.
 - **`init`**, short: `{ home }`, with `unchanged: true` when the home was
   already current or `converted: true` when it was an older layout. Long:
   `home, unchanged, converted, outcome, layout, version`: `outcome` is
@@ -266,53 +264,27 @@ $ echo $?
   its byte count, never its value.
 - **`clear_log`** truncates the call log in place and removes the rotated
   file. Short: `{"ok":true}`; long: `{ ok, outcome: "cleared", line_count }`.
-- **`leftovers`** lists what interrupted operations left: one bounded walk
-  of the home's own folders on `native` (20,000 entries or 2 s), and one
-  through the worker of each running machine; `--machine M` walks one.
-  Nothing is started: a machine that is stopped, held by an operation or
-  does not answer is named in `not_listed` (`{ machine, message }` with
-  `blocked_by`, the thing at the root and its state, or `reason`:
-  `timeout`, `busy` or `refused`), and so is one whose walk stopped at its
-  bound (`timeout`; what it found is listed). An item's short form is
-  `{ leftover, modified_at }`, with `size` (null when the bound ended the
-  walk before it was measured) and `report_only`; its long form adds
-  `removable_at`, `kind`, `machine` and `path`. `leftover` is its id,
-  `<machine>:<kind>:<name>` (never a path), the kind in snake_case:
-  `run_folder`, `empty_root`, `init_copy`, `backup_staging`, `image_tmp`,
-  `export_container`. An image's lock file and a Workspace's unmount marker are
-  LayerFS's own and never listed. A copy's staged part is not a leftover:
-  `machine images` shows it as a `broken`/`partial` item and `machine prune
-  --unused` removes it. An `export_container` is an image export container
-  a killed copy left in the host's Docker (this home's labelled ones and
-  legacy `layerfs-export-<machine>-<hex>` ones), listed with `native`'s
-  entries (`path` and `size` null, `report_only` while a copy of its image
-  holds the copy lock); Docker is asked only once an image copy has run from
-  the home (`run/image-lock/` exists). A Docker that does not answer names
-  `native` in `not_listed`, `blocked_by` `{machine: docker, reason:
-  engine_down}`; a host without Docker lists none. A home that is not
-  current has none; a machine the home does not know is `NotFound`.
-- **`prune <leftover>`** removes the one leftover whose id it is given,
-  once, on that machine, under that kind's guard. Short: `{ freed_bytes }`,
-  or `{"ok":true}` when the size was not measured; long: `ok, freed_bytes,
-  outcome ("removed"), leftover, kind, machine, path`.
-
-  | Kind | Removed when (else `InUse`, nothing removed) |
-  | --- | --- |
-  | `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root`; one with no marker, or a marker under a minute old, is listed `report_only` |
-  | `empty_root` | its run folder is gone and it is not a mount point; `rmdir` only |
-  | `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
-  | `backup_staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
-  | `image_tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
-  | `export_container` | no copy of its image to its machine holds the copy lock (taken without waiting); `docker rm -v` removes it with its anonymous volumes |
-
-  Other refusals: `NotFound` (no leftover has that id now), `Unavailable`
-  (the machine is stopped) and `Unknown` (the worker's answer was lost;
-  nothing is sent again).
+- What interrupted operations left on disk (a run folder or private root
+  of a Sandbox start or removal, an image unpack temporary or export
+  container of a killed copy, a staged backup snapshot, a project Init's
+  folder copy on a machine) LayerFS removes itself, at fixed points in
+  later calls and only where it can prove nothing owns it: a machine's
+  worker sweeps its run root when it starts and before each `sandbox
+  create`, and `native` before each `sandbox create`; the next image copy
+  to a machine sweeps the temporaries and export containers of every image
+  no copy holds; the next `backup create` of a Store, or a `backup restore`
+  that replaces it, removes its staged snapshots; and the call that settles
+  a project Init (the Init itself, or `project delete` of a project whose
+  Init's owner is gone) removes its folder copy. Each sweep is one attempt
+  inside 20,000 directory entries or 2 s and never fails the call it rides
+  on; each removal, and each one that failed and waits for the next sweep,
+  is a line of `log/sweep.jsonl`. `machine stats --with space` still counts
+  run folders as `other_runs`.
+- `home leftovers` and `home prune` were removed in spec v20 (owner
+  2026-11-19) with no alias; both exit 2.
 - `home.log` and `home.clear_log` were `logs.list` and `logs.reset`, and
-  `home.prune` was `doctor.fix` (the `doctor` family is gone); the old
-  names are gone, with no alias. A leftover's `id`, `bytes`, `age`,
-  `fixable` and `not_before` became `leftover`, `size`, `modified_at`,
-  `report_only` and `removable_at`, and its kinds lost their hyphens. A row's `at`, `ms`, `lines`, `has_more`
+  `doctor.fix` is gone (the `doctor` family is gone); the old names are
+  gone, with no alias. A row's `at`, `ms`, `lines`, `has_more`
   and `next` became `logged_at`, `duration_ms`, `items` and `next_cursor`.
   The home's layout and settings are in [the home](home.md).
 
@@ -864,8 +836,8 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   normalized to epoch 0 (`1970-01-01`) so resume across separate exports
   sees identical bytes; the container and its anonymous volumes are removed on
   completion or error; one a `SIGKILL`ed copy left is swept by the next copy
-  of the same image to the same machine, and any other is a `home leftovers`
-  entry of kind `export_container` that `home prune` removes), sent in 1 MiB frames and unpacked on the
+  of the same image to the same machine, and any other by the next copy of
+  an image no copy holds), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
@@ -1626,8 +1598,8 @@ every check was made and nothing was found; otherwise `findings` and
   record names, with no record of its own, is not: that record's own
   check reports the reference, an error in `home.records` as in `sandbox
   doctor`); 2 for a wrong command line. Leftovers
-  of interrupted operations are in no doctor's report: `home leftovers`
-  lists them and `home prune` removes one (see [`home`](#home-7)).
+  of interrupted operations are in no doctor's report: LayerFS removes them
+  itself (see [`home`](#home-5)).
 
 ## Results
 

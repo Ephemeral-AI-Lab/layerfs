@@ -4,17 +4,12 @@
 //! doctor changes nothing and starts no machine; it takes no lock, so a
 //! home that changes meanwhile may be reported as it was part way.
 //!
-//! It also lists what interrupted operations left on `native` and on each
-//! running machine (`home leftovers`, [`leftover_list`], one bounded walk
-//! per side), and `home prune` removes one of them under its guard
-//! ([`leftover_prune`]): the one call here that changes anything
-//! (layerfs-project#180). No doctor's report holds them.
+//! No doctor's report holds what interrupted operations left: LayerFS
+//! removes it itself where nothing can own it (spec v20,
+//! `layerfs_sandbox::sweep` and the sweeps of image copies and backups).
 mod capacity;
 mod checks;
 mod convert;
-pub mod leftover_list;
-pub mod leftover_prune;
-pub mod leftovers;
 mod records;
 mod scan;
 

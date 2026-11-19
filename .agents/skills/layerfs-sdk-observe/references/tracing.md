@@ -49,8 +49,8 @@ code; the stored line keeps the code as it was raised. It rotates once to
 [Home: traces and the call log](../../../../docs/architecture/control/home/README.md#traces-and-the-call-log).
 
 ```bash
-$ layerfs home log --limit 3                                       # seen
-{"items":[{"call":"home.leftovers","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:32Z"}],"next_cursor":"eyJmb3Ii…"}
+$ layerfs home log --limit 3                               # seen 2026-11-19
+{"items":[{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"}],"next_cursor":"eyJmb3Ii…"}
 ```
 
 ```js

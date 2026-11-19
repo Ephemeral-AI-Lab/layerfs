@@ -50,10 +50,38 @@ pub fn run(root: &Path, frame: &StageFrame) -> Outcome {
             Ok(SdkValue::map([("records", SdkValue::Int(records as i64))]))
         }
         StageStep::Discard => {
+            // a copy an Init reads is held by it: that Init removes it
+            let Some(_held) = hold(&dir)? else {
+                return Ok(SdkValue::map([
+                    ("discarded", SdkValue::Bool(false)),
+                    ("held", SdkValue::Bool(true)),
+                ]));
+            };
             let existed = dir.exists();
             remove(&dir)?;
             Ok(SdkValue::map([("discarded", SdkValue::Bool(existed))]))
         }
+    }
+}
+
+/// Holds staging folder `dir`: an exclusive `flock` on the folder itself,
+/// taken without waiting and released when the answer is dropped (no file
+/// is made). An Init holds its copy while it reads it, and a discard holds
+/// it while it removes it (spec v20); `None` while another holds it. An
+/// absent folder is held by no one: `Some` with nothing locked.
+pub fn hold(dir: &Path) -> Result<Option<Option<fs::File>>> {
+    let folder = match OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(dir)
+    {
+        Ok(folder) => folder,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Some(None)),
+        Err(error) => return Err(failed(error)),
+    };
+    match layerfs_home::home::flock::try_lock(&folder, true).map_err(failed)? {
+        true => Ok(Some(Some(folder))),
+        false => Ok(None),
     }
 }
 

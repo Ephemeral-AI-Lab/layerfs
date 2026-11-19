@@ -26,8 +26,8 @@ The call table and the one dispatcher every front end goes through: what a call 
  call_scoped(home, scope, name, args, events, client)    dispatch.rs
    take log_tag, detail, with --> find --> check --> render argv --> scope.apply
    --> home --> platform_policy --> migrate::open --> ensure_built_ins
-       (skipped for a call whose entry has opens false: home.init, home.get,
-       home.leftovers and the six doctors)
+       (skipped for a call whose entry has opens false: home.init, home.get
+       and the six doctors)
    --> scope.owns --> Call.run(Context{home, asked, events}) --> keys::snake
    --> shape (its short or long form, and the sections asked)
    --> one line in <home>/trace/calls.jsonl --> refusal::public (13 codes)
@@ -44,7 +44,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
-| Table | ten `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens, form, with, paging, profile, scope, policy, saves }`, an `Arg` `{ name, kind, optional, redact, shell, repeat, required }`; 85 calls, help order. Everything the machinery needs to know about one call is on its entry: no file under `calls/` lists call names | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Table | ten `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens, form, with, paging, profile, scope, policy, saves }`, an `Arg` `{ name, kind, optional, redact, shell, repeat, required }`; 83 calls, help order. Everything the machinery needs to know about one call is on its entry: no file under `calls/` lists call names | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | JSON form | `table_json()`: `[{ family, call, args: [{ name, kind, optional, shell?, repeat?, required? }], options, help, form }]` (an option that must be given is `required: true` and `optional: false`); every call's `form` is `{ short: { always, sometimes }, long, parts?, with: { <section>: { where, keys, form? } }, paging, progress, quiet, profile }`; Node's `table`, Python's `TABLE`; the CLI parser and help read the same `Call` values | `table.rs` `table_json` |
 | Forms | every entry declares its answer ([forms](#forms)); the dispatcher shapes the one full map its run function returns into the short or the long form | [`form.rs`](../../../../api/crates/layerfs-api/src/calls/form.rs), [`shape.rs`](../../../../api/crates/layerfs-api/src/calls/shape.rs) |
 | Global options | `log_tag`, `detail` (Bool) and `with` (a list of section names, or one comma-separated text) are taken out of the arguments before the check, on every call; no entry declares them. A `with` name the entry does not list is `InvalidInput`, naming the ones it takes | `dispatch.rs` `take_tag`, `take_asked` |
@@ -151,7 +151,7 @@ changes it. Reading and clearing it are `home.log` and `home.clear_log`
 
 The call surface 2.0 ([specification](../../../../core/docs/issues/call-surface-2-0/README.md))
 gives every call one form of answer, declared on its entry as a `Form`. All
-85 entries declare one. `home.log`'s entry, from
+83 entries declare one. `home.log`'s entry, from
 [`home/log.rs`](../../../../api/crates/layerfs-api/src/home/log.rs):
 
 ```rust
@@ -243,7 +243,7 @@ is empty (`calls`, `old_names`, `not_built` and `spec_sync`); the test's
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | ten families and 85 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | ten families and 83 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_scope` | any Unix host | a scope names its project, refuses every call it does not cover, needs a Sandbox of its project, and a scoped `branch.list` reads every page |
 | [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test scope_references` | any Unix host | fork and publish references outside the namespace refused before any effect; the JSON form refuses the same |
 | [`logs.rs`](../../../../api/crates/layerfs-api/tests/logs.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test logs` | any Unix host | one line per call, rendering and redaction, `home.log` and `home.clear_log` |

@@ -4,14 +4,16 @@
 
 The `home` calls: set a home up on purpose, read its state and what this
 build would use with it without changing anything, read and clear its call
-log, check it, and list and remove what interrupted operations left on disk,
-within the [SDK](README.md). `home.doctor` is one of
+log and check it, within the [SDK](README.md). What interrupted operations
+left on disk LayerFS removes itself (spec v20;
+[Checks: leftovers](../../control/doctor/checks.md#leftovers)): there is no
+call to list or remove it. `home.doctor` is one of
 [the doctors](../../control/doctor/README.md).
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/home`](../../../../api/crates/layerfs-api/src/home) (one file per call), [`layerfs-control/src/home.rs`](../../../../control/crates/layerfs-control/src/home.rs), [`layerfs-control/src/home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs), [`layerfs-home/src/logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs), [`layerfs-home/src/home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs), [`leftover_list.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_list.rs), [`leftover_prune.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_prune.rs) |
-| Runs by default | the caller's process; `doctor` and `leftovers` also ask each running machine's worker, and `prune` runs on the machine its leftover names. `init`, `get`, `doctor` and `leftovers` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, the others never do. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
+| Source | [`api/crates/layerfs-api/src/home`](../../../../api/crates/layerfs-api/src/home) (one file per call), [`layerfs-control/src/home.rs`](../../../../control/crates/layerfs-control/src/home.rs), [`layerfs-control/src/home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs), [`layerfs-home/src/logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs), [`layerfs-home/src/home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs) |
+| Runs by default | the caller's process; `doctor` also asks each running machine's worker. `init`, `get` and `doctor` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, the others never do. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
 | Design | [Home](../../control/home/README.md), [Migration](../../control/home/migration.md), [Doctors](../../control/doctor/README.md) |
 | Clients | `layerfs.home` is this family (`layerfs.home.get()`, `layerfs.home.init()`); a client's home is the one given to `client()` and is no field of it |
 
@@ -26,8 +28,6 @@ within the [SDK](README.md). `home.doctor` is one of
                  + the built-in machine records   -> {outcome: created | converted | unchanged}
  home.doctor     the home's own checks, then each machine, PostgreSQL Store
                  and bucket, shallowly                    -> the doctor report
- home.leftovers  walk native + ask each running machine's worker -> {items, not_listed}
- home.prune      the leftover's machine: guard, remove once     -> {freed_bytes}
 
  every other call ---- one line when it ends ----> <home>/trace/calls.jsonl
                                                     (calls.1.jsonl past 16 MiB)
@@ -42,10 +42,8 @@ within the [SDK](README.md). `home.doctor` is one of
 | [`home.log`](#homelog) | `{ items }` + `next_cursor` when there is a next page | `{ items, next_cursor, skipped }` |
 | [`home.clear_log`](#homeclear_log) | `{ ok: true }` | `{ ok, outcome: "cleared", line_count }` |
 | [`home.doctor`](#homedoctor) | `{ ok: true }`, or `findings` and `not_checked` | `{ ok, findings, not_checked, status, counts, observed_at, tree }` |
-| [`home.leftovers`](#homeleftovers) | `{ items }` + `not_listed` unless empty | `{ items, not_listed, observed_at }` |
-| [`home.prune`](#homeprune) | `{ freed_bytes }`, or `{ ok: true }` when the size was not measured | `{ ok, freed_bytes, outcome: "removed", leftover, kind, machine, path }` |
 
-All seven are `admin` in the MCP server.
+All five are `admin` in the MCP server.
 
 ### home.init
 
@@ -248,7 +246,7 @@ start"); `Failed` (a log file cannot be read).
 
 ```console
 $ layerfs home log --limit 3
-{"items":[{"call":"home.leftovers","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:33Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-18T22:05:32Z"}],"next_cursor":"eyJmb3IiOiJob21lLmxvZyIsImF0IjoiYzEuMC40M2M2YzMzYy4xNWEwOWRiNDRiMDkzZGZjLjM4YzUifQ"}
+{"items":[{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"},{"call":"home.doctor","outcome":"ok","logged_at":"2026-11-19T03:50:01Z"}],"next_cursor":"eyJmb3IiOiJob21lLmxvZyIsImF0IjoiYzEuMC40M2U4NjgwOC45NjMzMWYxOWRiMzQxZGIwLjY4In0"}
 ```
 
 It was `logs.list`, removed with no alias (the shell's `--op` is `--call`).
@@ -327,100 +325,12 @@ $ layerfs home doctor
 {"ok":true}
 ```
 
-### home.leftovers
-
-What earlier runs left behind on this computer and on each running machine.
-
-```text
-CLI     layerfs home leftovers [--machine M]
-Node    await layerfs.home.leftovers({ machine })
-Python  layerfs.home.leftovers(*, machine=None)
-```
-
-| Argument | Kind | Rule |
-| --- | --- | --- |
-| `machine` option | name | list only this machine's leftovers; `native` is this computer |
-
-| Answer | Keys |
-| --- | --- |
-| short | `items`; when set: `not_listed` |
-| long | `items, not_listed, observed_at` |
-| `items[]` short | `leftover`, `modified_at`; when set: `size`, `report_only` |
-| `items[]` long | `leftover, modified_at, size, report_only, removable_at, kind, machine, path` |
-| `not_listed[]` short | `machine`, `message`; when set: `blocked_by`, `reason` |
-| `not_listed[]` long | `machine, blocked_by, reason, message` |
-| call | writes one call-log line; MCP `admin` |
-
-What interrupted operations left on `native` and on each running machine:
-one bounded walk of each side's own folders, the machines' through their
-workers. It changes nothing and starts nothing; it is not paged.
-
-`leftover` is `<machine>:<kind>:<name>`, the id `home.prune` takes; it never
-holds a path. The kinds are `run_folder`, `empty_root`, `init_copy`,
-`backup_staging`, `image_tmp` and `export_container` (an image export
-container a killed copy left in the host's Docker, listed with `native`'s
-entries once an image copy has run from the home; a Docker that does not
-answer puts `native` in `not_listed`, blocked by `docker`'s `engine_down`)
-([Checks: leftovers](../../control/doctor/checks.md#leftovers)). `size` is
-left out when it was not measured; `report_only` marks one `home prune`
-would refuse now (`removable_at` says when, if known). An image's staged
-part is not a leftover: `machine images` shows it and `machine prune
---unused` removes it. A machine that was not walked, or not to the end, is in
-`not_listed` as `{ machine, blocked_by, reason, message }`: `blocked_by` for
-a stopped machine or one an operation holds, `reason` `timeout` (no answer,
-or the walk stopped at its bound of 20,000 entries or 2 s), `busy` or
-`refused`. `--machine` limits the list to one machine; an unknown one is
-`NotFound`.
-
-```console
-$ layerfs home leftovers
-{"items":[],"not_listed":[{"machine":"docker","blocked_by":{"machine":"docker","reason":"stopped"},"message":"machine docker is stopped"}]}
-```
-
-### home.prune
-
-Remove one leftover that home leftovers listed.
-
-```text
-CLI     layerfs home prune <leftover>
-Node    await layerfs.home.prune(leftover)
-Python  layerfs.home.prune(leftover)
-```
-
-| Argument | Kind | Rule |
-| --- | --- | --- |
-| `leftover` | text | an id `home leftovers` answers, `<machine>:<kind>:<name>` |
-
-| Answer | Keys |
-| --- | --- |
-| short | each when set: `ok`, `freed_bytes` |
-| long | `ok, freed_bytes, outcome, leftover, kind, machine, path` |
-| call | writes one call-log line; MCP `admin` |
-
-Removes the one leftover `leftover` names, under that kind's guard; it is
-looked up again and must still be a leftover. `freed_bytes` is what the
-removed files held, left out (null in the long form) for a folder copy, an
-image temporary and an export container. One attempt: nothing is retried or
-sent twice, and nothing but the one entry is removed. It was `doctor.fix`,
-removed with no alias.
-
-| Kind | Removed when (else `InUse`, nothing removed) |
-| --- | --- |
-| `run_folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it; one with no marker, or a marker under a minute old, is listed `report_only` |
-| `empty_root` | its run folder is gone and it is not a mount point; `rmdir` only |
-| `init_copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline passed more than an hour ago (`removable_at`); a copy no line names is `report_only` and refused `InvalidInput` |
-| `backup_staging` | no `backup create` of that Store is running |
-| `image_tmp` | no unpack of that image is running |
-| `export_container` | no copy of its image to its machine holds the copy lock (taken without waiting); `docker rm -v` removes it with its anonymous volumes |
-
-| Refusal | When |
-| --- | --- |
-| `NotFound` | no leftover has that id now: an id no list gives (a path, `..`, an unknown kind or machine), an entry already removed, or a link in its place |
-| `InUse` | the kind's guard does not hold; nothing was removed |
-| `InvalidInput` | a `report_only` leftover; a missing `leftover` |
-| `Unavailable` | the machine is stopped or does not answer; `fix: layerfs machine start <machine>` |
-| `Unknown` | the worker's answer was lost; `layerfs home leftovers` shows whether the entry is still there |
-| `Failed` | the mount table cannot be read, or a removal stopped at an I/O error (the message names where) |
+`home.leftovers` and `home.prune` were removed in spec v20 (owner
+2026-11-19) with no alias: `layerfs home leftovers` and `layerfs home prune`
+exit 2. LayerFS removes what interrupted operations left itself, at fixed
+points in later calls and only where it can prove nothing owns it; each
+removal is a line of `log/sweep.jsonl`
+([Checks: leftovers](../../control/doctor/checks.md#leftovers)).
 
 ## Related
 

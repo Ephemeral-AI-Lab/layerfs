@@ -1,10 +1,10 @@
 // The doctors over the real addon (call surface 2.0): `home.doctor()` and
-// its five siblings are table calls that report and change nothing; and
-// `home.leftovers()` and `home.prune(leftover)`, which list what earlier
-// runs left and remove one of them (layerfs-project#180).
+// its five siblings are table calls that report and change nothing;
+// `home.leftovers()` and `home.prune()` are gone (spec v20: LayerFS removes
+// leftovers itself).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import layerfs, { table, LayerFSError } from "../src/index.js";
@@ -39,52 +39,12 @@ test("home.doctor names a record that does not parse and its fix", async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test("home.prune removes a leftover home.leftovers listed, on the package and on a client", async () => {
-  const home = mkdtempSync(join(tmpdir(), "layerfs-node-doctor-"));
-  chmodSync(home, 0o700);
-  const lfs = layerfs.client({ home });
-  await lfs.store.list();
-  // an unpack's temporary folder, its image's lock, and a partly received
-  // image (no leftover since spec v19: `machine prune` owns it); each folder
-  // 0700, whatever the umask
-  let images = home;
-  for (const part of ["machine", "native", "run", "images"]) {
-    images = join(images, part);
-    mkdirSync(images, { recursive: true, mode: 0o700 });
-    chmodSync(images, 0o700);
-  }
-  const digest = "ab".repeat(32);
-  const tmp = join(images, `.tmp-${digest}.2-ab12`);
-  mkdirSync(join(tmp, "usr", "bin"), { recursive: true, mode: 0o700 });
-  for (const folder of [tmp, join(tmp, "usr"), join(tmp, "usr", "bin")]) chmodSync(folder, 0o700);
-  writeFileSync(join(tmp, "usr", "bin", "tool"), "x".repeat(50));
-  const part = join(images, `.recv-${digest}.part`);
-  writeFileSync(part, "x".repeat(50));
-  const then = Date.now() / 1000 - 7200;
-  utimesSync(part, then, then);
-  writeFileSync(join(images, `${digest}.2.lock`), "");
-
-  // the list names the temporary by its id; the lock and the part are no
-  // leftover
-  const id = `native:image_tmp:${digest}.2-ab12`;
-  const listed = await lfs.home.leftovers({ machine: "native" });
-  assert.deepEqual(listed.items.map((item) => item.leftover), [id]);
-
-  // the same function on the package and on a client; refusals carry a code
-  assert.equal(typeof layerfs.home.prune, "function");
-  assert.equal(typeof lfs.home.prune, "function");
-  assert.equal(layerfs.doctor, undefined, "the doctor family is gone");
-  const refused = (code) => (error) => error instanceof LayerFSError && error.code === code;
-  await assert.rejects(lfs.home.prune(`native:image_lock:${digest}.2`), refused("NotFound"));
-  await assert.rejects(lfs.home.prune("native:image_tmp:../../x"), refused("NotFound"));
-  await assert.rejects(lfs.home.prune(`native:image_part:${digest}`), refused("NotFound"));
-  await assert.rejects(lfs.home.prune(), refused("InvalidInput"));
-  const removed = await lfs.home.prune(id, { detail: true });
-  // a temporary is removed without a count
-  assert.deepEqual(removed, { ok: true, freed_bytes: null, outcome: "removed", leftover: id, kind: "image_tmp", machine: "native", path: tmp });
-  assert.ok(!existsSync(tmp));
-  assert.ok(existsSync(part), "the part stays for `machine prune`");
-  assert.ok(existsSync(join(images, `${digest}.2.lock`)), "the lock file stays");
-  await assert.rejects(lfs.home.prune(id), refused("NotFound"));
-  rmSync(home, { recursive: true, force: true });
+test("home.leftovers and home.prune are gone (spec v20: LayerFS removes leftovers itself)", () => {
+  const home = table.filter((spec) => spec.family === "home").map((spec) => spec.call);
+  assert.deepEqual(home, ["init", "get", "log", "clear_log", "doctor"]);
+  assert.equal(layerfs.home.leftovers, undefined);
+  assert.equal(layerfs.home.prune, undefined);
+  const lfs = layerfs.client({ home: join(tmpdir(), "layerfs-node-doctor-gone") });
+  assert.equal(lfs.home.leftovers, undefined);
+  assert.equal(lfs.home.prune, undefined);
 });

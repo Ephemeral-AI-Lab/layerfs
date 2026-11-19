@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 85 calls in ten
+//! The call table and its dispatcher (#533 step 2): 83 calls in ten
 //! families (the call surface 2.0), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -542,38 +542,16 @@ fn sizes_and_keys() {
 }
 
 #[test]
-fn home_leftovers_and_prune() {
-    assert!(code("home.prune", SdkValue::Null).contains("`leftover` is required"));
-    assert!(code(
-        "home.prune",
-        map(&[("leftover", t("native:image_part:00")), ("path", t("/etc"))])
-    )
-    .starts_with("InvalidInput: home.prune: unknown argument `path`"));
-    // reached: an id that names nothing is not found, and so is one in
-    // today's hyphenated spelling or of a kind that is no longer listed
-    let lock = format!("native:image_lock:{}.2", "ab".repeat(32));
-    for id in [
-        "native:run_folder:../x",
-        "native:run-folder:x",
-        lock.as_str(),
-    ] {
-        let reached = code("home.prune", map(&[("leftover", t(id))]));
-        assert!(reached.starts_with("NotFound: "), "{reached}");
-        assert!(reached.contains("layerfs home leftovers"), "{reached}");
+fn home_leftovers_and_prune_are_gone() {
+    // spec v20: LayerFS removes leftovers itself; the two calls and the
+    // name before them are gone, with no alias
+    for gone in ["home.leftovers", "home.prune", "doctor.fix"] {
+        assert!(layerfs_api::find(gone).is_none(), "{gone}");
+        assert_eq!(
+            code(gone, SdkValue::Null),
+            format!("InvalidInput: no call named `{gone}`")
+        );
     }
-    // a home with nothing left over lists nothing; a machine it does not
-    // know is not found
-    assert_eq!(code("home.leftovers", SdkValue::Null), r#"ok {"items":[]}"#);
-    let unknown = code("home.leftovers", map(&[("machine", t("lab"))]));
-    assert!(
-        unknown.starts_with("NotFound: no machine named lab"),
-        "{unknown}"
-    );
-    // ruling R1: the old name is gone, with its family
-    assert_eq!(
-        code("doctor.fix", SdkValue::Null),
-        "InvalidInput: no call named `doctor.fix`"
-    );
 }
 
 #[test]
@@ -712,18 +690,7 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
         .iter()
         .map(|call| call.call)
         .collect();
-    assert_eq!(
-        home,
-        [
-            "init",
-            "get",
-            "log",
-            "clear_log",
-            "doctor",
-            "leftovers",
-            "prune"
-        ]
-    );
+    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor",]);
 }
 
 #[test]
@@ -756,8 +723,6 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "home.log",
         "home.clear_log",
         "home.doctor",
-        "home.leftovers",
-        "home.prune",
     ];
     let branch = [
         "branch.list",

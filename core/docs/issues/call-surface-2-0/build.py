@@ -1,4 +1,4 @@
-"""Build the frozen LayerFS 2.0 call-surface spec (version 19).
+"""Build the frozen LayerFS 2.0 call-surface spec (version 20).
 
   python3 -I build.py <spec-src>                  check families/*.json against SCHEMA.md and
                                                   DECISIONS.md; write calls.json, pairs.html and
@@ -26,7 +26,7 @@ import re
 import subprocess
 import sys
 
-VERSION = 19
+VERSION = 20
 FROZEN = "2026-11-19"
 BASE = "caff58a43b"
 ORDER = ["project", "file", "sandbox", "workspace", "branch", "commit", "home", "machine", "store", "backup"]
@@ -115,6 +115,10 @@ NEW_REDACTED = ["cwd", "env", "include", "exclude", "stdin"]  # new arguments th
 ARG_FIELDS = ["name", "kind", "optional", "default", "help", "required", "redact", "shell", "repeat"]
 WITH_ORDER = ["live", "stats", "space", "docker", "platforms", "tree", "patch"]  # DECISIONS.md, "Simplicity changes adopted"
 WITH_GONE = {"write": "R5", "leftovers": "R6", "storage": "folded into stats", "usage": "folded into stats"}
+# today's calls with no row: removed with no successor (DECISIONS.md, the version that removed them)
+REMOVED_TODAY = {"doctor.fix": "v20: LayerFS removes leftovers itself; no call lists or removes them"}
+# calls an earlier version added that a later one removed again
+REMOVED_ROWS = {"home.leftovers": "v20", "home.prune": "v20"}
 GLOBAL_OPTIONS = [
     {"name": "detail", "kind": "Bool", "cli": "--detail", "node": "detail: true", "python": "detail=True",
      "help": "the long form"},
@@ -1253,8 +1257,6 @@ def check_decisions(state, partial, totals):
     has(state, "branch.publish", "options", ["expected"], "C8", "--expected guards main's head")
     has(state, "backup.doctor", "options", ["full"], "R5", "is `backup doctor <bucket> --full`")
     has(state, "project.doctor", "options", ["full"], "R5", "takes --full")
-    need(lambda r: names(r, "positionals") == ["leftover"], "home.prune", "R6", "is `home prune <leftover>`")
-    has(state, "home.leftovers", "options", ["machine"], "R6", "is `home leftovers [--machine M]`")
     need(lambda r: names(r, "positionals") == ["workspace"] and "exec" in names(r, "options"), "workspace.cancel", "R7",
          "is `workspace cancel <workspace> [--exec E]`")
     need(lambda r: r.get("profile") == "agent", "workspace.list", "R7", "joins the agent profile")
@@ -1274,7 +1276,10 @@ def check_decisions(state, partial, totals):
         errors.append("sandbox.close: [decision simplicity] is renamed sandbox.remove")
     if partial or state["missing"]:
         return  # a missing family file is already a failure; what it would hold is not reported again
-    for call, rule in (("home.leftovers", "R6"), ("sandbox.remove", "simplicity"), ("workspace.list", "R7"),
+    for call, version in REMOVED_ROWS.items():
+        if call in calls:
+            errors.append(f"{call}: [decision {version}] the call is removed, with no alias")
+    for call, rule in (("sandbox.remove", "simplicity"), ("workspace.list", "R7"),
                        ("home.doctor", "R1"), ("project.doctor", "R8")):
         if call not in calls:
             errors.append(f"{call}: [decision {rule}] the call is not in the table")
@@ -1721,7 +1726,7 @@ def render(S, fams, today, state, pairs_mod, draft):
         <div class="count"><div class="v">{len(REFUSAL_CODES)}</div><div class="l">refusal codes</div></div>
         <div class="count"><div class="v">{percent}</div><div class="l">of the long forms' bytes are in the short forms, over {npairs} examples</div></div>
       </div>
-      <p class="small">Frozen from version 17 with rulings R1 to R9, corrections C1 to C14 and the simplicity changes applied; they are listed under <a href="#decided">Decided at the freeze</a>. Version 19 brings the rows up to <code>layerfs_v2_0_0</code> #738–#741 (Store compaction in the machine's worker, image states, image import hardening); its changes are the last section there. Today's column is extracted from the code's own call table at <code>{BASE}</code> ({total_old} calls in {len(old_families)} families). Owner, 2026-11-18: no environment variables for context; project, Branch and Workspace stay explicit on every call.</p>
+      <p class="small">Frozen from version 17 with rulings R1 to R9, corrections C1 to C14 and the simplicity changes applied; they are listed under <a href="#decided">Decided at the freeze</a>. Version 19 brings the rows up to <code>layerfs_v2_0_0</code> #738–#741 (Store compaction in the machine's worker, image states, image import hardening). Version 20 (owner, 2026-11-19) removes <code>home leftovers</code> and <code>home prune</code>: LayerFS removes leftovers itself. Their changes are the last sections there. Today's column is extracted from the code's own call table at <code>{BASE}</code> ({total_old} calls in {len(old_families)} families). Owner, 2026-11-18: no environment variables for context; project, Branch and Workspace stay explicit on every call.</p>
     </header>'''
 
     def pre(lines):
@@ -1922,7 +1927,7 @@ def render(S, fams, today, state, pairs_mod, draft):
         name = f'{c["family"]}.{c["call"]}'
         new = now_of.get(name)
         same = ' class="same"' if new == name else ""
-        cli = E(by_name[new]["cli"]) if new in by_name else "—"
+        cli = E(by_name[new]["cli"]) if new in by_name else E(REMOVED_TODAY.get(name, "—"))
         mp.append(f'          <tr{same}><td class="call">{name}</td><td class="call">{new or "—"}</td><td class="cli" style="width:auto">{cli}</td></tr>')
     mp += ['        </tbody>', '      </table></div>']
     new_calls = [r for r in rows if not r["today"]]
@@ -2066,7 +2071,7 @@ def main(argv):
             state["errors"].append(f"{old}: [today] today's call is covered by {len(news)} rows: {', '.join(news)}")
     if not partial and not state["missing"]:
         for old in today:
-            if old not in state["covered"]:
+            if old not in state["covered"] and old not in REMOVED_TODAY:
                 state["errors"].append(f"{old}: [today] today's call is in no row's `today` list")
         counted = sum(f.get("old_count") or 0 for f in fams if isinstance(f.get("old_count"), int))
         gone = sum(1 for c in table["calls"] if c["family"] not in ORDER)
