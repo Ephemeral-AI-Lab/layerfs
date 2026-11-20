@@ -673,8 +673,14 @@ fn pruning(side: &Side<'_>, args: &SdkValue) -> Outcome {
         }
         if item.has_unpacked {
             let image = Image::parse(&id).map_err(|e| refused("InvalidInput", e.to_string()))?;
-            let gone = rootfs::remove(&image, &dir, |path| lowers.iter().any(|l| l == path))
-                .map_err(failed)?;
+            // Re-read helper specs under the image lock: a create that took its
+            // shared hold after the snapshot above may already name this image.
+            let gone = rootfs::remove(&image, &dir, |path| {
+                self::lowers(dir.parent().unwrap_or(&dir))
+                    .map(|now| now.iter().any(|l| l == path))
+                    .unwrap_or(true)
+            })
+            .map_err(failed)?;
             if gone {
                 removed_any = true;
             } else {
