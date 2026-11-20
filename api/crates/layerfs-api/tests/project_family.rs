@@ -580,3 +580,210 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
+
+fn worker_box_home(tag: &str) -> (PathBuf, PathBuf) {
+    let home = tempdir(tag);
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    ok(&home, "home.init", &[]);
+    write_record(
+        &paths::machine_record(&home, "native"),
+        &SdkValue::map([("name", t("native")), ("platform", t("native"))]),
+    )
+    .unwrap();
+    write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-00000000-box")),
+        ]),
+    )
+    .unwrap();
+    let root = tempdir(&format!("{tag}-guest"));
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let guest = root.clone();
+    std::thread::spawn(move || layerfs_api::worker::serve(listener, "k".to_owned(), guest));
+    write_record(
+        &paths::worker_record(&home, "box"),
+        &SdkValue::map([("address", t(&address)), ("secret", t("k"))]),
+    )
+    .unwrap();
+    (home, root)
+}
+
+#[test]
+fn worker_inited_project_keeps_manifest_across_move_to_native_and_back() {
+    let (home, root) = worker_box_home("worker-manifest");
+    let folder = tempdir("worker-manifest-folder");
+    std::fs::write(folder.join("README.md"), "hello\n").unwrap();
+
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
+    );
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+
+    let host_record = layerfs_api::home::read_record(&paths::project_record(&home, "shop", "api"))
+        .unwrap()
+        .unwrap();
+    assert!(
+        host_record.get("manifest").is_some() && host_record.get("installed").is_some(),
+        "host record after worker init must keep manifest and installed: {host_record:?}"
+    );
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+        .expect("host project discovery succeeds right after worker init");
+
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    );
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+        .expect("host project discovery succeeds after store move to native");
+    let doc = ok(
+        &home,
+        "project.doctor",
+        &[
+            ("project", t("shop/api")),
+            ("full", SdkValue::Bool(true)),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(doc.get("ok"), Some(&SdkValue::Bool(true)), "{doc:?}");
+
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
+    );
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+        .expect("host project discovery succeeds after moving back to worker");
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+#[test]
+fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
+    let (home, root) = worker_box_home("repair-incomplete");
+    let folder = tempdir("repair-incomplete-folder");
+    std::fs::write(folder.join("README.md"), "legacy\n").unwrap();
+
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
+    );
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+
+    let record_path = paths::project_record(&home, "shop", "api");
+    let full = layerfs_api::home::read_record(&record_path)
+        .unwrap()
+        .unwrap();
+    let stack = full
+        .get_text("stack")
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            let SdkValue::Bytes(bytes) = full.get("manifest").unwrap() else {
+                panic!()
+            };
+            let m = layerfs_bridge::provision::StoreManifest::decode(bytes).unwrap();
+            layerfs_bridge::sdk_values::hex(&m.stack)
+        });
+    let write_stub = |created: i64| {
+        write_record(
+            &record_path,
+            &SdkValue::map([
+                ("v", SdkValue::Int(1)),
+                ("name", t("api")),
+                ("stack", t(&stack)),
+                ("created", SdkValue::Int(created)),
+            ]),
+        )
+        .unwrap();
+    };
+
+    // Case 1: Store is on worker with a pre-fix 88-byte host record; move to native repairs it.
+    write_stub(12345);
+    assert_eq!(
+        layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+            .err()
+            .map(|r| r.code),
+        Some("NoSuchProject".to_owned())
+    );
+    let doc_before = ok(
+        &home,
+        "project.doctor",
+        &[
+            ("project", t("shop/api")),
+            ("full", SdkValue::Bool(true)),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    assert_eq!(
+        doc_before.get("ok"),
+        Some(&SdkValue::Bool(false)),
+        "{doc_before:?}"
+    );
+
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    );
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+        .expect("store move to native repairs incomplete host project record");
+    let repaired = layerfs_api::home::read_record(&record_path)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        repaired.get_int("created"),
+        Some(12345),
+        "created timestamp preserved"
+    );
+
+    // Case 2: Incomplete host record on native when moving back to worker is also repaired.
+    write_stub(24680);
+    assert_eq!(
+        layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+            .err()
+            .map(|r| r.code),
+        Some("NoSuchProject".to_owned())
+    );
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
+    );
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
+        .expect("store move from native repairs incomplete host project record");
+    let repaired2 = layerfs_api::home::read_record(&record_path)
+        .unwrap()
+        .unwrap();
+    assert_eq!(repaired2.get_int("created"), Some(24680));
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(folder);
+}
