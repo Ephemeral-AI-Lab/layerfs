@@ -8,16 +8,16 @@ profile with an active run.
 1. Check Node 24.9 or newer, pnpm and DeepSeek Harness 0.2.2-rc.5. This release
    supports a Linux service and Linux/Windows-WSL2 dsh clients. On Windows, run
    the service in Linux/WSL2 and keep its Store on local Linux ext4/xfs/btrfs,
-   never /mnt/c. macOS is not qualified. Do not install system-wide prerequisites
-   without the user's permission.
+   outside /mnt/c.
 2. Clone https://github.com/Ephemeral-AI-Lab/layerfs beside the plugin checkout
    and check out {{layerfs.commit}} ({{layerfs.version}}). Confirm its HEAD is
    exactly that SHA. Read its AGENTS.md, api/README.md, api/docs/agent.md and the
    .agents/skills/layerfs-js-sdk/ skill and references before LayerFS operations.
 3. Clone {{repository}} and check out {{commit}}. Confirm HEAD is exactly that
    SHA and layerfs.json names {{layerfs.commit}}. Read README.md, docs/dsh.md,
-   docs/layerfs-setup.md and docs/dsh-validation.md. Run npm ci --ignore-scripts,
-   npm test and npm run check. Bound each test invocation at 120 seconds.
+   docs/layerfs-setup.md and docs/dsh-validation.md. Check that package.json
+   reports {{version}}, then run npm ci --ignore-scripts, npm test, and
+   npm run check.
 4. Use the pinned LayerFS public SDK and a prepared existing project. Build its
    native addon/daemon following its guide if missing. For shell, confirm the
    selected Docker Engine/FUSE runtime and immutable image ID. Store calls run
@@ -30,11 +30,10 @@ profile with an active run.
    @layerfs/agent package or pass --sdk its public entry file. Use only one
    service per project/index and a shared lock path. Configure LAYERCACHE_TOKEN
    in both processes if authentication is enabled. Never print its value.
-6. Download dsh-layercache-{{version}}.tgz and SHA256SUMS.txt from the plugin's
-   GitHub release tagged v{{version}}. Verify the tarball checksum. Back up the
-   chosen dsh profile's package.json and cordis.patch.yml before installation.
-   Run dsh plugin --profile web add with the tarball's absolute path. It contains
-   executable JavaScript and requires no build/prepare permission. Run
+6. From the plugin checkout at {{commit}}, run npm pack --ignore-scripts to
+   build dsh-layercache-{{version}}.tgz. Back up the chosen dsh profile's
+   package.json and cordis.patch.yml before installation. Run
+   dsh plugin --profile web add with the generated tarball's absolute path. Run
    dsh --profile web --dump-config and confirm its dsh-layercache layer.
 7. Keep existing profile entries. Add the layercache row's config as docs/dsh.md
    describes: endpoint, backend: layerfs, tokenEnv, requestTimeoutMs, maxRollouts,

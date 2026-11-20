@@ -1,10 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <title>DSH LayerCache</title>
-  <rect width="128" height="128" rx="24" fill="#132333"/>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6">
-    <path d="M28 39 64 21 100 39 64 57Z" stroke="#8dd9cc"/>
-    <path d="m28 56 36 18 36-18M28 73l36 18 36-18" stroke="#65b9e9"/>
-    <path d="M64 91v13m0-7H38v9m26-9h26v9" stroke="#f3c878"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">LayerCache</title>
+  <desc id="description">A replay arrow encircles a tool-call prefix that splits into two cached results.</desc>
+  <circle cx="64" cy="64" r="60" fill="#281D35"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M42 100 A42 42 0 1 1 96 91 M96 77l-1 16 16-2" stroke="#FF985E" stroke-width="8"/>
+    <path d="M64 81V68m0 0L51 55m13 13 13-13" stroke="#FFE0A3" stroke-width="7"/>
   </g>
-  <g fill="#f3c878"><circle cx="38" cy="108" r="5"/><circle cx="90" cy="108" r="5"/></g>
+  <g fill="#FFE0A3">
+    <rect x="44" y="46" width="14" height="14" rx="3"/>
+    <rect x="70" y="46" width="14" height="14" rx="3"/>
+  </g>
 </svg>

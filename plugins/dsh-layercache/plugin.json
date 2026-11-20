@@ -33,13 +33,13 @@
   "versions": [
     {
       "version": "0.1.0",
-      "commit": "1e3b485867d034eb13a3a357cd3d3ef46389d3d4",
-      "date": "2026-11-19",
+      "commit": "747d82652e28594055581f77aa11d50e3e47168c",
+      "date": "2026-11-20",
       "layerfs": {
         "version": "v1.1.0",
         "commit": "7d42d0b506eac64801864923149f796f5c7c8d7e"
       },
-      "notes": "First release: explicit full-history dsh tools, session ownership, cache metadata, real LayerFS/FUSE qualification."
+      "notes": "Pinned source includes tool preflight, checkpoint expiry, resource validation, and asynchronous cache publication."
     }
   ]
 }
