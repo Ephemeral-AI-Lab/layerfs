@@ -45,6 +45,7 @@ pub(crate) enum Mode {
 
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
+    disconnected: Cell<bool>,
     uncertain: Cell<bool>,
     diagnostic: bool,
     /// `Mode::Statement`: whether its one statement was already sent.
@@ -117,6 +118,9 @@ impl Transaction<'_> {
             } else {
                 e.backend()
             };
+            if !self.diagnostic && e.disconnected() {
+                self.disconnected.set(true);
+            }
             if error == BackendError::Unknown {
                 self.uncertain.set(true);
             }
@@ -326,8 +330,19 @@ impl Session {
             .lock()
             .map_err(|_| E::from(BackendError::Unknown))?;
         let state: &mut State = &mut guard;
-        if state.quarantined {
-            return Err(BackendError::Unknown.into());
+        let ordinary = matches!(state.client, super::driver::Driver::Sync(_));
+        let held_write = turn.nested
+            && matches!(
+                mode,
+                Mode::Write | Mode::Snapshot | Mode::Stage | Mode::Publish
+            );
+        let lane_check = held_write.then(|| {
+            let xid = self.lane_xid.load(std::sync::atomic::Ordering::Acquire);
+            format!("DO $lane$ BEGIN IF pg_catalog.pg_xact_status('{xid}'::pg_catalog.xid8) IS DISTINCT FROM 'in progress' THEN RAISE EXCEPTION 'publication lane lost' USING ERRCODE='LF747'; END IF; END $lane$")
+        });
+        let replaced = state.quarantined;
+        if replaced {
+            self.reconnect(state)?;
         }
         // Spec 5.2: the generation check rides in the statements a client
         // already sends. A transaction checks it in the same round trip as its
@@ -346,7 +361,7 @@ impl Session {
         );
         let expected = generation.filter(|_| transactional);
         let autocommit = generation.filter(|_| matches!(mode, Mode::Immutable | Mode::Statement));
-        let begin = match mode {
+        let mut begin = match mode {
             Mode::Read => self.settings.read_begin(),
             Mode::Snapshot => self.settings.snapshot_begin(),
             Mode::Write => self.settings.write_begin(!turn.nested),
@@ -359,45 +374,65 @@ impl Session {
                 return result;
             }
         };
+        if let Some(check) = &lane_check {
+            begin.push_str("; SELECT 1 FROM store_lane WHERE id=1 FOR KEY SHARE; ");
+            begin.push_str(check);
+        }
         let schema = self.settings.schema.as_str();
         let result = (|| {
-            state.work.round_trips += 1;
-            if let Some(expected) = expected {
-                let check = format!(
-                    "{begin}; SELECT catalog_incarnation::text FROM {schema}.history_meta WHERE id=1"
-                );
-                match state.client.simple_query(&check) {
-                    Ok(messages) => {
-                        let mut actual: Option<&str> = None;
-                        for message in &messages {
-                            if let SimpleQueryMessage::Row(row) = message {
-                                actual = row.try_get(0).ok().flatten();
-                            }
+            let check = expected.map(|_| {
+                format!(
+                "{begin}; SELECT catalog_incarnation::text FROM {schema}.history_meta WHERE id=1"
+            )
+            });
+            let mut can_retry = ordinary && !replaced;
+            loop {
+                state.work.round_trips += 1;
+                let outcome = match &check {
+                    Some(sql) => state.client.simple_query(sql).map(|messages| {
+                        // The lane lock can return a row too. Only the last SELECT
+                        // reports the generation, including when it found no row.
+                        let mut rows = messages.iter().rev().skip_while(|message| {
+                            !matches!(message, SimpleQueryMessage::CommandComplete(_))
+                        });
+                        let generation = match (rows.next(), rows.next()) {
+                            (
+                                Some(SimpleQueryMessage::CommandComplete(1)),
+                                Some(SimpleQueryMessage::Row(row)),
+                            ) => row
+                                .try_get(0)
+                                .ok()
+                                .flatten()
+                                .and_then(|text| text.parse::<u64>().ok()),
+                            _ => None,
+                        };
+                        match generation {
+                            None => Err(BackendError::Integrity),
+                            value if value != expected => Err(BackendError::Stale),
+                            _ => Ok(()),
                         }
-                        let generation = actual
-                            .and_then(|text| text.parse::<u64>().ok())
-                            .ok_or(BackendError::Integrity)?;
-                        if generation != expected {
-                            if rollback(state).is_err() {
-                                state.quarantined = true;
-                                return Err(BackendError::Unknown.into());
-                            }
-                            state.work.rollbacks += 1;
-                            return Err(BackendError::Stale.into());
-                        }
+                    }),
+                    None => state.client.batch_execute(&begin).map(|()| Ok(())),
+                };
+                let error = match outcome {
+                    Ok(Ok(())) => break,
+                    Ok(Err(error)) => error,
+                    Err(error) if can_retry && error.disconnected() => {
+                        self.reconnect(state)?;
+                        can_retry = false;
+                        continue;
                     }
-                    Err(e) => {
-                        let error = e.backend();
-                        if error == BackendError::Unknown || rollback(state).is_err() {
-                            state.quarantined = true;
-                            return Err(BackendError::Unknown.into());
-                        }
-                        state.work.rollbacks += 1;
-                        return Err(error.into());
+                    Err(error) if ordinary && error.disconnected() => {
+                        state.quarantined = true;
+                        return Err(BackendError::Closed.into());
                     }
-                }
-            } else if let Err(e) = state.client.batch_execute(&begin) {
-                let error = e.backend();
+                    Err(error)
+                        if held_write && error.code().is_some_and(|c| c.code() == "LF747") =>
+                    {
+                        BackendError::Closed
+                    }
+                    Err(error) => error.backend(),
+                };
                 if error == BackendError::Unknown || rollback(state).is_err() {
                     state.quarantined = true;
                     return Err(BackendError::Unknown.into());
@@ -413,6 +448,7 @@ impl Session {
                 let tx = Transaction {
                     diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
                     state: RefCell::new(&mut *state),
+                    disconnected: Cell::new(false),
                     uncertain: Cell::new(false),
                     single: None,
                     lane: Cell::new(mode == Mode::Publish && !turn.nested),
@@ -423,6 +459,11 @@ impl Session {
                     located: RefCell::default(),
                 };
                 let result = body(&tx);
+                if tx.disconnected.get() {
+                    // No COMMIT was sent; a broken transport ends the transaction.
+                    state.quarantined = true;
+                    return Err(BackendError::Closed.into());
+                }
                 let uncertain = tx.uncertain.get()
                     || result.as_ref().err().is_some_and(OutcomeError::uncertain);
                 (result, uncertain)
@@ -435,7 +476,12 @@ impl Session {
                 Ok(value) => {
                     let commit = Instant::now();
                     state.work.round_trips += 1;
-                    let outcome = state.client.batch_execute("COMMIT");
+                    // The row pin excludes a successor through COMMIT, even if
+                    // the holder disconnects just after this final status check.
+                    let checked = lane_check.as_ref().map(|check| format!("{check}; COMMIT"));
+                    let outcome = state
+                        .client
+                        .batch_execute(checked.as_deref().unwrap_or("COMMIT"));
                     state.work.commit_ns += commit.elapsed().as_nanos() as u64;
                     match outcome {
                         Ok(()) => {
@@ -448,6 +494,23 @@ impl Session {
                         Err(e) => {
                             // A COMMIT whose reply was lost is uncertain; one
                             // the server refused (a deferred constraint) rolled back.
+                            if held_write && e.code().is_some_and(|c| c.code() == "LF747") {
+                                if rollback(state).is_err() {
+                                    state.quarantined = true;
+                                } else {
+                                    state.work.rollbacks += 1;
+                                }
+                                return Err(BackendError::Closed.into());
+                            }
+                            if ordinary && e.disconnected() {
+                                state.quarantined = true;
+                                return Err(if mode == Mode::Read {
+                                    BackendError::Closed
+                                } else {
+                                    BackendError::Unknown
+                                }
+                                .into());
+                            }
                             let error = e.backend();
                             if error == BackendError::Unknown {
                                 state.quarantined = true;
@@ -461,9 +524,12 @@ impl Session {
                 Err(e) => {
                     if rollback(state).is_err() {
                         state.quarantined = true;
-                        return Err(BackendError::Unknown.into());
+                        if !ordinary {
+                            return Err(BackendError::Unknown.into());
+                        }
+                    } else {
+                        state.work.rollbacks += 1;
                     }
-                    state.work.rollbacks += 1;
                     Err(e)
                 }
             }
@@ -549,6 +615,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
         let tx = Transaction {
             diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
             state: RefCell::new(&mut *state),
+            disconnected: Cell::new(false),
             uncertain: Cell::new(false),
             single,
             lane: Cell::new(false),
@@ -559,6 +626,10 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             located: RefCell::default(),
         };
         let result = body(&tx);
+        if tx.disconnected.get() {
+            state.quarantined = true;
+            return Err(BackendError::Closed.into());
+        }
         let uncertain = tx.uncertain.get();
         (result, uncertain)
     };

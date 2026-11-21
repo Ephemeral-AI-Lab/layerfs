@@ -521,10 +521,12 @@ const CHECKS = {
     { check: "store.connection", what: "it is reached where it lives: a sqlite Store through its machine; a PostgreSQL Store from this computer, and once more from each machine that has a Sandbox of it, with from naming that machine" },
     { check: "store.identity", what: "the id in its data is the id in its record" },
     { check: "store.schema", what: "its schema is the one this build reads" },
+    { check: "store.mount_holders", what: "durable mount holders have matching recorded workspaces" },
     { check: "store.backups", what: "no backup of it is behind: its heads against each bucket link (sqlite; a notice per bucket)" }],
   project: [
     { check: "project.record", what: "the home's record of the project and its folder read, and the Store the record sits under is on record" },
     { check: "project.listed", what: "the Store's own list holds the project the record names, by its stack id, or by its name for a record without one" },
+    { check: "project.mount_holders", what: "durable mount holders have matching recorded workspaces", full_only: true },
     { check: "project.data", what: "everything reachable from main's head and from each Branch's head is read and checked", full_only: true }],
   sandbox: [
     { check: "sandbox.record", what: "its record exists, parses and has a supported version" },

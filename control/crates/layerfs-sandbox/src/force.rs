@@ -106,8 +106,10 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&directory);
-    std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
-    layerfs_home::home::generation::moved_above(&directory);
+    if left.is_empty() {
+        std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
+        layerfs_home::home::generation::moved_above(&directory);
+    }
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(id)),

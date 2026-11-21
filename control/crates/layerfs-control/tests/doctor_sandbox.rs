@@ -1,5 +1,5 @@
 //! Saved-route diagnostics use real authenticated channels without leases or
-//! replay: the Sandbox's 17 checks, then one node per Workspace from its
+//! replay: the Sandbox's checks, then one node per Workspace from its
 //! daemon's list and its folder's records (`workspace.mounted`,
 //! `workspace.activity`).
 #[path = "support/doctor_own.rs"]
@@ -142,6 +142,7 @@ fn local_record() -> SdkValue {
 enum Mode {
     Pages,
     Mixed,
+    StoreUnavailable,
     Stale,
     Busy,
     Lost,
@@ -209,6 +210,7 @@ fn daemon(home: &Path, mode: Mode) -> (String, std::thread::JoinHandle<usize>) {
             .send(&Answer { id: call.id, reply }.encode().unwrap())
             .unwrap();
         let mut calls = 0;
+        let mut probed = false;
         loop {
             let Ok(bytes) = channel.receive.receive() else {
                 break;
@@ -235,6 +237,25 @@ fn daemon(home: &Path, mode: Mode) -> (String, std::thread::JoinHandle<usize>) {
                 panic!("only read-only SDK request")
             };
             assert_eq!(sdk.method, "sandbox.doctor_workspaces");
+            if sdk.args.get_text("probe") == Some("store_read") {
+                assert!(!probed, "Store read was replayed");
+                probed = true;
+                assert_eq!(sdk.args, SdkValue::map([("probe", t("store_read"))]));
+                let reply = if matches!(mode, Mode::StoreUnavailable) {
+                    Reply::SdkRefused(SdkRefusal {
+                        code: "StoreReadFailed".into(),
+                        message: "private connection details".into(),
+                        detail: SdkValue::Null,
+                    })
+                } else {
+                    Reply::Sdk(SdkValue::map([("readable", SdkValue::Bool(true))]))
+                };
+                channel
+                    .send
+                    .send(&Answer { id: call.id, reply }.encode().unwrap())
+                    .unwrap();
+                continue;
+            }
             calls += 1;
             if matches!(mode, Mode::Lost) || matches!(mode, Mode::LostPage) && calls == 2 {
                 break;
@@ -260,7 +281,7 @@ fn daemon(home: &Path, mode: Mode) -> (String, std::thread::JoinHandle<usize>) {
                 })
             } else {
                 let offset = sdk.args.get_int("offset").unwrap();
-                if matches!(mode, Mode::Mixed) {
+                if matches!(mode, Mode::Mixed | Mode::StoreUnavailable) {
                     let row = |n: i64, activity: &str, mounted: bool| {
                         SdkValue::map([
                             ("workspace", t(&id(n))),
@@ -708,6 +729,54 @@ fn finding<'a>(report: &'a SdkValue, workspace: &str, check: &str) -> &'a SdkVal
         .iter()
         .find(|f| f.get_text("workspace") == Some(workspace) && f.get_text("check") == Some(check))
         .unwrap_or_else(|| panic!("no {check} finding on {workspace}: {report:?}"))
+}
+
+#[test]
+fn issue_747_ready_daemon_with_unreadable_store_keeps_workspace_findings() {
+    let home = home();
+    sandbox(&home, "native", local_record());
+    recorded(&home, &id(1), "agent");
+    let (_, server) = daemon(&home, Mode::StoreUnavailable);
+    let report = doctor(&home);
+    assert_eq!(server.join().unwrap(), 1);
+    assert_eq!(
+        report.get("tree").unwrap().get_text("status"),
+        Some("error")
+    );
+    assert_eq!(
+        check(&report, "sandbox.daemon_ready").get_text("outcome"),
+        Some("fail")
+    );
+    finding(&report, &format!("sb:{}", id(3)), "workspace.activity");
+    assert!(!layerfs_home::json::print(&report).contains("private connection details"));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn issue_747_uncertain_explains_publication_and_destructive_repair() {
+    let home = home();
+    sandbox(&home, "native", local_record());
+    let (_, server) = daemon(&home, Mode::Mixed);
+    let report = doctor(&home);
+    assert_eq!(server.join().unwrap(), 1);
+    let handle = format!("sb:{}", id(3));
+    let uncertain = finding(&report, &handle, "workspace.activity");
+    let message = uncertain.get_text("message").unwrap();
+    assert!(
+        message.contains("whether the commit was published"),
+        "{message}"
+    );
+    assert!(
+        message.contains("discard") && message.contains("local"),
+        "{message}"
+    );
+    assert_eq!(
+        uncertain.get_text("fix"),
+        Some(&*format!(
+            "layerfs workspace unmount {handle} --discard --force"
+        ))
+    );
+    std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]

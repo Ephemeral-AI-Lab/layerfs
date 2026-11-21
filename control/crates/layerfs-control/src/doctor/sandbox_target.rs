@@ -105,7 +105,11 @@ pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
     }
     node.gate = (node.gate.take())
         .or(seen.gate)
-        .or_else(|| gate(&checks, name, machine.as_deref(), route));
+        .or_else(|| match seen.listing {
+            Listing::NotAsked => gate(&checks, name, machine.as_deref(), route),
+            // Hello succeeded and registry diagnostics are independent of Store reads.
+            _ => None,
+        });
     if node.gate.is_some() {
         return;
     }

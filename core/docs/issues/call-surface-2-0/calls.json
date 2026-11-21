@@ -285,6 +285,11 @@
      "full_only": false
     },
     {
+     "check": "store.mount_holders",
+     "what": "durable mount holders have matching recorded workspaces",
+     "full_only": false
+    },
+    {
      "check": "store.backups",
      "what": "no backup of it is behind: its heads against each bucket link (sqlite; a notice per bucket)",
      "full_only": false
@@ -300,6 +305,11 @@
      "check": "project.listed",
      "full_only": false,
      "what": "the Store's own list holds the project the record names, by its stack id, or by its name for a record without one"
+    },
+    {
+     "check": "project.mount_holders",
+     "what": "durable mount holders have matching recorded workspaces",
+     "full_only": true
     },
     {
      "check": "project.data",

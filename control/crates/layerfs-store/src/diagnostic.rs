@@ -1,6 +1,7 @@
 //! Observational Store engine entry points, without leases or writable opens.
 use crate::{identity::Identity, record::StoreRecord};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 /// The project id a project audit takes.
 pub use layerfs_history::LayerStackId;
 use layerfs_home::outcome::refused;
@@ -50,11 +51,32 @@ pub fn sqlite(
     })
 }
 
-/// The shallow cut of a sqlite Store (call surface 2.0, C14): its file at
-/// `path` opened read-only as Store `identity`, its id and schema checked
-/// against this build's, and nothing else read. A host that cannot open a
-/// sqlite Store is `Unsupported`.
-pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal> {
+/// A bounded diagnostic result suitable for forwarding from a worker.
+fn mount_rows(rows: Vec<layerfs_persistence::diagnostic::MountHolder>) -> SdkValue {
+    let text = |s: Option<String>| s.map_or(SdkValue::Null, SdkValue::text);
+    SdkValue::List(
+        rows.into_iter()
+            .map(|r| {
+                SdkValue::map([
+                    ("operation", SdkValue::text(hex(&r.operation))),
+                    ("scope_id", SdkValue::text(hex(&r.scope))),
+                    ("workspace", text(r.workspace)),
+                    ("sandbox", text(r.sandbox)),
+                    ("machine", text(r.machine)),
+                    ("project", text(r.project)),
+                    ("branch", text(r.branch)),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// Reads mount rows on the kernel that owns the SQLite file.
+pub fn sqlite_mounts(
+    path: &Path,
+    identity: &Identity,
+    stack: Option<LayerStackId>,
+) -> Result<SdkValue, SdkRefusal> {
     layerfs_store_service::kernel_guard::check(path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     layerfs_persistence::SqliteHandles::open_diagnostic(
@@ -62,12 +84,37 @@ pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal>
         &identity.binding,
         identity.cursor_key,
     )
-    .map(drop)
+    .and_then(|handles| handles.diagnostic_mounts(stack))
+    .map(mount_rows)
     .map_err(open_refusal)
 }
 
+/// Reads the selected PostgreSQL schema through an admitted read-only session.
+pub fn postgresql_mounts(
+    record: &StoreRecord,
+    identity: &Identity,
+    stack: Option<LayerStackId>,
+    options: Options,
+) -> Result<SdkValue, SdkRefusal> {
+    let selected = crate::postgresql::connect::selection(record)?;
+    let selection = crate::postgresql::open::selection(
+        selected.url()?,
+        &selected.schema()?,
+        &selected.setting()?,
+    );
+    open_admitted(&selection, identity, options, &mut |_| {})?
+        .diagnostic_mounts(stack)
+        .map(mount_rows)
+        .map_err(|_| {
+            refused(
+                "Unavailable",
+                "the Store's mount admissions could not be read",
+            )
+        })
+}
+
 /// Whether the sqlite Store file at `path` records this Store's id, read
-/// without the schema checks [`sqlite_schema`] adds.
+/// without opening a diagnostic session.
 pub fn sqlite_identity(path: &Path, identity: &Identity) -> Result<bool, SdkRefusal> {
     layerfs_persistence::SqliteHandles::diagnostic_identity(path, &identity.binding)
         .map_err(open_refusal)

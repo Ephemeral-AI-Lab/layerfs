@@ -99,7 +99,7 @@ compaction holds one already and never retains the URL.
    state: Mutex<State>           client (statement cache 256),
                                  quarantined, work counters
    lane: Mutex<Option<Client>>   second connection, opened on first
-                                 hold_lane
+                                 hold_lane, with the held transaction id
    settings: schema, synchronous_commit, lock_timeout_ms
    connector: Config + the process's one TLS connector, or none
               for sslmode=disable
@@ -109,7 +109,10 @@ compaction holds one already and never retains the URL.
 | --- | --- | --- |
 | New connection answered with an error | `Rejected` | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs) |
 | No connection made, or none made and logged in within 5 s (the URL's `connect_timeout` when set; LF13) | `Closed` | same |
-| Lost reply inside a transaction | `Unknown`; session quarantined | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| Unpinned ordinary connection lost before the transaction body | Replace the connection once and start the transaction. A further disconnect returns `Closed`. | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| Ordinary connection lost inside the body or before a read-only COMMIT reply | `Closed`. The disconnected client is set aside. | same |
+| Write COMMIT reply lost | `Unknown`. The next independent operation on an unpinned ordinary session can open a new connection. | same |
+| Diagnostic outcome uncertain | `Unknown`. The diagnostic session keeps its original deadline and does not reconnect. | same |
 | `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
 | `round_trips` | each exchange that waits for the server; the handshake is not one | same |
 | `prepares`, `connects` | statement-cache misses and COPY statements; new connections (session and lane) | same |
@@ -140,7 +143,10 @@ Source: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/bac
 A single statement sees one snapshot, so `Statement` reads a Branch and the
 rows it resolves to coherently. Statements outside a transaction name the
 schema (`{s}` in [`queries/history`](../../../../engine/crates/layerfs-persistence/sql/postgresql/queries/history)).
-Writes are never `SERIALIZABLE` and never retried.
+Writes use `READ COMMITTED` or `REPEATABLE READ` and the transaction body runs
+at most once. A borrower of a held publication lane pins the row until
+COMMIT and checks the holder's transaction at BEGIN and COMMIT. A new lane
+holder waits for outstanding borrowers to finish before admitting writes.
 
 The mark runs with the server's JIT compiler off: the planner's estimate for
 the history closure crosses the JIT threshold, and compiling it cost about

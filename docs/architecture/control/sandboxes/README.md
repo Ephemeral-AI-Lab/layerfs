@@ -67,6 +67,12 @@ runtime owns command launch, streams, exit status and cancel
 | Retired docker records | A record whose `backend` or `runtime` is `docker`, or a started docker-machine record with no `runtime`: every call but `sandbox.remove` is `Unsupported`, naming `docker rm -f <container>` when the daemon record keeps the container's name (else saying it does not); `sandbox.remove` removes its records, `outcome: already_gone`, and `left` says its container was not touched. | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `retired_container`, [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs) `retired`, [`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs) `forget` |
 | Machine-stop fields (record format) | A forced `machine.stop` adds two Bool fields to the Sandbox's `record.json`: `machine_stopped` (its runtime was stopped with the machine; shown `gone`) and `machine_stop_unknown` (the stop was not confirmed; shown `unresolved`). An absent field reads `false`, so older records need no change and `"v"` stays `1`. A build older than these fields keeps them as read but shows such a Sandbox as it was before the stop. | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `machine_stopped`, `with_machine_stop`; [`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs) `mark` |
 
+When a runtime is confirmed gone, `sandbox.remove` checks the recorded
+runtime identity and ends its recorded Workspace mount intents before
+removing the Sandbox record and reporting `already_gone`. If a forced stop
+cannot end every mount intent, `left` names the remaining work and the stopped
+Sandbox record is kept for a later `sandbox.remove`.
+
 ## Store leases
 
 A lease is `store/<store>/open/<pid>` in the home, taken under the Store's

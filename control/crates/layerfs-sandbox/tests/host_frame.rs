@@ -50,6 +50,7 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
     );
     let close = Call::Close {
         force: false,
+        bindings: Vec::new(),
         held: Some(vec!["/w/2".to_owned()]),
     };
     let frame = print(&encode(&sent(close, Message::Absent)).unwrap());
@@ -76,6 +77,7 @@ fn a_frame_reads_back_to_its_request() {
         Call::Close {
             force: true,
             held: None,
+            bindings: vec![("/w/2".into(), "07".repeat(32), "main".into())],
         },
         Call::ListWorkspaces { path: None },
         Call::Capacity,

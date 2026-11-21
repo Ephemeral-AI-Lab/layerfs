@@ -71,7 +71,28 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
         Call::Create { platform } => {
             fields.extend(platform.as_deref().map(|p| ("platform", text(p))))
         }
-        Call::Close { force, held } => {
+        Call::Close {
+            force,
+            held,
+            bindings,
+        } => {
+            if !bindings.is_empty() {
+                fields.push((
+                    "bindings",
+                    SdkValue::List(
+                        bindings
+                            .iter()
+                            .map(|(path, id, branch)| {
+                                SdkValue::map([
+                                    ("path", text(path)),
+                                    ("id", text(id)),
+                                    ("branch", text(branch)),
+                                ])
+                            })
+                            .collect(),
+                    ),
+                ));
+            }
             fields.push(("force", SdkValue::Bool(*force)));
             if let Some(held) = held {
                 let held = held.iter().map(|path| text(path)).collect();
@@ -219,7 +240,7 @@ pub fn decode(frame: &SdkValue) -> Result<Sent, SdkRefusal> {
     let more = frame.get("more").cloned().unwrap_or_default();
     let deploy = frame.get("deploy").cloned().unwrap_or_default();
     Ok(Sent {
-        call: call(op, &more),
+        call: call(op, &more)?,
         message: Message::read(more.get("message")),
         sandbox: more.get_text("sandbox").map(str::to_owned),
         store_record: StoreRecord::from_record(&store, record),
@@ -239,15 +260,29 @@ pub fn decode(frame: &SdkValue) -> Result<Sent, SdkRefusal> {
 
 /// Operation `op`'s fields from a request's `more`, read as the untyped
 /// request read them.
-fn call(op: Op, more: &SdkValue) -> Call {
+fn call(op: Op, more: &SdkValue) -> Result<Call, SdkRefusal> {
     let text = |name: &str| more.get_text(name).map(str::to_owned);
     let flag = |name: &str| more.get(name).map(|_| more.get_bool(name));
-    match op {
+    Ok(match op {
         Op::SandboxCreate => Call::Create {
             platform: text("platform"),
         },
         Op::SandboxClose => Call::Close {
             force: more.get_bool("force"),
+            bindings: match more.get("bindings") {
+                None => Vec::new(),
+                Some(SdkValue::List(items)) => items
+                    .iter()
+                    .map(|item| {
+                        let field = |key| {
+                            layerfs_home::helpers::required(item.get_text(key), key)
+                                .map(str::to_owned)
+                        };
+                        Ok((field("path")?, field("id")?, field("branch")?))
+                    })
+                    .collect::<Result<Vec<_>, SdkRefusal>>()?,
+                Some(_) => return Err(refused("InvalidInput", "close bindings must be a list")),
+            },
             held: match more.get("held") {
                 Some(SdkValue::List(items)) => Some(
                     (items.iter())
@@ -309,7 +344,7 @@ fn call(op: Op, more: &SdkValue) -> Call {
             path: text("path"),
             under: text("under"),
         },
-    }
+    })
 }
 
 /// A deployment as a map, as the untyped request kept it.

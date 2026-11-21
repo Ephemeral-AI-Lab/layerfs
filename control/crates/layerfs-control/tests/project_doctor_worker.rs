@@ -156,6 +156,7 @@ fn the_data_walk_of_a_store_on_another_machine_runs_in_its_worker() {
         [
             ("project.record".to_owned(), "pass".to_owned()),
             ("project.listed".to_owned(), "pass".to_owned()),
+            ("project.mount_holders".to_owned(), "pass".to_owned()),
             ("project.data".to_owned(), "pass".to_owned())
         ],
         "{node:?}"

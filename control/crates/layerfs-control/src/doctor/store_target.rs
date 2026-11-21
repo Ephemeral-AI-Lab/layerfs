@@ -45,6 +45,7 @@ pub(super) const CHECKS: &[CheckId] = &[
     CheckId::own(CONNECTION),
     CheckId::own(IDENTITY),
     CheckId::own(SCHEMA),
+    CheckId::own(super::mount_holders::STORE),
     CheckId::own(BACKUPS),
 ];
 
@@ -309,6 +310,14 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     }
     checks.pass(IDENTITY, "the id in its file is the id in its record");
     checks.pass(SCHEMA, "its schema is the one this build reads");
+    super::mount_holders::report(
+        probe.home,
+        record.name(),
+        false,
+        super::mount_holders::STORE,
+        found.get("mount_holders"),
+        checks,
+    );
     if heads {
         backups(record, text("heads"), text("heads_error"), checks);
     }
@@ -357,7 +366,7 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     if let Some(run) = layerfs_store::compact::recorded_run(path) {
         fields.push(("compaction", run));
     }
-    match diagnostic::sqlite_schema(path, identity) {
+    match diagnostic::sqlite_mounts(path, identity, None) {
         Err(error) if error.code == "Unsupported" => {
             fields.push(("unsupported", SdkValue::Text(error.message)))
         }
@@ -368,14 +377,18 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
             Ok(false) => fields.push(("identity_error", SdkValue::Text(error.message))),
             _ => fields.push(("schema_error", SdkValue::Text(error.message))),
         },
-        Ok(()) if heads => match layerfs_bucket::backup::heads(path) {
-            Ok(now) => fields.push((
-                "heads",
-                SdkValue::text(layerfs_bucket::bucket::pieces::hex(&now)),
-            )),
-            Err(why) => fields.push(("heads_error", SdkValue::Text(why))),
-        },
-        Ok(()) => {}
+        Ok(holders) => {
+            fields.push(("mount_holders", holders));
+            if heads {
+                match layerfs_bucket::backup::heads(path) {
+                    Ok(now) => fields.push((
+                        "heads",
+                        SdkValue::text(layerfs_bucket::bucket::pieces::hex(&now)),
+                    )),
+                    Err(why) => fields.push(("heads_error", SdkValue::Text(why))),
+                }
+            }
+        }
     }
     map_of(fields)
 }
@@ -489,7 +502,17 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
                 let failed = layerfs_store::observed::Reach::failed(&silent);
                 layerfs_store::observed::record(probe.home, record.name(), None, &failed);
             }
-            None => here(probe.home, record),
+            None => {
+                here(probe.home, record);
+                super::mount_holders::result(
+                    probe.home,
+                    record.name(),
+                    true,
+                    super::mount_holders::STORE,
+                    diagnostic::postgresql_mounts(record, identity, None, options),
+                    checks,
+                );
+            }
         },
     }
     reach(probe, record, checks);

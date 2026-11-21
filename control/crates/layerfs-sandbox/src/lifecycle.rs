@@ -258,10 +258,16 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
 /// Stop, then delete, each attempted once: a failed stop is not followed by
 /// a delete and keeps its cause; the folder goes after the delete. A
 /// Sandbox whose runtime ended by itself is reclaimed ([`reclaim`]) and
-/// answered `NoSuchSandbox`, as gone. A local record this build does not
-/// read is forgotten ([`forget_unread`]), no signal sent: a worker's own
-/// record, when the caller's home keeps only the forward to it.
-pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
+/// answered `Reclaimed` after its recorded mount intents end. A local
+/// record this build does not read is forgotten ([`forget_unread`]), no
+/// signal sent: a worker's own record, when the caller's home keeps only the
+/// forward to it.
+pub fn close(
+    host: &Host,
+    force: bool,
+    held: &[String],
+    bindings: &[(String, String, String)],
+) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::files::sandbox_dir(host)?;
     let Some(recorded) = crate::files::started(&directory)? else {
@@ -280,8 +286,13 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         Ok(state) => state,
         Err(gone) if gone.detail.get_bool("containerGone") => {
             let container = gone.detail.get_text("container").unwrap_or("").to_owned();
-            reclaim(host, &container, gone.detail.get_bool("containerStopped"))?;
-            return Err(gone);
+            return reclaim(
+                host,
+                &container,
+                gone.detail.get_bool("containerStopped"),
+                held,
+                bindings,
+            );
         }
         Err(refusal) => return Err(refusal),
     };
@@ -333,7 +344,15 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // unmount may leave its release queued in the daemon it then stops, so
     // each mount intent still left is ended below once the daemon is gone.
     // A Workspace the daemon cannot drain is reported as unknown below.
-    let bound = bound_mounts(&state, &mounted)?;
+    let mut bound = bound_mounts(&state, &mounted)?;
+    for binding in crate::mount_intents::resolve(bindings)? {
+        if let Some(known) = bound
+            .iter_mut()
+            .find(|known| known.path == binding.path && known.bound.is_none())
+        {
+            *known = binding;
+        }
+    }
     drop(_guard);
     for path in &mounted {
         let _ = crate::workspace::serve::unmount(host, Some(path), true, true);
@@ -347,8 +366,10 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     owner.delete().map_err(values::wire)?;
     let left = crate::mount_intents::end(Ok(&host.open_args()), &bound);
     lock(&SANDBOXES)?.remove(&directory);
-    std::fs::remove_dir_all(&directory).map_err(failed)?;
-    layerfs_home::home::generation::moved_above(&directory);
+    if left.is_empty() {
+        std::fs::remove_dir_all(&directory).map_err(failed)?;
+        layerfs_home::home::generation::moved_above(&directory);
+    }
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(&id)),
@@ -466,7 +487,13 @@ const STOP_S: u16 = 5;
 /// stopped runtime, then its folder. Under its folder's guard the record is
 /// read again: a Sandbox started again meanwhile has another runtime id
 /// and is left alone (`Busy`).
-pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
+pub fn reclaim(
+    host: &Host,
+    container: &str,
+    stopped: bool,
+    held: &[String],
+    forwarded: &[(String, String, String)],
+) -> Outcome {
     let id = host.sandbox()?;
     let directory = crate::files::sandbox_dir(host)?;
     let _guard = layerfs_store::project::discovery::guard(&directory)?;
@@ -482,12 +509,23 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
             format!("Sandbox {id} was started again while it was reclaimed; nothing was removed"),
         ));
     }
+    let mut records = crate::mount_intents::bindings(&directory)?;
+    records.extend_from_slice(forwarded);
+    let bindings = crate::mount_intents::resolve(&records)?;
+    for path in held {
+        if !bindings.iter().any(|binding| &binding.path == path) {
+            return Err(failed(format!(
+                "missing Workspace binding for {path}; retry sandbox.remove"
+            )));
+        }
+    }
     if stopped {
         crate::reopen::recorded(host, id, &value)?
             .stopped()
             .delete()
             .map_err(values::wire)?;
     }
+    crate::mount_intents::require_end(Ok(&host.open_args()), &bindings)?;
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);

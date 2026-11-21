@@ -1,4 +1,4 @@
-//! Bounded, nonblocking registry observations, without Store or overlay reads.
+//! Separate diagnostic observations of the registry and the published Store.
 use super::{inspect::activity, registry::Entry, Service};
 use layerfs_bridge::control::{Reply, SdkCall, SdkRefusal, SdkValue};
 use std::collections::hash_map::DefaultHasher;
@@ -13,8 +13,24 @@ fn refused(code: &str, message: &str) -> Reply {
     })
 }
 impl Service {
-    /// One diagnostic page of registry facts; no history, Store or overlay call.
+    /// A Store probe is explicit. Ordinary registry pages need no Store access.
     pub(crate) fn diagnostic_workspaces(&self, call: &SdkCall) -> Reply {
+        if let Some(probe) = call.args.get("probe") {
+            if !matches!(probe, SdkValue::Text(name) if name == "store_read") {
+                return refused("InvalidInput", "unknown diagnostic probe");
+            }
+            // Use the daemon's control reader, outside the registry lock. An
+            // empty catalog is readable too. Never follow its continuation.
+            return match self.store.published(|history| {
+                history.layer_stacks(&layerfs_history::Page {
+                    cursor: None,
+                    limit: 1,
+                })
+            }) {
+                Ok(_) => Reply::Sdk(SdkValue::map([("readable", SdkValue::Bool(true))])),
+                Err(_) => refused("StoreReadFailed", "the daemon could not read its Store"),
+            };
+        }
         let offset = match call.args.get_int("offset").unwrap_or(0) {
             value if value >= 0 => match usize::try_from(value) {
                 Ok(value) => value,

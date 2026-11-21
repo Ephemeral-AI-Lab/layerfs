@@ -36,6 +36,17 @@ impl Error {
             Self::Refused(error) => *error,
         }
     }
+    /// Only transport loss and server disconnects justify retrying BEGIN.
+    pub(crate) fn disconnected(&self) -> bool {
+        let Self::Database(error) = self else {
+            return false;
+        };
+        error.is_closed()
+            || std::error::Error::source(error).is_some_and(|cause| cause.is::<std::io::Error>())
+            || error.code().is_some_and(|code| {
+                code.code().starts_with("08") || matches!(code.code(), "57P01" | "57P02" | "57P05")
+            })
+    }
     pub(crate) fn code(&self) -> Option<&postgres::error::SqlState> {
         match self {
             Self::Database(error) => error.code(),

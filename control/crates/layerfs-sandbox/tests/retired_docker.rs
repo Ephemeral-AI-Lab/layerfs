@@ -98,7 +98,7 @@ fn a_retired_docker_record_is_refused_with_how_to_recreate_it() {
 fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
     let root = root("close");
     docker_record(&root, None);
-    let answer = layerfs_sandbox::lifecycle::close(&host(&root), false, &[]).unwrap();
+    let answer = layerfs_sandbox::lifecycle::close(&host(&root), false, &[], &[]).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert_eq!(answer.get_text("container"), Some("lfs-0123abcd-old"));
     assert_eq!(
@@ -107,7 +107,7 @@ fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
     );
     assert!(!paths::sandbox_dir(&root, "old").exists());
     // closed again: nothing is recorded any more
-    let refusal = layerfs_sandbox::lifecycle::close(&host(&root), false, &[]).unwrap_err();
+    let refusal = layerfs_sandbox::lifecycle::close(&host(&root), false, &[], &[]).unwrap_err();
     assert_eq!(refusal.code, "NoSuchSandbox", "{}", refusal.message);
     assert!(read_record(&paths::sandbox_record(&root, "old"))
         .unwrap()

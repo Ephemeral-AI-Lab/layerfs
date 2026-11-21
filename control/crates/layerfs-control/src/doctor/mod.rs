@@ -32,3 +32,5 @@ pub(crate) use scan::shell;
 mod backup_target;
 mod store_target;
 pub(crate) use store_target::in_worker as diagnose_store_in_worker;
+
+mod mount_holders;

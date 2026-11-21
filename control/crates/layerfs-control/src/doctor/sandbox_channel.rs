@@ -169,9 +169,7 @@ fn inspect(
         Ok(Reply::Hello(status)) => {
             checks.pass(INSTANCE, "the daemon is the one it was started with");
             match status.phase {
-                DaemonPhase::ControlReady => {
-                    checks.pass(READY, "its daemon is ready for calls");
-                }
+                DaemonPhase::ControlReady => {}
                 DaemonPhase::Retained => {
                     checks.fail(READY, "its daemon's startup failed and is kept as it ended");
                     checks.fix(READY, remove_fix(sandbox));
@@ -199,7 +197,37 @@ fn inspect(
             return nothing;
         }
     }
-    workspaces(control, deadline)
+    // Collect the registry first: a stuck Store must not hide an uncertain
+    // Workspace. Both observations share the absolute socket deadline.
+    let observed = workspaces(control, deadline);
+    match observed.0 {
+        Listing::NoVerdict(NoVerdict::Lost) => {
+            checks.lost(READY, "the daemon channel was lost before the Store read")
+        }
+        _ if Instant::now() >= deadline => {
+            checks.timeout(READY, "the daemon Store read ran out of time")
+        }
+        _ => match control.call(Request::Sdk(SdkCall {
+            method: "sandbox.doctor_workspaces".into(),
+            args: SdkValue::map([("probe", SdkValue::text("store_read"))]),
+        })) {
+            Ok(Reply::Sdk(value)) if value.get_bool("readable") => {
+                checks.pass(READY, "its daemon read published Store history")
+            }
+            Ok(Reply::SdkRefused(error)) if error.code == "StoreReadFailed" => {
+                checks.fail(READY, "its daemon could not read published Store history")
+            }
+            Ok(Reply::SdkRefused(error)) if error.code == "Busy" => {
+                checks.busy(READY, "the daemon Store read was busy")
+            }
+            Ok(_) => checks.unknown(READY, "its daemon did not confirm the Store read"),
+            Err(_) if Instant::now() >= deadline => {
+                checks.timeout(READY, "the daemon Store read timed out")
+            }
+            Err(_) => checks.lost(READY, "the daemon Store read reply was lost"),
+        },
+    }
+    observed
 }
 
 /// The daemon's whole Workspace list, in bounded pages under one

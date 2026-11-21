@@ -7,6 +7,17 @@ use crate::{
 use layerfs_storage::port::PersistenceError;
 
 impl SqliteHandles {
+    /// Lists durable mount admissions in an identity-checked read transaction.
+    pub fn diagnostic_mounts(
+        &self,
+        stack: Option<layerfs_history::LayerStackId>,
+    ) -> Result<Vec<super::MountHolder>, PersistenceError> {
+        self.storage
+            .session
+            .run::<_, BackendError>(false, |tx| super::mounts::read(tx, stack))
+            .map_err(Into::into)
+    }
+
     /// Audits one project's data ([`super::project`]): everything main's
     /// head and each live Branch's head reach, in one read transaction,
     /// with nothing written to the Store. Problems stream to `observer`;

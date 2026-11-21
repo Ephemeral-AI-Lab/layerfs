@@ -32,6 +32,66 @@ pub struct Bound {
     pub bound: Option<([u8; 32], Branch)>,
 }
 
+/// Recover the exact bindings while the Sandbox directory is still guarded.
+pub fn bindings(
+    directory: &Path,
+) -> Result<Vec<(String, String, String)>, layerfs_bridge::control::SdkRefusal> {
+    crate::files::workspaces(directory)?
+        .into_iter()
+        .map(|(file, record)| {
+            let required = |value: Option<&str>, key| {
+                value.map(str::to_owned).ok_or_else(|| {
+                    layerfs_home::outcome::failed(format!(
+                        "missing Workspace {key} in {}",
+                        file.display()
+                    ))
+                })
+            };
+            Ok((
+                required(record.path(), "path")?,
+                required(record.id(), "id")?,
+                required(record.branch(), "branch")?,
+            ))
+        })
+        .collect()
+}
+
+/// Validate bindings before using them on the runtime host.
+pub fn resolve(
+    records: &[(String, String, String)],
+) -> Result<Vec<Bound>, layerfs_bridge::control::SdkRefusal> {
+    records
+        .iter()
+        .map(|(path, id, branch)| {
+            let workspace = layerfs_bridge::sdk_values::unhex(id)
+                .and_then(|bytes| bytes.try_into().ok())
+                .ok_or_else(|| {
+                    layerfs_home::outcome::failed(format!("invalid Workspace id for {path}"))
+                })?;
+            Ok(Bound {
+                path: path.clone(),
+                bound: Some((workspace, Branch::Named(branch.clone()))),
+            })
+        })
+        .collect()
+}
+
+/// A retry needs every original binding, even if another binding already settled.
+pub fn require_end(
+    open: Result<&OpenArgs, &str>,
+    bound: &[Bound],
+) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+    for workspace in bound {
+        end_one(open, workspace).map_err(|why| {
+            layerfs_home::outcome::failed(format!(
+                "Workspace {}: {why}; mount cleanup must be retried",
+                workspace.path
+            ))
+        })?;
+    }
+    Ok(())
+}
+
 /// Ends, once each, the mount intents `bound` left in the Store `open`
 /// names (or the reason `open` could not be made), now that their owner is
 /// stopped. Answers a `left` sentence for each one it could not end.

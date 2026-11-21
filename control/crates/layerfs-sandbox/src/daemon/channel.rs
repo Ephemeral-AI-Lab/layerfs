@@ -1,6 +1,6 @@
 //! One attempted authenticated control exchange, retaining the original unknown.
 use layerfs_bridge::{
-    control::{Answer, Call, ControlError, Reply, Request},
+    control::{Answer, Call, ControlCode, ControlError, Reply, Request},
     duplex::{ChannelError, CloseHandle, Connection},
 };
 use std::fmt;
@@ -132,7 +132,13 @@ impl Control {
                     "original control correlation or result",
                 )));
             }
-            if matches!(answer.reply, Reply::SessionEnded) {
+            let inner = match &answer.reply {
+                Reply::Observed { reply, .. } => reply.as_ref(),
+                reply => reply,
+            };
+            if matches!(inner, Reply::SessionEnded)
+                || matches!(inner, Reply::Refused(error) if error.code == ControlCode::Unknown)
+            {
                 self.failed = true;
                 phase = ControlPhase::Fence;
                 // Quarantine the underlying owner as well: transferring it into

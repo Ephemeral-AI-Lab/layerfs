@@ -249,6 +249,20 @@ pub(crate) fn with_cancellation<T>(
 }
 
 impl PostgresHandles {
+    /// Lists durable mount admissions in an identity-checked read transaction.
+    pub fn diagnostic_mounts(
+        &self,
+        stack: Option<layerfs_history::LayerStackId>,
+    ) -> Result<Vec<super::MountHolder>, PersistenceError> {
+        self.storage
+            .session
+            .run_observed::<_, BackendError>(false, |tx| {
+                crate::backend::postgresql::schema::diagnostic_guard(tx)?;
+                super::mounts::read(tx, stack)
+            })
+            .map_err(Into::into)
+    }
+
     /// Audits one project's data ([`super::project`]) in one REPEATABLE READ
     /// READ ONLY view, with nothing written. Problems stream to `observer`;
     /// `progress` hears `(done, total)` trees.

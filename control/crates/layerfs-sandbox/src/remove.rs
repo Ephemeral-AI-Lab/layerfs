@@ -189,13 +189,24 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             .and_then(|()| crate::force::native_host(&home, name))
             .and_then(|host| crate::force::close(&host, held.as_deref().unwrap_or(&[])))
     } else {
-        on_machine(
-            &home,
-            events,
-            &record,
-            Call::Close { force, held },
-            crate::dispatch::call,
-        )
+        let bindings = if direct::forwarded(&record) {
+            crate::mount_intents::bindings(&record.dir(&home))
+        } else {
+            Ok(Vec::new())
+        };
+        bindings.and_then(|bindings| {
+            on_machine(
+                &home,
+                events,
+                &record,
+                Call::Close {
+                    force,
+                    held,
+                    bindings,
+                },
+                crate::dispatch::call,
+            )
+        })
     };
     let _lock = home::lock::take(&home)?;
     // on `native` the Sandbox's own side removed the folder already
@@ -203,6 +214,15 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     let _sandbox = match dir.exists() {
         true => Some(record::lock(&home, name)?),
         false => None,
+    };
+    // Preserve the uncertain operation until another remove can settle it.
+    let uncertain = |refusal: SdkRefusal| {
+        let op = op.at("stop").as_uncertain();
+        if let Some(now) = SandboxRecord::read(&home, name)? {
+            now.with_op(&op).write(&home)?;
+        }
+        op.log_uncertain(&home, "sandbox", name, &refusal.message);
+        Err(shown(refusal, &handle_of))
     };
     match stopped {
         // a record its side does not read went by its records alone, no
@@ -218,10 +238,18 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             };
             Ok(Removed::AlreadyGone { left })
         }
-        Ok(value) => {
+        Ok(value)
+            if value.get_text("kind") == Some("Reclaimed")
+                && value.get_text("id") == Some(name) =>
+        {
             phase(events, "delete", None);
             direct::release(&home, &record);
             remove_folder(&dir)?;
+            done(events);
+            Ok(Removed::AlreadyGone { left: Vec::new() })
+        }
+        Ok(value) if value.get_text("kind") == Some("Closed") => {
+            phase(events, "delete", None);
             let unmounted = match value.get("unknown") {
                 Some(SdkValue::List(paths)) => texts(paths).map(&handle_of).collect(),
                 _ => Vec::new(),
@@ -237,27 +265,20 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                 }
                 _ => Vec::new(),
             };
+            if left.is_empty() {
+                direct::release(&home, &record);
+                remove_folder(&dir)?;
+            } else {
+                record.without_op().with_machine_stop(true).write(&home)?;
+            }
             done(events);
             Ok(Removed::Stopped { unmounted, left })
         }
-        // a Sandbox already gone loses its record too
-        Err(refusal) if refusal.code == "NoSuchSandbox" => {
-            phase(events, "delete", None);
-            direct::release(&home, &record);
-            remove_folder(&dir)?;
-            done(events);
-            Ok(Removed::AlreadyGone { left: Vec::new() })
-        }
-        // its outcome is not known: the record stays with the intent,
-        // uncertain, until another `sandbox.remove` clears it
-        Err(refusal) if refusal.code == "Unknown" => {
-            let op = op.at("stop").as_uncertain();
-            if let Some(now) = SandboxRecord::read(&home, name)? {
-                now.with_op(&op).write(&home)?;
-            }
-            op.log_uncertain(&home, "sandbox", name, &refusal.message);
-            Err(shown(refusal, &handle_of))
-        }
+        Ok(_) => uncertain(refused(
+            "Unknown",
+            format!("worker did not confirm removal of Sandbox {name}; retry sandbox.remove"),
+        )),
+        Err(refusal) if refusal.code == "Unknown" => uncertain(refusal),
         // a certain failure leaves the Sandbox as it was, except a forced
         // remove whose runtime already stopped: the record says so
         Err(refusal) => {
@@ -380,6 +401,7 @@ fn forget(
             Call::Close {
                 force: true,
                 held: None,
+                bindings: Vec::new(),
             },
             crate::dispatch::call,
         )

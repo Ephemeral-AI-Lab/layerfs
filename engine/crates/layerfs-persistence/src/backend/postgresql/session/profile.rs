@@ -94,9 +94,11 @@ impl Settings {
     /// The held publication lane: one open transaction owning the lane row.
     pub(crate) fn lane_begin(&self) -> String {
         format!(
-            "BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO {}{}",
-            self.schema,
-            self.lane_lock()
+            "BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO {}; \
+             SET LOCAL lock_timeout TO {}; SELECT 1 FROM store_lane WHERE id=1 FOR NO KEY UPDATE; \
+             SAVEPOINT drain; SELECT 1 FROM store_lane WHERE id=1 FOR UPDATE; ROLLBACK TO drain; \
+             SELECT pg_current_xact_id()::text AS lane_xid FROM store_lane WHERE id=1",
+            self.schema, self.lock_timeout_ms
         )
     }
 

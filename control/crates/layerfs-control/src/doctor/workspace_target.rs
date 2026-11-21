@@ -206,7 +206,7 @@ fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
                     checks.fix(ACTIVITY, unmount_fix(handle));
                 }
                 "uncertain" => {
-                    checks.fail(ACTIVITY, "the outcome of an operation on it is not known");
+                    checks.fail(ACTIVITY, "it is unknown whether the commit was published. Check branch history before repair. Forced unmount discards local changes and leaves the commit outcome unknown.");
                     checks.fix(ACTIVITY, unmount_fix(handle));
                 }
                 _ => checks.pass(ACTIVITY, "no failed or uncertain operation is kept on it"),

@@ -387,14 +387,29 @@ fn plant_mount(home: &Path, sandbox: &str) {
 /// A live-owned mount intent of a Sandbox this home no longer records (one
 /// `sandbox remove` forgot without stopping its daemon) is not ended by
 /// anything that cannot prove its owner gone (RV5 FAIL-1): `store compact`
-/// and `branch remove` stay `InUse` (mounts active), and `store
-/// doctor` adds no leftover check (V20-4).
+/// and `branch remove` stay `InUse`. Doctor identifies the blocker and
+/// suggests recovery without releasing the admission.
 #[test]
 fn a_live_mount_intent_of_a_forgotten_sandbox_keeps_holding_the_store() {
     let (home, folder) = project();
     plant_mount(&home, "gone");
     let doctor = ok(&home, "store.doctor", &[("store", t("shop"))]);
-    assert!(!format!("{doctor:?}").contains("gone"), "{doctor:?}");
+    let Some(SdkValue::List(findings)) = doctor.get("findings") else {
+        panic!("missing findings: {doctor:?}");
+    };
+    let holder = findings
+        .iter()
+        .find(|finding| finding.get_text("check") == Some("store.mount_holders"))
+        .expect("historical mount holder finding");
+    assert_eq!(holder.get_text("severity"), Some("warning"));
+    assert!(
+        holder.get_text("message").unwrap().contains("gone"),
+        "{holder:?}"
+    );
+    assert!(
+        holder.get_text("fix").unwrap().contains("compact"),
+        "{holder:?}"
+    );
     for _ in 0..2 {
         let (code, message) = refused(&home, "store.compact", &[("store", t("shop"))]);
         assert_eq!(code, "InUse", "{message}");
@@ -464,6 +479,110 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         .unwrap();
 }
 
+/// Missing control keys say nothing about the runtime or its Store holders.
+#[cfg(target_os = "macos")]
+#[test]
+fn reclaim_missing_keys_preserves_the_remove_retry() {
+    let (home, folder) = project();
+    plant_mount(&home, "sb1");
+    ended_native_sandbox(&home, "shop/api");
+    let dir = layerfs_home::home::paths::sandbox_dir(&home, "sb1");
+    // Reopen probes the recorded process identity. It never starts a daemon.
+    layerfs_machine::record::MachineRecord::from_record(
+        "native",
+        map(&[("daemon", t("/usr/bin/true"))]),
+    )
+    .write(&home)
+    .unwrap();
+    let args = [("sandbox", t("sb1")), ("detail", SdkValue::Bool(true))];
+    let (_, message) = refused(&home, "sandbox.remove", &args);
+    assert!(message.contains("daemon keys"), "{message}");
+    assert!(dir.join("record.json").is_file());
+    assert!(dir
+        .join("workspace")
+        .join(format!("{}.json", "07".repeat(32)))
+        .is_file());
+    assert_eq!(
+        refused(&home, "store.compact", &[("store", t("shop"))]).0,
+        "InUse"
+    );
+    layerfs_home::secrets::save_daemon_keys(&dir, &map(&[])).unwrap();
+    let removed = ok(&home, "sandbox.remove", &args);
+    assert_eq!(removed.get_text("outcome"), Some("already_gone"));
+    assert!(!dir.exists());
+    ok(&home, "project.delete", &[p()]);
+    ok(&home, "store.compact", &[("store", t("shop"))]);
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
+/// Reclaim runs on the runtime's machine, including a Docker worker. A failed
+/// branch lookup must leave the binding available to the next attempt.
+#[test]
+fn reclaim_on_runtime_host_preserves_failed_binding_then_releases_holder() {
+    use layerfs_home::home::{paths, write_record};
+    use layerfs_sandbox::host::{Host, Message};
+    use layerfs_sandbox::record::WorkspaceRecord;
+    let (home, folder) = project();
+    plant_mount(&home, "sb1");
+    let dir = paths::sandbox_dir(&home, "sb1");
+    let daemon = map(&[("container", t("runtime-id"))]);
+    write_record(&dir.join("record.json"), &map(&[("daemon", daemon)])).unwrap();
+    let id = "07".repeat(32);
+    let ws = dir.join("workspace").join(format!("{id}.json"));
+    let bind = |branch| {
+        WorkspaceRecord::mounted(id.clone(), None, branch, "/w/sb1", 1)
+            .write(&ws)
+            .unwrap()
+    };
+    bind("missing");
+    let record = layerfs_store::record::StoreRecord::read(&home, "shop")
+        .unwrap()
+        .unwrap();
+    let open = layerfs_store::open_args::OpenArgs::of_record(&home, "shop", &record).unwrap();
+    let host = Host {
+        home: home.clone(),
+        store: "shop".into(),
+        project: "api".into(),
+        sandbox: Some("sb1".into()),
+        store_record: Some(record),
+        store_path: open.store_path,
+        deploy: None,
+        postgresql: None,
+        message: Message::Absent,
+        started: None,
+    };
+    let reclaim = || layerfs_sandbox::lifecycle::reclaim(&host, "runtime-id", false, &[], &[]);
+    let failure = reclaim().unwrap_err();
+    assert!(failure.message.contains("missing"), "{failure:?}");
+    assert!(dir.join("record.json").is_file());
+    assert!(ws.is_file());
+    assert_eq!(
+        refused(&home, "store.compact", &[("store", t("shop"))]).0,
+        "InUse"
+    );
+    std::fs::remove_file(&ws).unwrap();
+    let held = [String::from("/w/sb1")];
+    let retry = |bindings: &[(String, String, String)]| {
+        layerfs_sandbox::lifecycle::reclaim(&host, "runtime-id", false, &held, bindings)
+    };
+    assert!(retry(&[])
+        .unwrap_err()
+        .message
+        .contains("missing Workspace binding"));
+    assert!(dir.join("record.json").is_file());
+    let forwarded = [(held[0].clone(), id.clone(), String::from("sb1"))];
+    assert_eq!(
+        retry(&forwarded).unwrap().get_text("kind"),
+        Some("Reclaimed")
+    );
+    assert!(!dir.exists());
+    ok(&home, "project.delete", &[p()]);
+    ok(&home, "store.compact", &[("store", t("shop"))]);
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(folder).unwrap();
+}
+
 /// `sandbox.remove sb1 --force`'s `unmounted` and `left`.
 #[cfg(target_os = "macos")]
 fn force_removed(home: &Path) -> (Vec<String>, Vec<String>) {
@@ -515,6 +634,12 @@ fn a_mount_intent_a_forced_remove_cannot_end_is_left() {
           remove` of its Branch and `layerfs store compact` are refused while it remains; nothing \
           on this computer can prove its owner gone, so it stays"]
     );
+    let dir = layerfs_home::home::paths::sandbox_dir(&home, "sb1");
+    assert!(dir.join("record.json").is_file());
+    assert!(dir
+        .join("workspace")
+        .join(format!("{}.json", "07".repeat(32)))
+        .is_file());
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }

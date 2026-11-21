@@ -183,3 +183,13 @@ be gone.
 - [Workers and reach](../machines/workers-and-reach.md): the hello frame
 - [Sandboxes](../sandboxes/README.md): Sandbox records and operations
 - [SDK: home family](../../api/sdk/home.md#homedoctor): `home.doctor`
+
+### Historical mount holders
+
+`layerfs store doctor <store> --detail` and `layerfs project doctor <store/project> --full --detail` compare durable mount admissions with the sandbox and workspace records in the caller's home. Each finding gives the operation ID, scope ID, workspace ID and available placement hints. A project check uses the branch's stored project identity. A matching record establishes placement only. Use sandbox doctor on the owning machine to check runtime health.
+
+1. Find the owning home and machine using the placement hints. If they still have the workspace, use `layerfs workspace unmount <workspace>` there. If the sandbox has stopped, use its sandbox doctor and sandbox removal procedure. Run Store doctor again and confirm the reported operation disappeared.
+2. If the records have already been removed, preserve the detail output and check the actual mount and daemon on the Store's owning machine. A reused sandbox name, missing home record, stopped container or old timestamp alone cannot establish that the mount is gone. For shared PostgreSQL, identify **every** home and machine with access and fence clients against reconnecting. Leave the admission intact whenever any owner or mount cannot be accounted for.
+3. For SQLite, the supported automatic recovery for an eligible mount with a recorded Linux boot identity is `layerfs store compact <store>` after the owning kernel has restarted. For Docker this means the kernel running Docker. Restarting a container can preserve that boot identity. Uncertain admissions and rows without usable ownership evidence require separate investigation.
+4. For a confirmed historical orphan with no lifecycle record to unmount, arrange an offline Store maintenance window with the Store administrator. Stop clients, take a restorable whole-Store backup and use the owning kernel for SQLite. In a write transaction, select the single `gc_intent` row by the operation ID, and compare its `kind` (`mount`), state, scope ID, workspace and placement with the finding. Release only that exact row using all the verified values as conditions. Roll back if the row changed or the affected count differs from one. Preserve other admissions and all object data. PostgreSQL uses `layerfs.gc_intent` in the selected Store database.
+5. Reopen the Store, rerun both doctors and confirm the operation ID is gone before retrying project deletion or compaction. Retain the backup and before/after findings for recovery.

@@ -16,7 +16,6 @@ use crate::lifecycle::WORKSPACES;
 use crate::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 use crate::registry::{sandbox, sandbox_live, Mount};
 use crate::OperationCause;
-use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
 use layerfs_home::helpers::{lock, random, required};
@@ -474,10 +473,8 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
         if force {
-            match api.unmount(token, true).map_err(&mut answered)? {
-                Some(outcome) => Ok(values::force_unmounted(&outcome)),
-                None => values::unmounted(&Unmounted::Closed),
-            }
+            let outcome = api.force_unmount(token, discard).map_err(&mut answered)?;
+            Ok(values::force_unmounted(&outcome))
         } else {
             match api.unmount_checked(token, discard) {
                 Ok(answer) => values::unmounted(&answer),

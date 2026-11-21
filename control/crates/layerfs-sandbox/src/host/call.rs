@@ -109,6 +109,8 @@ pub enum Call {
     Close {
         force: bool,
         held: Option<Vec<String>>,
+        /// Caller-side Workspace bindings for a forwarded daemon.
+        bindings: Vec<(String, String, String)>,
     },
     /// `sandbox.list_workspaces`, with the Workspace `path` it may name.
     ListWorkspaces { path: Option<String> },

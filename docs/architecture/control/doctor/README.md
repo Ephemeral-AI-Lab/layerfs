@@ -160,8 +160,8 @@ then one `workspaces` event each.
 
 ### Store
 
-Six checks, in the frozen order (`CHECKS` in `store_target.rs`); no Store
-data is scanned. A sqlite Store is reached where it lives: in this process
+Seven checks in `CHECKS` order inspect Store records and mount admissions.
+Object contents are outside this check. A sqlite Store is reached where it lives: in this process
 for `native`, else through its machine's worker (the internal worker op
 `store.diagnose` with `cut: schema`, connect 5 s). A PostgreSQL Store is
 reached from this computer, then once more from each machine with a Sandbox
@@ -176,6 +176,7 @@ Under a machine that is not ready only `store.record` is made: the rest are
 | `store.connection` | A sqlite Store's file is where its record says, read through its machine; a PostgreSQL Store's server answers with the saved login; connect and login get 5 s, and a server silent past that fails the check, recorded as this computer's reach without a second dial (LF13) | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
 | `store.identity` | The id in its file is the one in its record; when it is not, `store.schema` is not made | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `store.schema` | Its schema is the one this build reads | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
+| `store.mount_holders` | Checks durable mount admissions against the recorded sandbox and workspace. See [Historical mount holders](checks.md#historical-mount-holders). | `mount_holders.rs` |
 | `store.backups` | sqlite only: each bucket link's backup heads against the Store's; one behind is a notice, `fix: layerfs backup create <store> <bucket>` | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
 
 ### Project
@@ -184,6 +185,7 @@ Under a machine that is not ready only `store.record` is made: the rest are
 | --- | --- | --- |
 | `project.record` | The project's record and its Store's record read | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs) |
 | `project.listed` | The Store's own list (read where its calls run) holds the record's stack id, or its name for a record without one. Not listed: a notice, `fix` `layerfs project delete <project>`, which removes such an entry. A Store this host cannot open or whose file is gone, and a worker that does not answer (`machine`, `not_answering`), block it | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs), [`live.rs`](../../../../control/crates/layerfs-store/src/project/live.rs) |
+| `project.mount_holders` (`--full` only) | Checks admissions affecting this project using its stack and branch identities. | `mount_holders.rs` |
 | `project.data` (`--full` only) | Everything main's head and each live Branch's head reach, read and checked once per project in one pinned read view: each tree's namespace qualified, each object located, reconstructed, admitted and its children's context checked, as the whole-Store scan checks its rows ([Store diagnostics](../../engine/store/diagnostics.md#one-projects-data)). sqlite on this kernel and PostgreSQL in this process; sqlite on a machine through its worker's `store.diagnose` with `cut: project`, its `data` events passed back. The first 64 problems are findings (an unreadable object `not_checked` `lost`), the rest one counted finding | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 
 `project.data` runs only after `project.listed` passed and only for the

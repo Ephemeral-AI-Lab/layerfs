@@ -144,6 +144,96 @@ fn sqlite_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_pro
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// A historical holder still blocks removal after its sandbox record is gone.
+#[test]
+fn historical_mount_holder() {
+    let home = folder("historical-holder");
+    call(&home, "store.create", &[("name", t("shop"))]);
+    let tree = source("holder-source");
+    holder_projects(&home, &tree);
+    let db = rusqlite::Connection::open(find_store_file(&home).unwrap()).unwrap();
+    assert_eq!(db.execute("INSERT INTO gc_intent(op_id,kind,scope_kind,scope_id,workspace,sandbox,machine,branch,state,uncertain,updated_ms) SELECT ?1,'mount','branch',branch_id,?2,'lost-sb','native',name,'live',0,0 FROM branch WHERE name='work'", rusqlite::params![[0x44u8;16].as_slice(), "33".repeat(32)]).unwrap(), 1);
+    check_historical_holder(&home, "sqlite");
+    assert_eq!(
+        db.query_row(
+            "SELECT state FROM gc_intent WHERE sandbox='lost-sb'",
+            [],
+            |r| r.get::<_, String>(0)
+        )
+        .unwrap(),
+        "live"
+    );
+    drop(db);
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(tree).unwrap();
+}
+
+fn holder_projects(home: &Path, tree: &Path) {
+    for project in ["shop/app", "shop/other"] {
+        call(
+            home,
+            "project.init",
+            &[
+                ("project", t(project)),
+                ("folder", t(tree.to_str().unwrap())),
+            ],
+        );
+    }
+    call(
+        home,
+        "branch.fork",
+        &[
+            ("project", t("shop/app")),
+            ("name", t("work")),
+            ("from", t("main")),
+        ],
+    );
+}
+
+fn check_historical_holder(home: &Path, engine: &str) {
+    let store = call(
+        home,
+        "store.doctor",
+        &[("store", t("shop")), ("detail", SdkValue::Bool(true))],
+    );
+    let (project, _) = doctor(home, "shop/app", true);
+    for (report, check) in [
+        (&store, "store.mount_holders"),
+        (&project, "project.mount_holders"),
+    ] {
+        assert_eq!(
+            report.get("ok"),
+            Some(&SdkValue::Bool(false)),
+            "{check}: {report:?}"
+        );
+        let finding = list(report, "findings")
+            .iter()
+            .find(|f| f.get_text("check") == Some(check))
+            .unwrap();
+        let detail = format!("{finding:?}");
+        for fact in ["lost-sb", "native", &"44".repeat(16), &"33".repeat(32)] {
+            assert!(detail.contains(fact), "{detail}");
+        }
+        let fix = finding.get_text("fix").unwrap();
+        assert!(
+            fix.contains(if engine == "sqlite" {
+                "compact"
+            } else {
+                "owning"
+            }),
+            "{fix}"
+        );
+    }
+    assert_eq!(
+        doctor(home, "shop/other", true).0.get("ok"),
+        Some(&SdkValue::Bool(true))
+    );
+    assert_eq!(
+        doctor(home, "shop/app", false).0.get("ok"),
+        Some(&SdkValue::Bool(true))
+    );
+}
+
 /// The same on a PostgreSQL Store, in a database of its own (a 2.0 Store
 /// lives in that database's fixed `layerfs` schema), dropped at the end.
 /// `LAYERFS_TEST_POSTGRES_URL` is `postgresql://user@host:port/db?...`.
@@ -171,25 +261,50 @@ fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each
     // password); the address is connected without it
     let (scheme, rest) = store_url.split_once("://").unwrap();
     let (user, address) = rest.split_once('@').unwrap();
-    call(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(user)),
-            ("password", t("unused")),
-        ],
+    let connect = |home: &Path| {
+        call(
+            home,
+            "store.save_auth",
+            &[
+                ("auth", t("pg")),
+                ("user", t(user)),
+                ("password", t("unused")),
+            ],
+        );
+        call(
+            home,
+            "store.connect",
+            &[
+                ("store", t("shop")),
+                ("url", t(&format!("{scheme}://{address}"))),
+                ("auth", t("pg")),
+                ("synchronous_commit", t("off")),
+            ],
+        );
+    };
+    connect(&home);
+    let tree = source("pg-holder-source");
+    holder_projects(&home, &tree);
+    let mut client = postgres::Client::connect(&store_url, postgres::NoTls).unwrap();
+    assert_eq!(client.execute("INSERT INTO layerfs.gc_intent(op_id,kind,scope_kind,scope_id,workspace,sandbox,machine,branch,state,uncertain,updated_ms) SELECT $1,'mount','branch',branch_id,$2,'lost-sb','native',name,'live',false,0 FROM layerfs.branch WHERE name='work'", &[&&[0x44u8;16][..], &"33".repeat(32)]).unwrap(), 1);
+    check_historical_holder(&home, "postgresql");
+    assert_eq!(
+        client
+            .query_one(
+                "SELECT state FROM layerfs.gc_intent WHERE sandbox='lost-sb'",
+                &[]
+            )
+            .unwrap()
+            .get::<_, String>(0),
+        "live"
     );
-    call(
-        &home,
-        "store.connect",
-        &[
-            ("store", t("shop")),
-            ("url", t(&format!("{scheme}://{address}"))),
-            ("auth", t("pg")),
-            ("synchronous_commit", t("off")),
-        ],
-    );
+    // Reset this dedicated database for the pre-existing object corruption case.
+    drop(client);
+    std::fs::remove_dir_all(&home).unwrap();
+    std::fs::remove_dir_all(tree).unwrap();
+    admin(&format!("DROP DATABASE {database} WITH (FORCE)"));
+    admin(&format!("CREATE DATABASE {database}"));
+    connect(&home);
     // the Store doctor reaches the same Store through the shared admission
     let (store, _) = call_events(
         &home,
@@ -301,6 +416,7 @@ fn check(home: &Path, engine: &str, damage: &dyn Fn(&Path) -> String) {
         [
             ("project.record".to_owned(), "pass".to_owned()),
             ("project.listed".to_owned(), "pass".to_owned()),
+            ("project.mount_holders".to_owned(), "pass".to_owned()),
             ("project.data".to_owned(), "pass".to_owned())
         ],
         "{clean:?}"

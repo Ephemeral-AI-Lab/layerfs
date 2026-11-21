@@ -171,6 +171,8 @@ pub(crate) struct Session {
     pub(crate) state: Mutex<State>,
     /// The connection that holds the publication lane, opened on first use.
     pub(crate) lane: Mutex<Option<Client>>,
+    /// Full transaction ID of this thread’s held lane, published under admission.
+    pub(crate) lane_xid: AtomicU64,
     pub(crate) writable: bool,
     pub(crate) settings: Settings,
     /// The server's version and the Store's frozen policy, read by the
@@ -209,6 +211,30 @@ impl LaneWork {
 }
 
 impl Session {
+    /// Replace only the transaction connection. A diagnostic has its own deadline,
+    /// and a session pinned for advisory locks cannot transfer those locks.
+    pub(super) fn reconnect(&self, state: &mut State) -> Result<(), BackendError> {
+        state.quarantined = true;
+        if self.backend_pid.load(Ordering::SeqCst) != 0 {
+            return Err(BackendError::Closed);
+        }
+        if matches!(state.client, super::driver::Driver::Diagnostic(_)) {
+            return Err(BackendError::Unknown);
+        }
+        let client = self.connector.connect().map_err(|error| {
+            if error == BackendError::Unknown {
+                BackendError::Closed
+            } else {
+                error
+            }
+        })?;
+        state.statements.clear();
+        state.client = super::driver::Driver::Sync(client);
+        state.work.connects += 1;
+        state.quarantined = false;
+        Ok(())
+    }
+
     pub(crate) fn connect_diagnostic_admitted(
         selection: &PostgresSelection,
         deadline: Option<Instant>,
@@ -234,6 +260,7 @@ impl Session {
                 },
             }),
             lane: Mutex::new(None),
+            lane_xid: AtomicU64::new(0),
             writable: false,
             settings,
             server_version: OnceLock::new(),
@@ -264,6 +291,7 @@ impl Session {
                 },
             }),
             lane: Mutex::new(None),
+            lane_xid: AtomicU64::new(0),
             writable,
             settings,
             server_version: OnceLock::new(),

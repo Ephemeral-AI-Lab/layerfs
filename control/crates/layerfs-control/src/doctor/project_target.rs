@@ -36,6 +36,7 @@ const DATA: &str = diagnostic::PROJECT_CHECK;
 pub(super) const CHECKS: &[CheckId] = &[
     CheckId::own(RECORD),
     CheckId::own(LISTED),
+    CheckId::full(super::mount_holders::PROJECT),
     CheckId::full(DATA),
 ];
 
@@ -186,31 +187,56 @@ fn data(probe: &Probe<'_>, store: &StoreRecord, stack: LayerStackId, checks: &mu
     let mut found = Found::default();
     let mut progress = |done: u64, total: u64| (probe.progress)("data", done, total);
     let made = match store.store_ref() {
-        Ok(StoreRef::Postgres { .. }) => diagnostic::postgresql_project(
-            store,
-            &identity,
-            stack,
-            options,
-            &mut |o| found.observe(&o),
-            &mut progress,
-        ),
+        Ok(StoreRef::Postgres { .. }) => {
+            super::mount_holders::result(
+                probe.home,
+                store.name(),
+                true,
+                super::mount_holders::PROJECT,
+                diagnostic::postgresql_mounts(store, &identity, Some(stack), options),
+                checks,
+            );
+            diagnostic::postgresql_project(
+                store,
+                &identity,
+                stack,
+                options,
+                &mut |o| found.observe(&o),
+                &mut progress,
+            )
+        }
         Ok(StoreRef::Sqlite { .. }) => {
             let machine = store.machine().unwrap_or_default();
             match place::on_machine_read(probe.home, &machine) {
-                Ok(Executor::Local) => diagnostic::sqlite_project(
-                    &paths::store_file(probe.home, store.name()),
-                    &identity,
-                    stack,
-                    options,
-                    &mut |o| found.observe(&o),
-                    &mut progress,
-                ),
+                Ok(Executor::Local) => {
+                    super::mount_holders::result(
+                        probe.home,
+                        store.name(),
+                        false,
+                        super::mount_holders::PROJECT,
+                        diagnostic::sqlite_mounts(
+                            &paths::store_file(probe.home, store.name()),
+                            &identity,
+                            Some(stack),
+                        ),
+                        checks,
+                    );
+                    diagnostic::sqlite_project(
+                        &paths::store_file(probe.home, store.name()),
+                        &identity,
+                        stack,
+                        options,
+                        &mut |o| found.observe(&o),
+                        &mut progress,
+                    )
+                }
                 Ok(Executor::Worker(_)) => remote(
                     probe,
                     (store.name(), &machine),
                     &identity,
                     stack,
                     &mut found,
+                    checks,
                 ),
                 Err(refusal) => Err(refusal),
             }
@@ -272,7 +298,7 @@ impl Found {
     }
 
     /// The walk's answer as a worker sends it.
-    fn encode(&self, coverage: ProjectCoverage) -> SdkValue {
+    fn encode(&self, coverage: ProjectCoverage, holders: SdkValue) -> SdkValue {
         let count = |n: u64| SdkValue::Int(i64::try_from(n).unwrap_or(i64::MAX));
         let problems = self.kept.iter().map(|(outcome, message)| {
             let word = if *outcome == Outcome::Fail {
@@ -286,6 +312,7 @@ impl Found {
             ])
         });
         SdkValue::map([
+            ("mount_holders", holders),
             ("trees", count(coverage.trees)),
             ("heads", count(coverage.heads)),
             ("objects", count(coverage.objects)),
@@ -333,6 +360,7 @@ fn remote(
     identity: &Identity,
     stack: LayerStackId,
     found: &mut Found,
+    checks: &mut Checks,
 ) -> Result<ProjectCoverage, SdkRefusal> {
     use layerfs_machine::worker::{diagnostic_connect, Endpoint};
     let saved = layerfs_home::secrets::worker_secret(probe.home, machine)?
@@ -370,6 +398,14 @@ fn remote(
         }
         Ok(())
     })?;
+    super::mount_holders::report(
+        probe.home,
+        store,
+        false,
+        super::mount_holders::PROJECT,
+        answer.get("mount_holders"),
+        checks,
+    );
     Ok(found.decode(&answer))
 }
 
@@ -412,5 +448,8 @@ pub(super) fn in_worker(
             ]));
         },
     )?;
-    Ok(found.encode(coverage))
+    Ok(found.encode(
+        coverage,
+        diagnostic::sqlite_mounts(&paths::store_file(root, name), identity, Some(stack))?,
+    ))
 }

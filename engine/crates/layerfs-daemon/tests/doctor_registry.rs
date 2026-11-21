@@ -234,3 +234,33 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
     drop(service);
     fixture.cleanup();
 }
+
+#[test]
+fn issue_747_probe_reads_the_daemons_store_even_with_an_empty_registry() {
+    let fixture = support::Fixture::new("doctor-store-read", |_| 0);
+    let service = Service::new(fixture.service.store.clone(), &fixture.owner);
+    let probe = || {
+        service
+            .execute_control(&Request::Sdk(SdkCall {
+                method: "sandbox.doctor_workspaces".into(),
+                args: SdkValue::map([("probe", SdkValue::text("store_read"))]),
+            }))
+            .unwrap()
+            .reply
+    };
+    let before = fixture.work();
+    assert!(matches!(probe(), Reply::Sdk(row) if row.get_bool("readable")));
+    let work = fixture.since(before);
+    assert!(
+        work.statements > 0 && work.rows <= 2,
+        "{} statements, {} rows",
+        work.statements,
+        work.rows
+    );
+    assert_eq!(work.object_batches, 0);
+    fixture.service.store.stop_reads();
+    assert!(matches!(page(&service, 0, None), Reply::Sdk(row) if row.get_int("total") == Some(0)));
+    assert!(matches!(probe(), Reply::SdkRefused(error) if error.code == "StoreReadFailed"));
+    drop(service);
+    fixture.cleanup();
+}

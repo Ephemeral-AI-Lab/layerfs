@@ -975,3 +975,58 @@ fn another_boot_stays_conservatively_live_on_a_shared_store() {
         .unwrap();
     assert_eq!(epoch(&mut schema.admin(), project_id), 1);
 }
+
+#[test]
+fn disconnected_mount_cannot_release_or_transfer_its_advisory_keys() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mount_disconnect");
+    let binding = binding("mount_disconnect");
+    let first = schema.create(&binding, CURSOR);
+    let (project_id, branch, _) = project(&first.history, 1);
+    let holder = mount(project_id, branch, 1);
+    let mut observer = schema.admin();
+    // Identify this holder even when unrelated sessions hold advisory keys.
+    let mut selection = schema.selection();
+    let tag = schema.name.clone();
+    let uri =
+        selection.url.starts_with("postgres://") || selection.url.starts_with("postgresql://");
+    selection.url.push_str(if !uri {
+        " "
+    } else if selection.url.contains('?') {
+        "&"
+    } else {
+        "?"
+    });
+    selection.url.push_str(&format!("application_name={tag}"));
+    let old =
+        layerfs_persistence::PostgresHandles::open_writable(&selection, &binding, CURSOR).unwrap();
+    old.history.gc_register(&holder).unwrap();
+    let row = observer.query_one("SELECT DISTINCT a.pid FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid WHERE a.application_name=$1 AND l.locktype='advisory' AND l.granted", &[&tag]).unwrap();
+    let pid: i32 = row.get(0);
+    assert!(observer
+        .query_one("SELECT pg_terminate_backend($1,5000)", &[&pid])
+        .unwrap()
+        .get::<_, bool>(0));
+    assert!(matches!(
+        old.history.gc_release(&op(1)),
+        Err(HistoryError::OwnershipUnavailable)
+    ));
+    assert!(matches!(
+        old.history.gc_register(&mount(project_id, branch, 2)),
+        Err(HistoryError::OwnershipUnavailable)
+    ));
+    let remaining = first
+        .history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].op_id, holder.op_id);
+    let sessions: i64 = observer
+        .query_one(
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name=$1",
+            &[&tag],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(sessions, 0);
+}

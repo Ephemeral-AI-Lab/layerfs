@@ -159,22 +159,26 @@ fn daemon(home: &Path, answer: bool) -> std::thread::JoinHandle<()> {
                 }),
                 Request::Sdk(sdk) => {
                     assert_eq!(sdk.method, "sandbox.doctor_workspaces");
-                    let row = |n: u8, activity: &str| {
-                        SdkValue::map([
-                            ("workspace", t(&id(n))),
-                            ("activity", t(activity)),
-                            ("mounted", SdkValue::Bool(true)),
-                        ])
-                    };
-                    Reply::Sdk(SdkValue::map([
-                        ("generation", t("0000000000000001")),
-                        ("total", SdkValue::Int(2)),
-                        ("next_offset", SdkValue::Null),
-                        (
-                            "workspaces",
-                            SdkValue::List(vec![row(1, "idle"), row(2, "failed")]),
-                        ),
-                    ]))
+                    if sdk.args.get_text("probe") == Some("store_read") {
+                        Reply::Sdk(SdkValue::map([("readable", SdkValue::Bool(true))]))
+                    } else {
+                        let row = |n: u8, activity: &str| {
+                            SdkValue::map([
+                                ("workspace", t(&id(n))),
+                                ("activity", t(activity)),
+                                ("mounted", SdkValue::Bool(true)),
+                            ])
+                        };
+                        Reply::Sdk(SdkValue::map([
+                            ("generation", t("0000000000000001")),
+                            ("total", SdkValue::Int(2)),
+                            ("next_offset", SdkValue::Null),
+                            (
+                                "workspaces",
+                                SdkValue::List(vec![row(1, "idle"), row(2, "failed")]),
+                            ),
+                        ]))
+                    }
                 }
                 Request::EndSession => Reply::SessionEnded,
                 other => panic!("the doctor sends only reads: {other:?}"),

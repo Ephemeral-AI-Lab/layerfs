@@ -23,9 +23,11 @@ pub fn call(host: Host, call: Call) -> Outcome {
         // (#540): a bounded read model, never a product operation
         Call::Capacity => capacity(&host),
         Call::Create { platform } => crate::lifecycle::create(&host, platform.as_deref()),
-        Call::Close { force, held } => {
-            crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default())
-        }
+        Call::Close {
+            force,
+            held,
+            bindings,
+        } => crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default(), &bindings),
         _ => Err(refused(
             "UnknownMethod",
             format!("no operation {}", call.op().name()),
