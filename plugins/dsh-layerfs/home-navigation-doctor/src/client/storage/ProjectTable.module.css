@@ -1,0 +1,593 @@
+/* The shared project table (ProjectTable.tsx): Home › Projects and a
+   Store's Projects tab. A row per project (two lines: name over its newest
+   Commit), open to its sessions or its Sandboxes. The head row and the 20px
+   chevron match the Machines table's.
+   Hover affordances sit under @media (hover: hover). */
+
+/* On the shared Card (ui.module.css), like the Machines table. */
+.card {
+  overflow: hidden;
+  padding: 0;
+  container-type: inline-size;
+}
+
+.table {
+  display: grid;
+  grid-template-columns:
+    20px minmax(220px, 3fr) 64px 72px minmax(84px, auto) minmax(72px, auto)
+    minmax(60px, auto) minmax(60px, auto) minmax(80px, auto) 40px;
+  column-gap: 16px;
+}
+
+.table[data-store-column] {
+  grid-template-columns:
+    20px minmax(168px, 1.5fr) minmax(116px, 1.15fr) repeat(7, minmax(72px, 0.65fr)) 40px;
+}
+
+.group {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.group + .group,
+.head + .group {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 60px;
+  padding: 8px 16px 8px 10px;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.row > * {
+  min-width: 0;
+}
+
+.head {
+  min-height: 0;
+  padding-block: 9px;
+  background: transparent;
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .group > .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.toggle > svg {
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.group[data-open] .toggle > svg {
+  transform: rotate(90deg);
+}
+
+.toggle:focus-visible,
+.sort:focus-visible,
+.name:focus-visible,
+.store:focus-visible,
+.cellLink:focus-visible,
+.add:focus-visible,
+.line:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-alias-link);
+  outline-offset: 1px;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.commitLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* A history LayerFS could not read: its dot (the tip and the fix) and the word. */
+.unread {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.branch {
+  flex: 0 1 auto;
+  max-width: 40%;
+  padding: 0 5px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--dsw-alias-settings-card-fill);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runningPill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-success-primary) 24%, transparent);
+  border-radius: 999px;
+  background: var(--dsw-alias-state-success-bg, color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent));
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-state-success-primary);
+  white-space: nowrap;
+}
+
+.runningPill i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* A sortable heading (a Store's page): the column's name as a quiet button. */
+.sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sort[data-active] {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.sort[data-active]::after {
+  content: ' ↓';
+}
+
+@media (hover: hover) {
+  .sort:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.colSize {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.share {
+  display: block;
+  width: 100%;
+  max-width: 88px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--dsw-alias-settings-card-fill);
+}
+
+.share > span {
+  display: block;
+  height: 100%;
+  margin-inline-start: auto;
+  border-radius: 2px;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.colWhen,
+.colSession {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.name {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .name:hover {
+    text-decoration: underline;
+  }
+}
+
+/* A cell that opens something (the Store, a list): quiet text, no chrome. */
+.store,
+.cellLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary);
+  text-align: start;
+  cursor: pointer;
+}
+
+.store > svg,
+.cellLink > span:first-child {
+  flex: none;
+}
+
+@media (hover: hover) {
+  .store:hover,
+  .cellLink:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dim {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.colSessions,
+.colSandboxes {
+  display: flex;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.table[data-store-column] :is(.colSessions, .colSandboxes, .colSession, .colSize) {
+  justify-content: center;
+  text-align: center;
+}
+
+.table[data-store-column] .colSize { align-items: center; }
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.job {
+  grid-column: 1 / -1;
+  padding: 0 12px 10px 46px;
+  font-size: 12px;
+}
+
+/* An open row: one list at a time, set in like the Machines table's. */
+.detail {
+  grid-column: 1 / -1;
+  padding: 0 12px 12px;
+  cursor: default;
+}
+
+.panel {
+  min-width: 0;
+  padding: 4px 14px 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+}
+
+.listHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.listTitle {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin-right: -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .add:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.empty {
+  margin: 0;
+  max-width: 65ch;
+  padding: 4px 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.error {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lines > li + li {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.line {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% + 16px);
+  min-height: 32px;
+  margin: 0 -8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  text-align: start;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .line:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.sessionLine {
+  grid-template-columns: 14px minmax(0, 1fr) auto 72px;
+}
+
+.sessionId {
+  margin-left: 8px;
+  font-family: var(--ds-font-family-code);
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* A hairline between the list switch and the add verb. */
+.headRule {
+  width: 0.5px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--dsw-alias-border-l3);
+}
+
+.sandboxLine {
+  grid-template-columns: 14px minmax(72px, max-content) minmax(0, 1fr) auto;
+}
+
+.lineIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.lineState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.lineState[data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.lineState[data-tone='warning'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.machine {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.noMatch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 65ch;
+  padding: 24px 4px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Overview uses compact two-line density with breathing room above the 720px fold. */
+.table[data-store-column] .group > .row {
+  min-height: 54px;
+  padding-block: 7px;
+}
+.table[data-store-column] .identity { gap: 10px; }
+.table[data-store-column] .name { font-size: 13.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .toggle > svg {
+    transition: none;
+  }
+}
+
+/* Narrow: Commits, Branches and Last commit go first, then the Store and Size. */
+@container (max-width: 1080px) {
+  .table {
+    grid-template-columns: 20px minmax(180px, 3fr) 64px 72px minmax(84px, auto) minmax(80px, auto) 40px;
+  }
+
+  .table[data-store-column] {
+    grid-template-columns: 20px minmax(150px, 1.5fr) minmax(110px, 1.15fr) repeat(4, minmax(72px, 0.65fr)) 40px;
+  }
+
+  .colCommits,
+  .colBranches,
+  .colWhen {
+    display: none;
+  }
+}
+
+@container (max-width: 780px) {
+  .table,
+  .table[data-store-column] {
+    grid-template-columns: 20px minmax(0, 1fr) 64px 72px minmax(84px, auto) 28px;
+  }
+
+  .colSize,
+  .colStore {
+    display: none;
+  }
+}
+
+/* A phone: the name keeps the room. Sessions and Sandboxes leave the row (the
+   chevron still opens either list, and "N running" stays by the name); the
+   row keeps its name, when a session last changed and its menu. */
+@container (max-width: 480px) {
+  .table,
+  .table[data-store-column] {
+    grid-template-columns: 20px minmax(0, 1fr) minmax(56px, auto) 28px;
+    column-gap: 10px;
+  }
+
+  .colSessions,
+  .colSandboxes {
+    display: none;
+  }
+
+  .row {
+    padding-inline: 8px;
+  }
+}
+
+/* A heading never spills into the next column. */
+.head > [role='columnheader'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table[data-store-column] :is(.branch, .mono, .sessionId) { font-family: inherit; }

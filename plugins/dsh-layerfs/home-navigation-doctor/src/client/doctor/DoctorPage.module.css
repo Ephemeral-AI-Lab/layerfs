@@ -1,0 +1,699 @@
+/* The Doctor page (DoctorPage.tsx, Row.tsx, tips.tsx).
+
+   Tokens named --doc-* are this page's own. They exist because DSH's state
+   colours fail contrast as small marks on a card: success and warn on white
+   (2.3:1 and 2.1:1), idle on either theme. Marks need 3:1 on the card, the
+   hovered row and the detail panel; the tip has its own surface, so its text
+   and marks keep their contrast whatever is under it. The tip and the toasts
+   are drawn in document.body, so they carry the tokens themselves. A button
+   that cannot be pressed still says why in its tip, so its label keeps 4.5:1
+   (--doc-off-*: muted colours, not opacity). */
+.root,
+.tip,
+.toasts {
+  --doc-ok: #15803d;
+  --doc-bad: #d41414;
+  --doc-warn: #b45309;
+  --doc-hollow: #73787f;
+  --doc-run: #3767d6;
+  --doc-link: #2f5fcf;
+  --doc-off-fg: #666b71;
+  --doc-off-fill: #e6e8ea;
+  --doc-off-fill-fg: #5a5e64;
+  --doc-tip-bg: #26282d;
+  --doc-tip-fg: #f9fafb;
+  --doc-tip-fg-2: #cfd3d6;
+  --doc-tip-well: #121316;
+  --doc-tip-ok: #4ade80;
+  --doc-tip-bad: #ff7b7b;
+  --doc-tip-warn: #fbbf24;
+  --doc-tip-hollow: #b6bbc1;
+  --doc-tip-run: #8fb8ff;
+}
+
+:global(body[data-ds-dark-theme]) .root,
+:global(body[data-ds-dark-theme]) .tip,
+:global(body[data-ds-dark-theme]) .toasts {
+  --doc-ok: #22c55e;
+  --doc-bad: #f76a6a;
+  --doc-warn: #f5a524;
+  --doc-hollow: #adb2b8;
+  --doc-run: #7aaaff;
+  --doc-link: #8fb8ff;
+  --doc-off-fg: #adb2b8;
+  --doc-off-fill: #47484c;
+  --doc-off-fill-fg: #cfd3d6;
+  --doc-tip-bg: #4a4b50;
+  --doc-tip-fg: #f9fafb;
+  --doc-tip-fg-2: #dadde0;
+  --doc-tip-well: #2a2b2e;
+}
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  /* the rows fold by the page's own width (a phone, or a wide window with the sidebar open) */
+  container-type: inline-size;
+}
+
+.root code,
+.tip code,
+.tip pre {
+  font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+}
+
+.root :focus-visible {
+  outline: 2px solid var(--doc-run);
+  outline-offset: 1px;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- head ---------- */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 24px;
+}
+
+.headRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding-right: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+  letter-spacing: -0.015em;
+}
+
+.intro {
+  max-width: 65ch;
+  min-height: 20px;
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.source {
+  margin: -8px 4px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.none {
+  margin: 0;
+  padding: 20px 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---------- buttons (DSH Button: primary, outline; size sm) ----------
+   A button that cannot be pressed keeps aria-disabled, not disabled: it stays
+   in the tab order, keeps focus and says why in its tip. */
+.btn {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 28px;
+  min-width: 68px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 150ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn[data-w='check'] { min-width: 68px; }
+.btn[data-w='full'] { min-width: 88px; }
+.btn[data-w='copy'] { min-width: 68px; }
+.btn[data-w='all'] { height: 28px; min-width: 88px; padding: 0 12px; }
+
+.btn[aria-disabled='true'] { cursor: default; }
+.btn[aria-disabled='true']:not([aria-busy='true']) { color: var(--doc-off-fg); }
+.btn[data-variant='primary'][aria-disabled='true']:not([aria-busy='true']) { border-color: transparent; background: var(--doc-off-fill); color: var(--doc-off-fill-fg); }
+.btn[aria-busy='true'] { color: transparent; }
+
+.btn[aria-busy='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 12px;
+  height: 12px;
+  margin: auto;
+  border: 1.5px solid var(--doc-run);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: doc-spin 900ms linear infinite;
+}
+
+/* on the primary fill the spinner takes the label's colour */
+.btn[data-variant='primary'][aria-busy='true']::after {
+  border-color: var(--dsw-alias-label-primary-foreground);
+  border-right-color: transparent;
+}
+
+@media (hover: hover) {
+  /* DSH's hover applies to everything not :disabled; a button that cannot be pressed does not react */
+  .btn[aria-disabled='true']:not([data-variant='primary']):hover { background: transparent; }
+  .btn[aria-disabled='true'][data-variant='primary']:hover { background: var(--dsw-alias-button-primary-fill); }
+  .btn[aria-disabled='true'][data-variant='primary']:not([aria-busy='true']):hover { background: var(--doc-off-fill); }
+}
+
+@keyframes doc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- marks: the plugin's StateDot, always beside words that say the same ----------
+   .dot is the 14px signal slot; .mk a StateDot at check-mark size. */
+.mk {
+  flex: none;
+}
+
+.mkSlot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.dot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- status: the plugin's Signal (dot and hover card), then the status word ---------- */
+.sig {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px 0 2px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.sigWord {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.sig[data-st='problem'],
+.sig[data-st='notice'] { font-weight: 500; }
+
+/* the width of the longest status word, so what follows lines up */
+.line > .sig { min-width: 104px; }
+
+.headSig {
+  height: 28px;
+  gap: 8px;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* what a status says, in its Signal's hover card (the DSH card surface: DSH tokens) */
+.sigCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: min(360px, calc(100vw - 48px));
+  white-space: normal;
+}
+
+.sigCard .tipLine { color: var(--dsw-alias-label-secondary); line-height: 18px; }
+.sigCard ul { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 0; padding: 0; list-style: none; }
+.sigCard li { display: flex; align-items: center; gap: 7px; line-height: 18px; }
+.sigCard li i { font-style: normal; color: var(--dsw-alias-label-secondary); }
+.sigCard li code { font-size: 11.5px; }
+
+.sigCard pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font-family: var(--ds-font-family-code);
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sigCard pre i { font-style: normal; color: var(--dsw-alias-label-secondary); }
+
+/* ---------- this install ---------- */
+.homeBox {
+  padding: 8px 0;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l3));
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-2));
+}
+
+/* ---------- tabs: the shared tab bar (ui/TabBar.tsx) ---------- */
+
+/* ---------- list card and rows ---------- */
+.card {
+  min-width: 0;
+  padding: 8px 0;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l4));
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-2));
+}
+
+.group {
+  padding: 6px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.group:first-child { padding-top: 0; border-top: 0; }
+.group:last-child { padding-bottom: 0; }
+
+.line {
+  --depth: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 48px;
+  margin: 0 6px;
+  padding: 6px 10px 6px 4px;
+  border-radius: var(--dsw-radius-md);
+  cursor: pointer;
+}
+
+.line:not([data-depth='0']) { min-height: 42px; padding-block: 4px; }
+.line[data-flash] { box-shadow: inset 0 0 0 2px var(--doc-run); }
+
+@media (hover: hover) {
+  .line:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+/* one name column at every depth, so the signals line up */
+.rowBtn {
+  display: inline-flex;
+  flex: 0 0 min(264px, 34%);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 4px 0 calc(2px + var(--depth) * 24px);
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line:not([data-depth='0']) .name { font-weight: 400; }
+
+.ico {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.ico svg { display: block; }
+
+.chev {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  transition: transform 120ms ease;
+}
+
+.chev::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--doc-hollow);
+  border-bottom: 1.5px solid var(--doc-hollow);
+  transform: rotate(-45deg);
+}
+
+.rowBtn[aria-expanded='true'] .chev { transform: rotate(90deg); }
+
+/* what follows the signal: the finding's own word, the root cause, the fix, then facts */
+.more {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.word {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fact {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.inside {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cause {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 8px 0 5px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 999px;
+  color: var(--doc-link);
+  font-size: 12px;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.causeName { overflow: hidden; line-height: 1; text-overflow: ellipsis; }
+
+@media (hover: hover) {
+  .cause:hover .causeName { text-decoration: underline; }
+}
+
+.phase { flex: none; line-height: 20px; color: var(--dsw-alias-label-secondary); white-space: nowrap; }
+.live { display: inline-flex; flex: none; align-items: center; gap: 8px; }
+.elapsed { min-width: 36px; line-height: 20px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+.more .btn { height: 28px; min-width: 68px; }
+
+/* the mark group: one mark per check, one focusable signal. Its width is kept
+   from the number of checks its kind has, so nothing beside it moves when the marks land. */
+.marks {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  height: 24px;
+  min-width: calc(var(--n) * 12px + 3px);
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: default;
+}
+
+span.marks { visibility: hidden; }
+
+@media (hover: hover) {
+  button.marks:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+/* Full check and Check keep one slot each on every row, so Check and the marks form columns */
+.acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 164px;
+}
+
+/* ---------- a row's detail: the call, the checks, the fix ---------- */
+.kids { display: block; }
+
+.detail {
+  --depth: 0;
+  --doc-lbl-w: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 14px 8px calc(38px + var(--depth) * 24px);
+  padding: 14px 16px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.cmdLine { display: flex; align-items: flex-start; gap: 8px; }
+
+.cmdLine code {
+  flex: 1 1 0;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 10px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.lbl {
+  flex: none;
+  width: var(--doc-lbl-w);
+  padding-top: 5px;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 calc(var(--doc-lbl-w) + 8px);
+  list-style: none;
+}
+
+.checks li {
+  display: grid;
+  grid-template-columns: minmax(148px, 196px) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+/* each check is a small signal of its own: its tip says what the check is */
+.chk {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 22px;
+  margin: 0 0 0 -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  line-height: 18px;
+  color: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.chk code {
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chk .mk { align-self: center; }
+
+@media (hover: hover) {
+  .chk:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+.res {
+  max-width: 65ch;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the delete confirmation ---------- */
+.modalBody { max-width: 65ch; margin: 0; line-height: 20px; overflow-wrap: anywhere; }
+.modalActions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.modalActions button { display: inline-flex; align-items: center; justify-content: center; height: 30px; min-width: 72px; padding: 0 14px; line-height: 1; }
+
+/* ---------- tip ---------- */
+.tip {
+  --doc-ok: var(--doc-tip-ok);
+  --doc-bad: var(--doc-tip-bad);
+  --doc-warn: var(--doc-tip-warn);
+  --doc-hollow: var(--doc-tip-hollow);
+  --doc-run: var(--doc-tip-run);
+  position: fixed;
+  z-index: 1200;
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  /* drawn in document.body, outside the page's own box sizing */
+  box-sizing: border-box;
+  min-width: 120px;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--doc-tip-bg);
+  color: var(--doc-tip-fg);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08), 0 8px 24px -4px rgba(0, 0, 0, 0.36);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  pointer-events: none;
+}
+
+.tip[data-on] { display: flex; }
+.tip[data-wide] { max-width: min(440px, calc(100vw - 16px)); }
+.tip b { display: flex; align-items: center; gap: 6px; font-weight: 500; overflow-wrap: anywhere; }
+.tipLine { color: var(--doc-tip-fg-2); overflow-wrap: anywhere; }
+.tip ul { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 0; padding: 0; list-style: none; }
+.tip li { display: flex; align-items: center; gap: 7px; line-height: 18px; }
+.tip li .mk { align-self: center; }
+.tip li i { font-style: normal; color: var(--doc-tip-fg-2); }
+.tip li code { font-size: 11.5px; }
+
+.tip pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--doc-tip-well);
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--doc-tip-fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tip pre i { font-style: normal; color: var(--doc-tip-fg-2); }
+
+/* ---------- toast: also the page's polite live region ---------- */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1150;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  box-sizing: border-box;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 9px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--doc-tip-bg);
+  color: var(--doc-tip-fg);
+  box-shadow: 0 0 0 0.5px #ffffff2e, 0 4px 14px 0 #00000052;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ---------- a middling column (the sidebar open): the name column gives room to the word and the fix ---------- */
+@container (max-width: 900px) {
+  .rowBtn { flex-basis: min(200px, 30%); }
+}
+
+/* ---------- narrow (a phone, a narrow column): name and status word on the first line, the rest below ---------- */
+@container (max-width: 760px) {
+  .line { flex-wrap: wrap; padding: 4px 6px 4px 0; }
+  .rowBtn { flex: 1 1 0; gap: 8px; padding-left: calc(2px + var(--depth) * 14px); }
+  .line > .sig { order: 1; min-width: 0; }
+  .more { order: 2; flex: 1 1 100%; padding-left: calc(31px + var(--depth) * 14px); }
+  /* nothing to say: still the line break before the marks */
+  .more[data-thin] { height: 0; overflow: hidden; }
+  .line[data-bare] .more[data-thin] { display: none; }
+  .fact { display: none; }
+  .marks { order: 3; flex: 0 1 auto; flex-wrap: wrap; height: auto; min-height: 24px; min-width: 0; margin-left: calc(27px + var(--depth) * 14px); }
+  .acts { order: 4; min-width: 0; width: auto; margin-left: auto; }
+  .line[data-bare] .marks,
+  .line[data-bare] .acts { display: none; }
+  .detail { margin: 8px 8px 8px calc(12px + var(--depth) * 14px); }
+  .checks { padding-left: 0; }
+  .checks li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .cmdLine { flex-wrap: wrap; }
+  .lbl { width: 100%; padding: 0; text-align: left; }
+}
+
+@media (max-width: 640px) {
+  .toasts { right: 12px; bottom: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn[aria-busy='true']::after { animation: none; border-style: dotted; }
+  .chev,
+  .btn { transition: none; }
+}
+
+.headActions { display: flex; align-items: center; gap: 8px; }

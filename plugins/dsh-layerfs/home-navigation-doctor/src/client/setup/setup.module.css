@@ -1,0 +1,492 @@
+/* Set up LayerFS (docs/specs/layerfs-setup.md §4): the frame (head, foot) comes
+   from the project dialog (projects/setup/dialog.module.css); one column of
+   sections, each with its state in words beside its title.
+   One 4px scale: 4 / 8 / 12 / 16 / 20 / 24. */
+
+.line,
+.runtime {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lineText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.lineTitle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.lineSub {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.lineSub[data-blocked] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.lineActions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.commit {
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mono {
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-weight: 400;
+}
+
+/* ---------- the runtime's pieces ---------- */
+.pieces {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.piece {
+  display: contents;
+}
+
+.pieceLabel {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pieceValue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+
+.verdict {
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.verdict[data-verdict='other'],
+.verdict[data-verdict='missing'] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.verdict[data-verdict='unknown'],
+.verdict[data-verdict='note'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.path {
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.noteBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.errorText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ---------- the runtime picker ---------- */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.pickerHead {
+  display: flex;
+  flex-direction: column;
+}
+
+.runtimes {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.runtime {
+  align-items: center;
+  padding: 8px 12px;
+}
+
+.runtime + .runtime {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.runtimeActive {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.tag {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.other {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.pickerFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ---------- Center and Settings cards ---------- */
+.card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg, 12px);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
+}
+
+.cardTile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.warning {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.warning[data-tone='warning'] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* ---------- the modal: one column ---------- */
+.modal.modal {
+  width: min(640px, 100%);
+}
+
+.scroll {
+  min-height: 0;
+  max-height: min(600px, calc(100vh - 200px));
+  overflow-y: auto;
+  padding: 4px 20px 20px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0 20px;
+}
+
+.section + .section {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.section:last-child {
+  padding-bottom: 4px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionState {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-warn-label);
+  text-align: right;
+}
+
+.sectionState[data-ready] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---------- rows: one per folder, build or platform ---------- */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) max-content 72px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 0;
+}
+
+.row + .row {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+
+}
+
+.rowTile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.rowTitle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowLine {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowLine[data-warn] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rowState {
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.rowState[data-warn] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.rowAction {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rowNote {
+  margin: 0 0 0 44px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowNote[data-warn] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* a line under a row, aligned with its text, with one action */
+.rowFollow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-left: 44px;
+}
+
+.rowFollowText {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rowFollow + .details { margin-top: 8px; }
+.rowFollow > [role="alert"] { flex-basis: 100%; }
+
+/* Details: the build's pieces, folded away by default */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 44px;
+}
+
+.detailsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .detailsToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.detailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Install… / Set up…: what to do, commands to copy, then Check */
+.howto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 44px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.howtoStep {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.howtoLink {
+  color: var(--dsw-alias-link);
+  overflow-wrap: anywhere;
+}
+
+.howtoFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.scroll :is(.mono, .commit, .path) { font-family: inherit; }
+.scroll :is(.rowLine.mono, .path) { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .row { grid-template-columns: 32px minmax(0, 1fr) max-content; gap: 6px 10px; }
+  .rowAction { grid-column: 2 / -1; }
+  .rowFollow, .details, .rowNote { margin-inline-start: 42px; }
+}

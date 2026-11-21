@@ -1,0 +1,225 @@
+/* The log pane (worker log, daemon log): DSH page tokens only, monospace
+   lines in the code-block tint the terminals use. Hover styles sit under
+   @media (hover: hover). */
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  height: max(320px, calc(100vh - 260px));
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 32px;
+}
+
+.find {
+  width: 220px;
+  max-width: 100%;
+}
+
+.findCount,
+.status {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.iconButton {
+  flex: none;
+}
+
+.toggle {
+  padding: 3px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.toggle[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+}
+
+.toggle:focus-visible,
+.earlier:focus-visible,
+.jump:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .toggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.banner {
+  flex: none;
+}
+
+.bannerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.bannerRow p {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 8px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.scroll:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-alias-link);
+  outline-offset: -2px;
+}
+
+.scroll ::selection {
+  background: var(--dsw-alias-bg-document-selection);
+}
+
+/* A line draws only near the screen: 5,000 lines cost the layout of a few dozen. */
+.line {
+  min-height: 18px;
+  font-family: var(--ds-font-family-code);
+  white-space: pre;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 18px;
+}
+
+.wrap .line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.line[data-current] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);
+}
+
+.hit {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 38%, transparent);
+  color: inherit;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-top: 0.5px dashed var(--dsw-alias-border-l2);
+}
+
+.note {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.earlier {
+  display: block;
+  margin: 0 0 6px;
+  padding: 2px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-link);
+  cursor: pointer;
+}
+
+.earlier:disabled {
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+}
+
+.jump {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--dsw-elevation-panel);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+/* The page column's own gap, so Overview keeps the spacing it had without tabs. */
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lfs-section-gap);
+  min-width: 0;
+}
+
+/* Narrow panes: the find field takes its own row. */
+@container (max-width: 560px) {
+  .find {
+    width: 100%;
+  }
+}
+
+/* A page whose tabs come first (the machine page): the tabs take the page's top inset
+   that the head would otherwise have, and the head inside the Overview panel drops it. */
+.tabsTop {
+  margin-top: var(--lfs-page-top-inset, 28px);
+}
+
+:global([data-platform='darwin']) .tabsTop {
+  margin-top: calc(var(--lfs-page-top-inset, 28px) + var(--dsh-frame-top-clearance, 0px));
+}
+
+.panelHead > header {
+  padding-top: 0;
+}

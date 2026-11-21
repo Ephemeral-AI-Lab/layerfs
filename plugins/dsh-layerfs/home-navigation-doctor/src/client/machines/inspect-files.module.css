@@ -1,0 +1,299 @@
+/* The Files tab of a machine and of a Sandbox: a bar (view, path, refresh),
+   then the folders beside the open file. DSH page tokens only; hover styles
+   sit under @media (hover: hover). Below 600 px one column: the folders, or
+   the open file. */
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  height: max(360px, calc(100vh - 260px));
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.pathForm {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pathInput {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 12.5px;
+}
+
+.problem,
+.goingLine {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.problem {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.goingLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.goingPath {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--ds-font-family-code);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.notice p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dismiss:focus-visible,
+.crumb:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.frame {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(240px, 38%) minmax(0, 1fr);
+  min-height: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xl);
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+}
+
+.frame[data-narrow] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.frame > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  border-right: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.frame[data-narrow] .side {
+  border-right: 0;
+}
+
+.sideHead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.filter {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+.crumbPart {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.crumbSep {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.crumb {
+  max-width: 100%;
+  padding: 0 3px;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: none;
+  color: var(--dsw-alias-link);
+  font: inherit;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: pointer;
+}
+
+.crumbHere {
+  padding: 0 3px;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.here {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.treeScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fileHead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.fileName {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* reads in progress and refusals, inside the folder they are about */
+.wait,
+.refusal {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.refusal {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.code {
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-state-error-primary);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+
+/* what follows a row */
+.chip {
+  padding: 0 5px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.chip[data-tone='warning'] {
+  border-color: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.hint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.lock {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .dismiss:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .crumb:hover {
+    text-decoration: underline;
+  }
+}
+
+.stoppedNotice { display: grid; gap: 6px; min-width: 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.stoppedNotice strong { font-weight: 600; color: var(--dsw-alias-label-primary); }
+.stoppedActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block: 4px; }
+.stoppedNotice summary { cursor: pointer; }
+.stoppedNotice p { margin: 6px 0 0; }

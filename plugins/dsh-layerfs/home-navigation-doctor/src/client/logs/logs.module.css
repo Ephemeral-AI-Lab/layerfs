@@ -1,0 +1,519 @@
+/* Logs page: filters, the call table, More, and the Reset confirm. */
+
+.muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---------- filters ---------- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.search {
+  width: 240px;
+  max-width: 100%;
+}
+
+.opSelect {
+  min-width: 180px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px 2px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chipLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .chipClear:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* ---------- table ---------- */
+
+.tableCard {
+  overflow: hidden;
+  /* The table drops low-value columns when its own width runs short (below). */
+  container-type: inline-size;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.table th {
+  padding: 10px 12px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* Fixed content widths (plus 24px padding); the command takes the rest. */
+.wTime { width: 84px; }
+.wClient { width: 48px; }
+.wOutcome { width: 88px; }
+.wMs { width: 64px; }
+.wSaved { width: 132px; }
+.wSession { width: 160px; }
+
+/* A narrow table keeps the command readable: Client and Saved go first.
+   Fixed columns plus their padding take ~750px, so below ~1000px the
+   command would be squeezed to a few characters. */
+@container (max-width: 1000px) {
+  .wClient,
+  .wSaved {
+    display: none;
+  }
+}
+
+/* 12px + 20px line + 12px: a comfortable 44px row. */
+.table td {
+  padding: 12px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table tbody tr + tr td {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.row {
+  cursor: pointer;
+}
+
+.row:focus {
+  outline: none;
+}
+
+.row:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .row:hover td {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.time {
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.commandCell {
+  max-width: 0;
+}
+
+.command {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* `layerfs` quiet, the operation strong, the arguments plain. */
+.cmdBin {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.cmdVerb {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.cmdArgs {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.ok {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* A refusal code or exit code as a pill: the Tag palette in code type. */
+.codeTag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--ds-font-family-code);
+}
+
+.duration {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.saved {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.saved > * + * {
+  margin-inline-start: 6px;
+}
+
+.kind {
+  font-size: 12px;
+}
+
+.hex {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.sessionLabel {
+  display: inline-flex;
+  flex-direction: column;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.sessionLabel > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionName {
+  font-size: 13px;
+}
+
+/* ---------- full command popover (body-portaled, placed by useAnchoredPosition) ---------- */
+
+.popover {
+  position: fixed;
+  z-index: 1100;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(640px, var(--dsh-anchored-max-width, calc(100vw - 24px)));
+  max-height: min(320px, var(--dsh-anchored-max-height, 50vh));
+  overflow: auto;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-panel);
+  cursor: auto;
+}
+
+.popoverText {
+  display: block;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.moreRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* ---------- confirmation ---------- */
+
+.confirmModal {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.dangerPrimary {
+  color: var(--dsw-alias-label-primary-inverted, var(--dsw-alias-label-primary-foreground));
+  background: var(--dsw-alias-state-error-primary);
+}
+
+/* ---------- call detail ---------- */
+
+div.detailModal {
+  width: min(880px, 100%);
+  max-height: 100%;
+  gap: 0;
+  padding: 0;
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 14px 14px 24px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.detailTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.detailOp {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.detailNav {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.detailNav > .muted {
+  margin-inline-end: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.iconOnly {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
+.detailBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lfs-section-gap);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--lfs-section-gap) 24px;
+}
+
+.detailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.copyButton {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.codeBlock {
+  box-sizing: border-box;
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codeBlock:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.factValue {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 8px;
+  max-width: 100%;
+}
+
+.fullHex {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.sessionFact {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+
+.outputStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.outputMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refusalNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.refusalHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.disclosure > summary {
+  width: max-content;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.disclosure > .codeBlock {
+  margin-top: 6px;
+}
+
+.stream {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.streamName {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.outputMissing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 0.5px dashed var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+}
+
+.outputMissingTitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}

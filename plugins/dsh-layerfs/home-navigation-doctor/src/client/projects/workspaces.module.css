@@ -1,0 +1,77 @@
+/* LayerFS view of the sidebar's Workspaces section. The header copies the
+   stock section header's geometry (36px row, tertiary label, actions at the
+   end) so switching views does not move anything. */
+.region {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  margin: 2px 0 4px;
+  padding-left: var(--dsh-sidebar-row-padding, 8px);
+  padding-right: 1px;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 20px;
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.switch {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.switchOn {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+.switchRail {
+  width: 36px;
+  height: 36px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.error {
+  flex: none;
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}

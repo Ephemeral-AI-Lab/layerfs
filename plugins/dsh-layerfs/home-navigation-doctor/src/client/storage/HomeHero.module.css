@@ -1,0 +1,374 @@
+/* Overview open header, quiet status line, notices & semantic multi-color underline tabs (docs/design/DESIGN-overview.md) */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.heroTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.heading,
+.status,
+.tools,
+.actions,
+.toolbar,
+.tabList,
+.tabLabel {
+  display: flex;
+  align-items: center;
+}
+
+.heading,
+.status,
+.toolbar,
+.actions {
+  flex-wrap: wrap;
+}
+
+.heading {
+  align-items: flex-end;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 34px);
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ov-ink-primary, var(--dsw-alias-label-primary));
+}
+
+/* Clean open status line with native semantic status dot colors. */
+.status {
+  gap: 6px 8px;
+  min-height: 24px;
+  color: var(--ov-ink-secondary, var(--dsw-alias-label-secondary));
+}
+
+.signalWrap {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.headline {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 65ch;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--ov-ink-secondary, var(--dsw-alias-label-secondary));
+  overflow-wrap: anywhere;
+}
+
+.status[data-alert] .headline {
+  font-weight: 500;
+  color: var(--ov-ink-primary, var(--dsw-alias-label-primary));
+}
+
+.tools,
+.actions {
+  gap: 6px;
+}
+
+.toolButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  line-height: 1;
+  color: var(--ov-ink-secondary, var(--dsw-alias-label-secondary));
+}
+
+.actionButton,
+.storeActions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.actionIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 1;
+}
+
+/* Full-width bottom-ruled tab bar with brand accent active indicator & semantic status marks. */
+.toolbar {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px 16px;
+  border-bottom: 1px solid var(--ov-border, var(--dsw-alias-border-l2, rgba(24, 24, 27, 0.08)));
+  padding-bottom: 0;
+}
+
+.tabList {
+  gap: 20px;
+  min-width: 0;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ov-ink-tertiary, var(--dsw-alias-label-tertiary));
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 140ms var(--ov-ease, cubic-bezier(0.16, 1, 0.3, 1)),
+    border-color 140ms var(--ov-ease, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+@media (hover: hover) {
+  .tab:hover {
+    color: var(--ov-ink-primary, var(--dsw-alias-label-primary));
+  }
+}
+
+.tab[data-active] {
+  border-bottom-color: var(--ov-accent, var(--dsw-alias-state-business-primary));
+  color: var(--ov-ink-primary, var(--dsw-alias-label-primary));
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  border-radius: 4px 4px 0 0;
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--ov-accent));
+  outline-offset: -2px;
+}
+
+.tabLabel {
+  justify-content: center;
+  gap: 6px;
+}
+
+.count {
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ov-ink-tertiary, var(--dsw-alias-label-tertiary));
+}
+
+.tab[data-active] .count {
+  color: var(--ov-ink-secondary, var(--dsw-alias-label-secondary));
+}
+
+.count[data-tone='warning'] {
+  font-weight: 500;
+  color: var(--ov-warning, var(--dsw-alias-state-warn-primary));
+}
+
+.count[data-tone='danger'] {
+  font-weight: 500;
+  color: var(--ov-danger, var(--dsw-alias-state-error-primary));
+}
+
+.toolbar > .actions {
+  padding-bottom: 6px;
+}
+
+/* Quiet mono runtime metadata — clean without box clutter. */
+.runtime {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--ov-radius-sm, 6px);
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ov-ink-tertiary, var(--dsw-alias-label-tertiary));
+  cursor: pointer;
+  transition: background-color 140ms var(--ov-ease, cubic-bezier(0.16, 1, 0.3, 1)),
+    color 140ms var(--ov-ease, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.runtime[data-tone='danger'] {
+  color: var(--ov-danger, var(--dsw-alias-state-error-primary));
+}
+
+@media (hover: hover) {
+  .runtime:hover {
+    background: var(--ov-hover, var(--dsw-alias-interactive-bg-hover));
+    color: var(--ov-ink-primary, var(--dsw-alias-label-primary));
+  }
+}
+
+.runtime:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--ov-accent));
+  outline-offset: 2px;
+}
+
+.statusActions {
+  display: inline-flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.statusActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.acts {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.refusal {
+  display: flex;
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--ov-danger, var(--dsw-alias-state-error-primary)) 24%, transparent);
+  border-radius: var(--ov-radius-sm, 6px);
+  background: color-mix(in srgb, var(--ov-danger, var(--dsw-alias-state-error-primary)) 7%, transparent);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.notices {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--ov-border, var(--dsw-alias-border-l2, rgba(24, 24, 27, 0.08)));
+  border-radius: var(--ov-radius-lg, 8px);
+  background: var(--ov-surface, var(--dsw-alias-bg-layer-1, #FCFCFD));
+  box-shadow: var(--ov-shadow);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 9px 0;
+}
+
+.notice + .notice {
+  border-top: 1px solid var(--ov-border, var(--dsw-alias-border-l2, rgba(24, 24, 27, 0.08)));
+}
+
+.noticeTitle {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 65ch;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ov-ink-primary, var(--dsw-alias-label-primary));
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .tabList {
+    gap: 14px;
+  }
+
+  .statusActions {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .runtime {
+    transition: none;
+  }
+}
+
+.dockerNotice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.dockerNotice::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ov-warning);
+}
+.dockerNotice::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border: solid var(--dsw-alias-label-secondary);
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.dockerNotice[aria-expanded='true']::after { transform: rotate(225deg); }
+.dockerNotice:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dockerDetail {
+  align-self: flex-start;
+  box-sizing: border-box;
+  max-width: min(100%, 64ch);
+  margin-top: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+.dockerMachines { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+
+.storeActions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
