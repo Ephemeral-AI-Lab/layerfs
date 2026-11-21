@@ -55,7 +55,7 @@ fn home_with_box() -> (PathBuf, PathBuf) {
     // `box` records its provider name, as every 2.0 create does
     for (name, platform, vm_name) in [
         ("native", "native", None),
-        ("box", "lima", Some("layerfs-test-box")),
+        ("box", "lima", Some("layerfs-00000000-box")),
     ] {
         let mut record = SdkValue::map([
             ("name", t(name)),
@@ -598,7 +598,7 @@ fn compact_of_a_remote_sqlite_store_takes_its_machines_worker_route() {
         &SdkValue::map([
             ("name", t("box")),
             ("platform", t("lima")),
-            ("vm_name", t("layerfs-test-box")),
+            ("vm_name", t("layerfs-00000000-box")),
         ]),
     )
     .unwrap();

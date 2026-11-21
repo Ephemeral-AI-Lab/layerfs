@@ -16,6 +16,7 @@
 //! records apply in any order on the worker; the `M` records (modes and
 //! times, which a later write or entry would undo) are gathered in parts of
 //! their own, each sent only after every part before it was answered.
+use super::frame::CopyCounts;
 use super::parts::Parts;
 use super::tree::{header, Record};
 use crate::place::Worker;
@@ -232,16 +233,28 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
 }
 
 /// Walks `folder` once without sending: refuses what Init would refuse and
-/// answers the bytes of its regular files.
-pub fn measure(folder: &Path, project: &str) -> Result<u64> {
-    let mut total = 0u64;
+/// answers the entries, regular files and bytes the copy will hold. Hard
+/// links count once per path, as the copy carries their bytes per path.
+pub fn measure(folder: &Path, project: &str) -> Result<CopyCounts> {
+    let mut counts = CopyCounts {
+        entries: 1,
+        ..CopyCounts::default()
+    };
     walk(folder, project, &mut |_, _, visit| {
-        if let Visit::File(meta) = visit {
-            total = total.saturating_add(meta.len());
+        match visit {
+            Visit::Enter | Visit::Link(..) => {
+                counts.entries = counts.entries.saturating_add(1);
+            }
+            Visit::File(meta) => {
+                counts.entries = counts.entries.saturating_add(1);
+                counts.files = counts.files.saturating_add(1);
+                counts.bytes = counts.bytes.saturating_add(meta.len());
+            }
+            Visit::Leave(_) => {}
         }
         Ok(())
     })?;
-    Ok(total)
+    Ok(counts)
 }
 
 /// Refuses `Capacity` unless the machine has the copy's `total` bytes and

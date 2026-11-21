@@ -6,6 +6,7 @@
 use layerfs_api::home::{paths, write_entity};
 use layerfs_api::json;
 use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -196,16 +197,47 @@ fn sqlite_store(home: &Path, name: &str, machine: &str) {
     .unwrap();
 }
 
+/// A decodable sqlite `StoreManifest`, as a project record holds it.
+fn manifest() -> SdkValue {
+    SdkValue::Bytes(
+        StoreManifest {
+            provider: ProviderKind::Sqlite,
+            locator: "/layerfs/store/shop.sqlite".into(),
+            profile: StoreProfile::Disposable,
+            binding: vec![1; 16],
+            cursor_key: [7; 32],
+            stack: [3; 17],
+            branch: [4; 17],
+            root: [5; 32],
+            bytes: 1,
+            host_sqlite: "3.45.1".into(),
+            daemon_sqlite: None,
+        }
+        .encode()
+        .expect("a manifest"),
+    )
+}
+
+/// A project record `name` a local sqlite project can be `ready` from: its
+/// `manifest` and installed manifest both decode.
+fn complete_project(home: &Path, store: &str, name: &str) {
+    let manifest = manifest();
+    write_entity(
+        &paths::project_record(home, store, name),
+        &SdkValue::map([
+            ("name", t(name)),
+            ("manifest", manifest.clone()),
+            ("installed", manifest),
+        ]),
+    )
+    .unwrap();
+}
 #[test]
 fn a_project_s_record_is_checked_against_its_store() {
     let home = tempdir("project");
     short(&home, "home.init", &[]);
     sqlite_store(&home, "shop", "native");
-    write_entity(
-        &paths::project_record(&home, "shop", "old"),
-        &SdkValue::map([("name", t("old"))]),
-    )
-    .unwrap();
+    complete_project(&home, "shop", "old");
     let (answer, events) = call(
         &home,
         "project.doctor",
@@ -259,6 +291,43 @@ fn a_project_s_record_is_checked_against_its_store() {
         ]
     );
     assert_eq!(list(&full, "not_checked"), list(&report, "not_checked"));
+    let _ = std::fs::remove_dir_all(home);
+}
+
+#[test]
+fn a_project_record_that_cannot_be_used_fails_its_record_check() {
+    let home = tempdir("project-incomplete");
+    short(&home, "home.init", &[]);
+    sqlite_store(&home, "shop", "native");
+    write_entity(
+        &paths::project_record(&home, "shop", "old"),
+        &SdkValue::map([("name", t("old"))]),
+    )
+    .unwrap();
+    let (answer, _) = call(
+        &home,
+        "project.doctor",
+        &[("project", t("shop/old")), ("detail", SdkValue::Bool(true))],
+    );
+    let report = answer.unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let rows = list(report.get("tree").unwrap(), "checks");
+    assert_eq!(rows.len(), 1, "{report:?}");
+    assert_eq!(rows[0].get_text("check"), Some("project.record"));
+    assert_eq!(rows[0].get_text("outcome"), Some("error"));
+    // the finding names the field and the delete that clears the entry;
+    // the Store is never asked, so `project.listed` has no row
+    let found = &list(&report, "findings")[0];
+    assert_eq!(found.get_text("check"), Some("project.record"));
+    assert_eq!(found.get_text("severity"), Some("error"));
+    assert!(
+        found.get_text("message").unwrap().contains("`manifest`"),
+        "{found:?}"
+    );
+    assert_eq!(
+        found.get_text("fix"),
+        Some("layerfs project delete shop/old")
+    );
     let _ = std::fs::remove_dir_all(home);
 }
 

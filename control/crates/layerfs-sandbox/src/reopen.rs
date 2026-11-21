@@ -14,6 +14,7 @@ use crate::runtime::NATIVE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::process::LocalProcess;
 use layerfs_home::helpers;
+use layerfs_home::home;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix};
 #[cfg(target_os = "macos")]
@@ -211,8 +212,12 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
     // nothing is stripped from it
     let name = helpers::required(value.name(), "name")?;
     let given = crate::lifecycle::sandbox_name(host.deploy(), id)?;
-    let named = name == given;
-    let expected = crate::launch::local::directory(host.deploy(), id, &given, directory.parent())?;
+    let legacy = match home::opened(&host.home) {
+        Ok(file) => format!("{}{}", layerfs_home::names::legacy_prefix(&file.id), id),
+        Err(_) => String::new(),
+    };
+    let named = name == given || (!legacy.is_empty() && name == legacy);
+    let expected = crate::launch::local::directory(host.deploy(), id, name, directory.parent())?;
     if !named || directory != expected {
         let refusal = refused(
             "InvalidInput",

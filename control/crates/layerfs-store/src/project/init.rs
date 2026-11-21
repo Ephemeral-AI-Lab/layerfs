@@ -54,6 +54,29 @@ pub fn in_worker(root: &Path, frame: &InitFrame) -> Outcome {
         ));
     };
     let add = || {
+        // The caller counted what it sent; the copy must hold exactly that
+        // before the add changes the Store or an entry. A short copy (a
+        // part that did not apply) is refused and removed whole.
+        if let Some(expected) = frame.counts {
+            let found = super::staged::counts(&staged)?;
+            if found != expected {
+                return Err(refused(
+                    "Failed",
+                    format!(
+                        "the folder copy at {} holds {} entries, {} files and {} bytes; \
+                         the caller sent {} entries, {} files and {} bytes: it is short, so \
+                         nothing was added",
+                        staged.display(),
+                        found.entries,
+                        found.files,
+                        found.bytes,
+                        expected.entries,
+                        expected.files,
+                        expected.bytes,
+                    ),
+                ));
+            }
+        }
         let _lease = crate::lease::hold_locked(root, &frame.store)?;
         crate::project::add::add_project(&ProjectAdd {
             home: root.to_path_buf(),

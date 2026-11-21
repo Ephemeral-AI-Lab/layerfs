@@ -19,7 +19,7 @@
 //! already there is a collision (`Conflict`, a case-insensitive host's
 //! `A` and `a` included), never merged or overwritten, and every folder on
 //! a record's way must already be a real directory.
-use super::frame::{StageFrame, StageStep};
+use super::frame::{CopyCounts, StageFrame, StageStep};
 use super::tree::{Reader, Record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -37,6 +37,49 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// Where copy `id` is staged under the worker's `root`.
 pub fn folder(root: &Path, id: &str) -> PathBuf {
     root.join("incoming").join(format!("init-{id}"))
+}
+
+/// What staging folder `dir` holds, as [`CopyCounts`] counts a copy:
+/// entries (the folder itself included), regular files and their bytes. A
+/// symlink is one entry and no file; a socket, FIFO or device file is
+/// refused (a copy never holds one).
+pub fn counts(dir: &Path) -> Result<CopyCounts> {
+    fn walk(dir: &Path, counts: &mut CopyCounts) -> Result<()> {
+        let entries =
+            fs::read_dir(dir).map_err(|e| refused("Failed", format!("{}: {e}", dir.display())))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| refused("Failed", format!("{}: {e}", dir.display())))?;
+            let at = entry.path();
+            let meta = fs::symlink_metadata(&at)
+                .map_err(|e| refused("Failed", format!("{}: {e}", at.display())))?;
+            counts.entries = counts.entries.saturating_add(1);
+            let kind = meta.file_type();
+            if kind.is_symlink() {
+                continue;
+            }
+            if kind.is_dir() {
+                walk(&at, counts)?;
+            } else if kind.is_file() {
+                counts.files = counts.files.saturating_add(1);
+                counts.bytes = counts.bytes.saturating_add(meta.len());
+            } else {
+                return Err(refused(
+                    "Failed",
+                    format!(
+                        "{}: a socket, FIFO or device file is not part of a copy",
+                        at.display()
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+    let mut counts = CopyCounts {
+        entries: 1,
+        ..CopyCounts::default()
+    };
+    walk(dir, &mut counts)?;
+    Ok(counts)
 }
 
 /// `project.stage`: `write` applies one part of the copy, `discard`

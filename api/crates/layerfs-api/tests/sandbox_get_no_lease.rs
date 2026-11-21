@@ -335,7 +335,7 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
         ("daemon", t(&daemon)),
     ];
     // every 2.0 create records its provider name; `native` has none
-    let vm_name = format!("layerfs-test-{machine}");
+    let vm_name = format!("layerfs-00000000-{machine}");
     if platform != "native" {
         fields.push(("vm_name", t(&vm_name)));
     }

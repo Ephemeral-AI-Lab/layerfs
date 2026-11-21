@@ -225,7 +225,7 @@ fn init_on_worker(
         folder,
         timeout,
     } = call;
-    let total = send::measure(Path::new(folder), name)?;
+    let counts = send::measure(Path::new(folder), name)?;
     let copy = send::Copy {
         home: &home,
         store,
@@ -235,7 +235,7 @@ fn init_on_worker(
         id: send::new_id()?,
         timeout_ms: timeout,
     };
-    send::room(&mut worker, &copy, total)?;
+    send::room(&mut worker, &copy, counts.bytes)?;
     // the lease is taken under the Store's lock with the record read there
     let (lease, record) = lease::claim(&home, store)?;
     // the copy is named on the Init's `op`, so the call that settles an
@@ -245,13 +245,14 @@ fn init_on_worker(
         ("machine", SdkValue::text(machine)),
     ]);
     op::phase_with(&home, store.as_str(), name, "send", left)?;
-    send::send(events, &worker, &copy, total)?;
+    send::send(events, &worker, &copy, counts.bytes)?;
     let request = InitFrame {
         store: store.clone(),
         name: Some(name.to_owned()),
         staged: copy.id.clone(),
         timeout_ms: Some(timeout),
         store_record: Some(record.to_record().clone()),
+        counts: Some(counts),
     }
     .encode();
     progress(events, "install", None);

@@ -2,6 +2,12 @@
 //! §9.2): its name, its LayerStack (a PostgreSQL Store's) and when it was
 //! made. The record also holds the sqlite project's manifest, which
 //! `sandbox/files.rs` reads and writes with the rest kept.
+//!
+//! A local sqlite record is usable only when that `manifest` decodes and,
+//! once installed, its `installed` manifest does too: [`ProjectRecord::complete`]
+//! and [`ProjectRecord::ready`] are the one decision `project.get`/`list`, the
+//! project doctor and the home tree share (c7).
+use crate::place::{self, Executor};
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
@@ -9,6 +15,7 @@ use layerfs_bridge::sdk_values::unhex;
 use layerfs_history::LayerStackId;
 use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
 use layerfs_home::op::Op;
+use layerfs_home::outcome::{refused, shell_word, with_fix};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -77,6 +84,87 @@ impl ProjectRecord {
     /// When the project was made, as its record holds it.
     pub fn created(&self) -> Option<&SdkValue> {
         self.fields.get("created")
+    }
+
+    /// The delete that clears a record this build cannot use: the project is
+    /// on record, so its entry (not a bare folder) is what `project prune`
+    /// refuses to touch.
+    fn delete_fix(&self) -> String {
+        format!(
+            "layerfs project delete {store}/{name}",
+            store = shell_word(&self.store),
+            name = shell_word(&self.name)
+        )
+    }
+
+    /// Whether this record is one that must carry a Store manifest: a
+    /// sqlite Store this computer runs locally. A PostgreSQL record holds
+    /// its `stack` instead, and a worker-placed sqlite record is written and
+    /// read on its machine, so both stay valid here (c7).
+    fn local_sqlite(&self, home: &Path, store: &StoreRecord) -> bool {
+        let Ok(kind) = store.store_ref() else {
+            return false;
+        };
+        matches!(kind, crate::record::StoreRef::Sqlite { .. })
+            && matches!(place::plan(home, kind), Ok(Executor::Local))
+    }
+
+    /// The record's `field` manifest, decoded; a missing field or one that
+    /// does not decode is `Failed`, naming the field and the decode error,
+    /// with this project's delete as its fix.
+    fn decode_field(&self, field: &str) -> Result<StoreManifest> {
+        match self.fields.get(field) {
+            Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).map_err(|error| {
+                with_fix(
+                    refused(
+                        "Failed",
+                        format!("the project record's `{field}` does not decode: {error}"),
+                    ),
+                    self.delete_fix(),
+                )
+            }),
+            _ => Err(with_fix(
+                refused(
+                    "Failed",
+                    format!("the project record's `{field}` is missing"),
+                ),
+                self.delete_fix(),
+            )),
+        }
+    }
+
+    /// Whether this record can be used at all (c7): a local sqlite project
+    /// has a `manifest` that decodes, and an `installed` it carries decodes
+    /// too. A PostgreSQL record and a worker-placed sqlite record are always
+    /// complete here (see [`Self::local_sqlite`]).
+    pub fn complete(&self, home: &Path, store: &StoreRecord) -> Result<()> {
+        if !self.local_sqlite(home, store) {
+            return Ok(());
+        }
+        self.decode_field("manifest")?;
+        if matches!(self.fields.get("installed"), Some(SdkValue::Bytes(_))) {
+            self.decode_field("installed")?;
+        }
+        Ok(())
+    }
+
+    /// Whether this record is complete *and* carries the `installed`
+    /// manifest a Sandbox opens: a local sqlite project without it is not
+    /// `ready` (`sandbox create` refuses until it is imported again). This is
+    /// the decision `project.get`/`project.list`, the project doctor and the
+    /// home tree share.
+    pub fn ready(&self, home: &Path, store: &StoreRecord) -> Result<()> {
+        if !self.local_sqlite(home, store) {
+            return Ok(());
+        }
+        self.complete(home, store)?;
+        if matches!(self.fields.get("installed"), Some(SdkValue::Bytes(_))) {
+            return Ok(());
+        }
+        Err(with_fix(
+            refused("Failed", "the project record's `installed` is missing"),
+            self.delete_fix(),
+        ))
     }
 
     /// The project's LayerStack identity as its record holds it (S §4.2):

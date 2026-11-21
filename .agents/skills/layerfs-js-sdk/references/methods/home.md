@@ -10,7 +10,7 @@
 > needs this family; a folder scope refuses it.
 
 ```js
-home.init()
+home.init({ adopt })            // { adopt: true } writes the marker for a home whose data is there
 home.get({ with: ["platforms", "tree"] })
 home.log({ call, project, client, tag, outcome, since, limit, cursor })
 home.clear_log()
@@ -25,10 +25,23 @@ The home is `LAYERFS_HOME` (default `~/.layerfs`), or the `home` of
 
 `init` creates the home and leaves a current home as it is. Short:
 `{ home }`, with `unchanged: true` for a current home; long `outcome` is
-`created` or `unchanged`. A folder that is not a LayerFS 2.0 home (an older
-LayerFS's included) is not converted or written: it is refused `Unsupported`
-with the `fix` `mv <home> <home>.old && layerfs home init`, which moves it
-aside and makes a new home.
+`created`, `unchanged` or `adopted`. A folder that is not a LayerFS 2.0 home
+(an older LayerFS's included) is not converted or written: it is refused
+`Unsupported` with the `fix` `mv <home> <home>.old && layerfs home init`,
+which moves it aside and makes a new home.
+
+A real home whose data (`store/`, `machine/`, `sandbox/`, `backup/`,
+`secret/`, `trace/`, `log/`, `incoming/`, `generation`) is there but whose
+`layerfs.json` is missing is not empty and not foreign: it is refused
+`Unsupported` with `fix: layerfs home init --adopt` (never `mv`). With
+`adopt: true` the call writes the marker and nothing else: the id is the
+longest prefix its records agree on plus a random tail (`id_source:
+"records"`), or fresh when no record names the home (`id_source: "fresh"`);
+`warnings` is a read only audit (missing/unreadable parts and records, a
+part not 0700, a leftover temporary, an `incoming/init-*` copy); records
+that disagree or cannot be read are refused. The data is never moved or
+rewritten. An older backup's full `layerfs-exported-from` will not match an
+adopted id. `mv` is only for when you do not want the data.
 
 `get` answers the home's state and build. Short: `{ home, state, version }`,
 with `generation` when ready (a counter that moves each time a record of the

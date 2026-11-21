@@ -53,7 +53,7 @@ fn home_with_shop() -> (PathBuf, PathBuf) {
     // `box` records its provider name, as every 2.0 create does
     for (name, platform, vm_name) in [
         ("native", "native", None),
-        ("box", "lima", Some("layerfs-test-box")),
+        ("box", "lima", Some("layerfs-00000000-box")),
     ] {
         let mut record = SdkValue::map([
             ("name", t(name)),
@@ -411,7 +411,7 @@ fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_clean
         &SdkValue::map([
             ("name", t("other")),
             ("platform", t("lima")),
-            ("vm_name", t("layerfs-test-other")),
+            ("vm_name", t("layerfs-00000000-other")),
         ]),
     )
     .unwrap();

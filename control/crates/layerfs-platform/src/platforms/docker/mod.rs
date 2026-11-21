@@ -24,7 +24,7 @@ pub(crate) use images::cached_image;
 pub(crate) use power::{load_image, start, stop};
 pub(crate) use profile::PROFILE;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(crate) use unix::{guest, host_address, provider_state, status};
+pub(crate) use unix::{guest, host_address, provider_state, status, volumes};
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub(crate) use windows::{
     cached_image, guest, host_address, load_image, provider_state, start, status, stop,

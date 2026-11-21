@@ -3,14 +3,16 @@
 //! reads a project (`layerfs_store::project::discovery::project`, then the
 //! installed manifest).
 use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::provision::{ProviderKind, StoreProfile};
+use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{BranchId, LayerStackId};
 use layerfs_home::home::{paths, private_dir};
+use layerfs_home::outcome::FIX;
 use layerfs_store::backup::restored::{records, Found, Main, Restored};
 use layerfs_store::identity::{Identity, Kind};
 use layerfs_store::project::add;
 use layerfs_store::project::discovery;
 use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 
 const STORE: &str = "box";
@@ -72,6 +74,46 @@ fn listed() -> Vec<Found> {
     }]
 }
 
+/// A Store record of `machine`, as its record holds it.
+fn store_record(machine: &str) -> StoreRecord {
+    StoreRecord::from_record(
+        STORE,
+        SdkValue::map([
+            ("name", SdkValue::text(STORE)),
+            ("kind", SdkValue::text("sqlite")),
+            ("machine", SdkValue::text(machine)),
+        ]),
+    )
+}
+
+/// A project record with `fields` beside its name.
+fn project(fields: Vec<(&str, SdkValue)>) -> ProjectRecord {
+    let mut record = vec![("name".to_owned(), SdkValue::text(PROJECT))];
+    record.extend((fields.into_iter()).map(|(name, value)| (name.to_owned(), value)));
+    ProjectRecord::from_record(STORE, PROJECT, SdkValue::Map(record))
+}
+
+/// A decodable sqlite `StoreManifest`.
+fn manifest() -> StoreManifest {
+    StoreManifest {
+        provider: ProviderKind::Sqlite,
+        locator: "/layerfs/store/box.sqlite".into(),
+        profile: StoreProfile::Disposable,
+        binding: vec![7; 32],
+        cursor_key: [9; 32],
+        stack: [3; 17],
+        branch: [4; 17],
+        root: [5; 32],
+        bytes: 1234,
+        host_sqlite: SQLITE.into(),
+        daemon_sqlite: None,
+    }
+}
+
+/// The refusal's fix line, if it carries one.
+fn fix(refusal: &layerfs_bridge::control::SdkRefusal) -> Option<String> {
+    refusal.detail.get_text(FIX).map(str::to_owned)
+}
 #[test]
 fn a_restored_project_reads_as_a_sandbox_reads_it() {
     let home = home("reads");
@@ -230,11 +272,17 @@ fn a_project_without_a_main_branch_keeps_the_listing_record() {
         .expect("the record")
         .expect("a record");
     assert!(record.to_record().get("manifest").is_none());
-    // the read a Sandbox makes still refuses it: unchanged by this fix
+    // the read a Sandbox makes refuses it as a project that exists but
+    // cannot be used: `Failed` with the delete that clears its entry (c7)
     let refusal = discovery::project(Some(&home), Some(STORE), Some(PROJECT))
         .err()
         .expect("refused");
-    assert_eq!(refusal.code, "NoSuchProject");
+    assert_eq!(refusal.code, "Failed");
+    assert_eq!(refusal.message, "no complete project manifest");
+    assert_eq!(
+        fix(&refusal).as_deref(),
+        Some("layerfs project delete box/proj")
+    );
 }
 
 #[test]
@@ -247,4 +295,125 @@ fn an_entry_of_a_project_the_store_lacks_is_removed() {
         .write(&home)
         .expect("written");
     assert!(!paths::project_dir(&home, STORE, "gone").exists());
+}
+
+#[test]
+fn a_local_sqlite_record_needs_its_manifests_to_be_usable() {
+    let home = home("complete");
+    let store = store_record("native");
+    let bare = project(vec![]);
+
+    let incomplete = bare.complete(&home, &store).expect_err("no manifest");
+    assert_eq!(incomplete.code, "Failed");
+    assert!(
+        incomplete.message.contains("`manifest`"),
+        "{}",
+        incomplete.message
+    );
+    assert!(
+        incomplete.message.contains("missing"),
+        "{}",
+        incomplete.message
+    );
+    assert_eq!(
+        fix(&incomplete).as_deref(),
+        Some("layerfs project delete box/proj")
+    );
+    let ready = bare.ready(&home, &store).expect_err("not ready");
+    assert!(ready.message.contains("`manifest`"), "{}", ready.message);
+    assert_eq!(fix(&ready), fix(&incomplete));
+
+    let with_manifest = manifest();
+    let record = project(vec![(
+        "manifest",
+        SdkValue::Bytes(with_manifest.encode().expect("a manifest")),
+    )]);
+    record.complete(&home, &store).expect("a manifest");
+    let missing = record.ready(&home, &store).expect_err("no installed");
+    assert!(
+        missing.message.contains("`installed`"),
+        "{}",
+        missing.message
+    );
+    assert_eq!(
+        fix(&missing).as_deref(),
+        Some("layerfs project delete box/proj")
+    );
+
+    let mut installed = with_manifest.clone();
+    installed.daemon_sqlite = Some(SQLITE.to_owned());
+    let record = record.with(
+        "installed",
+        SdkValue::Bytes(installed.encode().expect("an installed manifest")),
+    );
+    record.ready(&home, &store).expect("ready");
+}
+
+#[test]
+fn a_corrupt_manifest_is_named_with_its_field_and_decode_error() {
+    let home = home("corrupt");
+    let store = store_record("native");
+    let record = project(vec![("manifest", SdkValue::Bytes(vec![0; 8]))]);
+    let refusal = record.complete(&home, &store).expect_err("corrupt");
+    assert_eq!(refusal.code, "Failed");
+    assert!(
+        refusal.message.contains("`manifest`"),
+        "{}",
+        refusal.message
+    );
+    assert!(
+        refusal.message.contains("does not decode"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(
+        fix(&refusal).as_deref(),
+        Some("layerfs project delete box/proj")
+    );
+
+    let good = manifest();
+    let record = project(vec![
+        (
+            "manifest",
+            SdkValue::Bytes(good.encode().expect("a manifest")),
+        ),
+        ("installed", SdkValue::Bytes(vec![0; 8])),
+    ]);
+    let refusal = record
+        .complete(&home, &store)
+        .expect_err("corrupt installed");
+    assert!(
+        refusal.message.contains("`installed`"),
+        "{}",
+        refusal.message
+    );
+    assert!(
+        refusal.message.contains("does not decode"),
+        "{}",
+        refusal.message
+    );
+}
+
+#[test]
+fn a_postgresql_and_a_worker_placed_record_stay_complete() {
+    let home = home("elsewhere");
+    let postgres = StoreRecord::from_record(
+        STORE,
+        SdkValue::map([
+            ("name", SdkValue::text(STORE)),
+            ("kind", SdkValue::text("postgresql")),
+            ("url", SdkValue::text("postgresql://db.invalid/box")),
+        ]),
+    );
+    let bare = project(vec![("stack", SdkValue::text("03"))]);
+    bare.complete(&home, &postgres)
+        .expect("a PostgreSQL record is complete");
+    bare.ready(&home, &postgres)
+        .expect("a PostgreSQL record is ready");
+
+    let worker = store_record("docker");
+    bare.complete(&home, &worker)
+        .expect("a worker-placed record is complete");
+    bare.ready(&home, &worker)
+        .expect("a worker-placed record is ready");
 }

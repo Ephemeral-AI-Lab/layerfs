@@ -136,14 +136,19 @@ pub fn spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
 pub fn provider_spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
     let name = record.name();
     let kind = record.platform()?;
+    let id = home_id(home)?;
     let lasting = record.field("lasting");
     Ok(Spec {
         name: name.to_owned(),
         kind,
+        // the full id, not the 16-hex provider prefix: the data volume's
+        // `layerfs.home` label says the whole id, so no truncation can make
+        // another home's volume look like this one's (c3)
+        home_id: id.clone(),
         // `native` has no provider name: its record keeps none
         vm_name: match kind {
             Platform::Native => String::new(),
-            _ => record.provider_name()?.to_owned(),
+            _ => record.provider_name(&id)?.to_owned(),
         },
         cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,

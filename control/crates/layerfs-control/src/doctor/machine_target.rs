@@ -248,7 +248,7 @@ impl Machine<'_> {
             return Err(Some("stopped"));
         }
         let free = self.worker(status.free_disk)?;
-        self.capacity(free);
+        self.capacity(&spec, free);
         Ok(())
     }
 
@@ -571,7 +571,7 @@ impl Machine<'_> {
     /// bytes of its image cache `machine prune --unused` frees
     /// (`reclaimable_image_bytes`, from the machine's image listing); that
     /// prune is the fix only when there are such bytes.
-    fn capacity(&mut self, free: Option<u64>) {
+    fn capacity(&mut self, spec: &layerfs_machine::platform::Spec, free: Option<u64>) {
         use layerfs_bridge::control::SdkValue;
         const ID: &str = "machine.capacity";
         let reclaimable = layerfs_home::names::MachineName::parse(self.name)
@@ -595,6 +595,64 @@ impl Machine<'_> {
                 "neither its provider nor its worker measured its data disk",
             ),
         }
+        self.volumes(spec);
+    }
+
+    /// `machine.capacity`'s second half: the machine's data volumes say
+    /// whose they are. A `docker` volume labelled with this home must name a
+    /// machine record whose `vm_name` it is; a foreign home label, an orphan
+    /// machine or a name its record does not match is an error, and an
+    /// unlabelled volume no record explains is a warning. Only the `docker`
+    /// machine has provider volumes this build lists; every other kind
+    /// leaves this half to the disk room. The listing is bounded and
+    /// read-only.
+    fn volumes(&mut self, spec: &layerfs_machine::platform::Spec) {
+        use layerfs_machine::platform::{Code, Platform};
+        use std::time::{Duration, Instant};
+        const ID: &str = "machine.capacity";
+        if spec.kind != Platform::Docker {
+            return;
+        }
+        let stop = Instant::now() + self.budget.limit(Duration::from_secs(10));
+        let volumes = match layerfs_machine::platform::volumes_within(spec, stop) {
+            Ok(volumes) => volumes,
+            Err(error) => {
+                let what = format!("its data volumes could not be listed: {}", error.message);
+                if self.budget.expired() {
+                    self.checks.timeout(ID, what);
+                } else if matches!(error.code, Code::Unknown | Code::Unavailable) {
+                    self.checks.lost(ID, what);
+                } else {
+                    self.checks.unknown(ID, what);
+                }
+                return;
+            }
+        };
+        let (errors, warnings, inspect) = volume_problems(self.home, spec, &volumes);
+        let fix = || {
+            inspect
+                .iter()
+                .map(|name| format!("docker volume inspect {}", shell_word(name)))
+                .collect::<Vec<_>>()
+                .join(" && ")
+        };
+        if !errors.is_empty() {
+            let mut said = errors.join("; ");
+            if !warnings.is_empty() {
+                said.push_str("; also ");
+                said.push_str(&warnings.join("; "));
+            }
+            self.checks.fail(ID, said);
+            self.checks.fix(ID, fix());
+        } else if !warnings.is_empty() {
+            self.checks.warning(ID, warnings.join("; "));
+            self.checks.fix(ID, fix());
+        } else {
+            self.checks.pass(
+                ID,
+                "its data volumes are labelled for this home, or its records explain them",
+            );
+        }
     }
 
     /// An error on check `id` with `fix`.
@@ -602,6 +660,128 @@ impl Machine<'_> {
         self.checks.fail(id, message);
         self.checks.fix(id, fix);
     }
+}
+
+/// Which of `volumes` may be this home's, and what its labels say: the
+/// errors, the warnings and the volumes a fix should inspect. A volume
+/// provably another home's is left alone. A built-in machine exists with or
+/// without a record, so its volume still has an owner.
+#[cfg(feature = "machine")]
+fn volume_problems(
+    home: &Path,
+    spec: &layerfs_machine::platform::Spec,
+    volumes: &[layerfs_machine::platform::Volume],
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    use layerfs_home::names;
+    use layerfs_machine::record::MachineRecord;
+    let mut records = crate::inventory::machines(home).unwrap_or_default();
+    for name in names::BUILT_IN {
+        if !records.iter().any(|record| record.name() == name) {
+            records.push(MachineRecord::built_in(name, &spec.home_id));
+        }
+    }
+    let known: std::collections::BTreeMap<&str, &MachineRecord> = records
+        .iter()
+        .filter_map(|record| record.text("vm_name").map(|vm| (vm, record)))
+        .collect();
+    let by_name: std::collections::BTreeMap<&str, &MachineRecord> = records
+        .iter()
+        .map(|record| (record.name(), record))
+        .collect();
+    let own = format!("{}-data", spec.vm_name);
+    let prefix = names::provider_prefix(&spec.home_id);
+    let legacy = names::legacy_prefix(&spec.home_id);
+    let id16 = spec.home_id.get(..16).unwrap_or(spec.home_id.as_str());
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+    let mut inspect: Vec<String> = Vec::new();
+    for volume in volumes {
+        let name = volume.name.as_str();
+        let home_label = volume.label("layerfs.home");
+        let machine_label = volume.label("layerfs.machine");
+        let vm = name.strip_suffix("-data");
+        // the volume is this home's when its home label or its name says
+        // so; another home's volumes are not this doctor's business (a
+        // machine name alone is no proof: `docker` exists in every home)
+        let ours = matches!(home_label, Some(label) if label == spec.home_id || label == id16)
+            || name.starts_with(&prefix)
+            || name.starts_with(&legacy)
+            || name == own
+            || vm.is_some_and(|vm| vm == spec.vm_name || known.contains_key(vm));
+        if !ours {
+            continue;
+        }
+        // a `layerfs.home` label must name this home: the full 32-hex id or
+        // its 16-hex provider prefix; a wrong or foreign home is an error
+        if let Some(label) = home_label.filter(|label| *label != spec.home_id && *label != id16) {
+            errors.push(format!(
+                "its data volume {name} is labelled with home {label}, not this home {}",
+                spec.home_id
+            ));
+            inspect.push(name.to_owned());
+            continue;
+        }
+        let Some(machine) = machine_label else {
+            // no machine label: a volume whose VM a record names is an older
+            // one the record explains; anything else cannot be placed
+            if vm.is_some_and(|vm| vm == spec.vm_name || known.contains_key(vm)) {
+                continue;
+            }
+            warnings.push(format!(
+                "its data volume {name} has no layerfs.home or layerfs.machine label, and no record names its VM"
+            ));
+            inspect.push(name.to_owned());
+            continue;
+        };
+        let Some(record) = by_name.get(machine) else {
+            // the machine label names no record that names a VM: nothing
+            // owns the volume, and the sqlite Stores a Store record places
+            // on that machine would live in it, so list it before removal
+            let stores = crate::inventory::stores_on(home, machine).unwrap_or_default();
+            let holds = match stores.as_slice() {
+                [] => "it holds no sqlite Store".to_owned(),
+                [one] => format!("the sqlite Store {one} is recorded on it"),
+                many => format!("the sqlite Stores {} are recorded on it", many.join(", ")),
+            };
+            errors.push(format!(
+                "its data volume {name} is labelled as machine {machine}, which has no record naming a VM; no call owns it, and {holds}: inspect it before removing it"
+            ));
+            inspect.push(name.to_owned());
+            continue;
+        };
+        let expected = record.text("vm_name");
+        if expected.map(|vm| format!("{vm}-data")).as_deref() != Some(name) {
+            errors.push(format!(
+                "its data volume {name} is labelled as machine {machine}, whose record names VM {}: the volume is not its data disk",
+                expected.unwrap_or("(none)")
+            ));
+            inspect.push(name.to_owned());
+            continue;
+        }
+        // the record names this volume; the name must be made from this
+        // home's 16-hex prefix. An older 8-hex name cannot prove another
+        // home (c2's documented cap), so it is accepted; a 16-hex name of
+        // another home is an error.
+        let mine = expected.is_some_and(|vm| {
+            vm == spec.vm_name
+                || vm.starts_with(&prefix)
+                || ["layerfs-", "lfs-"].iter().any(|head| {
+                    vm.strip_prefix(head)
+                        .and_then(|rest| rest.split_once('-'))
+                        .is_some_and(|(hex, _)| {
+                            hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit())
+                        })
+                })
+        });
+        if !mine {
+            errors.push(format!(
+                "its data volume {name} is named for machine {machine}, whose record names VM {} from another home: no call of this home reads it",
+                expected.unwrap_or("(none)")
+            ));
+            inspect.push(name.to_owned());
+        }
+    }
+    (errors, warnings, inspect)
 }
 
 #[cfg(feature = "machine")]

@@ -307,6 +307,22 @@ fn signature_and_region_refusals_are_precise_without_echoing_error_bodies() {
 }
 
 #[test]
+fn each_subcheck_gets_a_fresh_window() {
+    // no overall deadline (the `--full` write test): every subcheck starts
+    // its own window from `Instant::now()` instead of sharing one
+    let budget = target::Budget::new(None);
+    let first = backup_target::window(&budget, Duration::from_secs(10));
+    std::thread::sleep(Duration::from_millis(5));
+    let second = backup_target::window(&budget, Duration::from_secs(10));
+    assert!(second > first, "a later subcheck must start a new window");
+    // an overall budget still caps every window
+    let capped = target::Budget::new(Some(Duration::from_millis(500)));
+    let start = std::time::Instant::now();
+    let deadline = backup_target::window(&capped, Duration::from_secs(30));
+    assert!(deadline <= start + Duration::from_secs(1));
+}
+
+#[test]
 fn deadline_after_put_retains_exact_owned_version_and_never_sends_late_delete() {
     let f = Fixture::new(Mode {
         stall_get: true,

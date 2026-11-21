@@ -491,4 +491,54 @@ mod with_a_store {
         std::fs::remove_dir_all(home).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
     }
+    #[test]
+    fn a_project_whose_manifests_are_gone_is_broken_and_create_names_its_delete() {
+        let (home, folder, _) = shop_with_api("manifests");
+        // what an intermediate build left: the entry, but no manifest pair
+        let record = layerfs_store::project::record::ProjectRecord::read(&home, "shop", "api")
+            .unwrap()
+            .expect("a record");
+        record
+            .without("manifest")
+            .without("installed")
+            .write(&home)
+            .unwrap();
+
+        let got = ok(&home, "project.get", &[("project", t("shop/api"))]);
+        assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
+        assert_eq!(got.get_text("reason"), Some("failed"));
+        assert_eq!(got.get_text("fix"), Some("layerfs project delete shop/api"));
+        let list = ok(&home, "project.list", &[]);
+        let row = &items(&list)[0];
+        assert_eq!(row.get_text("state"), Some("broken"), "{row:?}");
+        assert_eq!(row.get_text("reason"), Some("failed"));
+
+        let report = ok(
+            &home,
+            "project.doctor",
+            &[("project", t("shop/api")), ("detail", SdkValue::Bool(true))],
+        );
+        assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+        let findings = match report.get("findings") {
+            Some(SdkValue::List(found)) => found.clone(),
+            other => panic!("{other:?}"),
+        };
+        let found = findings
+            .iter()
+            .find(|found| found.get_text("check") == Some("project.record"))
+            .expect("the record finding");
+        assert_eq!(found.get_text("severity"), Some("error"));
+        assert_eq!(
+            found.get_text("fix"),
+            Some("layerfs project delete shop/api")
+        );
+
+        // the read `sandbox.create` makes of the same entry (its
+        // `lifecycle::installed`) is `Failed` with that delete, and
+        // create keeps the fix instead of naming the machine doctor: the
+        // store test `restored_records.rs` holds that read's own case
+        layerfs_api::close_idle(std::time::Duration::ZERO);
+        std::fs::remove_dir_all(home).unwrap();
+        std::fs::remove_dir_all(folder).unwrap();
+    }
 }

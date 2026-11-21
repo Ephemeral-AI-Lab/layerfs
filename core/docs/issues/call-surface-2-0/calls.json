@@ -254,7 +254,7 @@
     },
     {
      "check": "machine.capacity",
-     "what": "its data disk has room",
+     "what": "its data disk has room, and its data volumes are labelled for this home",
      "full_only": false
     }
    ],
@@ -1231,6 +1231,47 @@
      },
      "dropped": [],
      "new_work": null
+    },
+    {
+     "call": "project.prune",
+     "badge": "new",
+     "today": [],
+     "help": "remove a project's home entry that has no record",
+     "cli": "layerfs project prune <project>",
+     "positionals": [
+      {
+       "name": "project",
+       "kind": "Project"
+      }
+     ],
+     "options": [],
+     "stdin": null,
+     "with": {},
+     "paging": null,
+     "progress": false,
+     "quiet": false,
+     "profile": "full",
+     "short": {
+      "always": [
+       "ok"
+      ],
+      "sometimes": []
+     },
+     "long": [
+      "ok",
+      "outcome",
+      "project",
+      "store"
+     ],
+     "item": null,
+     "examples": {
+      "short": [
+       "{\"ok\":true}"
+      ],
+      "long": "{\"ok\":true,\"outcome\":\"pruned\",\"project\":\"shop/orphan\",\"store\":\"shop\"}"
+     },
+     "dropped": [],
+     "new_work": "The call is new: no call removes a home entry that has no record today. <code>project prune</code> reads the home only, under its lock; it opens no Store, refuses a Store not on record, an entry on record (valid, broken or unreadable) and a symlink, and removes only a real folder with no record. <code>project init</code> on such a folder answers <code>NameTaken</code> with <code>project prune</code> as its fix, and the home doctor reports the folder as an error with the same fix."
     },
     {
      "call": "project.hide_path",
@@ -5170,10 +5211,16 @@
      "today": [
       "home.init"
      ],
-     "help": "create this home; a current home is left as it is",
-     "cli": "layerfs home init",
+     "help": "create this home, or adopt one whose data is there but layerfs.json is missing; a current home is left as it is",
+     "cli": "layerfs home init [--adopt]",
      "positionals": [],
-     "options": [],
+     "options": [
+      {
+       "name": "adopt",
+       "kind": "Bool",
+       "help": "write layerfs.json for a home whose data is there but whose marker is missing; take the id from its records and never move or rewrite the data"
+      }
+     ],
      "stdin": null,
      "with": {},
      "paging": null,
@@ -5185,7 +5232,10 @@
        "home"
       ],
       "sometimes": [
-       "unchanged"
+       "unchanged",
+       "id",
+       "id_source",
+       "warnings"
       ]
      },
      "long": [
@@ -5193,18 +5243,22 @@
       "unchanged",
       "outcome",
       "layout",
-      "version"
+      "version",
+      "id",
+      "id_source",
+      "warnings"
      ],
      "item": null,
      "examples": {
       "short": [
        "{\"home\":\"/Users/me/.layerfs\"}",
-       "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}"
+       "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}",
+       "an adopted home: {\"home\":\"/Users/me/.layerfs\",\"id\":\"2f51a567b6f153b6e914393cab0904b6\",\"id_source\":\"records\",\"warnings\":[\"this build's records keep only an 8- or 16-hex prefix of the home id\"]}"
       ],
-      "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
+      "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"outcome\":\"adopted\",\"layout\":3,\"version\":\"2.0.0\",\"id\":\"2f51a567b6f153b6e914393cab0904b6\",\"id_source\":\"records\",\"warnings\":[\"this build's records keep only an 8- or 16-hex prefix of the home id\"]}"
      },
      "dropped": [],
-     "new_work": "No new capability. `outcome` is `created` or `unchanged`, from today's `created` boolean; `unchanged` is new as a key; `version` is the build's version. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time. An older home is refused, not converted (v20)."
+     "new_work": "No new capability beyond `--adopt`. `outcome` is `created`, `unchanged` or `adopted`; `unchanged` is new as a key; `version` is the build's version; an adopted home also answers the `id` it wrote, `id_source` (`records` when the records' longest agreed prefix was kept, `fresh` when no record named the home) and read only `warnings`. A home whose data is there but `layerfs.json` is missing is refused without `--adopt`; with it the marker is written and the data is never moved, rewritten or initialized. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time. An older home is refused, not converted (v20)."
     },
     {
      "call": "home.get",
@@ -7279,7 +7333,7 @@
        },
        {
         "check": "machine.capacity",
-        "what": "its data disk has room",
+        "what": "its data disk has room, and its data volumes are labelled for this home",
         "full_only": false
        }
       ]

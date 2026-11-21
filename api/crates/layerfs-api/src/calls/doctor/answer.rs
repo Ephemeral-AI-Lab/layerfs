@@ -4,7 +4,10 @@
 //! `status`, `counts`, `observed_at` and `tree`, and its `ok` is false
 //! whenever anything was found or could not be checked. A finding and a
 //! `not_checked` entry name their thing by its own word. A doctor exits 0
-//! once its report is made; only a thing it cannot find is a refusal.
+//! once its report is made; only a thing it cannot find is a refusal. The
+//! shell's `--fail-on error` is the one exception: a report with an error
+//! finding or a `not_checked` entry then exits 1, while a warning or a
+//! notice still exits 0.
 use crate::calls::{Context, Form, Part, THING};
 use layerfs_control::doctor::{Kind, Options, Thing};
 use layerfs_home::outcome::Outcome;

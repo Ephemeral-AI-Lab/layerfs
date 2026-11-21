@@ -112,7 +112,7 @@ pub fn get(home: &Path, project: &ProjectRef, machines: Machines) -> Outcome {
     let block = state::store_block(home, &record, machines)?;
     let live = listing(home, store, &record, block.as_ref(), false);
     let said = says(&live, &entry, name);
-    let state = state::derive(home, store, name, &entry, block.as_ref(), said);
+    let state = state::derive(home, &record, name, &entry, block.as_ref(), said);
     let state = state.ok_or_else(missing)?;
     let listed = match said {
         Listing::Listed(listed) => Some(listed),
@@ -186,7 +186,7 @@ pub fn list(home: &Path, request: &ProjectList, machines: Machines) -> Outcome {
                 continue;
             };
             let said = says(&live, &entry, &name);
-            let Some(state) = state::derive(home, &store, &name, &entry, block.as_ref(), said)
+            let Some(state) = state::derive(home, &record, &name, &entry, block.as_ref(), said)
             else {
                 continue;
             };

@@ -1,17 +1,20 @@
 //! The `project` calls that need this layer's reads of other entities:
 //! `project.delete`, which retires a project in its Store and removes the
 //! caller's home entry (spec §4), with the project-scope `Busy` checks of
-//! the Sandboxes that use it; and the project reads, which take this
-//! layer's machine state (`project.get`, `project.list`). The other
-//! `project` calls are `layerfs-store`'s own.
+//! the Sandboxes that use it; `project.prune`, which removes only a home
+//! entry with no record; and the project reads, which take this layer's
+//! machine state (`project.get`, `project.list`). The other `project`
+//! calls are `layerfs-store`'s own.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::home::{lock, paths};
 use layerfs_home::names::ProjectRef;
 use layerfs_home::op::Standing;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_store::project::op::{self, DELETE, INIT};
 use layerfs_store::project::read::{self, ProjectList};
 use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::record::StoreRecord;
 use std::path::Path;
 
 /// `project.get(project)`: one project, its state and main's head; its
@@ -79,6 +82,72 @@ pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Out
         discard_copy(home, (store, name), init.args());
     }
     outcome
+}
+
+/// `project.prune(project)`: removes the home's entry of a project the home
+/// has no record of, under the home's lock. It opens no Store and reads no
+/// project data: a Store not on record is `NotFound`; an entry that is on
+/// record (valid, broken or unreadable) is `Exists` with the delete's fix;
+/// a symlink or a file is refused; only a real folder with no record is
+/// removed. A whole Store folder with no record is not its business (`home
+/// doctor` names that one). Answers `{ ok, outcome: "pruned", project,
+/// store }`.
+pub fn prune(home: &Path, project: &ProjectRef) -> Outcome {
+    let (store, name) = (project.store.as_str(), project.project.as_str());
+    let handle = project.to_string();
+    let _lock = lock::take(home)?;
+    if StoreRecord::read(home, store)?.is_none() {
+        return Err(refused(
+            "NotFound",
+            format!("no Store named {store}; `layerfs store list` names the Stores"),
+        ));
+    }
+    let entry = paths::project_dir(home, store, name);
+    let meta = match std::fs::symlink_metadata(&entry) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(refused(
+                "NotFound",
+                format!("no entry for project {handle}"),
+            ));
+        }
+        Err(error) => return Err(failed(error)),
+    };
+    if meta.file_type().is_symlink() {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "{} is a symbolic link, not a project folder; remove the link by hand",
+                entry.display()
+            ),
+        ));
+    }
+    if !meta.is_dir() {
+        return Err(refused(
+            "InvalidInput",
+            format!("{} is not a project folder", entry.display()),
+        ));
+    }
+    match ProjectRecord::read(home, store, name) {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            return Err(with_fix(
+                refused("Exists", format!("project {handle} is on record")),
+                format!("layerfs project delete {}", shell_word(&handle)),
+            ));
+        }
+        // a record that cannot be read is still on record: `prune` leaves
+        // the entry alone, and the record's own doctor names it
+        Err(refusal) => return Err(refusal),
+    }
+    std::fs::remove_dir_all(&entry).map_err(failed)?;
+    layerfs_home::home::generation::moved_above(&entry);
+    Ok(SdkValue::map([
+        ("ok", SdkValue::Bool(true)),
+        ("outcome", SdkValue::text("pruned")),
+        ("project", SdkValue::text(&handle)),
+        ("store", SdkValue::text(store)),
+    ]))
 }
 
 /// Removes the folder copy an Init whose owner is gone sent to a machine

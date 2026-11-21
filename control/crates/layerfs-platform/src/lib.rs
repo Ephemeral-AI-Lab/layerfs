@@ -38,11 +38,11 @@ pub use setup::find_tool;
 pub use setup::{
     cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
     name_limit, provider_within, reach, remove, start, status, status_within, stop, stop_force,
-    State, Status,
+    volumes, volumes_within, State, Status,
 };
 pub use spec::{
     parse_size, search_path, tool_fallbacks, Bundle, Endpoint, Forward, Lasting, NameLimit,
-    Running, Spec, Tools, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT,
+    Running, Spec, Tools, Volume, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT,
 };
 pub use support::{
     platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,

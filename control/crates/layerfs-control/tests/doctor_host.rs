@@ -97,7 +97,13 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     assert_eq!(outcome(&report, "home.layout"), None, "{report:?}");
     assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
     assert!(outcome(&report, "home.native_daemon").is_some());
-    assert!(outcome(&report, "home.capacity").is_some());
+    // a home that is not there has no disk of its own: no ancestor is
+    // measured, so the check is not made rather than passed
+    assert_eq!(
+        outcome(&report, "home.capacity").as_deref(),
+        Some("unknown"),
+        "{report:?}"
+    );
     in_order(&report);
 }
 #[test]
@@ -246,6 +252,30 @@ fn stale_lease_and_dead_op_remain_while_live_op_is_not_stale() {
     assert!(!contains(&report, "store live has an unresolved"));
     std::fs::remove_dir_all(home).unwrap();
 }
+#[test]
+fn an_orphan_project_folder_is_an_error_with_the_prune_fix() {
+    let home = home(3);
+    write_entity(
+        &paths::store_record(&home, "shop"),
+        &SdkValue::map([("kind", t("sqlite")), ("machine", t("native"))]),
+    )
+    .unwrap();
+    let orphan = paths::project_dir(&home, "shop", "orphan");
+    private_dir(&orphan).unwrap();
+    let report = run(&home);
+    assert!(
+        contains(&report, "project shop/orphan has no record"),
+        "{report:?}"
+    );
+    assert!(
+        contains(&report, "layerfs project prune shop/orphan"),
+        "{report:?}"
+    );
+    // the doctor names the leftover; removing it is the call's effect
+    assert!(orphan.exists(), "the doctor removed the entry");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 #[test]
 fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
     let home = home(3);
@@ -428,5 +458,254 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
             .as_str()
         )
     );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// Another home's id.
+const OTHER_HOME_ID: &str = "fedcba9876543210fedcba9876543210";
+
+/// Rewrites `layerfs.json` with `id`.
+fn write_marker(home: &Path, id: &str) {
+    write_record(
+        &home.join("layerfs.json"),
+        &SdkValue::map([("layout", SdkValue::Int(3)), ("id", t(id))]),
+    )
+    .unwrap();
+}
+
+/// A machine record with a `vm_name`, as `machine create` writes one.
+fn machine_with_vm(home: &Path, name: &str, vm_name: &str) {
+    write_entity(
+        &paths::machine_record(home, name),
+        &SdkValue::map([
+            ("name", t(name)),
+            ("platform", t(name)),
+            ("vm_name", t(vm_name)),
+        ]),
+    )
+    .unwrap();
+}
+
+/// A started Sandbox record whose `daemon` names its run folder.
+fn sandbox_with_daemon(home: &Path, name: &str, daemon: &str) {
+    write_entity(
+        &paths::sandbox_record(home, name),
+        &SdkValue::map([
+            ("name", t(name)),
+            ("project", t("shop/api")),
+            ("machine", t("native")),
+            ("daemon", SdkValue::map([("name", t(daemon))])),
+        ]),
+    )
+    .unwrap();
+}
+
+/// Asserts `home.layout` failed and answers its row.
+fn failed_layout(report: &SdkValue) -> SdkValue {
+    assert_eq!(
+        outcome(report, "home.layout").as_deref(),
+        Some("fail"),
+        "{report:?}"
+    );
+    row(report, "home.layout")
+}
+
+#[test]
+fn a_forged_id_does_not_match_a_machine_record() {
+    let home = home(3);
+    write_marker(&home, OTHER_HOME_ID);
+    machine_with_vm(&home, "docker", "layerfs-0123456789abcdef-docker");
+    let before = tree(&home);
+    let report = run(&home);
+    let check = failed_layout(&report);
+    assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
+    assert_eq!(check.get("fix"), Some(&SdkValue::Null), "{check:?}");
+    let message = check.get_text("message").unwrap_or_default();
+    assert!(
+        message.contains(&paths::machine_record(&home, "docker").display().to_string()),
+        "{message}"
+    );
+    assert!(
+        message.contains("layerfs-0123456789abcdef-docker"),
+        "{message}"
+    );
+    assert!(
+        message.contains("layerfs-fedcba9876543210-docker"),
+        "{message}"
+    );
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_matching_machine_record_passes_the_layout() {
+    let home = home(3);
+    machine_with_vm(&home, "docker", "layerfs-0123456789abcdef-docker");
+    let report = run(&home);
+    assert_eq!(
+        outcome(&report, "home.layout").as_deref(),
+        Some("pass"),
+        "{report:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn the_earlier_eight_hex_machine_name_passes() {
+    let home = home(3);
+    machine_with_vm(&home, "docker", "layerfs-01234567-docker");
+    let report = run(&home);
+    assert_eq!(
+        outcome(&report, "home.layout").as_deref(),
+        Some("pass"),
+        "{report:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_bare_home_and_a_nameless_record_pass() {
+    let bare = home(3);
+    let report = run(&bare);
+    assert_eq!(
+        outcome(&report, "home.layout").as_deref(),
+        Some("pass"),
+        "{report:?}"
+    );
+    std::fs::remove_dir_all(bare).unwrap();
+
+    let home = home(3);
+    write_entity(
+        &paths::machine_record(&home, "vm1"),
+        &SdkValue::map([("name", t("vm1")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    let report = run(&home);
+    assert_eq!(
+        outcome(&report, "home.layout").as_deref(),
+        Some("pass"),
+        "{report:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_deleted_record_leaves_no_conflict() {
+    let home = home(3);
+    machine_with_vm(&home, "docker", "layerfs-fedcba9876543210-docker");
+    std::fs::remove_dir_all(paths::machine_dir(&home, "docker")).unwrap();
+    let report = run(&home);
+    assert_eq!(
+        outcome(&report, "home.layout").as_deref(),
+        Some("pass"),
+        "{report:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn sandbox_daemon_names_of_three_eras_pass() {
+    let home = home(3);
+    sandbox_with_daemon(&home, "live16", "layerfs-0123456789abcdef-live16");
+    sandbox_with_daemon(&home, "live8", "layerfs-01234567-live8");
+    sandbox_with_daemon(&home, "lfs8", "lfs-01234567-lfs8");
+    let report = run(&home);
+    assert_eq!(
+        outcome(&report, "home.layout").as_deref(),
+        Some("pass"),
+        "{report:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_sandbox_daemon_name_from_another_home_fails_the_layout() {
+    let home = home(3);
+    sandbox_with_daemon(&home, "live", "layerfs-fedcba9876543210-live");
+    let before = tree(&home);
+    let report = run(&home);
+    let check = failed_layout(&report);
+    assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
+    assert_eq!(check.get("fix"), Some(&SdkValue::Null), "{check:?}");
+    let message = check.get_text("message").unwrap_or_default();
+    assert!(
+        message.contains(&paths::sandbox_record(&home, "live").display().to_string()),
+        "{message}"
+    );
+    assert!(
+        message.contains("layerfs-fedcba9876543210-live"),
+        "{message}"
+    );
+    assert!(
+        message.contains("layerfs-0123456789abcdef-live"),
+        "{message}"
+    );
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// Makes `home` look like a machine's worker root, with no `layerfs.json`.
+fn worker_shape(home: &Path) {
+    for folder in [
+        "store/shop",
+        "sandbox/live",
+        "machine/native/run",
+        "log",
+        "incoming",
+    ] {
+        std::fs::create_dir_all(home.join(folder)).unwrap();
+    }
+    std::fs::write(home.join("log/worker.log"), "worker started\n").unwrap();
+    std::fs::create_dir_all(home.join("incoming/init-0123456789abcdef")).unwrap();
+}
+
+#[test]
+fn a_worker_root_fails_the_layout_and_gets_no_records_check() {
+    // the incident's shape: never a home, and moved nowhere
+    let home = temp();
+    std::fs::create_dir_all(&home).unwrap();
+    worker_shape(&home);
+    let before = tree(&home);
+    let report = run(&home);
+    let check = failed_layout(&report);
+    assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
+    assert!(
+        check
+            .get_text("message")
+            .is_some_and(|message| message.contains("worker root")),
+        "{check:?}"
+    );
+    let fix = check.get_text("fix").unwrap_or_default();
+    assert!(!fix.contains("mv "), "{fix}");
+    assert!(!fix.contains("home init"), "{fix}");
+    assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
+    assert_eq!(before, tree(&home), "the doctor wrote in the worker root");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_home_that_lost_its_marker_fails_the_layout_with_the_adopt_fix() {
+    // the data is there and the marker is not: not a foreign folder, never
+    // moved, and the records check does not run (layerfs-project#752, c6)
+    let home = temp();
+    std::fs::create_dir_all(home.join("store/shop/project/demo")).unwrap();
+    std::fs::write(home.join("store/shop/record.json"), "{}").unwrap();
+    std::fs::create_dir_all(home.join("trace")).unwrap();
+    std::fs::write(home.join("trace/calls.jsonl"), "").unwrap();
+    let before = tree(&home);
+    let report = run(&home);
+    let check = failed_layout(&report);
+    assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
+    assert!(
+        check
+            .get_text("message")
+            .is_some_and(|message| message.contains("no layerfs.json")),
+        "{check:?}"
+    );
+    let fix = check.get_text("fix").unwrap_or_default();
+    assert_eq!(fix, "layerfs home init --adopt");
+    assert!(!fix.contains("mv "), "{fix}");
+    assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
+    assert_eq!(before, tree(&home), "the doctor wrote in the data home");
     std::fs::remove_dir_all(home).unwrap();
 }

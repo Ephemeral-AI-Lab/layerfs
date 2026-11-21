@@ -8,7 +8,7 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_home::helpers;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix};
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
 use std::{
     fs::{self, File, OpenOptions},
@@ -273,11 +273,39 @@ pub fn save_project(path: &Path, project: &Project) -> Result<()> {
 /// in `home` (by default, `LAYERFS_HOME`), read from its entry.
 pub fn project(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> Result<Project> {
     let path = project_dir(home, store, name)?;
+    let fix = format!(
+        "layerfs project delete {store}/{name}",
+        store = shell_word(
+            path.parent()
+                .and_then(Path::parent)
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                .unwrap_or("")
+        ),
+        name = shell_word(
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("")
+        )
+    );
     let value = layerfs_home::home::read_record(&path.join("record.json"))?
         .ok_or_else(|| refused("NoSuchProject", "no project record"))?;
-    let decode = |name| match value.get(name) {
-        Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).map_err(failed),
-        _ => Err(refused("NoSuchProject", "no complete project manifest")),
+    // a record whose `manifest` is missing or does not decode is not
+    // `NoSuchProject`: it exists and needs `project delete` (c7). The
+    // sentence "no complete project manifest" is kept for log searches.
+    let decode = |field| match value.get(field) {
+        Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).map_err(|error| {
+            with_fix(
+                failed(format!(
+                    "the project record's `{field}` does not decode: {error}"
+                )),
+                fix.clone(),
+            )
+        }),
+        _ => Err(with_fix(
+            refused("Failed", "no complete project manifest"),
+            fix.clone(),
+        )),
     };
     let manifest = decode("manifest")?;
     if manifest.profile != layerfs_bridge::provision::StoreProfile::Disposable {

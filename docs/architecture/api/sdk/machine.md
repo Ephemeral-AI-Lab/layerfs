@@ -803,7 +803,13 @@ worker checks, and under a stopped machine, or one whose provider or worker
 failed its check, nothing on it is tried (`not_checked` with `blocked_by`).
 `machine.capacity`'s evidence adds `reclaimable_image_bytes` (what `machine
 prune --unused` frees); that prune is its fix only when there are such
-bytes. It changes nothing and exits 0 once its report is made. It replaces
+bytes. On `docker` the same check reads each provider volume's
+`layerfs.home` and `layerfs.machine` labels against the home's machine
+records: a volume labelled with this home must name a record whose
+`vm_name` it is (a foreign home, a name its record does not match, or a
+machine with no record is an error; an unlabelled volume no record explains
+is a warning), with `fix: docker volume inspect <name>`. It changes nothing
+and exits 0 once its report is made. It replaces
 the shell's `layerfs doctor machine`, removed with no alias.
 
 ```console

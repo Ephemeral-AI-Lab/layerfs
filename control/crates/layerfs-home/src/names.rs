@@ -21,11 +21,62 @@ const DEVICES: [&str; 22] = [
 pub const BUILT_IN: [&str; 2] = ["native", "docker"];
 
 /// The prefix of every name LayerFS gives outside its records, for the
-/// home with id `home_id`: `layerfs-<home id8>-` before a machine's VM,
+/// home with id `home_id`: `layerfs-<home id16>-` before a machine's VM,
 /// container and volume names and a Sandbox's run folder, so two homes on
 /// one host never share one (owner, 2026-11-15, layerfs-project#180).
+/// Since layerfs-project#752 (c2) it uses 16 hex digits, not 8: an 8-hex
+/// prefix leaves only 32 bits, so two homes can collide.
 pub fn provider_prefix(home_id: &str) -> String {
-    format!("layerfs-{}-", &home_id[..8.min(home_id.len())])
+    let cut = home_id.get(..16).unwrap_or(home_id);
+    format!("layerfs-{cut}-")
+}
+
+/// The prefix this build wrote before c2 (layerfs-project#752): the same
+/// `layerfs-` form with the home id's first 8 hex digits. A recorded name
+/// made then still reads; new names use [`provider_prefix`].
+pub fn legacy_prefix(home_id: &str) -> String {
+    let cut = home_id.get(..8).unwrap_or(home_id);
+    format!("layerfs-{cut}-")
+}
+
+/// The home id prefix a provider name keeps: the hex run in its
+/// `layerfs-<hex>-` or `lfs-<hex>-` form, 16 digits for a name this build
+/// gives and 8 for one made before c2. `None` when the name is not one of
+/// those forms. The inverse of [`provider_prefix`] and [`legacy_prefix`],
+/// for a record whose home id is what a repair ([`super::layout`] `adopt`)
+/// reads: a record keeps only the prefix, never the whole id
+/// (layerfs-project#752, c6).
+pub fn provider_prefix_hex(recorded: &str) -> Option<&str> {
+    if let Some(rest) = recorded.strip_prefix("layerfs-") {
+        if let Some(hex) = rest.get(..16) {
+            if hex.bytes().all(|b| b.is_ascii_hexdigit()) && rest.as_bytes().get(16) == Some(&b'-')
+            {
+                return Some(hex);
+            }
+        }
+        let hex = rest.get(..8)?;
+        (hex.bytes().all(|b| b.is_ascii_hexdigit()) && rest.as_bytes().get(8) == Some(&b'-'))
+            .then_some(hex)
+    } else {
+        let rest = recorded.strip_prefix("lfs-")?;
+        let hex = rest.get(..8)?;
+        (hex.bytes().all(|b| b.is_ascii_hexdigit()) && rest.as_bytes().get(8) == Some(&b'-'))
+            .then_some(hex)
+    }
+}
+
+/// Whether `recorded` is a name this home's providers give: its current
+/// `layerfs-<id16>-` form, the earlier `layerfs-<id8>-` form, or the oldest
+/// `lfs-<id8>-` form. Only the prefix is compared; its tail is the machine's
+/// or Sandbox's name, which the caller knows. The eight-hex forms pin only
+/// 32 bits (layerfs-project#752's documented cap), so a name made from an id
+/// that shares the first eight hex digits matches too. A 16-hex name from
+/// another id does not.
+pub fn matches_provider_name(home_id: &str, recorded: &str) -> bool {
+    let id8 = home_id.get(..8).unwrap_or(home_id);
+    recorded.starts_with(&provider_prefix(home_id))
+        || recorded.starts_with(&legacy_prefix(home_id))
+        || recorded.starts_with(&format!("lfs-{id8}-"))
 }
 
 /// `name` as one machine, Store, bucket, project or Sandbox name, or why not.
@@ -210,5 +261,79 @@ impl WorkspaceRef {
 impl std::fmt::Display for WorkspaceRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.sandbox, self.at.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_prefix_uses_sixteen_hex_not_eight() {
+        let a = "0123456789abcdef0123456789abcdef";
+        let b = "01234567fedcba980123456789abcdef";
+        assert_eq!(provider_prefix(a), "layerfs-0123456789abcdef-");
+        assert_eq!(legacy_prefix(a), "layerfs-01234567-");
+        assert_ne!(provider_prefix(a), provider_prefix(b));
+        // the earlier 8-hex names collided for these two homes
+        assert_eq!(legacy_prefix(a), legacy_prefix(b));
+    }
+
+    #[test]
+    fn a_short_home_id_does_not_panic() {
+        assert_eq!(provider_prefix("abc"), "layerfs-abc-");
+        assert_eq!(legacy_prefix("abc"), "layerfs-abc-");
+    }
+
+    #[test]
+    fn matches_provider_name_accepts_the_three_eras() {
+        let id = "0123456789abcdef0123456789abcdef";
+        assert!(matches_provider_name(id, "layerfs-0123456789abcdef-docker"));
+        assert!(matches_provider_name(id, "layerfs-01234567-docker"));
+        assert!(matches_provider_name(id, "lfs-01234567-live"));
+        assert!(!matches_provider_name(
+            id,
+            "layerfs-fedcba9876543210-docker"
+        ));
+        assert!(!matches_provider_name(id, "layerfs-fedcba98-docker"));
+        assert!(!matches_provider_name(id, "lfs-fedcba98-live"));
+        assert!(!matches_provider_name(id, "docker"));
+        assert!(!matches_provider_name(id, "layerfs-01234567"));
+    }
+
+    #[test]
+    fn matches_provider_name_pins_only_32_bits_for_eight_hex_names() {
+        let home = "0123456789abcdef0123456789abcdef";
+        let collides = "01234567fedcba980123456789abcdef";
+        assert!(matches_provider_name(home, "layerfs-01234567-live"));
+        assert!(matches_provider_name(collides, "layerfs-01234567-live"));
+        assert!(matches_provider_name(collides, "lfs-01234567-live"));
+        assert!(!matches_provider_name(
+            collides,
+            "layerfs-0123456789abcdef-live"
+        ));
+    }
+
+    #[test]
+    fn provider_prefix_hex_reads_the_three_eras_and_nothing_else() {
+        assert_eq!(
+            provider_prefix_hex("layerfs-0123456789abcdef-docker"),
+            Some("0123456789abcdef")
+        );
+        assert_eq!(
+            provider_prefix_hex("layerfs-01234567-docker"),
+            Some("01234567")
+        );
+        assert_eq!(provider_prefix_hex("lfs-01234567-live"), Some("01234567"));
+        // the 16-hex form is the longest, and a name needs its tail after a `-`
+        assert_eq!(provider_prefix_hex("layerfs-0123456789abcdef"), None);
+        assert_eq!(provider_prefix_hex("layerfs-01234567"), None);
+        assert_eq!(
+            provider_prefix_hex("layerfs-fedcba9876543210-live"),
+            Some("fedcba9876543210")
+        );
+        assert_eq!(provider_prefix_hex("docker"), None);
+        assert_eq!(provider_prefix_hex("layerfs-nothex-docker"), None);
+        assert_eq!(provider_prefix_hex("lfs-0123456-live"), None);
     }
 }

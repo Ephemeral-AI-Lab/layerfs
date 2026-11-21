@@ -89,6 +89,7 @@ impl Scratch {
         Spec {
             name: "dev".into(),
             kind,
+            home_id: "0123456789abcdef0123456789abcdef".into(),
             vm_name: "lfs-dev".into(),
             cpus: 2,
             memory: 2 << 30,

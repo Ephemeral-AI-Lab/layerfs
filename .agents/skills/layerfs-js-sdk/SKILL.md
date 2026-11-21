@@ -350,7 +350,7 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-83 calls in ten families. Each family's page has arguments, answers,
+84 calls in ten families. Each family's page has arguments, answers,
 refusals and examples. Every option object may also carry `detail`, `with`
 (only where listed) and `log_tag`.
 

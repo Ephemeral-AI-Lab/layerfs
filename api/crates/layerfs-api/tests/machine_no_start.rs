@@ -54,7 +54,7 @@ fn home_with_stopped_vm(tag: &str) -> PathBuf {
         &SdkValue::map([
             ("name", t("dev")),
             ("platform", t("lima")),
-            ("vm_name", t("layerfs-test-dev")),
+            ("vm_name", t("layerfs-00000000-dev")),
             ("state", t("stopped")),
         ]),
     )

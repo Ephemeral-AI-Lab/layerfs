@@ -64,7 +64,7 @@ fn doctor_help_is_help_and_help_exits_0() {
         let (c, out, err) = code(&home, words);
         assert_eq!(c, Some(0), "{words:?}: {err}");
         assert!(
-            out.starts_with("layerfs home doctor [--progress]\n"),
+            out.starts_with("layerfs home doctor [--progress] [--fail-on never|error]\n"),
             "{out}"
         );
         assert!(err.is_empty(), "{err}");

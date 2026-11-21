@@ -319,7 +319,12 @@ fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
         layerfs_home::names::provider_prefix(&id),
         record.name()
     );
-    if recorded == given {
+    let legacy = format!(
+        "{}{}",
+        layerfs_home::names::legacy_prefix(&id),
+        record.name()
+    );
+    if recorded == given || recorded == legacy {
         return Ok(None);
     }
     let folder = daemon.directory().unwrap_or(recorded);

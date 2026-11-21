@@ -174,7 +174,7 @@ fn every_call_is_migrated_or_pending_and_the_table_names_no_other() {
     let spec = read(SPEC);
     let pending = read(PENDING);
     let named: Vec<&str> = rows(&spec).into_iter().map(name).collect();
-    assert_eq!(named.len(), 83);
+    assert_eq!(named.len(), 84);
     let waiting = texts(at(&pending, "calls"));
     for call in &named {
         let migrated = layerfs_api::find(call).is_some_and(|entry| entry.form.is_some());
@@ -578,7 +578,7 @@ fn a_migrated_entry_declares_what_its_row_says() {
 
 #[test]
 fn every_row_s_long_example_shapes_to_its_long_and_short_keys() {
-    // one rule, no I/O: all 83 rows, migrated or not
+    // one rule, no I/O: all 84 rows, migrated or not
     let spec = read(SPEC);
     let mut seen = 0;
     for row in rows(&spec) {
@@ -640,7 +640,7 @@ fn every_row_s_long_example_shapes_to_its_long_and_short_keys() {
         }
         seen += 1;
     }
-    assert_eq!(seen, 83);
+    assert_eq!(seen, 84);
 }
 
 fn paged(row: &SdkValue) -> bool {

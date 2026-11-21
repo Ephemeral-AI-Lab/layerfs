@@ -10,14 +10,14 @@ use std::time::{Duration, Instant};
 const ID: &str = "home.capacity";
 
 pub(super) fn check(home: &Path, budget: &Budget, checks: &mut Checks) {
-    let mut path = home;
-    while !path.exists() {
-        let Some(parent) = path.parent() else {
-            checks.unknown(ID, "no folder above the home exists to measure");
-            return;
-        };
-        path = parent;
+    // a home that is not there has no disk of its own: its nearest
+    // ancestor's disk says nothing about where the home would live, so no
+    // ancestor is measured
+    if !home.exists() {
+        checks.unknown(ID, "the home folder does not exist; no disk was measured");
+        return;
     }
+    let path = home;
     let wait = budget.limit(Duration::from_secs(5));
     if wait.is_zero() {
         checks.timeout(ID, "its time ran out before the disk was measured");

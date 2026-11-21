@@ -1,5 +1,5 @@
 //! One command line, start to exit code.
-use crate::parse::{parse, Usage};
+use crate::parse::{parse, FailOn, Usage};
 use crate::{help, output, view, worker};
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -207,9 +207,22 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
             }
         }
-        // a doctor's report reads as its findings and what it could not check
-        Ok(value) if text && call.call == "doctor" => output::doctor(&value),
+        // a doctor's report reads as its findings and what it could not
+        // check; `--fail-on error` makes a successful write exit 1
+        Ok(value) if text && call.call == "doctor" => {
+            output::doctor_gated(&value, fails(&value, call, switches.fail_on))
+        }
         Ok(value) if text => view::show(call, words, &value),
-        Ok(value) => output::result(&value, false, call.form),
+        Ok(value) => output::result_gated(
+            &value,
+            false,
+            call.form,
+            fails(&value, call, switches.fail_on),
+        ),
     }
+}
+
+/// Whether `--fail-on error` asks this doctor's report to exit 1.
+fn fails(value: &SdkValue, call: &layerfs_api::Call, fail_on: FailOn) -> bool {
+    call.call == "doctor" && fail_on == FailOn::Error && output::doctor_failed(value)
 }

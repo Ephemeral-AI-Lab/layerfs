@@ -453,6 +453,8 @@ fn project_init_name_collision_reports_holder_and_source() {
     assert_eq!(holder.get_text("name"), Some("api"));
     assert_eq!(holder.get_text("state"), Some("live"));
     assert_eq!(home_taken.detail.get_text("source"), Some("home"));
+    // the entry is on record: no prune hint
+    assert_eq!(home_taken.detail.get_text("fix"), None, "{home_taken:?}");
 
     // A home that no longer records the project meets the Store's own holder.
     std::fs::remove_dir_all(paths::project_dir(&home, "shop", "api")).unwrap();
@@ -470,6 +472,54 @@ fn project_init_name_collision_reports_holder_and_source() {
     assert_eq!(holder.get_text("name"), Some("api"));
     assert_eq!(holder.get_text("state"), Some("live"));
     assert_eq!(store_taken.detail.get_text("source"), Some("store"));
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+/// A folder with no record is not a project: `project init` refuses the name
+/// with the `project prune` line that removes the leftover. A record that
+/// cannot be read is still on record, so it gets no prune line.
+#[test]
+fn project_init_names_project_prune_for_a_leftover_with_no_record() {
+    let home = private_home("orphan-init");
+    let folder = tempdir("orphan-init-folder");
+    std::fs::write(folder.join("README"), b"left\n").unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let leftover = paths::project_dir(&home, "shop", "leftover");
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(&leftover).unwrap();
+    std::fs::set_permissions(&leftover, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let refusal = refused(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/leftover")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    assert_eq!(refusal.code, "Exists", "{}", refusal.message);
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs project prune shop/leftover"),
+        "{refusal:?}"
+    );
+    assert!(leftover.exists(), "init removed the leftover");
+
+    // a record that cannot be read is on record: no prune line
+    let broken = paths::project_dir(&home, "shop", "broken");
+    std::fs::create_dir_all(&broken).unwrap();
+    std::fs::write(broken.join("record.json"), "{not json").unwrap();
+    let refusal = refused(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/broken")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    assert_eq!(refusal.code, "Exists", "{}", refusal.message);
+    assert_eq!(refusal.detail.get_text("fix"), None, "{refusal:?}");
 
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);

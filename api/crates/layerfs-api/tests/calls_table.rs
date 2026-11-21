@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 83 calls in ten
+//! The call table and its dispatcher (#533 step 2): 84 calls in ten
 //! families (the call surface 2.0), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -755,6 +755,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "project.stats",
         "project.export",
         "project.delete",
+        "project.prune",
         "project.hide_path",
         "project.doctor",
     ];

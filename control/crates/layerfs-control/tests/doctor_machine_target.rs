@@ -23,7 +23,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// One test owns `PATH` and `DOCKER_HOST` at a time: the fixture matrix and
+/// the data-volume test each set both for their whole run.
+static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct Fixture {
+    /// Held for the fixture's life, so two tests never share `PATH`.
+    _one: std::sync::MutexGuard<'static, ()>,
     root: PathBuf,
     home: PathBuf,
     /// The home's id, which a built-in machine's first record is made with.
@@ -36,6 +42,7 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        let one = ONE.lock().unwrap_or_else(|e| e.into_inner());
         let root =
             std::env::temp_dir().join(format!("lfs-doctor-machine-target-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -71,6 +78,7 @@ impl Fixture {
         let docker_host = std::env::var_os("DOCKER_HOST");
         std::env::set_var("DOCKER_HOST", format!("unix://{}", socket.display()));
         Self {
+            _one: one,
             root,
             home,
             id,
@@ -91,7 +99,14 @@ impl Fixture {
     /// An Engine that answers, with the worker container in `state`.
     fn provider(&self, state: &str) {
         self.script(&format!(
-            "*version*) echo 29.0;; *inspect*) printf '{state}\\tmachine-worker\\n';;"
+            "*version*) echo 29.0;; *inspect*) printf '{state}\\tmachine-worker\\n';; *volume*ls*) printf '';;"
+        ));
+    }
+    /// An Engine that answers, holds the running worker container and lists
+    /// the volumes `lines` (as `docker volume ls --format` prints them).
+    fn volumes(&self, lines: &str) {
+        self.script(&format!(
+            "*version*) echo 29.0;; *inspect*) printf 'running\\tmachine-worker\\n';; *volume*ls*) printf '{lines}';;"
         ));
     }
     /// An Engine that answers and holds no worker container.
@@ -419,6 +434,83 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
     assert_eq!(f.calls(), asked);
 }
 
+/// The docker node's data-volume ownership check, folded into
+/// `machine.capacity`: an orphan or a foreign home label is an error, an
+/// unlabelled volume no record explains is a warning, and the machine's own
+/// older unlabelled volume and a matching labelled one are not findings.
+#[test]
+fn data_volume_labels_are_checked_on_the_docker_node() {
+    let f = Fixture::new();
+    MachineRecord::built_in("docker", &f.id)
+        .write(&f.home)
+        .unwrap();
+    // an orphan's sqlite Store is named, so it is inventoried before the
+    // volume is removed
+    write_entity(
+        &paths::store_record(&f.home, "shop"),
+        &SdkValue::map([
+            ("kind", SdkValue::text("sqlite")),
+            ("machine", SdkValue::text("ghost")),
+            ("name", SdkValue::text("shop")),
+        ]),
+    )
+    .unwrap();
+    let vm = layerfs_machine::vm_name(&f.id, "docker");
+    let own = format!("{vm}-data");
+    let id16: String = f.id.chars().take(16).collect();
+    let ghost = format!("layerfs-{id16}-ghost-data");
+    // its own older volume, unlabelled, is explained by its record
+    f.volumes(&format!("{own}\t\t\n"));
+    let server = worker(&f.home, "roomy");
+    let report = f.report("docker", SECOND);
+    server.join().unwrap();
+    assert_eq!(
+        outcome(&report, "machine.capacity"),
+        Some("pass".to_owned()),
+        "{report:?}"
+    );
+    // a labelled volume matching its machine record
+    f.volumes(&format!("{own}\t{}\tdocker\n", f.id));
+    let server = worker(&f.home, "roomy");
+    let report = f.report("docker", SECOND);
+    server.join().unwrap();
+    assert_eq!(
+        outcome(&report, "machine.capacity"),
+        Some("pass".to_owned()),
+        "{report:?}"
+    );
+    // unlabelled and unknown: a warning, not an error
+    f.volumes(&format!("{ghost}\t\t\n"));
+    let server = worker(&f.home, "roomy");
+    let report = f.report("docker", SECOND);
+    server.join().unwrap();
+    let (severity, message, fix) = finding(&report, "machine.capacity");
+    assert_eq!(severity, "warning", "{report:?}");
+    assert!(message.contains(&ghost), "{message}");
+    assert_eq!(fix, format!("docker volume inspect {ghost}"));
+    // a label naming a machine with no record: an orphan error, and its
+    // sqlite Store is named so it is not lost with the volume
+    f.volumes(&format!("{ghost}\t{}\tghost\n", f.id));
+    let server = worker(&f.home, "roomy");
+    let report = f.report("docker", SECOND);
+    server.join().unwrap();
+    let (severity, message, fix) = finding(&report, "machine.capacity");
+    assert_eq!(severity, "error", "{report:?}");
+    assert!(
+        message.contains("ghost") && message.contains("shop"),
+        "{message}"
+    );
+    assert_eq!(fix, format!("docker volume inspect {ghost}"));
+    // a 16-hex home label that is not this home's is an error
+    f.volumes(&format!("{own}\tffffffffffffffff\tdocker\n"));
+    let server = worker(&f.home, "roomy");
+    let report = f.report("docker", SECOND);
+    server.join().unwrap();
+    let (severity, message, _) = finding(&report, "machine.capacity");
+    assert_eq!(severity, "error", "{report:?}");
+    assert!(message.contains("labelled with home"), "{message}");
+}
+
 fn json(report: &SdkValue) -> String {
     let clean = matches!(report.get("findings"), Some(SdkValue::List(l)) if l.is_empty())
         && matches!(report.get("not_checked"), Some(SdkValue::List(l)) if l.is_empty());
@@ -430,9 +522,10 @@ fn json(report: &SdkValue) -> String {
 
 /// A stand-in worker for machine `docker`, saved in its `worker.json`:
 /// `answer` is this build's worker (a ping answers 1234 free bytes);
-/// `protocol` answers hello as another build and takes no request;
-/// `version`, `refusal` and `timeout` answer the ping wrongly, refuse it
-/// or never answer it.
+/// `roomy` is this build's worker with 100 GiB free, so the disk room
+/// check passes; `protocol` answers hello as another build and takes no
+/// request; `version`, `refusal` and `timeout` answer the ping wrongly,
+/// refuse it or never answer it.
 fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -485,14 +578,18 @@ fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
                 "version" => "different-version",
                 _ => env!("CARGO_PKG_VERSION"),
             };
+            let free = match mode {
+                "roomy" => 100i64 << 30,
+                _ => 1234,
+            };
             let answer = match mode {
-                "answer" | "version" => Some(SdkValue::map([(
+                "answer" | "roomy" | "version" => Some(SdkValue::map([(
                     "value",
                     SdkValue::map([
                         ("kind", SdkValue::text("worker")),
                         ("pid", SdkValue::Int(42)),
                         ("version", SdkValue::text(version)),
-                        ("free_disk", SdkValue::Int(1234)),
+                        ("free_disk", SdkValue::Int(free)),
                     ]),
                 )])),
                 "refusal" => Some(SdkValue::map([(
@@ -508,7 +605,7 @@ fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
                 write_frame(&mut stream, &answer).unwrap();
             }
         }
-        if mode == "answer" {
+        if matches!(mode, "answer" | "roomy") {
             return;
         }
         // no second request and no abandoned peer after a timeout or refusal

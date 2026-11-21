@@ -74,7 +74,10 @@ fn recorded_running(home: &Path, name: &str) {
         &SdkValue::map([
             ("name", SdkValue::text(name)),
             ("platform", SdkValue::text("lima")),
-            ("vm_name", SdkValue::text(format!("layerfs-test-{name}"))),
+            (
+                "vm_name",
+                SdkValue::text(format!("layerfs-00000000-{name}")),
+            ),
             ("state", SdkValue::text("running")),
             ("cpus", SdkValue::Int(2)),
             ("memory", SdkValue::Int(4 << 30)),

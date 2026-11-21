@@ -1,6 +1,7 @@
 //! `layerfs.json` and the layout version (#533 step 3): an empty home, the
 //! current layout, a foreign or unparsable `layerfs.json` (MIG, RC-8) and one
 //! the system refuses to read, each in its own test.
+use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{detect, ensure, open, Layout, LAYOUT_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
@@ -99,7 +100,7 @@ fn integration_folders_and_ds_store_read_as_empty_and_init_leaves_them() {
     std::fs::write(home.join(".DS_Store"), "finder").unwrap();
     let before = snapshot(&home);
     assert_eq!(detect(&home).unwrap(), Layout::Empty);
-    let created = layerfs_control::home::init(&home).unwrap();
+    let created = layerfs_control::home::init(&home, false).unwrap();
     assert_eq!(created.get_text("outcome"), Some("created"));
     assert!(matches!(detect(&home).unwrap(), Layout::Current(_)));
     let after = snapshot(&home);
@@ -197,5 +198,374 @@ fn a_layerfs_json_the_system_refuses_to_read_is_refused_unreadable() {
         refused.message
     );
     assert_eq!(fix(&refused), None);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// Makes `dir` look like a machine's worker root: its data (`store/`,
+/// `sandbox/`, `machine/native/run/`) and what its worker keeps (a
+/// `project.init` copy and its `log/worker.log`).
+fn worker_shape(dir: &std::path::Path) {
+    for folder in [
+        "store/shop",
+        "sandbox/live",
+        "machine/native/run",
+        "log",
+        "incoming",
+    ] {
+        std::fs::create_dir_all(dir.join(folder)).unwrap();
+    }
+    std::fs::write(dir.join("log/worker.log"), "worker started\n").unwrap();
+    std::fs::create_dir_all(dir.join("incoming/init-0123456789abcdef")).unwrap();
+}
+
+#[test]
+fn a_workers_data_disk_is_a_worker_root_not_a_home() {
+    // the incident's shape: a data disk with no `layerfs.json`, mistaken
+    // for a new home because nothing was written there yet
+    let home = tempdir("worker-root");
+    worker_shape(&home);
+    assert_eq!(detect(&home).unwrap(), Layout::WorkerRoot);
+    let before = snapshot(&home);
+    for refused in [ensure(&home).unwrap_err(), open(&home).unwrap_err()] {
+        assert_eq!(refused.code, "Unsupported");
+        assert!(
+            refused.message.contains("worker root"),
+            "{}",
+            refused.message
+        );
+        let fix = fix(&refused).unwrap_or_default();
+        assert!(!fix.contains("mv "), "{fix}");
+        assert!(!fix.contains("home init"), "{fix}");
+    }
+    // refused before the home lock: no `layerfs.json`, no `layerfs.lock`
+    assert_eq!(before, snapshot(&home), "the worker root was written");
+    assert!(!home.join("layerfs.json").exists());
+    assert!(!home.join("layerfs.lock").exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn one_half_of_a_worker_root_is_not_a_worker_root() {
+    // one half only: not a worker's root. A home's own data with no
+    // marker is adoptable (c6); the worker's output or an init copy alone
+    // is a home that lost its marker too, never a worker's root
+    for data in ["store/shop", "sandbox/live", "machine/native/run"] {
+        let home = tempdir("worker-data-only");
+        std::fs::create_dir_all(home.join(data)).unwrap();
+        assert_eq!(detect(&home).unwrap(), Layout::DataWithoutMarker, "{data}");
+        std::fs::remove_dir_all(home).unwrap();
+    }
+    let home = tempdir("worker-log-only");
+    std::fs::create_dir_all(home.join("log")).unwrap();
+    std::fs::write(home.join("log/worker.log"), "worker started\n").unwrap();
+    assert_eq!(detect(&home).unwrap(), Layout::DataWithoutMarker);
+    std::fs::remove_dir_all(home).unwrap();
+    let home = tempdir("worker-incoming-only");
+    std::fs::create_dir_all(home.join("incoming/init-0123456789abcdef")).unwrap();
+    assert_eq!(detect(&home).unwrap(), Layout::DataWithoutMarker);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn home_entries_keep_a_worker_shaped_folder_from_being_a_worker_root() {
+    // a home keeps these; a worker's root never does
+    for entry in ["trace", "backup"] {
+        let home = tempdir("worker-home-entry");
+        worker_shape(&home);
+        std::fs::create_dir_all(home.join(entry)).unwrap();
+        assert_ne!(detect(&home).unwrap(), Layout::WorkerRoot, "{entry}");
+        std::fs::remove_dir_all(home).unwrap();
+    }
+}
+
+#[test]
+fn a_worker_shaped_folder_with_layerfs_json_is_current() {
+    // a real home may hold a Store's file and a worker-like log; its marker
+    // decides, and the shape check never sees it
+    let home = tempdir("worker-marker");
+    worker_shape(&home);
+    let file = layerfs_home::home::layout::HomeFile {
+        layout: LAYOUT_VERSION,
+        id: "c".repeat(32),
+    };
+    layerfs_home::home::layout::write(&home, &file).unwrap();
+    assert_eq!(detect(&home).unwrap(), Layout::Current(file));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_home_missing_its_marker_is_not_a_worker_root() {
+    // a real home's data, log and backup with no `layerfs.json`. c6 gives
+    // this its own variant; under either build it is not a worker's root,
+    // which also needs an `init-*` copy or `log/worker.log`
+    let home = tempdir("markerless-home");
+    for folder in ["store/shop/project/demo", "trace", "backup/bucket", "log"] {
+        std::fs::create_dir_all(home.join(folder)).unwrap();
+    }
+    std::fs::write(home.join("store/shop/record.json"), "{}").unwrap();
+    std::fs::write(home.join("trace/calls.jsonl"), "").unwrap();
+    std::fs::write(home.join("backup/bucket/record.json"), "{}").unwrap();
+    std::fs::write(home.join("log/leases.jsonl"), "").unwrap();
+    let found = detect(&home).unwrap();
+    assert_eq!(found, Layout::DataWithoutMarker);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn home_get_answers_a_worker_root_broken_unsupported_without_moving_it() {
+    use layerfs_control::home::{get, Build, With};
+    let home = tempdir("worker-get");
+    worker_shape(&home);
+    let before = snapshot(&home);
+    let answer = get(&home, Build::default(), With::default()).unwrap();
+    assert_eq!(answer.get_text("state"), Some("broken"));
+    assert_eq!(answer.get_text("reason"), Some("unsupported"));
+    assert_eq!(answer.get_text("layout"), None);
+    let fix = answer.get_text("fix").unwrap_or_default();
+    assert!(!fix.contains("mv "), "{fix}");
+    assert!(!fix.contains("home init"), "{fix}");
+    assert!(
+        answer
+            .get_text("message")
+            .is_some_and(|message| message.contains("worker root")),
+        "{answer:?}"
+    );
+    assert_eq!(before, snapshot(&home), "home get wrote in the worker root");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A real home's data with no `layerfs.json`: a Store with a project, a
+/// machine record whose `vm_name` names the home, a Sandbox record whose
+/// daemon names it too, a trace file, a backup bucket and a log.
+fn data_home(tag: &str) -> PathBuf {
+    let home = tempdir(tag);
+    for folder in [
+        "store/shop/project/demo",
+        "machine/docker",
+        "machine/native",
+        "sandbox/live",
+        "backup/bucket",
+        "trace",
+        "log",
+    ] {
+        std::fs::create_dir_all(home.join(folder)).unwrap();
+    }
+    std::fs::write(
+        home.join("store/shop/record.json"),
+        r#"{"name":"shop","kind":"sqlite","machine":"native"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("store/shop/project/demo/record.json"),
+        r#"{"name":"demo"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("machine/docker/record.json"),
+        r#"{"name":"docker","vm_name":"layerfs-0123456789abcdef-docker"}"#,
+    )
+    .unwrap();
+    // `native` keeps no provider name
+    std::fs::write(
+        home.join("machine/native/record.json"),
+        r#"{"name":"native"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("sandbox/live/record.json"),
+        r#"{"name":"live","daemon":{"name":"layerfs-0123456789abcdef-live"}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("backup/bucket/record.json"),
+        r#"{"bucket":"bucket"}"#,
+    )
+    .unwrap();
+    std::fs::write(home.join("trace/calls.jsonl"), "").unwrap();
+    std::fs::write(home.join("log/leases.jsonl"), "").unwrap();
+    home
+}
+
+#[test]
+fn a_home_that_lost_its_marker_is_data_without_marker() {
+    let home = data_home("markerless-data");
+    assert_eq!(detect(&home).unwrap(), Layout::DataWithoutMarker);
+    assert_eq!(
+        layerfs_control::home::recorded_prefixes(&home).unwrap(),
+        ["0123456789abcdef".to_owned()]
+    );
+    let before = snapshot(&home);
+    // every call that opens the home is refused with the adopt fix, before
+    // the home lock: nothing is written, not even the call log
+    for refused in [ensure(&home).unwrap_err(), open(&home).unwrap_err()] {
+        assert_eq!(refused.code, "Unsupported");
+        assert_eq!(fix(&refused), Some("layerfs home init --adopt"));
+        assert!(
+            refused.message.contains("no layerfs.json"),
+            "{}",
+            refused.message
+        );
+        assert!(!refused.message.contains(".old"), "{}", refused.message);
+    }
+    assert_eq!(before, snapshot(&home), "the data home was written");
+    // `home get` says broken missing with the adopt fix, reading only
+    let answer = layerfs_control::home::get(
+        &home,
+        layerfs_control::home::Build::default(),
+        layerfs_control::home::With::default(),
+    )
+    .unwrap();
+    assert_eq!(answer.get_text("state"), Some("broken"));
+    assert_eq!(answer.get_text("reason"), Some("missing"));
+    assert_eq!(answer.get_text("fix"), Some("layerfs home init --adopt"));
+    assert!(
+        answer
+            .get_text("message")
+            .is_some_and(|message| message.contains("no layerfs.json")),
+        "{answer:?}"
+    );
+    assert!(!answer.get_text("fix").unwrap_or_default().contains("mv "));
+    assert_eq!(before, snapshot(&home), "home get wrote in the data home");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn init_without_adopt_refuses_a_markerless_home_and_writes_nothing() {
+    let home = data_home("no-adopt");
+    let before = snapshot(&home);
+    let refused = layerfs_control::home::init(&home, false).unwrap_err();
+    assert_eq!(refused.code, "Unsupported");
+    assert_eq!(fix(&refused), Some("layerfs home init --adopt"));
+    assert_eq!(before, snapshot(&home), "the data home was written");
+    assert!(!home.join("layerfs.json").exists());
+    assert!(!home.join("layerfs.lock").exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn adopt_writes_the_marker_and_keeps_every_data_byte() {
+    let home = data_home("adopt");
+    let before = snapshot(&home);
+    let answer = layerfs_control::home::init(&home, true).unwrap();
+    assert_eq!(answer.get_text("outcome"), Some("adopted"));
+    assert_eq!(answer.get("unchanged"), Some(&SdkValue::Bool(false)));
+    let id = answer.get_text("id").expect("an id");
+    assert_eq!(id.len(), 32, "{id}");
+    assert!(id.starts_with("0123456789abcdef"), "{id}");
+    assert_eq!(answer.get_text("id_source"), Some("records"));
+    match answer.get("warnings") {
+        Some(SdkValue::List(items)) => assert!(!items.is_empty(), "the audit warns"),
+        other => panic!("no warnings: {other:?}"),
+    }
+    assert!(matches!(detect(&home).unwrap(), Layout::Current(_)));
+    assert!(
+        !std::path::Path::new(&format!("{}.old", home.display())).exists(),
+        "adopt moved the data"
+    );
+    // the data is byte for byte what it was; only the marker and the lock
+    // the adopt took are new
+    let after = snapshot(&home);
+    for entry in &before {
+        assert!(after.contains(entry), "{:?} changed", entry.0);
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn adopt_reuses_an_eight_hex_prefix_from_records_of_the_earlier_era() {
+    let home = data_home("adopt-8");
+    std::fs::write(
+        home.join("machine/docker/record.json"),
+        r#"{"name":"docker","vm_name":"layerfs-01234567-docker"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("sandbox/live/record.json"),
+        r#"{"name":"live","daemon":{"name":"lfs-01234567-live"}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        layerfs_control::home::recorded_prefixes(&home).unwrap(),
+        ["01234567".to_owned()]
+    );
+    let answer = layerfs_control::home::init(&home, true).unwrap();
+    assert_eq!(answer.get_text("outcome"), Some("adopted"));
+    let id = answer.get_text("id").unwrap();
+    assert_eq!(id.len(), 32);
+    assert!(id.starts_with("01234567"), "{id}");
+    assert_eq!(answer.get_text("id_source"), Some("records"));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn adopt_makes_a_fresh_id_when_no_record_names_the_home() {
+    let home = tempdir("adopt-fresh");
+    std::fs::create_dir_all(home.join("store/shop")).unwrap();
+    let answer = layerfs_control::home::init(&home, true).unwrap();
+    assert_eq!(answer.get_text("outcome"), Some("adopted"));
+    let id = answer.get_text("id").unwrap();
+    assert_eq!(id.len(), 32);
+    assert_eq!(answer.get_text("id_source"), Some("fresh"));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn adopt_refuses_records_that_disagree_on_the_home_id() {
+    let home = data_home("adopt-conflict");
+    std::fs::write(
+        home.join("sandbox/live/record.json"),
+        r#"{"name":"live","daemon":{"name":"layerfs-fedcba9876543210-live"}}"#,
+    )
+    .unwrap();
+    let before = snapshot(&home);
+    let refused = layerfs_control::home::init(&home, true).unwrap_err();
+    assert_eq!(refused.code, "Failed");
+    assert!(refused.message.contains("disagree"), "{}", refused.message);
+    assert!(!home.join("layerfs.json").exists());
+    let after = snapshot(&home);
+    for entry in &before {
+        assert!(after.contains(entry), "{:?} changed", entry.0);
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn adopt_refuses_a_record_it_cannot_decode() {
+    let home = data_home("adopt-unreadable");
+    std::fs::write(home.join("machine/docker/record.json"), "{not json").unwrap();
+    let refused = layerfs_control::home::init(&home, true).unwrap_err();
+    assert_eq!(refused.code, "Failed");
+    assert!(!home.join("layerfs.json").exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn adopt_leaves_a_current_home_as_it_was() {
+    let home = tempdir("current-adopt");
+    let file = open(&home).unwrap();
+    let before = snapshot(&home);
+    let answer = layerfs_control::home::init(&home, true).unwrap();
+    assert_eq!(answer.get_text("outcome"), Some("unchanged"));
+    assert_eq!(answer.get("id"), None);
+    assert_eq!(detect(&home).unwrap(), Layout::Current(file));
+    assert_eq!(before, snapshot(&home), "adopt wrote in a current home");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_worker_root_is_never_adoptable() {
+    let home = tempdir("worker-adopt");
+    worker_shape(&home);
+    let before = snapshot(&home);
+    let refused = layerfs_control::home::init(&home, true).unwrap_err();
+    assert_eq!(refused.code, "Unsupported");
+    assert!(
+        refused.message.contains("worker root"),
+        "{}",
+        refused.message
+    );
+    assert_eq!(fix(&refused), Some("unset LAYERFS_HOME"));
+    assert_eq!(before, snapshot(&home), "the worker root was written");
+    assert!(!home.join("layerfs.json").exists());
     std::fs::remove_dir_all(home).unwrap();
 }

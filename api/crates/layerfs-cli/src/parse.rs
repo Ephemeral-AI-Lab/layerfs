@@ -28,6 +28,30 @@ pub struct Switches {
     pub scope: Option<SdkValue>,
     /// `--detail`: the long form, of the result and of a refusal.
     pub detail: bool,
+    /// `--fail-on` (`doctor` only): whether a report with something wrong
+    /// exits 1 (`error`) or 0 (`never`, the default).
+    pub fail_on: FailOn,
+}
+
+/// When a doctor's report fails the call.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FailOn {
+    /// A report is the answer, whatever it found: exit 0.
+    #[default]
+    Never,
+    /// Exit 1 when a finding is an error or a check could not be made.
+    Error,
+}
+
+impl FailOn {
+    /// The word `--fail-on` takes, if it is one.
+    fn parse(word: &str) -> Option<Self> {
+        match word {
+            "never" => Some(FailOn::Never),
+            "error" => Some(FailOn::Error),
+            _ => None,
+        }
+    }
 }
 
 /// One parsed call: its named arguments and the switches.
@@ -125,6 +149,16 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         match flag {
             "--text" => switches.text = true,
             "--json" => switches.json = true,
+            // `--fail-on` is the doctor's own switch, not a call option
+            "--fail-on" if call.call == "doctor" => {
+                let word = take(&mut i)?;
+                switches.fail_on = FailOn::parse(&word).ok_or_else(|| {
+                    usage(format!(
+                        "{}: --fail-on is never or error, not {word:?}",
+                        call.name()
+                    ))
+                })?;
+            }
             // the global options of every call (call surface 2.0): the
             // library takes them out of the arguments and checks them
             "--detail" if inline.is_none() => {

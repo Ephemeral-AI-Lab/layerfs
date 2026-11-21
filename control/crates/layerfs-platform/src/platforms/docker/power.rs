@@ -99,7 +99,29 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
         .answer("removing the old worker container")?;
     }
     let bundle_mount = format!("{}:/layerfs/bundle:ro", bundle.dir.display());
-    let volume = format!("{}-data:{DATA}", spec.vm_name);
+    // The volume is made before the container so it can carry the labels
+    // that say whose it is; `docker run -v` would make it unlabelled. An
+    // existing volume keeps the labels it has (Docker ignores `volume
+    // create`'s options then), and the start goes on: the doctor reports it.
+    // Best effort: a create that fails is not a start failure, since the
+    // `--volume` below would make the volume anyway.
+    let volume_name = format!("{}-data", spec.vm_name);
+    let volume = format!("{volume_name}:{DATA}");
+    let home_label = format!("layerfs.home={}", spec.home_id);
+    let machine_label = format!("layerfs.machine={}", spec.name);
+    let _ = run(
+        spec,
+        &[
+            "volume",
+            "create",
+            "--label",
+            &home_label,
+            "--label",
+            &machine_label,
+            &volume_name,
+        ],
+        "creating the machine's data volume",
+    );
     let bundle_label = format!("layerfs.bundle={}", bundle.hash);
     let secret_file = format!("LAYERFS_WORKER_SECRET={STATE}/secret");
     let log = format!("LAYERFS_WORKER_LOG={WORKER_LOG}");

@@ -5,7 +5,9 @@
 //! home. A check that does not apply is left out: a home not made yet has
 //! no layout or records; the bundle is checked only where a recorded
 //! machine needs it; a check that waits on an unreadable layout or record
-//! set is not made.
+//! set is not made. Once the records scan gave a stable verdict,
+//! `home.layout` also cross-checks the id `layerfs.json` holds against the
+//! provider names the records keep (`super::host_identity`).
 use super::records::Findings;
 use super::target::{Budget, Checks};
 use layerfs_home::home::{detect, Layout};
@@ -68,11 +70,60 @@ fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::sc
             checks.fix(LAYOUT, layerfs_home::home::layout::foreign_fix(home));
             None
         }
-        Layout::Current(_) => {
+        // a machine's worker root is not a home, and moving a data disk
+        // would empty its volume: name the real home, run no records check
+        // (layerfs-project#752, c5)
+        Layout::WorkerRoot => {
+            checks.fail(
+                LAYOUT,
+                "a machine's worker root, not a LayerFS 2.0 home: this build writes nothing in it; point LAYERFS_HOME at your home",
+            );
+            checks.fix(LAYOUT, layerfs_home::home::layout::worker_root_fix());
+            None
+        }
+        // a home that lost its `layerfs.json`: its data is there, so this is
+        // not a foreign folder and is never moved aside; `home init --adopt`
+        // writes the marker without touching the data (layerfs-project#752, c6)
+        Layout::DataWithoutMarker => {
+            checks.fail(
+                LAYOUT,
+                "a LayerFS home's data with no layerfs.json: this build writes nothing in it; adopt it and keep the data",
+            );
+            checks.fix(
+                LAYOUT,
+                layerfs_home::home::layout::data_without_marker_fix(),
+            );
+            None
+        }
+        Layout::Current(file) => {
             checks.pass(LAYOUT, "a current-layout home this build reads");
-            observed(home, budget, checks)
+            let scanned = observed(home, budget, checks);
+            if let Some(records) = &scanned {
+                identity(home, &file.id, records, checks);
+            }
+            scanned
         }
     }
+}
+
+/// `home.layout`'s second part: the id `layerfs.json` holds against the
+/// provider names the home's records keep, once the records scan gave a
+/// stable verdict. A mismatch fails `home.layout` with no fix: the record or
+/// the id belongs to another home, and moving this one aside is not a
+/// repair.
+fn identity(home: &Path, home_id: &str, records: &super::scan::Scanned, checks: &mut Checks) {
+    let Some(conflict) = super::host_identity::mismatch(home, home_id, records) else {
+        return;
+    };
+    checks.fail(
+        LAYOUT,
+        format!(
+            "{} records the provider name {:?}, but this home's id gives {:?}: the record or layerfs.json comes from another home, so use the home it belongs to or remove the record by hand",
+            conflict.path.display(),
+            conflict.recorded,
+            conflict.expected
+        ),
+    );
 }
 
 /// `home.records`: every record, with the home's record set fingerprinted

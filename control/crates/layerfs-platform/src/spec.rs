@@ -3,6 +3,7 @@
 //! comes from the caller.
 use crate::error::{Code, MachineError};
 use crate::platform::Platform;
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -16,6 +17,11 @@ pub struct Spec {
     /// The machine's name (`dev`).
     pub name: String,
     pub kind: Platform,
+    /// The full id of the LayerFS home the machine belongs to (32 hex
+    /// digits): the value of its data volume's `layerfs.home` label, so the
+    /// volume itself says whose it is (layerfs-project#752, c3). Every
+    /// machine has one; only a container-shaped platform reads it.
+    pub home_id: String,
     /// The provider's name for the machine's VM or worker container,
     /// `<prefix><machine>`, chosen by the caller.
     pub vm_name: String,
@@ -38,6 +44,26 @@ pub struct Spec {
     /// A folder of the caller's for this machine: its logs.
     pub work_dir: PathBuf,
     pub tools: Tools,
+}
+
+/// One provider volume as a read-only listing reports it: its name and the
+/// labels it holds (`layerfs.home` and `layerfs.machine` today).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Volume {
+    /// The provider's name for the volume (a machine's `<vm_name>-data`).
+    pub name: String,
+    /// Every label the volume holds, by key; an absent label is no entry.
+    pub labels: BTreeMap<String, String>,
+}
+
+impl Volume {
+    /// The value of label `key`, when the volume holds a non-empty one.
+    pub fn label(&self, key: &str) -> Option<&str> {
+        self.labels
+            .get(key)
+            .map(String::as_str)
+            .filter(|v| !v.is_empty())
+    }
 }
 
 /// Guest state that outlives one call; the caller stores and passes it back.

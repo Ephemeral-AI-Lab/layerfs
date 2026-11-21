@@ -7,9 +7,12 @@
 //! In order: the operation the project's record holds ([`held`]); the
 //! Store's records-only state, which blocks the project when it is not
 //! ready; the Store's own list, which hides a project it does not list and
-//! blocks every project of a Store it cannot be read from; a delete intent
-//! left behind (`store/<store>/delete/<project>.json`) on a project the
-//! Store still lists, which is `broken` `unresolved`; else `ready`.
+//! blocks every project of a Store it cannot be read from; a record a local
+//! sqlite project cannot use ([`ProjectRecord::ready`]: no `manifest` or
+//! `installed`, or one that does not decode), which is `broken` `failed`
+//! with the project's delete as its fix; a delete intent left behind
+//! (`store/<store>/delete/<project>.json`) on a project the Store still
+//! lists, which is `broken` `unresolved`; else `ready`.
 use crate::project::delete::Intent;
 use crate::project::frame::ListedProject;
 use crate::project::op::{DELETE, INIT};
@@ -20,6 +23,7 @@ use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::refused;
 use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::FIX;
 use layerfs_home::state::{Reason, State};
 use std::path::Path;
 
@@ -73,31 +77,41 @@ pub enum Listing<'a> {
     Listed(&'a ListedProject),
 }
 
-/// The state of project `name` of Store `store` (see the module), its
-/// Store's block `block` (the Store's records-only state, when it is not
-/// ready) and what the Store's list says. `None` is a project the Store
-/// does not list: it is hidden, as today.
+/// The state of project `name` of `store` (see the module), its Store's
+/// block `block` (the Store's records-only state, when it is not ready) and
+/// what the Store's list says. `None` is a project the Store does not list:
+/// it is hidden, as today.
 pub fn derive(
     home: &Path,
-    store: &str,
+    store: &StoreRecord,
     name: &str,
     record: &ProjectRecord,
     block: Option<&State>,
     listing: Listing<'_>,
 ) -> Option<State> {
-    if let Some(state) = held(store, name, record) {
+    let store_name = store.name();
+    if let Some(state) = held(store_name, name, record) {
         return Some(state);
     }
     if let Some(block) = block {
         return Some(block.clone());
     }
     match listing {
-        Listing::Unread(reason) => Some(State::blocked_by("store", store, reason)),
+        Listing::Unread(reason) => Some(State::blocked_by("store", store_name, reason)),
         Listing::Hidden => None,
-        Listing::Skipped | Listing::Listed(_) => Some(match intent_left(home, store, name) {
-            true => unresolved(store, name),
-            false => State::Ready,
-        }),
+        Listing::Skipped | Listing::Listed(_) => {
+            // a record this build cannot use is `broken` `failed` (c7),
+            // after the Store's block and before the delete intent: the
+            // record exists, so its entry (not a bare folder) is the fix
+            if let Err(refusal) = record.ready(home, store) {
+                let fix = refusal.detail.get_text(FIX);
+                return Some(State::broken(Reason::Failed, fix));
+            }
+            Some(match intent_left(home, store_name, name) {
+                true => unresolved(store_name, name),
+                false => State::Ready,
+            })
+        }
     }
 }
 
@@ -133,13 +147,6 @@ pub fn recorded(home: &Path, store: &StoreRecord, name: &str, machines: Machines
     let record = ProjectRecord::read(home, store_name, name)?
         .ok_or_else(|| refused("NoSuchProject", format!("no project {store_name}/{name}")))?;
     let block = store_block(home, store, machines)?;
-    let state = derive(
-        home,
-        store_name,
-        name,
-        &record,
-        block.as_ref(),
-        Listing::Skipped,
-    );
+    let state = derive(home, store, name, &record, block.as_ref(), Listing::Skipped);
     Ok(state.unwrap_or(State::Ready))
 }

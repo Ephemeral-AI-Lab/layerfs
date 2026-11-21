@@ -20,6 +20,30 @@ Canonical construction is the engine's
 [Project Init](../../engine/project-init/README.md); this page is where it
 runs and how the folder gets there.
 
+## Completeness (`record.rs`)
+
+A local sqlite project's record is usable only when its `manifest` decodes,
+and `ready` only when its `installed` manifest is present and decodes
+(`ProjectRecord::complete` and `ready`). `project.get`/`project.list`, the
+home tree and `project doctor`'s `project.record` take that one decision: a
+record that exists but cannot be used is `broken` `failed`, fixed by
+`layerfs project delete <store>/<project>`. It is not a folder to
+`project prune`, which only removes a folder with no record. A PostgreSQL
+record (its `stack` is the identity) and a sqlite record placed on a worker
+are exempt: the worker writes and reads that record on its machine.
+
+## Leftover entries (`project prune`)
+
+A real folder under `store/<store>/project/` with no record is not a
+project: it is the leftover of an Init that never reached the Store, or of
+a delete from another home. `home doctor` reports it as an error whose fix
+is `layerfs project prune <store>/<project>`; `project init` of that name
+answers `NameTaken` with the same fix. `project.prune` reads the home only,
+takes its lock and opens no Store: a Store the home does not record is
+`NotFound`, an entry on record (valid, broken or unreadable) is `Exists`
+with `layerfs project delete <store>/<project>`, a symlink is
+`InvalidInput`, and only a real folder with no record is removed.
+
 ## Init (`family.rs`, `add.rs`, `postgres_init.rs`, `init.rs`)
 
 ```text

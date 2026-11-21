@@ -28,6 +28,7 @@ fn each_frame_encodes_the_map_its_caller_built() {
         staged: ID.to_owned(),
         timeout_ms: Some(5),
         store_record: Some(record.clone()),
+        counts: None,
     };
     let encoded = init.encode();
     assert_eq!(

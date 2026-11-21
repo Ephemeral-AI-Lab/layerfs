@@ -773,6 +773,44 @@ fn workspace_nodes_come_from_the_daemon_s_list_and_the_folder_s_records() {
 }
 
 #[test]
+fn unreadable_workspace_records_are_not_checked_not_none() {
+    let home = home();
+    sandbox(&home, "native", local_record());
+    // the daemon lists its Workspaces; the home's folder of records cannot
+    // be read, so the recorded set is unknown, not empty
+    let (_, server) = daemon(&home, Mode::Mixed);
+    let records = paths::workspace_dir(&home, "sb");
+    if records.exists() {
+        std::fs::remove_dir_all(&records).unwrap();
+    }
+    std::fs::write(&records, b"not a folder").unwrap();
+    let report = doctor(&home);
+    assert_eq!(server.join().unwrap(), 1);
+    let observation = check(&report, "sandbox.observation");
+    assert_eq!(
+        observation.get_text("outcome"),
+        Some("unknown"),
+        "{report:?}"
+    );
+    assert_eq!(
+        observation
+            .get("blocked_by")
+            .and_then(|blocked| blocked.get_text("reason")),
+        Some("failed"),
+        "{report:?}"
+    );
+    // the daemon's own rows still name their Workspaces; no recorded-only
+    // one can be named
+    let handles: Vec<String> = workspaces(&report)
+        .iter()
+        .map(|node| node.get_text("workspace").unwrap().to_owned())
+        .collect();
+    assert_eq!(handles.len(), 3, "{handles:?}");
+    assert!(!handles.iter().any(|handle| handle == "sb:gone"));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn a_lost_daemon_blocks_its_workspaces_without_trying_them() {
     let home = home();
     sandbox(&home, "native", local_record());
