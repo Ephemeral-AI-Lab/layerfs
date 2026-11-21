@@ -241,3 +241,60 @@ fn a_row_s_reason_reads_in_state_and_its_fix_under_the_table() {
          fix pg: layerfs store update pg --auth x\n"
     );
 }
+
+#[test]
+fn doctor_text_aligns_columns_and_renders_detail_tree_and_evidence() {
+    use layerfs_cli::output::doctor_text;
+    let t = |text: &str| SdkValue::text(text);
+    let report = SdkValue::map([
+        ("ok", SdkValue::Bool(false)),
+        (
+            "findings",
+            SdkValue::List(vec![SdkValue::map([
+                ("store", t("pg")),
+                ("check", t("store.connection")),
+                ("severity", t("error")),
+                ("message", t("cannot reach server")),
+                ("fix", t("layerfs store update pg --auth a")),
+                ("evidence", SdkValue::map([("step", t("handshake"))])),
+            ])]),
+        ),
+        (
+            "not_checked",
+            SdkValue::List(vec![SdkValue::map([
+                ("project", t("pg/app")),
+                ("check", t("project.listed")),
+                (
+                    "blocked_by",
+                    SdkValue::map([("store", t("pg")), ("reason", t("failed"))]),
+                ),
+            ])]),
+        ),
+        ("observed_at", t("2026-11-20T05:00:00Z")),
+        (
+            "tree",
+            SdkValue::map([
+                ("store", t("pg")),
+                ("status", t("error")),
+                ("coverage", t("shallow")),
+                (
+                    "checks",
+                    SdkValue::List(vec![SdkValue::map([
+                        ("check", t("store.record")),
+                        ("outcome", t("pass")),
+                    ])]),
+                ),
+            ]),
+        ),
+    ]);
+    let shown = doctor_text(&report);
+    let lines: Vec<&str> = shown.lines().collect();
+    assert_eq!(
+        lines[1].find("store pg"),
+        lines[4].find("project pg/app"),
+        "{shown}"
+    );
+    assert!(shown.contains("evidence: step=handshake"), "{shown}");
+    assert!(shown.contains("observed at: 2026-11-20T05:00:00Z"), "{shown}");
+    assert!(shown.contains("store.record: pass"), "{shown}");
+}
