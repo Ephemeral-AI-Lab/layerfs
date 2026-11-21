@@ -132,11 +132,43 @@ fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
     let name = &host.project;
     let identity = layerfs_store::identity::identity(&host.open_args())?;
     layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
-    let project = layerfs_store::project::discovery::project(
+    let project = match layerfs_store::project::discovery::project(
         Some(&host.home),
         Some(&host.store),
         Some(&host.project),
-    )?;
+    ) {
+        Ok(project) => project,
+        Err(refusal)
+            if refusal.code == "NoSuchProject"
+                && refusal.message == "no complete project manifest" =>
+        {
+            let repaired = host
+                .open_args()
+                .store_path()
+                .ok()
+                .filter(|path| path.is_file())
+                .map(|path| {
+                    layerfs_store::backup::restored::repair_project(
+                        &host.home,
+                        &host.store,
+                        &host.project,
+                        identity,
+                        &path,
+                    )
+                })
+                .transpose()?
+                .unwrap_or(false);
+            if !repaired {
+                return Err(refusal);
+            }
+            layerfs_store::project::discovery::project(
+                Some(&host.home),
+                Some(&host.store),
+                Some(&host.project),
+            )?
+        }
+        Err(refusal) => return Err(refusal),
+    };
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",

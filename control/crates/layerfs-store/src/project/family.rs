@@ -17,6 +17,7 @@ use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
 use crate::sqlite::family::progress;
 use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::provision::StoreManifest;
 use layerfs_home::events::Events;
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::op::FIELD;
@@ -286,10 +287,20 @@ fn init_on_worker(
         refusal
     })?;
     let stack = added.get("stack").cloned().unwrap_or_default();
+    let mut project = ProjectRecord::initialised(store, name, stack);
+    if let (Some(SdkValue::Bytes(m)), Some(SdkValue::Bytes(i))) =
+        (added.get("manifest"), added.get("installed"))
+    {
+        if StoreManifest::decode(m).is_ok() && StoreManifest::decode(i).is_ok() {
+            project = project
+                .with("manifest", SdkValue::Bytes(m.clone()))
+                .with("installed", SdkValue::Bytes(i.clone()));
+        }
+    }
     progress(events, "record", None);
     {
         let _lock = layerfs_home::home::lock::take(&home)?;
-        ProjectRecord::initialised(store, name, stack).write(&home)?;
+        project.write(&home)?;
     }
     created(&home, store, name, &record, &added)
 }
