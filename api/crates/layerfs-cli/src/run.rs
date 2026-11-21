@@ -208,7 +208,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
             }
         }
         // a doctor's report reads as its findings and what it could not check
-        Ok(value) if text && call.call == "doctor" => output::doctor(&value),
+        Ok(value) if text && call.call == "doctor" => output::doctor(&value, switches.detail),
         Ok(value) if text => view::show(call, words, &value),
         Ok(value) => output::result(&value, false, call.form),
     }

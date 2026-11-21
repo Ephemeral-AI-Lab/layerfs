@@ -55,7 +55,7 @@ pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
 /// A doctor's report in the readable form: a count line, then each finding as
 /// `<severity> <thing> <name> <check>: <message>` with its fix on the next
 /// line, then each check that could not be made and why.
-pub fn doctor(report: &SdkValue) -> ExitCode {
+pub fn doctor(report: &SdkValue, detail: bool) -> ExitCode {
     let empty = Vec::new();
     let rows = |key: &str| match report.get(key) {
         Some(SdkValue::List(rows)) => rows,
@@ -75,29 +75,46 @@ pub fn doctor(report: &SdkValue) -> ExitCode {
             .filter(|f| text(f, "severity") == severity)
             .count()
     };
-    let mut printed = match (found.len(), open.len()) {
-        (0, 0) => "ok: every check was made and nothing was found\n".to_owned(),
+    let summary = match (found.len(), open.len()) {
+        (0, 0) => "ok: every check was made and nothing was found".to_owned(),
         _ => format!(
-            "{} error(s), {} warning(s), {} notice(s), {} not checked\n",
+            "{} error(s), {} warning(s), {} notice(s), {} not checked",
             count("error"),
             count("warning"),
             count("notice"),
             open.len()
         ),
     };
+    let width = if open.is_empty() {
+        8
+    } else {
+        "not checked".len()
+    };
+    let indent = " ".repeat(width + 1);
+    let mut printed = format!("{}\n", crate::banner::bold(&summary));
     for finding in found {
+        let severity = text(finding, "severity");
+        let color = match severity.as_str() {
+            "error" => "31",
+            "warning" => "33",
+            _ => "36",
+        };
         printed.push_str(&format!(
-            "{:<8} {} {}: {}\n",
-            text(finding, "severity"),
+            "{} {} {}: {}\n",
+            crate::banner::paint(&format!("{severity:<width$}"), color),
             named(finding),
             text(finding, "check"),
             text(finding, "message"),
         ));
-        if let Some(from) = finding.get_text("from") {
-            printed.push_str(&format!("         from: {from}\n"));
+        for field in ["from", "fix"] {
+            if let Some(value) = finding.get_text(field) {
+                printed.push_str(&format!("{indent}{field}: {value}\n"));
+            }
         }
-        if let Some(fix) = finding.get_text("fix") {
-            printed.push_str(&format!("         fix: {fix}\n"));
+        if detail {
+            if let Some(evidence) = finding.get("evidence") {
+                printed.push_str(&format!("{indent}evidence: {}\n", json::print(evidence)));
+            }
         }
     }
     for entry in open {
@@ -112,12 +129,45 @@ pub fn doctor(report: &SdkValue) -> ExitCode {
             .get_text("check")
             .map_or(String::new(), |check| format!(" {check}"));
         printed.push_str(&format!(
-            "{:<8} {}{check}: {why}\n",
-            "not checked",
+            "{} {}{check}: {why}\n",
+            crate::banner::paint("not checked", "2"),
             named(entry)
         ));
     }
+    if detail {
+        for field in ["status", "counts", "observed_at"] {
+            if let Some(value) = report.get(field) {
+                printed.push_str(&format!("{field}: {}\n", name_of(value)));
+            }
+        }
+        if let Some(tree) = report.get("tree") {
+            printed.push_str("tree:\n");
+            doctor_node(tree, 2, &mut printed);
+        }
+    }
     print(&printed)
+}
+
+/// Retain every node and check, including empty child groups and check origins.
+fn doctor_node(node: &SdkValue, indent: usize, out: &mut String) {
+    let pad = " ".repeat(indent);
+    if let SdkValue::Map(fields) = node {
+        for (key, value) in fields {
+            match value {
+                SdkValue::List(rows) if !rows.is_empty() => {
+                    out.push_str(&format!("{pad}{key}:\n"));
+                    for row in rows {
+                        if key == "checks" {
+                            out.push_str(&format!("{pad}  {}\n", json::print(row)));
+                        } else {
+                            doctor_node(row, indent + 2, out);
+                        }
+                    }
+                }
+                value => out.push_str(&format!("{pad}{key}: {}\n", name_of(value))),
+            }
+        }
+    }
 }
 
 fn name_of(value: &SdkValue) -> String {

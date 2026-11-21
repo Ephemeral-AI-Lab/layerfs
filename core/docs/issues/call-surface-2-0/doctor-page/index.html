@@ -306,9 +306,10 @@ span.marks { visibility: hidden; }
   min-width: 120px; max-width: min(300px, calc(100vw - 16px)); padding: 8px 10px;
   border-radius: var(--dsw-radius-sm); background: var(--doc-tip-bg); color: var(--doc-tip-fg);
   box-shadow: 0 0 0 .5px #ffffff2e, 0 4px 14px 0 #00000052;
-  font-size: 12px; line-height: 16px; pointer-events: none;
+  font-size: 12px; line-height: 16px; overflow-y: auto; overscroll-behavior: contain;
   --doc-ok: var(--doc-tip-ok, #22c55e); --doc-bad: var(--doc-tip-bad, #f76a6a); --doc-warn: var(--doc-tip-warn, #f5a524); --doc-hollow: var(--doc-tip-hollow, #adb2b8);
 }
+.tip > * { flex-shrink: 0; }
 .tip[data-on] { display: flex; }
 .tip[data-wide] { max-width: min(440px, calc(100vw - 16px)); }
 .tip b { display: flex; align-items: center; gap: 6px; font-weight: 500; overflow-wrap: anywhere; }
@@ -346,7 +347,7 @@ span.marks { visibility: hidden; }
 .mock .hint { flex: 1 1 100%; color: var(--dsw-alias-label-secondary); }
 
 /* ---------- phone: name and status word on the first line, the rest below ---------- */
-@media (max-width: 640px) {
+@media (max-width: 860px) {
   .page { --inset: 12px; }
   .line { flex-wrap: wrap; padding: 4px 6px 4px 0; }
   .rowBtn { flex: 1 1 0; gap: 7px; padding-left: calc(6px + var(--depth) * 14px); }
@@ -354,7 +355,8 @@ span.marks { visibility: hidden; }
   .more { order: 2; flex: 1 1 100%; padding-left: calc(31px + var(--depth) * 14px); }
   .more[data-thin] { height: 0; overflow: hidden; }   /* nothing to say: still the line break before the marks */
   .line[data-bare] .more[data-thin] { display: none; }
-  .fact { display: none; }
+  .more { flex-wrap: wrap; }
+  .fact { flex: 1 1 100%; white-space: normal; overflow-wrap: anywhere; }
   .marks { order: 3; min-width: 0; margin-left: calc(27px + var(--depth) * 14px); }
   .acts { order: 4; width: auto; margin-left: auto; }
   .line[data-bare] .marks, .line[data-bare] .acts { display: none; }
@@ -517,8 +519,8 @@ const CHECKS = {
     { check: "machine.capacity", what: "its data disk has room" }],
   store: [
     { check: "store.record", what: "its record is valid: name, engine and the saved id" },
-    { check: "store.operation", what: "no operation on it is half-finished or left with its outcome not known, and no lease is stale" },
-    { check: "store.connection", what: "it is reached where it lives: a sqlite Store through its machine; a PostgreSQL Store from this computer, and once more from each machine that has a Sandbox of it, with from naming that machine" },
+    { check: "store.operation", what: "no operation on it is half-finished or left with its outcome not known, in the home's record or, for a sqlite Store, beside its file on its machine; and no lease is stale" },
+    { check: "store.connection", what: "it is reached where it lives: a sqlite Store through its machine; a PostgreSQL Store from this computer, and once more from each machine that has a Sandbox of it, with `from` naming that machine" },
     { check: "store.identity", what: "the id in its data is the id in its record" },
     { check: "store.schema", what: "its schema is the one this build reads" },
     { check: "store.backups", what: "no backup of it is behind: its heads against each bucket link (sqlite; a notice per bucket)" }],
@@ -610,8 +612,15 @@ function buildWorld(sc) {
 }
 const kidsOf = (x) => W.things.filter((y) => y.parent === x.key);
 const ancestors = (x) => { const a = []; let p = x.parent && W.by[x.parent]; while (p) { a.push(p); p = p.parent && W.by[p.parent]; } return a; };
-/* R9: a PostgreSQL Store is probed from each machine that has a Sandbox of that Store. */
-const reachMachines = (x) => W.things.filter((m) => m.k === 'machine' && kidsOf(m).some((b) => b.k === 'sandbox' && b.project.split('/')[0] === x.n));
+/* The default connection already probes native unless it has its own address. */
+function reachMachines(store) {
+  const sources = new Set((store.connections || []).map(c => c.machine).filter(Boolean));
+  W.things.filter(x => x.k === 'sandbox' && x.project.split('/')[0] === store.n).forEach(x => {
+    const machine = W.by[x.machine];
+    if (machine && machine.id !== 'native') sources.add(machine.id);
+  });
+  return Array.from(sources).sort().map(id => W.things.find(m => m.k === 'machine' && m.id === id)?.key || 'machine:' + id);
+}
 /* The checks a report holds for one thing: that kind's frozen list, in order. A check that
    does not apply is left out, not listed as skipped: native has no provider, worker or data
    disk; a stopped machine's worker checks are not made; store.backups is left out for a
@@ -621,16 +630,15 @@ const reachMachines = (x) => W.things.filter((m) => m.k === 'machine' && kidsOf(
 function checkIds(x, full, any) {
   let list = CHECKS[x.k].filter((c) => full || !c.full_only);
   const drop = (re) => { list = list.filter((c) => !re.test(c.check)); };
-  if (x.k === 'machine' && x.platform === 'native') drop(/^machine\.(provider|worker\.|capacity)/);
+  if (x.k === 'machine' && x.platform === 'native') list = list.filter(c => ['machine.record', 'machine.operation', 'machine.state'].includes(c.check));
   else if (x.k === 'machine' && !any && W.stopped.has(x.n)) drop(/^machine\.(worker\.|capacity)/);
-  if (x.k === 'sandbox' && W.by[x.machine].platform === 'native') drop(/^sandbox\.worker_compatibility$/);
+  if (x.k === 'sandbox' && W.by[x.machine]?.platform === 'native') drop(/^sandbox\.(forward_process|worker_compatibility)$/);
   if (x.k === 'store' && (x.engine === 'postgresql' || !LINKS[x.n])) drop(/^store\.backups$/);
   if (x.k === 'bucket') drop(/^bucket\.reconcile$/);
   const out = [];
   list.forEach((c) => {
     out.push({ id: c.check, what: c.what });
-    /* R9: one more store.connection per machine that has a Sandbox of a PostgreSQL Store, with `from` */
-    if (c.check === 'store.connection' && x.engine === 'postgresql') reachMachines(x).forEach((m) => out.push({ id: c.check, what: c.what, from: m.key }));
+    if (c.check === 'store.connection' && x.engine === 'postgresql') reachMachines(x).forEach(from => out.push({ id: c.check, what: c.what, from }));
   });
   return out;
 }
@@ -673,6 +681,11 @@ function probe(x, full) {
     find('machine.worker.compatibility', 'bad', res.msg);
     return res;
   }
+  if (x.k === 'sandbox' && !W.by[x.machine]) {
+    res.s = 'problem'; res.word = 'Missing machine'; res.msg = 'its recorded machine does not exist';
+    find('sandbox.machine_reference', 'bad', res.msg);
+    return res;
+  }
   if (x.k === 'sandbox' && W.lost.has(x.n)) {
     res.s = 'problem'; res.word = 'Lost'; res.msg = 'its daemon does not answer';
     find('sandbox.daemon_connect', 'bad', res.msg);
@@ -690,7 +703,8 @@ function probe(x, full) {
   }
   if (x.k === 'store') res.checks.forEach((c) => {
     const m = c.from && W.by[c.from];
-    if (m && (W.stopped.has(m.n) || W.outdated.has(m.n))) { c.r = 'nc'; c.note = 'machine not ready'; }
+    if (c.from && !m) { c.r = 'nc'; c.note = 'machine record missing'; }
+    else if (m && (W.stopped.has(m.n) || W.outdated.has(m.n))) { c.r = 'nc'; c.note = 'machine not ready'; }
   });
   return res;
 }
@@ -940,7 +954,7 @@ function callFor(x) {
   return 'layerfs backup doctor ' + x.n;
 }
 const fullCmd = (x) => callFor(x) + ' --full';
-const checkName = (c) => c.id + (c.from ? ' from ' + W.by[c.from].n : '');
+const checkName = (c) => c.id + (c.from ? ' from ' + (W.by[c.from]?.n || c.from.replace(/^machine:/, '')) : '');
 const checkText = (c) => RES[c.r] + (c.note ? ': ' + c.note : '');
 const mk = (s) => '<span class="mk" data-s="' + s + '"></span>';
 const dot = (s) => '<span class="dot">' + mk(s) + '</span>';
@@ -1073,7 +1087,7 @@ function rowHtml(v) {
   const waitsOn = o.st === 'nc' && o.why === 'waiting' ? o.by : null;
   /* the row's accessible name: its name, kind, state word, own word, root cause, trouble inside */
   const said = [kind.words, WORD[o.st], v.word, phase[key] ? phase[key] : '', waitsOn ? 'waiting on ' + waitsOn.n : '', v.inside].filter(Boolean).join(', ');
-  const controls = v.open ? (v.folder ? 'k' + x.i + (v.ownTrouble ? ' d' + x.i : '') : 'd' + x.i) : '';
+  const controls = v.open ? (v.folder ? 'd' + x.i + ' k' + x.i : 'd' + x.i) : '';
   const more = [];
   if (v.word) more.push('<span class="word">' + esc(v.word) + '</span>');
   if (waitsOn) more.push('<a class="cause" href="#" data-goto="' + esc(waitsOn.key) + '" data-fid="goto:' + esc(key) + '">' + dot(DOT[stateOf(waitsOn).st]) + '<span class="sr">Waiting on </span><span class="n">' + esc(waitsOn.n) + '</span><span class="sr">: go to it</span></a>');
@@ -1090,7 +1104,6 @@ function rowHtml(v) {
   const full = running('full', key);
   if (full) more.push('<span class="live"><span class="sr">Elapsed </span><span class="elapsed" data-t0="' + full.t0 + '">' + mmss(Date.now() - full.t0) + '</span>'
     + btn({ fid: 'stop:' + key, act: 'stop', key, text: 'Stop', label: 'Stop the Full check of ' + x.n, tip: { title: 'Stop', lines: ['Ends this Full check. Nothing is written.'] } }) + '</span>');
-  const thin = more.length === 0 && !v.inside;
   if (v.fact) more.push('<span class="fact">' + esc(v.fact) + '</span>');
   if (v.inside) more.push('<span class="inside">' + mk(v.insideMark) + esc(v.inside) + '</span>');
 
@@ -1118,15 +1131,15 @@ function rowHtml(v) {
     + '<span class="chev" aria-hidden="true"></span><span class="ico">' + kind.svg + '</span><span class="name">' + esc(v.name) + '</span><span class="sr">, ' + esc(said) + '</span></button>'
     + '<button type="button" class="sig" data-st="' + o.st + '"' + tipFor('sig:' + key, sTip) + '>' + dot(DOT[o.st]) + WORD[o.st]
     + (sTip.lines && sTip.lines.length ? '<span class="sr">: ' + esc(sTip.lines.join(' ')) + '</span>' : '') + '</button>'
-    + '<span class="more"' + (thin ? ' data-thin' : '') + '>' + more.join('') + '</span>'
+    + '<span class="more"' + (!more.length ? ' data-thin' : '') + '>' + more.join('') + '</span>'
     + marks + '<span class="acts">' + acts.join('') + '</span></div>';
 }
-/* A row, and under it when open: its own detail if it has trouble of its own, then what is on it. */
+/* Expansion exposes the row’s own report before its children. */
 function nodeHtml(x, depth) {
   const v = view(x, depth);
   if (!v.open) return rowHtml(v);
   if (!v.folder) return rowHtml(v) + detailHtml(v);
-  return rowHtml(v) + (v.ownTrouble ? detailHtml(v) : '')
+  return rowHtml(v) + detailHtml(v)
     + '<div class="kids" role="group" id="k' + x.i + '" aria-label="On ' + esc(x.n) + '">' + v.kids.map((y) => nodeHtml(y, depth + 1)).join('') + '</div>';
 }
 
@@ -1228,6 +1241,7 @@ function showTip(el) {
   if (tip.wide || tip.checks || (tip.cmds && tip.cmds.length)) tipEl.dataset.wide = ''; else delete tipEl.dataset.wide;
   tipEl.dataset.on = '';
   el.setAttribute('aria-describedby', 'tip');
+  tipEl.style.maxHeight = 'calc(100vh - 16px)';
   const r = el.getBoundingClientRect(); const w = tipEl.offsetWidth; const h = tipEl.offsetHeight;
   const vw = window.innerWidth; const vh = window.innerHeight; const gap = 6; const pad = 8;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -1235,7 +1249,13 @@ function showTip(el) {
   if (r.bottom + gap + h <= vh - pad) { side = 'below'; top = r.bottom + gap; left = clamp(r.left, pad, vw - w - pad); }
   else if (r.right + gap + w <= vw - pad) { side = 'right'; left = r.right + gap; top = clamp(r.top, pad, vh - h - pad); }
   else if (r.left - gap - w >= pad) { side = 'left'; left = r.left - gap - w; top = clamp(r.top, pad, vh - h - pad); }
-  else { side = 'above'; top = Math.max(pad, r.top - gap - h); left = clamp(r.left, pad, vw - w - pad); }
+  else {
+    const above = r.top - gap - pad; const below = vh - pad - r.bottom - gap;
+    side = above >= below ? 'above' : 'below';
+    tipEl.style.maxHeight = Math.max(0, side === 'above' ? above : below) + 'px';
+    top = side === 'above' ? r.top - gap - tipEl.offsetHeight : r.bottom + gap;
+    left = clamp(r.left, pad, vw - w - pad);
+  }
   tipEl.dataset.side = side;
   tipEl.style.left = left + 'px'; tipEl.style.top = top + 'px';
 }
@@ -1268,7 +1288,8 @@ function fades() {
 /* A waiting row's root cause: open the path to its row and focus it. */
 function goTo(key) {
   const x = W.by[key];
-  const shown = document.querySelector('#panel [data-fid="' + CSS.escape('row:' + key) + '"]');
+  if (!x) return toast('This row is no longer on record.');
+  const shown = document.querySelector('[data-fid="' + CSS.escape('row:' + key) + '"]');
   if (!shown) {
     S.tab = TABS.find((d) => d[2] === (x.k === 'workspace' ? 'sandbox' : x.k))[0];
     if (x.k === 'workspace') S.open[x.parent] = true;
@@ -1281,7 +1302,7 @@ function goTo(key) {
 }
 
 /* -------------------------------------------------------------- events --- */
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const link = e.target.closest('a[data-goto]');
   if (link) { e.preventDefault(); return goTo(link.dataset.goto); }
   const el = e.target.closest('button');
@@ -1299,7 +1320,9 @@ document.addEventListener('click', (e) => {
   if (el.dataset.tab) { S.tab = el.dataset.tab; hideTip(); return render(); }
   const act = el.dataset.act; const key = el.dataset.key;
   if (act === 'copy') {
-    if (navigator.clipboard) navigator.clipboard.writeText(key).catch(() => {});
+    if (!navigator.clipboard?.writeText) return toast('Clipboard unavailable. Select the command to copy it.');
+    try { await navigator.clipboard.writeText(key); }
+    catch (error) { return toast('Could not copy the command: ' + error.message); }
     el.textContent = 'Copied'; setTimeout(() => { if (el.isConnected) el.textContent = 'Copy'; }, 1400); return;
   }
   hideTip();
@@ -1311,7 +1334,11 @@ document.addEventListener('click', (e) => {
 });
 const tipAnchor = (t) => { const el = t.closest && t.closest('[data-fid]'); return el && TIPS[el.dataset.fid] ? el : null; };
 document.addEventListener('mouseover', (e) => { const el = tipAnchor(e.target); if (el && el.dataset.fid !== tipFid) showTipSoon(el); });
-document.addEventListener('mouseout', (e) => { const el = tipAnchor(e.target); if (el && !el.contains(e.relatedTarget)) hideTip(); });
+// Allow the pointer to cross the gap into a scrollable tip.
+function leaveTip() { clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 180); }
+tipEl.addEventListener('mouseenter', () => clearTimeout(tipTimer));
+tipEl.addEventListener('mouseleave', leaveTip);
+document.addEventListener('mouseout', (e) => { const el = tipAnchor(e.target); if (el && !el.contains(e.relatedTarget)) leaveTip(); });
 document.addEventListener('focusin', (e) => { if (quietFocus) return; const el = tipAnchor(e.target); if (el && el.matches(':focus-visible')) showTipSoon(el); });
 document.addEventListener('focusout', () => { if (!quietFocus) hideTip(); });
 document.addEventListener('keydown', (e) => {
@@ -1348,7 +1375,7 @@ document.addEventListener('keydown', (e) => {
 });
 document.getElementById('tabScroll').addEventListener('scroll', fades);
 window.addEventListener('resize', () => { hideTip(); fades(); });
-window.addEventListener('scroll', (e) => { if (e.target !== document.getElementById('tabScroll')) hideTip(); }, true);
+window.addEventListener('scroll', (e) => { if (e.target !== tipEl && e.target !== document.getElementById('tabScroll')) hideTip(); }, true);
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'auto') setTheme('auto'); });
 
 /* MOCK ONLY: the scenario strip */
