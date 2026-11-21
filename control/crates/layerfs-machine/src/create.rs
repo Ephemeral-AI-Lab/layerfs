@@ -29,10 +29,10 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The longest name `machine.create` takes. A provider takes a VM name of
 /// at most 63 characters (`layerfs-platform`'s plain-name rule, checked for
-/// every platform but `native`), and `layerfs-<home id8>-` takes 17 of
+/// every platform but `native`), and `layerfs-<home id16>-` takes 25 of
 /// them. Every platform `machine.create` makes is held to it; a machine
 /// made earlier with a longer name keeps its recorded VM name.
-const NEW_NAME_MAX: usize = 46;
+const NEW_NAME_MAX: usize = 38;
 
 /// A new machine's name: valid, not built in, short enough for its VM name
 /// (and, where `kind`'s provider has a limit of its own on this host, for
@@ -56,7 +56,7 @@ fn new_name(home: &Path, id: &str, kind: Platform, name: &str) -> Result<()> {
             format!(
                 "machine name `{name}` has {} characters; a new machine's name is at most \
                  {NEW_NAME_MAX}: its VM name is at most 63 characters and its prefix \
-                 `layerfs-<home id8>-` takes 17",
+                 `layerfs-<home id16>-` takes 25",
                 name.len()
             ),
         ));
@@ -70,7 +70,7 @@ fn new_name(home: &Path, id: &str, kind: Platform, name: &str) -> Result<()> {
         let Some(theirs) = MachineRecord::read(home, &other)? else {
             continue;
         };
-        let Ok(taken) = theirs.provider_name() else {
+        let Ok(taken) = theirs.provider_name(id) else {
             continue;
         };
         if taken == wanted {
@@ -109,7 +109,7 @@ fn provider_room(kind: Platform, vm: &str, name: &str) -> Result<()> {
         "InvalidInput",
         format!(
             "machine name `{name}` has {} characters; {fits}: {}, and its VM name's prefix \
-             `layerfs-<home id8>-` takes {prefix}",
+             `layerfs-<home id16>-` takes {prefix}",
             name.len(),
             limit.why
         ),

@@ -47,7 +47,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 fn machine(home: &Path, name: &str, platform: &str, state: Option<&str>) {
     let mut fields = vec![("name", t(name)), ("platform", t(platform))];
     // every 2.0 create records its provider name; `native` has none
-    let vm_name = format!("layerfs-test-{name}");
+    let vm_name = format!("layerfs-00000000-{name}");
     fields.extend((platform != "native").then(|| ("vm_name", t(&vm_name))));
     fields.extend(state.map(|state| ("state", t(state))));
     let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v));

@@ -116,7 +116,7 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
     // `Unavailable` with the Store's `blocked_by` ([`plan`], LF10)
     if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
         if record.nameless() {
-            record.provider_name()?;
+            record.provider_name(&layerfs_home::home::opened(home)?.id)?;
         }
     }
     Ok(Executor::Worker(Worker {

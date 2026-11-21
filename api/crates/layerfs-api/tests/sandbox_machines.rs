@@ -167,7 +167,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         &SdkValue::map([
             ("name", t("dev")),
             ("platform", t("lima")),
-            ("vm_name", t("layerfs-test-dev")),
+            ("vm_name", t("layerfs-00000000-dev")),
         ]),
     )
     .unwrap();

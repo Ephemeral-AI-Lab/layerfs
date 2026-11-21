@@ -93,7 +93,7 @@ fn machine_record(home: &Path, machine: &str, platform: &str, worker: Option<(So
         ("daemon", t(&daemon)),
     ];
     // every 2.0 record of a machine with a provider names its VM
-    let vm_name = format!("layerfs-test-{machine}");
+    let vm_name = format!("layerfs-00000000-{machine}");
     if platform != "native" {
         fields.push(("vm_name", t(&vm_name)));
     }

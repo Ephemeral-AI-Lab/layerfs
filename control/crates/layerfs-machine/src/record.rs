@@ -35,9 +35,10 @@ fn plain(name: &str) -> String {
 }
 
 /// The provider's name for a new machine's VM or worker container:
-/// `layerfs-<home id8>-<machine>`, so two homes on one host never share
-/// one (O33; `layerfs-` since layerfs-project#180). Recorded as `vm_name`
-/// when the machine is made; read back by [`MachineRecord::provider_name`].
+/// `layerfs-<home id16>-<machine>`, so two homes on one host never share
+/// one (O33; `layerfs-` since layerfs-project#180, 16 hex since
+/// layerfs-project#752). Recorded as `vm_name` when the machine is made;
+/// read back by [`MachineRecord::provider_name`].
 pub fn vm_name(home_id: &str, name: &str) -> String {
     let prefix = layerfs_home::names::provider_prefix(home_id);
     format!("{prefix}{}", plain(name))
@@ -136,16 +137,51 @@ impl MachineRecord {
     }
 
     /// The name the machine's provider knows it by (its VM or worker
-    /// container; its volume is `<name>-data`): the record's `vm_name`.
-    /// A record without one was made before LayerFS named machines
-    /// `layerfs-<home id8>-<machine>` (layerfs-project#180): refused
-    /// [`no_vm_name`] with [`no_vm_name_fix`], since this build reads no
-    /// older name.
-    pub fn provider_name(&self) -> Result<&str> {
-        self.text("vm_name").ok_or_else(|| {
+    /// container; its volume is `<name>-data`): the record's `vm_name`,
+    /// checked against `home_id`. The name must be the one this build
+    /// gives the machine now (`layerfs-<home id16>-<machine>`,
+    /// layerfs-project#752) or the one it gave before c2
+    /// (`layerfs-<home id8>-<machine>`, layerfs-project#180). Any other
+    /// name is refused [`InvalidInput`], naming both the recorded and the
+    /// expected names, so a record copied from another home or edited by
+    /// hand cannot pass for this home's. A record without `vm_name` was
+    /// made before LayerFS named machines: refused [`no_vm_name`] with
+    /// [`no_vm_name_fix`], since this build reads no older name.
+    pub fn provider_name(&self, home_id: &str) -> Result<&str> {
+        let recorded = self.text("vm_name").ok_or_else(|| {
             let fix = no_vm_name_fix(&self.name, Holders::default());
             with_fix(refused("Failed", no_vm_name(&self.name)), fix)
-        })
+        })?;
+        let expected = vm_name(home_id, &self.name);
+        let legacy = format!(
+            "{}{}",
+            layerfs_home::names::legacy_prefix(home_id),
+            plain(&self.name)
+        );
+        // An 8-hex name of either era is accepted whatever the hex value:
+        // 32 bits cannot prove which home made it (c4's documented cap),
+        // and a record from a home that predates c2 must keep working.
+        let old_hex = ["layerfs-", "lfs-"].iter().any(|prefix| {
+            recorded
+                .strip_prefix(prefix)
+                .and_then(|rest| rest.split_once('-'))
+                .is_some_and(|(id, tail)| {
+                    id.len() == 8
+                        && id.bytes().all(|b| b.is_ascii_hexdigit())
+                        && tail == plain(&self.name)
+                })
+        });
+        if recorded == expected || recorded == legacy || old_hex {
+            Ok(recorded)
+        } else {
+            Err(refused(
+                "InvalidInput",
+                format!(
+                    "machine {}'s record names VM {:?}; this home expects {:?} (or the earlier {:?})",
+                    self.name, recorded, expected, legacy
+                ),
+            ))
+        }
     }
 
     /// Whether the record is one an earlier build made, with no provider
@@ -306,5 +342,47 @@ impl MachineRecord {
     /// show.
     pub fn recorded_held(&self, held: Holders<'_>) -> layerfs_home::state::State {
         self.status_held(self.removed().is_some(), held)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HOME: &str = "0123456789abcdef0123456789abcdef";
+    const OTHER: &str = "01234567fedcba980123456789abcdef";
+
+    fn with_vm(vm: &str) -> MachineRecord {
+        MachineRecord::from_record("docker", SdkValue::map([("vm_name", SdkValue::text(vm))]))
+    }
+
+    #[test]
+    fn provider_name_accepts_the_current_sixteen_hex_name() {
+        let vm = vm_name(HOME, "docker");
+        assert!(vm.starts_with("layerfs-0123456789abcdef-"));
+        assert_eq!(with_vm(&vm).provider_name(HOME).unwrap(), vm);
+    }
+
+    #[test]
+    fn provider_name_accepts_the_earlier_eight_hex_name() {
+        let vm = format!("{}docker", layerfs_home::names::legacy_prefix(HOME));
+        assert_eq!(with_vm(&vm).provider_name(HOME).unwrap(), vm);
+    }
+
+    #[test]
+    fn provider_name_refuses_a_name_from_another_home() {
+        let vm = vm_name(OTHER, "docker");
+        let error = with_vm(&vm).provider_name(HOME).unwrap_err();
+        assert_eq!(error.code, "InvalidInput");
+        assert!(error.message.contains(&vm));
+        assert!(error.message.contains(&vm_name(HOME, "docker")));
+    }
+
+    #[test]
+    fn provider_name_refuses_a_hand_edited_name() {
+        let error = with_vm("layerfs-deadbeefdeadbeef-docker")
+            .provider_name(HOME)
+            .unwrap_err();
+        assert_eq!(error.code, "InvalidInput");
     }
 }

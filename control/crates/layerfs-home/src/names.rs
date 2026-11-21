@@ -21,11 +21,22 @@ const DEVICES: [&str; 22] = [
 pub const BUILT_IN: [&str; 2] = ["native", "docker"];
 
 /// The prefix of every name LayerFS gives outside its records, for the
-/// home with id `home_id`: `layerfs-<home id8>-` before a machine's VM,
+/// home with id `home_id`: `layerfs-<home id16>-` before a machine's VM,
 /// container and volume names and a Sandbox's run folder, so two homes on
 /// one host never share one (owner, 2026-11-15, layerfs-project#180).
+/// Since layerfs-project#752 (c2) it uses 16 hex digits, not 8: an 8-hex
+/// prefix leaves only 32 bits, so two homes can collide.
 pub fn provider_prefix(home_id: &str) -> String {
-    format!("layerfs-{}-", &home_id[..8.min(home_id.len())])
+    let cut = home_id.get(..16).unwrap_or(home_id);
+    format!("layerfs-{cut}-")
+}
+
+/// The prefix this build wrote before c2 (layerfs-project#752): the same
+/// `layerfs-` form with the home id's first 8 hex digits. A recorded name
+/// made then still reads; new names use [`provider_prefix`].
+pub fn legacy_prefix(home_id: &str) -> String {
+    let cut = home_id.get(..8).unwrap_or(home_id);
+    format!("layerfs-{cut}-")
 }
 
 /// `name` as one machine, Store, bucket, project or Sandbox name, or why not.
@@ -210,5 +221,27 @@ impl WorkspaceRef {
 impl std::fmt::Display for WorkspaceRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.sandbox, self.at.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_prefix_uses_sixteen_hex_not_eight() {
+        let a = "0123456789abcdef0123456789abcdef";
+        let b = "01234567fedcba980123456789abcdef";
+        assert_eq!(provider_prefix(a), "layerfs-0123456789abcdef-");
+        assert_eq!(legacy_prefix(a), "layerfs-01234567-");
+        assert_ne!(provider_prefix(a), provider_prefix(b));
+        // the earlier 8-hex names collided for these two homes
+        assert_eq!(legacy_prefix(a), legacy_prefix(b));
+    }
+
+    #[test]
+    fn a_short_home_id_does_not_panic() {
+        assert_eq!(provider_prefix("abc"), "layerfs-abc-");
+        assert_eq!(legacy_prefix("abc"), "layerfs-abc-");
     }
 }

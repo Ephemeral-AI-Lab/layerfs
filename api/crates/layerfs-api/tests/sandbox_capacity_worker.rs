@@ -82,7 +82,7 @@ fn home_records(home: &Path, worker: SocketAddr) {
         &map(&[
             ("name", t("box")),
             ("platform", t("docker")),
-            ("vm_name", t("layerfs-test-vm")),
+            ("vm_name", t("layerfs-00000000-vm")),
             ("state", t("running")),
         ]),
     )

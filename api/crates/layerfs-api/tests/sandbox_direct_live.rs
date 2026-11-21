@@ -178,7 +178,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
         &SdkValue::map([
             ("name", t("box")),
             ("platform", t("lima")),
-            ("vm_name", t("layerfs-test-vm")),
+            ("vm_name", t("layerfs-00000000-vm")),
             ("state", t("running")),
         ]),
     )

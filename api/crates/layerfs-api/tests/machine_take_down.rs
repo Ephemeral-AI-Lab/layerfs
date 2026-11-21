@@ -40,7 +40,7 @@ fn lima(home: &Path, name: &str, more: &[(&str, SdkValue)]) {
         ("name".to_owned(), t(name)),
         ("platform".to_owned(), t("lima")),
         // every 2.0 create records its VM's name
-        ("vm_name".to_owned(), t(&format!("layerfs-test-{name}"))),
+        ("vm_name".to_owned(), t(&format!("layerfs-00000000-{name}"))),
     ];
     fields.extend(more.iter().map(|(n, v)| ((*n).to_owned(), v.clone())));
     write_record(&paths::machine_record(home, name), &SdkValue::Map(fields)).unwrap();
