@@ -541,3 +541,40 @@ and not rerun.
 **NOT RUN for this version:** the installed artifacts; Linux, Lima, Apple
 Container, Windows; PostgreSQL through Node or Python; Python 3.10 to 3.13
 and Node 22; a real `Unknown` outcome; backups.
+
+## Project-level completeness
+
+A home's layout is not the whole story: a project is usable only when its record carries
+`manifest` and `installed`, two encoded `StoreManifest` values
+(`layerfs-store/src/project/discovery.rs`). `project init` writes them; a project created
+by an intermediate build has neither, and the first `sandbox create` then refuses with
+`no complete project manifest` — while `project list` and `project doctor` still look fine,
+because they only read the record's other fields. A project in that state is not
+detectably broken through any current command, which is the part that costs an operator
+the most time.
+
+A `manifest` is derivable from rows that already exist:
+
+| Bytes | Field | Source |
+| --- | --- | --- |
+| `"LFSI" 0101 0200` | header | literal |
+| `22 "<store path>"` | Store path | the Store's `store.sqlite` location |
+| `<store binding 32B>` | Store binding | `store/<s>/record.json` `binding.hex` |
+| `<cursor 32B>` | Store cursor | `store/<s>/record.json` `cursor.hex` |
+| `<stack id 16B>` | project | `layer_stack.layer_stack_id` |
+| `<scope id 16B>` | project scope | `layer_stack.scope_id` |
+| `<root_id 32B>` | initial layer | `layer.parent_layer_id IS NULL` |
+| `00000000 <sqlite version>` | version | the Store's sqlite |
+
+Three conditions the layout rules above do not state, each found on a live home:
+
+- **A directory holding `store/<s>/record.json` (or `store/<s>/project/*`) is an existing
+  home, whatever marker it has.** `detect` reports it as `Empty` today because none of the
+  nine 1.1.0 names match, so no conversion runs; `home init` on that path builds a second,
+  empty home `…/.layerfs/` inside it instead of adopting the data.
+- **A sqlite Store on a machine is reachable only while that machine runs.** With the
+  machine stopped, `store list` and `project list` still report the Store's own record as
+  `ready`; the project rows carry `blocked_by: {reason: "stopped" | "unreachable"}`.
+- **A docker Store has two project records**: the home's copy and the machine's, under
+  `_data/store/<s>/project/<p>/record.json`. Only the machine's copy is read when the
+  Store lives on that machine; the home's copy may legitimately have no `manifest`.
