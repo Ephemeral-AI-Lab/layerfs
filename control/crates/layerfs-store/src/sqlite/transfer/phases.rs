@@ -333,16 +333,14 @@ fn phases(
     // use on `to` and a copy the next move deletes first
     enter(&home, events, op, name, "record", None)?;
     if matches!(source, Executor::Local) || matches!(target, Executor::Local) {
-        let local_record = at("record", StoreRecord::of(&home, name))?;
-        at(
-            "record",
-            crate::backup::restored::complete_existing(
+        if let Ok(local_record) = StoreRecord::of(&home, name) {
+            let _ = crate::backup::restored::complete_existing(
                 &home,
                 name,
                 &local_record,
                 &home::paths::store_file(&home, name),
-            ),
-        )?;
+            );
+        }
     }
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),

@@ -787,3 +787,119 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);
 }
+
+#[test]
+fn move_skips_unreadable_project_record_and_still_repairs_incomplete_ones() {
+    let (home, root) = worker_box_home("unreadable-record");
+    let folder = tempdir("unreadable-record-folder");
+    std::fs::write(folder.join("hello.txt"), "hello\n").unwrap();
+
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    for name in ["good", "damaged", "legacy"] {
+        ok(
+            &home,
+            "project.init",
+            &[
+                ("project", t(&format!("shop/{name}"))),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        );
+    }
+
+    let legacy_path = paths::project_record(&home, "shop", "legacy");
+    let legacy_full = layerfs_api::home::read_record(&legacy_path)
+        .unwrap()
+        .unwrap();
+    let SdkValue::Bytes(bytes) = legacy_full.get("manifest").unwrap() else {
+        panic!()
+    };
+    let stack = layerfs_bridge::sdk_values::hex(
+        &layerfs_bridge::provision::StoreManifest::decode(bytes)
+            .unwrap()
+            .stack,
+    );
+    let write_legacy_stub = |created: i64| {
+        write_record(
+            &legacy_path,
+            &SdkValue::map([
+                ("v", SdkValue::Int(1)),
+                ("name", t("legacy")),
+                ("stack", t(&stack)),
+                ("created", SdkValue::Int(created)),
+            ]),
+        )
+        .unwrap();
+    };
+
+    let damaged_path = paths::project_record(&home, "shop", "damaged");
+    std::fs::write(&damaged_path, b"{").unwrap();
+    write_legacy_stub(11111);
+
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("box"))],
+    );
+    let store_rec = layerfs_api::home::read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(store_rec.get_text("machine"), Some("box"));
+    assert_eq!(store_rec.get("op"), None);
+    assert_eq!(std::fs::read(&damaged_path).unwrap(), b"{");
+    let read = ok(
+        &home,
+        "file.read",
+        &[
+            ("project", t("shop/good")),
+            ("branch", t("main")),
+            ("path", t("/hello.txt")),
+        ],
+    );
+    assert_eq!(content(&read), "hello\n");
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("legacy"))
+        .expect("legacy project repaired on move to worker despite damaged sibling");
+    assert_eq!(
+        layerfs_api::home::read_record(&legacy_path)
+            .unwrap()
+            .unwrap()
+            .get_int("created"),
+        Some(11111)
+    );
+
+    // Moving back to native with damaged sibling still unreadable also succeeds and repairs legacy.
+    write_legacy_stub(22222);
+    ok(
+        &home,
+        "store.move",
+        &[("store", t("shop")), ("machine", t("native"))],
+    );
+    let store_rec = layerfs_api::home::read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(store_rec.get_text("machine"), Some("native"));
+    assert_eq!(store_rec.get("op"), None);
+    assert_eq!(std::fs::read(&damaged_path).unwrap(), b"{");
+    let read = ok(
+        &home,
+        "file.read",
+        &[
+            ("project", t("shop/good")),
+            ("branch", t("main")),
+            ("path", t("/hello.txt")),
+        ],
+    );
+    assert_eq!(content(&read), "hello\n");
+    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("legacy"))
+        .expect("legacy project repaired on move to native despite damaged sibling");
+    assert_eq!(
+        layerfs_api::home::read_record(&legacy_path)
+            .unwrap()
+            .unwrap()
+            .get_int("created"),
+        Some(22222)
+    );
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(folder);
+}

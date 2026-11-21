@@ -261,10 +261,11 @@ pub fn complete_existing(
     };
     let mut incomplete = Vec::new();
     for name in entries {
-        if let Some(existing) = ProjectRecord::read(home, store, &name)? {
-            if existing.op().is_none() && !complete(&existing) {
-                incomplete.push(name);
-            }
+        let Ok(Some(existing)) = ProjectRecord::read(home, store, &name) else {
+            continue;
+        };
+        if existing.op().is_none() && !complete(&existing) {
+            incomplete.push(name);
         }
     }
     if incomplete.is_empty() {
@@ -282,14 +283,14 @@ pub fn complete_existing(
     };
     let _lock = home::lock::take(home)?;
     for name in incomplete {
-        let Some(existing) = ProjectRecord::read(home, store, &name)? else {
+        let Ok(Some(existing)) = ProjectRecord::read(home, store, &name) else {
             continue;
         };
         if existing.op().is_some() || complete(&existing) {
             continue;
         }
-        if let Some(updated) = match_rebuilt(store, &restored, &found, &name, existing)? {
-            updated.write(home)?;
+        if let Ok(Some(updated)) = match_rebuilt(store, &restored, &found, &name, existing) {
+            let _ = updated.write(home);
         }
     }
     Ok(())
