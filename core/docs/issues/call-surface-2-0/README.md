@@ -32,6 +32,7 @@ writes `calls.json`, `pairs.html` and `layerfs-call-surface.html` only when
 every rule passes. `python3 -I build.py "$PWD" --today <repo>` re-extracts
 `today-table.json` from a checkout.
 
-83 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6,
+84 calls in 10 families: project 9, file 14, sandbox 7, workspace 7, branch 6,
 commit 3, home 5, machine 14, store 13, backup 6 (version 20 removed
-`home.leftovers` and `home.prune`; see DECISIONS.md).
+`home.leftovers` and `home.prune`; this branch adds `project.prune`; see
+DECISIONS.md).

@@ -44,18 +44,28 @@ pub fn refusal_text(value: &SdkValue) -> String {
 /// Prints a call's result; `form` is the call's declared answer, which
 /// the readable form reads for the columns its rows may leave out.
 pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
+    result_gated(value, text, form, false)
+}
+
+/// [`result`], exiting 1 on a successful write when `fail` asks.
+pub fn result_gated(value: &SdkValue, text: bool, form: Option<&Form>, fail: bool) -> ExitCode {
     let printed = if text {
         readable(value, form)
     } else {
         format!("{}\n", json::print(value))
     };
-    print(&printed)
+    print_gated(&printed, fail)
 }
 
 /// A doctor's report in the readable form: a count line, then each finding as
 /// `<severity> <thing> <name> <check>: <message>` with its fix on the next
 /// line, then each check that could not be made and why.
 pub fn doctor(report: &SdkValue) -> ExitCode {
+    doctor_gated(report, false)
+}
+
+/// [`doctor`], exiting 1 on a successful write when `fail` asks.
+pub fn doctor_gated(report: &SdkValue, fail: bool) -> ExitCode {
     let empty = Vec::new();
     let rows = |key: &str| match report.get(key) {
         Some(SdkValue::List(rows)) => rows,
@@ -117,7 +127,21 @@ pub fn doctor(report: &SdkValue) -> ExitCode {
             named(entry)
         ));
     }
-    print(&printed)
+    print_gated(&printed, fail)
+}
+
+/// Whether a doctor's report is a failure under `--fail-on error`: a
+/// finding whose severity is `error`, or a check that could not be made. A
+/// warning or a notice is not.
+pub fn doctor_failed(report: &SdkValue) -> bool {
+    let rows = |key: &str| match report.get(key) {
+        Some(SdkValue::List(rows)) => rows.as_slice(),
+        _ => &[],
+    };
+    let error = rows("findings")
+        .iter()
+        .any(|finding| finding.get_text("severity") == Some("error"));
+    error || !rows("not_checked").is_empty()
 }
 
 fn name_of(value: &SdkValue) -> String {
@@ -135,6 +159,11 @@ pub fn diagnostic(line: &str) {
 
 /// Writes `printed` to stdout.
 pub fn print(printed: &str) -> ExitCode {
+    print_gated(printed, false)
+}
+
+/// [`print`], with a successful write exiting 1 when `fail` asks.
+fn print_gated(printed: &str, fail: bool) -> ExitCode {
     let mut out = std::io::stdout().lock();
     if out
         .write_all(printed.as_bytes())
@@ -144,7 +173,10 @@ pub fn print(printed: &str) -> ExitCode {
         // stdout went away; the call itself succeeded
         return ExitCode::from(REFUSED);
     }
-    ExitCode::SUCCESS
+    match fail {
+        true => ExitCode::from(1),
+        false => ExitCode::SUCCESS,
+    }
 }
 
 /// Fields shown as human sizes, beside every `*_bytes`.

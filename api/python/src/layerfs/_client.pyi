@@ -13,11 +13,12 @@ class HomeFamily:
     def init(
         self,
         *,
+        adopt: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """create this home; a current home is left as it is"""
+        """create this home, or adopt one whose data is there but layerfs.json is missing; a current home is left as it is"""
     def get(
         self,
         *,

@@ -18,6 +18,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{detect, paths, Layout};
 use layerfs_home::outcome::refused;
 use layerfs_home::state::{BlockedBy, Reason, State};
+use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::project::state as project_state;
+use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -345,8 +348,28 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
             if !recorded.contains(&SdkValue::text(project)) {
                 return Err(missing());
             }
+            // the record's own operation first (a running Init is `busy`, a
+            // gone one `unresolved`), then its completeness (c7): an
+            // unreadable or unusable record is `broken` `failed`, never
+            // `ready` just because its name is listed
+            let state =
+                match ProjectRecord::read(home, store, project) {
+                    Err(_) => State::broken(Reason::Failed, None),
+                    Ok(None) => State::Ready,
+                    Ok(Some(record)) => project_state::held(store, project, &record)
+                        .unwrap_or_else(|| match StoreRecord::read(home, store) {
+                            Ok(Some(store_record)) => match record.ready(home, &store_record) {
+                                Ok(()) => State::Ready,
+                                Err(refusal) => State::broken(
+                                    Reason::Failed,
+                                    refusal.detail.get_text(layerfs_home::outcome::FIX),
+                                ),
+                            },
+                            _ => State::Ready,
+                        }),
+                };
             Ok(Located {
-                state: State::Ready,
+                state,
                 blocked: blocker(&state_of(node), "store", store),
                 children: Vec::new(),
             })

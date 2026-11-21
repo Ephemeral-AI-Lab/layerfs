@@ -101,6 +101,11 @@ export interface CallSpec {
 
 
 
+/** Options of `home.init`; an unknown option is refused. */
+export interface HomeInitOptions extends CallOptions {
+  adopt?: boolean;
+}
+
 /** Options of `home.get`; an unknown option is refused. */
 export interface HomeGetOptions extends CallOptions {
   with?: readonly ("platforms" | "tree")[];
@@ -568,8 +573,8 @@ export interface BackupDoctorOptions extends CallOptions {
 }
 
 export interface HomeFamily {
-  /** create this home; a current home is left as it is */
-  init(options?: CallOptions): Promise<Result>;
+  /** create this home, or adopt one whose data is there but layerfs.json is missing; a current home is left as it is */
+  init(options?: HomeInitOptions): Promise<Result>;
   /** the home's state and build; with --with, the platforms this computer supports or the tree of everything in the home */
   get(options?: HomeGetOptions): Promise<Result>;
   /** the calls made against this home, newest first */

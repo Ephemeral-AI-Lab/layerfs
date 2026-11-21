@@ -76,17 +76,23 @@ Python: `layerfs.store.doctor("team-db", machine="lima1")`.
 `home.doctor`'s own checks, in the order they run (`HOME` in `kinds.rs`).
 Never dials a worker. An absent home is reported and stays absent; a folder
 that is not a LayerFS 2.0 home fails `home.layout` and its records are not
-read. A check that does not apply is left out.
+read, and so does a machine's worker root, which is never moved or written.
+A home whose data is there but whose `layerfs.json` is missing fails
+`home.layout` too, with the fix `layerfs home init --adopt`: the data is
+never moved, and the adopt writes only the marker (layerfs-project#752, c6).
+A current home's id is cross-checked against its records' provider
+names once the records scan is stable; a disagreement fails `home.layout`
+with no fix. A check that does not apply is left out.
 
 | Check | What is observed | Source |
 | --- | --- | --- |
 | `home.build`, `home.prerequisites` | The calling executable; native runtime prerequisites | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
-| `home.layout` | pass for a current layout; fail for a folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout or one that cannot be parsed, or anything but `layerfs.lock`, the integration folders and `.DS_Store` with no `layerfs.json`), "this build writes nothing in it", `fix: mv <home> <home>.old && layerfs home init`; fail with the OS error and no fix when the system refuses to read `layerfs.json` or the folder; left out for a home not made yet | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
+| `home.layout` | pass for a current layout; fail for a folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout or one that cannot be parsed, or stray files with no `layerfs.json`), "this build writes nothing in it", `fix: mv <home> <home>.old && layerfs home init`; fail for a home that lost its `layerfs.json` (a home's data with no marker; [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `classify`, `DATA`), "a LayerFS home's data with no layerfs.json", `fix: layerfs home init --adopt`, with no records check, no `mv` and nothing written; fail for a machine's worker root (its data disk's content; [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `worker_root_shape`), "a machine's worker root, not a LayerFS 2.0 home", `fix: unset LAYERFS_HOME`, with no records check and no `mv`; fail with the OS error and no fix when the system refuses to read `layerfs.json` or the folder; left out for a home not made yet; once the records scan is stable, fail with no fix when a machine `vm_name` or a Sandbox daemon name is not the provider name this id gives | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs), [`host_identity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_identity.rs) |
 | `home.records` | The records scan and record checks (`checks::check_local`, on a current-layout home only), each finding as an error or warning on the thing it is about, with its fix; no verdict when the record inventory changed or could not be read; see [Checks](checks.md) | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs), [`host_inventory.rs`](../../../../control/crates/layerfs-control/src/doctor/host_inventory.rs) |
 | `home.bundle` | When a record names a non-native machine: the Linux bundle manifest (this version, `linux-<arch>`) and its files present | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
 | `home.native_daemon` | The daemon the native machine runs, as its Sandbox launch chooses it (`NativeDaemon`, shared with `home.get`): its record's `daemon`, else the one beside this host's bundle; read from files. Missing or not executable: an error for a recorded one, a warning for the default (`fix: chmod +x <path>` where only the mode is wrong); its stamped commit (`layerfs-build-identity:`) against the calling build's (`Options.build`): another commit is a warning in `DaemonMismatch`'s words; unknown or dirty passes, saying it cannot compare | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs), [`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) |
 | `home.artifacts` | Each non-native machine's recorded `daemon` executable | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
-| `home.capacity` | `/bin/df -Pk` on the home or its nearest existing ancestor, capped at 5 s, killed and reaped when late; under 2 GiB free is a warning (`capacity::room`), evidence `disk_free_bytes` | [`host_capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_capacity.rs), [`capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/capacity.rs) |
+| `home.capacity` | `/bin/df -Pk` on the home, capped at 5 s, killed and reaped when late; under 2 GiB free is a warning (`capacity::room`), evidence `disk_free_bytes`. A home that does not exist is not checked: no ancestor is measured, since its disk is not the home's | [`host_capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_capacity.rs), [`capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/capacity.rs) |
 
 The inventory fingerprints only management paths (records, `worker.json`,
 `control.json`, lease stamps under `open/`, `store.sqlite.incoming`, project,
@@ -113,7 +119,7 @@ it with the reason found.
 | `machine.state` | Recorded state against the observed one; a record a live read would change is a warning, `fix: layerfs machine get <m> --with live`; the record is not refreshed | [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 | `machine.worker.endpoint` | Saved loopback address, nonzero port, nonempty secret | [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 | `machine.worker.auth`, `.compatibility` | One authenticated hello within 5 s returning `ready: true` (`not_answering`, `fix: layerfs machine start <m>`); protocol and sealed bundle match this build (`outdated`, fix `replace_worker`: stop and start, the stop forced while Sandboxes are recorded on it) | [`diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs), [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
-| `machine.worker.ping`, `machine.capacity` | `worker.ping` with `capacity: true`: kind `worker`, positive pid, this version, and the data disk's free bytes; `machine.capacity` is a warning under 2 GiB free (`capacity::room`), its evidence adding `reclaimable_image_bytes` from the machine's image listing (what `machine prune --unused` frees), and that prune is its fix only when it is above 0 | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs), [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
+| `machine.worker.ping`, `machine.capacity` | `worker.ping` with `capacity: true`: kind `worker`, positive pid, this version, and the data disk's free bytes; `machine.capacity` is a warning under 2 GiB free (`capacity::room`), its evidence adding `reclaimable_image_bytes` from the machine's image listing (what `machine prune --unused` frees), and that prune is its fix only when it is above 0. On `docker` it also reads the Engine's volumes' `layerfs.home` and `layerfs.machine` labels: a volume labelled with this home must name a machine record whose `vm_name` it is (a foreign home, a name its record does not match, or a machine with no record is an error; an unlabelled volume no record explains is a warning), with `fix: docker volume inspect <name>` and, for an orphan, the sqlite Stores recorded on the machine it names | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs), [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 
 ### Sandbox
 
@@ -136,7 +142,7 @@ The Sandbox's records state comes from one function in `sandbox_target.rs`
 | `sandbox.route`, `.worker_compatibility` | Native: direct. Forward: the machine's `worker.json` must exist (else `not_checked`, blocked by the machine); no worker call. Other machines: one request of the internal worker op `doctor.sandbox` to an authenticated worker of this build, whose report (checks, `workspaces`, `listing`) is read in; a malformed or cut report leaves the Sandbox `not_checked` with `reason` `lost` | [`sandbox_remote.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_remote.rs) |
 | `sandbox.daemon_keys`, `.daemon_connect`, `.daemon_auth`, `.daemon_instance`, `.daemon_ready` | Saved loopback endpoint and 32-byte keys; a refused connection is an error (nothing listens), any other failure `not_checked`; authenticated channel; `Hello` without waiting for startup must name the saved instance and `ControlReady` (still starting: warning; retained: error) | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
 | `sandbox.session` | `EndSession` for the doctor's own control session, only after a clean exchange | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
-| `sandbox.observation` | The saved keys file did not change while the daemon was read | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
+| `sandbox.observation` | The saved keys file did not change while the daemon was read, and the folder of Workspace records could be read | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
 
 **Workspaces.** A Workspace has no doctor of its own. After a ready daemon,
 `sandbox.doctor_workspaces` is read in pages of at most 32 rows under one
@@ -154,9 +160,12 @@ is recorded. A daemon that is not seen ready blocks its Workspaces: each is
 `not_checked` with `blocked_by` the thing at the root (`sandbox` with
 `lost`, `unreachable`, `missing`, `not_answering`, `failed` or `busy`, or
 the `machine` whose worker does not answer or is `outdated`), and none is
-tried ([`workspace_target.rs`](../../../../control/crates/layerfs-control/src/doctor/workspace_target.rs)). The runner adds the Workspaces the daemon listed to those the
-home records before the first is checked, so `--progress` sends `self`,
-then one `workspaces` event each.
+tried ([`workspace_target.rs`](../../../../control/crates/layerfs-control/src/doctor/workspace_target.rs)).
+A folder of Workspace records that cannot be read is not an empty one:
+`sandbox.observation` is `not_checked` with the read's error, and only the
+daemon's rows name Workspaces. The runner adds the Workspaces the daemon
+listed to those the home records before the first is checked, so
+`--progress` sends `self`, then one `workspaces` event each.
 
 ### Store
 
@@ -182,7 +191,7 @@ Under a machine that is not ready only `store.record` is made: the rest are
 
 | Check | What is observed | Source |
 | --- | --- | --- |
-| `project.record` | The project's record and its Store's record read | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs) |
+| `project.record` | The project's record and its Store's record read. An entry the home does not record fails with the `project prune` line its leftover folder takes; an entry on record that cannot be used fails with `project delete`, never `prune` | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs) |
 | `project.listed` | The Store's own list (read where its calls run) holds the record's stack id, or its name for a record without one. Not listed: a notice, `fix` `layerfs project delete <project>`, which removes such an entry. A Store this host cannot open or whose file is gone, and a worker that does not answer (`machine`, `not_answering`), block it | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs), [`live.rs`](../../../../control/crates/layerfs-store/src/project/live.rs) |
 | `project.data` (`--full` only) | Everything main's head and each live Branch's head reach, read and checked once per project in one pinned read view: each tree's namespace qualified, each object located, reconstructed, admitted and its children's context checked, as the whole-Store scan checks its rows ([Store diagnostics](../../engine/store/diagnostics.md#one-projects-data)). sqlite on this kernel and PostgreSQL in this process; sqlite on a machine through its worker's `store.diagnose` with `cut: project`, its `data` events passed back. The first 64 problems are findings (an unreadable object `not_checked` `lost`), the rest one counted finding | [`project_target.rs`](../../../../control/crates/layerfs-control/src/doctor/project_target.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 
@@ -195,7 +204,10 @@ check has no time budget.
 
 Uses the bucket's own S3 configuration, signer, TLS policy and HTTP codec,
 with the bridge's bounded resolver. The write test is the bucket's Full
-check (`backup doctor --full`).
+check (`backup doctor --full`). Each subcheck (list, versioning, create,
+reconcile and the read/delete probe) takes a fresh window from
+`Instant::now()`, capped by the bucket's own budget, so a slow listing or
+one lost exchange does not spend the time a signed write needs.
 
 | Check | What is observed | Source |
 | --- | --- | --- |
@@ -231,7 +243,7 @@ reconcile that fails leaves `possible_retained_key` and `owned_version`.
 | A thing not in the home | `NotFound` ("no `<kind>` named `<name>`"), exit 125; a machine only a Store or Sandbox record names is not there (that record's own check reports the reference) | [`kinds.rs`](../../../../control/crates/layerfs-control/src/doctor/kinds.rs) `locate` |
 | `store doctor --machine` on a sqlite Store | `InvalidInput` | [`store/doctor.rs`](../../../../api/crates/layerfs-api/src/store/doctor.rs) |
 | A wrong command line | exit 2 | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
-| A report, whatever it finds | exit 0 | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
+| A report, whatever it finds | exit 0; `--fail-on error` exits 1 when a finding is an error or a check could not be made (a warning or a notice still exits 0) | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) |
 | Retained checks, message, evidence | 1024 checks, 4096 characters, 16 KiB; beyond them `truncated` | [`check_report.rs`](../../../../control/crates/layerfs-control/src/doctor/check_report.rs) |
 | Budgets per thing | home, machine, Sandbox 30 s; Store, project, Workspace, bucket 10 s; a Full check none | [`kinds.rs`](../../../../control/crates/layerfs-control/src/doctor/kinds.rs) `KINDS` |
 | Probe caps | `df` 5 s; provider 10 s; worker hello 5 s; Store worker connect 5 s; bucket probe 10 s, 30 s with the write test | target sources above |
@@ -266,7 +278,7 @@ Give each a wall limit of at most 120 s.
 | [`doctor_sandbox_calls.rs`](../../../../api/crates/layerfs-api/tests/doctor_sandbox_calls.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test doctor_sandbox_calls` | macOS, Linux | `sandbox.doctor` with a daemon that lists its Workspaces, and with one that is lost |
 | [`project_doctor_full.rs`](../../../../api/crates/layerfs-api/tests/project_doctor_full.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test project_doctor_full` | macOS, Linux | `project doctor --full`: a damaged object is a `project.data` error in each project that reaches it; nothing written |
 | [`doctor_targets.rs` (CLI)](../../../../api/crates/layerfs-cli/tests/doctor_targets.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor_targets` | macOS, Linux | Each doctor's help, a wrong command line and a missing thing never make a home; bad flags exit 2 |
-| [`doctor.rs` (CLI)](../../../../api/crates/layerfs-cli/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor` | Unix | `layerfs home doctor` prints one report (JSON or `--text`), exits 0 and changes nothing; `home leftovers` and `home prune` exit 2 |
+| [`doctor.rs` (CLI)](../../../../api/crates/layerfs-cli/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor` | Unix | `layerfs home doctor` prints one report (JSON or `--text`), exits 0 and changes nothing; `--fail-on error` exits 1 on an error finding or a check that was not made, and ignores warnings and notices; `home leftovers` and `home prune` exit 2 |
 
 The stand-ins and fault peers check the observation boundary; they do not
 qualify live Docker, Lima, Apple Container, R2 or MinIO installations.

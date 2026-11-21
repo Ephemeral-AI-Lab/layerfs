@@ -2,7 +2,10 @@
 //! this build would use with it without changing anything. `init` opens the
 //! home as every call does (created when empty; a folder that is not a
 //! LayerFS 2.0 home is refused with the fix that moves it aside) and says which it did
-//! (`outcome`: `created` or `unchanged`).
+//! (`outcome`: `created`, `adopted` or `unchanged`). A home that lost its
+//! `layerfs.json` is not created again: `--adopt` writes the marker for the
+//! data already there, taking the id its records keep, and audits it read
+//! only (layerfs-project#752, c6).
 //! `get` reads files only: no process, Docker, network, lock or log line, so a
 //! client can poll it, and it answers for a home that does not exist yet.
 //! What it answers is the call surface's (2.0): the home's `state` with
@@ -10,11 +13,14 @@
 //! and, only when asked, the platforms this computer supports (a probe)
 //! and the tree of everything in the home ([`crate::home_tree`]).
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::layout::{detect, Layout};
-use layerfs_home::home::{generation, read_record, with_field};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::home::layout::{detect, HomeFile, Layout, LAYOUT_VERSION};
+use layerfs_home::home::{generation, paths, read_record, with_field};
+use layerfs_home::names::{matches_provider_name, provider_prefix_hex};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::state::{Reason, State};
-use std::path::Path;
+use layerfs_machine::record::MachineRecord;
+use layerfs_sandbox::record::SandboxRecord;
+use std::path::{Path, PathBuf};
 
 /// The identity of the build making the call (`LAYERFS_BUILD_COMMIT` and
 /// `LAYERFS_BUILD_DIRTY` when it was compiled), compared with the Linux
@@ -38,6 +44,9 @@ enum Found {
     Missing,
     Current,
     Foreign,
+    WorkerRoot,
+    /// A home's data with no `layerfs.json`: `--adopt` writes it.
+    DataWithoutMarker,
 }
 
 /// The sections `home.get` adds when asked (`--with`).
@@ -58,37 +67,357 @@ fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_bridge::control::S
     Ok(match detect(home)? {
         Layout::Empty => (Found::Missing, None),
         Layout::Foreign => (Found::Foreign, None),
+        Layout::WorkerRoot => (Found::WorkerRoot, None),
+        Layout::DataWithoutMarker => (Found::DataWithoutMarker, None),
         Layout::Current(file) => (Found::Current, Some(file.layout)),
     })
 }
 
 /// `home.init`: the home ready for calls, as the first call of any other
-/// kind makes it: `{ home, unchanged, outcome, layout, version }`. Refused
-/// inside a machine's worker root, which is not a home, and for a folder
-/// that is not a LayerFS 2.0 home (`Unsupported`, with the fix that moves
-/// it aside).
-pub fn init(home: &Path) -> Outcome {
+/// kind makes it: `{ home, unchanged, outcome, layout, version }`, and for
+/// `--adopt` also `{ id, id_source, warnings }`. Refused inside a machine's
+/// worker root this process serves (`InvalidInput`), for a folder that is
+/// not a LayerFS 2.0 home (`Unsupported`, with the fix that moves it
+/// aside), and for a home that lost its marker without `--adopt`
+/// (`Unsupported`, with `layerfs home init --adopt`; never a move).
+/// `--adopt` takes the home lock, re-detects the folder under it, writes
+/// `layerfs.json` atomically and never rewrites, moves or initializes the
+/// data (layerfs-project#752, c6).
+pub fn init(home: &Path, adopt: bool) -> Outcome {
     if layerfs_home::home::guest::is_root(home) {
         return Err(refused(
             "InvalidInput",
             "a machine's worker root is not a home; run `layerfs home init` on the host",
         ));
     }
-    let (before, _) = state(home)?;
+    match state(home)? {
+        // a current home is left as it is, with or without `--adopt`
+        (Found::Current, layout) => unchanged(home, layout.unwrap_or(LAYOUT_VERSION)),
+        // an empty home is created, `--adopt` or not
+        (Found::Missing, _) => created(home),
+        (Found::Foreign, _) => Err(layerfs_home::home::layout::foreign(home)),
+        (Found::WorkerRoot, _) => Err(layerfs_home::home::layout::worker_root(home)),
+        // the data is there but the marker is not: `--adopt` writes it,
+        // and without `--adopt` nothing is written, not even the home lock
+        (Found::DataWithoutMarker, _) if !adopt => {
+            Err(layerfs_home::home::layout::data_without_marker(home))
+        }
+        (Found::DataWithoutMarker, _) => adopted(home),
+    }
+}
+
+/// The answer of `home.init` for a home that was there already.
+fn unchanged(home: &Path, layout: i64) -> Outcome {
+    Ok(SdkValue::map([
+        ("home", SdkValue::text(home.display().to_string())),
+        ("unchanged", SdkValue::Bool(true)),
+        ("outcome", SdkValue::text("unchanged")),
+        ("layout", SdkValue::Int(layout)),
+        ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
+    ]))
+}
+
+/// The answer of `home.init` for a home it made: an empty folder, created
+/// as the first call of any other kind makes it.
+fn created(home: &Path) -> Outcome {
     let file = layerfs_home::home::open(home)?;
     #[cfg(feature = "machine")]
     layerfs_machine::ensure_built_ins(home, &file.id)?;
-    let outcome = match before {
-        Found::Current => "unchanged",
-        _ => "created",
-    };
     Ok(SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
-        ("unchanged", SdkValue::Bool(before == Found::Current)),
-        ("outcome", SdkValue::text(outcome)),
+        ("unchanged", SdkValue::Bool(false)),
+        ("outcome", SdkValue::text("created")),
         ("layout", SdkValue::Int(file.layout)),
         ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
     ]))
+}
+
+/// `home.init --adopt`: the home lock, then detection again under it (a
+/// home adopted meanwhile is left as it is), then `layerfs.json` and the
+/// read only audit. The data is never rewritten, moved or initialized.
+fn adopted(home: &Path) -> Outcome {
+    let _lock = layerfs_home::home::lock::take(home)?;
+    match state(home)? {
+        (Found::Current, layout) => unchanged(home, layout.unwrap_or(LAYOUT_VERSION)),
+        (Found::Missing, _) => created(home),
+        (Found::Foreign, _) => Err(layerfs_home::home::layout::foreign(home)),
+        (Found::WorkerRoot, _) => Err(layerfs_home::home::layout::worker_root(home)),
+        (Found::DataWithoutMarker, _) => {
+            let (id, id_source, mut warnings) = adopted_id(home)?;
+            let file = HomeFile {
+                layout: LAYOUT_VERSION,
+                id,
+            };
+            layerfs_home::home::layout::write(home, &file)?;
+            warnings.extend(audit(home));
+            Ok(SdkValue::map([
+                ("home", SdkValue::text(home.display().to_string())),
+                ("unchanged", SdkValue::Bool(false)),
+                ("outcome", SdkValue::text("adopted")),
+                ("layout", SdkValue::Int(file.layout)),
+                ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
+                ("id", SdkValue::text(&file.id)),
+                ("id_source", SdkValue::text(id_source)),
+                (
+                    "warnings",
+                    SdkValue::List(warnings.into_iter().map(|w| SdkValue::text(w)).collect()),
+                ),
+            ]))
+        }
+    }
+}
+
+/// The id `--adopt` writes: the longest hex prefix the home's records agree
+/// on plus a random tail, so the machines and Sandboxes they name keep
+/// their provider names; a fresh random id only when no record names one.
+/// A record that cannot be read, or whose provider name is not one this
+/// build parses, and records that disagree are refused: this build cannot
+/// tell which home the data belongs to, so it writes nothing
+/// (layerfs-project#752, c4, c6).
+fn adopted_id(home: &Path) -> Result<(String, &'static str, Vec<String>), SdkRefusal> {
+    let names = provider_names(home)?;
+    let mut prefixes: Vec<String> = Vec::new();
+    for (path, recorded) in &names {
+        let Some(hex) = provider_prefix_hex(recorded) else {
+            return Err(refused(
+                "Failed",
+                format!(
+                    "{} names provider {recorded:?}, not a `layerfs-<hex>-` or `lfs-<hex>-` name, so this build cannot tell this home's id; repair or remove that record by hand",
+                    path.display()
+                ),
+            ));
+        };
+        if !prefixes.iter().any(|known| known == hex) {
+            prefixes.push(hex.to_owned());
+        }
+    }
+    let mut warnings = Vec::new();
+    let (id, id_source) = match prefixes.iter().max_by_key(|hex| hex.len()) {
+        None => {
+            warnings.push(
+                "no machine or Sandbox record names this home, so its id is new; an older backup's `layerfs-exported-from` will not match it".to_owned(),
+            );
+            (fresh_id()?, "fresh")
+        }
+        Some(longest) => {
+            if let Some(other) = prefixes
+                .iter()
+                .find(|hex| !longest.starts_with(hex.as_str()))
+            {
+                return Err(conflicting(home, longest, other));
+            }
+            let mut id = longest.clone();
+            id.push_str(&random_hex()?[..32 - longest.len()]);
+            // c4's predicate: every recorded name must still name this id
+            for (_, recorded) in &names {
+                if !matches_provider_name(&id, recorded) {
+                    return Err(conflicting(
+                        home,
+                        longest,
+                        provider_prefix_hex(recorded).unwrap_or_default(),
+                    ));
+                }
+            }
+            warnings.push(
+                "this build's records keep only an 8- or 16-hex prefix of the home id; the adopted id keeps that prefix and a random tail, so an older backup's full `layerfs-exported-from` will not match it; a record that stored the full home id would make a later adopt exact".to_owned(),
+            );
+            (id, "records")
+        }
+    };
+    Ok((id, id_source, warnings))
+}
+
+/// The provider names the home's records keep: each machine record's
+/// `vm_name` and each Sandbox record's daemon name, with the record's path.
+/// These are the fields the doctor's `home.layout` cross-check reads
+/// (layerfs-project#752, c4); a record with no provider name (`native`, a
+/// machine made before c2, a Sandbox that never started) names none.
+fn provider_names(home: &Path) -> Result<Vec<(PathBuf, String)>, SdkRefusal> {
+    let mut names = Vec::new();
+    for name in paths::names(&home.join("machine")).map_err(failed)? {
+        let path = paths::machine_record(home, &name);
+        let Some(value) = read_record(&path)? else {
+            continue;
+        };
+        let record = MachineRecord::from_record(&name, value);
+        if let Some(recorded) = record.text("vm_name") {
+            names.push((path, recorded.to_owned()));
+        }
+    }
+    for name in paths::names(&home.join("sandbox")).map_err(failed)? {
+        let Some(record) = SandboxRecord::read(home, &name)? else {
+            continue;
+        };
+        let Some(recorded) = record.daemon().and_then(|daemon| daemon.name()) else {
+            continue;
+        };
+        names.push((paths::sandbox_record(home, &name), recorded.to_owned()));
+    }
+    Ok(names)
+}
+
+/// The home id prefixes its provider names keep (layerfs-project#752, c4,
+/// c6): each machine record's `vm_name` and each Sandbox record's daemon
+/// `name`, as the hex run it starts with (`16` digits since c2, `8` before),
+/// without duplicates. `--adopt` uses them to reuse the longest agreed
+/// prefix; a record that cannot be read or whose name is not a provider name
+/// this build parses is refused.
+pub fn recorded_prefixes(home: &Path) -> Result<Vec<String>, SdkRefusal> {
+    let mut prefixes: Vec<String> = Vec::new();
+    for (path, recorded) in provider_names(home)? {
+        let Some(hex) = provider_prefix_hex(&recorded) else {
+            return Err(refused(
+                "Failed",
+                format!(
+                    "{} names provider {recorded:?}, not a `layerfs-<hex>-` or `lfs-<hex>-` name",
+                    path.display()
+                ),
+            ));
+        };
+        if !prefixes.iter().any(|known| known == hex) {
+            prefixes.push(hex.to_owned());
+        }
+    }
+    Ok(prefixes)
+}
+
+/// The refusal of a home whose records disagree on its id: nothing is
+/// written; a person chooses the home the records belong to, or removes the
+/// other's records.
+fn conflicting(home: &Path, first: &str, second: &str) -> SdkRefusal {
+    refused(
+        "Failed",
+        format!(
+            "{}: this home's records disagree on its id (prefixes {first:?} and {second:?}); this build writes nothing: choose the home the records belong to, or remove the other's records by hand",
+            home.display()
+        ),
+    )
+}
+
+/// A random 32-hex id.
+fn fresh_id() -> Result<String, SdkRefusal> {
+    Ok(random_hex()?[..32].to_owned())
+}
+
+/// 64 random hex digits (32 random bytes).
+fn random_hex() -> Result<String, SdkRefusal> {
+    Ok(layerfs_bridge::sdk_values::hex(
+        &layerfs_home::helpers::random()?,
+    ))
+}
+
+/// The parts a home keeps at its top level, as this build writes them.
+const PARTS: [&str; 7] = [
+    "machine", "store", "sandbox", "backup", "secret", "trace", "log",
+];
+
+/// The read only audit after `home.init --adopt` wrote the marker: each
+/// expected part (missing, unreadable, or not 0700), each `*/record.json`
+/// (missing or undecodable), a temporary a killed `home.init` left, and an
+/// `incoming/init-*` copy a worker's root keeps. No doctor, no open, no
+/// ensure: every finding is a warning for the caller
+/// (layerfs-project#752, c6).
+fn audit(home: &Path) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if let Some(mode) = bits(home) {
+        if mode != 0o700 {
+            warnings.push(format!("{}: mode {mode:04o}, not 0700", home.display()));
+        }
+    }
+    for part in PARTS {
+        let dir = home.join(part);
+        match std::fs::read_dir(&dir) {
+            Ok(_) => {
+                if let Some(mode) = bits(&dir) {
+                    if mode != 0o700 {
+                        warnings.push(format!("{}: mode {mode:04o}, not 0700", dir.display()));
+                    }
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                warnings.push(format!("{}: missing", dir.display()));
+            }
+            Err(error) => warnings.push(format!("{}: cannot be read: {error}", dir.display())),
+        }
+    }
+    for path in record_files(home) {
+        match read_record(&path) {
+            Ok(Some(_)) => {}
+            Ok(None) => warnings.push(format!("{}: no record", path.display())),
+            Err(refusal) => warnings.push(format!("{}: {}", path.display(), refusal.message)),
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(home) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(".layerfs.json.") && name.ends_with(".tmp") {
+                warnings.push(format!(
+                    "{}: a temporary a killed `home init` left",
+                    entry.path().display()
+                ));
+            }
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(home.join("incoming")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("init-") && entry.path().is_dir() {
+                warnings.push(format!(
+                    "{}: a worker's init copy; check this is the home you meant",
+                    entry.path().display()
+                ));
+            }
+        }
+    }
+    warnings
+}
+
+/// Every `record.json` a home's entity folders keep: one per machine, Store,
+/// Sandbox and bucket, and one per project under a Store.
+fn record_files(home: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for kind in ["machine", "sandbox", "backup"] {
+        let Ok(entries) = std::fs::read_dir(home.join(kind)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                paths.push(entry.path().join("record.json"));
+            }
+        }
+    }
+    let Ok(entries) = std::fs::read_dir(home.join("store")) else {
+        return paths;
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        paths.push(dir.join("record.json"));
+        if let Ok(projects) = std::fs::read_dir(dir.join("project")) {
+            for project in projects.flatten() {
+                if project.path().is_dir() {
+                    paths.push(project.path().join("record.json"));
+                }
+            }
+        }
+    }
+    paths
+}
+
+/// A folder's permission bits, `0o700` for a private one.
+#[cfg(unix)]
+fn bits(path: &Path) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    Some(std::fs::metadata(path).ok()?.permissions().mode() & 0o777)
+}
+
+#[cfg(not(unix))]
+fn bits(_path: &Path) -> Option<u32> {
+    None
 }
 
 /// `home.get`: the home's path, `state` (with `reason`, `fix` and the
@@ -118,6 +447,27 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             ),
             layout,
             Some(layerfs_home::home::layout::foreign(home).message),
+        ),
+        // a machine's worker root is not a home: `unsupported`, naming the
+        // real home instead of moving the data disk (layerfs-project#752, c5)
+        Ok((Found::WorkerRoot, layout)) => (
+            State::broken(
+                Reason::Unsupported,
+                Some(layerfs_home::home::layout::worker_root_fix()),
+            ),
+            layout,
+            Some(layerfs_home::home::layout::worker_root(home).message),
+        ),
+        // a home that lost its `layerfs.json` is not missing and is never
+        // moved: `missing` with the adopt fix, which writes the marker and
+        // keeps the data (layerfs-project#752, c6)
+        Ok((Found::DataWithoutMarker, layout)) => (
+            State::broken(
+                Reason::Missing,
+                Some(layerfs_home::home::layout::data_without_marker_fix()),
+            ),
+            layout,
+            Some(layerfs_home::home::layout::data_without_marker(home).message),
         ),
         // `detect` refuses only a read the system refused (permissions,
         // I/O), which may be a real 2.0 home: `failed` with the OS error,

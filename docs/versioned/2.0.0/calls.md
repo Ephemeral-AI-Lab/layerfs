@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 83 calls in ten families: `home` 5, `project` 8, `branch` 6,
+There are 84 calls in ten families: `home` 5, `project` 9, `branch` 6,
 `commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 13
 and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
 prints one family or one call, and `layerfs help --json` prints the whole
@@ -189,18 +189,32 @@ $ echo $?
   `log` and `clear_log` write no line to the call log, and all five are
   `admin` in the MCP server.
 - **`init`**, short: `{ home }`, with `unchanged: true` when the home was
-  already current. Long: `home, unchanged, outcome, layout, version`:
-  `outcome` is `created` or `unchanged`, and `version` is this build's.
-  A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another
-  layout, or files and no `layerfs.json`) is never converted: it is
-  refused `Unsupported` with the fix
-  `mv <home> <home>.old && layerfs home init`, and nothing in it is written.
+  already current and, for `--adopt`, `id`, `id_source` and `warnings`.
+  Long: `home, unchanged, outcome, layout, version, id, id_source,
+  warnings`: `outcome` is `created`, `unchanged` or `adopted`, and `version`
+  is this build's. `--adopt` writes `layerfs.json` for a home whose data is
+  there but whose marker is missing: the id is the longest prefix its
+  records agree on plus a random tail (`id_source: records`), or a fresh
+  random one when no record names the home (`id_source: fresh`); the data
+  is never moved, rewritten or initialized, and records that disagree or
+  cannot be read are refused `Failed`. A folder that is not a LayerFS 2.0
+  home (a `layerfs.json` of another layout, or stray files and no
+  `layerfs.json`) is never converted: it is refused `Unsupported` with
+  `fix: mv <home> <home>.old && layerfs home init`, and nothing in it is
+  written. A home whose data is there but whose `layerfs.json` is missing
+  is refused without `--adopt` with `fix: layerfs home init --adopt`. A
+  machine's data disk whose content is a worker's root is refused
+  `Unsupported` with the fix `unset LAYERFS_HOME` instead: it is never
+  moved or initialized.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
-  home there, fixed by `layerfs home init`; `outdated`: a folder that is
-  not a LayerFS 2.0 home, or one whose `layerfs.json` cannot be parsed or
-  names no layout this build knows, fixed by
-  `mv <home> <home>.old && layerfs home init`; `failed`, with no fix: the
+  home there, fixed by `layerfs home init`, or a home whose data is there
+  but whose `layerfs.json` is missing, fixed by `layerfs home init
+  --adopt`; `outdated`: a folder that is not a LayerFS 2.0 home, or one
+  whose `layerfs.json` cannot be parsed or names no layout this build
+  knows, fixed by `mv <home> <home>.old && layerfs home init`;
+  `unsupported`: a machine's data disk whose content is a worker's root,
+  fixed by `unset LAYERFS_HOME`, never `mv`; `failed`, with no fix: the
   system refused to read `layerfs.json` or list the folder, a permission or
   I/O error, which the long form's `message` names). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
@@ -308,7 +322,7 @@ $ layerfs home clear-log --detail
 (Four lines: the three above and the refused `file read` shown under
 [errors](#errors-and-exit-codes), all from the same run.)
 
-### `project` (8)
+### `project` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -318,6 +332,7 @@ $ layerfs home clear-log --detail
 | `stats` | `project` | `branch` (default `main`), `at` | entry counts and size of the tree at a Branch's head or a Commit |
 | `export` | `project`, `destination` | `branch` (default `main`), `at`, `on_progress` | exports a Branch's committed tree to a folder on this computer |
 | `delete` | `project` | — | retires one project in its Store and removes its home entry |
+| `prune` | `project` | — | removes a project's home entry that has no record |
 | `hide_path` | `project`, `path` | — | hides one absolute path from the project's whole history; frees no bytes |
 | `doctor` | `project` | `full`, `on_progress` | checks one project's record against its Store's own list; `--full` reads its data ([the doctors](#the-doctors)) |
 
@@ -326,13 +341,18 @@ A project's `state` is `ready`, `busy` (an Init or a delete of it runs:
 `blocked` (its Store, or that Store's machine, is not ready, or the Store
 cannot be read: `blocked_by {store | machine, reason}`) or `broken` with
 `reason: unresolved` (a delete, or an Init, that stopped part-way, with
-`fix: layerfs project delete <project>`). A project is never `stopped` or
-`unknown`. While a call runs on a project its record holds the call's `op`;
-a Store whose records say it is not ready is not asked, and any other
-Store's own list is read where its calls run. A project on record that its
-Store does not list is hidden from `list` and `NotFound` to `get`, as
-before (`project doctor` reports it as a notice). An export is a read and
-records no `op`.
+`fix: layerfs project delete <project>`) or with `reason: failed` (a local
+sqlite project's record whose `manifest` is missing or does not decode, or
+whose `installed` manifest is missing or does not decode; `fix: layerfs
+project delete <project>`, again). A PostgreSQL project's record carries its
+`stack` and no manifest, and a sqlite project placed on a worker is written
+and read on its machine, so both stay `ready` by this rule. A project is
+never `stopped` or `unknown`. While a call runs on a project its record
+holds the call's `op`; a Store whose records say it is not ready is not
+asked, and any other Store's own list is read where its calls run. A
+project on record that its Store does not list is hidden from `list` and
+`NotFound` to `get`, as before (`project doctor` reports it as a notice).
+An export is a read and records no `op`.
 
 - **`init`** never creates a Store; a missing one is `NotFound`. `folder`
   is an absolute path on this computer. Into a sqlite Store on `native` or
@@ -340,7 +360,10 @@ records no `op`.
   Store on another machine (which must be running), the caller copies the
   folder to that machine's worker, which runs Init on the copy and then
   deletes it (#536 H11, H11a): the machine needs free room for the copy
-  while Init runs (`Capacity` otherwise). A missing folder, or one with a
+  while Init runs (`Capacity` otherwise). The copy is counted (entries,
+  regular files and bytes) against the caller's walk before the worker
+  adds it; a short copy is refused `Failed` and removed whole, with
+  nothing added to the Store or the home. A missing folder, or one with a
   socket, FIFO or device file, is refused before anything is sent. The
   project's entry is claimed first (a name the home already holds is
   `Exists`), so the project is listed `busy` while Init runs; a refusal
@@ -378,6 +401,15 @@ records no `op`.
   `ok, home_entry_kept, outcome ("deleted"), deleted_at`. Running it again
   clears a `broken` `unresolved` project, including the entry of an Init
   that never reached the Store.
+- **`prune`** removes only a real folder under
+  `store/<store>/project/<project>/` that has no `record.json`, under the
+  home lock and without opening the Store. It is the fix for the leftover
+  an Init that never reached the Store (or a delete from another home)
+  leaves, and `project init` of that name answers `NameTaken` with it. A
+  Store the home does not record is `NotFound`; an entry on record (valid,
+  broken or unreadable) is `Exists` with `fix: layerfs project delete
+  <project>`; a symlink is `InvalidInput`. Short: `{"ok":true}`; long:
+  `ok, outcome ("pruned"), project, store`.
 - **`hide_path`** (was `remove_file`, removed with no alias) writes a
   marker, not a Commit: it hides the path across the project's history and
   frees no bytes; the marker frontier governs later re-creations. Short:
@@ -1217,7 +1249,11 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   `{sandbox_count}`; a copy lock that cannot be checked is `Failed`.
   **`doctor`**'s `machine.capacity` evidence adds `reclaimable_image_bytes`
   (what `prune --unused` frees); that prune is its fix only when there are
-  such bytes.
+  such bytes. On `docker` it also reads each provider volume's
+  `layerfs.home` and `layerfs.machine` labels against the home's machine
+  records: a foreign home or an orphan machine is an error, an unlabelled
+  volume no record explains a warning, with `fix: docker volume inspect
+  <name>`.
 - **`stats`** short: `cpus, memory_used_bytes, memory_total_bytes,
   disk_free_bytes, disk_total_bytes`, and `incomplete` when the 4 s budget
   ended first. Long adds `disk_used_bytes, reasons, machine, platform,
@@ -1590,7 +1626,7 @@ lock, write no record, remove no stale lease and start no machine.
 layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
 layerfs store doctor <store> [--machine M]   # the Store, then each of its projects
-layerfs project doctor <project> [--full]   # the project's record against its Store's own list; --full reads its data
+layerfs project doctor <project> [--full]   # the project's record (its manifests decode) against its Store's own list; --full reads its data
 layerfs sandbox doctor <sandbox>    # the Sandbox: record, runtime, daemon; then each of its Workspaces
 layerfs backup doctor <bucket> [--full]               # the bucket's record and reach; --full writes and reads one object
 ```
@@ -1643,7 +1679,9 @@ every check was made and nothing was found; otherwise `findings` and
   Workspaces `not_checked`, blocked by the Sandbox (or its machine's
   worker), and none is tried.
 - A project's checks, in this order: `project.record` (its record and its
-  Store's record read), `project.listed` (the Store's own list holds it, by
+  Store's record read, and a local sqlite project's `manifest` and
+  `installed` manifests decode; a record that exists but cannot be used
+  fails this check with `layerfs project delete <project>`), `project.listed` (the Store's own list holds it, by
   its stack id, or by its name for a record without one; a record the Store
   does not list is a `notice` whose `fix` `layerfs project delete
   <project>` removes the entry) and, with `--full` only, `project.data`:
@@ -1686,7 +1724,10 @@ every check was made and nothing was found; otherwise `findings` and
 - `--text` prints a count line (`N error(s), N warning(s), N notice(s), N
   not checked`, or `ok` alone), then each finding, its `from` and its `fix`,
   then each `not_checked` entry.
-- Exit 0 once the report is made, whatever it finds; 125 with `NotFound`
+- Exit 0 once the report is made, whatever it finds; `--fail-on error`
+  exits 1 when a finding is an error or a `not_checked` entry is present
+  (a warning or a notice still exits 0), and `--fail-on never` is the
+  default. 125 with `NotFound`
   when the thing is not in the home (a machine that only a Store or Sandbox
   record names, with no record of its own, is not: that record's own
   check reports the reference, an error in `home.records` as in `sandbox
@@ -1731,7 +1772,7 @@ every check was made and nothing was found; otherwise `findings` and
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | the call succeeded; a doctor exits 0 once its report is made, whatever it found |
+| 0 | the call succeeded; a doctor exits 0 once its report is made, whatever it found (with `--fail-on error` a report with an error finding or a check it could not make exits 1) |
 | 2 | the command line is wrong (wrong number of positionals, unknown option, a required option missing, a `--with` section the call does not take, a value that is not a whole number or not `true`/`false`, bad JSON, an unreadable `--from` file); nothing was called |
 | 125 | LayerFS refused or failed the call; the refusal is on stderr, as JSON or readably, the form the result would take |
 
@@ -1831,6 +1872,7 @@ the request was sent and no answer settled it, and its message says so
 | `--with <a,b>` | `home get` (`platforms`, `tree`), `project list` (`stats`), `commit diff` (`patch`), `sandbox get` (`stats`), `machine list` and `machine get` (`live`), `machine images` (`docker`), `machine stats` (`space`), `store list` (`stats`), `store get` (`live`, `stats`) | adds the named sections to the answer; a name the call does not take is exit 2 |
 | `--progress` | `home doctor`, `project init`, `project export`, `project doctor`, `sandbox create`, `sandbox remove`, `sandbox doctor`, `workspace exec`, `machine load-image`, `machine start`, `machine stop`, `machine create`, `machine remove`, `machine doctor`, `store move`, `store compact`, `store doctor`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}` (a doctor adds `node`; `workspace exec` adds `exec` to its one `start` event). On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase; `LAYERFS_PROGRESS_JSON` set keeps the JSON lines on a terminal. `backup doctor` sends no progress |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too), prints no result and exits with the command's code |
+| `--fail-on never or error` | the six `doctor` calls | a report's exit code: `never` (the default) exits 0 whatever it found; `error` exits 1 when a finding is an error or a check could not be made. A warning or a notice stays 0, and a refusal stays 125 |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | a text option (`--message-from`, `--old-string-from`, `--new-string-from`, `--cursor-from`, `--path-from` and the others `layerfs help --json` lists under `switches`) | reads the option's value from a file |
 | `-m <text>` | `branch merge`, the seven `file` writes, `workspace commit` | the commit message, the same as `--message`; help shows it as `[-m msg]` |

@@ -13,9 +13,58 @@ use layerfs_home::outcome::refused;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
+/// What one folder copy holds, as Init counts it: entries (the copy's own
+/// folder included), regular files and their bytes. A hard link is one
+/// entry and one file per path, because the copy carries the paths and not
+/// the link; both sides count the same paths.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CopyCounts {
+    /// Entries, the folder itself included.
+    pub entries: u64,
+    /// Regular files, one per path.
+    pub files: u64,
+    /// Their bytes.
+    pub bytes: u64,
+}
+
+impl CopyCounts {
+    /// The counts a frame carries as `entries`, `files` and `bytes`: all
+    /// three, or none (a caller of an older build sends none).
+    fn decode(frame: &SdkValue) -> Result<Option<Self>> {
+        let get = |name: &str| frame.get_int(name);
+        match (get("entries"), get("files"), get("bytes")) {
+            (None, None, None) => Ok(None),
+            (Some(entries), Some(files), Some(bytes))
+                if entries >= 0 && files >= 0 && bytes >= 0 =>
+            {
+                Ok(Some(CopyCounts {
+                    entries: entries as u64,
+                    files: files as u64,
+                    bytes: bytes as u64,
+                }))
+            }
+            _ => Err(refused(
+                "InvalidInput",
+                "a copy's counts must be `entries`, `files` and `bytes`, each a whole number of zero or more",
+            )),
+        }
+    }
+
+    /// The three fields a frame carries, as one run of pairs.
+    fn fields(self) -> Vec<(&'static str, SdkValue)> {
+        let count = |n: u64| SdkValue::Int(i64::try_from(n).unwrap_or(i64::MAX));
+        vec![
+            ("entries", count(self.entries)),
+            ("files", count(self.files)),
+            ("bytes", count(self.bytes)),
+        ]
+    }
+}
+
 /// `project.init` in a worker: add the folder copy `staged` as project
 /// `name` of Store `store`. `name` and `timeoutMs` are checked by the add,
-/// after the copy is found and the lease taken.
+/// after the copy is found and the lease taken. `counts`, when the caller
+/// sends it, must match the staging folder before anything is added.
 #[derive(Clone, Debug)]
 pub struct InitFrame {
     /// The Store.
@@ -28,6 +77,8 @@ pub struct InitFrame {
     pub timeout_ms: Option<i64>,
     /// The Store's record.
     pub store_record: Option<SdkValue>,
+    /// What the caller's walk counted, when this build's caller sends it.
+    pub counts: Option<CopyCounts>,
 }
 
 /// `project.export` in a worker: stream Branch `branch` of project
@@ -115,6 +166,7 @@ impl InitFrame {
         fields.push(("staged", SdkValue::text(&self.staged)));
         fields.extend(self.timeout_ms.map(|ms| ("timeoutMs", SdkValue::Int(ms))));
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        fields.extend(self.counts.map(CopyCounts::fields).unwrap_or_default());
         map_of(fields)
     }
 
@@ -128,6 +180,7 @@ impl InitFrame {
             name: frame.get_text("name").map(str::to_owned),
             timeout_ms: frame.get_int("timeoutMs"),
             store_record: frame.get("store_record").cloned(),
+            counts: CopyCounts::decode(frame)?,
         })
     }
 }

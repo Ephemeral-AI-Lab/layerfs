@@ -153,6 +153,7 @@ fn docker_on_macos_and_linux_starts_one_privileged_worker_container_without_the_
         "docker",
         r#"case "$3" in
   inspect) echo "Error: No such object: lfs-dev" >&2; exit 1 ;;
+  volume) exit 0 ;;
   run) echo "pull access denied" >&2; exit 1 ;;
 esac"#,
     );
@@ -204,6 +205,21 @@ esac"#,
         "data volume and bundle only, never Docker's socket: {run}"
     );
     assert!(!run.contains("docker.sock:"), "{run}");
+    // the data volume is made before the container and carries the labels
+    // that say whose it is; `docker run -v` would make it unlabelled
+    let create = line(&log, "docker -H unix:///var/run/docker.sock volume create");
+    assert_eq!(
+        create,
+        format!(
+            "docker -H unix:///var/run/docker.sock volume create --label layerfs.home={} --label layerfs.machine=dev lfs-dev-data",
+            spec.home_id
+        )
+    );
+    let created = log.lines().position(|said| said == create).unwrap();
+    let ran = (log.lines())
+        .position(|said| said.starts_with("docker -H unix:///var/run/docker.sock run"))
+        .unwrap();
+    assert!(created < ran, "the labels must precede the run:\n{log}");
     // its folders are made as a VM guest's are, and the host's user
     // namespace limit is left alone: the command filter blocks them
     assert!(
@@ -211,6 +227,25 @@ esac"#,
         "{log}"
     );
     assert!(!log.contains("max_user_namespaces"), "{log}");
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn docker_volumes_are_bounded_and_other_platforms_have_none() {
+    use std::time::Instant;
+    // the listing parser itself is a unit test in `docker/unix.rs`; here the
+    // call's shape: a platform whose data is not a Docker volume has none to
+    // list, and the deadline stops the command before it starts
+    let scratch = Scratch::new("docker-volumes");
+    // the tool is found; the deadline stops it before it runs
+    scratch.tool("docker", "exit 0");
+    let error = machine::volumes_within(&scratch.spec(Platform::Lima), Instant::now()).unwrap_err();
+    assert_eq!(error.code, Code::Unsupported);
+    let before = scratch.log();
+    let error =
+        machine::volumes_within(&scratch.spec(Platform::Docker), Instant::now()).unwrap_err();
+    assert_eq!(error.code, Code::Unknown);
+    assert_eq!(scratch.log(), before);
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

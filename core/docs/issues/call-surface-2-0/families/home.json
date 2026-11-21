@@ -12,14 +12,20 @@
   {
    "call": "home.init",
    "badge": "reshaped",
-   "note": "creates the home; a current home is left as it is and answers <code>unchanged:true</code>. No <code>[path]</code>: the home is the folder <code>LAYERFS_HOME</code> names, else <code>~/.layerfs</code>, as for every call. This build converts no older home (v20, owner 2026-11-19; MIG): a folder that is not a LayerFS 2.0 home (a <code>layerfs.json</code> of another layout, or anything but <code>layerfs.lock</code>, the integration folders and <code>.DS_Store</code> in a folder with no <code>layerfs.json</code>) is refused <code>Unsupported</code> with a fix that moves it aside (<code>mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>) and is never written; a broken <code>layerfs.json</code> is refused and left untouched",
+   "note": "creates the home; a current home is left as it is and answers <code>unchanged:true</code>. No <code>[path]</code>: the home is the folder <code>LAYERFS_HOME</code> names, else <code>~/.layerfs</code>, as for every call. A home whose data (<code>store/</code>, <code>machine/</code>, <code>sandbox/</code>, <code>backup/</code>, <code>secret/</code>, <code>trace/</code>, <code>log/</code>, <code>incoming/</code>, <code>generation</code>) is there but whose <code>layerfs.json</code> is missing is not empty and not foreign: without <code>--adopt</code> it is refused <code>Unsupported</code> with <code>fix: layerfs home init --adopt</code>, and with <code>--adopt</code> the marker is written from the records' longest agreed id prefix plus a random tail, the data is never moved, rewritten or initialized, and a read only audit answers <code>warnings</code> (layerfs-project#752, c6). Everything else this build converts nothing (v20, owner 2026-11-19; MIG): a folder that is not a LayerFS 2.0 home (a <code>layerfs.json</code> of another layout, or anything but <code>layerfs.lock</code>, the integration folders and <code>.DS_Store</code> in a folder with no <code>layerfs.json</code>) is refused <code>Unsupported</code> with a fix that moves it aside (<code>mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>) and is never written; a broken <code>layerfs.json</code> is refused and left untouched",
    "today": [
     "home.init"
    ],
-   "help": "create this home; a current home is left as it is",
-   "cli": "layerfs home init",
+   "help": "create this home, or adopt one whose data is there but layerfs.json is missing; a current home is left as it is",
+   "cli": "layerfs home init [--adopt]",
    "positionals": [],
-   "options": [],
+   "options": [
+    {
+     "name": "adopt",
+     "kind": "Bool",
+     "help": "write layerfs.json for a home whose data is there but whose marker is missing; take the id from its records and never move or rewrite the data"
+    }
+   ],
    "stdin": null,
    "with": {},
    "paging": null,
@@ -31,7 +37,10 @@
      "home"
     ],
     "sometimes": [
-     "unchanged"
+     "unchanged",
+     "id",
+     "id_source",
+     "warnings"
     ]
    },
    "long": [
@@ -39,18 +48,22 @@
     "unchanged",
     "outcome",
     "layout",
-    "version"
+    "version",
+    "id",
+    "id_source",
+    "warnings"
    ],
    "item": null,
    "examples": {
     "short": [
      "{\"home\":\"/Users/me/.layerfs\"}",
-     "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}"
+     "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}",
+     "an adopted home: {\"home\":\"/Users/me/.layerfs\",\"id\":\"2f51a567b6f153b6e914393cab0904b6\",\"id_source\":\"records\",\"warnings\":[\"this build's records keep only an 8- or 16-hex prefix of the home id\"]}"
     ],
-    "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
+    "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"outcome\":\"adopted\",\"layout\":3,\"version\":\"2.0.0\",\"id\":\"2f51a567b6f153b6e914393cab0904b6\",\"id_source\":\"records\",\"warnings\":[\"this build's records keep only an 8- or 16-hex prefix of the home id\"]}"
    },
    "dropped": [],
-   "new_work": "No new capability. `outcome` is `created` or `unchanged`, from today's `created` boolean; `unchanged` is new as a key; `version` is the build's version. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time. An older home is refused, not converted (v20)."
+   "new_work": "No new capability beyond `--adopt`. `outcome` is `created`, `unchanged` or `adopted`; `unchanged` is new as a key; `version` is the build's version; an adopted home also answers the `id` it wrote, `id_source` (`records` when the records' longest agreed prefix was kept, `fresh` when no record named the home) and read only `warnings`. A home whose data is there but `layerfs.json` is missing is refused without `--adopt`; with it the marker is written and the data is never moved, rewritten or initialized. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time. An older home is refused, not converted (v20)."
   },
   {
    "call": "home.get",

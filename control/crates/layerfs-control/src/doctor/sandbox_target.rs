@@ -13,7 +13,7 @@ use super::frame::Probe;
 use super::report::{NoVerdict, Node, NotChecked};
 use super::target::{Budget, Checks};
 use super::workspace_target::{self, Listing, Seen};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::names::{self, MachineName, SandboxName};
 use layerfs_home::op::Standing;
@@ -66,8 +66,8 @@ struct Observed {
 /// Sandbox package's one derivation (`layerfs_sandbox::state::state`), so
 /// the doctor and `sandbox get` agree. Its machine's record that cannot be
 /// read is `sandbox.machine_reference`'s finding, not a state here.
-fn recorded_state(home: &Path, record: &SandboxRecord) -> State {
-    layerfs_sandbox::state::state(home, record).unwrap_or(State::Ready)
+fn recorded_state(home: &Path, record: &SandboxRecord) -> Result<State, SdkRefusal> {
+    layerfs_sandbox::state::state(home, record)
 }
 
 /// The `sandbox` kind's run: its checks into `node`, then its Workspaces'
@@ -203,7 +203,17 @@ fn diagnose(
     operation(&record, checks);
     let state = match probe.blocked {
         Some(by) => State::Blocked(by.clone()),
-        None => recorded_state(home, &record),
+        None => match recorded_state(home, &record) {
+            Ok(state) => state,
+            Err(refusal) => {
+                // a state that cannot be derived is not a ready one
+                checks.unknown(
+                    "sandbox.machine_reference",
+                    format!("its state cannot be read: {}", refusal.message),
+                );
+                return (Route::None, machine);
+            }
+        },
     };
     match state {
         State::Blocked(by) => {
@@ -441,7 +451,18 @@ fn local(
         false => checks.unknown(OBSERVATION, "its daemon's saved keys changed while read"),
     }
     seen.listing = listing;
-    let recorded = workspace_target::recorded(&directory);
+    // the folder's records are part of the observation: one that cannot be
+    // read leaves the Workspaces it would name unknown, not none
+    let recorded = match workspace_target::recorded(&directory) {
+        Ok(recorded) => recorded,
+        Err(refusal) => {
+            checks.unknown(
+                OBSERVATION,
+                format!("its Workspace records cannot be read: {}", refusal.message),
+            );
+            Vec::new()
+        }
+    };
     seen.workspaces = match listing {
         Listing::NotAsked => Vec::new(),
         _ => workspace_target::seen(name, &recorded, rows),

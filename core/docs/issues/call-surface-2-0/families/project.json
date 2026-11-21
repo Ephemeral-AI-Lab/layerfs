@@ -442,6 +442,48 @@
       "new_work": null
     },
     {
+      "call": "project.prune",
+      "badge": "new",
+      "note": "removes only an entry with no record; an entry on record (valid, broken or unreadable) is refused <code>Exists</code> with the delete's fix, and a symlink is left to the hand",
+      "today": [],
+      "help": "remove a project's home entry that has no record",
+      "cli": "layerfs project prune <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "kind": "Project"
+        }
+      ],
+      "options": [],
+      "stdin": null,
+      "with": {},
+      "paging": null,
+      "progress": false,
+      "quiet": false,
+      "profile": "full",
+      "short": {
+        "always": [
+          "ok"
+        ],
+        "sometimes": []
+      },
+      "long": [
+        "ok",
+        "outcome",
+        "project",
+        "store"
+      ],
+      "item": null,
+      "examples": {
+        "short": [
+          "{\"ok\":true}"
+        ],
+        "long": "{\"ok\":true,\"outcome\":\"pruned\",\"project\":\"shop/orphan\",\"store\":\"shop\"}"
+      },
+      "dropped": [],
+      "new_work": "The call is new: no call removes a home entry that has no record today. <code>project prune</code> reads the home only, under its lock; it opens no Store, refuses a Store not on record, an entry on record (valid, broken or unreadable) and a symlink, and removes only a real folder with no record. <code>project init</code> on such a folder answers <code>NameTaken</code> with <code>project prune</code> as its fix, and the home doctor reports the folder as an error with the same fix."
+    },
+    {
       "call": "project.hide_path",
       "badge": "renamed",
       "note": "was <code>remove_file</code>; it writes a marker, not a Commit, so it takes no <code>-m</code> and answers no <code>commit</code>; a path already hidden answers <code>{\"unchanged\":true}</code>",

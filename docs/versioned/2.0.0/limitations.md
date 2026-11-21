@@ -59,7 +59,9 @@ for this manual.
 | `machine` calls in a build without the `machine` feature (the guest worker's build) | names the #533 step |
 | A `native` Sandbox on Linux started by a non-root user | namespaces need root for FUSE |
 | A Store made without the acquisition tables projects are added through | LayerFS adds no tables to an existing Store |
-| A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or files and no `layerfs.json`) | not converted or written (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
+| A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or stray files and no `layerfs.json`) | not converted or written (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
+| A real home whose data is there but whose `layerfs.json` is missing | not empty and not foreign: `Unsupported` with fix `layerfs home init --adopt`, which writes the marker and never moves or rewrites the data (layerfs-project#752, c6). An older backup's full `layerfs-exported-from` will not match the adopted id |
+| A machine's data disk whose content is a worker's root | not a home: `Unsupported`, fix `unset LAYERFS_HOME`; never moved or initialized (layerfs-project#752, c5) |
 
 Also not built:
 

@@ -17,6 +17,7 @@ project.get(project)
 project.stats(project, { branch, at })
 project.export(project, destination, { branch, at, on_progress })
 project.delete(project)
+project.prune(project)
 project.hide_path(project, path)
 project.doctor(project, { full, on_progress })
 ```
@@ -142,6 +143,22 @@ stays until a later `store.compact`. Short: `{"ok":true}`, or
 again). Refused `Busy` while a Sandbox of the project is recorded or another
 call's `op` holds it.
 
+## `project.prune`
+
+Removes a real folder under `store/<store>/project/` that has no
+`record.json`: the leftover of an Init that never reached the Store, or of a
+delete from another home. It reads the home only, takes its lock and opens
+no Store. A Store the home does not record is `NotFound`; an entry on
+record (valid, broken or unreadable) is `Exists` with
+`fix: layerfs project delete <project>`; a symlink is `InvalidInput`. An
+entry that exists only because a project is on record is `delete`'s, never
+`prune`'s. `project init` of such a name answers `NameTaken` with the prune
+line. Short: `{ ok: true }`; long: `ok, outcome ("pruned"), project, store`.
+
+```js
+await layerfs.project.prune("shop/orphan");
+```
+
 ## `project.hide_path`
 
 Hides one absolute path from the project's whole history. It writes a
@@ -166,5 +183,5 @@ $ layerfs project doctor shop/api                                              #
 {"ok":true}
 ```
 
-An agent working on a project never needs `delete` or `hide_path`; they are
+An agent working on a project never needs `delete`, `prune` or `hide_path`; they are
 for whoever owns the home.

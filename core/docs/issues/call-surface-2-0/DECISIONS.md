@@ -91,9 +91,9 @@ the project record check is not new (and its finding is a notice with a fix, not
 
 ## Totals after the freeze
 
-83 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 5,
+84 calls in 10 families: project 9, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 5,
 machine 14, store 13, backup 6. (85 at the freeze, with home 7; version 20 removed `home leftovers`
-and `home prune`.)
+and `home prune`, and this branch adds `project prune`, so `project` has 9.)
 
 ## Fixes from the exit review
 

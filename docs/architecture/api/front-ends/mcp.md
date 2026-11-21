@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-83 calls: 17 in `work` (the table's `agent` profile), 66 in `admin` only (`full`); `--profile admin` lists 83.
+84 calls: 17 in `work` (the table's `agent` profile), 67 in `admin` only (`full`); `--profile admin` lists 84.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -131,6 +131,7 @@ built addon).
 | `project.stats` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.export` | admin | admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it; the `full` profile (administration) |
 | `project.delete` | admin | admin | retire a project in its Store and remove its home entry; a folder scope refuses it; the `full` profile (administration) |
+| `project.prune` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.hide_path` | admin | admin | hide one absolute path from the project's whole history; a folder scope refuses it; the `full` profile (administration) |
 | `project.doctor` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `branch.list` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |

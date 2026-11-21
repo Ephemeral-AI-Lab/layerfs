@@ -141,6 +141,10 @@ pub fn provider_spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
     Ok(Spec {
         name: name.to_owned(),
         kind,
+        // the full id, not the 16-hex provider prefix: the data volume's
+        // `layerfs.home` label says the whole id, so no truncation can make
+        // another home's volume look like this one's (c3)
+        home_id: id.clone(),
         // `native` has no provider name: its record keeps none
         vm_name: match kind {
             Platform::Native => String::new(),

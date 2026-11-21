@@ -15,7 +15,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::{hex, unhex};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, Outcome as CallOutcome};
+use layerfs_home::outcome::{refused, Outcome as CallOutcome, FIX};
 use layerfs_home::state::BlockedBy;
 use layerfs_store::diagnostic::{
     self, LayerStackId, Observation, Options, Outcome, ProjectCoverage,
@@ -61,15 +61,36 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
         Ok((found, ProjectRecord::read(probe.home, store, name)?))
     });
     match recorded {
-        Ok((record, Some(project))) => {
-            checks.pass(RECORD, "the project and its Store are on record");
-            let stack = listed(probe, (&record, &project), handle, &mut checks);
-            if let (Some(stack), true) = (stack, probe.full) {
-                data(probe, &record, stack, &mut checks);
+        Ok((record, Some(project))) => match project.ready(probe.home, &record) {
+            Ok(()) => {
+                checks.pass(RECORD, "the project and its Store are on record");
+                let stack = listed(probe, (&record, &project), handle, &mut checks);
+                if let (Some(stack), true) = (stack, probe.full) {
+                    data(probe, &record, stack, &mut checks);
+                }
             }
-        }
+            // a record that exists but cannot be decoded is not a folder to
+            // prune: its fix is the project delete (c7)
+            Err(refusal) => {
+                checks.fail(RECORD, refusal.message);
+                if let Some(fix) = refusal.detail.get_text(FIX) {
+                    checks.fix(RECORD, fix);
+                }
+            }
+        },
         Ok((_, None)) => {
             checks.fail(RECORD, format!("the home has no record of {handle}"));
+            // a real folder with no record is the one thing `project prune`
+            // removes; a link or an absent entry is left to the hand
+            let entry = paths::project_dir(probe.home, store, name);
+            let folder = std::fs::symlink_metadata(&entry)
+                .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink());
+            if folder {
+                checks.fix(
+                    RECORD,
+                    format!("layerfs project prune {}", shell_word(handle)),
+                );
+            }
         }
         Err(refusal) => checks.fail(RECORD, refusal.message),
     }

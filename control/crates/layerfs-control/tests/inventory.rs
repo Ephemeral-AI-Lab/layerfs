@@ -143,6 +143,20 @@ fn relationships_are_read_from_the_records() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// A Store record can name a machine with no record of its own: the doctor's
+/// data-volume check inventories those sqlite Stores before an orphan volume
+/// is removed.
+#[test]
+fn stores_on_a_machine_with_no_record_are_still_read() {
+    let home = home();
+    record(
+        &paths::store_record(&home, "orphan"),
+        r#"{"kind":"sqlite","machine":"ghost"}"#,
+    );
+    assert_eq!(inventory::stores_on(&home, "ghost").unwrap(), ["orphan"]);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 /// A PostgreSQL Store is on no machine: a machine's own connection to one
 /// (its record's `machines`) and a Sandbox of one hold no Store on the
 /// machine, so only its sqlite Stores, Sandboxes and hosted records refuse

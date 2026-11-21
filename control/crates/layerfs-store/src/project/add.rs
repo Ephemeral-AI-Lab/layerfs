@@ -4,6 +4,7 @@ use crate::identity::{identity, sqlite_only, store_dir, Identity};
 use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use crate::project::discovery::Project;
+use crate::project::record::ProjectRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
@@ -13,7 +14,7 @@ use layerfs_history::{BranchId, HistoryName, LayerStackId};
 use layerfs_home::helpers::random;
 use layerfs_home::home::paths;
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, InitError, ProjectApi};
 use layerfs_project::{InitCounters, ProjectError};
@@ -82,8 +83,10 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
         if error.kind() != std::io::ErrorKind::AlreadyExists {
             return Err(failed(error));
         }
-        if !crate::project::op::claimed(home, store, name)? {
-            return Err(home_name_taken(store, name));
+        // a record that cannot be read cannot be this process's claim:
+        // the name is still taken, and its own doctor names the record
+        if !crate::project::op::claimed(home, store, name).unwrap_or(false) {
+            return Err(home_name_taken(home, store, name));
         }
     }
     use std::os::unix::fs::PermissionsExt;
@@ -92,17 +95,34 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
 }
 
 /// A project name the caller's home already records: `NameTaken` with its
-/// `home` source, decided before the Store is asked anything.
-pub(crate) fn home_name_taken(store: &str, name: &str) -> SdkRefusal {
+/// `home` source, decided before the Store is asked anything. An entry
+/// with no record is not a project: its refusal carries the `project
+/// prune` line that removes the leftover. A record that cannot be read
+/// gets no prune line (the entry is on record and this call cannot say
+/// what it needs).
+pub(crate) fn home_name_taken(home: &Path, store: &str, name: &str) -> SdkRefusal {
     let state = NameTakenState::new(
         NameHolder::new(HolderKind::Project, name, HolderState::Live),
         NameSource::Home,
     );
-    lookup::refuse(
+    let refusal = lookup::refuse(
         "NameTaken",
         format!("project {name} exists in Store {store}"),
         lookup::name_taken_detail(&state),
-    )
+    );
+    let entry = paths::project_dir(home, store, name);
+    let folder = std::fs::symlink_metadata(&entry)
+        .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink());
+    match ProjectRecord::read(home, store, name) {
+        Ok(None) if folder => with_fix(
+            refusal,
+            format!(
+                "layerfs project prune {}",
+                shell_word(&format!("{store}/{name}"))
+            ),
+        ),
+        _ => refusal,
+    }
 }
 
 /// `project.init`'s add of folder `source` as the new project `name` of

@@ -78,8 +78,21 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     let first = long(&home, "home.init");
     assert_eq!(
         keys(&first),
-        ["home", "unchanged", "outcome", "layout", "version"]
+        [
+            "home",
+            "unchanged",
+            "outcome",
+            "layout",
+            "version",
+            "id",
+            "id_source",
+            "warnings"
+        ]
     );
+    // only an adopted home names them
+    for key in ["id", "id_source", "warnings"] {
+        assert_eq!(first.get(key), Some(&SdkValue::Null), "{key}");
+    }
     assert_eq!(first.get_text("outcome"), Some("created"));
     assert_eq!(first.get("unchanged"), Some(&SdkValue::Bool(false)));
     assert_eq!(first.get("layout"), Some(&SdkValue::Int(3)));
@@ -322,5 +335,162 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     let by = stores[0].get("blocked_by").unwrap();
     assert_eq!(by.get_text("machine"), Some("gone"));
     assert_eq!(by.get_text("reason"), Some("missing"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// A home's data with no `layerfs.json`: a Store with a project, a machine
+/// record whose `vm_name` names the home and a Sandbox record whose daemon
+/// names it too.
+fn data_home() -> PathBuf {
+    let home = place();
+    for folder in [
+        "store/shop/project/demo",
+        "machine/docker",
+        "sandbox/live",
+        "trace",
+        "log",
+    ] {
+        std::fs::create_dir_all(home.join(folder)).unwrap();
+    }
+    std::fs::write(
+        home.join("store/shop/record.json"),
+        r#"{"name":"shop","kind":"sqlite","machine":"native"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("machine/docker/record.json"),
+        r#"{"name":"docker","vm_name":"layerfs-0123456789abcdef-docker"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("sandbox/live/record.json"),
+        r#"{"name":"live","daemon":{"name":"layerfs-0123456789abcdef-live"}}"#,
+    )
+    .unwrap();
+    std::fs::write(home.join("trace/calls.jsonl"), "").unwrap();
+    std::fs::write(home.join("log/leases.jsonl"), "").unwrap();
+    home
+}
+
+/// The long form's arguments: `detail` with `args`.
+fn asked(args: &[(&str, SdkValue)]) -> SdkValue {
+    let mut fields: Vec<(String, SdkValue)> = args
+        .iter()
+        .map(|(name, value)| ((*name).to_owned(), value.clone()))
+        .collect();
+    fields.push(("detail".to_owned(), SdkValue::Bool(true)));
+    SdkValue::Map(fields)
+}
+
+#[test]
+fn home_get_and_init_refuse_a_home_that_lost_its_marker() {
+    let home = data_home();
+    let got = get(&home);
+    assert_eq!(got.get_text("state"), Some("broken"));
+    assert_eq!(got.get_text("reason"), Some("missing"));
+    assert_eq!(got.get_text("fix"), Some("layerfs home init --adopt"));
+    assert!(
+        got.get_text("message")
+            .is_some_and(|message| message.contains("no layerfs.json")),
+        "{got:?}"
+    );
+    assert!(!got.get_text("fix").unwrap_or_default().contains("mv "));
+    // without --adopt the call is refused with the adopt fix, and writes
+    // nothing (not even the home lock)
+    let refused =
+        layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();
+    assert_eq!(refused.code, "Unsupported");
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs home init --adopt")
+    );
+    assert!(!home.join("layerfs.json").exists());
+    assert!(!home.join("layerfs.lock").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn home_init_adopt_writes_the_marker_and_answers_its_id() {
+    let home = data_home();
+    let before = std::fs::read(home.join("store/shop/record.json")).unwrap();
+    let answer = layerfs_api::call(
+        Some(&home),
+        "home.init",
+        asked(&[("adopt", SdkValue::Bool(true))]),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(
+        keys(&answer),
+        [
+            "home",
+            "unchanged",
+            "outcome",
+            "layout",
+            "version",
+            "id",
+            "id_source",
+            "warnings"
+        ]
+    );
+    assert_eq!(answer.get_text("outcome"), Some("adopted"));
+    assert_eq!(answer.get("unchanged"), Some(&SdkValue::Bool(false)));
+    let id = answer.get_text("id").expect("an id");
+    assert_eq!(id.len(), 32);
+    assert!(id.starts_with("0123456789abcdef"), "{id}");
+    assert_eq!(answer.get_text("id_source"), Some("records"));
+    assert!(
+        matches!(answer.get("warnings"), Some(SdkValue::List(items)) if !items.is_empty()),
+        "{answer:?}"
+    );
+    // the data is untouched and nothing was moved
+    assert_eq!(
+        std::fs::read(home.join("store/shop/record.json")).unwrap(),
+        before
+    );
+    assert!(!std::path::Path::new(&format!("{}.old", home.display())).exists());
+    assert_eq!(get(&home).get_text("state"), Some("ready"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn home_init_adopt_short_form_names_the_id_and_a_current_home_is_unchanged() {
+    let home = data_home();
+    let short = layerfs_api::call(
+        Some(&home),
+        "home.init",
+        SdkValue::map([("adopt", SdkValue::Bool(true))]),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(keys(&short), ["home", "id", "id_source", "warnings"]);
+    assert_eq!(short.get("unchanged"), None);
+    // the home is current now: adopt writes nothing and answers unchanged
+    let marker = std::fs::read(home.join("layerfs.json")).unwrap();
+    let again = layerfs_api::call(
+        Some(&home),
+        "home.init",
+        asked(&[("adopt", SdkValue::Bool(true))]),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(again.get_text("outcome"), Some("unchanged"));
+    assert_eq!(
+        keys(&again),
+        [
+            "home",
+            "unchanged",
+            "outcome",
+            "layout",
+            "version",
+            "id",
+            "id_source",
+            "warnings"
+        ]
+    );
+    for key in ["id", "id_source", "warnings"] {
+        assert_eq!(again.get(key), Some(&SdkValue::Null), "{key}");
+    }
+    assert_eq!(std::fs::read(home.join("layerfs.json")).unwrap(), marker);
     let _ = std::fs::remove_dir_all(&home);
 }

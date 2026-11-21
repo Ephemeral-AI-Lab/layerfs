@@ -138,7 +138,7 @@ asyncio.run(main())
 
 See [`project.export`](../../architecture/api/sdk/project.md#projectexport)
 for destination validation, fidelity, routing, refusal codes and result fields.
-The table has 83 calls, eight in the `project` family.
+The table has 84 calls, nine in the `project` family.
 
 ```js
 // /exports exists; the destination is absent or empty on this host.
@@ -227,10 +227,16 @@ call on a Store on another machine goes to that machine's worker. See
 [routes](machines-and-stores.md#routes).
 
 A call of this build on a folder that is not a LayerFS 2.0 home (a
-`layerfs.json` of another layout, or files and no `layerfs.json`) is
+`layerfs.json` of another layout, or stray files and no `layerfs.json`) is
 refused `Unsupported` with the fix
 `mv <home> <home>.old && layerfs home init`; the home is not converted or
-written. See [the home](home.md#an-older-home).
+written. A real home whose data is there but whose `layerfs.json` is
+missing is refused `Unsupported` with the fix `layerfs home init --adopt`
+(never `mv`): `--adopt` writes the marker and leaves every data byte as it
+is, reusing the id prefix its records agree on. A machine's data disk whose
+content is a worker's root is refused `Unsupported` with the fix
+`unset LAYERFS_HOME`, never `mv` or `layerfs home init`. See [the
+home](home.md#a-home-that-lost-its-layerfsjson).
 
 ## Checks on this branch
 

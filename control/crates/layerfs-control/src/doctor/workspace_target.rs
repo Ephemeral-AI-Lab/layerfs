@@ -11,7 +11,7 @@
 use super::frame::Probe;
 use super::report::{NoVerdict, Node, NotChecked, Thing};
 use super::target::Checks;
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::state::BlockedBy;
 use layerfs_sandbox::state::unmount_fix;
 use std::path::Path;
@@ -125,16 +125,16 @@ impl Seen {
 
 /// The Workspaces Sandbox `sandbox`'s folder `dir` records: `(id, name)`,
 /// the name its mount gave it, else its path. A folder that cannot be read
-/// records none here; the home's own doctor names it.
-pub(super) fn recorded(dir: &Path) -> Vec<(String, String)> {
-    let records = layerfs_sandbox::files::workspaces(dir).unwrap_or_default();
-    (records.into_iter())
+/// is its refusal: the Workspaces it records are unknown, not none.
+pub(super) fn recorded(dir: &Path) -> Result<Vec<(String, String)>, SdkRefusal> {
+    let records = layerfs_sandbox::files::workspaces(dir)?;
+    Ok((records.into_iter())
         .filter_map(|(_, record)| {
             let id = record.id()?.to_owned();
             let name = record.name().or(record.path()).unwrap_or(&id).to_owned();
             Some((id, name))
         })
-        .collect()
+        .collect())
 }
 
 /// Sandbox `sandbox`'s Workspaces: those `recorded` names (`(id, name)`)

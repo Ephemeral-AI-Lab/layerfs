@@ -9,7 +9,7 @@ left on disk, and the report all six doctors answer, within
 
 | | |
 | --- | --- |
-| Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor): `host_target.rs`, `records.rs`, `scan.rs`, `checks.rs`, `report.rs`, `check_report.rs` |
+| Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor): `host_target.rs`, `host_identity.rs`, `records.rs`, `scan.rs`, `checks.rs`, `report.rs`, `check_report.rs` |
 
 ## The records check
 
@@ -20,8 +20,16 @@ left on disk, and the report all six doctors answer, within
      Empty         -> no home.layout, no home.records; the home stays absent
      Foreign       -> home.layout fails, fix `mv <home> <home>.old && layerfs home init`;
                       no records (not a LayerFS 2.0 home)
-     Current (3)   -> home.records = scan -> checks::check_local
+     WorkerRoot    -> home.layout fails, fix `unset LAYERFS_HOME`; no records
+                      (a machine's data disk, never moved)
+     DataWithoutMarker -> home.layout fails, fix `layerfs home init --adopt`;
+                      no records (a home's data with no layerfs.json, kept)
+     Current (3)   -> home.layout passes; home.records = scan -> checks::check_local
    inventory fingerprint before and after: changed or unreadable -> no verdict
+   when the scan gave a stable verdict:
+     id cross-check (host_identity): layerfs.json's id against every machine
+     record's vm_name and every sandbox record's daemon name
+       mismatch -> home.layout fails, error, no fix
    -> Findings [ { severity, entity {kind, name}, message, fix } ]
    -> each one row of home.records on the thing it is about
 ```
@@ -33,6 +41,7 @@ left on disk, and the report all six doctors answer, within
 | thing | `home`, `machine`, `store`, `project`, `sandbox`, `workspace` or `bucket`; a command record's finding names its Workspace | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs), [`checks.rs`](../../../../control/crates/layerfs-control/src/doctor/checks.rs), [`check_report.rs`](../../../../control/crates/layerfs-control/src/doctor/check_report.rs) `about` |
 | order | findings in the order the checks made them | [`records.rs`](../../../../control/crates/layerfs-control/src/doctor/records.rs) |
 | nothing found | `home.records` passes | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
+| id mismatch | `home.layout` fails (error, no fix): a machine `vm_name` or a Sandbox `daemon.name` is not the provider name this home's `layerfs.json` id gives. The message names the record path and the recorded and expected names; no line fixes it, since moving a whole home aside would not repair a record or a marker that belongs to another home. A bare home, a record with no provider name (`native`, an earlier machine, an unstarted Sandbox) and a deleted record pass. Eight-hex names (`layerfs-<id8>-`, `lfs-<id8>-`) compare only their first 8 digits (32 bits) | [`host_identity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_identity.rs), [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) `matches_provider_name` |
 | no verdict | a record or lease that cannot be read, a record set that changed while it was read, or the home's budget ending: `home.records` is `not_checked` | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) `observed` |
 | leftovers | in no report: LayerFS removes them itself; see [Leftovers](#leftovers) | [`sweep.rs`](../../../../control/crates/layerfs-sandbox/src/sweep.rs) |
 
@@ -61,6 +70,7 @@ there at the second read. It dials no worker or daemon.
 | folder mode | `error` when others may list or change it or its group may use it (0701 is allowed, for a namespaces Sandbox, except on a Store's own folder; a symlink is reported as a link with `make it a real folder`, never `chmod`, which would change the target); fix `chmod g-rwx,o-rw <path>` | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder`, `link` |
 | Store folder mode | `error` when a Store's own folder has any group or other bit (`0701` is not allowed; fix `chmod 700 <path>`) or is a symlink (scanned under `store/`, reported without descending into `record.json` or `project/`, and without suggesting `chmod`) | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `store_folder`, `store_names` |
 | Store folder | `error` on each project in a Store folder with no Store record; fix: restore the record or delete the folder by hand | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `store` |
+| Project folder | `error` on each real project folder whose Store record exists but whose `record.json` does not; the fix is `layerfs project prune <store>/<project>`, which removes only such a folder. A symlink entry is skipped (the scan descends no link) and is never a prune fix | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `store` |
 | Workspace folder | `warning` for `workspace/<id>/` with no `<id>.json` beside it (its Workspace was unmounted); fix `rm -r <folder>` | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `execs` |
 | command record | `warning` when its owner process is gone; fix `layerfs workspace cancel <sandbox>:<workspace> --exec <id>` (the message adds that the Workspace's unmount or the Sandbox's removal also ends it); `error` when a file under `exec/` does not read as one (no fix: repair or remove it by hand) | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `execs` |
 
@@ -106,7 +116,7 @@ the worker's `stat`, fix `layerfs store move <s> <machine>` or `layerfs store
 move <s> native`) is in `check_scope`'s remote branch, which no doctor calls
 today.
 
-## Foreign homes
+## Foreign homes and worker roots
 
 A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another
 layout, or anything but `layerfs.lock`, the integration folders and
@@ -117,6 +127,35 @@ writes nothing in it; move it aside and make a new home", with the fix
 The conversion and its blocker survey were removed (owner, 2026-11-19;
 [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs)
 `layout`, [opening a home](../home/README.md#opening-a-home)).
+
+A folder whose entries are a home's own data and which has no
+`layerfs.json` is not foreign and is not moved: it is `DataWithoutMarker`
+(`store/`, `machine/`, `sandbox/`, `backup/`, `secret/`, `trace/`, `log/`,
+`incoming/`, `generation`, at least one and each data name a folder but
+`generation`; layerfs-project#752, c6). `home.layout` fails, "a LayerFS
+home's data with no layerfs.json: this build writes nothing in it; adopt it
+and keep the data", with the fix `layerfs home init --adopt`, and
+`home.records` is not run. The adopt writes only the marker; the doctor
+still has no records verdict until the next run.
+
+A machine's data disk that holds a worker's content is not a foreign home
+and is not moved. Its shape, read only and before the empty/foreign
+decision: at least one of `store/`, `sandbox/` and `machine/native/run/`;
+`incoming/init-<16 hex>/` or `log/worker.log`; and no `trace/`, `backup/`
+or `layerfs.json` ([`layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs)
+`worker_root_shape`). `home.layout` fails, "a machine's worker root, not a
+LayerFS 2.0 home: this build writes nothing in it; point `LAYERFS_HOME` at
+your home", with the fix `unset LAYERFS_HOME`; `home.records` is not run
+and the doctor writes nothing. A real home missing its `layerfs.json`
+keeps `trace/` or `backup/` and is not a worker's root: it is
+`DataWithoutMarker`, and `home.layout` names the adopt fix instead.
+
+A current-layout home whose id disagrees with its records is not a foreign
+home and is not moved: `home.layout` fails with no fix, naming the record
+path and both the recorded and expected names, because the record or
+`layerfs.json` came from another home. The cross-check reads only what the
+records scan already holds and runs only when that scan gave a stable
+verdict ([`host_identity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_identity.rs)).
 
 Worker reach and Sandbox daemon reach are not records checks: a machine's
 worker is `machine.doctor`'s (`machine.worker.*`), a Sandbox's daemon

@@ -84,6 +84,10 @@ pub fn usage(call: &Call) -> String {
         let sections: Vec<&str> = call.with.iter().map(|section| section.name).collect();
         line.push_str(&format!(" [--with {}]", sections.join(",")));
     }
+    // the doctor's own switch, not a call option
+    if call.call == "doctor" {
+        line.push_str(" [--fail-on never|error]");
+    }
     line
 }
 
@@ -168,7 +172,13 @@ fn top() -> String {
         bold("Options on every call"),
         indented(OPTIONS)
     ));
-    text.push_str("Exit 0 done · 2 wrong command line · 125 refused, with the reason on stderr\n");
+    text.push_str(
+        "Doctors: --fail-on never|error exits 1 when a report has an error or a check it could not make\n",
+    );
+    text.push_str(
+        "Exit 0 done · 1 a doctor --fail-on error found a problem · 2 wrong command line · \
+         125 refused, with the reason on stderr\n",
+    );
     text.push_str("Home: LAYERFS_HOME, else ~/.layerfs · More: layerfs help <family> [<call>]\n");
     text
 }
@@ -237,6 +247,14 @@ pub fn call_help(call: &Call) -> String {
     if piped(call) {
         let from = "read the content from this file instead of stdin".to_owned();
         options.push(("--from <file>".to_owned(), from));
+    }
+    if call.call == "doctor" {
+        options.push((
+            "--fail-on <when>".to_owned(),
+            "exit 1 when the report has an error finding or a check it could not make: \
+             never (the default) or error"
+                .to_owned(),
+        ));
     }
     if !options.is_empty() {
         text.push_str(&format!("\n{}\n{}", bold("Options"), rows(&options)));

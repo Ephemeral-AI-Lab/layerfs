@@ -9,7 +9,7 @@ use crate::error::{Code, MachineError};
 use crate::setup::guest::Guest;
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
-use crate::spec::Spec;
+use crate::spec::{Spec, Volume};
 use std::time::Duration;
 
 const CALL: Duration = Duration::from_secs(30);
@@ -120,4 +120,60 @@ pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
         _ => None,
     };
     Ok(with_worker(spec, kernel, free, version))
+}
+
+/// The Engine's named volumes and their two LayerFS labels, read-only: one
+/// `docker volume ls --format` call. The listing is every volume of the
+/// Engine, which other homes share; the caller decides which are its own.
+pub(crate) fn volumes(spec: &Spec) -> Result<Vec<Volume>, MachineError> {
+    const FORMAT: &str = r#"{{.Name}}\t{{.Label "layerfs.home"}}\t{{.Label "layerfs.machine"}}"#;
+    let out = run(
+        spec,
+        &["volume", "ls", "--format", FORMAT],
+        "docker volume ls",
+    )?;
+    let said = out.answer("listing Docker volumes")?;
+    Ok(volumes_from(&said))
+}
+
+/// The listing's lines as volumes, each `<name>\t<home>\t<machine>` with an
+/// empty field for an absent label (c3).
+fn volumes_from(said: &str) -> Vec<Volume> {
+    said.lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            let mut fields = line.split('\t');
+            let name = fields.next().unwrap_or("").to_owned();
+            let mut labels = std::collections::BTreeMap::new();
+            for (key, value) in [
+                ("layerfs.home", fields.next()),
+                ("layerfs.machine", fields.next()),
+            ] {
+                if let Some(value) = value.filter(|value| !value.is_empty()) {
+                    labels.insert(key.to_owned(), value.to_owned());
+                }
+            }
+            Volume { name, labels }
+        })
+        .filter(|volume| !volume.name.is_empty())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::volumes_from;
+
+    #[test]
+    fn a_listing_line_is_a_name_and_its_two_labels() {
+        let home = "0123456789abcdef0123456789abcdef";
+        let volumes = volumes_from(&format!("lfs-dev-data\t{home}\tdev\nstray-data\t\t\n"));
+        assert_eq!(volumes.len(), 2, "{volumes:?}");
+        assert_eq!(volumes[0].name, "lfs-dev-data");
+        assert_eq!(volumes[0].label("layerfs.home"), Some(home));
+        assert_eq!(volumes[0].label("layerfs.machine"), Some("dev"));
+        assert_eq!(volumes[1].name, "stray-data");
+        assert_eq!(volumes[1].label("layerfs.home"), None);
+        assert_eq!(volumes[1].label("layerfs.machine"), None);
+        assert!(volumes_from("").is_empty());
+    }
 }

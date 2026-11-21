@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **83 calls in 10 families**, the same names and arguments in JavaScript, Python, the MCP server and the `layerfs` command, one page per family.
+Every call a program can make: **84 calls in 10 families**, the same names and arguments in JavaScript, Python, the MCP server and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |

@@ -37,7 +37,7 @@ Nothing here is published to npm, PyPI or crates.io.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | npm `@layerfs/agent` (`import { LayerFS } from "@layerfs/agent"`) | npm `@layerfs/node` (`api/node`): `import layerfs from "@layerfs/node"` or `import { client, LayerFSError } from "@layerfs/node"`. An ES module for Node 22 or later, MIT | **Replaced.** One package, one native addon. [`api/node/package.json`](../../../api/node/package.json), [Node](../../architecture/api/front-ends/bindings.md#layerfs-node) |
-| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary: the 83 calls plus `worker`, `help` and `--version` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
+| npm `@layerfs/cli` (the Node `layerfs` command; #521: 106 commands) | the native `layerfs` command, one Rust binary: the 84 calls plus `worker`, `help` and `--version` | **Replaced.** It is not an npm package: `layerfs-cli` has `publish = false`. The command counts are not comparable (the old ones included the backend and runtime commands). [CLI](../../architecture/api/front-ends/README.md#the-layerfs-command) |
 | npm `@layerfs/backend` (`LayerFSBackend.of(client)`, 14 operator and diagnostic calls) | none, except `layerfs.workspace.status(workspace)` | **Removed** (O25). [Limitations](limitations.md#not-built-refused-as-unsupported), [README](README.md#compatibility-with-110) |
 | npm `@layerfs/runtime` (`LayerFSRuntime.open`, worker start and restart, `project.start_init` / `get_init` / `subscribe_init`, Sandbox and volume sweep) | no package. The `machine`, `store`, `project` and `sandbox` families; `project.init` with `on_progress`; `machine start` and `machine stop` by hand (nothing starts a machine on demand, D11) | **Replaced** in part, **Removed** for the job registry (O22) and the sweep. [Machines and Stores](machines-and-stores.md#starting-and-stopping-manual-535-d11), [Node and Python](sdk.md#functions-as-options) |
 | npm `@layerfs/mcp` (#521: 50 tools, stdio) | `@layerfs/mcp` in `api/mcp` (`layerfs-mcp`, stdio; not published): one tool per call, named `<family>_<call>`; the default `work` profile lists the 17 `agent` calls, `--profile admin` all 83 | **Replaced.** Generated from the Node package's table. [MCP](../../architecture/api/front-ends/mcp.md) |
@@ -88,7 +88,7 @@ that built it (2.39 on the host used). See
 
 ## 3. Methods
 
-2.0 has one call table of 83 calls in ten families, the same in the shell,
+2.0 has one call table of 84 calls in ten families, the same in the shell,
 Node, Python and MCP ([the calls](calls.md)). Positionals go from the outside
 in: project, Branch, path or new name, other inputs; anything optional is an
 option, and a Commit to read at is the option `at`. Every call takes the
@@ -548,10 +548,17 @@ A home's layout is not the whole story: a project is usable only when its record
 `manifest` and `installed`, two encoded `StoreManifest` values
 (`layerfs-store/src/project/discovery.rs`). `project init` writes them; a project created
 by an intermediate build has neither, and the first `sandbox create` then refuses with
-`no complete project manifest` — while `project list` and `project doctor` still look fine,
-because they only read the record's other fields. A project in that state is not
-detectably broken through any current command, which is the part that costs an operator
-the most time.
+`no complete project manifest`.
+
+This build detects that state: a local sqlite project's record is `broken` `failed` when
+its `manifest` is missing or does not decode, or its `installed` manifest is missing or
+does not decode. `project get` and `project list` answer `reason: failed` with
+`fix: layerfs project delete <store>/<project>`; `project doctor` fails `project.record`
+with the same fix; `sandbox create` refuses `Failed` (not `NotFound`) and keeps that fix
+instead of naming the machine doctor. The record exists, so `project prune` (which only
+removes a folder with no record) is not its fix: `project delete` is. A PostgreSQL
+project's record carries its `stack` and no manifest, and a sqlite project placed on a
+worker is written and read on its machine, so both are exempt.
 
 A `manifest` is derivable from rows that already exist:
 

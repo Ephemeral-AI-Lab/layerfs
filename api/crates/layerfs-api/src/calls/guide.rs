@@ -148,6 +148,11 @@ const ARGS: &[(&str, &str, &str)] = &[
         "the new project, written <store>/<project>, in an existing Store",
     ),
     ("project.init", "timeout", "the time limit in milliseconds"),
+    (
+        "project.prune",
+        "project",
+        "the project whose leftover home entry goes; it must have no record",
+    ),
     ("project.list", "store", "list only this Store's projects"),
     (
         "project.stats",
@@ -382,6 +387,11 @@ const ARGS: &[(&str, &str, &str)] = &[
         "list only changes under this folder",
     ),
     (
+        "home.init",
+        "adopt",
+        "write layerfs.json for a home whose data is there but marker is missing; never moves or rewrites the data",
+    ),
+    (
         "home.log",
         "call",
         "only this call: a family (file) or family.call (file.write)",
@@ -563,6 +573,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         "layerfs project export shop/web ~/out/web --branch work",
     ),
     ("project.delete", "layerfs project delete shop/old"),
+    ("project.prune", "layerfs project prune shop/orphan"),
     (
         "project.hide_path",
         "layerfs project hide-path shop/web /secrets.env",

@@ -3,6 +3,7 @@
 //! finds and changes nothing; `layerfs home leftovers` and `layerfs home
 //! prune` are gone (spec v20: LayerFS removes leftovers itself).
 use layerfs_api::home::{self, paths, private_dir};
+use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -75,6 +76,97 @@ fn home_doctor_text_names_each_finding_and_its_fix() {
         Some(2)
     );
     std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn doctor_fail_on_error_gates_errors_and_unchecks() {
+    let home = home_path("fail-on");
+    // an absent home has no disk of its own to measure: `home.capacity` is
+    // not checked, which `--fail-on error` gates and `never` (the default)
+    // does not
+    for (words, want) in [
+        (&["home", "doctor", "--text"][..], 0),
+        (&["home", "doctor", "--text", "--fail-on", "never"], 0),
+        (&["home", "doctor", "--text", "--fail-on", "error"], 1),
+        (&["home", "doctor", "--json", "--fail-on", "error"], 1),
+    ] {
+        let out = layerfs(&home, words);
+        assert_eq!(out.status.code(), Some(want), "{words:?}: {out:?}");
+    }
+    // an error finding is reported on stdout and gates the same way
+    home::open(&home).unwrap();
+    let bad = paths::store_record(&home, "bad");
+    private_dir(bad.parent().unwrap()).unwrap();
+    std::fs::write(&bad, "{not json").unwrap();
+    std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let out = layerfs(&home, &["home", "doctor", "--json"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let out = layerfs(&home, &["home", "doctor", "--json", "--fail-on", "error"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let report = layerfs_api::json::parse(String::from_utf8(out.stdout).unwrap().trim()).unwrap();
+    let findings = match report.get("findings") {
+        Some(SdkValue::List(rows)) => rows.as_slice(),
+        _ => &[],
+    };
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding.get_text("severity") == Some("error")),
+        "{report:?}"
+    );
+    // an unknown word is a wrong command line
+    let out = layerfs(&home, &["home", "doctor", "--fail-on", "sometimes"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("never or error"), "{err}");
+    // a refusal stays 125, whatever the gate
+    assert_eq!(
+        layerfs(
+            &home,
+            &["project", "doctor", "shop/none", "--fail-on", "error"]
+        )
+        .status
+        .code(),
+        Some(125)
+    );
+    // the switch belongs to a doctor, not to every call
+    assert_eq!(
+        layerfs(&home, &["store", "list", "--fail-on", "error"])
+            .status
+            .code(),
+        Some(2)
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// `--fail-on error` reads the report's two lists: an error finding or a
+/// check that could not be made fails it; a warning or a notice does not.
+#[test]
+fn fail_on_error_ignores_warnings_and_notices() {
+    let report = |findings: Vec<SdkValue>, not_checked: Vec<SdkValue>| {
+        SdkValue::map([
+            ("findings", SdkValue::List(findings)),
+            ("not_checked", SdkValue::List(not_checked)),
+        ])
+    };
+    let finding = |severity: &str| SdkValue::map([("severity", SdkValue::text(severity))]);
+    assert!(layerfs_cli::output::doctor_failed(&report(
+        vec![finding("error")],
+        vec![]
+    )));
+    assert!(!layerfs_cli::output::doctor_failed(&report(
+        vec![finding("warning")],
+        vec![]
+    )));
+    assert!(!layerfs_cli::output::doctor_failed(&report(
+        vec![finding("notice")],
+        vec![]
+    )));
+    let open = SdkValue::map([("reason", SdkValue::text("timeout"))]);
+    assert!(layerfs_cli::output::doctor_failed(&report(
+        vec![],
+        vec![open]
+    )));
 }
 
 #[test]

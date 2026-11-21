@@ -89,13 +89,16 @@ pub(super) fn diagnose(
         "bucket.credentials",
         "its key was read from the home; values were not displayed",
     );
-    let until = Instant::now()
-        + budget.limit(if write_test {
+    // Each subcheck gets its own window from `Instant::now()`: a slow
+    // listing or probe must not spend the time a signed write needs.
+    match client.diagnostic_list(window(
+        budget,
+        if write_test {
             Duration::from_secs(30)
         } else {
             Duration::from_secs(10)
-        });
-    match client.diagnostic_list(until) {
+        },
+    )) {
         Ok(()) => {
             checks.pass(
                 "bucket.transport",
@@ -116,7 +119,7 @@ pub(super) fn diagnose(
     if !write_test {
         return;
     }
-    match client.diagnostic_versioning(until) {
+    match client.diagnostic_versioning(window(budget, Duration::from_secs(10))) {
         Ok(()) => checks.pass("bucket.write_capability", "bucket reports enabled immutable object versioning; conditional create and version-specific cleanup can be attempted"),
         Err(error) => {
             checks.unknown("bucket.write_capability", "safe temporary write-test capability could not be established; no object was written");
@@ -137,7 +140,7 @@ pub(super) fn diagnose(
     let key = client
         .diagnostic_key(&token)
         .expect("generated lowercase hex token");
-    let object = match client.diagnostic_create(&token, until) {
+    let object = match client.diagnostic_create(&token, window(budget, Duration::from_secs(30))) {
         Ok(object) => {
             checks.pass(
                 "bucket.put",
@@ -147,7 +150,7 @@ pub(super) fn diagnose(
         }
         Err(error @ RemoteError::Uncertain(_)) => {
             failure(checks, "bucket.put", &error);
-            match client.diagnostic_reconcile(&token, until) {
+            match client.diagnostic_reconcile(&token, window(budget, Duration::from_secs(10))) {
                 Ok(object) => {
                     checks.pass("bucket.reconcile", "exact generated key contains this probe's token and bytes at an immutable version; PUT was not resent");
                     object
@@ -163,7 +166,19 @@ pub(super) fn diagnose(
             return;
         }
     };
-    probe(&client, object, &key, until, checks);
+    probe(
+        &client,
+        object,
+        &key,
+        window(budget, Duration::from_secs(10)),
+        checks,
+    );
+}
+
+/// The deadline one subcheck may use: a fresh window of `maximum`, never
+/// past the thing's own budget.
+pub(super) fn window(budget: &Budget, maximum: Duration) -> Instant {
+    Instant::now() + budget.limit(maximum)
 }
 
 fn probe(

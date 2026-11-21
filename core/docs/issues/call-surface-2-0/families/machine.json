@@ -1285,7 +1285,7 @@
           },
           {
             "check": "machine.capacity",
-            "what": "its data disk has room",
+            "what": "its data disk has room, and its data volumes are labelled for this home",
             "full_only": false
           }
         ]

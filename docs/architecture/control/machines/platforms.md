@@ -66,6 +66,9 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
  start(spec, bundle)                                   docker/power.rs
    image = spec.os_image (none -> InvalidInput)
    docker inspect <vm>: ours -> docker rm -f; not ours -> Exists
+   docker volume create --label layerfs.home=<the home's full id>
+     --label layerfs.machine=<machine> <vm>-data
+                                          (an existing volume keeps its labels)
    docker run -d --pull never --name <vm> --init --privileged
      --cgroupns private --label layerfs.role=machine-worker
      --label layerfs.bundle=<hash>
@@ -92,6 +95,14 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
 The worker's output goes to `/layerfs/data/log/worker.log` on the data
 volume, not to `docker logs`
 ([the worker's log](workers-and-reach.md#the-workers-log)).
+
+The data volume is made before the container, so it can carry
+`layerfs.home=<the home's full 32-hex id>` and `layerfs.machine=<machine>`:
+the volume itself then says whose it is. An older, unlabelled volume is used
+as it is (Docker ignores `volume create`'s options for an existing name; the
+start goes on), and the doctor's `machine.capacity` reports it by its name
+and the record that names its VM. Apple Container's data volume is not
+labelled: a documented gap.
 
 | Call | Answer |
 | --- | --- |
@@ -124,7 +135,8 @@ it ([Sandboxes: backends](../sandboxes/backends.md)).
 
 One container of Apple's `container` CLI (macOS, Apple silicon). Its main
 process is a shell that sleeps and ends on SIGTERM; its data disk is a
-named volume.
+named volume, created without `layerfs.home`/`layerfs.machine` labels (a
+documented gap: `machine.capacity` reads only Docker volumes).
 
 ```text
  create(spec, bundle)                         apple_container/create.rs

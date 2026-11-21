@@ -38,8 +38,8 @@ are kept in the home's secret folder; see
     start.lock                 taken while a process starts, makes or removes the machine
     forward.log, forward.1.log what a lima machine's ssh forwards said, and its one rotated file
   machine/native/run/          native Sandboxes' run folders, and their image cache
-    layerfs-<id8>-<sandbox>/   one run folder per Sandbox
-    layerfs-<id8>-<sandbox>.root/  its private root (Linux; empty from outside)
+    layerfs-<id16>-<sandbox>/  one run folder per Sandbox
+    layerfs-<id16>-<sandbox>.root/  its private root (Linux; empty from outside)
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
@@ -71,7 +71,8 @@ worker's root:
 
 ```
 /layerfs/data/
-  .layout-3                    what an earlier bundle left here was cleared
+  .layout-3                    historical: what an earlier bundle left here
+                               was cleared; this build writes no such marker
   store/<name>/                record.json (v, name, kind), store.sqlite, store.sqlite.incoming
                                (a store move's partial copy), store.sqlite.backup
   sandbox/<name>/              record.json, control.json, lock, workspace/ as above
@@ -101,10 +102,18 @@ worker's root:
   carries `"v": 1` as its first field; call results never show it.
 - **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
   is written once. The `docker` machine names its worker container with it (O33),
-  VM, container and volume names and Sandbox run folders carry its first 8
-  digits (`layerfs-<id8>-<name>`), and backups record it as where they
-  were exported from. A folder that is not a home of this layout is not
-  converted or written ([below](#an-older-home)).
+  VM, container and volume names and Sandbox run folders carry its first 16
+  digits (`layerfs-<id16>-<name>`; before layerfs-project#752 they carried
+  the first 8, `layerfs-<id8>-`, and the oldest names were `lfs-<id8>-`,
+  which still read), and backups record it as where they were exported
+  from. Eight hex digits pin only 32 bits, so a legacy record can prove no
+  more than that two ids share their first 8 digits. `home.doctor`'s
+  `home.layout` check compares the id with every machine's `vm_name` and
+  every Sandbox's recorded daemon name, once the records scan is stable; a
+  record or an id that came from another home fails it as an error with no
+  fix (never `mv`: the record or marker, not the home, is what disagrees).
+  A folder that is not a home of this layout is not converted or written
+  ([below](#an-older-home)).
 - **`layerfs.lock`** guards record writes and Sandbox-name uniqueness.
   Taking it waits up to 120 s for another holder; that is a readiness wait,
   not a retry. If it is still held, the call is refused `Unavailable` and
@@ -148,7 +157,8 @@ worker's root:
   not the machine's. `runtime_id` and `daemon` are never shown. The
   Sandbox's `id` is its name.
 - **`machine/native/run/`** holds each native Sandbox's run folder
-  (`layerfs-<id8>-<name>`) and the image cache the namespaces backend
+  (`layerfs-<id16>-<name>`; earlier `layerfs-<id8>-`, oldest `lfs-<id8>-`)
+  and the image cache the namespaces backend
   unpacks once (`images/<64 hex>.2`; `.2` is the cache's layout version).
   A Sandbox's run folder is created by its create and deleted by its
   close. It holds the daemon's setup and log, the Workspaces' mount points
@@ -185,13 +195,21 @@ worker's root:
   with the Sandbox's run folder and deleted with it, so there is no
   `daemon.1.log`.
 - **Names outside the home.** A machine's VM or worker container is named
-  `layerfs-<id8>-<machine>`, where `<id8>` is the first 8 digits of the
-  home's id and every character of the machine's name that is not a
+  `layerfs-<id16>-<machine>`, where `<id16>` is the first 16 hex digits of
+  the home's id and every character of the machine's name that is not a
   letter or digit becomes `-`; its data volume is that name with `-data`
   (`docker`, `apple-container`). A Sandbox's run folder is
-  `layerfs-<id8>-<sandbox>`. Every `machine create`, and a new home's
-  `docker` machine, records the name as `vm_name`. No name starts with
-  `lfs-`, and none is computed for a record (owner, 2026-11-19): a machine
+  `layerfs-<id16>-<sandbox>`. Every `machine create`, and a new home's
+  `docker` machine, records the name as `vm_name`. An earlier build wrote
+  `layerfs-<id8>-` and the oldest `lfs-<id8>-`: a machine `vm_name` that
+  keeps one still reads, and a Sandbox is reopened under the current or
+  the `layerfs-<id8>-` form (an `lfs-<id8>-` run folder is an earlier
+  build's, which this build neither reopens nor deletes); this build
+  computes no older form. Eight hex digits are only 32 bits, so such a
+  name proves only that two ids share their first 8 digits;
+  `matches_provider_name` reads it under that cap, and `home.layout`'s id
+  cross-check accepts it for that much and no more. No name is computed
+  for a record that lacks one (owner, 2026-11-19): a machine
   record without `vm_name`, made by an earlier build, reads `broken`
   `outdated`, and every machine call that needs its VM or container is
   refused `Failed` (a call on a sqlite Store on it `Unavailable`, with the
@@ -248,7 +266,9 @@ deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
 `machine/*/sandbox/`, old local directories in
 `machine/native/sandbox-root/` (renamed `machine/native/run/`, its
 `images/` kept) and full Store records (rewritten thin). The marker
-`/layerfs/data/.layout-3` keeps it from running again.
+`/layerfs/data/.layout-3` keeps it from running again: that marker is a
+historical mechanism, this build does not write it, and a data disk
+without one is still a worker's root by its contents ([below](#an-older-home)).
 
 ## Secrets, and moving or copying a home
 
@@ -272,10 +292,13 @@ deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
   Files a record names outside the home (a machine's `image_archive`, a
   `file:` secret reference) are not moved with it.
 - **Copying.** A copy keeps the original's id and its records, so both
-  homes use the same `layerfs-<id8>-` names: the same VMs, the same
+  homes use the same `layerfs-<id16>-` names: the same VMs, the same
   `docker` worker container and volume (a start from one replaces the
   container the other started), and the same Sandbox records and run
-  folders on a machine. Do not use a copy beside its original.
+  folders on a machine. The `home.layout` id cross-check cannot tell a
+  copy from its original: the id and records agree, so both pass while
+  they drive the same provider objects. Do not use a copy beside its
+  original.
 
 Not run for this manual; the statements are from the source.
 
@@ -295,21 +318,77 @@ $ cat /tmp/lfs-new/layerfs.json
 (Run before layout 3; the answer is the same at layout 3 but for the
 layout number.)
 
+## A home that lost its `layerfs.json`
+
+A real home can lose its marker: a copy that left `layerfs.json` behind, a
+restore that missed it, or a hand-made one. Its data is still there, so it
+is neither a new home nor a foreign folder. A folder with no `layerfs.json`
+whose entries are all a home's own — `store/`, `machine/`, `sandbox/`,
+`backup/`, `secret/`, `trace/`, `log/`, `incoming/` and `generation` (a
+file; each other one a folder) — and at least one of them, is
+**`DataWithoutMarker`**. So is one that also holds the `layerfs.lock` a
+first call takes, the temporary a marker is renamed from, an integration's
+`runtime/`, `job/`, `stat/` and `preset/` folders, and macOS's
+`.DS_Store`. This build never writes one by accident: every call on it is
+refused `Unsupported`, "holds a LayerFS home's data but no layerfs.json",
+before the home lock, with the fix
+
+```console
+$ layerfs home init --adopt
+```
+
+`home get` answers it `broken` `missing` with the same fix and message, and
+the home doctor's `home.layout` fails with it, without a records check.
+
+`--adopt` takes the home lock, detects the folder again under it, writes
+`layerfs.json` (layout 3 and an id) and audits the home read only. It never
+moves the folder, rewrites a record or the data, or initializes an empty
+home there. The id is the longest prefix the home's records agree on — a
+machine's `vm_name`, a Sandbox daemon's name, `layerfs-<16 hex>-` or the
+earlier eight-hex forms — plus a random tail; with no such record it is a
+fresh random id. Records that disagree, or that cannot be read, are
+refused `Failed` and no marker is written (the home lock may be). The
+answer also says `id`,
+`id_source` (`records` or `fresh`) and read only `warnings` (a missing part,
+an unreadable or missing `*/record.json`, a part not `0700`, a temporary a
+killed init left, an `incoming/init-*` copy).
+
+The records keep only a prefix of the home id, so an adopted id keeps that
+prefix and gets a random tail: an older backup records the full id it was
+exported from (`layerfs-exported-from`), and a restore check that compares
+the whole id will not match the adopted one. A record that stored the full
+home id would make a later adopt exact; this build does not write one yet.
+
 ## An older home
 
 This build converts no older home (owner, 2026-11-19: "cut and cleanup old
 incompatible aggressively, no lfs, and fallback to old 2.0 or 1.x", and
 "just drop it. we will never need it"). A folder that is not a LayerFS 2.0
-home is never written: one whose `layerfs.json` names another layout, or
-one holding anything with no `layerfs.json` beyond the `layerfs.lock` a
-first call takes, an integration's `runtime/`, `job/`, `stat/` and
-`preset/` folders, and macOS's `.DS_Store`. Every call on it is refused `Unsupported`, `home get`
-answers it `broken` `outdated`, and the home doctor's `home.layout` check
-fails, each with the fix
+home and is not a home that lost its marker is never written: one whose
+`layerfs.json` names another layout, or one holding anything else with no
+`layerfs.json` (a stray file, a data name that is a file). Every call on it
+is refused `Unsupported`, `home get` answers it `broken` `outdated`, and
+the home doctor's `home.layout` check fails, each with the fix
 
 ```console
 $ mv <home> <home>.old && layerfs home init
 ```
 
 which keeps the old folder and makes a new, empty home. Nothing in the old
-folder is carried over.
+folder is carried over. If an adopted home's data is not wanted after all,
+that `mv` is the line too: the adopt only writes a marker, so moving the
+folder aside is how to start over without it.
+
+A machine's data disk (`/layerfs/data`) is not an older home and is not
+moved. This build recognises it by its contents before it would call it
+empty, a home's data or foreign: at least one of `store/`, `sandbox/` and
+`machine/native/run/`; `incoming/init-<16 hex>/` or `log/worker.log`; and
+none of `trace/`, `backup/` or `layerfs.json`. Every call on it is refused
+`Unsupported`, "a machine's worker root, not a LayerFS home", with the fix
+`unset LAYERFS_HOME` (never `mv` or `layerfs home init`); `home get`
+answers it `broken` `unsupported`, and the home doctor's `home.layout`
+fails without a records check. The refusal comes before the home lock, so
+nothing — not `layerfs.json`, not `layerfs.lock`, not the call log — is
+written there. A real home that lost its `layerfs.json` keeps `trace/` or
+`backup/`, which a worker's root never does, so it is `DataWithoutMarker`,
+not a worker's root.

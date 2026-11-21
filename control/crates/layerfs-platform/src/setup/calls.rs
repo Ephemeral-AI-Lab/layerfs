@@ -8,7 +8,7 @@ use super::worker;
 use crate::adapter::{adapter, refused};
 use crate::error::{Code, MachineError};
 use crate::platform::{HostOs, Platform, Route};
-use crate::spec::{Bundle, Forward, NameLimit, Running, Spec};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Volume};
 use std::path::Path;
 use std::time::Instant;
 
@@ -153,6 +153,39 @@ pub fn status(spec: &Spec) -> Result<Status, MachineError> {
 /// time (`machine.list`), so a probe past it leaves no process behind.
 pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineError> {
     super::tool::within(deadline, || status(spec))
+}
+
+/// The provider's named data volumes of machine `spec` and their labels,
+/// read-only: `docker volume ls` on a `docker` machine. A platform that
+/// keeps its data somewhere else answers `Unsupported`: only Docker volumes
+/// carry the `layerfs.home` and `layerfs.machine` labels (Apple Container's
+/// volume labeling is a documented gap). No machine is started.
+pub fn volumes(spec: &Spec) -> Result<Vec<Volume>, MachineError> {
+    spec.validate()?;
+    if spec.kind != Platform::Docker {
+        return Err(MachineError::new(
+            Code::Unsupported,
+            format!(
+                "the {} machine {} has no provider volumes to list",
+                spec.kind.name(),
+                spec.name
+            ),
+        ));
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    return crate::platforms::docker::volumes(spec);
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    Err(MachineError::new(
+        Code::Unsupported,
+        "this build lists Docker volumes on macOS and Linux only",
+    ))
+}
+
+/// [`volumes`], with every command it runs ending by `deadline`: one still
+/// running then is killed with its process group and reaped. For callers
+/// that read it for a bounded time (`machine.capacity` in the doctor).
+pub fn volumes_within(spec: &Spec, deadline: Instant) -> Result<Vec<Volume>, MachineError> {
+    super::tool::within(deadline, || volumes(spec))
 }
 
 /// Observes provider prerequisites, version and runtime state by `deadline`.

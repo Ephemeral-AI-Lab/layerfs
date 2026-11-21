@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-83 calls in 10 families, counted from the Node table. Calls present: Node 83, Python 83, Python `aio` 83, CLI 83, MCP 83 (17 in `work`, 66 admin only).
+84 calls in 10 families, counted from the Node table. Calls present: Node 84, Python 84, Python `aio` 84, CLI 84, MCP 84 (17 in `work`, 67 admin only).
 
 Argument names that are Python keywords: from.
 
@@ -50,7 +50,7 @@ Front-end problems: none.
 
 | Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI | MCP |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `home.init` | - | - | yes | yes | yes | yes | admin |
+| `home.init` | - | adopt | yes | yes | yes | yes | admin |
 | `home.get` | - | - | yes | yes | yes | yes | admin |
 | `home.log` | - | call, project, client, tag, outcome, since, limit, cursor | yes | yes | yes | yes | admin |
 | `home.clear_log` | - | - | yes | yes | yes | yes | admin |
@@ -61,6 +61,7 @@ Front-end problems: none.
 | `project.stats` | project | branch, at | yes | yes | yes | yes | admin |
 | `project.export` | project, destination | branch, at, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.delete` | project | - | yes | yes | yes | yes | admin |
+| `project.prune` | project | - | yes | yes | yes | yes | admin |
 | `project.hide_path` | project, path | - | yes | yes | yes | yes | admin |
 | `project.doctor` | project | full, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `branch.list` | project | prefix, exclude_prefix, limit, cursor | yes | yes | yes | yes | admin |

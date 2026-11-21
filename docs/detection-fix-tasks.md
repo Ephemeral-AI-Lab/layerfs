@@ -101,22 +101,41 @@ cargo test  -p layerfs-control
 
 ## 4. `c5` 按内容识别 worker root
 
-**目标**：正确的拒绝（"这是 worker root，不是 home"）变得可达。
+**目标**：正确的拒绝（"这是 worker root，不是 home"）变得可达，且**绝不**对数据盘给出 `mv` 或 `home init`。
 
 **文件**
-- `control/crates/layerfs-home/src/home/guest.rs:33-36, 50-63`
-- `control/crates/layerfs-home/src/home/layout.rs`（判定入口）
-- `docs/versioned/2.0.0/home.md:74, 245-251`
+- `control/crates/layerfs-home/src/home/layout.rs`（`Layout`、`detect`、`worker_root_shape`、拒绝与 fix）
+- `control/crates/layerfs-home/src/home/guest.rs`（`open`/`opened` 的 `is_root` 判断保持第一）
+- `control/crates/layerfs-control/src/home.rs`（`home get` 的 `broken`/`unsupported`）
+- `control/crates/layerfs-control/src/doctor/host_target.rs`（`home.layout`）
+- `control/crates/layerfs-sandbox/src/image_load.rs`（`existing_home_id`）
+- `control/crates/layerfs-control/tests/{home_layout,doctor_host}.rs`
+- `docs/versioned/2.0.0/home.md`、`docs/architecture/control/home/README.md`、`docs/architecture/control/doctor/{README,checks}.md`、`docs/architecture/api/sdk/home.md`、`docs/architecture/api/calls/errors-and-events.md`
 
 **步骤**
-1. 新增 `worker_root_shape(dir) -> bool`：同时满足
+1. 新增 `Layout::WorkerRoot`（**不复用** `Foreign`，两者 fix 不同），并新增 `worker_root_shape(dir) -> bool`；判定用 `paths::run_root` / `paths::worker_log` / `paths::trace_dir`，不写死字面路径。同时满足：
    - 有 `store/` 或 `sandbox/` 或 `machine/native/run/`
-   - 有 `incoming/`（`init-*` 子目录）或 `log/worker.log`
+   - 有 `incoming/init-*` 子目录 或 `log/worker.log`
    - **没有** `trace/`、**没有** `backup/`、**没有** `layerfs.json`
-2. `detect()` 在 `own_only == false` 时先判 `worker_root_shape`：为真 → 新变体 `Layout::WorkerRoot`（或复用 `Foreign` 但换文案），给出的 fix 是"用 `LAYERFS_HOME` 指向你的 home，通过 machine 子命令操作这块盘"，**不是** `mv`。
-3. `home.md` 把 `.layout-3` 段落标注为**历史机制**（本 build 不写）。
+   - 任何 IO 错误一律按 `false`（不改变原有的 `Failed` 语义）
+2. `detect()` 在**没有 marker** 时先判 `worker_root_shape`，为真 → `WorkerRoot`，再走 `own_only`/`Empty`/`Foreign`；`open`/`opened` 里 `guest::is_root` 仍是第一判断。
+3. 每个穷举 `match Layout` 都处理 `WorkerRoot`：`open`/`ensure`/`opened` 拒绝 `Unsupported` 且不写任何东西；`home get` 为 `broken`/`unsupported`，fix 是一行 shell（`unset LAYERFS_HOME`），**不是** `mv`/`home init`；doctor 的 `home.layout` 失败、`home.records` 不运行；`foreign_fix` 只留给 `Foreign`；`image_load.rs::existing_home_id` 对 `WorkerRoot` 报错而不是返回 `None`。
+4. 测试（`home_layout.rs`、`doctor_host.rs`）：
+   - 事故目录形态 → `WorkerRoot`；`open`/`ensure` 拒绝；`layerfs.json`/`layerfs.lock` 及整目录快照不变
+   - 只有 `store/`、只有 `machine/native/run/`、只有 `log/worker.log`、只有 `incoming/init-*` → 仍是 `Foreign`
+   - 完整 worker 形态 + `trace/` 或 `backup/` → 不是 `WorkerRoot`
+   - 完整 worker 形态 + 合法 `layerfs.json` → `Current`
+   - 真 home 丢 marker（`store/`+record+`trace/`+`backup/`）→ 不是 `WorkerRoot`（对变体不敏感，给 c6 留空间）
+   - `home get`/doctor 均不出现 `mv`
+5. 文档：`home.md` 把 `.layout-3` 标为**历史机制**（本 build 不写），补 worker root 形态与拒绝语义；home/doctor/SDK/errors 文档同步；本任务单原先低估了范围（不只是 `guest.rs` 与 `home.md`）。
 
-**完成判据**：fixture（目录形态如本次事故）→ 报 `worker root`，且**不**出现 `mv` 建议。
+**完成判据**
+```bash
+cargo check -p layerfs-home -p layerfs-control
+cargo test -p layerfs-control --test home_layout --test doctor_host
+cargo test -p layerfs-home
+```
+fixture（目录形态如本次事故）→ 报 `worker root`，`home get` 为 `broken`/`unsupported`，且**不**出现 `mv` 或 `home init` 建议。
 
 ---
 

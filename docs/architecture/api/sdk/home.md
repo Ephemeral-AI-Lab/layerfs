@@ -24,8 +24,9 @@ call to list or remove it. `home.doctor` is one of
                  bundle.json, native's record and the daemon file -> changes nothing
    --with platforms   the platforms this computer supports
    --with tree        the home's records: machines > Stores, Sandboxes; buckets
- home.init       home::open (create an empty home; an older one refused)
-                 + the built-in machine records   -> {outcome: created | unchanged}
+ home.init       home::open (create an empty home; an older one refused),
+                 or --adopt for a home whose data is there but whose
+                 layerfs.json is missing          -> {outcome: created | adopted | unchanged}
  home.doctor     the home's own checks, then each machine, PostgreSQL Store
                  and bucket, shallowly                    -> the doctor report
 
@@ -37,7 +38,7 @@ call to list or remove it. `home.doctor` is one of
 
 | Call | Short form | Long form |
 | --- | --- | --- |
-| [`home.init`](#homeinit) | `{ home }` + `unchanged` when true | `{ home, unchanged, outcome, layout, version }` |
+| [`home.init`](#homeinit) | `{ home }` + `unchanged` when true, and `id`, `id_source`, `warnings` for an adopted home | `{ home, unchanged, outcome, layout, version, id, id_source, warnings }` |
 | [`home.get`](#homeget) | `{ home, state, version }` + `generation`, `reason`, `fix` when news | `{ home, state, version, generation, reason, fix, message, layout, mode, bundle, daemon, cache }` |
 | [`home.log`](#homelog) | `{ items }` + `next_cursor` when there is a next page | `{ items, next_cursor, skipped }` |
 | [`home.clear_log`](#homeclear_log) | `{ ok: true }` | `{ ok, outcome: "cleared", line_count }` |
@@ -47,39 +48,63 @@ All five are `admin` in the MCP server.
 
 ### home.init
 
-Create this home; a current home is left as it is.
+Create this home, or adopt one whose data is there but whose `layerfs.json`
+is missing; a current home is left as it is.
 
 ```text
-CLI     layerfs home init
-Node    await layerfs.home.init()
-Python  layerfs.home.init()
+CLI     layerfs home init [--adopt]
+Node    await layerfs.home.init({ adopt })
+Python  layerfs.home.init(adopt=True)
 ```
 
 | Answer | Keys |
 | --- | --- |
-| short | `home`; when set: `unchanged` |
-| long | `home, unchanged, outcome, layout, version` |
+| short | `home`; when set: `unchanged`; for an adopted home also `id`, `id_source`, `warnings` |
+| long | `home, unchanged, outcome, layout, version, id, id_source, warnings` |
 | call | writes one call-log line; MCP `admin` |
 
 Makes the home ready for calls, as the first call of any other kind does: an
 empty or missing folder is created (0700, `layerfs.json`, `machine/native/`
 and `machine/docker/` with the `machine` feature). A current home is left
-as it is. `outcome` is `created` or `unchanged`; `version` is this build's
-version and `layout` the home's layout. It writes one call-log line, and the
-records it writes move the generation. Nothing is converted (owner,
-2026-11-19).
+as it is. `outcome` is `created`, `unchanged` or `adopted`; `version` is
+this build's version and `layout` the home's layout. It writes one call-log
+line, and the records it writes move the generation. Nothing is converted
+(owner, 2026-11-19).
 
-Refused `InvalidInput` inside a machine's worker root (not a home);
+A home that lost its `layerfs.json` is not empty and not foreign: its own
+data (`store/`, `machine/`, `sandbox/`, `backup/`, `secret/`, `trace/`,
+`log/`, `incoming/`, `generation`) is there without a marker. Every call
+on it is refused `Unsupported` with the fix `layerfs home init --adopt`,
+writing nothing; with `--adopt` the call takes the home lock, detects the
+folder again, writes `layerfs.json` only and audits it read only. The id is
+the longest provider-name prefix the records agree on — a machine's
+`vm_name` or a Sandbox daemon's name, `layerfs-<16 hex>-` or the earlier
+eight-hex forms — plus a random tail (`id_source: "records"`); with no such
+record it is a fresh random id (`id_source: "fresh"`). Records that
+disagree or cannot be read are refused `Failed` and no marker is written
+(the home lock, `layerfs.lock`, may be).
+`warnings` reports a missing or unreadable part or `*/record.json`, a part
+not 0700, a temporary a killed init left, and an `incoming/init-*` copy. The
+data is never moved, rewritten or initialized. Records keep only a prefix
+of the home id, so an older backup's full `layerfs-exported-from` will not
+match an adopted id.
+
+Refused `InvalidInput` inside a machine's worker root this process serves;
 `Unsupported` for a folder that is not a LayerFS 2.0 home (a `layerfs.json`
-of another layout, or anything but `layerfs.lock`, the integration folders
-and `.DS_Store` with no `layerfs.json`),
+of another layout, or stray files with no `layerfs.json`),
 with the fix `mv <home> <home>.old && layerfs home init`, writing nothing;
-and as opening a home is refused otherwise (an unreadable `layerfs.json` is
+`Unsupported` for a home whose data is there but whose marker is missing
+without `--adopt`, with the fix `layerfs home init --adopt`; `Unsupported`
+for a machine's worker root this process does not serve, with the fix
+`unset LAYERFS_HOME` and never `mv` or `home init`, writing nothing; and as
+opening a home is refused otherwise (an unreadable `layerfs.json` is
 `Failed`) ([opening a home](../../control/home/README.md#opening-a-home)).
 
 ```console
 $ layerfs home init
 {"home":"/tmp/demo/home"}
+$ layerfs home init --adopt
+{"home":"/tmp/demo/home","id":"2f51a567b6f153b6e914393cab0904b6","id_source":"records","warnings":["…"]}
 ```
 
 ### home.get
@@ -107,7 +132,7 @@ and it answers for a home that does not exist yet, creating nothing.
 | Field | Meaning |
 | --- | --- |
 | `home` | the home's path |
-| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`, the integration folders `runtime/`, `job/`, `stat/`, `preset/` and `.DS_Store`; `layerfs home init`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or other files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
+| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`, the integration folders `runtime/`, `job/`, `stat/`, `preset/` and `.DS_Store`; `layerfs home init`; or a home whose data is there but whose `layerfs.json` is missing, `layerfs home init --adopt`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or stray files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `unsupported` (a machine's worker root, its data disk's content; `unset LAYERFS_HOME`, never `mv` or `home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
 | `version` | this build's version |
 | `generation` | the home's [generation](../../control/home/README.md#the-generation-counter): a number that moves when a record is written or removed and never for a read. Null unless the home is ready |
 | `message` | a sentence saying what is wrong, null when ready |

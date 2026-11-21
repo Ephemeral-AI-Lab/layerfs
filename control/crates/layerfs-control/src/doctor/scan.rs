@@ -140,6 +140,18 @@ fn store(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings
                 ),
                 String::new(),
             );
+        } else if !path.exists() {
+            // a real folder with no record is not a project: the leftover
+            // of an Init that never reached the Store, or of a delete
+            // from another home; `project prune` removes exactly this
+            findings.error(
+                entity,
+                format!(
+                    "project {full} has no record in {}, so no call reads it: remove the entry with `layerfs project prune {full}`, or repair it by hand",
+                    paths::project_dir(home, name, &project).display()
+                ),
+                format!("layerfs project prune {}", shell_word(&full)),
+            );
         }
     }
     Ok(())

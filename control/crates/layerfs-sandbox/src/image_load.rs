@@ -373,6 +373,8 @@ pub struct Cleanup {
 }
 
 /// Reads `home`'s 32-hex id without creating files when `home` is empty.
+/// A machine's worker root mistaken for a home is refused, never read as
+/// empty: nothing is created in a data disk (layerfs-project#752, c5).
 pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
     if home::guest::is_root(home) {
         return Ok(Some(home::guest::file(home)?.id));
@@ -380,6 +382,10 @@ pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
     match home::detect(home)? {
         home::Layout::Current(file) => Ok(Some(file.id)),
         home::Layout::Empty => Ok(None),
+        home::Layout::WorkerRoot => Err(home::layout::worker_root(home)),
+        // a home that lost its marker keeps its data: no home is created
+        // here, and `home init --adopt` is the repair (layerfs-project#752, c6)
+        home::Layout::DataWithoutMarker => Err(home::layout::data_without_marker(home)),
         home::Layout::Foreign => Err(home::layout::foreign(home)),
     }
 }
