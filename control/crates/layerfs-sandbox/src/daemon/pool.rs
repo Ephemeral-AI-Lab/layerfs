@@ -10,8 +10,11 @@
 //! closed rather than reused; the failed call is never sent again.
 //! When the daemon admits no more connections, the Sandbox keeps the ones it
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
-//! before it is refused `Busy`. Opening a connection is not an attempt
-//! of any operation: nothing is sent before the connection is ready.
+//! before it is refused `Busy`. That lower limit holds for [`RECOVER`]; then
+//! the limit is [`CONNECTIONS`] again, so a long-lived process is not held
+//! to a spike's limit, and a refused open lowers it once more. Opening a
+//! connection is not an attempt of any operation: nothing is sent before
+//! the connection is ready.
 use crate::daemon::fence::Fence;
 use crate::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
@@ -50,6 +53,11 @@ pub const ADMISSION_WAIT: Duration = Duration::from_secs(60);
 /// the caller's discovery turn. The wait is readiness: nothing is attempted
 /// before it ends, and its `Busy` refusal is not retried.
 pub const LEND_WAIT: Duration = ADMISSION_WAIT;
+
+/// How long a limit lowered by a refused open holds before the limit is
+/// [`CONNECTIONS`] again: at most one more open is tried in each such
+/// period while the daemon stays full.
+pub const RECOVER: Duration = Duration::from_secs(2);
 
 /// The exact refusal for a failed open that never reached the Hello reply,
 /// typed from the channel error rather than from refusal message text (#547
@@ -271,8 +279,23 @@ struct Pool {
     /// Connections open, idle or lent.
     open: usize,
     /// Most connections this Sandbox keeps: [`CONNECTIONS`], or fewer once
-    /// the daemon admitted no more.
+    /// the daemon admitted no more, until [`RECOVER`] after `lowered`.
     limit: usize,
+    /// When a refused open last lowered `limit`.
+    lowered: Option<Instant>,
+}
+
+impl Pool {
+    /// The limit back at [`CONNECTIONS`] once [`RECOVER`] has passed since
+    /// it was lowered; how long until then, while it holds.
+    fn recover(&mut self) -> Option<Duration> {
+        let left = RECOVER.checked_sub(self.lowered?.elapsed());
+        if left.is_none() {
+            self.limit = CONNECTIONS;
+            self.lowered = None;
+        }
+        left
+    }
 }
 
 /// A Sandbox's connections.
@@ -296,6 +319,7 @@ impl Controls {
                 idle: vec![first],
                 open: 1,
                 limit: CONNECTIONS,
+                lowered: None,
             }),
             freed: Condvar::new(),
             dial,
@@ -313,7 +337,7 @@ impl Controls {
     /// wait and reports the exact refusal (#540).
     pub fn lend_within(&self, wait: Duration) -> Result<Lease<'_>, SdkRefusal> {
         let started = Instant::now();
-        // the pool is two counts and a list, each changed in one step, so
+        // the pool is counts, a time and a list, each changed in one step, so
         // it is whole after a holder's panic: its guard is taken back
         // (layerfs-project#177), as `Lease`'s drop takes it
         let mut pool = self.held();
@@ -321,6 +345,7 @@ impl Controls {
             if let Some(control) = pool.idle.pop() {
                 return Ok(self.lease(control));
             }
+            let lowered = pool.recover();
             if pool.open < pool.limit {
                 pool.open += 1;
                 // the only connection: like a process's first, wait to be admitted
@@ -339,8 +364,10 @@ impl Controls {
                         if pool.open == 0 {
                             return Err(refusal);
                         }
-                        // The daemon admits no more: take turns on the open ones.
+                        // The daemon admits no more: take turns on the open
+                        // ones until the limit recovers.
                         pool.limit = pool.open;
+                        pool.lowered = Some(Instant::now());
                         continue;
                     }
                 }
@@ -356,6 +383,8 @@ impl Controls {
                     ),
                 ));
             }
+            // a lowered limit that recovers first ends the wait then
+            let remaining = lowered.map_or(remaining, |left| remaining.min(left));
             pool = self
                 .freed
                 .wait_timeout(pool, remaining)
