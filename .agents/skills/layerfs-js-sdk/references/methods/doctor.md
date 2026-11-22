@@ -35,7 +35,9 @@ entries.
 - A `not_checked` entry names a thing, or one of its checks, that gave no
   verdict: `blocked_by` (the thing at the root of the block and its state) or
   `reason` (`timeout`, `busy`, `lost`), never both.
-- The long form (`detail: true`) adds `status` (the worst of `error`,
+- The long form (`detail: true`) adds `evidence` on each finding (e.g.
+  `{ step: "handshake" | "authentication" | "transport" }`, retained backup
+  keys, or reclaimable image bytes), plus `status` (the worst of `error`,
   `warning`, `not_checked`, `notice`, `ok`), `counts`, `observed_at` and
   `tree`: the doctor's own thing with `status`, `coverage` (`none`,
   `shallow` or `full`), its `checks` (`{ check, outcome, from }`),
@@ -78,12 +80,19 @@ for (const n of report.not_checked) console.log("not checked:", JSON.stringify(n
   `project.data`: everything `main`'s head and each Branch's head reach is
   read and checked where the Store's calls run. It writes nothing to the
   Store.
-- **`store.doctor`**: `store.record`, `store.operation` (an operation left
+- **`store.doctor`**: `store.record` (for a PostgreSQL Store whose record
+  lacks a saved login, names a missing login, or holds outdated pre-2.0
+  fields, `store.record` fails with the `fix` from `store list`/`store get`
+  while remaining checks still run), `store.operation` (an operation left
   with its outcome unknown is an error whose `fix` clears it),
-  `store.connection`, `store.identity`, `store.schema` and, for a sqlite
-  Store, `store.backups` (a notice per bucket whose backup is behind, `fix`
-  `layerfs backup create <store> <bucket>`). No Store data is scanned.
-  `machine` is for a PostgreSQL Store: it also probes from that machine.
+  `store.connection` (for PostgreSQL, probes from this computer and from each
+  machine with an own address, recorded reach, or Sandbox of the Store — plus
+  `machine` when given — with a 5 s connect-and-login handshake limit so a
+  silent server fails `store.connection` with `evidence: { step: "handshake" }`
+  and records reach `failed` without a second dial), `store.identity`,
+  `store.schema` and, for a sqlite Store, `store.backups` (a notice per
+  bucket whose backup is behind, `fix` `layerfs backup create <store> <bucket>`).
+  No Store data is scanned.
 - **`sandbox.doctor`**: the Sandbox's record and references, its operation,
   runtime, route and daemon (`sandbox.record` … `sandbox.observation`), then one
   node per Workspace (`workspace.mounted`, `workspace.activity`); a failed or

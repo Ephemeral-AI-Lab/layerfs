@@ -177,6 +177,41 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+fn split_pg_test_url(raw: &str) -> (String, String) {
+    if let Some(rest) = raw
+        .strip_prefix("postgresql://")
+        .or_else(|| raw.strip_prefix("postgres://"))
+    {
+        if let Some((creds, address)) = rest.split_once('@') {
+            let user = creds.split(':').next().unwrap_or("postgres");
+            return (user.to_owned(), format!("postgresql://{address}"));
+        }
+        return ("postgres".to_owned(), format!("postgresql://{rest}"));
+    }
+    let mut host = "127.0.0.1";
+    let mut port = "5432";
+    let mut user = "postgres";
+    let mut dbname = "postgres";
+    let mut sslmode = "disable";
+    for token in raw.split_whitespace() {
+        if let Some((k, v)) = token.split_once('=') {
+            let v = v.trim_matches('\'').trim_matches('"');
+            match k {
+                "host" => host = v,
+                "port" => port = v,
+                "user" => user = v,
+                "dbname" => dbname = v,
+                "sslmode" => sslmode = v,
+                _ => {}
+            }
+        }
+    }
+    (
+        user.to_owned(),
+        format!("postgresql://{host}:{port}/{dbname}?sslmode={sslmode}"),
+    )
+}
+
 #[test]
 fn postgresql_statistics_have_null_free_and_count_publications() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
@@ -186,14 +221,13 @@ fn postgresql_statistics_have_null_free_and_count_publications() {
     let home = folder("pg-home");
     // the URL's user becomes a saved login (a trust-auth server takes any
     // password); the address is connected without it
-    let (scheme, rest) = url.split_once("://").unwrap();
-    let (user, address) = rest.split_once('@').unwrap();
+    let (user, clean_url) = split_pg_test_url(&url);
     call(
         &home,
         "store.save_auth",
         &[
             ("auth", t("pg")),
-            ("user", t(user)),
+            ("user", t(&user)),
             ("password", t("unused")),
         ],
     );
@@ -202,7 +236,7 @@ fn postgresql_statistics_have_null_free_and_count_publications() {
         "store.connect",
         &[
             ("store", t("stats")),
-            ("url", t(&format!("{scheme}://{address}"))),
+            ("url", t(&clean_url)),
             ("auth", t("pg")),
             ("synchronous_commit", t("off")),
         ],

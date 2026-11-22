@@ -147,7 +147,7 @@ outcome. Written by `layerfs-home/src/trace.rs` (`stepped`, `step`),
 | --- | --- | --- |
 | Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5); `LAYERFS_TRACE` is read for the worker-connection line, and with `LAYERFS_TRACE_STEP` for the step lines; `LAYERFS_TRACE_START` is not read |
 | The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); the call log (#659, `layerfs-home/src/logs.rs`, read with `home.log`) is its per-call replacement, without daemon telemetry |
-| In-process collector | `host/trace.rs` in the Node binding | `api/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
+| In-process collector | `host/trace.rs` in the Node binding | retired when `api/crates/layerfs-api/src/host/` was removed in 2.0 (no front end or API module collects in-process daemon telemetry) |
 | The home's `trace/` folder | `traces/` | `paths::trace_dir` (a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the feed. Holds the call log, `calls.jsonl` and `calls.1.jsonl` (#659) |
 
 So, today: the call log records every call's outcome and time; turning

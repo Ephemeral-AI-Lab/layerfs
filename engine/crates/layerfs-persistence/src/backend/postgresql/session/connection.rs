@@ -113,10 +113,10 @@ impl Connector {
         self.connect_raw().map_err(|dial| match dial {
             // No session exists, so no work can have started: the
             // server refused it with an error, or no connection was made.
-            Dial::Driver(e) => match (rows::error(&e), e.code()) {
-                (BackendError::Unknown, Some(_)) => BackendError::Rejected,
-                (BackendError::Unknown, None) => BackendError::Closed,
-                (other, _) => other,
+            Dial::Driver(e) => match e.code().map(|c| rows::sqlstate(c.code())) {
+                Some(BackendError::Unknown) => BackendError::Rejected,
+                Some(other) => other,
+                None => BackendError::Closed,
             },
             Dial::Silent(_) => BackendError::Closed,
         })

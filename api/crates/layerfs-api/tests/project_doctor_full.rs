@@ -144,6 +144,51 @@ fn sqlite_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_pro
     let _ = std::fs::remove_dir_all(&home);
 }
 
+fn split_pg_store_url(raw: &str, database: &str) -> (String, String, String) {
+    if let Some(rest) = raw
+        .strip_prefix("postgresql://")
+        .or_else(|| raw.strip_prefix("postgres://"))
+    {
+        let (base, query) = rest.split_once('?').unwrap_or((rest, ""));
+        let (server, _) = base.rsplit_once('/').unwrap_or((base, ""));
+        let (user, host_part) = match server.split_once('@') {
+            Some((creds, hp)) => (creds.split(':').next().unwrap_or("postgres"), hp),
+            None => ("postgres", server),
+        };
+        let suffix = if query.is_empty() {
+            format!("/{database}")
+        } else {
+            format!("/{database}?{query}")
+        };
+        return (
+            user.to_owned(),
+            format!("postgresql://{server}{suffix}"),
+            format!("postgresql://{host_part}{suffix}"),
+        );
+    }
+    let mut host = "127.0.0.1";
+    let mut port = "5432";
+    let mut user = "postgres";
+    let mut sslmode = "disable";
+    for token in raw.split_whitespace() {
+        if let Some((k, v)) = token.split_once('=') {
+            let v = v.trim_matches('\'').trim_matches('"');
+            match k {
+                "host" => host = v,
+                "port" => port = v,
+                "user" => user = v,
+                "sslmode" => sslmode = v,
+                _ => {}
+            }
+        }
+    }
+    (
+        user.to_owned(),
+        format!("postgresql://{user}@{host}:{port}/{database}?sslmode={sslmode}"),
+        format!("postgresql://{host}:{port}/{database}?sslmode={sslmode}"),
+    )
+}
+
 /// The same on a PostgreSQL Store, in a database of its own (a 2.0 Store
 /// lives in that database's fixed `layerfs` schema), dropped at the end.
 /// `LAYERFS_TEST_POSTGRES_URL` is `postgresql://user@host:port/db?...`.
@@ -160,23 +205,16 @@ fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each
     };
     admin(&format!("DROP DATABASE IF EXISTS {database}"));
     admin(&format!("CREATE DATABASE {database}"));
-    let (base, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
-    let (server, _) = base.rsplit_once('/').unwrap();
-    let store_url = match query {
-        "" => format!("{server}/{database}"),
-        query => format!("{server}/{database}?{query}"),
-    };
+    let (user, store_url, clean_url) = split_pg_store_url(&url, &database);
     let home = folder("pg-home");
     // the URL's user becomes a saved login (a trust-auth server takes any
     // password); the address is connected without it
-    let (scheme, rest) = store_url.split_once("://").unwrap();
-    let (user, address) = rest.split_once('@').unwrap();
     call(
         &home,
         "store.save_auth",
         &[
             ("auth", t("pg")),
-            ("user", t(user)),
+            ("user", t(&user)),
             ("password", t("unused")),
         ],
     );
@@ -185,7 +223,7 @@ fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each
         "store.connect",
         &[
             ("store", t("shop")),
-            ("url", t(&format!("{scheme}://{address}"))),
+            ("url", t(&clean_url)),
             ("auth", t("pg")),
             ("synchronous_commit", t("off")),
         ],
