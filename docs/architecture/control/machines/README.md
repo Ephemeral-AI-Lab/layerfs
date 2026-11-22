@@ -49,11 +49,11 @@ and setting in a `Spec` and writes every record
 | --- | --- | --- |
 | Keeps machine records | `machine/<name>/record.json`: platform, size, images, lasting guest state, recorded state, the `op` of a create or remove, built-in settings; read once and kept whole | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) |
 | Built-in machines | `machine/native/` and `machine/docker/` exist from the first call and are never removed | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `ensure_built_ins` |
-| `machine.create` | home lock only to claim and to record; the claimed record holds the `op` while the VM boots | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
-| `machine.start` | the only call that starts a machine: dials the recorded worker; if it does not answer, starts machine and worker under `start.lock` and replaces `worker.json` | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
+| `machine.create` | home lock only to claim and to record; the claimed record holds the `op` while the VM boots, and the worker host port its VM forwards (`lasting.port`) | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
+| `machine.start` | the only call that starts a machine: dials the recorded worker; if none is recorded, or it does not answer and the provider reports the machine not running, starts machine and worker under `start.lock` and replaces `worker.json`. A recorded worker that does not answer on a running machine is never started over (that would end it and every Sandbox on it): the machine is recorded `broken` `not_answering` and the start refused `Unavailable`, fix a stop and a start ([Workers and reach](workers-and-reach.md#lifecycle)) | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | `machine.stop` | stops worker and VM (disks stay); refused `InUse` while Sandboxes are recorded on it | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `machine.remove` | `op` in the record, VM deleted under `start.lock`, folder removed; refused `InUse` while it holds Stores or Sandboxes; `outcome: removed`. Of a removed platform's machine only its record is removed (`{ok: true}`, `message` "only its record was removed (<reason>); nothing on its host was touched") | [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs) |
-| `machine.update` | changes settings; refused `InUse` while Sandboxes run on it | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
+| `machine.update` | changes settings; refused `InUse` while Sandboxes run on it. A resize (`cpus`, `memory`) is not built: on a VM machine it is refused `Unsupported` ("resizing a <platform> machine is not built yet; nothing was changed"), after the `InUse` check; on a built-in machine `InvalidInput` | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
 | `machine.list`, `machine.get` | records and the row's `supports`; with `--with live` one probe of each machine's provider and one hello to its worker (at most 10 s, else `unknown`), starting nothing; the record is written only when the observed state word or reason changed | [`list.rs`](../../../../control/crates/layerfs-machine/src/list.rs) `list`, `get`; [`live.rs`](../../../../control/crates/layerfs-machine/src/live.rs); [`machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs) |
 | `home.get --with platforms` | this host's support rows plus live `ready`, `missing`, `version` from `probe`; starts nothing (`layerfs_machine::platforms`, called from `layerfs-control` `home.rs`) | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs), [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) |
 | Docker default image | with no image named, the bundle's `sandbox-image.tar` is loaded into Docker once; the record keeps `loaded_image: {id, bundle}`, and an Engine tag `layerfs-cache/sandbox:<config hex>` reuses it across homes after `docker image inspect` | [`image.rs`](../../../../control/crates/layerfs-machine/src/image.rs), [`docker/images.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/images.rs) |
@@ -101,7 +101,7 @@ The per-platform values are in [Platforms](platforms.md).
 
 | Public call (`setup/calls.rs`) | Checks first | Then |
 | --- | --- | --- |
-| `create`, `start` | `validate`, `check_bundle`; `start` answers `None` when the route is `InProcess` | the adapter |
+| `create`, `start` | `validate`, `check_bundle`; `start` answers `None` when the route is `InProcess` | the adapter; `create` forwards `spec.state.port` when the caller recorded one (`worker_port`), `start` refuses `InvalidInput` without it on `lima` and `apple-container` |
 | `stop`, `remove`, `status` | `validate` (`InUse` is the caller's check) | the adapter |
 | `status_within`, `provider_within` | as `status` | every command killed with its process group at the deadline, answered `Unknown` |
 | `reach` | `validate` | no message holds the URL |
@@ -109,10 +109,17 @@ The per-platform values are in [Platforms](platforms.md).
 | `load_image`, `cached_image` | `validate`; `docker` only | `docker load -i`, answers `sha256:<64 hex>` |
 | `copy_in`, `copy_out` | `validate`; the platform's `guest` | one `tar` stream in, `cat` out to a new 0600 file |
 
-`Status` is `{state, free_disk, tool_version, down_reason}`. A VM's kernel
-state passes through `with_worker`: running but no worker hello is
-`stopped` ("the machine runs but its worker does not answer"); provider
-`Failed` is `failed`; `Missing` is `missing`
+`Status` is `{state, kernel, worker, free_disk, tool_version, down_reason}`:
+`kernel` is what the provider said, `None` when it did not answer (the
+Docker Engine is not running; `state` is then `Stopped`); `worker` is
+whether the worker answered its hello, asked only when the kernel runs
+(`Some(false)` with no endpoint, `None` on an in-process machine).
+`Status::word` and `Status::reason` say it in the call surface's words: no
+provider answer is `broken` `engine_down`; a VM's kernel state passes
+through `with_worker`, where running with no worker hello is `broken`
+`not_answering` ("the machine runs but its worker does not answer"), never
+`stopped`; provider `Failed` is `broken` `failed`; `Missing` is `broken`
+`missing`; else running is `ready` and stopped `stopped`
 ([`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs)).
 
 ### Spec
@@ -133,7 +140,7 @@ state passes through `with_worker`: running but no worker hello is
 | One crate-private sealed trait and one exhaustive match for behaviour; one match for facts; no registry or factory | [`adapter.rs`](../../../../control/crates/layerfs-platform/src/adapter.rs) `adapter`, [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) `profile` |
 | Every refusal of a platform, host and Store kind comes from the one support table | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) `sandbox_allowed` |
 | A spec and the bundle are checked before any effect | [`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
-| A create that fails before its VM exists removes what it made; after, it keeps the VM (`vm_exists`, recorded `failed`); `Unknown` keeps everything with an uncertain `op` | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs), [`error.rs`](../../../../control/crates/layerfs-platform/src/error.rs) |
+| A create that fails before its VM exists removes what it made; after, it keeps the VM (`vm_exists`, recorded `failed`); `Unknown` keeps everything with an uncertain `op`. The worker host port the VM forwards (`worker_port`) is recorded as `lasting.port` with the claim, before the VM is made, so `machine start` can start a kept VM on it | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs), [`error.rs`](../../../../control/crates/layerfs-platform/src/error.rs) |
 | The home lock is never held while a VM boots; `start.lock` serialises start, stop, create and remove of one machine | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | One attempt; a readiness wait is not a retry | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) `ready`, [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |
 | No guest mounts the host home: Lima `mounts: []`; docker mounts its data volume and the bundle only, never the Engine socket; apple-container mounts only its volume | [`lima/template.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/template.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs), [`apple_container/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/create.rs) |

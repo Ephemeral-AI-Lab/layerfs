@@ -99,6 +99,15 @@ pub fn data_volume(spec: &Spec) -> Option<String> {
     adapter(spec.kind).data_volume(spec)
 }
 
+/// A free host loopback port for the worker of a new VM machine, picked
+/// now. The caller records it (`Lasting::port`) before [`create`] and passes
+/// it back in `spec.state.port`, which the create's VM forwards: a VM a
+/// failed create keeps (`vm_exists`, or an `Unknown` outcome) is then
+/// started on the port it was made with.
+pub fn worker_port() -> Result<u16, MachineError> {
+    super::tool::free_port()
+}
+
 /// Makes a new VM machine and starts its worker. A create that fails before
 /// the VM exists removes what it made; once it exists, the error has
 /// `vm_exists` and the VM is kept for inspection. `Unknown` keeps everything.

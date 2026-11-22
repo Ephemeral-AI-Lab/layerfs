@@ -20,7 +20,7 @@ pub(crate) fn data_volume(spec: &Spec) -> String {
 }
 
 /// The host port a new VM's configuration forwards: the one the caller
-/// recorded, else a free one.
+/// recorded before the create (`worker_port`), else a free one.
 pub(crate) fn new_port(spec: &Spec) -> Result<u16, MachineError> {
     spec.state.port.map_or_else(tool::free_port, Ok)
 }
