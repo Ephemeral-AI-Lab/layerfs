@@ -81,11 +81,17 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
         message: Message::Absent,
         started: None,
     };
-    let err = lifecycle::create(&host, None).unwrap_err();
-    assert_ne!(
-        err.code, "NoSuchProject",
-        "must heal manifest instead of failing NoSuchProject: {err:?}"
-    );
+    // the repair happens before launch; a host that can launch a daemon
+    // starts one, which is removed again
+    match lifecycle::create(&host, None) {
+        Ok(_) => {
+            lifecycle::close(&host, true, &[]).expect("the started Sandbox is removed");
+        }
+        Err(err) => assert_ne!(
+            err.code, "NoSuchProject",
+            "must heal manifest instead of failing NoSuchProject: {err:?}"
+        ),
+    }
     let repaired = ProjectRecord::read(&home, "shop", "api").unwrap().unwrap();
     assert_eq!(repaired.created(), Some(&SdkValue::Int(55)));
     assert!(restored::complete(&repaired));

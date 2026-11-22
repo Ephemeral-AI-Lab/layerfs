@@ -552,6 +552,14 @@ fn a_sqlite_project_without_a_manifest_fails_project_doctor() {
                     && f.get_text("severity") == Some("error")),
             "full={full}: {report:?}"
         );
+        // the record's failure hides no other check: the Store's list is
+        // still checked
+        let rows = list(report.get("tree").unwrap(), "checks");
+        assert!(
+            rows.iter()
+                .any(|row| row.get_text("check") == Some("project.listed")),
+            "full={full}: {report:?}"
+        );
     }
 
     // PostgreSQL project records hold no manifest; project.record still passes.

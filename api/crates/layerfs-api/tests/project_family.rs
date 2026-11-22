@@ -834,12 +834,35 @@ fn move_skips_unreadable_project_record_and_still_repairs_incomplete_ones() {
     let damaged_path = paths::project_record(&home, "shop", "damaged");
     std::fs::write(&damaged_path, b"{").unwrap();
     write_legacy_stub(11111);
+    // a record of a stack the Store does not hold cannot be rebuilt: the
+    // move still ends, and says so in log/repair.jsonl
+    let orphan_path = paths::project_record(&home, "shop", "orphan");
+    home::private_dir(orphan_path.parent().unwrap()).unwrap();
+    write_record(
+        &orphan_path,
+        &SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", t("orphan")),
+            ("stack", t("0101010101010101010101010101010101")),
+            ("created", SdkValue::Int(1)),
+        ]),
+    )
+    .unwrap();
 
     ok(
         &home,
         "store.move",
         &[("store", t("shop")), ("machine", t("box"))],
     );
+    let repair_log = std::fs::read_to_string(paths::log_dir(&home).join("repair.jsonl")).unwrap();
+    assert!(
+        repair_log
+            .lines()
+            .any(|line| line.contains("\"project\":\"orphan\"")
+                && line.contains("\"call\":\"store.move\"")),
+        "{repair_log}"
+    );
+    assert!(!repair_log.contains("\"legacy\""), "{repair_log}");
     let store_rec = layerfs_api::home::read_record(&paths::store_record(&home, "shop"))
         .unwrap()
         .unwrap();

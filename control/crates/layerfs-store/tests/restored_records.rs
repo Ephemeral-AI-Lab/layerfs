@@ -307,7 +307,7 @@ fn repair_project_completes_an_incomplete_record_from_sqlite_store() {
         &paths::store_file(&home, STORE),
     )
     .unwrap();
-    assert!(repaired);
+    assert!(repaired.is_some_and(|record| layerfs_store::backup::restored::complete(&record)));
     let project = discovery::project(Some(&home), Some(STORE), Some(PROJECT))
         .expect("repaired record opens in Sandbox");
     assert!(project.installed.is_some());

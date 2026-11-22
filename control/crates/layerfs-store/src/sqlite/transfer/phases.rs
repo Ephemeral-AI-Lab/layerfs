@@ -228,6 +228,44 @@ fn enter(
     at(phase, advance(&home, name, op, phase))
 }
 
+/// Completes the incomplete project records of Store `name` from the Store
+/// file on this kernel (#749), before a worker's copy and the entries it
+/// keeps are retired. Best effort: a record left incomplete does not fail
+/// the move, which has installed the Store already; each is a line of
+/// `log/repair.jsonl`, naming the project (none when the Store's records
+/// were not read at all) and why.
+fn complete_records(home: &Path, name: &str, call: &str) {
+    let left = match StoreRecord::of(home, name) {
+        Ok(record) => crate::backup::restored::complete_existing(
+            home,
+            name,
+            &record,
+            &home::paths::store_file(home, name),
+        ),
+        Err(refusal) => vec![(String::new(), refusal.message)],
+    };
+    for (project, why) in left {
+        let _ = home::log_line(
+            home,
+            "repair.jsonl",
+            &SdkValue::map([
+                ("at", SdkValue::Int(home::now_ms())),
+                ("call", SdkValue::text(call)),
+                ("store", SdkValue::text(name)),
+                (
+                    "project",
+                    if project.is_empty() {
+                        SdkValue::Null
+                    } else {
+                        SdkValue::text(project)
+                    },
+                ),
+                ("message", SdkValue::text(why)),
+            ]),
+        );
+    }
+}
+
 fn phases(
     home: &Path,
     events: &mut Events<'_>,
@@ -333,14 +371,7 @@ fn phases(
     // use on `to` and a copy the next move deletes first
     enter(&home, events, op, name, "record", None)?;
     if matches!(source, Executor::Local) || matches!(target, Executor::Local) {
-        if let Ok(local_record) = StoreRecord::of(&home, name) {
-            let _ = crate::backup::restored::complete_existing(
-                &home,
-                name,
-                &local_record,
-                &home::paths::store_file(&home, name),
-            );
-        }
+        complete_records(&home, name, op.name());
     }
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),
