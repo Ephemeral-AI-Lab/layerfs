@@ -121,6 +121,13 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             return forget(&home, events, name, first, Worker::Ask);
         }
     }
+    // a machine recorded stopped runs no daemon and its worker is not
+    // reached: a Sandbox whose runtime a forced `machine.stop` ended, or any
+    // with `force`, goes by its records alone; without either, the remove
+    // says how it can go
+    if let Some(first) = stopped_on(&home, &found, request.force)? {
+        return forget(&home, events, name, first, Worker::Skip);
+    }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
     let running = match force {
@@ -413,6 +420,48 @@ fn forget(
     Ok(Removed::AlreadyGone {
         left: std::iter::once(first).chain(kept).collect(),
     })
+}
+
+/// What a remove of Sandbox `record` leaves on its machine when that
+/// machine is recorded `stopped` (no worker runs, and no daemon with it)
+/// and the Sandbox may go by its records alone: its runtime a forced
+/// `machine.stop` ended (`machine_stopped`), or the remove is forced. The
+/// worker's own record and run folder of it stay on the machine until its
+/// worker next starts, which removes them (`crate::sweep::worker_start`).
+/// `None` on `native`, which this process closes itself, and on a machine
+/// not recorded stopped; refused `Unavailable` on a stopped machine
+/// without either, naming both ways on.
+fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option<String>> {
+    let machine = record.machine();
+    let stopped = (machine != "native")
+        && layerfs_machine::record::MachineRecord::read(home, machine)?
+            .is_some_and(|on| on.recorded_state() == Some("stopped"));
+    if !stopped {
+        return Ok(None);
+    }
+    let (name, word) = (record.name(), shell_word(machine));
+    if !force && !record.machine_stopped() {
+        let refusal = refused(
+            "Unavailable",
+            format!(
+                "machine {machine} is stopped, so Sandbox {name}'s daemon is not reached: \
+                 `layerfs machine start {word}` lets the remove stop it, or `layerfs sandbox \
+                 remove {} --force` removes its records here and leaves the rest to the \
+                 machine's worker when it next starts",
+                shell_word(name)
+            ),
+        );
+        return Err(layerfs_home::outcome::with_fix(
+            refusal,
+            format!("layerfs machine start {word}"),
+        ));
+    }
+    Ok(Some(format!(
+        "machine {machine} is stopped, so only the Sandbox's records here were removed and its \
+         worker was not asked: its daemon ended with the machine, and the worker's own record \
+         and run folder of it stay on the machine until its worker next starts, which removes \
+         them"
+    )))
 }
 
 /// Whether [`forget`] asks the Sandbox's machine's worker to drop its own

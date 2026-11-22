@@ -21,6 +21,15 @@
 //! empty private root: its run folder is gone and it is not a mount point;
 //! `rmdir` only. Anything that cannot be proven free is kept.
 //!
+//! A worker starting to serve ([`worker_start`]) first removes each Sandbox
+//! record folder of its root whose recorded daemon is known gone (its pid,
+//! start time and boot name no live process: the machine stopped since, or
+//! the daemon ended), under that folder's guard: the home may have removed
+//! its own record while the machine was stopped (`sandbox remove --force`),
+//! and nothing else would reach this one. Its run folder is then no
+//! record's, and goes by the rules above. A record with no daemon, or one
+//! whose daemon may live or cannot be told, is kept.
+//!
 //! A sweep is one attempt inside [`BOUNDS`] (20,000 directory entries or
 //! 2 s, the bounded walk the leftover listing used), and it never fails the
 //! call it rides on: what it removed, and each removal that failed, is a
@@ -121,6 +130,37 @@ impl Swept {
 /// Sweeps the run root of side root `root` inside [`BOUNDS`].
 pub fn run_root(root: &Path) -> Swept {
     run_root_within(root, BOUNDS)
+}
+
+/// A worker's sweep of its root `root` when it starts serving: the Sandbox
+/// records whose daemon is gone, then [`run_root`] (see the module).
+pub fn worker_start(root: &Path) -> Swept {
+    let mut swept = Swept::default();
+    for name in paths::names(&root.join("sandbox")).unwrap_or_default() {
+        let folder = paths::sandbox_dir(root, &name);
+        let ended = || match SandboxRecord::read(root, &name) {
+            Ok(Some(record)) => record.daemon().and_then(alive) == Some(false),
+            _ => false,
+        };
+        if !ended() {
+            continue;
+        }
+        // read again under its guard: a call that holds it may change it
+        let Ok(_guard) = layerfs_store::project::discovery::guard(&folder) else {
+            continue;
+        };
+        if !ended() {
+            continue;
+        }
+        let outcome = std::fs::remove_dir_all(&folder).map(|()| None);
+        let outcome = outcome.map_err(|error| format!("{}: {error}", folder.display()));
+        swept.note(root, "record", folder, outcome);
+    }
+    let run = run_root(root);
+    swept.removed.extend(run.removed);
+    swept.failed.extend(run.failed);
+    swept.complete = run.complete;
+    swept
 }
 
 /// [`run_root`] inside `bounds`.
