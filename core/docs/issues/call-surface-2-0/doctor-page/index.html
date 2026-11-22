@@ -341,8 +341,8 @@ span.marks { visibility: hidden; }
   color: var(--dsw-alias-label-secondary); font-size: 12px;
 }
 .mock b { color: var(--dsw-alias-label-primary); text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
-.mock label { display: inline-flex; align-items: center; gap: 6px; }
-.mock select { height: 28px; max-width: 100%; padding: 0 6px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
+.mock label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 100%; min-width: 0; }
+.mock select { height: 28px; min-width: 0; max-width: 100%; padding: 0 6px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
 .mock .hint { flex: 1 1 100%; color: var(--dsw-alias-label-secondary); }
 
 /* ---------- phone: name and status word on the first line, the rest below ---------- */
