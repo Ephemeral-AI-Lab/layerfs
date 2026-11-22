@@ -53,7 +53,7 @@ and setting in a `Spec` and writes every record
 | `machine.start` | the only call that starts a machine: dials the recorded worker; if none is recorded, or it does not answer and the provider reports the machine not running, starts machine and worker under `start.lock` and replaces `worker.json`. A recorded worker that does not answer on a running machine is never started over (that would end it and every Sandbox on it): the machine is recorded `broken` `not_answering` and the start refused `Unavailable`, fix a stop and a start ([Workers and reach](workers-and-reach.md#lifecycle)) | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | `machine.stop` | stops worker and VM (disks stay); refused `InUse` while Sandboxes are recorded on it | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `machine.remove` | `op` in the record, VM deleted under `start.lock`, folder removed; refused `InUse` while it holds Stores or Sandboxes; `outcome: removed`. Of a removed platform's machine only its record is removed (`{ok: true}`, `message` "only its record was removed (<reason>); nothing on its host was touched") | [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs) |
-| `machine.update` | changes settings; refused `InUse` while Sandboxes run on it | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
+| `machine.update` | changes settings; refused `InUse` while Sandboxes run on it. A resize (`cpus`, `memory`) is not built: on a VM machine it is refused `Unsupported` ("resizing a <platform> machine is not built yet; nothing was changed"), after the `InUse` check; on a built-in machine `InvalidInput` | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
 | `machine.list`, `machine.get` | records and the row's `supports`; with `--with live` one probe of each machine's provider and one hello to its worker (at most 10 s, else `unknown`), starting nothing; the record is written only when the observed state word or reason changed | [`list.rs`](../../../../control/crates/layerfs-machine/src/list.rs) `list`, `get`; [`live.rs`](../../../../control/crates/layerfs-machine/src/live.rs); [`machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs) |
 | `home.get --with platforms` | this host's support rows plus live `ready`, `missing`, `version` from `probe`; starts nothing (`layerfs_machine::platforms`, called from `layerfs-control` `home.rs`) | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs), [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) |
 | Docker default image | with no image named, the bundle's `sandbox-image.tar` is loaded into Docker once; the record keeps `loaded_image: {id, bundle}`, and an Engine tag `layerfs-cache/sandbox:<config hex>` reuses it across homes after `docker image inspect` | [`image.rs`](../../../../control/crates/layerfs-machine/src/image.rs), [`docker/images.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/images.rs) |
@@ -109,10 +109,17 @@ The per-platform values are in [Platforms](platforms.md).
 | `load_image`, `cached_image` | `validate`; `docker` only | `docker load -i`, answers `sha256:<64 hex>` |
 | `copy_in`, `copy_out` | `validate`; the platform's `guest` | one `tar` stream in, `cat` out to a new 0600 file |
 
-`Status` is `{state, free_disk, tool_version, down_reason}`. A VM's kernel
-state passes through `with_worker`: running but no worker hello is
-`stopped` ("the machine runs but its worker does not answer"); provider
-`Failed` is `failed`; `Missing` is `missing`
+`Status` is `{state, kernel, worker, free_disk, tool_version, down_reason}`:
+`kernel` is what the provider said, `None` when it did not answer (the
+Docker Engine is not running; `state` is then `Stopped`); `worker` is
+whether the worker answered its hello, asked only when the kernel runs
+(`Some(false)` with no endpoint, `None` on an in-process machine).
+`Status::word` and `Status::reason` say it in the call surface's words: no
+provider answer is `broken` `engine_down`; a VM's kernel state passes
+through `with_worker`, where running with no worker hello is `broken`
+`not_answering` ("the machine runs but its worker does not answer"), never
+`stopped`; provider `Failed` is `broken` `failed`; `Missing` is `broken`
+`missing`; else running is `ready` and stopped `stopped`
 ([`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs)).
 
 ### Spec
