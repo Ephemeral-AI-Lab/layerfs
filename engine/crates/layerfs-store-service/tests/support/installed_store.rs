@@ -77,7 +77,7 @@ impl Fixture {
         let count = build(&source);
         let sealed = store_directory.join("sealed.sqlite");
         let config = PersistenceConfig::sqlite(&sealed)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
         let handles = SqliteHandles::create(
             config.clone(),
@@ -150,7 +150,7 @@ impl Fixture {
         Self {
             directory,
             config: PersistenceConfig::sqlite(&installed)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal)
                 .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
             branch: BranchId::from_authority([24; 16]),
             count,

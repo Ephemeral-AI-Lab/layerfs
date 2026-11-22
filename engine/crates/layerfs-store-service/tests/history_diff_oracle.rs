@@ -440,7 +440,7 @@ fn change_walk_equals_the_full_walk() {
             }
         }
         println!(
-            "DIFF_ORACLE seed={seed} diffs={} entries={} named_alike={} profile=Disposable",
+            "DIFF_ORACLE seed={seed} diffs={} entries={} named_alike={} profile=Normal",
             compared.0, compared.1, compared.2
         );
         drop(reader);

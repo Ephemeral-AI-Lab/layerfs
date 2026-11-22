@@ -122,7 +122,7 @@ fn serial_writer_hold_has_a_real_inclusive_upper_observation() {
     let rig = Rig::new("issue319-writer-upper");
     assert_eq!(
         rig.fixture.config.sqlite_profile,
-        SqlitePersistenceProfile::Disposable
+        SqlitePersistenceProfile::Normal
     );
     let handles = SqliteHandles::open_writable(
         rig.fixture.config.clone(),

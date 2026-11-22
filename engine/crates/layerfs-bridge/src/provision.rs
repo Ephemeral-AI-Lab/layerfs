@@ -15,10 +15,9 @@ pub enum ProviderKind {
 pub enum StoreProfile {
     /// WAL with FULL synchronization.
     Durable,
-    /// The non-durable WAL Store. Its wire byte and name predate the Normal
-    /// profile: every product opener now opens such a Store with NORMAL
-    /// synchronization (owner, 2026-11-17); only a test selects OFF.
-    Disposable,
+    /// The WAL Store opened with NORMAL synchronization (owner, 2026-11-17).
+    /// Its wire byte (2) is the one the former `Disposable` label used.
+    Normal,
 }
 /// Bounded control metadata. File bytes are streamed separately without a size cap.
 #[derive(Clone, Eq, PartialEq)]

@@ -194,7 +194,7 @@ impl Fixture {
                 InitRequest {
                     source: source.clone(),
                     store: PersistenceConfig::sqlite(directory.join("sealed.sqlite"))
-                        .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                        .with_sqlite_profile(SqlitePersistenceProfile::Normal),
                     locator: destination.to_str().unwrap().into(),
                     policy: StoragePolicy::frozen_default(),
                     catalog: HistoryCatalogConfig {
@@ -276,7 +276,7 @@ impl Fixture {
         .unwrap();
         assert_eq!(
             manifest.profile,
-            layerfs_bridge::provision::StoreProfile::Disposable
+            layerfs_bridge::provision::StoreProfile::Normal
         );
         let expected = fs::read_to_string(prepared.join("expected-metadata.txt")).unwrap();
         let fields = expected.split_whitespace().collect::<Vec<_>>();
@@ -314,7 +314,7 @@ impl Fixture {
         let cache_bytes = 8 * 1024 * 1024;
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&database)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             &manifest.binding,
             manifest.cursor_key,
             4,

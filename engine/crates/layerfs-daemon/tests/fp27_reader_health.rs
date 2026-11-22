@@ -30,7 +30,7 @@
 //! The Store is composed from the public pieces `open_store` composes, with
 //! no object cache, so that the test keeps each read session's provider and
 //! every base demand reaches it. Every call is forwarded to the real
-//! provider; nothing is injected. Global Store profile: Disposable, selected
+//! provider; nothing is injected. Global Store profile: Normal, selected
 //! explicitly by the fixture and asserted.
 //!
 //! NOT in scope here (plan section 6): a poisoned reader, a release after a
@@ -139,7 +139,7 @@ fn quiet(harness: &Harness, token: WorkspaceToken) -> bool {
     })
 }
 
-/// One installed Disposable Store, opened once and kept open, with no object
+/// One installed Normal Store, opened once and kept open, with no object
 /// cache, and one real kernel serving assembly over it. The test keeps the
 /// provider of each read session.
 struct Fx {
@@ -165,9 +165,9 @@ impl Fx {
         assert!(
             matches!(
                 fixture.config.sqlite_profile,
-                SqlitePersistenceProfile::Disposable
+                SqlitePersistenceProfile::Normal
             ),
-            "the global Store profile is Disposable, selected explicitly"
+            "the global Store profile is Normal, selected explicitly"
         );
         let config = || fixture.config.clone();
         let writer =
@@ -238,7 +238,7 @@ impl Fx {
         }
         drop(readers);
         println!(
-            "FP-27 RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop={clean} handles_after_stop={}",
+            "FP-27 RIG store_opened=1 sealed=0 reopened=0 profile=Normal clean_stop={clean} handles_after_stop={}",
             Arc::strong_count(&store)
         );
         drop(store);

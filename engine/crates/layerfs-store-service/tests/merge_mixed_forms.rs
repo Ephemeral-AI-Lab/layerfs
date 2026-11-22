@@ -87,7 +87,7 @@ fn branch_root(fixture: &Fixture, branch: &str) -> String {
 /// Each path's metadata form, `inline` or `root`.
 fn forms(fixture: &Fixture, root: &str) -> BTreeMap<String, &'static str> {
     let config = PersistenceConfig::sqlite(&fixture.host.config.path)
-        .with_sqlite_profile(SqlitePersistenceProfile::Disposable);
+        .with_sqlite_profile(SqlitePersistenceProfile::Normal);
     let handles =
         SqliteHandles::open_read_only(config, installed::BINDING, installed::CURSOR).unwrap();
     let storage = Storage::new(handles.storage).unwrap();
@@ -134,7 +134,7 @@ fn view(fixture: &Fixture, root: &str) -> BTreeMap<String, String> {
 /// read through one fresh Store reader.
 fn branch_delta_applies(fixture: &Fixture, root: &str) -> u64 {
     let config = PersistenceConfig::sqlite(&fixture.host.config.path)
-        .with_sqlite_profile(SqlitePersistenceProfile::Disposable);
+        .with_sqlite_profile(SqlitePersistenceProfile::Normal);
     let handles =
         SqliteHandles::open_read_only(config, installed::BINDING, installed::CURSOR).unwrap();
     let storage = Storage::new(handles.storage).unwrap();

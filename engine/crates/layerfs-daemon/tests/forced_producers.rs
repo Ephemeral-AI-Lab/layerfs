@@ -231,7 +231,7 @@ fn row(directory: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// One installed Disposable Store, opened once and kept open, and one real
+/// One installed Normal Store, opened once and kept open, and one real
 /// kernel serving assembly over it: `Harness::new`, as `rig::Rig` uses it.
 struct Fx {
     fixture: installed::Fixture,
@@ -384,7 +384,7 @@ impl Fx {
             owner.stop().unwrap();
         }
         println!(
-            "FORCED_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop={clean} handles_after_stop={}",
+            "FORCED_RIG store_opened=1 sealed=0 reopened=0 profile=Normal clean_stop={clean} handles_after_stop={}",
             Arc::strong_count(&store)
         );
         drop(store);

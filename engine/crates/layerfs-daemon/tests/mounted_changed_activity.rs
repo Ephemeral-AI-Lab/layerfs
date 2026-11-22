@@ -2,7 +2,7 @@
 //! Workspace's changes and its activity (word, phase, start), which ride
 //! there rather than in the Status record so that record keeps the bytes
 //! other builds read (RF re-check N-A). A path no Workspace is mounted at
-//! is refused. Disposable profile.
+//! is refused. Normal profile.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]

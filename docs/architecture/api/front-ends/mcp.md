@@ -265,7 +265,7 @@ the SDK's request schema (`-32603`). The call does not run.
 From the repository root, each under a 120 s wall limit, with `TMPDIR` on
 ext4, xfs or btrfs, the built addon (`api/node/layerfs.node`) and
 `LAYERFS_CLI`. The tests run a real `node src/server.js` with the SDK's
-`Client` over `StdioClientTransport` and a Disposable temp home.
+`Client` over `StdioClientTransport` and a temporary home.
 
 | Test | Command | Shows |
 | --- | --- | --- |

@@ -156,7 +156,7 @@ fn bounded_reclamation_preserves_another_live_operation_and_survives_reopen() {
 fn old_non_reclaimable_stores_are_opened_without_implicit_conversion() {
     let temp = Temp::new("old-reclamation-mode");
     let path = temp.join("store.sqlite");
-    let profile = SqlitePersistenceProfile::Disposable;
+    let profile = SqlitePersistenceProfile::Normal;
     let handles = SqliteHandles::create(
         config(&path, profile),
         StoragePolicy::frozen_default(),
@@ -189,7 +189,7 @@ fn path_windows_use_actual_lengths_without_exceeding_column_or_row_budgets() {
     let temp = Temp::new("path-windows");
     let path = temp.join("store.sqlite");
     let handles = SqliteHandles::create(
-        config(&path, SqlitePersistenceProfile::Disposable),
+        config(&path, SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &history(),
     )
@@ -236,8 +236,8 @@ fn path_windows_use_actual_lengths_without_exceeding_column_or_row_budgets() {
     assert_eq!(one.len(), 1);
 }
 
-/// Owner direction 2026-10-07: Disposable is the sole active development
+/// Owner direction 2026-11-23: Normal is the sole active development
 /// verification profile. Durable execution of these bodies is NOT_RUN —
-/// deferred by owner for Disposable-only development. Durable support and its
+/// deferred by owner for Normal-only development. Durable support and its
 /// retained historical receipts are unchanged.
-const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Normal];

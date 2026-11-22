@@ -20,7 +20,7 @@ use layerfs_storage::StoragePolicy;
 use support::{branch_id, name, root, stack, Temp, BINDING};
 
 fn config(path: &std::path::Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 
 fn create(path: &std::path::Path) -> SqliteHandles {

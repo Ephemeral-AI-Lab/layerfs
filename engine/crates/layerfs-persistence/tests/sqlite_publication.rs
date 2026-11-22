@@ -525,7 +525,7 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         let profile = h.profile();
         assert_eq!(profile.persistence, selected);
         assert_eq!(profile.journal_mode, "wal");
-        assert_eq!(profile.synchronous, if selected == Durable { 2 } else { 0 });
+        assert_eq!(profile.synchronous, if selected == Durable { 2 } else { 1 });
         assert_eq!(profile.fullfsync, i64::from(selected == Durable));
         assert_eq!((profile.checkpoint_fullfsync, profile.temp_store), (1, 2));
         assert_eq!(
@@ -635,9 +635,9 @@ fn multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomi
     }
 }
 
-/// Owner direction 2026-10-07: Disposable is the sole active development
+/// Owner direction 2026-11-23: Normal is the sole active development
 /// verification profile. Durable execution of these bodies is NOT_RUN —
-/// deferred by owner for Disposable-only development. Durable support and its
+/// deferred by owner for Normal-only development. Durable support and its
 /// retained historical receipts are unchanged.
 const DEVELOPMENT_PROFILES: [layerfs_persistence::SqlitePersistenceProfile; 1] =
-    [layerfs_persistence::SqlitePersistenceProfile::Disposable];
+    [layerfs_persistence::SqlitePersistenceProfile::Normal];

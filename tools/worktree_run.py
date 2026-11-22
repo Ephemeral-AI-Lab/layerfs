@@ -106,7 +106,7 @@ def launch(args):
         "store_volume": prefix + "store",
         "command": command,
         "timeout_seconds": args.timeout,
-        "store_profile": "Disposable (SDK native route)",
+        "store_profile": "Normal (SDK native route)",
         "released": False,
     }
     receipt = directory / "receipt.json"

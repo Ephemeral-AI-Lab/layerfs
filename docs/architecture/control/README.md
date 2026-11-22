@@ -130,7 +130,7 @@ kind or kernel route is an engine change.
 | A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
 | Drivers know nothing of the home and write no records | [`layerfs-platform/src/lib.rs`](../../../control/crates/layerfs-platform/src/lib.rs) |
 | Stored and displayed values do not follow internal renames: the `host_process` backend is stored and shown as `"native"` | [`host_process/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs) |
-| Disposable/WAL/synchronous=OFF is the only permitted Store profile; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../control/crates/layerfs-store/src/record.rs) |
+| sqlite Stores open with the Normal profile (WAL, synchronous=NORMAL), the only SQLite profile; their records carry the label `normal`; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../control/crates/layerfs-store/src/record.rs) |
 
 The binding code rules for this layer are in the
 [control guide](../../../control/AGENTS.md).

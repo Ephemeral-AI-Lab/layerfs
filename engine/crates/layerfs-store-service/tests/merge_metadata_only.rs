@@ -115,7 +115,7 @@ fn view(fixture: &Fixture, branch: &str) -> BTreeMap<String, String> {
 /// read through one fresh Store reader.
 fn branch_delta_applies(fixture: &Fixture, root: &str) -> u64 {
     let config = PersistenceConfig::sqlite(&fixture.host.config.path)
-        .with_sqlite_profile(SqlitePersistenceProfile::Disposable);
+        .with_sqlite_profile(SqlitePersistenceProfile::Normal);
     let handles =
         SqliteHandles::open_read_only(config, installed::BINDING, installed::CURSOR).unwrap();
     let storage = Storage::new(handles.storage).unwrap();

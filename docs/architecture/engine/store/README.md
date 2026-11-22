@@ -133,7 +133,7 @@ own write transaction, which the one writer already orders.
 | Waiting for a turn is readiness, never a retry; the queue has no time limit and a holder that unwinds releases its turn | [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs) |
 | Short holds: only head check, merge step and publish run under the lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Reads never take the lane or the cross-process lock | [`sqlite/session/transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs), [`read_service.rs`](../../../../engine/crates/layerfs-store-service/src/store/read_service.rs) |
-| Disposable / WAL / synchronous=OFF is the only permitted SQLite profile; product openers select it explicitly and refuse anything else | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs), [`init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs), [`live.rs`](../../../../engine/crates/layerfs-project/src/store/live.rs), [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
+| Normal / WAL / synchronous=NORMAL is the only SQLite profile, selected explicitly by every opener; Durable is refused | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs), [`init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs), [`live.rs`](../../../../engine/crates/layerfs-project/src/store/live.rs), [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
 | One attempt per operation: `busy_timeout=0`, no busy handler, no retry or replay; `Unknown` quarantines the session and every later call fails without SQL | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`sqlite/session/transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs) |
 | Published packs, units, locations and value blocks never change; a block overlapping a stored one fails its publication | Triggers and insert-only statements: [`objects.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects.sql), [`sqlite/metadata/values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/values.rs) |
 | Pack ids never go back; inode serials are never recycled | [`metadata/allocation.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/allocation.rs), [`history/allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/allocation.rs) |
@@ -144,11 +144,12 @@ own write transaction, which the one writer already orders.
 
 Durable persistence: the `Durable` SQLite variant still compiles, but its
 execution is `NOT_RUN — disabled by owner until explicit reauthorization`.
-Every product opener selects Disposable by name, and new code must too: the
+Every opener selects `Normal` by name, and new code must too: the
 Rust enum's `#[default]` attribute still sits on the retained `Durable`
-variant, so an unnamed profile is a defect. A Disposable Store survives
-process termination,
-and a kernel or VM crash can lose or damage it
+variant, so an unnamed profile is a defect. A Normal Store survives
+process termination; a kernel or VM crash can lose the commits since the
+last synchronized checkpoint, and its safety gate has not run, so no
+power-loss guarantee is claimed
 ([`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs)).
 A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 

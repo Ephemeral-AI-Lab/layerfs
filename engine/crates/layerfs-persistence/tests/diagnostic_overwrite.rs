@@ -95,7 +95,7 @@ fn local_merges_late_publication_and_separate_stacks_have_exact_counts() {
     let temp = support::Temp::new("doctor-overwrite");
     let path = temp.join("db");
     let handles = SqliteHandles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: support::BINDING.to_vec(),
@@ -230,7 +230,7 @@ fn cancellation_interrupts_large_scratch_publication_analysis_and_joins() {
     let temp = support::Temp::new("doctor-overwrite-cancel");
     let path = temp.join("db");
     let handles = SqliteHandles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: support::BINDING.to_vec(),

@@ -9,7 +9,7 @@ use layerfs_storage::StoragePolicy;
 
 fn create(path: &std::path::Path) -> SqliteHandles {
     SqliteHandles::create(
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"doctor-schema".to_vec(),

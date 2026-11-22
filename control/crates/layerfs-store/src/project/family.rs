@@ -288,7 +288,7 @@ fn init_on_worker(
     let stack = added.get("stack").cloned().unwrap_or_default();
     // the worker's `manifest` and `installed` complete the record (#749);
     // a worker that sends none (an older build) or sends ones that are not
-    // a complete Disposable pair leaves it for a move or a Sandbox create
+    // a complete Normal pair leaves it for a move or a Sandbox create
     // to complete from the Store file, the latter logged: the project is
     // already in the Store, so the Init does not fail over it
     let initialised = ProjectRecord::initialised(store, name, stack);
@@ -312,7 +312,7 @@ fn init_on_worker(
                         (
                             "message",
                             SdkValue::text(
-                                "the worker's manifest and installed manifest are not a complete Disposable pair; the record keeps neither",
+                                "the worker's manifest and installed manifest are not a complete Normal pair; the record keeps neither",
                             ),
                         ),
                     ]),

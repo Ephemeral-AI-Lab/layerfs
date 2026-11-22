@@ -72,7 +72,7 @@ fn probe() -> Option<Probe> {
     let dir = std::env::temp_dir().join(format!("lfs354-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let opened = open_store_observed(
-        PersistenceConfig::sqlite(&store).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &manifest.binding,
         manifest.cursor_key,
         64,
@@ -884,7 +884,7 @@ fn reuse() {
     let manifest = StoreManifest::decode(manifest).unwrap();
     let handles = layerfs_persistence::SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(std::env::var_os("LFS354_STORE").unwrap())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &manifest.binding,
         manifest.cursor_key,
     )

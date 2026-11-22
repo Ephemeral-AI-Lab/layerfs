@@ -207,7 +207,7 @@ fn a_mark_finds_its_objects_among_many_blocks_of_locators() {
         .unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
     let reopened = SqliteHandles::open_writable(
-        PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         b"doctor-adversarial",
         [71; 32],
     )

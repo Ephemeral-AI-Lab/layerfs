@@ -170,7 +170,7 @@ These are not calls and are not in the matrix.
 [`contract.mjs`](../../../../api/node/test/contract.mjs) runs the case list
 in [`contract/cases.mjs`](../../../../api/node/test/contract/cases.mjs)
 through Node, Python, Python `aio` and the command, each in its own fresh
-Disposable home (a native SQLite Store `shop`, project `shop/api`, Branch
+temporary home (a native SQLite Store `shop`, project `shop/api`, Branch
 `agent`). Answers are compared step by step after ids, times, inode numbers,
 stored sizes and home paths are normalized, and every case also asserts its
 expected value; a refusal is compared by `code`, key set and, unless the
@@ -178,7 +178,7 @@ wording is the front end's own, `message` and `detail`.
 
 | Group | What it shows |
 | --- | --- |
-| `setup` | `store.create` (profile `disposable`), `project.init`, `branch.fork` |
+| `setup` | `store.create` (profile `normal`), `project.init`, `branch.fork` |
 | `args` | a missing positional; defaults of `file.read`, `branch.list` and the Commit message; omitted equals `null`; a line window, a `limit` and `cursor` page, `mode` |
 | `unknown` | an unknown option, an extra positional and a non-function handler are refused before any effect (state listed before and after is equal) |
 | `validation` | `InvalidInput` (a bad name, path or kind, a write to `main`, a bad cursor), `NotFound` (no project, Branch or path; the raised `NoSuchPath` kept as `detail.code`), `Exists` (a fork onto a taken name); `file.apply` stops at the first refused change with nothing committed (`detail.index`); JSON nested deeper than 128 |

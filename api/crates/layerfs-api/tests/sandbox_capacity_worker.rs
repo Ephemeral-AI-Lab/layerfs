@@ -99,7 +99,7 @@ fn home_records(home: &Path, worker: SocketAddr) {
             ("kind", t("sqlite")),
             ("binding", SdkValue::Bytes(vec![7; 16])),
             ("cursor", SdkValue::Bytes(vec![8; 32])),
-            ("profile", t("disposable")),
+            ("profile", t("normal")),
             ("machine", t("box")),
         ]),
     )

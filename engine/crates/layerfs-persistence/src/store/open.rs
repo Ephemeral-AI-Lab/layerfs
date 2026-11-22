@@ -62,7 +62,7 @@ impl SqliteHandles {
         Self::open(config, binding, cursor_key, false)
     }
     /// Opens for diagnosis without changing journal/checkpoint settings or
-    /// migrating the source. Uses the explicitly Disposable execution policy.
+    /// migrating the source. Uses the Normal profile, read-only.
     pub fn open_diagnostic(
         path: &std::path::Path,
         binding: &[u8],

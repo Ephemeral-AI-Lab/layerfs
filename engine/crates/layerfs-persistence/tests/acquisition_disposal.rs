@@ -134,7 +134,7 @@ fn final_bounded_disposal_releases_in_one_ack_and_preserves_another_owner() {
 #[test]
 fn zero_budget_retains_work_and_can_release_an_empty_owner() {
     let temp = Temp::new("acquisition-zero-disposal");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let owner = begin(&handles);
     port.put_entries(owner, &[root()]).unwrap();
@@ -160,8 +160,8 @@ fn zero_budget_retains_work_and_can_release_an_empty_owner() {
     assert_eq!(port.work(owner), Err(AcquisitionError::Stale));
 }
 
-/// Owner direction 2026-10-07: Disposable is the sole active development
+/// Owner direction 2026-11-23: Normal is the sole active development
 /// verification profile. Durable execution of these bodies is NOT_RUN —
-/// deferred by owner for Disposable-only development. Durable support and its
+/// deferred by owner for Normal-only development. Durable support and its
 /// retained historical receipts are unchanged.
-const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Normal];

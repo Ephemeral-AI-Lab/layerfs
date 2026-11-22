@@ -75,7 +75,7 @@ impl Fixture {
                 InitRequest {
                     source,
                     store: PersistenceConfig::sqlite(directory.join("sealed.sqlite"))
-                        .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                        .with_sqlite_profile(SqlitePersistenceProfile::Normal),
                     locator: locator
                         .map(str::to_owned)
                         .unwrap_or_else(|| directory.join("store.sqlite").to_str().unwrap().into()),
@@ -250,7 +250,7 @@ pub fn commits(
     use layerfs_history::HistoryCatalog;
     let handles = layerfs_persistence::SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(&manifest.locator)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &manifest.binding,
         manifest.cursor_key,
     )

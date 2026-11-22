@@ -25,7 +25,7 @@ const BINDING: &[u8] = b"store-first-proof";
 const CURSOR: [u8; 32] = [41; 32];
 
 fn store(path: &Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 
 fn catalog() -> HistoryCatalogConfig {

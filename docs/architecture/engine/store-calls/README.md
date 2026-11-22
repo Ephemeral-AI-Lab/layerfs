@@ -35,7 +35,7 @@ Commits use; those are described under [Commit](../commit/README.md) and
         |                 |                     |
         v                 v                     v
  StoreService { store: Arc<Store>, owner: OwnerClient, bound <= 64 }
-   kernel_guard::check -> open (Disposable) -> overlay template
+   kernel_guard::check -> open (Normal)     -> overlay template
         |                                     |
         v                                     v
    Store (SQLite file or PostgreSQL)     overlay owner: one private
@@ -60,7 +60,7 @@ Commits use; those are described under [Commit](../commit/README.md) and
 StoreService::open_direct(store, binding, cursor_key, template)
   1 kernel_guard::check(store)              -> Unsupported (nothing opened)
   2 store.is_file()                         -> Missing
-  3 open_store_observed(sqlite, Disposable, CALLS=64, cache 64 KiB)
+  3 open_store_observed(sqlite, Normal, CALLS=64, cache 64 KiB)
        writer session + read-only control reader
                                             -> Busy("Store open: ..") /
                                                Failed("Store open: ..")
@@ -189,7 +189,7 @@ not in `methods::call`, and in this repository only tests call it.
 | --- | --- |
 | No FUSE, socket or Sandbox in this crate; no unsafe Rust. | [`Cargo.toml`](../../../../engine/crates/layerfs-store-service/Cargo.toml), `#![forbid(unsafe_code)]` in [`lib.rs`](../../../../engine/crates/layerfs-store-service/src/lib.rs) |
 | The guard runs before any file is opened; a refused setup leaves the Store and template untouched. | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs), [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
-| A SQLite Store is opened Disposable explicitly, with no busy handler, retry or fsync. | `open_direct` in [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
+| A SQLite Store is opened Normal explicitly, with no busy handler, retry or fsync. | `open_direct` in [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
 | `read`, `write` and `history` know no SDK method names. | [`methods/mod.rs`](../../../../engine/crates/layerfs-store-service/src/methods/mod.rs) |
 | Each call runs once; no retry, replay or fallback. | [`methods/dispatch.rs`](../../../../engine/crates/layerfs-store-service/src/methods/dispatch.rs) |
 | Reads never take the publication lane. | [`store/open.rs`](../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
@@ -226,7 +226,7 @@ not in `methods::call`, and in this repository only tests call it.
 | [`merge_units.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_units` | macOS or Linux | A unit both sides changed comes whole from the later write. |
 | [`write_refusals.rs`](../../../../engine/crates/layerfs-store-service/tests/write_refusals.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test write_refusals` | macOS or Linux | A write onto a directory is `IsDirectory`, onto another non-file `NotFile`, a bad name `InvalidInput`; nothing is committed. |
 
-The tests build a Disposable Store with Project Init in a temporary
+The tests build a Normal Store with Project Init in a temporary
 directory ([`tests/support/sdk.rs`](../../../../engine/crates/layerfs-store-service/tests/support/sdk.rs)).
 
 ## Pages

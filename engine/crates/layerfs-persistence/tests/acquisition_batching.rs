@@ -96,7 +96,7 @@ fn symlink(position: u64) -> NewEntry {
 #[test]
 fn non_host_windows_skip_the_host_insert_without_losing_targets_or_charges() {
     let temp = Temp::new("acquisition-non-host-window");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let owner = begin(&handles);
     port.put_entries(owner, &[directory(None, b"", 0)]).unwrap();
@@ -210,7 +210,7 @@ fn narrow_bindings_preserve_mixed_payloads_after_an_existing_alias_boundary() {
 fn directory_uniqueness_and_host_evidence_keep_the_first_refusal_after_a_prefix() {
     use layerfs_storage::port::PersistenceError;
     let temp = Temp::new("acquisition-mixed-refusal-order");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let owner = begin(&handles);
     port.put_entries(
@@ -302,7 +302,7 @@ fn windows_amortize_execution_without_losing_aliases_or_atomic_completion() {
 #[test]
 fn missing_and_repeated_roots_roll_back_the_window_and_report_first_failure() {
     let temp = Temp::new("acquisition-root-window-atomic");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let owner = begin(&handles);
     port.put_entries(owner, &[directory(None, b"", 0)]).unwrap();
@@ -371,7 +371,7 @@ fn missing_and_repeated_roots_roll_back_the_window_and_report_first_failure() {
 #[test]
 fn directory_completion_uses_only_directory_positions_and_is_atomic() {
     let temp = Temp::new("acquisition-directory-window");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let owner = begin(&handles);
     port.put_entries(
@@ -407,7 +407,7 @@ fn root_window_index_work_ignores_unrelated_population() {
     let mut work = Vec::new();
     for population in [2000_u64, 20000] {
         let temp = Temp::new("acquisition-root-index-work");
-        let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+        let handles = create(&temp, SqlitePersistenceProfile::Normal);
         let port = &handles.acquisition;
         let owner = begin(&handles);
         port.put_entries(owner, &[directory(None, b"", 0)]).unwrap();
@@ -447,7 +447,7 @@ fn independent_entries_share_executions_and_population_work_stays_indexed() {
     let mut work = Vec::new();
     for population in [2000_u64, 20000] {
         let temp = Temp::new("acquisition-entry-index-work");
-        let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+        let handles = create(&temp, SqlitePersistenceProfile::Normal);
         let port = &handles.acquisition;
         let owner = begin(&handles);
         port.put_entries(owner, &[directory(None, b"", 0)]).unwrap();
@@ -492,7 +492,7 @@ fn independent_entries_share_executions_and_population_work_stays_indexed() {
 fn entry_refusal_order_and_full_unit_rollback_survive_execution_windows() {
     use layerfs_storage::port::PersistenceError;
     let temp = Temp::new("acquisition-entry-refusal-order");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let owner = begin(&handles);
     port.put_entries(owner, &[directory(None, b"", 0), file(1, 1)])
@@ -550,11 +550,11 @@ fn entry_refusal_order_and_full_unit_rollback_survive_execution_windows() {
     );
 }
 
-/// Owner direction 2026-10-07: Disposable is the sole active development
+/// Owner direction 2026-11-23: Normal is the sole active development
 /// verification profile. Durable execution of these bodies is NOT_RUN —
-/// deferred by owner for Disposable-only development. Durable support and its
+/// deferred by owner for Normal-only development. Durable support and its
 /// retained historical receipts are unchanged.
-const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Normal];
 
 #[test]
 fn a_metadata_value_outside_the_portable_grammar_is_refused_and_never_read() {
@@ -564,7 +564,7 @@ fn a_metadata_value_outside_the_portable_grammar_is_refused_and_never_read() {
     // outside the grammar or with nonzero padding; that is checked by changing
     // a stored row out of band.
     let temp = Temp::new("acquisition-metadata-refusal");
-    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let handles = create(&temp, SqlitePersistenceProfile::Normal);
     let owner = begin(&handles);
     let mut bad = symlink(1);
     bad.metadata.mode = 0o644;

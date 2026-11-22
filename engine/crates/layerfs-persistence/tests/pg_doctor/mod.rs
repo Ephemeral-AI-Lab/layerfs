@@ -42,7 +42,7 @@ impl Fixture {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         );
-        // The doctor fixture is a Disposable Store: it selects the commit mode
+        // The doctor fixture is a Normal Store: it selects the commit mode
         // itself instead of taking the product default, which is `local`.
         let selection = PostgresSelection::new(url, &schema)
             .with_synchronous_commit(layerfs_persistence::SynchronousCommit::Off);
@@ -59,7 +59,7 @@ impl Fixture {
         assert_eq!(
             selection.synchronous_commit,
             layerfs_persistence::SynchronousCommit::Off,
-            "Disposable fixture"
+            "Normal fixture"
         );
         let admin = Client::connect(&selection.url, NoTls).unwrap();
         Some(Self {

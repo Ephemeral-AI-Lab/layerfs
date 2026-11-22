@@ -196,7 +196,7 @@ pub fn summary(
         ("backups", SdkValue::List(backups.collect())),
         (
             "profile",
-            only(sqlite, SdkValue::opt_text(record.text("profile"))),
+            only(sqlite, SdkValue::opt_text(crate::record::profile(record))),
         ),
         (
             "synchronous_commit",

@@ -137,7 +137,7 @@ fn request(op: u8) -> CompactRequest {
 fn reopen(store: &Path) -> SqliteHandles {
     SqliteHandles::open_writable(
         PersistenceConfig::sqlite(store.to_path_buf())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         b"doctor-adversarial",
         [71; 32],
     )

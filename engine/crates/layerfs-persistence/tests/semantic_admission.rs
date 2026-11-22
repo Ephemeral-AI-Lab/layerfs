@@ -22,7 +22,7 @@ use support::Temp;
 
 fn handles(temp: &Temp) -> SqliteHandles {
     let mut config = PersistenceConfig::sqlite(temp.join("store"));
-    config.sqlite_profile = SqlitePersistenceProfile::Disposable;
+    config.sqlite_profile = SqlitePersistenceProfile::Normal;
     SqliteHandles::create(
         config,
         StoragePolicy::frozen_default(),

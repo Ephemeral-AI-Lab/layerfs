@@ -52,7 +52,7 @@ fn fields(name: &str) -> SdkValue {
 fn store_file(path: &Path) -> SqliteHandles {
     home::private_dir(path.parent().unwrap()).unwrap();
     SqliteHandles::create(
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: BINDING.to_vec(),

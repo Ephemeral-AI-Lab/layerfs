@@ -74,8 +74,8 @@ impl DaemonStore {
                 }
                 if let Some(m) = install {
                     m.check().map_err(ControlError)?;
-                    if &m.locator != locator || m.profile != StoreProfile::Disposable {
-                        return Err(ControlError("explicit existing Disposable Store"));
+                    if &m.locator != locator || m.profile != StoreProfile::Normal {
+                        return Err(ControlError("explicit existing Normal Store"));
                     }
                 }
                 Ok(())

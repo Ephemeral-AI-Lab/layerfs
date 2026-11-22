@@ -1,4 +1,4 @@
-//! Rig for mounted live Commit proofs: one sealed Disposable Store built from a
+//! Rig for mounted live Commit proofs: one sealed Normal Store built from a
 //! kernel base tree, opened once and kept open, one real kernel serving
 //! assembly over it, commands launched outside the daemon, the product control
 //! Commit and three independent readings of a tree (ordinary syscalls, the

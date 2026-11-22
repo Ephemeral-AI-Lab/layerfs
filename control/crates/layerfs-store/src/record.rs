@@ -169,6 +169,20 @@ pub fn lock(home: &Path, name: &str) -> Result<EntityLock> {
     entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
 
+/// The profile label a new sqlite Store's record is written with: the WAL
+/// Store opened with NORMAL synchronization (owner, 2026-11-23).
+pub const PROFILE: &str = "normal";
+
+/// A sqlite Store record's profile label as callers show it. A record written
+/// before 2026-11-23 says `disposable`, the earlier name of the same Store;
+/// it reads as `normal`, and the record is never rewritten for it.
+pub fn profile(record: &StoreRecord) -> Option<&str> {
+    match record.text("profile") {
+        Some("disposable") => Some(PROFILE),
+        other => other,
+    }
+}
+
 impl StoreRecord {
     /// Store `name`'s record `value`, as read.
     pub fn from_record(name: &str, value: SdkValue) -> Self {
@@ -469,7 +483,7 @@ impl StoreRecord {
         let mut record = self;
         for (field, value) in [
             ("machine", SdkValue::text(machine)),
-            ("profile", SdkValue::text("disposable")),
+            ("profile", SdkValue::text(PROFILE)),
             ("created", SdkValue::Int(home::now_ms())),
         ] {
             record = record.with(field, value);
@@ -485,7 +499,7 @@ impl StoreRecord {
             ("binding", SdkValue::Bytes(binding.to_vec())),
             ("cursor", SdkValue::Bytes(cursor.to_vec())),
             ("machine", SdkValue::text("native")),
-            ("profile", SdkValue::text("disposable")),
+            ("profile", SdkValue::text(PROFILE)),
             ("created", SdkValue::Int(home::now_ms())),
         ]);
         Self::from_record(name, fields)

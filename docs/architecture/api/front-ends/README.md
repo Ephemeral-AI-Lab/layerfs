@@ -147,7 +147,7 @@ eight `quiet` calls write none.
 | stderr cannot be written | the line is lost; the exit stays the outcome's | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) `diagnostic` |
 | `workspace exec`: a command exiting 2 or 125 | same exit as a usage error or refusal; stderr tells them apart | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
 | Cargo features | Node: `machine` always, `tls` opt-in; Python and CLI: `machine` by default; without `tls` an `https://` remote is `Unsupported`. PostgreSQL is always built | the three crates' `Cargo.toml` |
-| Durable Stores | `NOT_RUN — disabled by owner until explicit reauthorization`; a sqlite Store runs WAL with `synchronous=NORMAL` (record label `disposable`) | [store family](../sdk/store.md) |
+| Durable Stores | `NOT_RUN — disabled by owner until explicit reauthorization`; a sqlite Store runs WAL with `synchronous=NORMAL` (record label `normal`) | [store family](../sdk/store.md) |
 
 ## Packaging and release
 

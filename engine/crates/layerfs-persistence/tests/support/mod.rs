@@ -116,7 +116,7 @@ pub mod sqlite {
     ) -> HistoryResult<SqliteCatalog> {
         SqliteHandles::create(
             PersistenceConfig::sqlite(path)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             StoragePolicy::frozen_default(),
             config,
         )
@@ -130,7 +130,7 @@ pub mod sqlite {
     ) -> HistoryResult<SqliteCatalog> {
         SqliteHandles::open_read_only(
             PersistenceConfig::sqlite(path)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             binding,
             cursor,
         )

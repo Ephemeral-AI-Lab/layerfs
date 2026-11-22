@@ -87,7 +87,7 @@ fn diff_commits_is_independent_of_tree_size_and_history_depth() {
             let (work, measured_head) = diff_one(&fixture, &warmed, measured);
             last = measured_head;
             depth += 2;
-            println!("SDK_DIFF_SIZE files={} commits={target} diff={work:?} profile=Disposable cache=warm-after-sibling-diff diagnostic_count_gate=true", dirs * 30);
+            println!("SDK_DIFF_SIZE files={} commits={target} diff={work:?} profile=Normal cache=warm-after-sibling-diff diagnostic_count_gate=true", dirs * 30);
             observed.push((dirs, target, work));
         }
         fixture.cleanup();

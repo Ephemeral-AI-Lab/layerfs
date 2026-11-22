@@ -43,9 +43,11 @@ https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 > Node and Python ([`api/`](api/README.md)) and the native `layerfs` command. It replaces
 > 1.1.0's `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime` and `@layerfs/cli`;
 > see the [2.0.0 manual](docs/versioned/2.0.0/README.md).
-> The results below are 1.0.0's, measured on `main` at `e5c7aaae05`. The Store runs in its Disposable profile only, with no
-> crash or power-loss durability: use LayerFS for agent work and its history, not
-> as the only copy of data you cannot rebuild.
+> The results below are 1.0.0's, measured on `main` at `e5c7aaae05` with the then-Disposable
+> profile (`synchronous=OFF`). A SQLite Store now opens with the Normal profile (WAL,
+> `synchronous=NORMAL`), whose safety gate has not run, so no power-loss durability is
+> claimed: use LayerFS for agent work and its history, not as the only copy of data you
+> cannot rebuild.
 
 Since 1.1.0, LayerFS also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#windows-live).
 
@@ -180,8 +182,8 @@ writable tree, and every result becomes a Commit on a Branch in one shared Store
 | **[try](https://github.com/binpash/try)** | Run a command against an overlay of your system, then inspect, apply or discard what it changed | `try` works on one machine with one overlay at a time. LayerFS keeps every result as a Commit, and lets many agents branch from any of them and share one Store |
 | **Apiary and virtual layered file systems** (Potter and Nieh, [USENIX ATC 2010](https://www.usenix.org/conference/usenix-atc-10/apiary-easy-use-desktop-application-fault-containment-commodity-operating), [LISA 2011](https://www.usenix.org/legacy/event/lisa11/tech/full_papers/Potter.pdf)) | Ephemeral containers that start instantly over shared layered filesystems | Apiary isolates desktop applications. LayerFS's target is agent tool calls whose results are kept, branched and merged as history |
 
-**Use something else** if you need crash or power-loss durability (the Store runs
-in its Disposable profile only), full POSIX node types, or top sequential I/O
+**Use something else** if you need power-loss durability (the Store's Normal
+profile claims none yet), full POSIX node types, or top sequential I/O
 bandwidth ([fio](https://layerfs.ai/benchmarks/fio/)). For a few long-lived
 checkouts on one machine, Btrfs snapshots or Git worktrees may be all you need.
 

@@ -227,7 +227,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if !matches!(args.len(), 7 | 8) {
         return Err(
-            "store history root-hex stack-body-hex manifest-tsv manifest-sha256 [durable|disposable] required".into(),
+            "store history root-hex stack-body-hex manifest-tsv manifest-sha256 [durable|normal] required".into(),
         );
     }
     let raw = fs::read(&args[5])?;
@@ -252,8 +252,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|_| "cursor key width")?;
     let selected = match args.get(7).map(String::as_str).unwrap_or("durable") {
         "durable" => SqlitePersistenceProfile::Durable,
-        "disposable" => SqlitePersistenceProfile::Disposable,
-        _ => return Err("explicit durable/disposable profile required".into()),
+        "normal" => SqlitePersistenceProfile::Normal,
+        _ => return Err("explicit durable/normal profile required".into()),
     };
     let config = PersistenceConfig::sqlite(&args[1]).with_sqlite_profile(selected);
     // Provisioning order: a writable opener establishes missing WAL sidecars

@@ -16,7 +16,7 @@ const BINDING: &[u8] = b"gc-admission";
 const CURSOR: [u8; 32] = [47; 32];
 
 fn config(path: &std::path::Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 
 fn catalog(temp: &Temp) -> layerfs_persistence::HistoryProvider {

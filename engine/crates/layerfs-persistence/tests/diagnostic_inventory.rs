@@ -21,7 +21,7 @@ impl Fixture {
         let temp = support::Temp::new("diagnostic-inventory");
         let handles = SqliteHandles::create(
             PersistenceConfig::sqlite(temp.join("store.sqlite"))
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal)
                 .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {

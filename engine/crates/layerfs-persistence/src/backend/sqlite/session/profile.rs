@@ -8,7 +8,6 @@ impl SqlitePersistenceProfile {
     pub(crate) fn identity(self) -> &'static str {
         match self {
             Self::Durable => "sqlite-wal-full-v2",
-            Self::Disposable => "sqlite-wal-off-v2",
             Self::Normal => "sqlite-wal-normal-v2",
         }
     }
@@ -18,20 +17,19 @@ impl SqlitePersistenceProfile {
     pub(crate) fn synchronous(self) -> i64 {
         match self {
             Self::Durable => 2,
-            Self::Disposable => 0,
             Self::Normal => 1,
         }
     }
     pub(crate) fn fullfsync(self) -> i64 {
         i64::from(self == Self::Durable)
     }
-    /// Pages after which a COMMIT checkpoints the log itself. Disposable and
-    /// Normal leave it to their session's checkpoint thread, off the commit
+    /// Pages after which a COMMIT checkpoints the log itself. Normal leaves
+    /// it to its session's checkpoint thread, off the commit
     /// path (`background.rs`; owner approval, 2026-11-07).
     pub(crate) fn wal_autocheckpoint(self) -> i64 {
         match self {
             Self::Durable => 1000,
-            Self::Disposable | Self::Normal => 0,
+            Self::Normal => 0,
         }
     }
     /// Whether a writable session of this profile runs the checkpoint thread.

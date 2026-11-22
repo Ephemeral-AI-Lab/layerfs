@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let selected = match args.get(4).map(String::as_str).unwrap_or("durable") {
         "durable" => SqlitePersistenceProfile::Durable,
-        "disposable" => SqlitePersistenceProfile::Disposable,
+        "disposable" => SqlitePersistenceProfile::Normal,
         _ => return Err("explicit durable/disposable profile required".into()),
     };
     let deadline_seconds = args

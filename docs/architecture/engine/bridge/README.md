@@ -143,7 +143,7 @@ are redacted from `Debug`. Source:
 
 ```text
 installer (Project Init)                 daemon (one install per process)
-  StoreManifest "LFSI\x01" ----------->  Request: Disposable, locator ==
+  StoreManifest "LFSI\x01" ----------->  Request: Normal, locator ==
                                           configured path, no daemon_sqlite
                                          Claim: create_new temp, target absent
               <------------- InstallReply::Ready
@@ -158,7 +158,7 @@ installer (Project Init)                 daemon (one install per process)
 | --- | --- | --- |
 | `provider` | `Sqlite`; `Postgres` has no sealed file and is refused by `check` | [`provision.rs`](../../../../engine/crates/layerfs-bridge/src/provision.rs) |
 | `locator` | Absolute path in the daemon's filesystem, at most 4 096 bytes, no NUL, no trailing `/` | same |
-| `profile` | The daemon accepts only `Disposable`. Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
+| `profile` | `StoreProfile::Normal` (wire byte 2, formerly named `Disposable`); the daemon accepts only it. Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
 | `binding`, `cursor_key` | Catalog authority: binding 1–128 bytes, nonzero key; only on the authenticated channel | [`provision.rs`](../../../../engine/crates/layerfs-bridge/src/provision.rs) |
 | `stack`, `branch`, `root` | The Init's LayerStack, first Branch and complete root | same |
 | `bytes`, `host_sqlite`, `daemon_sqlite` | Nonzero sealed length; SQLite versions on each side (the daemon's filled only on success) | same |

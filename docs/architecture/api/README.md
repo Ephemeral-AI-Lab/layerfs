@@ -78,7 +78,7 @@ give each call's own arguments, answer and errors.
 | Unknown call or argument, wrong kind, out of scope | `InvalidInput`, before any effect | [`calls/check.rs`](../../../api/crates/layerfs-api/src/calls/check.rs) |
 | New work on a removed platform | `Unsupported`, before the home is opened | [`calls/platform_policy.rs`](../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
 | Where a Store call runs | the caller's process, or the Store machine's worker; no daemon serves a Store call | [Control](../control/README.md) |
-| Persistence | a sqlite Store opens with WAL and `synchronous=NORMAL` (its record label is still `disposable`); a PostgreSQL Store writes with `synchronous_commit` (default `local`). Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [store family](sdk/store.md) |
+| Persistence | a sqlite Store opens with WAL and `synchronous=NORMAL`, the only SQLite profile (record label `normal`); a PostgreSQL Store writes with `synchronous_commit` (default `local`). Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [store family](sdk/store.md) |
 
 ## Demonstration
 

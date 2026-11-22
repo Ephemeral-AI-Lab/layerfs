@@ -302,8 +302,8 @@ class NativeExport(unittest.TestCase):
             os.utime(source / "ignored.bin", ns=(timestamp, timestamp))
             lfs = self.real.client(home=home)
             try:
-                lfs.store.create("shop")  # public create selects only Disposable
-                self.assertEqual(lfs.store.get("shop", detail=True)["profile"], "disposable")
+                lfs.store.create("shop")  # public create selects the sole Normal profile
+                self.assertEqual(lfs.store.get("shop", detail=True)["profile"], "normal")
                 lfs.project.init("shop/api", str(source))
                 lfs.branch.fork("shop/api", "agent", "main")
                 lfs.file.write("shop/api", "agent", "/branch.txt", "agent\n")

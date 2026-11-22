@@ -1,4 +1,4 @@
-//! A Normal or Disposable session's checkpoint thread (owner approval,
+//! A Normal session's checkpoint thread (owner approval,
 //! 2026-11-07; Normal since 2026-11-17): COMMIT does not checkpoint
 //! (`wal_autocheckpoint=0`); a log longer than 4 MiB is copied into the Store
 //! file while the session stays open, with no idle checkpoint, seal or close.
@@ -47,12 +47,7 @@ fn size(path: &Path) -> u64 {
     std::fs::metadata(path).map_or(0, |m| m.len())
 }
 
-#[test]
-fn a_long_log_is_copied_into_the_store_while_the_session_stays_open() {
-    copied(SqlitePersistenceProfile::Disposable, 0);
-}
-
-/// The product profile: the session and its checkpoint thread run at
+/// The Store profile: the session and its checkpoint thread run at
 /// `synchronous=1` (NORMAL), and the log is still copied off the commit path.
 #[test]
 fn a_normal_session_copies_its_log_with_normal_synchronization() {

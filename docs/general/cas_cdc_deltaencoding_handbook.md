@@ -37,7 +37,7 @@ problems and can cooperate in the same Save.
 
 Compression is another physical operation: an independent value can compress
 without using a base. Delta encoding and ordinary compression are not synonyms.
-All three mechanisms are shared across Durable and Disposable profiles. Their
+All three mechanisms are shared across the Durable and Normal profiles. Their
 correctness and identities do not depend on relaxing durability.
 
 ```text

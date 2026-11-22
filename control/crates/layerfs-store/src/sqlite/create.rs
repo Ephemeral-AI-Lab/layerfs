@@ -47,7 +47,7 @@ fn created(record: &StoreRecord) -> SdkValue {
         ("store", SdkValue::text(record.name())),
         ("engine", SdkValue::text("sqlite")),
         ("machine", SdkValue::opt_text(record.text("machine"))),
-        ("profile", SdkValue::opt_text(record.text("profile"))),
+        ("profile", SdkValue::opt_text(crate::record::profile(record))),
         ("sqlite_version", SdkValue::opt_text(record.text("sqlite"))),
         (
             "created_at",

@@ -22,7 +22,7 @@ fn config() -> HistoryCatalogConfig {
 fn create(path: &std::path::Path) -> SqliteHandles {
     SqliteHandles::create(
         PersistenceConfig::sqlite(path)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .with_sqlite_pack_layout(SqlitePackLayout::GroupRows),
         StoragePolicy::frozen_default(),
         &config(),
@@ -120,7 +120,7 @@ fn explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order() {
     drop(storage);
     drop(h);
     let reopened = SqliteHandles::open_read_only(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &config().binding_key,
         config().cursor_key,
     )

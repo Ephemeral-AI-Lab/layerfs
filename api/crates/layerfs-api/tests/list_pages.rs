@@ -2,7 +2,7 @@
 //! default page of 100, plain and under a folder scope: every page boundary
 //! is crossed, the last page has no `next_cursor`, and a bad limit or cursor
 //! is refused (#30, #33; 2.0 call surface). The Store's paging is real: one
-//! Disposable home, Branches made by `branch.fork`.
+//! Normal home, Branches made by `branch.fork`.
 use layerfs_api::home;
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;

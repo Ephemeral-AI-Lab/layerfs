@@ -22,7 +22,7 @@ P, B = "shop/api", "agent"
 
 
 class Fixture(unittest.TestCase):
-    """A Disposable Store with one project and a Branch, in a temp home."""
+    """A Normal Store with one project and a Branch, in a temp home."""
 
     @classmethod
     def setUpClass(cls):

@@ -210,8 +210,8 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
   const lfs = real.client({ home: f.home });
   try {
     assert.equal(typeof lfs.project.export, "function", "LP53a table entry required");
-    await lfs.store.create("shop"); // public create selects the sole Disposable profile
-    assert.equal((await lfs.store.get("shop", { detail: true })).profile, "disposable");
+    await lfs.store.create("shop"); // public create selects the sole Normal profile
+    assert.equal((await lfs.store.get("shop", { detail: true })).profile, "normal");
     await lfs.project.init("shop/api", f.source);
     await lfs.branch.fork("shop/api", "agent", "main");
     await lfs.file.write("shop/api", "agent", "/branch.txt", "agent\n");
@@ -284,7 +284,7 @@ test("CLI export: stdout JSON/text, stderr progress JSONL, default/selected Bran
       const run = shell(f.home, words);
       assert.equal(run.status, 0, run.stderr);
     }
-    assert.equal(JSON.parse(shell(f.home, ["store", "get", "shop", "--detail"]).stdout).profile, "disposable");
+    assert.equal(JSON.parse(shell(f.home, ["store", "get", "shop", "--detail"]).stdout).profile, "normal");
     const dest = join(f.parent, "out");
     const run = shell(f.home, ["project", "export", "shop/api", dest, "--progress", "--detail"]);
     assert.equal(run.status, 0, run.stderr);

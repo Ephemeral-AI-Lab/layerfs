@@ -491,7 +491,7 @@ A Workspace is a mounted side Branch where ordinary commands run. The route is
 | a single-project MCP session that unmounted at end of input or on a signal (#521) | nothing commits or unmounts for you | **Removed.** `workspace.unmount` is `Dirty` while changes are uncommitted, unless `discard`; `sandbox.remove` is `InUse` while a Workspace is mounted, unless `force` |
 | `mount` of `main` | refused `InvalidInput`: fork a Branch from it | **Changed** |
 | `commit` | one Commit; merges first when the Branch moved since the mount, `force` publishes over a moved head; a conflict writes markers and commits nothing (`Conflict`) | unchanged in meaning |
-| the Store profile | WAL with `synchronous=NORMAL` (the record's label stays `disposable`); Durable is disabled by the owner | **Changed** from 1.1.0's `synchronous=OFF` (owner, 2026-11-17); no power-loss guarantee is claimed yet |
+| the Store profile | WAL with `synchronous=NORMAL`, the only SQLite profile (record label `normal`; a record that says `disposable` reads as `normal` and is never rewritten); Durable is disabled by the owner | **Changed** from 1.1.0's `synchronous=OFF` (owner, 2026-11-17; OFF removed 2026-11-23); no power-loss guarantee is claimed yet |
 
 Run for this page on macOS `native` with a daemon of the same build, in the
 shell, Node and Python ([quickstart](quickstart.md#4-a-sandbox-a-workspace-and-a-commit),

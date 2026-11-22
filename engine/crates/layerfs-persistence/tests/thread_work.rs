@@ -41,7 +41,7 @@ fn each_thread_counts_only_its_own_sql_work() {
     let temp = support::Temp::new("thread-work");
     let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"thread-work".to_vec(),

@@ -24,7 +24,7 @@ const ROUNDS: usize = 20_000;
 
 fn config(path: &std::path::Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path)
-        .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+        .with_sqlite_profile(SqlitePersistenceProfile::Normal)
         .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)
 }
 fn history() -> HistoryCatalogConfig {

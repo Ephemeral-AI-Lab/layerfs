@@ -18,7 +18,7 @@ const LIMIT: Duration = Duration::from_millis(750);
 fn counters_are_read_while_the_lane_is_held() {
     let temp = Temp::new("diagnostics-during-lane");
     let mut config = PersistenceConfig::sqlite(temp.join("store"));
-    config.sqlite_profile = SqlitePersistenceProfile::Disposable;
+    config.sqlite_profile = SqlitePersistenceProfile::Normal;
     let handles = SqliteHandles::create(
         config,
         StoragePolicy::frozen_default(),

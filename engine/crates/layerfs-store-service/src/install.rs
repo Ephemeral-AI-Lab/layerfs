@@ -209,8 +209,8 @@ pub fn install_local(
         cause: String::new(),
     };
     let result = (|| {
-        if manifest.profile != StoreProfile::Disposable || manifest.daemon_sqlite.is_some() {
-            return Err("a sealed, not yet installed, Disposable Store is required".to_owned());
+        if manifest.profile != StoreProfile::Normal || manifest.daemon_sqlite.is_some() {
+            return Err("a sealed, not yet installed, Normal Store is required".to_owned());
         }
         let text = |error: io::Error| error.to_string();
         prepare(destination)?;

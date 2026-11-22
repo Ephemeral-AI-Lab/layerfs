@@ -236,7 +236,7 @@ fn cold_tree(source: &Path) {
     stamp_tree(source);
 }
 
-/// One installed Disposable Store, opened once and kept open, and one real
+/// One installed Normal Store, opened once and kept open, and one real
 /// kernel serving assembly over it. The test keeps the writable session, the
 /// provider of each read session and the counted catalog.
 struct Fx {
@@ -256,9 +256,9 @@ impl Fx {
         assert!(
             matches!(
                 fixture.config.sqlite_profile,
-                SqlitePersistenceProfile::Disposable
+                SqlitePersistenceProfile::Normal
             ),
-            "the global Store profile is Disposable, selected explicitly"
+            "the global Store profile is Normal, selected explicitly"
         );
         let config = || fixture.config.clone();
         let writer = Arc::new(
@@ -357,7 +357,7 @@ impl Fx {
         }
         drop((history, readers, writer));
         println!(
-            "P2_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop={clean} handles_after_stop={}",
+            "P2_RIG store_opened=1 sealed=0 reopened=0 profile=Normal clean_stop={clean} handles_after_stop={}",
             Arc::strong_count(&store)
         );
         drop(store);

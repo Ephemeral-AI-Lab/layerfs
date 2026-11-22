@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(query);
     drop(db);
     let h = SqliteHandles::open_read_only(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         b"layerfs/issue286/retained-history/v3",
         [0x28; 32],
     )?;

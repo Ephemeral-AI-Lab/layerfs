@@ -7,7 +7,7 @@ fn manifest() -> StoreManifest {
     StoreManifest {
         provider: ProviderKind::Sqlite,
         locator: "/store/store.sqlite".into(),
-        profile: StoreProfile::Disposable,
+        profile: StoreProfile::Normal,
         binding: b"install-records".to_vec(),
         cursor_key: [7; 32],
         stack: [0x31; 17],

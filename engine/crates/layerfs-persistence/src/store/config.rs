@@ -105,21 +105,17 @@ pub enum SqlitePersistenceProfile {
     /// WAL/FULL; macOS additionally requests full synchronization.
     #[default]
     Durable,
-    /// WAL/OFF; survives process termination, without kernel-crash durability.
-    /// A kernel or VM crash can corrupt the Store or lose acknowledged data.
-    /// Tests and diagnostics may still select it; the product opens Normal.
-    Disposable,
     /// WAL/NORMAL: the log is synchronized before each checkpoint and after a
     /// log restart, not at every COMMIT. A kernel or VM crash can lose the
-    /// commits since the last synchronized checkpoint. The profile every
-    /// product opener selects (owner, 2026-11-17).
+    /// commits since the last synchronized checkpoint. The only profile a
+    /// Store is opened with (owner, 2026-11-17; OFF was removed 2026-11-23).
     Normal,
 }
 impl SqlitePersistenceProfile {
-    /// Whether a product path may open a Store with this profile: Normal, or
-    /// Disposable for a test or diagnostic. Durable stays disabled.
+    /// Whether a Store may be opened with this profile: Normal only.
+    /// Durable stays disabled.
     pub const fn permitted(self) -> bool {
-        matches!(self, Self::Normal | Self::Disposable)
+        matches!(self, Self::Normal)
     }
 }
 /// Explicit physical layout for a newly created embedded Store.

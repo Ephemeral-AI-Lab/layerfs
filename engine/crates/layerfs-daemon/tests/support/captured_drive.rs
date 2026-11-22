@@ -40,7 +40,7 @@ pub fn job<T>(
 ) -> T {
     command(owner, route).unwrap_or_else(|error| panic!("{error:?}"))
 }
-/// A sealed, installed Disposable Store whose base is the model of the kernel
+/// A sealed, installed Normal Store whose base is the model of the kernel
 /// source it was initialized from, plus one local owner.
 pub struct Rig {
     pub f: support::Fixture,

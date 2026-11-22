@@ -145,7 +145,7 @@ fn merge_and_publish_are_independent_of_history_depth() {
         );
         let publish = round(&fixture, rounds);
         rounds += 1;
-        println!("SDK_HISTORY_DEPTH rounds={depth} ancestry={walks:?} merge={merge:?} publish={publish:?} profile=Disposable cache=warm-after-identical-probe diagnostic_count_gate=true");
+        println!("SDK_HISTORY_DEPTH rounds={depth} ancestry={walks:?} merge={merge:?} publish={publish:?} profile=Normal cache=warm-after-identical-probe diagnostic_count_gate=true");
         observed.push((depth, walks, merge, publish));
     }
     let (_, walks_low, merge_low, publish_low) = observed[0];

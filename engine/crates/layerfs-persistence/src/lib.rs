@@ -1,5 +1,5 @@
-//! The global Store: embedded SQLite (explicit Durable and disk-backed
-//! Disposable profiles) or PostgreSQL (#506).
+//! The global Store: embedded SQLite (the Normal profile; Durable is
+//! disabled by the owner) or PostgreSQL (#506).
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;

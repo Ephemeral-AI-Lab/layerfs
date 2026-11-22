@@ -21,7 +21,7 @@ const CURSOR: [u8; 32] = [41; 32];
 
 fn config(path: std::path::PathBuf) -> PersistenceConfig {
     PersistenceConfig::sqlite(path)
-        .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+        .with_sqlite_profile(SqlitePersistenceProfile::Normal)
         .with_sqlite_pack_layout(SqlitePackLayout::GroupRowsIndexed)
         .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)
 }
