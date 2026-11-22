@@ -426,6 +426,11 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
             for (i, url) in loopback_urls(query).iter().enumerate() {
                 let outcome = machine::reach(&spec, url);
                 match loopback(&spec) {
+                    Loopback::Shared if cfg!(target_os = "linux") && i == 1 => assert_eq!(
+                        outcome,
+                        Ok(with_host("127.0.0.1", query)[1].clone()),
+                        "{platform:?}"
+                    ),
                     Loopback::Shared => assert_eq!(outcome.as_ref(), Ok(url)),
                     Loopback::Alias(alias) => assert_eq!(
                         outcome,
@@ -436,9 +441,18 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
             }
         }
         // the server's certificate names the loopback host, not an alias
-        for url in loopback_urls("?sslmode=verify-full") {
+        for (i, url) in loopback_urls("?sslmode=verify-full")
+            .into_iter()
+            .enumerate()
+        {
             let outcome = machine::reach(&spec, &url);
             match loopback(&spec) {
+                Loopback::Shared if cfg!(target_os = "linux") && i == 1 => {
+                    let (code, message) = refused(platform, outcome);
+                    assert_eq!(code, Code::Unsupported, "{message}");
+                    assert!(message.starts_with(&prefix), "{message}");
+                    assert!(message.contains("sslmode=verify-full"), "{message}");
+                }
                 Loopback::Shared => assert_eq!(outcome, Ok(url)),
                 Loopback::Alias(_) => {
                     let (code, message) = refused(platform, outcome);

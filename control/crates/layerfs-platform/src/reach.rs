@@ -24,19 +24,27 @@ pub(crate) enum Loopback<'a> {
 /// The URL `spec`'s daemon dials for `url`, given how its machine reaches
 /// the caller's loopback.
 pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<String, MachineError> {
-    if let Loopback::Shared = loopback {
+    let shared_linux = matches!(loopback, Loopback::Shared) && cfg!(target_os = "linux");
+    if matches!(loopback, Loopback::Shared) && !shared_linux {
         return Ok(url.to_owned());
     }
     // a host list (`h1:5432,h2:5433`) reads as one host holding a `,`
     let parsed = PostgresUrl::parse(url).filter(|p| !p.host().contains(','));
-    let parsed = parsed.ok_or_else(|| {
-        refuse(
-            spec,
-            Code::InvalidInput,
-            "its URL is not one postgres://[user@]host[:port]/... URL with one host",
-        )
-    })?;
+    let parsed = match parsed {
+        Some(parsed) => parsed,
+        None if shared_linux => return Ok(url.to_owned()),
+        None => {
+            return Err(refuse(
+                spec,
+                Code::InvalidInput,
+                "its URL is not one postgres://[user@]host[:port]/... URL with one host",
+            ));
+        }
+    };
     if parsed.query("host").chain(parsed.query("hostaddr")).count() > 0 {
+        if shared_linux {
+            return Ok(url.to_owned());
+        }
         return Err(refuse(
             spec,
             Code::Unsupported,
@@ -44,13 +52,21 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<Str
         ));
     }
     if parsed.host().is_empty() {
+        if shared_linux {
+            return Ok(url.to_owned());
+        }
         return Err(refuse(
             spec,
             Code::Unsupported,
             "its URL names no host (a Unix socket of the caller), which no machine reaches",
         ));
     }
-    if !parsed.loopback() {
+    let rewrite = if shared_linux {
+        parsed.host() == "localhost"
+    } else {
+        parsed.loopback()
+    };
+    if !rewrite {
         return Ok(url.to_owned());
     }
     if parsed.query("sslmode").any(|mode| mode == "verify-full") {
@@ -61,9 +77,9 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<Str
         ));
     }
     let alias = match loopback {
+        Loopback::Shared => "127.0.0.1".to_owned(),
         Loopback::Alias(alias) => alias.to_owned(),
         Loopback::Lookup(read) => read()?,
-        Loopback::Shared => unreachable!("answered above"),
     };
     Ok(parsed.with_host(&alias))
 }

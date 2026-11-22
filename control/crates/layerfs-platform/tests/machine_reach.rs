@@ -74,6 +74,11 @@ fn each_platform_rewrites_a_loopback_host() {
         for (i, url) in loopback_urls().iter().enumerate() {
             let outcome = machine::reach(&spec, url);
             match alias {
+                // Linux namespaces Sandboxes have no /etc/hosts, so localhost
+                // becomes 127.0.0.1 while 127.0.0.1 and [::1] stay unchanged.
+                "unchanged" if cfg!(target_os = "linux") && i == 1 => {
+                    assert_eq!(outcome, Ok(rewritten("127.0.0.1")[1].clone()), "{kind:?}")
+                }
                 "unchanged" => assert_eq!(outcome.as_deref(), Ok(url.as_str())),
                 alias => assert_eq!(outcome, Ok(rewritten(alias)[i].clone()), "{kind:?}"),
             }
@@ -155,7 +160,7 @@ fn a_rewrite_is_refused_for_verify_full() {
     let scratch = Scratch::new("reach-tls");
     let url = format!("postgres://lfs:{SECRET}@localhost:5432/layerfs?sslmode=verify-full");
     let rewriting: &[Platform] = match cfg!(target_os = "linux") {
-        true => &[Platform::Lima],
+        true => &[Platform::Native, Platform::Docker, Platform::Lima],
         false => &[Platform::Docker, Platform::Lima],
     };
     for &kind in rewriting {
@@ -163,11 +168,27 @@ fn a_rewrite_is_refused_for_verify_full() {
         assert_eq!(code, Code::Unsupported);
         assert!(message.contains("sslmode=verify-full"), "{message}");
     }
-    // native rewrites nothing, so its certificate check still holds
-    assert_eq!(
-        machine::reach(&spec(&scratch, Platform::Native), &url),
-        Ok(url.clone())
-    );
+    if !cfg!(target_os = "linux") {
+        // macOS native rewrites nothing, so its certificate check still holds
+        assert_eq!(
+            machine::reach(&spec(&scratch, Platform::Native), &url),
+            Ok(url.clone())
+        );
+    } else {
+        // Linux native and docker keep 127.0.0.1 and [::1] unchanged even with verify-full
+        for kind in [Platform::Native, Platform::Docker] {
+            for literal in [
+                format!("postgres://lfs:{SECRET}@127.0.0.1:5432/layerfs?sslmode=verify-full"),
+                format!("postgres://lfs:{SECRET}@[::1]:5432/layerfs?sslmode=verify-full"),
+            ] {
+                assert_eq!(
+                    machine::reach(&spec(&scratch, kind), &literal),
+                    Ok(literal),
+                    "{kind:?}"
+                );
+            }
+        }
+    }
     // verify-ca does not check the host name
     let ca = url.replace("verify-full", "verify-ca");
     assert_eq!(

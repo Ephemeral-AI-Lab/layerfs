@@ -566,10 +566,29 @@ impl Application {
                     Some(opened)
                 }
                 Err(cause) => {
+                    let closed = matches!(
+                        &cause,
+                        layerfs_storage::StorageError::Io(io)
+                            if matches!(
+                                io.get_ref().and_then(|e| {
+                                    e.downcast_ref::<layerfs_storage::port::PersistenceError>()
+                                }),
+                                Some(layerfs_storage::port::PersistenceError::Refused { status })
+                                    if status == "Closed"
+                            )
+                    );
+                    let cause = match (&setup.store, closed) {
+                        (layerfs_bridge::DaemonStore::Postgres { url, .. }, true) => {
+                            ApplicationError::PostgresUnreachable {
+                                host: postgres_host(url),
+                            }
+                        }
+                        _ => ApplicationError::Store(cause),
+                    };
                     return Err(ApplicationError::AfterOverlay {
                         owner: Box::new(owner),
-                        cause: Box::new(ApplicationError::Store(cause)),
-                    })
+                        cause: Box::new(cause),
+                    });
                 }
             },
             None => None,
@@ -710,6 +729,23 @@ impl Application {
 /// server. A Sandbox daemon opens it with the light check (#63): the schema
 /// was fully checked when its Store was connected, and the caller's reach
 /// check read its binding just before this daemon started.
+fn postgres_host(url: &str) -> String {
+    let Some((_, rest)) = url.split_once("://") else {
+        return String::new();
+    };
+    let authority = rest.split(['/', '?']).next().unwrap_or("");
+    let host_port = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    match host_port.strip_prefix('[') {
+        Some(v6) => v6.split_once(']').map_or("", |(host, _)| host).to_owned(),
+        None => host_port
+            .rsplit_once(':')
+            .map_or(host_port, |(host, _)| host)
+            .to_owned(),
+    }
+}
+
 fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PostgresSelection {
     let setting = match synchronous_commit {
         "local" => SynchronousCommit::Local,

@@ -21,6 +21,11 @@ pub enum ApplicationError {
     },
     /// Original direct existing-Store open failure.
     Store(layerfs_storage::StorageError),
+    /// PostgreSQL Store server was unreachable at open.
+    PostgresUnreachable {
+        /// Server host without userinfo.
+        host: String,
+    },
     /// Original authentication/kernel transport failure.
     Channel(ChannelError),
     /// Original malformed request, with bounded bytes retained separately.
@@ -53,6 +58,12 @@ impl fmt::Display for ApplicationError {
             Self::Owner(e) => write!(f, "Overlay startup: {:?}", e.result.as_ref().err()),
             Self::AfterOverlay { cause, .. } => write!(f, "after Overlay startup: {cause}"),
             Self::Store(e) => write!(f, "Store open: {e}"),
+            Self::PostgresUnreachable { host } if host.is_empty() => {
+                f.write_str("cannot reach PostgreSQL Store")
+            }
+            Self::PostgresUnreachable { host } => {
+                write!(f, "cannot reach PostgreSQL Store at {host}")
+            }
             Self::Channel(e) => write!(f, "kernel channel: {e}"),
             Self::Protocol(e) => write!(f, "kernel request: {e}"),
             Self::Install(e) => write!(f, "installation: {e}"),

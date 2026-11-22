@@ -82,11 +82,10 @@ impl Adapter for Docker {
         status(spec)
     }
     /// On a Linux Engine the worker shares the host's network, and its
-    /// `namespaces` Sandboxes share the worker's (D-8), so a loopback URL is
-    /// dialled as given. Elsewhere (Docker Desktop) a loopback URL becomes
-    /// the address the running worker container resolves
-    /// `host.docker.internal` to: a Sandbox image's root cannot resolve
-    /// the name.
+    /// `namespaces` Sandboxes share the worker's (D-8), though their image
+    /// root has no `/etc/hosts` so `localhost` becomes `127.0.0.1`. Elsewhere
+    /// (Docker Desktop) a loopback URL becomes the address the running worker
+    /// container resolves `host.docker.internal` to.
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         if cfg!(target_os = "linux") {
             return dial(spec, url, Loopback::Shared);
