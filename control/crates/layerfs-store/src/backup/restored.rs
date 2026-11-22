@@ -8,7 +8,9 @@ use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
-use layerfs_history::{BranchId, HistoryCatalog, HistoryName, LayerStackId, NamedSnapshot};
+use layerfs_history::{
+    BranchId, HistoryCatalog, HistoryName, HistoryResult, LayerStackId, NamedSnapshot,
+};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused};
 use std::path::{Path, PathBuf};
@@ -188,26 +190,14 @@ pub fn complete(record: &ProjectRecord) -> bool {
     decodes("manifest") && decodes("installed")
 }
 
-/// Reads the live projects and SQLite version of the local SQLite Store at
-/// `file` through a read-only diagnostic handle so the file's bytes and WAL
-/// stay untouched.
-pub fn projects_in_diagnostic(file: &Path, identity: &Identity) -> Result<(Vec<Found>, String)> {
-    layerfs_store_service::kernel_guard::check(file)
-        .map_err(|reason| refused("Unsupported", reason.0))?;
-    let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
-        file,
-        &identity.binding,
-        identity.cursor_key,
-    )
-    .map_err(|error| refused("Unavailable", crate::words::persistence(&error)))?;
-    let main = HistoryName::new(layerfs_store_service::history::branch::MAIN).map_err(failed)?;
+/// The projects Store history `history` holds, each with its `main`
+/// Branch when it has one: what a restore and a record repair rebuild
+/// records from.
+pub fn found_in(history: &dyn HistoryCatalog) -> HistoryResult<Vec<Found>> {
+    let main = HistoryName::new(layerfs_store_service::history::branch::MAIN)?;
     let mut found = Vec::new();
-    for stack in layerfs_project::store::projects(&handles.history).map_err(failed)? {
-        let snapshot = match handles
-            .history
-            .branch_snapshot_named(&stack.name, &main)
-            .map_err(failed)?
-        {
+    for stack in layerfs_project::store::projects(history)? {
+        let snapshot = match history.branch_snapshot_named(&stack.name, &main)? {
             NamedSnapshot::Found(snapshot) => Some(Main {
                 stack: snapshot.branch.stack,
                 branch: snapshot.branch.id,
@@ -221,9 +211,28 @@ pub fn projects_in_diagnostic(file: &Path, identity: &Identity) -> Result<(Vec<F
             main: snapshot,
         });
     }
+    Ok(found)
+}
+
+/// Reads the live projects and SQLite version of the local SQLite Store at
+/// `file` through a read-only diagnostic handle so the file's bytes and WAL
+/// stay untouched.
+pub fn projects_in_diagnostic(file: &Path, identity: &Identity) -> Result<(Vec<Found>, String)> {
+    layerfs_store_service::kernel_guard::check(file)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
+    let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
+        file,
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map_err(|error| refused("Unavailable", crate::words::persistence(&error)))?;
+    let found = found_in(&handles.history).map_err(failed)?;
     Ok((found, handles.profile().sqlite_version.clone()))
 }
 
+/// The record `name` would be completed to: `existing` with the `manifest`
+/// and `installed` its listed project rebuilds, when the Store lists it
+/// with a `main` Branch of the recorded stack. `Ok(None)` when it does not.
 fn match_rebuilt(
     store: &str,
     restored: &Restored,
@@ -244,36 +253,57 @@ fn match_rebuilt(
     Ok(Some(existing.with_fields_of(&rebuilt)))
 }
 
+/// A record repair needs: it holds no `op` and is not [`complete`].
+fn needs_repair(record: &ProjectRecord) -> bool {
+    record.op().is_none() && !complete(record)
+}
+
 /// Rebuilds `manifest` and `installed` on existing incomplete SQLite project
 /// records of Store `store` under `home` from the local `file`. Records that
-/// are already complete or hold an `op` are left alone; when none need repair,
-/// `file` is not opened.
+/// are already complete or hold an `op` are left alone, as is one whose
+/// `record.json` does not read; when none need repair, `file` is not opened.
+/// Returns each record it left incomplete, with why, so the caller can say
+/// so: a failure here never fails the call that asked for it.
 pub fn complete_existing(
     home: &Path,
     store: &str,
     record: &StoreRecord,
     file: &Path,
-) -> Result<()> {
+) -> Vec<(String, String)> {
     let entries = match paths::names(&paths::store_dir(home, store).join("project")) {
         Ok(names) => names,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(failed(error)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(error) => return vec![(String::new(), error.to_string())],
     };
-    let mut incomplete = Vec::new();
-    for name in entries {
-        let Ok(Some(existing)) = ProjectRecord::read(home, store, &name) else {
-            continue;
-        };
-        if existing.op().is_none() && !complete(&existing) {
-            incomplete.push(name);
-        }
-    }
+    let incomplete: Vec<String> = entries
+        .into_iter()
+        .filter(|name| {
+            ProjectRecord::read(home, store, name)
+                .is_ok_and(|r| r.as_ref().is_some_and(needs_repair))
+        })
+        .collect();
     if incomplete.is_empty() {
-        return Ok(());
+        return Vec::new();
     }
+    complete_all(home, store, record, file, &incomplete).unwrap_or_else(|refusal| {
+        (incomplete.into_iter())
+            .map(|name| (name, refusal.message.clone()))
+            .collect()
+    })
+}
+
+/// [`complete_existing`] of the records `incomplete` names, once the Store
+/// file is read.
+fn complete_all(
+    home: &Path,
+    store: &str,
+    record: &StoreRecord,
+    file: &Path,
+    incomplete: &[String],
+) -> Result<Vec<(String, String)>> {
     let identity = crate::identity::identity_in(record)?;
     if identity.kind != Kind::Sqlite {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let (found, sqlite) = projects_in_diagnostic(file, &identity)?;
     let restored = Restored {
@@ -282,37 +312,40 @@ pub fn complete_existing(
         sqlite,
     };
     let _lock = home::lock::take(home)?;
+    let mut left = Vec::new();
     for name in incomplete {
-        let Ok(Some(existing)) = ProjectRecord::read(home, store, &name) else {
-            continue;
+        let existing = match ProjectRecord::read(home, store, name) {
+            Ok(Some(existing)) if needs_repair(&existing) => existing,
+            _ => continue,
         };
-        if existing.op().is_some() || complete(&existing) {
-            continue;
-        }
-        if let Ok(Some(updated)) = match_rebuilt(store, &restored, &found, &name, existing) {
-            let _ = updated.write(home);
-        }
+        let why = match match_rebuilt(store, &restored, &found, name, existing) {
+            Ok(Some(updated)) => match updated.write(home) {
+                Ok(()) => continue,
+                Err(refusal) => refusal.message,
+            },
+            Ok(None) => format!("Store {store} has no main Branch of its stack"),
+            Err(refusal) => refusal.message,
+        };
+        left.push((name.clone(), why));
     }
-    Ok(())
+    Ok(left)
 }
 
 /// Completes one existing incomplete SQLite project record `project` of
-/// Store `store` from the local `file`; returns whether the record was written.
+/// Store `store` from the local `file`; returns the record it wrote, or
+/// `None` when the record needs no repair or cannot be rebuilt.
 pub fn repair_project(
     home: &Path,
     store: &str,
     project: &str,
     identity: Identity,
     file: &Path,
-) -> Result<bool> {
+) -> Result<Option<ProjectRecord>> {
     if identity.kind != Kind::Sqlite {
-        return Ok(false);
+        return Ok(None);
     }
-    let Some(existing) = ProjectRecord::read(home, store, project)? else {
-        return Ok(false);
-    };
-    if existing.op().is_some() || complete(&existing) {
-        return Ok(false);
+    if !ProjectRecord::read(home, store, project)?.is_some_and(|r| needs_repair(&r)) {
+        return Ok(None);
     }
     let (found, sqlite) = projects_in_diagnostic(file, &identity)?;
     let restored = Restored {
@@ -321,15 +354,12 @@ pub fn repair_project(
         sqlite,
     };
     let _lock = home::lock::take(home)?;
-    let Some(existing) = ProjectRecord::read(home, store, project)? else {
-        return Ok(false);
+    let Some(existing) = ProjectRecord::read(home, store, project)?.filter(needs_repair) else {
+        return Ok(None);
     };
-    if existing.op().is_some() || complete(&existing) {
-        return Ok(false);
-    }
     let Some(updated) = match_rebuilt(store, &restored, &found, project, existing)? else {
-        return Ok(false);
+        return Ok(None);
     };
     updated.write(home)?;
-    Ok(true)
+    Ok(Some(updated))
 }

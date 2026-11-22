@@ -17,7 +17,6 @@ use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
 use crate::sqlite::family::progress;
 use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::provision::StoreManifest;
 use layerfs_home::events::Events;
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::op::FIELD;
@@ -287,16 +286,41 @@ fn init_on_worker(
         refusal
     })?;
     let stack = added.get("stack").cloned().unwrap_or_default();
-    let mut project = ProjectRecord::initialised(store, name, stack);
-    if let (Some(SdkValue::Bytes(m)), Some(SdkValue::Bytes(i))) =
-        (added.get("manifest"), added.get("installed"))
-    {
-        if StoreManifest::decode(m).is_ok() && StoreManifest::decode(i).is_ok() {
-            project = project
-                .with("manifest", SdkValue::Bytes(m.clone()))
-                .with("installed", SdkValue::Bytes(i.clone()));
+    // the worker's `manifest` and `installed` complete the record (#749);
+    // a worker that sends none (an older build) or sends ones that are not
+    // a complete Disposable pair leaves it for a move or a Sandbox create
+    // to complete from the Store file, the latter logged: the project is
+    // already in the Store, so the Init does not fail over it
+    let initialised = ProjectRecord::initialised(store, name, stack);
+    let project = match (added.get("manifest"), added.get("installed")) {
+        (None, None) => initialised,
+        (manifest, installed) => {
+            let full = (initialised.clone())
+                .with("manifest", manifest.cloned().unwrap_or_default())
+                .with("installed", installed.cloned().unwrap_or_default());
+            if crate::backup::restored::complete(&full) {
+                full
+            } else {
+                let _ = layerfs_home::home::log_line(
+                    &home,
+                    "repair.jsonl",
+                    &SdkValue::map([
+                        ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+                        ("call", SdkValue::text("project.init")),
+                        ("store", SdkValue::text(store.as_str())),
+                        ("project", SdkValue::text(name)),
+                        (
+                            "message",
+                            SdkValue::text(
+                                "the worker's manifest and installed manifest are not a complete Disposable pair; the record keeps neither",
+                            ),
+                        ),
+                    ]),
+                );
+                initialised
+            }
         }
-    }
+    };
     progress(events, "record", None);
     {
         let _lock = layerfs_home::home::lock::take(&home)?;
