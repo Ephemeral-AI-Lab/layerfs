@@ -7,7 +7,7 @@
 //! under the filter that refuses a user namespace instead.
 use super::cli::docker;
 use super::network::published_port;
-use super::unix::{guest, inspect, run};
+use super::unix::{guest, inspect, not_ours, run, WORKER_ROLE};
 use crate::error::{Code, MachineError};
 use crate::setup::{tool, worker};
 use crate::spec::{Bundle, Running, Spec, DATA, STATE, WORKER_LOG, WORKER_PORT};
@@ -82,14 +82,8 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
         )
     })?;
     if let Some((_, role)) = inspect(spec)? {
-        if format!("layerfs.role={role}") != ROLE {
-            return Err(MachineError::new(
-                Code::Exists,
-                format!(
-                    "the container {} is not a LayerFS worker; it is left alone",
-                    spec.vm_name
-                ),
-            ));
+        if role != WORKER_ROLE {
+            return Err(not_ours(spec));
         }
         run(
             spec,
@@ -176,11 +170,8 @@ pub(crate) fn stop(spec: &Spec, force: bool) -> Result<(), MachineError> {
     let Some((state, role)) = inspect(spec)? else {
         return Ok(());
     };
-    if role != "machine-worker" {
-        return Err(MachineError::new(
-            Code::InvalidInput,
-            "the recorded container is not a LayerFS worker; it is left alone",
-        ));
+    if role != WORKER_ROLE {
+        return Err(not_ours(spec));
     }
     if !matches!(state.as_str(), "running" | "restarting" | "paused") {
         return Ok(());

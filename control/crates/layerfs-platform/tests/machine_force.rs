@@ -34,7 +34,8 @@ fn docker_force_stops_only_the_owned_worker_with_zero_grace() {
 #[test]
 fn docker_force_preserves_unowned_containers_and_reports_inspect_failure() {
     for (answer, code) in [
-        ("printf 'running\\tother-role\\n'", Code::InvalidInput),
+        // the one code every docker call gives a foreign container
+        ("printf 'running\\tother-role\\n'", Code::Exists),
         ("echo 'engine unavailable' >&2; exit 1", Code::Failed),
     ] {
         let scratch = Scratch::new("force-docker-refuse");

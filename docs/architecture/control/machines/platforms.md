@@ -96,8 +96,10 @@ volume, not to `docker logs`
 | Call | Answer |
 | --- | --- |
 | `create`, `remove` | `InvalidInput` (built in) |
-| `stop` | `docker stop -t 5 <vm>` if it exists; the volume stays |
+| `stop` | `docker stop -t 5 <vm>` (forced: `-t 0`) while it runs, restarts or is paused; the volume stays |
 | `status` | `stopped` when the Engine does not answer; else `inspect` state (`running`; `dead` is failed; else stopped), through `with_worker` |
+| `provider_within` | `inspect` state alone: `running`; `created`, `exited` stopped; `dead` failed; paused, restarting, removing or unknown `Unavailable` |
+| a container named `<vm>` without the `layerfs.role=machine-worker` label | `Exists` from `start`, `stop` and `provider_within` alike ("… is not a LayerFS worker; it is left alone"); it is never touched |
 | `guest` | `docker -H unix://<socket> exec` in the worker container |
 | `load_image` | `docker load -i` (up to 300 s), `sha256:<64 hex>` |
 | `reach` | Linux host: as given (host network); Docker Desktop: a loopback host becomes the address the worker resolves `host.docker.internal` to (`getent ahostsv4`) |
@@ -196,7 +198,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | `missing: host:macos-or-linux` | `native` on Windows or another host | same |
 | `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
-| docker `start` `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
+| docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/unix.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/unix.rs) `not_ours` |
 | docker `start` `Failed` | image not in the Engine (`--pull never`), or no published port (macOS) | same |
 | `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | apple-container `Failed`: "… inspect answer is not the shape this adapter knows" | another CLI version's JSON | [`apple_container/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/observe.rs) |

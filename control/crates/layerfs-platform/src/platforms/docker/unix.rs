@@ -69,6 +69,21 @@ pub(crate) fn host_address(spec: &Spec) -> Result<String, MachineError> {
     })
 }
 
+/// The `layerfs.role` label of a machine's worker container.
+pub(super) const WORKER_ROLE: &str = "machine-worker";
+
+/// A container of the worker's name without its label: `Exists` on every
+/// call, which never touches it.
+pub(super) fn not_ours(spec: &Spec) -> MachineError {
+    MachineError::new(
+        Code::Exists,
+        format!(
+            "the container {} is not a LayerFS worker; it is left alone",
+            spec.vm_name
+        ),
+    )
+}
+
 pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
     Ok(Guest::Docker {
         socket: spec.tools.docker_socket.clone(),
@@ -80,10 +95,7 @@ pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
 pub(crate) fn provider_state(spec: &Spec) -> Result<State, MachineError> {
     match inspect(spec)? {
         None => Ok(State::Missing),
-        Some((_, role)) if role != "machine-worker" => Err(MachineError::new(
-            Code::Failed,
-            "the Docker container with this machine's name is not a LayerFS worker",
-        )),
+        Some((_, role)) if role != WORKER_ROLE => Err(not_ours(spec)),
         Some((state, _)) => match state.as_str() {
             "running" => Ok(State::Running),
             "created" | "exited" => Ok(State::Stopped),
