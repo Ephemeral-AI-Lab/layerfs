@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 /// How long a stop waits for the provider to say whether a machine its
 /// record calls stopped is.
-const CHECK: Duration = Duration::from_secs(10);
+pub(super) const CHECK: Duration = Duration::from_secs(10);
 
 /// The phases of a stop.
 pub const STOP_PHASES: [&str; 2] = ["check", "stop"];

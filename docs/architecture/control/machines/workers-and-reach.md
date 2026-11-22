@@ -149,7 +149,9 @@ until `machine.stop`: it never stops by itself
 | answer lost (the connection closed: the operation panicked, or the caller read nothing for 30 s) | `Unknown`, "it may have run, and was not resent" | yes |
 | a read-only operation panicked before its first event | `Failed`, naming `worker.log` | yes |
 
-Only `Unreached` lets the caller start a machine before it sends. A ping
+Only `Unreached` lets `machine start` (and `layerfs_machine::running`)
+start a machine, and then only when no worker is recorded or the provider
+reports the machine not running ([Lifecycle](#lifecycle)). A ping
 waits at most 10 s; other operations wait as long as they run
 ([`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs)).
 
@@ -254,7 +256,7 @@ it in the worker server's files alone and refuses a manifest that enables it.
 
 | Event | Effect | Source |
 | --- | --- | --- |
-| `machine.start` | a recorded worker that answers its secret counts as running, whatever its build; else start under `start.lock`, check the new hello (a stale bundle is `Unavailable`, naming `python3 tools/linux_bundle.py`) | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
+| `machine.start` | a recorded worker that answers its secret counts as running (one of another build is refused `Unavailable`, recorded `outdated`); else, under `start.lock`, a recorded worker whose hello failed makes the provider be asked of the VM alone (`provider_within`, 10 s): a machine it reports running is recorded `broken` `not_answering` and refused `Unavailable`, `fix: layerfs machine stop <m> && layerfs machine start <m>` (`--force` while Sandboxes are recorded on it, the message naming how many and `layerfs machine doctor <m>`), since a start would end that worker and every Sandbox on it; one it cannot say of is refused `Unavailable`, fix its doctor. With no worker recorded, or a machine stopped, failed or missing, the start runs and checks the new hello (a stale bundle is `Unavailable`, naming `python3 tools/linux_bundle.py`) | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | any other call | dials `worker.json` once; none recorded or no answer is `Unavailable` naming `layerfs machine start`; nothing is started; later steps of one operation reuse the endpoint | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | `machine.stop` | refused `InUse` while Sandboxes are recorded; stops worker and VM, removes `worker.json` | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | idle | nothing: a worker has no idle stop | [`worker/mod.rs`](../../../../control/crates/layerfs-machine/src/worker/mod.rs) |

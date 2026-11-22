@@ -85,8 +85,9 @@ pub fn settle(machine: &str, op: &Op) -> String {
 fn fix(machine: &str, reason: Reason, removed: bool, sandboxes: usize) -> Option<String> {
     match reason {
         Reason::EngineDown => Some(start_docker().to_owned()),
-        Reason::Outdated => Some(replace_worker(machine, sandboxes)),
-        Reason::NotAnswering | Reason::Failed => Some(format!(
+        // a start does not replace a worker that runs and does not answer
+        Reason::Outdated | Reason::NotAnswering => Some(replace_worker(machine, sandboxes)),
+        Reason::Failed => Some(format!(
             "layerfs machine start {machine}",
             machine = shell_word(machine)
         )),
@@ -103,7 +104,7 @@ fn fix(machine: &str, reason: Reason, removed: bool, sandboxes: usize) -> Option
 }
 
 /// How many Sandboxes are on it, as a sentence's end.
-fn count(sandboxes: usize) -> String {
+pub(crate) fn count(sandboxes: usize) -> String {
     match sandboxes {
         1 => "1 Sandbox is on it".to_owned(),
         n => format!("{n} Sandboxes are on it"),

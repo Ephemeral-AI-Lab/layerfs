@@ -1,8 +1,12 @@
 //! `machine.start` (#535 D11: the only call that starts a machine): it
-//! dials the worker its `worker.json` records and, when that worker does
-//! not answer, starts the machine and its worker, waits until it is ready
-//! (a readiness wait, not a retry) and replaces `worker.json`. Two
-//! processes starting the same machine take turns on its `start.lock`.
+//! dials the worker its `worker.json` records and, when none is recorded or
+//! the provider says the machine is not running, starts the machine and its
+//! worker, waits until it is ready (a readiness wait, not a retry) and
+//! replaces `worker.json`. A recorded worker that does not answer on a
+//! machine that runs is never started over: that would end it and every
+//! Sandbox on it, so the machine is recorded `broken` `not_answering` and
+//! the start refused. Two processes starting the same machine take turns
+//! on its `start.lock`.
 //!
 //! A start that has something to do records its `op` in the machine's
 //! record before its first effect (call surface 2.0), moves its phase as
@@ -12,6 +16,7 @@
 //! use; broken `failed` when its provider refused. A lost reply keeps the
 //! `op`, uncertain, and `machine get <m> --with live` settles it. A worker
 //! of another build is never replaced by a start over it (ruling R2).
+use super::power::CHECK;
 use super::progress::Phases;
 use super::record::{MachineRecord, START};
 use super::spec::{self as record, machine_of, refusal, save_running, save_unready};
@@ -22,11 +27,11 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::lock;
 use layerfs_home::op::Op;
-use layerfs_home::outcome::with_fix;
+use layerfs_home::outcome::{refused, shell_word, with_fix};
 use layerfs_home::state::{Reason, State};
 use layerfs_platform::{self as adapters, Code, HostOs, Platform, Route};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -62,29 +67,43 @@ pub(super) fn bring_up(
     if kind.route(HostOs::current()) == Route::InProcess {
         return Ok(false);
     }
-    if answers(home, name, &record, related)? {
+    if answers(home, name, &record, related)? == Answer::Ready {
         return Ok(false);
     }
     let _start = start_lock(home, name)?;
     // another process may have started it, or removed it, meanwhile
     let record = machine_of(home, name)?;
-    if answers(home, name, &record, related)? {
-        return Ok(false);
+    match answers(home, name, &record, related)? {
+        Answer::Ready => return Ok(false),
+        Answer::Silent(silent) => not_running(home, name, &record, related, silent)?,
+        Answer::Unrecorded => {}
     }
     start(home, name, &record, related, events)
+}
+
+/// What the recorded worker said to one hello.
+#[derive(PartialEq)]
+enum Answer {
+    /// It answered its secret and is this build's.
+    Ready,
+    /// No worker is recorded for the machine.
+    Unrecorded,
+    /// One is recorded and its hello failed: why.
+    Silent(SdkRefusal),
 }
 
 /// Whether the recorded worker answers its secret and is this build's; a
 /// record that says otherwise then is put right. A worker of another build
 /// is refused, never replaced by a start over it: the machine is recorded
 /// `outdated`.
-fn answers(home: &Path, name: &str, record: &MachineRecord, related: Related) -> Result<bool> {
+fn answers(home: &Path, name: &str, record: &MachineRecord, related: Related) -> Result<Answer> {
     let Some(recorded) = record::worker(home, name)? else {
-        return Ok(false);
+        return Ok(Answer::Unrecorded);
     };
     let endpoint = endpoint_of(&recorded);
-    let Ok(hello) = worker::hello(&endpoint) else {
-        return Ok(false);
+    let hello = match worker::hello(&endpoint) {
+        Ok(hello) => hello,
+        Err(silent) => return Ok(Answer::Silent(silent)),
     };
     if let Some(mismatch) = hello.mismatch(&endpoint.address.to_string()) {
         let noted = {
@@ -102,7 +121,65 @@ fn answers(home: &Path, name: &str, record: &MachineRecord, related: Related) ->
             record.with("state", SdkValue::text("running")).mended()
         })?;
     }
-    Ok(true)
+    Ok(Answer::Ready)
+}
+
+/// A recorded worker whose hello failed (`silent`) is never replaced by a
+/// start while its machine runs: the start would end that worker and every
+/// Sandbox on it, which only `machine stop` may do (its `InUse` guard, or
+/// `--force`). The provider is asked once, of the VM alone, within
+/// [`CHECK`]: a machine it reports running is recorded `broken`
+/// `not_answering` and refused `Unavailable`, the fix a stop and a start
+/// and the message naming how many Sandboxes are on it; one it cannot say
+/// of is refused too, its doctor as the fix. A stopped, failed or missing
+/// one is started.
+fn not_running(
+    home: &Path,
+    name: &str,
+    record: &MachineRecord,
+    related: Related,
+    silent: SdkRefusal,
+) -> Result<()> {
+    let spec =
+        record::provider_spec(home, record).map_err(|r| related.nameless_fix(home, name, r))?;
+    let said = match adapters::provider_within(&spec, Instant::now() + CHECK) {
+        Ok(status) if status.state != adapters::State::Running => return Ok(()),
+        Ok(_) => format!("it runs and its worker does not answer: {}", silent.message),
+        Err(error) => {
+            let message = format!(
+                "machine {name}'s worker does not answer ({}) and its provider could not say \
+                 whether it runs, so it is not started over it: {}",
+                silent.message, error.message
+            );
+            let doctor = format!("layerfs machine doctor {}", shell_word(name));
+            return Err(with_fix(refused("Unavailable", message), doctor));
+        }
+    };
+    let noted = {
+        let _lock = lock::take(home)?;
+        record::update(home, name, |record| {
+            record.broken_as(Reason::NotAnswering, &said)
+        })
+    };
+    let sandboxes = (related.sandboxes_on)(home, name).map_or(0, |on| on.len());
+    let mut message = format!(
+        "machine {name} {said}; a start would replace that worker and end every Sandbox on it"
+    );
+    if sandboxes > 0 {
+        message.push_str(&format!("; {}", super::state::count(sandboxes)));
+    }
+    if let Some(why) = noted.err() {
+        message.push_str(&format!(
+            "; its record could not be written: {}",
+            why.message
+        ));
+    }
+    message.push_str(&format!(
+        "; `layerfs machine doctor {}` says why",
+        shell_word(name)
+    ));
+    let refusal = refused("Unavailable", message);
+    Err(with_fix(refusal, replace_worker(name, sandboxes)))
 }
 
 /// `mismatch` (a worker of another build) as `machine.start` refuses it:
