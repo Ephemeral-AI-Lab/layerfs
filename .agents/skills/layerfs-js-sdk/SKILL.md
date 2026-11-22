@@ -42,9 +42,9 @@ Branch, your Sandbox and how to reach the package or the command.
   you find there may be an old copy, not the project.
 - **`main` is read-only.** Read it and fork from it. A write to it, a merge
   into it (without `into`) and a mount of it are refused `InvalidInput`; the
-  mount's refusal was seen with
-  `"fix":"layerfs branch fork shop/api <name> main"`. Work on a Branch, then
-  `branch.publish` it.
+  mount's refusal gives a runnable `fix`
+  (`"layerfs branch fork shop/api work && layerfs workspace mount <sandbox> work"`).
+  Work on a Branch, then `branch.publish` it.
 - **Always unmount.** Put every `workspace.unmount` in a `finally` block. A
   forgotten Workspace stays mounted and its Sandbox cannot be removed.
 

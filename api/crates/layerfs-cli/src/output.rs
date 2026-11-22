@@ -54,8 +54,14 @@ pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
 
 /// A doctor's report in the readable form: a count line, then each finding as
 /// `<severity> <thing> <name> <check>: <message>` with its fix on the next
-/// line, then each check that could not be made and why.
+/// line, then each check that could not be made and why; in `--detail` mode,
+/// also `observed_at`, `evidence` on findings, and the check `tree`.
 pub fn doctor(report: &SdkValue) -> ExitCode {
+    print(&doctor_text(report))
+}
+
+/// Formats a doctor's report in the readable form.
+pub fn doctor_text(report: &SdkValue) -> String {
     let empty = Vec::new();
     let rows = |key: &str| match report.get(key) {
         Some(SdkValue::List(rows)) => rows,
@@ -75,29 +81,45 @@ pub fn doctor(report: &SdkValue) -> ExitCode {
             .filter(|f| text(f, "severity") == severity)
             .count()
     };
-    let mut printed = match (found.len(), open.len()) {
-        (0, 0) => "ok: every check was made and nothing was found\n".to_owned(),
+    let summary = match (found.len(), open.len()) {
+        (0, 0) => "ok: every check was made and nothing was found".to_owned(),
         _ => format!(
-            "{} error(s), {} warning(s), {} notice(s), {} not checked\n",
+            "{} error(s), {} warning(s), {} notice(s), {} not checked",
             count("error"),
             count("warning"),
             count("notice"),
             open.len()
         ),
     };
+    let mut printed = format!("{}\n", crate::banner::bold(&summary));
+    let width = if open.is_empty() { 8 } else { 11 };
+    let pad = " ".repeat(width + 1);
     for finding in found {
         printed.push_str(&format!(
-            "{:<8} {} {}: {}\n",
+            "{:<width$} {} {}: {}\n",
             text(finding, "severity"),
             named(finding),
             text(finding, "check"),
             text(finding, "message"),
         ));
         if let Some(from) = finding.get_text("from") {
-            printed.push_str(&format!("         from: {from}\n"));
+            printed.push_str(&format!("{pad}from: {from}\n"));
         }
         if let Some(fix) = finding.get_text("fix") {
-            printed.push_str(&format!("         fix: {fix}\n"));
+            printed.push_str(&format!("{pad}fix: {fix}\n"));
+        }
+        match finding.get("evidence") {
+            Some(SdkValue::Map(fields)) if !fields.is_empty() => {
+                let items: Vec<String> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}={}", format_field(k, v)))
+                    .collect();
+                printed.push_str(&format!("{pad}evidence: {}\n", items.join(", ")));
+            }
+            Some(ev) if !matches!(ev, SdkValue::Null) => {
+                printed.push_str(&format!("{pad}evidence: {}\n", inline("evidence", ev)));
+            }
+            _ => {}
         }
     }
     for entry in open {
@@ -112,12 +134,53 @@ pub fn doctor(report: &SdkValue) -> ExitCode {
             .get_text("check")
             .map_or(String::new(), |check| format!(" {check}"));
         printed.push_str(&format!(
-            "{:<8} {}{check}: {why}\n",
+            "{:<width$} {}{check}: {why}\n",
             "not checked",
             named(entry)
         ));
     }
-    print(&printed)
+    if let Some(observed_at) = report.get_text("observed_at") {
+        printed.push_str(&format!("observed at: {observed_at}\n"));
+    }
+    if let Some(tree) = report.get("tree") {
+        doctor_tree_node(tree, 0, &mut printed);
+    }
+    printed
+}
+
+fn doctor_tree_node(node: &SdkValue, depth: usize, out: &mut String) {
+    let SdkValue::Map(fields) = node else { return };
+    let pad = "  ".repeat(depth);
+    let thing = fields
+        .first()
+        .map_or(String::new(), |(k, v)| format!("{k} {}", name_of(v)));
+    let status = node.get_text("status").unwrap_or("ok");
+    let coverage = node.get_text("coverage").unwrap_or("none");
+    out.push_str(&format!("{pad}{thing} [{status}, {coverage}]\n"));
+    if let Some(SdkValue::List(checks)) = node.get("checks") {
+        for c in checks {
+            let id = c.get_text("check").unwrap_or("");
+            let outcome = c.get_text("outcome").unwrap_or("");
+            match c.get_text("from") {
+                Some(from) => out.push_str(&format!("{pad}  {id} ({from}): {outcome}\n")),
+                None => out.push_str(&format!("{pad}  {id}: {outcome}\n")),
+            }
+        }
+    }
+    for child_key in [
+        "machines",
+        "stores",
+        "projects",
+        "sandboxes",
+        "workspaces",
+        "buckets",
+    ] {
+        if let Some(SdkValue::List(children)) = node.get(child_key) {
+            for child in children {
+                doctor_tree_node(child, depth + 1, out);
+            }
+        }
+    }
 }
 
 fn name_of(value: &SdkValue) -> String {

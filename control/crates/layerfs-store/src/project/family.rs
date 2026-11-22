@@ -286,10 +286,45 @@ fn init_on_worker(
         refusal
     })?;
     let stack = added.get("stack").cloned().unwrap_or_default();
+    // the worker's `manifest` and `installed` complete the record (#749);
+    // a worker that sends none (an older build) or sends ones that are not
+    // a complete Disposable pair leaves it for a move or a Sandbox create
+    // to complete from the Store file, the latter logged: the project is
+    // already in the Store, so the Init does not fail over it
+    let initialised = ProjectRecord::initialised(store, name, stack);
+    let project = match (added.get("manifest"), added.get("installed")) {
+        (None, None) => initialised,
+        (manifest, installed) => {
+            let full = (initialised.clone())
+                .with("manifest", manifest.cloned().unwrap_or_default())
+                .with("installed", installed.cloned().unwrap_or_default());
+            if crate::backup::restored::complete(&full) {
+                full
+            } else {
+                let _ = layerfs_home::home::log_line(
+                    &home,
+                    "repair.jsonl",
+                    &SdkValue::map([
+                        ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+                        ("call", SdkValue::text("project.init")),
+                        ("store", SdkValue::text(store.as_str())),
+                        ("project", SdkValue::text(name)),
+                        (
+                            "message",
+                            SdkValue::text(
+                                "the worker's manifest and installed manifest are not a complete Disposable pair; the record keeps neither",
+                            ),
+                        ),
+                    ]),
+                );
+                initialised
+            }
+        }
+    };
     progress(events, "record", None);
     {
         let _lock = layerfs_home::home::lock::take(&home)?;
-        ProjectRecord::initialised(store, name, stack).write(&home)?;
+        project.write(&home)?;
     }
     created(&home, store, name, &record, &added)
 }

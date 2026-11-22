@@ -36,11 +36,12 @@ From the home's records, with no probe. A Store's `state` is `ready`, `busy`
 (`op`: a move, remove, create, compaction, backup or restore), `blocked`
 (its machine is not ready) or `broken` (`reason`, with a `fix` naming the
 call that clears it). `get` short: `{ engine, state }` with `machine`,
-`projects`, `backups`, `connections` and the companion when they say
-something; long adds `auth`, `projects_count`, `op`, `blocked_by`, `reason`,
-`fix`, `observed_at`, `store`, `profile`, `synchronous_commit`,
-`sqlite_version`, `created_at`, `last_transfer`. `list` rows are the same
-with `store` first; `machine` keeps the sqlite Stores on one machine.
+`auth`, `projects`, `projects_count`, `backups`, `connections` and the
+companion when they say something; long adds `binding` (16-hex prefix of the
+Store's database id), `op`, `blocked_by`, `reason`, `fix`, `observed_at`,
+`store`, `profile`, `synchronous_commit`, `sqlite_version`, `created_at`,
+`last_transfer`. `list` rows are the same with `store` first; `machine` keeps
+the sqlite Stores on one machine.
 
 ```bash
 $ layerfs store list                                                           # seen
@@ -55,7 +56,11 @@ Sections of `get`:
   and `observed_at` from that read, and `live: { holders, phases, behind,
   server_version, latency_ms }` (`holders`: pids of other live processes
   holding the Store; `phases`: a running compaction's; `behind`: the
-  buckets whose backup is behind).
+  buckets whose backup is behind). For PostgreSQL, every connect-and-login
+  handshake is bounded to 5 s (`POSTGRESQL_HANDSHAKE` or the URL's
+  `connect_timeout`), one attempt, no retry: a silent server yields
+  `state: "broken"`, `reason: "unreachable"` (`"the server did not answer
+  within 5 s (connect and login)"`).
 - `with: ["stats"]` opens the Store for its counters: `stats: { size,
   logical_bytes, canonical_bytes, stored_bytes, metadata_bytes, file_bytes,
   reusable_bytes, dedupe, compression, init }` (ratios as text, six
@@ -71,13 +76,13 @@ $ layerfs store get shop --with live,stats                                     #
 | Call | What it does | Notes |
 | --- | --- | --- |
 | `create(name)` | An empty sqlite Store | `{"ok":true}` (seen). A taken name is `Exists` (seen: `a Store named shop exists`). `machine` makes it on that running machine through its worker |
-| `save_auth(auth, { user, password })` | Saves or replaces a PostgreSQL login in the home's secret folder | Shell: `--user U --password-stdin`; the password is never answered, logged or traced. `{"ok":true}` |
-| `auths()` | The saved logins and the Stores that use each | `{ items: [{ auth, user, stores? }] }`; never a password. Seen on a fresh home: `{"items":[]}` |
+| `save_auth(auth, { user, password })` | Saves or replaces a PostgreSQL login in the home's secret folder (also overwrites a broken/unreadable login file) | Shell: `--user U --password-stdin`; the password is never answered, logged or traced. `{"ok":true}` |
+| `auths()` | The saved logins and the Stores that use each | `{ items: [{ auth, user, stores?, stores_count?, state?, reason?, fix? }] }`; long adds `created_at`, `updated_at`; unreadable login files appear as `state: "broken"`, `reason: "failed"` rows with a `save-auth` `fix`; never a password. Seen on a fresh home: `{"items":[]}` |
 | `remove_auth(auth)` | Deletes a saved login no Store uses | `InUse` (flat `stores`) while one uses it |
-| `connect(store, url, …)` | Connects a PostgreSQL database as a Store (`auth` required the first time; `synchronous_commit` defaults to `local`); on a connected Store, sets its address, or with `machine` that machine's own | The URL holds host, port, database and TLS settings only: one naming a user or password is `InvalidInput`. Short `{ projects }`, or `{"ok":true}` |
+| `connect(store, url, …)` | Connects a PostgreSQL database as a Store (`auth` required the first time; `synchronous_commit` defaults to `local`); on a connected Store, sets its address, or with `machine` proves and records that machine's own reach | The URL holds host, port, database and TLS settings only (`sslkey`/`sslcert` allowed): one naming a user, password or `passfile` is `InvalidInput` (with a `fix` chaining `store save-auth` and `store connect`/`store update` stripped of credentials). Short `{ projects, projects_count? }`, or `{"ok":true}` |
 | `update(store, …)` | A PostgreSQL Store's login (`auth`) or `synchronous_commit` | `{"ok":true}` |
 | `disconnect(store)` | Forgets a PostgreSQL Store, its data staying; with `machine`, only that machine's own address | `InUse` while a Sandbox or Workspace uses it |
-| `move(store, machine)` | Moves a sqlite Store between this computer and a machine | To or from `native` only (seen when already there: `store move, check: Store shop is already on native`, `InvalidInput`). Progress `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`. Short `{ moved_bytes }`. A sqlite Store's Sandboxes run only on its machine |
+| `move(store, machine)` | Moves a sqlite Store between this computer and a machine | To or from `native` only (seen when already there: `store move, check: Store shop is already on native`, `InvalidInput`; moving off a machine whose record lacks `vm_name` is `Unavailable` with `blocked_by`). Progress `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`. Short `{ moved_bytes }`. A sqlite Store's Sandboxes run only on its machine |
 | `remove(store)` | Deletes a sqlite Store with every project in it | `{"ok":true}`. `NotFound` for an unknown name (seen). A PostgreSQL Store is disconnected instead. A record this build does not read, or a Store on a machine whose record has no 2.0 name, goes by its records alone, with `left` saying what may remain |
 | `compact(store)` | Reclaims the dead bytes of one Store | The only byte-reclaiming call. Short `{ freed_bytes }` (seen: `{"freed_bytes":0}`); long `outcome` (`compacted` or `unchanged`), `dead_bytes`, `kept_waste`, `peak_temp_bytes`, `zero_reasons`, …. Progress `mark`, `build`, `verify`, `install` (sqlite; an `unchanged` run sends `mark` only). A sqlite Store on another machine is compacted by its worker. `InUse` while Workspaces are mounted; `Busy` (with `op`); `Unavailable`, `Unknown` and `Unresolved` (each with a `fix`) |
 | `doctor(store)` | Checks the Store, then each of its projects | See [doctors](doctor.md); seen: `{"ok":true}` |

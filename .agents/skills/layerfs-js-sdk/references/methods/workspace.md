@@ -88,7 +88,7 @@ trimmed from the ends (`Feature/Login` mounts as `feature-login`).
 $ layerfs workspace mount tests agent                                          # seen
 {"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
 $ layerfs workspace mount tests main                                           # seen, exit 125
-{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
+{"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api work && layerfs workspace mount tests work"}
 ```
 
 | `error` | When | Do |
@@ -124,7 +124,7 @@ $ layerfs workspace exec tests:agent 'exit 3'                                  #
   `unmount` deletes it). Output that is not UTF-8 is bytes.
 - **Node and Python** also take `stdout` and `stderr` functions, called with
   the output's pieces, and `stream: true`, which writes it to your process's
-  own stdout and stderr. When the pieces arrive was not checked in this pass.
+  own stdout and stderr. Output is delivered after the command ends, never live.
 - **Shell:** the command exits with the command's own code and prints the
   answer on stdout; `--stream` writes the output to stdout and stderr and
   prints no answer; a refusal exits 125.

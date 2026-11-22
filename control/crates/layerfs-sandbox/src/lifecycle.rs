@@ -132,11 +132,24 @@ fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
     let name = &host.project;
     let identity = layerfs_store::identity::identity(&host.open_args())?;
     layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
-    let project = layerfs_store::project::discovery::project(
+    let found = layerfs_store::project::discovery::project(
         Some(&host.home),
         Some(&host.store),
         Some(&host.project),
-    )?;
+    );
+    // a record without a complete `manifest` and `installed` (#749: one an
+    // older worker Init wrote) is rebuilt from the Store file here, once;
+    // a repair that cannot complete it leaves the refusal as it was
+    let project = match found {
+        Ok(project) if project.installed.is_some() => project,
+        Err(refusal) if !matches!(refusal.code.as_str(), "NoSuchProject" | "Failed") => {
+            return Err(refusal)
+        }
+        found => match repaired(host, identity) {
+            Some(project) => project,
+            None => found?,
+        },
+    };
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
@@ -144,6 +157,33 @@ fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
         ));
     };
     Ok(OpenedStore::File(Box::new((project, installed))))
+}
+
+/// The project of `host`, its record completed from the Store file this
+/// kernel holds ([`restored::repair_project`]); `None` when there is no such
+/// file, the record needs no repair or the repair does not complete it.
+///
+/// [`restored::repair_project`]: layerfs_store::backup::restored::repair_project
+fn repaired(
+    host: &Host,
+    identity: layerfs_store::identity::Identity,
+) -> Option<layerfs_store::project::discovery::Project> {
+    let file = host.open_args().store_path().ok().filter(|p| p.is_file())?;
+    let record = layerfs_store::backup::restored::repair_project(
+        &host.home,
+        &host.store,
+        &host.project,
+        identity,
+        &file,
+    )
+    .ok()??;
+    layerfs_store::project::discovery::project_of(
+        Some(&host.home),
+        Some(&host.store),
+        Some(&host.project),
+        record.to_record(),
+    )
+    .ok()
 }
 
 /// Starts the Sandbox the call names (`sandbox`) as its deployment says

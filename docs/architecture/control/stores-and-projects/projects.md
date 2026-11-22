@@ -42,7 +42,7 @@ runs and how the folder gets there.
 | Rule | Detail | Source |
 | --- | --- | --- |
 | Live add | Init adds a folder as a new project to an existing Store through its writer; it does not seal | [`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs), [`add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs) |
-| Where | where the Store's calls run: this process for PostgreSQL and a `Local` sqlite machine, else the machine's worker; the folder is always on the caller's host | same |
+| Where | where the Store's calls run: this process for PostgreSQL and a `Local` sqlite machine, else the machine's worker; the folder is always on the caller's host, and a worker Init returns `manifest` and `installed` so the caller's project record is complete; a pair that is not a complete Disposable one is left out and logged in `log/repair.jsonl`, for a move or Sandbox create to complete | same |
 | Time limit | default 1 hour (`timeout` in ms) | same, `INIT_TIMEOUT_MS` |
 | Progress | `{phase, done, total}`: `check`, `send` (bytes, worker route only), `install`, `record` | same |
 | Lease | this process holds the Store's lease for the whole Init, on every route | same |

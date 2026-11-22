@@ -2,7 +2,7 @@
 use super::family::write_link;
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
-use super::restored::{records, Found, Main, Restored};
+use super::restored::{records, Found, Restored};
 use crate::get::hex_text;
 use crate::identity::{Identity, Kind};
 use crate::intent;
@@ -12,7 +12,6 @@ use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_bucket::backup as remote;
-use layerfs_history::{HistoryName, NamedSnapshot};
 use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
@@ -449,30 +448,10 @@ fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> R
         ..Default::default()
     };
     crate::service::with_service(&open, |service| {
-        // the project's own line of Layers: `main`, through its name index
-        let main =
-            HistoryName::new(layerfs_store_service::history::branch::MAIN).map_err(failed)?;
+        // each project's own line of Layers: `main`, through its name index
         let projects = service
             .store
-            .published(|history| {
-                let mut found = Vec::new();
-                for stack in layerfs_project::store::projects(history)? {
-                    let snapshot = match history.branch_snapshot_named(&stack.name, &main)? {
-                        NamedSnapshot::Found(snapshot) => Some(Main {
-                            stack: snapshot.branch.stack,
-                            branch: snapshot.branch.id,
-                            root: snapshot.base_root.to_bytes(),
-                        }),
-                        NamedSnapshot::NoStack | NamedSnapshot::NoBranch => None,
-                    };
-                    found.push(Found {
-                        name: stack.name.as_str().to_owned(),
-                        stack: SdkValue::text(hex(&stack.id.to_bytes())),
-                        main: snapshot,
-                    });
-                }
-                Ok(found)
-            })
+            .published(super::restored::found_in)
             .map_err(failed)?;
         Ok(Listing {
             projects,

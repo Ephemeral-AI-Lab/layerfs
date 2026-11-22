@@ -62,7 +62,19 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
     });
     match recorded {
         Ok((record, Some(project))) => {
-            checks.pass(RECORD, "the project and its Store are on record");
+            if opened_here(probe.home, &record, &project)
+                && !layerfs_store::backup::restored::complete(&project)
+            {
+                checks.fail(
+                    RECORD,
+                    format!(
+                        "project {handle}'s record has no complete manifest (a Sandbox on this computer cannot open it)"
+                    ),
+                );
+            } else {
+                checks.pass(RECORD, "the project and its Store are on record");
+            }
+            // the Store's list and data are checked whatever the record holds
             let stack = listed(probe, (&record, &project), handle, &mut checks);
             if let (Some(stack), true) = (stack, probe.full) {
                 data(probe, &record, stack, &mut checks);
@@ -74,6 +86,21 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
         Err(refusal) => checks.fail(RECORD, refusal.message),
     }
     checks.fill(node, probe.checks, probe.budget.expired());
+}
+
+/// Whether a Sandbox of `project` opens its Store from this home's record:
+/// a sqlite Store whose calls run in this process, with no Init under way.
+/// A worker's Sandbox reads the entry that worker keeps, which its own Init
+/// wrote complete (#749), so a host record without one is not a fault there.
+fn opened_here(home: &Path, store: &StoreRecord, project: &ProjectRecord) -> bool {
+    matches!(store.store_ref(), Ok(StoreRef::Sqlite { .. }))
+        && project
+            .op()
+            .is_none_or(|op| op.name() != layerfs_store::project::op::INIT)
+        && matches!(
+            place::on_machine_read(home, &store.machine().unwrap_or_default()),
+            Ok(Executor::Local)
+        )
 }
 
 /// `project.listed`: the Store's own list holds the project its record
