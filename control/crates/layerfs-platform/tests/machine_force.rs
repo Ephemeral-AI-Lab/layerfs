@@ -100,19 +100,40 @@ fn lima_idle_force_and_normal_stop_do_not_change_disks() {
     assert!(scratch.log().ends_with("limactl stop lfs-dev\n"));
 }
 
+/// A `container` stand-in whose `inspect` reports `state` and whose `stop` succeeds.
+fn apple(label: &str, state: &str) -> Scratch {
+    let scratch = Scratch::new(label);
+    scratch.tool("container", &format!(
+        "case \"$1\" in inspect) echo '[{{\"status\":{{\"state\":\"{state}\"}}}}]';; stop) exit 0;; *) exit 99;; esac"
+    ));
+    scratch
+}
+
 #[test]
-fn apple_force_stops_running_or_failed_container_without_guest_calls() {
-    for state in ["running", "failed"] {
-        let scratch = Scratch::new("force-apple");
-        scratch.tool("container", &format!(
-            "case \"$1\" in inspect) echo '[{{\"status\":{{\"state\":\"{state}\"}}}}]';; stop) exit 0;; *) exit 99;; esac"
-        ));
+fn apple_force_stops_running_failed_or_passing_container_without_grace() {
+    for state in ["running", "failed", "stopping", "unknown"] {
+        let scratch = apple("force-apple", state);
         machine::stop_force(&scratch.spec(Platform::AppleContainer)).unwrap();
         assert_eq!(
             scratch.log(),
-            "container inspect lfs-dev\ncontainer stop lfs-dev\n"
+            "container inspect lfs-dev\ncontainer stop --time 0 lfs-dev\n",
+            "{state}"
         );
     }
+}
+
+#[test]
+fn ordinary_apple_stop_retains_grace_and_leaves_a_passing_container() {
+    let scratch = apple("normal-apple-stop", "running");
+    machine::stop(&scratch.spec(Platform::AppleContainer)).unwrap();
+    assert_eq!(
+        scratch.log(),
+        "container inspect lfs-dev\ncontainer stop lfs-dev\n"
+    );
+    let scratch = apple("normal-apple-passing", "stopping");
+    let error = machine::stop(&scratch.spec(Platform::AppleContainer)).unwrap_err();
+    assert_eq!(error.code, Code::Unavailable, "{error}");
+    assert_eq!(scratch.log(), "container inspect lfs-dev\n");
 }
 
 #[test]

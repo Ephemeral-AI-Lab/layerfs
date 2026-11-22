@@ -6,7 +6,9 @@
 //! mounted. Facts verified against `container` 1.6.1 (#527): `inspect`
 //! prints a JSON array whose `status.state` is the state; the guest's
 //! `/proc/sys` is read-only until remounted (the shared preparation does);
-//! `delete --force` ends a running container; `volume delete` removes the disk.
+//! `delete --force` ends a running container; `stop --time 0` kills its
+//! processes without the grace period (`--time`, 5 s by default);
+//! `volume delete` removes the disk.
 use crate::error::{Code, MachineError};
 use crate::facts;
 use crate::platform::HostOs;
@@ -59,11 +61,19 @@ pub(crate) fn observe(spec: &Spec) -> Result<State, MachineError> {
                 "the container CLI's inspect answer is not the shape this adapter knows",
             )
         })?;
-    Ok(match state.to_lowercase().as_str() {
-        "running" => State::Running,
-        "stopped" => State::Stopped,
-        _ => State::Failed,
-    })
+    // `container` 1.6.1 reports `running` and `stopped`, and `stopping` (or
+    // `unknown`) while it changes one into the other: a passing or unknown
+    // state is not a verdict, so it is `Unavailable`, as on lima and docker,
+    // and never recorded `failed`. Only a `failed` answer is `Failed`
+    match state.to_lowercase().as_str() {
+        "running" => Ok(State::Running),
+        "stopped" => Ok(State::Stopped),
+        "failed" => Ok(State::Failed),
+        other => Err(MachineError::new(
+            Code::Unavailable,
+            format!("the container CLI reports the container {other:?}, a transitional or unrecognized state"),
+        )),
+    }
 }
 
 /// Where the container reaches its host: its network's gateway,

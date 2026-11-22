@@ -142,10 +142,10 @@ named volume.
 
 | Call | Answer |
 | --- | --- |
-| `start` | needs the recorded port (else `InvalidInput`) and the container (else `NotFound`); `container start` if stopped or failed; `bring_up`; records the network gateway |
-| `stop` | `container stop` if running |
+| `start` | needs the recorded port (else `InvalidInput`) and the container (else `NotFound`); `container start` if stopped, and once if failed (the CLI's answer decides; `failed`'s fix is `machine start`); `bring_up`; records the network gateway |
+| `stop` | `container stop` (5 s grace) if running; forced: `container stop --time 0`, also when failed or between states |
 | `remove` | `container delete --force`, then `container volume delete` |
-| `status` | `container inspect` `status.state` `running`/`stopped`, else failed |
+| `status` | `container inspect` `status.state`: `running`, `stopped`, `failed`; any other (`stopping`, `unknown`) is `Unavailable`, as lima's and docker's passing states, never recorded `failed` |
 | `reach` | a loopback host becomes the recorded gateway, else `status.networks[0].ipv4Gateway` read while it runs |
 | `forward` | `Unsupported`: the CLI publishes a port only at create |
 
@@ -179,8 +179,9 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 
 | Call | Answer |
 | --- | --- |
-| `start` | needs the recorded port (else `InvalidInput`) and the instance (else `NotFound`); `Failed` if `Broken`; boots if stopped; attach; `bring_up` |
-| `stop` | `limactl stop` (up to 300 s); instance and disk stay |
+| `start` | needs the recorded port (else `InvalidInput`) and the instance (else `NotFound`); `Failed` if `Broken`, before any call: Lima says `Broken` when it cannot read the instance's own files, and `limactl start` refuses such an instance itself ("errors inspecting instance"), so unlike apple-container's `failed` it is not tried; boots if stopped; attach; `bring_up` |
+| `stop` | `limactl stop` (up to 300 s) if running; forced: `limactl stop --force`, also when `Broken`; instance and disk stay |
+| `status` | `limactl list` `Running`, `Stopped`, `Broken` (failed); any other is `Unavailable` |
 | `remove` | `limactl delete --force`, then `limactl disk delete` |
 | `reach` | a loopback host becomes `192.168.5.2` (the address of `host.lima.internal`; the Sandbox root has no such hosts entry) |
 | `forward` | a detached `ssh -N -L` over Lima's `ssh.config`, answering its pid ([Workers and reach](workers-and-reach.md#forwards)) |
@@ -200,8 +201,10 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | apple-container `Failed`: "… inspect answer is not the shape this adapter knows" | another CLI version's JSON | [`apple_container/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/observe.rs) |
 | apple-container `reach` `Unavailable`: no gateway | the machine is stopped | same |
+| apple-container `Unavailable`: "… a transitional or unrecognized state" | the container is `stopping` (or `unknown`); ask again once it settles, or force the stop | same; [`apple_container/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/power.rs) |
 | `missing: host:macos`, `tool:limactl` | not a Mac, no `limactl` | [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) |
 | lima "… is not an ext4 mount" | the data disk did not attach as ext4 | [`lima/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |
+| lima `start` `Failed`: "… is broken: Lima cannot read its files" | Lima reports the instance `Broken`; `limactl list <vm>` says why; a start cannot repair it | same |
 | `Exists`: a disk or volume "already exists; it is left alone" | left by an earlier machine of that name | `create.rs` of the platform |
 | `Unsupported`: "the guest of … still allows user namespaces" | the guest refused the sysctl | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | `Unknown`: "… did not end within N s and was stopped", or "… ended, but its output was still held open when its time ran out" | a provider command passed its bound (30 s call, 120 s create, 300 s boot), or left a process holding its output past it; its whole process group was killed, the outcome is not known and nothing is retried | [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |

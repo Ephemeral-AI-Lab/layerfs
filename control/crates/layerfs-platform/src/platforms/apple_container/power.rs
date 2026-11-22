@@ -1,11 +1,16 @@
 //! `apple_container` power: see `mod.rs`.
 use super::observe::{gateway, guest, observe, CLI};
-use crate::error::MachineError;
+use crate::error::{Code, MachineError};
 use crate::setup::vm::{checked, not_found, recorded_port, CREATE};
 use crate::setup::worker;
 use crate::setup::State;
 use crate::spec::{Bundle, Lasting, Running, Spec};
 
+/// Starts a stopped container, and tries a failed one once: `container
+/// start` runs its main process again over the same volume, and the
+/// documented fix of a `failed` machine is `machine start`; the CLI's own
+/// answer decides. Lima refuses its `Broken` before any call, because
+/// `limactl start` refuses such an instance itself (`lima/power.rs`).
 pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     let port = recorded_port(spec)?;
     match observe(spec)? {
@@ -18,10 +23,23 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     bring_up(spec, bundle, port)
 }
 
+/// `container stop` keeps the container and its volume. A forced stop gives
+/// it no grace (`--time 0`, as docker's `-t 0`) and also stops a failed
+/// container or one between states (`Unavailable`), which an ordinary stop
+/// leaves alone.
 pub(crate) fn stop(spec: &Spec, force: bool) -> Result<(), MachineError> {
-    let state = observe(spec)?;
-    if state == State::Running || (force && state == State::Failed) {
-        checked(spec, CLI, &["stop", &spec.vm_name], CREATE)?;
+    let stoppable = match observe(spec) {
+        Ok(state) => state == State::Running || (force && state == State::Failed),
+        Err(passing) if force && passing.code == Code::Unavailable => true,
+        Err(error) => return Err(error),
+    };
+    if stoppable {
+        let mut words = vec!["stop"];
+        if force {
+            words.extend(["--time", "0"]);
+        }
+        words.push(&spec.vm_name);
+        checked(spec, CLI, &words, CREATE)?;
     }
     Ok(())
 }

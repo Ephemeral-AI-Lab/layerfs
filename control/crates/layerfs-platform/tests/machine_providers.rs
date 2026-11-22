@@ -84,6 +84,39 @@ esac"#,
 }
 
 #[test]
+fn apple_container_maps_a_passing_state_unavailable_and_failed_failed() {
+    let answer = |state: &str| {
+        let scratch = Scratch::new("apple-states");
+        scratch.tool(
+            "container",
+            &format!(
+                r#"case "$1" in
+  inspect) echo '[{{"status":{{"state":"{state}"}}}}]' ;;
+  --version) echo "container CLI version 1.6.1" ;;
+  *) exit 99 ;;
+esac"#
+            ),
+        );
+        let spec = scratch.spec(Platform::AppleContainer);
+        let status = machine::status(&spec);
+        let start = machine::start(&spec, &scratch.bundle());
+        (status, start.map(drop), scratch.log())
+    };
+    for state in ["stopping", "unknown", "starting"] {
+        let (status, start, log) = answer(state);
+        // between states, or a word this adapter does not know: no verdict,
+        // as lima and docker answer, never recorded `failed`
+        assert_eq!(status.unwrap_err().code, Code::Unavailable, "{state}");
+        assert_eq!(start.unwrap_err().code, Code::Unavailable, "{state}");
+        assert!(!log.contains("container start"), "{state}: {log}");
+    }
+    let (status, _, _) = answer("failed");
+    let status = status.unwrap();
+    assert_eq!(status.kernel, Some(State::Failed));
+    assert_eq!((status.word(), status.reason()), ("broken", Some("failed")));
+}
+
+#[test]
 fn a_docker_engine_that_does_not_answer_is_broken_engine_down() {
     let scratch = Scratch::new("engine-down");
     scratch.tool(
