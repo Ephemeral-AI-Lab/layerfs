@@ -492,7 +492,10 @@ fn abandon(
                 format!(
                     "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server"
                 )
-            } else if namespaces && pg_host.parse::<std::net::IpAddr>().is_err() {
+            } else if namespaces
+                && !pg_host.eq_ignore_ascii_case("localhost")
+                && pg_host.parse::<std::net::IpAddr>().is_err()
+            {
                 format!(
                     "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server at {pg_host} (the Sandbox root has no /etc/hosts or /etc/resolv.conf, so a hostname may not resolve there; use an IP address)"
                 )

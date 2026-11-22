@@ -5,11 +5,13 @@ use crate::backend::{admission::Admission, records::BackendError};
 use crate::{PostgresSelection, SqlWork};
 use layerfs_storage::StoragePolicy;
 use postgres::{
-    config::SslMode, Client, Config, NoTls, SimpleQueryMessage, SimpleQueryRow, Statement,
+    config::{Host, SslMode},
+    Client, Config, NoTls, SimpleQueryMessage, SimpleQueryRow, Statement,
 };
 use postgres_native_tls::MakeTlsConnector;
 use std::{
     collections::HashMap,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str::FromStr,
     sync::{
         atomic::{AtomicI64, AtomicU64, Ordering},
@@ -75,7 +77,17 @@ pub(crate) struct Connector {
 
 impl Connector {
     pub(crate) fn new(selection: &PostgresSelection) -> Result<Self, BackendError> {
-        let config = Config::from_str(&selection.url).map_err(|_| BackendError::Integrity)?;
+        let mut config = Config::from_str(&selection.url).map_err(|_| BackendError::Integrity)?;
+        if config.get_hostaddrs().is_empty() {
+            if let [Host::Tcp(host)] = config.get_hosts() {
+                if host.eq_ignore_ascii_case("localhost") {
+                    let name = host.clone();
+                    config.host(&name);
+                    config.hostaddr(IpAddr::V4(Ipv4Addr::LOCALHOST));
+                    config.hostaddr(IpAddr::V6(Ipv6Addr::LOCALHOST));
+                }
+            }
+        }
         let tls = match config.get_ssl_mode() {
             SslMode::Disable => None,
             _ => Some(tls()?),

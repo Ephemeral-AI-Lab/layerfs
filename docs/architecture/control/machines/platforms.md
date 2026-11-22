@@ -53,7 +53,7 @@ Linux, Store calls run in the caller's process and there is no worker.
 | `stop` | nothing to stop |
 | `status` | `running`; `down_reason` "missing: …" when the host lacks something |
 | `guest`, `copy_in`, `copy_out` | `InvalidInput`: "runs in-process; its files are the host's" |
-| `reach` | `Loopback::Shared`: unchanged on macOS; on Linux `localhost` becomes `127.0.0.1` (`127.0.0.1` and `::1` stay unchanged) |
+| `reach` | the URL as given (`Loopback::Shared`) |
 | `forward` | `127.0.0.1:<guest port>`, no pid |
 
 ## docker (`platforms/docker/`)

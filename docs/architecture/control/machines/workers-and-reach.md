@@ -268,11 +268,7 @@ nothing, and no message holds any part of the URL.
 
 ```text
  dial(spec, url, loopback)
-   Shared (non-Linux)? ------------------------------> url as given
-   Shared (Linux)? ---> host == localhost?
-                          no ------------------------> url as given
-                          yes, verify-full ----------> Unsupported
-                          yes -----------------------> with_host(127.0.0.1)
+   Shared? ------------------------------------------> url as given
    one postgres[ql]://[user@]host[:port]/... ?  no --> InvalidInput
    ?host= or ?hostaddr= ------------------------ yes --> Unsupported
    no host (a Unix socket) --------------------- yes --> Unsupported
@@ -283,8 +279,8 @@ nothing, and no message holds any part of the URL.
 
 | Platform | `Loopback` | A loopback host becomes |
 | --- | --- | --- |
-| `native` | `Shared` | unchanged on macOS; on Linux `localhost` becomes `127.0.0.1` (`127.0.0.1` and `::1` stay unchanged) |
-| `docker` | `Shared` on a Linux host; `Lookup` on Docker Desktop | on Linux `localhost` becomes `127.0.0.1` (`127.0.0.1` and `::1` stay unchanged); on Docker Desktop the address the running worker resolves `host.docker.internal` to |
+| `native` | `Shared` | unchanged; the URL is not parsed |
+| `docker` | `Shared` on a Linux host; `Lookup` on Docker Desktop | the address the running worker resolves `host.docker.internal` to |
 | `lima` | `Alias` | `192.168.5.2` |
 | `apple-container` | `Alias` (recorded gateway), else `Lookup` | the gateway the last start recorded, else `container inspect`'s while running; a stale recorded gateway is dialled as recorded |
 
