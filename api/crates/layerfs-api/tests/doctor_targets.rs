@@ -201,9 +201,28 @@ fn a_project_s_record_is_checked_against_its_store() {
     let home = tempdir("project");
     short(&home, "home.init", &[]);
     sqlite_store(&home, "shop", "native");
+    let manifest = layerfs_bridge::provision::StoreManifest {
+        provider: layerfs_bridge::provision::ProviderKind::Sqlite,
+        locator: "/layerfs-store/global/store.sqlite".into(),
+        profile: layerfs_bridge::provision::StoreProfile::Disposable,
+        binding: vec![1; 16],
+        cursor_key: [7; 32],
+        stack: [2; 17],
+        branch: [3; 17],
+        root: [4; 32],
+        bytes: 4096,
+        host_sqlite: "3.45.1".to_owned(),
+        daemon_sqlite: None,
+    };
+    let mut installed = manifest.clone();
+    installed.daemon_sqlite = Some("3.45.1".to_owned());
     write_entity(
         &paths::project_record(&home, "shop", "old"),
-        &SdkValue::map([("name", t("old"))]),
+        &SdkValue::map([
+            ("name", t("old")),
+            ("manifest", SdkValue::Bytes(manifest.encode().unwrap())),
+            ("installed", SdkValue::Bytes(installed.encode().unwrap())),
+        ]),
     )
     .unwrap();
     let (answer, events) = call(
@@ -500,5 +519,78 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
     assert!(took < Duration::from_secs(9), "{took:?}");
     assert_eq!(live.get_text("state"), Some("broken"), "{live:?}");
     assert_eq!(live.get_text("reason"), Some("unreachable"), "{live:?}");
+    let _ = std::fs::remove_dir_all(home);
+}
+
+#[test]
+fn a_sqlite_project_without_a_manifest_fails_project_doctor() {
+    let home = tempdir("missing-manifest");
+    short(&home, "home.init", &[]);
+    sqlite_store(&home, "shop", "native");
+    write_entity(
+        &paths::project_record(&home, "shop", "api"),
+        &SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", t("api")),
+            ("stack", t("0101010101010101010101010101010101")),
+            ("created", SdkValue::Int(1)),
+        ]),
+    )
+    .unwrap();
+    for full in [false, true] {
+        let report = long(
+            &home,
+            "project.doctor",
+            &[("project", t("shop/api")), ("full", SdkValue::Bool(full))],
+        );
+        assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+        let found = list(&report, "findings");
+        assert!(
+            found
+                .iter()
+                .any(|f| f.get_text("check") == Some("project.record")
+                    && f.get_text("severity") == Some("error")),
+            "full={full}: {report:?}"
+        );
+    }
+
+    // PostgreSQL project records hold no manifest; project.record still passes.
+    short(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("a")),
+            ("user", t("owner")),
+            ("password", t("pw")),
+        ],
+    );
+    write_entity(
+        &paths::store_record(&home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgresql://db.invalid:5432/layerfs_db")),
+            ("auth", t("a")),
+            ("schema", t("layerfs")),
+            ("synchronous_commit", t("local")),
+            ("binding", SdkValue::Bytes(vec![1; 16])),
+            ("cursor", SdkValue::Bytes(vec![7; 32])),
+        ]),
+    )
+    .unwrap();
+    write_entity(
+        &paths::project_record(&home, "pg", "app"),
+        &SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", t("app")),
+            ("stack", t("0101010101010101010101010101010101")),
+            ("created", SdkValue::Int(1)),
+        ]),
+    )
+    .unwrap();
+    let pg_report = long(&home, "project.doctor", &[("project", t("pg/app"))]);
+    let rows = list(pg_report.get("tree").unwrap(), "checks");
+    assert_eq!(rows[0].get_text("check"), Some("project.record"));
+    assert_eq!(rows[0].get_text("outcome"), Some("pass"), "{pg_report:?}");
     let _ = std::fs::remove_dir_all(home);
 }

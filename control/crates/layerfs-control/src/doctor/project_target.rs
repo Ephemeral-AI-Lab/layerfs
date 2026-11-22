@@ -62,10 +62,23 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
     });
     match recorded {
         Ok((record, Some(project))) => {
-            checks.pass(RECORD, "the project and its Store are on record");
-            let stack = listed(probe, (&record, &project), handle, &mut checks);
-            if let (Some(stack), true) = (stack, probe.full) {
-                data(probe, &record, stack, &mut checks);
+            let needs_manifest = matches!(record.store_ref(), Ok(StoreRef::Sqlite { .. }))
+                && project
+                    .op()
+                    .is_none_or(|op| op.name() != layerfs_store::project::op::INIT);
+            if needs_manifest && !layerfs_store::backup::restored::complete(&project) {
+                checks.fail(
+                    RECORD,
+                    format!(
+                        "project {handle}'s record has no complete manifest (a Sandbox cannot open it)"
+                    ),
+                );
+            } else {
+                checks.pass(RECORD, "the project and its Store are on record");
+                let stack = listed(probe, (&record, &project), handle, &mut checks);
+                if let (Some(stack), true) = (stack, probe.full) {
+                    data(probe, &record, stack, &mut checks);
+                }
             }
         }
         Ok((_, None)) => {
