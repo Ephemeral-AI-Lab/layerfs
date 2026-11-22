@@ -4,7 +4,7 @@ use super::power::boot_and_bring_up;
 use super::template::template;
 use crate::error::{kept, Code, MachineError};
 use crate::setup::tool;
-use crate::setup::vm::{call, checked, exists, mib, new_port, BOOT, CALL};
+use crate::setup::vm::{call, checked, exists, mib, new_port, BOOT, CALL, CREATE};
 use crate::setup::State;
 use crate::spec::{Bundle, Running, Spec};
 
@@ -39,7 +39,7 @@ pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErr
     let made = tool::run(
         command,
         Some(template(spec, port).as_bytes()),
-        CALL,
+        CREATE,
         "limactl create",
     )?;
     if !made.ok() {

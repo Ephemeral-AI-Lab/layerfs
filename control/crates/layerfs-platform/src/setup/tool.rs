@@ -14,6 +14,7 @@ use std::net::{Ipv4Addr, TcpListener};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -25,6 +26,9 @@ const KEEP: usize = 1 << 20;
 /// provider call (#66).
 const FIRST_POLL: Duration = Duration::from_millis(1);
 const POLL: Duration = Duration::from_millis(20);
+/// How long past its deadline a command's output may take to reach its end
+/// (after its process group was killed there).
+const DRAIN: Duration = Duration::from_secs(1);
 
 thread_local! {
     /// This thread's probe deadline, set by [`within`]: every command the
@@ -33,9 +37,10 @@ thread_local! {
 }
 
 /// Runs `probe` with every command it starts on this thread ending by
-/// `deadline`: each runs in its own process group, and one still running
-/// then is killed with its whole group (a `limactl shell`'s `ssh`, say) and
-/// reaped, so a probe past its time leaves no process behind.
+/// `deadline`: one still running then is killed with its whole process
+/// group (a `limactl shell`'s `ssh`, say) and reaped, as at [`run`]'s own
+/// deadline, and the group of one that ended is killed too, so a probe past
+/// its time leaves no process behind.
 pub(crate) fn within<T>(deadline: Instant, probe: impl FnOnce() -> T) -> T {
     let before = CAP.replace(Some(deadline));
     let out = probe();
@@ -117,6 +122,16 @@ fn is_executable(path: &Path) -> bool {
 
 /// Runs `command` once with `input` on stdin, killing it at `timeout`. A
 /// command that does not end in time is `Unknown`: what it did is not known.
+///
+/// It runs in its own process group, and at the deadline the whole group is
+/// killed, not only the command: a descendant that still holds its output
+/// (`limactl`'s `ssh` or host agent, say) would otherwise keep the readers,
+/// and the call, waiting past the deadline. The output is read until the
+/// deadline and [`DRAIN`] more, never longer: output still held open then
+/// has the group killed and is `Unknown` too, even when the command itself
+/// ended (its call did not). A command that ends and leaves a descendant
+/// running without its pipes keeps it: only [`within`]'s probe deadline
+/// ends the group of a command that ended.
 pub(crate) fn run(
     mut command: Command,
     input: Option<&[u8]>,
@@ -130,11 +145,9 @@ pub(crate) fn run(
             Stdio::null()
         })
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .process_group(0);
     let cap = CAP.get();
-    if cap.is_some() {
-        command.process_group(0);
-    }
     let own = Instant::now() + timeout;
     let deadline = cap.map_or(own, |cap| cap.min(own));
     if Instant::now() >= deadline {
@@ -144,46 +157,38 @@ pub(crate) fn run(
         ));
     }
     let mut child = command.spawn().map_err(|e| spawn_failed(what, &e))?;
-    let feeder = match (input, child.stdin.take()) {
-        (Some(bytes), Some(mut stdin)) => {
-            let bytes = bytes.to_vec();
-            Some(thread::spawn(move || {
-                // a command that ends without reading its input is judged by its exit
-                let _ = stdin.write_all(&bytes);
-            }))
-        }
-        _ => None,
-    };
+    if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
+        let bytes = bytes.to_vec();
+        // a command that ends without reading its input is judged by its
+        // exit; the writer is not joined, so a descendant that keeps the
+        // pipe open unread holds only this thread, never the call
+        thread::spawn(move || drop(stdin.write_all(&bytes)));
+    }
     let out = collect(child.stdout.take());
     let err = collect(child.stderr.take());
-    let waited = wait_for(&mut child, deadline, cap.is_some());
+    let waited = wait_for(&mut child, deadline, true);
     if waited.is_err() {
+        kill_group(&child);
         let _ = child.kill();
         let _ = child.wait();
     }
     // A version/list command may exit while a descendant still holds its pipes.
     // Under an observational deadline, end that private process group before
-    // joining the collectors; otherwise pipe EOF could outlive the budget.
+    // reading to the end; otherwise pipe EOF could outlive the budget.
     if cap.is_some() {
-        if let Ok(pid) = i32::try_from(child.id()) {
-            let _ = kill(Pid::from_raw(-pid), Signal::SIGKILL);
-        }
+        kill_group(&child);
     }
-    if let Some(feeder) = feeder {
-        let _ = feeder.join();
+    // the output may take [`DRAIN`] past the deadline to reach its end; one
+    // still held open then is not waited for: its holders are killed
+    let ended = out.ended_by(deadline + DRAIN) && err.ended_by(deadline + DRAIN);
+    if !ended {
+        kill_group(&child);
     }
-    let stdout = out.join().unwrap_or_default();
-    let stderr = err.join().unwrap_or_default();
     let status = waited.map_err(|error| {
         MachineError::new(Code::Unknown, format!("{what}: waiting failed: {error}"))
     })?;
-    match status {
-        Some(status) => Ok(Output {
-            code: status.code(),
-            stdout,
-            stderr,
-        }),
-        None => Err(MachineError::new(
+    let Some(status) = status else {
+        return Err(MachineError::new(
             Code::Unknown,
             if deadline < own {
                 format!("{what} did not end by its probe's deadline and was stopped")
@@ -193,29 +198,76 @@ pub(crate) fn run(
                     timeout.as_secs()
                 )
             },
-        )),
+        ));
+    };
+    if !ended {
+        return Err(MachineError::new(
+            Code::Unknown,
+            format!(
+                "{what} ended, but its output was still held open when its time ran out; its outcome is not known"
+            ),
+        ));
     }
+    Ok(Output {
+        code: status.code(),
+        stdout: out.text(),
+        stderr: err.text(),
+    })
 }
 
 pub(crate) fn spawn_failed(what: &str, error: &io::Error) -> MachineError {
     MachineError::new(Code::Failed, format!("{what}: could not start: {error}"))
 }
 
-fn collect<R: Read + Send + 'static>(stream: Option<R>) -> thread::JoinHandle<String> {
+/// One pipe read to its end on a thread of its own: what it held so far
+/// (up to [`KEEP`]) and whether it ended.
+struct Reader {
+    kept: Arc<Mutex<Vec<u8>>>,
+    ended: mpsc::Receiver<()>,
+}
+
+impl Reader {
+    /// Whether the pipe ended by `deadline`; asked again, it answers at once.
+    fn ended_by(&self, deadline: Instant) -> bool {
+        let left = deadline.saturating_duration_since(Instant::now());
+        !matches!(
+            self.ended.recv_timeout(left),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        )
+    }
+
+    fn text(&self) -> String {
+        let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
+        String::from_utf8_lossy(&kept).into_owned()
+    }
+}
+
+fn collect<R: Read + Send + 'static>(stream: Option<R>) -> Reader {
+    let kept = Arc::new(Mutex::new(Vec::new()));
+    let (done, ended) = mpsc::channel();
+    let into = Arc::clone(&kept);
     thread::spawn(move || {
-        let mut kept = Vec::new();
         if let Some(mut stream) = stream {
             let mut buffer = [0u8; 8192];
             while let Ok(n) = stream.read(&mut buffer) {
                 if n == 0 {
                     break;
                 }
+                let mut kept = into.lock().unwrap_or_else(|e| e.into_inner());
                 let room = KEEP.saturating_sub(kept.len());
                 kept.extend_from_slice(&buffer[..n.min(room)]);
             }
         }
-        String::from_utf8_lossy(&kept).into_owned()
-    })
+        let _ = done.send(());
+    });
+    Reader { kept, ended }
+}
+
+/// SIGKILL to the process group `child` leads (it was started with its own).
+fn kill_group(child: &Child) {
+    if let Ok(pid) = i32::try_from(child.id()) {
+        let _ = kill(Pid::from_raw(-pid), Signal::SIGKILL);
+    }
 }
 
 /// Waits for `child` until `deadline`; past it the child is killed and `None`
@@ -232,9 +284,9 @@ fn wait_for(child: &mut Child, deadline: Instant, group: bool) -> io::Result<Opt
             return Ok(Some(status));
         }
         if Instant::now() >= deadline {
-            match i32::try_from(child.id()) {
-                Ok(pid) if group => drop(kill(Pid::from_raw(-pid), Signal::SIGKILL)),
-                _ => drop(child.kill()),
+            match group {
+                true => kill_group(child),
+                false => drop(child.kill()),
             }
             child.wait()?;
             return Ok(None);

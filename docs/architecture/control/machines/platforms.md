@@ -163,7 +163,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
  create(spec, bundle)                                   lima/create.rs
    limactl list <vm> / disk list --json lfs<8 hex>: present -> Exists
    limactl disk create lfs<8 hex> --size <disk>MiB --format raw
-   limactl create --name <vm> --tty=false -  < template
+   limactl create --name <vm> --tty=false -  < template   (up to 120 s)
    limactl start --tty=false <vm>
    /mnt/lima-lfs<8 hex> must be ext4; bind it at /layerfs/data
    bring_up over ssh -F <dir>/ssh.config lima-<vm> sudo -n
@@ -204,6 +204,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | lima "… is not an ext4 mount" | the data disk did not attach as ext4 | [`lima/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |
 | `Exists`: a disk or volume "already exists; it is left alone" | left by an earlier machine of that name | `create.rs` of the platform |
 | `Unsupported`: "the guest of … still allows user namespaces" | the guest refused the sysctl | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
+| `Unknown`: "… did not end within N s and was stopped", or "… ended, but its output was still held open when its time ran out" | a provider command passed its bound (30 s call, 120 s create, 300 s boot), or left a process holding its output past it; its whole process group was killed, the outcome is not known and nothing is retried | [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |
 
 ## Support table (`support.rs`)
 

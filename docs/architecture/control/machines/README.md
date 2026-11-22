@@ -148,9 +148,9 @@ state passes through `with_worker`: running but no worker hello is
 | Missing tool or host fact | probe pushes `tool:<cli>` or `host:<fact>`; create refuses `Unsupported` with `missing`; version query 10 s | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) |
 | VM size | at least 1 CPU, 256 MiB memory, 1 GiB disk (`InvalidInput`) | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) `validate` |
 | Names | machine and VM names are plain names; `work_dir` absolute (`InvalidInput`) | same |
-| Provider calls | 30 s per call, 120 s create, 300 s boot | [`setup/vm.rs`](../../../../control/crates/layerfs-platform/src/setup/vm.rs) |
+| Provider calls | 30 s per call, 120 s create (`limactl create`, `container volume create`, `container run`), 300 s boot | [`setup/vm.rs`](../../../../control/crates/layerfs-platform/src/setup/vm.rs) |
 | Guest command, copy | 60 s, 600 s | [`setup/guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs) |
-| Host command output | 1 MiB kept per stream; exit polled every 1 ms growing to 20 ms; a timeout is `Unknown` | [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
+| Host command output | 1 MiB kept per stream; exit polled every 1 ms growing to 20 ms; each command in its own process group, all of it killed at the deadline; output read until the deadline and 1 s more, never longer; a timeout, or output a descendant still holds then, is `Unknown` | [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |
 | Another process starting the machine | waits up to 600 s on `start.lock`, then `Unavailable` | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | Bundle lacks `layerfs`, `layerfs-daemon` or `layerfs-sandbox-helper`, or hash not hex | `InvalidInput`, `missing: bundle:<name>` | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) `check_bundle` |
 | Errors | one `Code`: `Exists`, `InUse`, `Unsupported`, `Unavailable`, `Denied`, `Failed`, `Unknown`, `InvalidInput`, `NotFound`; with `missing` and `vm_exists` | [`error.rs`](../../../../control/crates/layerfs-platform/src/error.rs) |

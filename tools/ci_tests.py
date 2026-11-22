@@ -78,6 +78,9 @@ SLOW = {
     # History closures of 9,000 Commits and 24,000 Branches against the one
     # recursive statement (layerfs-project#41), 2026-11-18.
     ("layerfs-persistence", "kept_node_closure"): 5.32,
+    # A provider call waits out its own 10 s and 30 s bounds (cp-platform
+    # fix of tool::run's deadline), estimated from those bounds, 2026-11-23.
+    ("layerfs-platform", "machine_deadline"): 31.0,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
