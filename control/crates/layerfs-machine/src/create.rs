@@ -2,10 +2,12 @@
 //! a create holds it only to claim and to record, never while
 //! the VM boots. The record it claims holds its `op` (#536 §7.1), which
 //! keeps every other call off the machine meanwhile; the write that records
-//! it running drops the `op`. One attempt: a create that fails before its
-//! VM exists removes what it made, one that fails after keeps the VM as
-//! broken `failed`, and an `Unknown` outcome keeps everything, its `op`
-//! marked uncertain, and is logged. Its phases are `bundle`, `boot` and
+//! it running drops the `op`, and the worker host port its VM forwards
+//! (`lasting.port`), picked before the VM is made. One attempt: a create
+//! that fails before its VM exists removes what it made, one that fails
+//! after keeps the VM as broken `failed`, and an `Unknown` outcome keeps
+//! everything, its `op` marked uncertain, and is logged. Either kept VM
+//! keeps its recorded port, so `machine start` can start it. Its phases are `bundle`, `boot` and
 //! `worker` (call surface 2.0): the `op` moves through them and each is a
 //! `{ phase, done, total }` event on the caller's stream.
 use super::bundle::bundle;
@@ -199,6 +201,9 @@ pub fn create(
         None => super::bundle::prepared_os_image(kind, &bundle)?,
     };
     let id = home_id(&home)?;
+    // the worker port the VM forwards is recorded with the claim, before
+    // the VM is made: a VM a failed create keeps is started on it
+    let port = adapters::worker_port().map_err(refusal)?;
     let mut fields = vec![
         ("name", SdkValue::text(name)),
         ("platform", SdkValue::text(kind.name())),
@@ -216,6 +221,10 @@ pub fn create(
         ),
         ("vm_name", SdkValue::text(record::vm_name(&id, name))),
         ("created", SdkValue::Int(home::now_ms())),
+        (
+            "lasting",
+            SdkValue::map([("port", SdkValue::Int(i64::from(port)))]),
+        ),
     ];
     if let Some(image) = &request.image {
         fields.push(("image", SdkValue::text(image)));
