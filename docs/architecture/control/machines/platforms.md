@@ -51,7 +51,7 @@ Linux, Store calls run in the caller's process and there is no worker.
 | `create`, `remove` | `InvalidInput`: "is built in and never created" / "… never removed" |
 | `start` | `None` on macOS and Linux; on Windows `Unsupported` (its Stores would run in a WSL2 worker, which is not designed) |
 | `stop` | nothing to stop |
-| `status` | `running`; `down_reason` "missing: …" when the host lacks something |
+| `status` | `running`; `Unsupported` with `missing` (`host:root`, `host:/dev/fuse`, `host:cgroup2`, `host:macos-or-linux`) when the host lacks what its Sandboxes need, as `provider_within` answers, so it never reads `ready` |
 | `guest`, `copy_in`, `copy_out` | `InvalidInput`: "runs in-process; its files are the host's" |
 | `reach` | the URL as given (`Loopback::Shared`) |
 | `forward` | `127.0.0.1:<guest port>`, no pid |
@@ -196,6 +196,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | --- | --- | --- |
 | `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `native` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
 | `missing: host:macos-or-linux` | `native` on Windows or another host | same |
+| `Unsupported` from a `native` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`native/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
 | `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
 | docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/unix.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/unix.rs) `not_ours` |

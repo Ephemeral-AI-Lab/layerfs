@@ -3,7 +3,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_platform::{self as machine, Code, HostOs, Platform, State};
+use layerfs_platform::{self as machine, native_missing, Code, HostOs, Platform, State};
 use standin::Scratch;
 
 fn line<'a>(log: &'a str, prefix: &str) -> &'a str {
@@ -150,13 +150,23 @@ fn built_in_machines_are_never_created_or_removed() {
         .unwrap()
         .is_none());
     machine::stop(&native).unwrap();
-    let status = machine::status(&native).unwrap();
-    assert_eq!(status.state, State::Running);
-    // its calls run in the caller's process: no worker to ask, and ready
-    assert_eq!(
-        (status.worker, status.word(), status.reason()),
-        (None, "ready", None)
-    );
+    let missing = native_missing(HostOs::current());
+    match machine::status(&native) {
+        Ok(status) => {
+            assert!(missing.is_empty(), "ready while missing {missing:?}");
+            assert_eq!(status.state, State::Running);
+            // its calls run in the caller's process: no worker to ask, and ready
+            assert_eq!(
+                (status.worker, status.word(), status.reason()),
+                (None, "ready", None)
+            );
+        }
+        // a host that lacks what Sandboxes need never reads ready
+        Err(error) => {
+            assert_eq!(error.code, Code::Unsupported, "{error}");
+            assert_eq!(error.missing, missing);
+        }
+    }
     assert!(scratch.log().is_empty());
 }
 
