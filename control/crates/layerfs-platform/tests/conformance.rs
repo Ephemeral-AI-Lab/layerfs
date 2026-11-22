@@ -330,8 +330,14 @@ fn an_in_process_platform_has_nothing_to_start_stop_or_observe() {
         let spec = valid_spec(&scratch, platform);
         assert!(machine::start(&spec, &scratch.bundle()).unwrap().is_none());
         machine::stop(&spec).unwrap();
-        let status = machine::status(&spec).unwrap();
-        assert_eq!(status.state, machine::State::Running, "{platform:?}");
+        // a host that lacks what its Sandboxes need is `Unsupported` naming it
+        match machine::status(&spec) {
+            Ok(status) => assert_eq!(status.state, machine::State::Running, "{platform:?}"),
+            Err(error) => {
+                assert_eq!(error.code, Code::Unsupported, "{platform:?}: {error}");
+                assert!(!error.missing.is_empty(), "{platform:?}: {error}");
+            }
+        }
         assert!(scratch.log().is_empty(), "{platform:?}: {}", scratch.log());
     }
 }

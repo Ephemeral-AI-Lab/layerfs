@@ -51,7 +51,7 @@ Linux, Store calls run in the caller's process and there is no worker.
 | `create`, `remove` | `InvalidInput`: "is built in and never created" / "… never removed" |
 | `start` | `None` on macOS and Linux; on Windows `Unsupported` (its Stores would run in a WSL2 worker, which is not designed) |
 | `stop` | nothing to stop |
-| `status` | `running`; `down_reason` "missing: …" when the host lacks something |
+| `status` | `running`; `Unsupported` with `missing` (`host:root`, `host:/dev/fuse`, `host:cgroup2`, `host:macos-or-linux`) when the host lacks what its Sandboxes need, as `provider_within` answers, so it never reads `ready` |
 | `guest`, `copy_in`, `copy_out` | `InvalidInput`: "runs in-process; its files are the host's" |
 | `reach` | the URL as given (`Loopback::Shared`) |
 | `forward` | `127.0.0.1:<guest port>`, no pid |
@@ -96,8 +96,10 @@ volume, not to `docker logs`
 | Call | Answer |
 | --- | --- |
 | `create`, `remove` | `InvalidInput` (built in) |
-| `stop` | `docker stop -t 5 <vm>` if it exists; the volume stays |
+| `stop` | `docker stop -t 5 <vm>` (forced: `-t 0`) while it runs, restarts or is paused; the volume stays |
 | `status` | `stopped` when the Engine does not answer; else `inspect` state (`running`; `dead` is failed; else stopped), through `with_worker` |
+| `provider_within` | `inspect` state alone: `running`; `created`, `exited` stopped; `dead` failed; paused, restarting, removing or unknown `Unavailable` |
+| a container named `<vm>` without the `layerfs.role=machine-worker` label | `Exists` from `start`, `stop` and `provider_within` alike ("… is not a LayerFS worker; it is left alone"); it is never touched |
 | `guest` | `docker -H unix://<socket> exec` in the worker container |
 | `load_image` | `docker load -i` (up to 300 s), `sha256:<64 hex>` |
 | `reach` | Linux host: as given (host network); Docker Desktop: a loopback host becomes the address the worker resolves `host.docker.internal` to (`getent ahostsv4`) |
@@ -142,10 +144,10 @@ named volume.
 
 | Call | Answer |
 | --- | --- |
-| `start` | needs the recorded port (else `InvalidInput`) and the container (else `NotFound`); `container start` if stopped or failed; `bring_up`; records the network gateway |
-| `stop` | `container stop` if running |
+| `start` | needs the recorded port (else `InvalidInput`) and the container (else `NotFound`); `container start` if stopped, and once if failed (the CLI's answer decides; `failed`'s fix is `machine start`); `bring_up`; records the network gateway |
+| `stop` | `container stop` (5 s grace) if running; forced: `container stop --time 0`, also when failed or between states |
 | `remove` | `container delete --force`, then `container volume delete` |
-| `status` | `container inspect` `status.state` `running`/`stopped`, else failed |
+| `status` | `container inspect` `status.state`: `running`, `stopped`, `failed`; any other (`stopping`, `unknown`) is `Unavailable`, as lima's and docker's passing states, never recorded `failed` |
 | `reach` | a loopback host becomes the recorded gateway, else `status.networks[0].ipv4Gateway` read while it runs |
 | `forward` | `Unsupported`: the CLI publishes a port only at create |
 
@@ -163,7 +165,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
  create(spec, bundle)                                   lima/create.rs
    limactl list <vm> / disk list --json lfs<8 hex>: present -> Exists
    limactl disk create lfs<8 hex> --size <disk>MiB --format raw
-   limactl create --name <vm> --tty=false -  < template
+   limactl create --name <vm> --tty=false -  < template   (up to 120 s)
    limactl start --tty=false <vm>
    /mnt/lima-lfs<8 hex> must be ext4; bind it at /layerfs/data
    bring_up over ssh -F <dir>/ssh.config lima-<vm> sudo -n
@@ -179,8 +181,9 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 
 | Call | Answer |
 | --- | --- |
-| `start` | needs the recorded port (else `InvalidInput`) and the instance (else `NotFound`); `Failed` if `Broken`; boots if stopped; attach; `bring_up` |
-| `stop` | `limactl stop` (up to 300 s); instance and disk stay |
+| `start` | needs the recorded port (else `InvalidInput`) and the instance (else `NotFound`); `Failed` if `Broken`, before any call: Lima says `Broken` when it cannot read the instance's own files, and `limactl start` refuses such an instance itself ("errors inspecting instance"), so unlike apple-container's `failed` it is not tried; boots if stopped; attach; `bring_up` |
+| `stop` | `limactl stop` (up to 300 s) if running; forced: `limactl stop --force`, also when `Broken`; instance and disk stay |
+| `status` | `limactl list` `Running`, `Stopped`, `Broken` (failed); any other is `Unavailable` |
 | `remove` | `limactl delete --force`, then `limactl disk delete` |
 | `reach` | a loopback host becomes `192.168.5.2` (the address of `host.lima.internal`; the Sandbox root has no such hosts entry) |
 | `forward` | a detached `ssh -N -L` over Lima's `ssh.config`, answering its pid ([Workers and reach](workers-and-reach.md#forwards)) |
@@ -193,17 +196,21 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | --- | --- | --- |
 | `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `native` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
 | `missing: host:macos-or-linux` | `native` on Windows or another host | same |
+| `Unsupported` from a `native` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`native/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
 | `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
-| docker `start` `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
+| docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/unix.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/unix.rs) `not_ours` |
 | docker `start` `Failed` | image not in the Engine (`--pull never`), or no published port (macOS) | same |
 | `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | apple-container `Failed`: "… inspect answer is not the shape this adapter knows" | another CLI version's JSON | [`apple_container/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/observe.rs) |
 | apple-container `reach` `Unavailable`: no gateway | the machine is stopped | same |
+| apple-container `Unavailable`: "… a transitional or unrecognized state" | the container is `stopping` (or `unknown`); ask again once it settles, or force the stop | same; [`apple_container/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/power.rs) |
 | `missing: host:macos`, `tool:limactl` | not a Mac, no `limactl` | [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) |
 | lima "… is not an ext4 mount" | the data disk did not attach as ext4 | [`lima/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |
+| lima `start` `Failed`: "… is broken: Lima cannot read its files" | Lima reports the instance `Broken`; `limactl list <vm>` says why; a start cannot repair it | same |
 | `Exists`: a disk or volume "already exists; it is left alone" | left by an earlier machine of that name | `create.rs` of the platform |
 | `Unsupported`: "the guest of … still allows user namespaces" | the guest refused the sysctl | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
+| `Unknown`: "… did not end within N s and was stopped", or "… ended, but its output was still held open when its time ran out" | a provider command passed its bound (30 s call, 120 s create, 300 s boot), or left a process holding its output past it; its whole process group was killed, the outcome is not known and nothing is retried | [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |
 
 ## Support table (`support.rs`)
 
