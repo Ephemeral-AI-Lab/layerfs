@@ -223,8 +223,9 @@ impl Server {
         layerfs_home::home::guest::serve_root(&self.root);
         // what earlier Sandbox starts and removals left in this machine's
         // run root goes before the first request (spec v20), inside its
-        // bound; its outcome is in `log/sweep.jsonl`
-        layerfs_sandbox::sweep::run_root(&self.root);
+        // bound, after the records of daemons that ended (the machine
+        // stopped); its outcome is in `log/sweep.jsonl`
+        layerfs_sandbox::sweep::worker_start(&self.root);
         let server = Arc::new(self);
         let mut limited = Limited {
             every: server.waits.log_every,

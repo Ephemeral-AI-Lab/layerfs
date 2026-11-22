@@ -40,7 +40,7 @@ fn each_backend_fixes_its_capabilities() {
         ),
         (
             "namespaces-linux",
-            IsolationModel::MicroVm,
+            IsolationModel::Namespaces,
             MountDriver::Fuse
         )
     );
