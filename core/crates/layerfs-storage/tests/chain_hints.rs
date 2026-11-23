@@ -1134,3 +1134,88 @@ fn a_group_read_admits_its_ranges_when_the_pack_is_dense_in_the_cache() {
     assert_eq!(provider.calls("read_scoped_pack"), 0);
     assert_eq!(provider.calls("read_packs"), 0);
 }
+
+#[test]
+fn a_program_page_read_locates_every_deeper_level_of_its_chain_in_one_locate() {
+    // A read binds no member of a program page's chain; the levels below
+    // the first are still located together, from the base ids the cached
+    // records name, with no member trusted (#758 fix 3).
+    let (memory, _) = directory_change(6);
+    let (page, levels) = {
+        let state = memory.state.lock().unwrap();
+        let pages: Vec<ObjectId> = state
+            .objects
+            .values()
+            .filter(|row| is_program(row.role) && row.base.is_some())
+            .map(|row| row.object_id)
+            .collect();
+        drop(state);
+        pages
+            .into_iter()
+            .map(|page| (page, depth(&memory, page)))
+            .max_by_key(|(_, levels)| *levels)
+            .expect("a page stored as a program")
+    };
+    assert!(levels >= 4, "fixture depth {levels}");
+    let (expected, today) = read(copy(&memory), &[page], true);
+    let expected = expected.unwrap();
+    assert_eq!(today.locate, levels as u64 + 1, "today: one per level");
+    for batched in [false, true] {
+        let mut provider = chain_port(&memory);
+        provider.batched = batched;
+        let provider = Arc::new(provider);
+        let (got, after) = read(provider.clone(), &[page], true);
+        assert_eq!(got.unwrap(), expected);
+        // The page's own locate, then one for every level of its chain.
+        assert_eq!(after.locate, 2, "{after:?}");
+        let asked = provider.asked.lock().unwrap().clone();
+        assert_eq!(asked.len(), 2);
+        assert_eq!(asked[1].len(), levels, "every level's base, located");
+        assert_eq!(after.chain_hinted_bases, 0, "no member trusted");
+        assert_eq!(after.chain_hint_stale, 0);
+    }
+    // A member that names a record off the chain makes the guesses below it
+    // wrong: the read stays correct, locates those levels as before, and
+    // counts nothing stale, strict or not.
+    let other = {
+        let state = memory.state.lock().unwrap();
+        let chain = chain_of(&state.objects, page);
+        let member = state
+            .objects
+            .values()
+            .find(|other| is_program(other.role) && !chain.contains(&other.object_id))
+            .expect("a page outside the chain");
+        ChainMember {
+            object_id: None,
+            pack: state.packs[&member.pack_id].info,
+            group_number: member.group_number,
+            record_number: member.record_number,
+            canonical_length: member.canonical_length,
+        }
+    };
+    for strict in [false, true] {
+        let provider = editing(chain_port(&memory), move |chains| {
+            for chain in chains.chains.iter_mut().filter(|c| c.root == page) {
+                chain.members[1] = other;
+            }
+        });
+        let (got, after) = read(provider.clone(), &[page], strict);
+        assert_eq!(got.unwrap(), expected);
+        assert!(after.locate > 2, "{after:?}");
+        assert!(after.locate <= levels as u64 + 1, "{after:?}");
+        assert_eq!(after.chain_hinted_bases, 0);
+        assert_eq!(after.chain_hint_stale, 0);
+    }
+}
+
+/// `id`'s stored chain, `id` first.
+fn chain_of(
+    objects: &std::collections::BTreeMap<ObjectId, layerfs_storage::location::ObjectLocation>,
+    id: ObjectId,
+) -> Vec<ObjectId> {
+    let mut chain = vec![id];
+    while let Some(base) = objects[chain.last().unwrap()].base {
+        chain.push(base);
+    }
+    chain
+}

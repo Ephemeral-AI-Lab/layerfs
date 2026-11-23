@@ -379,7 +379,11 @@ Chosen per Store in `PostgresSelection` and applied with `SET LOCAL` to every
 \#758. A read of a delta record used to locate each base level by level,
 one round trip per level. A PostgreSQL Store records each row's chain when
 it publishes the row, so a cold read locates a whole chain in one wave and
-reads the groups it needs in one ranged statement per 2 MiB.
+reads the groups it needs in one ranged statement per 2 MiB. A chain a read
+does not bind to its members (program pages, pooled leaves) costs one more
+wave for all its levels: core locates them together from the base ids the
+cached records at the members' positions name, each located as an ordinary
+authoritative row ([physical storage](../../core/physical-storage/README.md)).
 
 | Piece | What it does | Source |
 | --- | --- | --- |

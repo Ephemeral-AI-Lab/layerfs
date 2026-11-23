@@ -559,44 +559,66 @@ pub fn stored_base(
             if body.len() != view.decoded_length {
                 return Err(StorageError::Integrity("group body length"));
             }
-            let record = crate::encoding::decode::framed_record(body, location.record_number)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::Ordinary,
-                record,
-                location.canonical_length,
-                location.role,
-            )
+            record_base(PackLane::Ordinary, body, location)
         }
-        PackLane::WholeFile => {
-            let record = crate::encoding::decode::framed_record(selected, location.record_number)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::WholeFile,
-                record,
-                location.canonical_length,
-                location.role,
-            )
-        }
-        PackLane::Chunk => {
-            let record = crate::encoding::decode::framed_record(selected, location.record_number)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::Chunk,
-                record,
-                location.canonical_length,
-                location.role,
-            )
-        }
-        PackLane::Singleton => {
-            let record = crate::encoding::decode::framed_record(selected, 0)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::Singleton,
-                record,
-                location.canonical_length,
-                location.role,
-            )
-        }
+        lane => record_base(lane, selected, location),
     }?;
     connection.bind_base(location, base)?;
     Ok(base)
+}
+
+/// The base the record at `location` of `body` names: an ordinary lane's
+/// decoded group body, or another lane's encoded group.
+fn record_base(
+    lane: PackLane,
+    body: &[u8],
+    location: &ObjectLocation,
+) -> StorageResult<Option<ObjectId>> {
+    let at = match lane {
+        PackLane::Singleton => 0,
+        _ => location.record_number,
+    };
+    let record = crate::encoding::decode::framed_record(body, at)?;
+    crate::encoding::delta::record::stored_base(
+        lane,
+        record,
+        location.canonical_length,
+        location.role,
+    )
+}
+
+/// The base the record at `location` names, read only from bytes `packs`
+/// and `groups` already hold, leaving both as they were (#758): a guess
+/// for a locate, never trusted, so any miss or malformed byte is `None`.
+/// The record is not authenticated and `location` may be wrong.
+pub(crate) fn cached_base(
+    packs: &crate::encoding::PackCache,
+    groups: &GroupCache,
+    workspace: &mut DecompressionWorkspace,
+    location: &ObjectLocation,
+) -> Option<ObjectId> {
+    let selected = packs.peek_group(location.pack_id, location.group_number)?;
+    let decoded;
+    let body: &[u8] = match (selected.header.lane, selected.view.codec) {
+        (PackLane::Ordinary, crate::pack::layout::GroupCodec::Zstandard) => {
+            match groups.peek(location.pack_id, location.group_number) {
+                Some(cached) => cached,
+                None => {
+                    decoded = workspace
+                        .decompress_group(selected.bytes, selected.view.decoded_length)
+                        .ok()?;
+                    &decoded
+                }
+            }
+        }
+        _ => selected.bytes,
+    };
+    if selected.header.lane == PackLane::Ordinary && body.len() != selected.view.decoded_length {
+        return None;
+    }
+    record_base(selected.header.lane, body, location)
+        .ok()
+        .flatten()
 }
 
 /// Adds one resolved chain's work to an operation's totals.

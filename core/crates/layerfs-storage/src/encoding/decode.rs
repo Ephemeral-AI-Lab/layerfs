@@ -55,6 +55,14 @@ impl GroupCache {
         Some(&entry.body)
     }
 
+    /// Borrows retained input without recording recency: for a guess that
+    /// must leave the cache as it found it (`read/hints.rs` `chain_ahead`).
+    pub(crate) fn peek(&self, pack_id: i64, group_number: usize) -> Option<&[u8]> {
+        self.bodies
+            .get(&(pack_id, group_number))
+            .map(|entry| entry.body.as_slice())
+    }
+
     /// Retains authenticated decoded input within the same byte allowance.
     /// Duplicate immutable input is idempotent; changed or oversized input fails.
     pub fn insert(

@@ -11,7 +11,7 @@ use super::{
     Fetch,
 };
 use crate::{
-    encoding::{PackAcquisition, PackCache, PackUnit},
+    encoding::{delta::read::cached_base, PackAcquisition, PackCache, PackUnit},
     error::{StorageError, StorageResult},
     location::{ChainMember, LocatedChains, LocatedObject, ObjectLocation, PackInfo},
     pack::layout,
@@ -336,6 +336,67 @@ impl Fetch {
         self.forget_member_marks();
         let promoted = self.locators.borrow_mut().promote_hinted() as u64;
         self.note(|c| c.chain_verified_bases += promoted);
+    }
+    /// The ids further down the chains of `edges` (each a walked child and
+    /// the base its record names) that a locate of this level can carry
+    /// (#758): member `k` of a child's chain says where its level-`k` base
+    /// may be stored, so the base id the record there names, read from bytes
+    /// the caches already hold ([`cached_base`]), is a guess for level
+    /// `k + 1`. Nothing is trusted: the guesses are only located with the
+    /// level's own ids, so their rows are authoritative, and the walk still
+    /// takes every base id from the record at its base's authoritative
+    /// location; a wrong guess only leaves the next level to locate its base
+    /// as before. Empty unless this level locates anyway (`level` holds an
+    /// id the cache lacks), and never more than fills that locate's page, so
+    /// no statement is added. Bases a member binds are cached already, so
+    /// this serves the chains a read does not bind (program pages, pooled
+    /// leaves) and a Save's reads, which bind none.
+    pub(crate) fn chain_ahead(
+        &self,
+        level: &[ObjectId],
+        edges: &[(ObjectLocation, ObjectId)],
+        packs: &PackCache,
+        groups: &crate::encoding::GroupCache,
+        workspace: &mut crate::encoding::codec::DecompressionWorkspace,
+    ) -> Vec<ObjectId> {
+        let cached = |id: &ObjectId| {
+            self.locators.borrow().contains_key(id) || self.absent.borrow().contains(id)
+        };
+        let missing: BTreeSet<_> = level.iter().filter(|id| !cached(id)).collect();
+        if missing.is_empty() || !self.trust_hints.get() {
+            return Vec::new();
+        }
+        let room = READ_OBJECT_LIMIT.saturating_sub(missing.len());
+        let hints = self.hints.borrow();
+        let mut ahead = BTreeSet::new();
+        for (child, base) in edges {
+            let Some((_, _, _, rest)) = hints.rest(child.object_id) else {
+                continue;
+            };
+            let mut id = *base;
+            for member in rest.iter().take_while(|m| self.known(m)) {
+                let location = ObjectLocation {
+                    object_id: id,
+                    role: child.role,
+                    canonical_length: member.canonical_length,
+                    pack_id: member.pack.pack_id,
+                    group_number: member.group_number,
+                    record_number: member.record_number,
+                    base: None,
+                };
+                let Some(next) = cached_base(packs, groups, workspace, &location) else {
+                    break;
+                };
+                if ahead.len() >= room {
+                    break;
+                }
+                if !cached(&next) && !missing.contains(&next) {
+                    ahead.insert(next);
+                }
+                id = next;
+            }
+        }
+        ahead.into_iter().collect()
     }
     /// Fetches the uncached groups `locations` and their chains need in one
     /// `read_groups` call, as the first page of [`Self::page`] does. Nothing

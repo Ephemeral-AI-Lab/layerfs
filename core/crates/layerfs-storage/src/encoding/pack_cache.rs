@@ -202,6 +202,30 @@ impl PackCache {
             }))
         }
     }
+    /// A held group's bytes for a guess only (#758, `read/hints.rs`
+    /// `chain_ahead`): no descriptor check, no recency, no counter, so the
+    /// cache and the handle are left as they were. Never a source of bytes a
+    /// read returns: [`Self::group`] serves those.
+    pub(crate) fn peek_group(&self, id: i64, number: usize) -> Option<super::GroupSlice<'_>> {
+        let entry = self
+            .entries
+            .get(&(id, None))
+            .or_else(|| self.entries.get(&(id, Some(number))))?;
+        if let Some((header, view)) = entry.unit {
+            return Some(super::GroupSlice {
+                header,
+                view,
+                bytes: &entry.body,
+            });
+        }
+        let header = crate::pack::layout::parse_header(&entry.body).ok()?;
+        let view = crate::pack::layout::group_view(&entry.body, header, number).ok()?;
+        Some(super::GroupSlice {
+            header,
+            view,
+            bytes: entry.body.get(view.start..view.end)?,
+        })
+    }
     /// The entry that holds `id`'s group `number` (its whole body or that
     /// group's unit) and its retained bytes, without touching recency.
     pub(crate) fn held(&self, id: i64, number: usize) -> Option<((i64, Option<usize>), usize)> {
