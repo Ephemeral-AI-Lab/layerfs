@@ -92,6 +92,9 @@ pub(crate) struct Fetch {
     pub(crate) strict_hints: Cell<bool>,
     /// A read binds members to locators; a Save only prefetches their groups.
     pub(super) bind_hints: Cell<bool>,
+    /// Program pages bind members too: set only while a Save rebuilds and
+    /// hashes its bases (`save/wave.rs`), never for a read.
+    pub(super) bind_pages: Cell<bool>,
     /// Set while a Save reads through a reader (its lost registrations'
     /// winners): those demands bind nothing either.
     saving: Cell<bool>,
@@ -113,6 +116,7 @@ impl Fetch {
             capacities: Cell::new(None),
             strict_hints: Cell::new(false),
             bind_hints: Cell::new(true),
+            bind_pages: Cell::new(false),
             saving: Cell::new(false),
             trust_hints: Cell::new(true),
         }
@@ -191,6 +195,11 @@ impl Fetch {
     /// drops.
     pub(crate) fn binding(&self) -> Restore<'_> {
         Restore(&self.bind_hints, self.bind_hints.replace(true))
+    }
+    /// Lets program pages bind members too, for a Save's check of its
+    /// program-page bases, until the guard drops.
+    pub(crate) fn binding_pages(&self) -> Restore<'_> {
+        Restore(&self.bind_pages, self.bind_pages.replace(true))
     }
     /// A body the latest Save published, to a reader that continues it,
     /// validated as a fetched one would be.

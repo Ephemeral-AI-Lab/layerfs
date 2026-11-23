@@ -201,6 +201,10 @@ impl PoolReader {
             }
             let record = self.record(connection, workspace, &current, caches.as_mut())?;
             let base = stored_base(&record)?;
+            // Only a Save's check of its bases binds a program page's chain
+            // member here (#758, `Fetch::bind`); every element below is still
+            // hashed to the id its child's record names.
+            connection.bind_base(&current, base)?;
             chain.push((current, record));
             let Some(base) = base else {
                 break;

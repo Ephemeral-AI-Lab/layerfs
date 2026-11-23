@@ -607,6 +607,115 @@ fn a_program_page_binds_no_member_so_a_misplaced_one_cannot_break_its_read() {
     }
 }
 
+/// A directory of 4,000 names changed in `rounds` Saves on one handle; the
+/// objects of one more change, constructed on that handle, are returned
+/// unsaved with the Store, so a fresh handle can Save them.
+fn directory_change(rounds: u64) -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedObject>) {
+    let memory = Arc::new(metadata::MemoryMetadata::default());
+    let storage = Storage::new(memory.clone()).unwrap();
+    let mut root: Option<DirectoryRoot> = None;
+    for round in 0..=rounds {
+        let reader = storage.reader().unwrap();
+        let mut emitted = Emitted::default();
+        {
+            let mut objects = FilesystemObjects::new(&reader, &mut emitted);
+            root = Some(match root {
+                None => {
+                    build_directory(&mut objects, (1..=4_000).map(|s| Ok((name(s), s))))
+                        .unwrap()
+                        .0
+                }
+                Some(base) => {
+                    let added = 4_001 + round;
+                    let mut changes = vec![(name(10 + round), None), (name(added), Some(added))];
+                    changes.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+                    apply_bindings(
+                        &mut objects,
+                        Some(base),
+                        changes.into_iter().map(Ok),
+                        layerfs_content::filesystem::MAXIMUM_SCRATCH_BYTES,
+                        &mut |_, _| Ok(()),
+                    )
+                    .unwrap()
+                    .0
+                }
+            });
+        }
+        drop(reader);
+        if round == rounds {
+            return (memory, emitted.0);
+        }
+        let save = storage.begin_save().unwrap();
+        for object in emitted.0 {
+            save.accept(object).unwrap();
+        }
+        save.finish().unwrap();
+    }
+    unreachable!()
+}
+
+#[test]
+fn a_fresh_handle_save_rebuilds_its_program_page_bases_without_a_locate_per_level() {
+    // Directory pages stored as programs against the pages they replace,
+    // chains of depth >= 4; the change is Saved by a fresh handle, so no
+    // element of its bases' chains is located yet.
+    let (memory, objects) = directory_change(6);
+    let program_bases: Vec<usize> = objects
+        .iter()
+        .filter(|object| object.role() == ObjectRole::DirectoryLeaf)
+        .filter_map(|object| object.predecessors().ids().next())
+        .map(|base| depth(&memory, base))
+        .filter(|levels| *levels > 0)
+        .collect();
+    assert!(!program_bases.is_empty(), "a page stored against a program");
+    let levels = program_bases.iter().copied().max().unwrap();
+    assert!(levels >= 4, "fixture depth {levels}");
+    let save = |port: Arc<dyn layerfs_storage::port::PackPersistence>| {
+        let storage = Storage::new(port).unwrap();
+        storage.set_strict_hints(true);
+        let save = storage.begin_save().unwrap();
+        for object in objects.clone() {
+            save.accept(object).unwrap();
+        }
+        save.finish().unwrap();
+        storage.diagnostics()
+    };
+    let plain = copy(&memory);
+    let plain_work = save(plain.clone());
+    let count = |memory: &metadata::MemoryMetadata, name| {
+        let calls = memory.calls.lock().unwrap();
+        calls.iter().filter(|c| c.0 == name).count()
+    };
+    // Today: every level of a program page's chain is located alone.
+    let today = count(&plain, "locate");
+    assert!(today > program_bases.len() * levels, "{plain_work:?}");
+    for batched in [false, true] {
+        let mut provider = chain_port(&memory);
+        provider.batched = batched;
+        let provider = Arc::new(provider);
+        let work = save(provider.clone());
+        {
+            let (a, b) = (
+                plain.state.lock().unwrap(),
+                provider.inner.state.lock().unwrap(),
+            );
+            assert_eq!(a.objects, b.objects, "the same records");
+            assert_eq!(a.packs, b.packs, "byte-identical packs");
+        }
+        // The membership locate of each wave and the closure check of its
+        // publication; every program-page base hashed and kept, none located
+        // by level.
+        let locates = count(&provider.inner, "locate");
+        assert_eq!(locates as u64, work.locate);
+        assert!(locates <= 2, "{work:?}");
+        assert!(
+            work.chain_verified_bases >= (program_bases.len() * levels) as u64,
+            "{work:?}"
+        );
+        assert_eq!(work.chain_hint_stale, 0);
+    }
+}
+
 #[test]
 fn a_member_pack_that_does_not_answer_as_named_is_stale_and_the_read_goes_on() {
     let (memory, roots, _) = history(EDITS, |m| m);

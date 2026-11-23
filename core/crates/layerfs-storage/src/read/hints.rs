@@ -196,12 +196,16 @@ impl Fetch {
     /// hinted locator, so the walk's own locate sends nothing. A member whose
     /// id or end disagrees with the record is stale: its chain is dropped.
     /// Pooled leaves and program pages are rebuilt by the pool reader, which
-    /// has no rebuild of its own, so their bases are located as before.
+    /// has no rebuild of its own, so a read locates their bases as before;
+    /// only a Save's check of its program-page bases binds theirs
+    /// ([`Self::binding_pages`]), and it walks them again from authoritative
+    /// locates when the check fails.
     pub(super) fn bind(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
         if !self.bind_hints.get()
             || !self.trust_hints.get()
             || child.role == ObjectRole::InodeLeaf
-            || crate::encoding::pool::branch::is_program_role(child.role)
+            || (crate::encoding::pool::branch::is_program_role(child.role)
+                && !self.bind_pages.get())
         {
             return Ok(());
         }

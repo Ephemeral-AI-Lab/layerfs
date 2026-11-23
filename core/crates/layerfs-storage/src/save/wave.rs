@@ -1,10 +1,14 @@
 //! Membership, exact reuse and one preparation wave.
 use super::{source::WaveSource, state::State};
 use crate::{
-    encoding::delta::read::{BodyCaches, ChainCounters, Resolver},
+    encoding::{
+        delta::read::{BodyCaches, ChainCounters, Resolver},
+        pool::{branch::is_program_role, read::PooledCaches, PoolReader},
+    },
     error::{StorageError, StorageResult},
     location::ObjectLocation,
     policy::READ_OBJECT_LIMIT,
+    read::hint_failure,
     source::Source,
 };
 use layerfs_content::{FinalizedObject, ObjectId};
@@ -164,6 +168,10 @@ impl State<'_> {
     /// still sees authoritative locators only: an element whose hash failed
     /// is never kept, the rebuild falls back to authoritative locates (a
     /// stale hint, counted), and a chain with no member is walked as before.
+    /// A program page is rebuilt by a pool reader of its own (its counts are
+    /// not the Save's): that reader has no rebuild, so a failure a hint may
+    /// have caused drops every hint (counted) and selection walks that chain
+    /// from authoritative locates, as it did before.
     fn verify_bases(&mut self, bases: &[Vec<ObjectLocation>]) -> StorageResult<()> {
         let fetch = &self.storage.source;
         let mut seen = BTreeSet::new();
@@ -171,17 +179,15 @@ impl State<'_> {
             .iter()
             .filter_map(|stored| stored.first().copied())
             .filter(|base| fetch.has_hint(base.object_id) && !self.depths.knows(base.object_id))
-            // Pooled leaves and program pages bind no member (`Fetch::bind`).
-            .filter(|base| {
-                base.role != layerfs_content::ObjectRole::InodeLeaf
-                    && !crate::encoding::pool::branch::is_program_role(base.role)
-            })
+            // Pooled leaves bind no member (`Fetch::bind`).
+            .filter(|base| base.role != layerfs_content::ObjectRole::InodeLeaf)
             .filter(|base| seen.insert(base.object_id))
             .collect();
         if chained.is_empty() {
             return Ok(());
         }
         let _bind = fetch.binding();
+        let _pages = fetch.binding_pages();
         let view = WaveSource {
             fetch,
             packer: &self.packer,
@@ -190,24 +196,45 @@ impl State<'_> {
         };
         let capacities = self.storage.capacities();
         let mut counters = ChainCounters::default();
+        let mut pages = PoolReader::new();
         for base in chained {
             // A stale hint on an earlier base drops every hint.
             if !fetch.has_hint(base.object_id) {
                 continue;
             }
-            Resolver::new(
-                &view,
-                i64::MAX,
-                &capacities,
-                BodyCaches {
-                    packs: &mut self.packs,
-                    pool: &mut self.pool,
-                },
-                &mut self.groups,
-                &mut self.decode,
-                &mut counters,
-            )
-            .resolve_at(base)?;
+            if is_program_role(base.role) {
+                let caches = PooledCaches {
+                    encoded: &mut self.packs,
+                    decoded: &mut self.groups,
+                };
+                let rebuilt = pages.branch_canonical_with_caches(
+                    &view,
+                    &capacities,
+                    i64::MAX,
+                    &mut self.decode,
+                    base,
+                    Some(caches),
+                );
+                match rebuilt {
+                    Ok(_) => {}
+                    Err(error) if hint_failure(&error) && fetch.drop_hints(&[])? => continue,
+                    Err(error) => return Err(error),
+                }
+            } else {
+                Resolver::new(
+                    &view,
+                    i64::MAX,
+                    &capacities,
+                    BodyCaches {
+                        packs: &mut self.packs,
+                        pool: &mut self.pool,
+                    },
+                    &mut self.groups,
+                    &mut self.decode,
+                    &mut counters,
+                )
+                .resolve_at(base)?;
+            }
             fetch.promote_hints();
         }
         Ok(())
