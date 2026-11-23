@@ -10,7 +10,11 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// `(scheme://, userinfo, rest)` of a PostgreSQL URL.
+/// `(scheme, userinfo, rest)` of a PostgreSQL URL, split as the daemon's
+/// client (tokio-postgres 0.7, `UrlParser::parse_credentials`) splits it:
+/// the userinfo is everything before the first `@` anywhere after the
+/// scheme, not only before the first `/`, so the user part a login
+/// replaces and a URL naming a user are the ones the client reads.
 pub fn parts(url: &str) -> Result<(&str, Option<&str>, &str)> {
     let (scheme, after) = url
         .split_once("://")
@@ -21,9 +25,8 @@ pub fn parts(url: &str) -> Result<(&str, Option<&str>, &str)> {
                 "a PostgreSQL URL starts postgresql:// or postgres://",
             )
         })?;
-    let authority_end = after.find('/').unwrap_or(after.len());
-    match after[..authority_end].rfind('@') {
-        Some(at) => Ok((scheme, Some(&after[..at]), &after[at + 1..])),
+    match after.split_once('@') {
+        Some((userinfo, rest)) => Ok((scheme, Some(userinfo), rest)),
         None => Ok((scheme, None, after)),
     }
 }

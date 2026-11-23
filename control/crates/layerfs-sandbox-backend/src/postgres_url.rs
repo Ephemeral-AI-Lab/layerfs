@@ -6,7 +6,8 @@
 //! The client is tokio-postgres 0.7 (`Config::from_str`, its `UrlParser`):
 //! the userinfo ends at the first `@` anywhere in the URL; the host list
 //! ends at the first `/` or `?` after it and splits at each `,`; a host is
-//! what a `[...]` holds, else what comes before its first `:`; each host,
+//! what a `[...]` holds, else what comes before its first `:` (an empty one
+//! is a name no lookup resolves, and the client goes on to the next); each host,
 //! each query key and a `hostaddr` value are percent-decoded (`%` and two
 //! hex digits, any other `%` kept), and a host whose decoded bytes start
 //! with `/` is a Unix socket directory. A host is then dialled through
@@ -21,13 +22,29 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 /// Every server host `url` names, decoded as its client decodes them: each
 /// host of its host list, then each one a `host` or `hostaddr` query
 /// parameter names, in order. A `host` value the client takes as one host
-/// is split at `,` here too, so no spelling of it goes unchecked. A URL
-/// naming none names the client's default, a Unix socket (`""`).
+/// is split at `,` here too, so no spelling of it goes unchecked. An empty
+/// host (`h1,,h2`, `?host=`) is left out: the client's lookup of it fails
+/// and it dials the next. A URL naming none is answered as one empty host
+/// (`""`), which [`socket`] counts as naming no host: its client refuses
+/// it (`both host and hostaddr are missing`).
 /// `None` when `url` is not one the client reads: no `postgres://` or
 /// `postgresql://`, a `[` never closed, anything but `:port` after its
 /// `]`, a parameter with no `=`, or a host, key or `hostaddr` value whose
 /// decoded bytes are not UTF-8 (a socket directory may be any bytes).
 pub fn url_hosts(url: &str) -> Option<Vec<String>> {
+    read(url).map(|(hosts, _)| hosts)
+}
+
+/// Whether `url` gives a `hostaddr` parameter its client reads: the client
+/// then dials those addresses alone (the i-th for the i-th host, whose
+/// name only TLS checks) and resolves no host name. `false` for a URL it
+/// does not read.
+pub fn url_hostaddr(url: &str) -> bool {
+    read(url).is_some_and(|(_, hostaddr)| hostaddr)
+}
+
+/// [`url_hosts`], and whether a `hostaddr` parameter was given.
+fn read(url: &str) -> Option<(Vec<String>, bool)> {
     let rest = (url.strip_prefix("postgres://")).or_else(|| url.strip_prefix("postgresql://"))?;
     // the userinfo ends at the first `@`, wherever it is
     let rest = rest.split_once('@').map_or(rest, |(_, after)| after);
@@ -46,12 +63,13 @@ pub fn url_hosts(url: &str) -> Option<Vec<String>> {
                 }
                 None => chunk.split(':').next().unwrap_or(chunk),
             };
-            hosts.push(host_text(host)?);
+            hosts.extend(Some(host_text(host)?).filter(|host| !host.is_empty()));
         }
     }
     // the path, if any, ends at the first `?`; then `key=value` pairs, each
     // key ending at its first `=`, each value at the next `&`
     let mut query = tail.split_once('?').map_or("", |(_, query)| query);
+    let mut hostaddr = false;
     while !query.is_empty() {
         let (key, after) = query.split_once('=')?;
         let (value, next) = after.split_once('&').unwrap_or((after, ""));
@@ -59,11 +77,16 @@ pub fn url_hosts(url: &str) -> Option<Vec<String>> {
         match String::from_utf8(decode(key)).ok()?.as_str() {
             "host" => match host_text(value)? {
                 path if path.starts_with('/') => hosts.push(path),
-                named => hosts.extend(named.split(',').map(str::to_owned)),
+                named => hosts.extend(
+                    (named.split(','))
+                        .filter(|host| !host.is_empty())
+                        .map(str::to_owned),
+                ),
             },
             "hostaddr" => {
                 let value = String::from_utf8(decode(value)).ok()?;
                 hosts.extend(value.split(',').map(str::to_owned));
+                hostaddr = true;
             }
             _ => {}
         }
@@ -71,7 +94,7 @@ pub fn url_hosts(url: &str) -> Option<Vec<String>> {
     if hosts.is_empty() {
         hosts.push(String::new());
     }
-    Some(hosts)
+    Some((hosts, hostaddr))
 }
 
 /// One host as the client reads it: percent-decoded; a socket directory
@@ -108,10 +131,12 @@ fn decode(text: &str) -> Vec<u8> {
     decoded
 }
 
-/// Whether `host` (one of [`url_hosts`]) names a Unix socket: none (the
-/// client's default), or a path.
+/// Whether `host` (one of [`url_hosts`]) names no TCP host: none at all
+/// (the empty host a URL naming none is answered as), or a Unix socket
+/// directory, a path. The client reads only a leading `/` as a path: any
+/// other host (`@name` included) is a name it looks up.
 pub fn socket(host: &str) -> bool {
-    host.is_empty() || host.starts_with('/') || host.starts_with('@')
+    host.is_empty() || host.starts_with('/')
 }
 
 /// Whether `host` (one of [`url_hosts`]) names this host's loopback
@@ -154,8 +179,10 @@ fn bare(host: &str) -> &str {
     host.strip_suffix('.').unwrap_or(host)
 }
 
-/// `text` as `inet_aton` reads it (glibc's and musl's, which agree but for
-/// one leniency kept here: glibc reads a bare `0x` as zero): one to four
+/// `text` as `inet_aton` reads it (glibc's and musl's, which differ only
+/// on a bare `0x`: musl refuses it, and glibc's reading has changed between
+/// versions; here it is zero, which can only read more hosts as
+/// addresses, never fewer): one to four
 /// numbers separated by `.`, each decimal, octal (a leading `0`) or hex
 /// (`0x`), each starting with a digit; the last fills the bits the earlier
 /// ones leave (`a`, `a.b` with `b` < 2^24, `a.b.c` with `c` < 2^16,

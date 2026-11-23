@@ -3,10 +3,14 @@
 //! them, so each intent its Workspaces held is ended once, as that
 //! daemon's own unmount would have ended it: released, or marked uncertain
 //! when the Store refuses the delete. One it cannot end is a sentence of
-//! `left`. Nothing else ends a mount intent: `store compact` and the other
-//! GC calls settle only what the Store's admission proves unowned.
+//! `left`. A close that ran without a PostgreSQL Store URL (its machine
+//! cannot dial it) hands the intents with known ids back to its caller
+//! ([`handed`]), which ends them with its own URL ([`end_handed`]).
+//! Nothing else ends a mount intent: `store compact` and the other GC
+//! calls settle only what the Store's admission proves unowned.
 use crate::record::SandboxRecord;
 use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::sdk_values::{hex, unhex};
 use layerfs_history::BranchId;
 use layerfs_home::outcome::shell_word;
 use layerfs_store::open_args::OpenArgs;
@@ -65,6 +69,68 @@ fn end_one(open: Result<&OpenArgs, &str>, workspace: &Bound) -> Result<(), Strin
     layerfs_store::service::end_mount(open, branch, *id)
         .map(drop)
         .map_err(|refusal| refusal.message)
+}
+
+/// The field of a close's answer that hands its caller the mount intents
+/// its side could not end for want of a PostgreSQL Store URL it can dial.
+pub const HANDED: &str = "ending";
+
+/// `bound`'s Workspaces bound by id, as a close's answer hands them to its
+/// caller ([`HANDED`]): `{ path, workspace, branch }`, each id in hex.
+/// Only a Workspace bound to a Branch id is handed: what records less is
+/// a `left` sentence where the close runs.
+pub fn handed(bound: &[Bound]) -> SdkValue {
+    SdkValue::List(
+        (bound.iter())
+            .filter_map(|workspace| match &workspace.bound {
+                Some((id, Branch::Id(branch))) => Some(SdkValue::map([
+                    ("path", SdkValue::text(&workspace.path)),
+                    ("workspace", SdkValue::text(hex(id))),
+                    ("branch", SdkValue::text(hex(branch.as_slice()))),
+                ])),
+                _ => None,
+            })
+            .collect(),
+    )
+}
+
+/// A close's `answer` for Sandbox `record` of home `home`, with each mount
+/// intent its side handed back ([`HANDED`]) ended here, once, in the Store
+/// opened as a Store call here opens it ([`store_of`]): each one not ended
+/// is a sentence of its `left`, and the handed field goes. Any other answer
+/// is returned as it is.
+pub fn end_handed(home: &Path, record: &SandboxRecord, answer: SdkValue) -> SdkValue {
+    let SdkValue::Map(fields) = answer else {
+        return answer;
+    };
+    let (handed, mut fields): (Vec<_>, Vec<_>) =
+        fields.into_iter().partition(|(name, _)| name == HANDED);
+    let bound = match handed.into_iter().next() {
+        Some((_, SdkValue::List(items))) => items.iter().map(taken).collect::<Vec<_>>(),
+        Some(_) | None => return SdkValue::Map(fields),
+    };
+    if bound.is_empty() {
+        return SdkValue::Map(fields);
+    }
+    let open = store_of(home, record);
+    let more = end(open.as_ref().map_err(String::as_str), &bound);
+    match fields.iter_mut().find(|(name, _)| name == "left") {
+        Some((_, SdkValue::List(left))) => left.extend(more),
+        _ => fields.push(("left".to_owned(), SdkValue::List(more))),
+    }
+    SdkValue::Map(fields)
+}
+
+/// One Workspace [`handed`] names; one whose ids do not read is listed
+/// with neither, so its `left` sentence says so.
+fn taken(item: &SdkValue) -> Bound {
+    let id = |field: &str| item.get_text(field).and_then(unhex);
+    let workspace = id("workspace").and_then(|bytes| <[u8; 32]>::try_from(bytes).ok());
+    let branch = id("branch").and_then(|bytes| BranchId::from_slice(&bytes).ok());
+    Bound {
+        path: item.get_text("path").unwrap_or_default().to_owned(),
+        bound: workspace.zip(branch.map(Branch::Id)),
+    }
 }
 
 /// The Store of Sandbox `record`'s project in home `home`, opened as a

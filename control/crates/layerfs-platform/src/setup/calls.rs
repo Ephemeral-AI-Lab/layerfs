@@ -233,8 +233,9 @@ pub fn reach(spec: &Spec, store: &str, url: &str) -> Result<String, MachineError
 /// What a failed connection to Store `store` at `url` from `spec`'s machine
 /// adds for its user, where it may be a loopback the machine does not
 /// share: `Some` only on such a machine and only when the URL names a host
-/// by name (an address is never resolved, and [`reach`] refused every
-/// loopback one). A name that resolves to a loopback address there (a
+/// by name and gives no `hostaddr` (an address is never resolved, [`reach`]
+/// refused every loopback one, and with a `hostaddr` the client dials that
+/// address alone). A name that resolves to a loopback address there (a
 /// hosts entry) is not refused up front, since nothing resolves a name to
 /// check it, so the failure of its one dial carries the same advice as the
 /// refusal. The caller adds it only when no connection was made, not when

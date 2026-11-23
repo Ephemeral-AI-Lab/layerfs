@@ -46,7 +46,7 @@ pub use backend::host_process::HostProcessProvider;
 #[cfg(unix)]
 pub use helper_spec::{HelperSpec, SpecNetwork, RESOLVER_FILES};
 #[cfg(unix)]
-pub use postgres_url::{ip, loopback, socket, url_hosts};
+pub use postgres_url::{ip, loopback, socket, url_hostaddr, url_hosts};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
 #[cfg(any(target_os = "linux", target_os = "macos"))]

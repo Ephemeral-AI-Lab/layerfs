@@ -880,7 +880,9 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   then the Sandbox is stopped anyway: `unmounted` lists the Workspaces it
   ended, whose uncommitted changes end with it. Once its runtime is
   confirmed stopped, the mount intent each of those Workspaces held in the
-  Store is ended, once each. One it could not end (its Store could not be
+  Store is ended, once each; on a PostgreSQL Store whose URL its machine
+  cannot dial, the machine hands those intents back and the caller ends
+  them with the Store's own address. One it could not end (its Store could not be
   opened, say) is a sentence of `left` that says why: `branch remove` of
   its Branch and `store compact` are refused while it remains, and only the
   Store's admission ends it later, once it can prove the owner gone (for a

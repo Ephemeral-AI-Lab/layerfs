@@ -497,7 +497,15 @@ shown in [the calls](calls.md#store-13).)
   `native` and `docker` on a Linux Engine share the loopback and dial it
   as given. A Sandbox resolves names as its machine does. Only the calls
   that dial the URL (`sandbox create`, Commit, a Workspace status) are
-  refused for it: a Sandbox can always be read and removed. The login
+  refused for it: a Sandbox can always be read and removed. A forced
+  `sandbox remove` there still ends the mount intent each of its
+  Workspaces held: the machine closes the Sandbox without the URL and
+  hands those intents back, and this computer ends each once with the
+  Store's own address (PostgreSQL Store calls run in the caller), so
+  `branch remove` and `store compact` are not refused for them afterwards;
+  one it could not end is a sentence of `left`. Any other reason the URL
+  cannot be made (the saved login is gone, or the Store names none)
+  refuses the remove with that reason and its fix. The login
   travels only in the one request. The server always runs off the
   machine; nothing installs PostgreSQL in a machine (D12).
 - `store doctor <store>` checks the Store from this computer and from each

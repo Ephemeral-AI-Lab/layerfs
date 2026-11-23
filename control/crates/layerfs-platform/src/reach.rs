@@ -66,12 +66,16 @@ pub(crate) fn dial(
 
 /// [`crate::loopback_hint`]: the refusal's advice, for a failed dial of a
 /// name that resolves to a loopback address on the machine. Only a URL
-/// naming at least one host by name can fail so: an address is read, never
-/// resolved, and [`dial`] refused every loopback one.
+/// whose client resolves at least one host name can fail so: an address is
+/// read, never resolved, and [`dial`] refused every loopback one; with a
+/// `hostaddr` the client dials those addresses alone.
 pub(crate) fn hint(spec: &Spec, (store, url): (&str, &str), loopback: Loopback) -> Option<String> {
     let Loopback::Apart(this_host) = loopback else {
         return None;
     };
+    if layerfs_sandbox_backend::url_hostaddr(url) {
+        return None;
+    }
     let named = |host: &String| {
         !layerfs_sandbox_backend::socket(host) && layerfs_sandbox_backend::ip(host).is_none()
     };

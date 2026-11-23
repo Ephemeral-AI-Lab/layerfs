@@ -76,7 +76,8 @@ impl Op {
     /// A create starts a daemon that dials it (after the reach check), a
     /// Commit reads its Branch's head and `expected` there and a status its
     /// head: [`StoreUrl::Dialled`]. A close dials it only to end the mount
-    /// intents a forced unmount left, which it reports when it cannot:
+    /// intents a forced unmount left; where the machine cannot dial it, it
+    /// hands them back to its caller, which ends them:
     /// [`StoreUrl::Cleanup`]. Every other operation asks only the
     /// Sandbox's daemon, which dials the URL its create gave it:
     /// [`StoreUrl::Unused`].
@@ -99,8 +100,10 @@ impl Op {
 pub enum StoreUrl {
     /// Dialled for its answer: a URL the machine cannot dial refuses it.
     Dialled,
-    /// Dialled for a cleanup it reports when it cannot: the operation runs
-    /// without a URL the machine cannot dial.
+    /// Dialled for a cleanup: the operation runs without a URL the machine
+    /// cannot dial (`layerfs_machine::platform::reach` refuses it), and its
+    /// caller does the cleanup. Any other reason the URL cannot be made
+    /// refuses it, as for [`StoreUrl::Dialled`].
     Cleanup,
     /// Never dialled: the operation runs without it.
     Unused,

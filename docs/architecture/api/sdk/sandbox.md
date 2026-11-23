@@ -299,7 +299,8 @@ identity and ends its mounts and processes
 Once the runtime is confirmed stopped, either forced path ends the mount
 intent each of its Workspaces held in the Store, once each (by the Branch
 name and Workspace id their records keep on `native`; by the bound ids its
-worker holds on a machine), and each one it could not end is a `left`
+worker holds on a machine, which hands them back to the caller to end with
+the Store's own URL when it could not dial a PostgreSQL Store's), and each one it could not end is a `left`
 sentence naming why and what ends it there
 ([`mount_intents.rs`](../../../../control/crates/layerfs-sandbox/src/mount_intents.rs)).
 Nothing else ends a mount intent: `store compact` and the other GC calls

@@ -209,6 +209,8 @@ fn a_failed_dial_carries_the_loopback_hint_where_it_is_not_shared() {
             format!("postgres://lfs:{SECRET}@10.0.0.5:5432/layerfs"),
             format!("postgres://lfs:{SECRET}@[2001:db8::1],10.1/layerfs"),
             format!("postgres://lfs:{SECRET}@10.0.0.5/layerfs?hostaddr=10.0.0.6"),
+            // with a hostaddr its client dials that address alone
+            format!("postgres://lfs:{SECRET}@db.example.com/layerfs?hostaddr=10.0.0.6"),
         ] {
             assert_eq!(machine::loopback_hint(&spec, STORE, &addressed), None);
         }
