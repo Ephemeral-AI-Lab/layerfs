@@ -10,8 +10,11 @@
 //!   LAYERFS_TEST_PG_PASSWORD, LAYERFS_TEST_DAEMON (a host daemon built with
 //!   `postgresql`); the docker half also LAYERFS_TEST_IMAGE (a local image
 //!   digest, the worker container's) and LAYERFS_BUNDLE (a sealed Linux
-//!   bundle whose daemon has `postgresql`). macOS reaches a loopback server
-//!   from the container as `host.docker.internal`.
+//!   bundle whose daemon has `postgresql`). The URL is never rewritten: on
+//!   Docker Desktop a loopback URL is refused for the docker machine, which
+//!   is then given its own URL naming `host.docker.internal`, which its
+//!   Sandboxes resolve with the worker's resolver files; their Workspace
+//!   and Commit never show those files.
 //! - a sqlite Store pushed to the docker machine and its Sandbox, through the
 //!   docker worker: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The Sandbox runs
 //!   in namespaces inside the privileged worker container and shows
@@ -202,8 +205,26 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         layerfs_platform::StoreKind::Postgresql,
     ) {
         Ok(()) => {
+            // a loopback URL is refused before the machine is asked: lima
+            // does not share this host's loopback, and nothing rewrites it
+            assert_eq!(code, "Unsupported", "{message}");
+            assert!(message.contains("host.lima.internal"), "{message}");
+            assert!(message.contains("--machine dev`"), "{message}");
+            // any other host: the stopped machine is refused naming its start
+            let record = paths::store_record(&home, "pg");
+            let mut fields = home::read_record(&record).unwrap().unwrap();
+            if let SdkValue::Map(entries) = &mut fields {
+                for (name, value) in entries.iter_mut() {
+                    if name == "url" {
+                        *value = t("postgres://db.invalid:1/db");
+                    }
+                }
+            }
+            home::write_record(&record, &fields).unwrap();
+            let (code, message) = create("dev");
             assert_eq!(code, "Unavailable", "{message}");
             assert!(message.contains("layerfs machine start dev"), "{message}");
+            pg_record(&home);
         }
         Err(reason) => {
             assert_eq!(code, "Unsupported", "{message}");
@@ -395,17 +416,42 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         let outcome = std::panic::catch_unwind(|| {
             // only `machine.start` starts a machine (D11)
             ok(&home, "machine.start", &[("name", t("docker"))]);
-            // docker runs the Store's Sandboxes with no step before the
-            // create, whose reach check dials from the worker container
-            ok(
-                &home,
-                "sandbox.create",
-                &[
-                    ("project", t("pg/app")),
-                    ("name", t("d")),
-                    ("machine", t("docker")),
-                ],
-            );
+            let create = || {
+                call(
+                    &home,
+                    "sandbox.create",
+                    &[
+                        ("project", t("pg/app")),
+                        ("name", t("d")),
+                        ("machine", t("docker")),
+                    ],
+                )
+            };
+            // Docker Desktop's worker does not share this host's loopback:
+            // a loopback URL is refused, naming the host's name there, and
+            // the machine gets its own URL (nothing is rewritten)
+            let loopback = ["127.0.0.1", "localhost", "[::1]"]
+                .iter()
+                .find(|host| address.starts_with(*host));
+            if let (Some(host), false) = (loopback, cfg!(target_os = "linux")) {
+                let (code, message) = create().unwrap_err();
+                assert_eq!(code, "Unsupported", "{message}");
+                assert!(message.contains("host.docker.internal"), "{message}");
+                assert!(message.contains("--machine docker"), "{message}");
+                let own = address.replacen(host, "host.docker.internal", 1);
+                ok(
+                    &home,
+                    "store.connect",
+                    &[
+                        ("store", t("pg")),
+                        ("url", t(&format!("{scheme}://{own}"))),
+                        ("machine", t("docker")),
+                    ],
+                );
+            }
+            // the create's reach check dials from the worker container
+            create().unwrap();
+            resolves_as_the_worker(&home, "pg/app", "d");
             work(&home, "pg/app", "d", "on-docker", "docker.txt");
             ok(&home, "sandbox.remove", &[("sandbox", t("d"))]);
         });
@@ -433,6 +479,61 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     }
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+/// A Sandbox resolves names as its machine's worker does: the worker's
+/// `/etc/resolv.conf` and `/etc/hosts` are bound over its root's, so
+/// `host.docker.internal` resolves in it on Docker Desktop. Reading them
+/// changes nothing a Workspace shows: no change, an UpToDate Commit, and
+/// neither file in the Workspace's tree.
+fn resolves_as_the_worker(home: &Path, project: &str, sandbox: &str) {
+    ok(
+        home,
+        "branch.fork",
+        &[
+            ("project", t(project)),
+            ("name", t("resolver")),
+            ("from", t("main")),
+        ],
+    );
+    let mounted = ok(
+        home,
+        "workspace.mount",
+        &[("sandbox", t(sandbox)), ("branch", t("resolver"))],
+    );
+    let ws = mounted.get_text("workspace").unwrap().to_owned();
+    let name = if cfg!(target_os = "linux") {
+        "localhost"
+    } else {
+        "host.docker.internal"
+    };
+    let ran = ok(
+        home,
+        "workspace.exec",
+        &[
+            ("workspace", t(&ws)),
+            (
+                "command",
+                t(&format!(
+                    "test -s /etc/resolv.conf && test -s /etc/hosts && getent hosts {name} && ls -a"
+                )),
+            ),
+        ],
+    );
+    assert_eq!(ran.get_int("exit_code"), Some(0), "{ran:?}");
+    let listed = ran.get_text("stdout").unwrap_or_default().to_owned();
+    for line in listed.lines() {
+        assert!(!matches!(line, "etc" | "resolv.conf" | "hosts"), "{listed}");
+    }
+    let status = ok(home, "workspace.status", &[("workspace", t(&ws))]);
+    assert_eq!(
+        status.get("changes"),
+        Some(&SdkValue::List(Vec::new())),
+        "{status:?}"
+    );
+    let committed = ok(home, "workspace.commit", &[("workspace", t(&ws))]);
+    assert!(committed.get("unchanged").is_some(), "{committed:?}");
+    ok(home, "workspace.unmount", &[("workspace", t(&ws))]);
 }
 
 /// Removes the docker worker container and data volume of the home `id`,

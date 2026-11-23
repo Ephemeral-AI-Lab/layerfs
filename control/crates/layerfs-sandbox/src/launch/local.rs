@@ -180,13 +180,7 @@ fn start_named(
         let pg = pg_host
             .as_deref()
             .filter(|_| failure.phase == crate::SandboxPhase::Listener)
-            .map(|pg_host| {
-                (
-                    pg_host,
-                    host.store.as_str(),
-                    backend == crate::runtime::Backend::Namespaces,
-                )
-            });
+            .map(|pg_host| (pg_host, host.store.as_str()));
         abandon(
             id,
             format!(
@@ -454,7 +448,7 @@ fn abandon(
     mut cause: String,
     sandbox: Option<Box<Sandbox>>,
     daemon: &Path,
-    pg: Option<(&str, &str, bool)>,
+    pg: Option<(&str, &str)>,
 ) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;
@@ -487,17 +481,10 @@ fn abandon(
                 || line.contains("Store open: physical Store I/O: pack persistence: Refused { status: \"Closed\" }")
         });
     let (code, message, removed) = match (left, pg_unreachable, pg) {
-        (None, true, Some((pg_host, store_name, namespaces))) => {
+        (None, true, Some((pg_host, store_name))) => {
             let message = if pg_host.is_empty() {
                 format!(
                     "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server"
-                )
-            } else if namespaces
-                && !pg_host.eq_ignore_ascii_case("localhost")
-                && pg_host.parse::<std::net::IpAddr>().is_err()
-            {
-                format!(
-                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server at {pg_host} (the Sandbox root has no /etc/hosts or /etc/resolv.conf, so a hostname may not resolve there; use an IP address)"
                 )
             } else {
                 format!(

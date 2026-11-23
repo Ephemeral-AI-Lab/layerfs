@@ -102,7 +102,7 @@ volume, not to `docker logs`
 | a container named `<vm>` without the `layerfs.role=machine-worker` label | `Exists` from `start`, `stop` and `provider_within` alike ("… is not a LayerFS worker; it is left alone"); it is never touched |
 | `guest` | `docker -H unix://<socket> exec` in the worker container |
 | `load_image` | `docker load -i` (up to 300 s), `sha256:<64 hex>` |
-| `reach` | Linux host: as given (host network); Docker Desktop: a loopback host becomes the address the worker resolves `host.docker.internal` to (`getent ahostsv4`) |
+| `reach` | Linux host: `Shared` (host network), every URL as given; Docker Desktop: `Apart`, a loopback host or Unix socket refused naming `host.docker.internal`, which the worker and its Sandboxes resolve (Docker Desktop's DNS); nothing is rewritten and no `docker` command runs ([Reach](workers-and-reach.md#reach-reachrs)) |
 | `forward` | `Unsupported`: Docker publishes a container's ports only at start, so Workspace calls go through the worker |
 
 The secret goes into a private tmpfs after start, so it is in no command
@@ -148,7 +148,7 @@ named volume.
 | `stop` | `container stop` (5 s grace) if running; forced: `container stop --time 0`, also when failed or between states |
 | `remove` | `container delete --force`, then `container volume delete` |
 | `status` | `container inspect` `status.state`: `running`, `stopped`, `failed`; any other (`stopping`, `unknown`) is `Unavailable`, as lima's and docker's passing states, never recorded `failed` |
-| `reach` | a loopback host becomes the recorded gateway, else `status.networks[0].ipv4Gateway` read while it runs |
+| `reach` | `Apart`: a loopback host or Unix socket refused naming the gateway the last start recorded (else vmnet's default `192.168.64.1`), on which the server must listen; the guest has no name for this host; no `container` command runs |
 | `forward` | `Unsupported`: the CLI publishes a port only at create |
 
 `/proc/sys` is read-only until remounted; preparation remounts it before
@@ -185,7 +185,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | `stop` | `limactl stop` (up to 300 s) if running; forced: `limactl stop --force`, also when `Broken`; instance and disk stay |
 | `status` | `limactl list` `Running`, `Stopped`, `Broken` (failed); any other is `Unavailable` |
 | `remove` | `limactl delete --force`, then `limactl disk delete` |
-| `reach` | a loopback host becomes `192.168.5.2` (the address of `host.lima.internal`; the Sandbox root has no such hosts entry) |
+| `reach` | `Apart`: a loopback host or Unix socket refused naming `host.lima.internal` (the guest's hosts entry for `192.168.5.2`, which its Sandboxes read through the bound resolver files) |
 | `forward` | a detached `ssh -N -L` over Lima's `ssh.config`, answering its pid ([Workers and reach](workers-and-reach.md#forwards)) |
 
 `disk` sizes the data disk only; Lima's root disk keeps Lima's own size.
@@ -203,7 +203,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | docker `start` `Failed` | image not in the Engine (`--pull never`), or no published port (macOS) | same |
 | `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | apple-container `Failed`: "… inspect answer is not the shape this adapter knows" | another CLI version's JSON | [`apple_container/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/observe.rs) |
-| apple-container `reach` `Unavailable`: no gateway | the machine is stopped | same |
+| `reach` `Unsupported`: "… its URL names this host's loopback (…), which the machine does not share; give the Store a host the machine reaches (…), or give the machine its own URL with `layerfs store connect <store> <url> --machine <m>`" (or "… names no host (a Unix socket of the caller) …") | a loopback or Unix-socket PostgreSQL URL on docker (Docker Desktop), lima or apple-container | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
 | apple-container `Unavailable`: "… a transitional or unrecognized state" | the container is `stopping` (or `unknown`); ask again once it settles, or force the stop | same; [`apple_container/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/power.rs) |
 | `missing: host:macos`, `tool:limactl` | not a Mac, no `limactl` | [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) |
 | lima "… is not an ext4 mount" | the data disk did not attach as ext4 | [`lima/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |

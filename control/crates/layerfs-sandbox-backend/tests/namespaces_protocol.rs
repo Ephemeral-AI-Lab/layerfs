@@ -3,6 +3,7 @@
 //! records from another. Nothing here starts a process.
 use layerfs_sandbox_backend::{
     Bind, HelperSpec, Image, LocalRecord, NamespaceRecord, RuntimeError, SandboxRecord,
+    RESOLVER_FILES,
 };
 use std::path::{Path, PathBuf};
 
@@ -26,6 +27,41 @@ fn spec() -> HelperSpec {
         binds: vec![Bind::store(Path::new("/layerfs-store/project/store.sqlite")).unwrap()],
         runtime: None,
     }
+}
+
+/// The launcher's resolver files are bound over the root's `/etc` only:
+/// never inside the Sandbox directory, under which every Workspace is
+/// mounted (and which a diff or a Commit reads), nor inside a bind. A spec
+/// whose Sandbox directory or bind would hold one is refused, so the init
+/// stage starts no Sandbox where a resolver file could enter a Workspace.
+#[test]
+fn resolver_files_land_on_the_root_s_etc_never_in_a_workspace() {
+    let spec = spec();
+    let targets = spec.resolver_targets().unwrap();
+    assert_eq!(
+        targets,
+        [
+            PathBuf::from("/etc/resolv.conf"),
+            PathBuf::from("/etc/hosts")
+        ]
+    );
+    assert_eq!(RESOLVER_FILES.len(), targets.len());
+    let workspaces = spec.sandbox.join("workspaces");
+    for target in &targets {
+        assert!(target.starts_with("/etc"), "{}", target.display());
+        assert!(!target.starts_with(&spec.sandbox), "{}", target.display());
+        assert!(!target.starts_with(&workspaces), "{}", target.display());
+        assert!(!workspaces.starts_with(target), "{}", target.display());
+    }
+    for sandbox in ["/etc", "/"] {
+        let mut clash = spec.clone();
+        clash.sandbox = PathBuf::from(sandbox);
+        let refusal = clash.resolver_targets().unwrap_err();
+        assert!(refusal.contains("which the Sandbox mounts"), "{refusal}");
+    }
+    let mut clash = spec.clone();
+    clash.binds = vec![Bind::store(Path::new("/etc/store.sqlite")).unwrap()];
+    assert!(clash.resolver_targets().is_err());
 }
 
 #[test]

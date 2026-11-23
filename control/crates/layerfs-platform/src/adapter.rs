@@ -37,10 +37,10 @@ pub(crate) trait Adapter: Sync {
     fn provider_state(&self, spec: &Spec) -> Result<State, MachineError>;
     /// The machine's state now; starts nothing.
     fn status(&self, spec: &Spec) -> Result<Status, MachineError>;
-    /// The PostgreSQL Store URL the machine's Sandbox daemons dial for
-    /// `url`: a loopback host becomes the machine's host alias, or is
-    /// refused naming what is missing (`crate::reach`). Starts nothing.
-    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError>;
+    /// How the machine's Sandboxes reach the caller's loopback, which
+    /// `crate::reach` checks every PostgreSQL Store URL against. Reads
+    /// nothing from the machine.
+    fn loopback(&self, spec: &Spec) -> crate::reach::Loopback;
     /// The host loopback address at which this process reaches a Sandbox
     /// daemon listening on `127.0.0.1:<guest_port>` in the machine (the
     /// worker's network namespace), or why the machine forwards none

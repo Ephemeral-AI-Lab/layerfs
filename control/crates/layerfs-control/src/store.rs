@@ -328,7 +328,8 @@ pub(crate) fn check_from(
             }
         }
     };
-    let checked = checked.map_err(|refusal| from_machine(refusal, (name, machine, &host), hint));
+    let checked =
+        checked.map_err(|refusal| from_machine(refusal, (name, machine, &host), hint.as_deref()));
     (Some(host), checked)
 }
 

@@ -1,19 +1,15 @@
 //! A PostgreSQL connection URL (`postgres://` or `postgresql://`) split at
-//! its host, so a Sandbox's daemon can be given the same URL under another
-//! host name (Docker Desktop's `host.docker.internal`, a machine's alias).
+//! its host, so the hosts it names can be read: a machine that does not
+//! share the caller's loopback refuses a URL naming it (the URL itself is
+//! never rewritten).
 //!
 //! The URL may hold the Store's password: [`PostgresUrl`] has no `Debug`,
 //! and nothing here puts any part of the URL into a message.
 
 /// A URL as `scheme://[userinfo@]host[:port][/path][?query]`, borrowed.
 pub struct PostgresUrl<'a> {
-    scheme: &'a str,
-    /// Everything before the last `@` of the authority, password included.
-    userinfo: Option<&'a str>,
     /// The host, without an IPv6 address's brackets.
     host: &'a str,
-    /// `:<port>`, or empty.
-    port: &'a str,
     /// The path and query, from the first `/` or `?` on.
     tail: &'a str,
 }
@@ -23,13 +19,11 @@ impl<'a> PostgresUrl<'a> {
     /// port that is not 1 to 5 digits (a host list `h1,h2:5433` reads as
     /// one host holding a `,`).
     pub fn parse(url: &'a str) -> Option<Self> {
-        let (scheme, rest) = url.split_once("://")?;
+        let (_scheme, rest) = url.split_once("://")?;
         let end = rest.find(['/', '?']).unwrap_or(rest.len());
         let (authority, tail) = rest.split_at(end);
-        let (userinfo, host_port) = match authority.rsplit_once('@') {
-            Some((userinfo, host_port)) => (Some(userinfo), host_port),
-            None => (None, authority),
-        };
+        // everything before the last `@` is the userinfo, password included
+        let host_port = authority.rsplit_once('@').map_or(authority, |(_, at)| at);
         let (host, port) = match host_port.strip_prefix('[') {
             Some(v6) => v6.split_once(']')?,
             None => match host_port.rsplit_once(':') {
@@ -46,13 +40,7 @@ impl<'a> PostgresUrl<'a> {
         if !port_ok {
             return None;
         }
-        Some(Self {
-            scheme,
-            userinfo,
-            host,
-            port,
-            tail,
-        })
+        Some(Self { host, tail })
     }
 
     /// The host, without an IPv6 address's brackets.
@@ -60,10 +48,17 @@ impl<'a> PostgresUrl<'a> {
         self.host
     }
 
-    /// Whether the host is this host's loopback: `localhost`, `127.0.0.1`
-    /// or `::1`.
-    pub fn loopback(&self) -> bool {
-        matches!(self.host, "127.0.0.1" | "localhost" | "::1")
+    /// Every server host the URL names: each host of its host list
+    /// (`h1,h2:5433`, ports and IPv6 brackets dropped), then each one a
+    /// `host` or `hostaddr` parameter names. `%2F` reads as `/`, so a
+    /// socket directory reads as one. An empty host is libpq's default, a
+    /// Unix socket.
+    pub fn hosts(&self) -> Vec<String> {
+        let mut hosts = list(self.host);
+        for value in self.query("host").chain(self.query("hostaddr")) {
+            hosts.extend(list(value));
+        }
+        hosts
     }
 
     /// The values of the query parameter `key`, in order (not
@@ -75,16 +70,100 @@ impl<'a> PostgresUrl<'a> {
             (name == key).then_some(value)
         })
     }
+}
 
-    /// The same URL with `host` in place of its host; everything else,
-    /// the userinfo included, is kept byte for byte.
-    pub fn with_host(&self, host: &str) -> String {
-        let user = self.userinfo.map(|u| format!("{u}@")).unwrap_or_default();
-        let host = if host.contains(':') {
-            format!("[{host}]")
-        } else {
-            host.to_owned()
-        };
-        format!("{}://{user}{host}{}{}", self.scheme, self.port, self.tail)
+/// Every server host a connection string names: a URL's
+/// ([`PostgresUrl::hosts`]), or the `host` and `hostaddr` values of
+/// libpq's `key=value` words (single quotes and backslash escapes read as
+/// libpq reads them); words naming neither name the default Unix socket
+/// (`""`). `None` when it is neither form.
+pub fn conninfo_hosts(conninfo: &str) -> Option<Vec<String>> {
+    if conninfo.contains("://") {
+        return PostgresUrl::parse(conninfo).map(|url| url.hosts());
+    }
+    let mut hosts = Vec::new();
+    let mut named = false;
+    for (key, value) in words(conninfo)? {
+        if key == "host" || key == "hostaddr" {
+            named = true;
+            hosts.extend(list(&value));
+        }
+    }
+    if !named {
+        hosts.push(String::new());
+    }
+    Some(hosts)
+}
+
+/// libpq's `key = value` words, or `None` when one is malformed.
+fn words(text: &str) -> Option<Vec<(String, String)>> {
+    let mut chars = text.chars().peekable();
+    let mut found = Vec::new();
+    loop {
+        while chars.next_if(|c| c.is_whitespace()).is_some() {}
+        if chars.peek().is_none() {
+            return Some(found);
+        }
+        let mut key = String::new();
+        while let Some(c) = chars.next_if(|c| *c != '=' && !c.is_whitespace()) {
+            key.push(c);
+        }
+        while chars.next_if(|c| c.is_whitespace()).is_some() {}
+        if key.is_empty() || chars.next() != Some('=') {
+            return None;
+        }
+        while chars.next_if(|c| c.is_whitespace()).is_some() {}
+        let quoted = chars.next_if_eq(&'\'').is_some();
+        let mut value = String::new();
+        loop {
+            match chars.next() {
+                Some('\\') => value.push(chars.next()?),
+                Some('\'') if quoted => break,
+                Some(c) if !quoted && c.is_whitespace() => break,
+                Some(c) => value.push(c),
+                None if quoted => return None,
+                None => break,
+            }
+        }
+        found.push((key, value));
+    }
+}
+
+/// The hosts of one comma-separated list, each [`bare`], `%2F` read as `/`.
+fn list(text: &str) -> Vec<String> {
+    let text = text.replace("%2F", "/").replace("%2f", "/");
+    text.split(',').map(|host| bare(host).to_owned()).collect()
+}
+
+/// One host of a host list without its port or an IPv6 address's brackets.
+fn bare(host: &str) -> &str {
+    if let Some(v6) = host.strip_prefix('[') {
+        return v6.split_once(']').map_or(v6, |(v6, _)| v6);
+    }
+    match host.rsplit_once(':') {
+        // `h:5432`, not an unbracketed IPv6 address (`::1`)
+        Some((name, port)) if !name.contains(':') && port.bytes().all(|b| b.is_ascii_digit()) => {
+            name
+        }
+        _ => host,
+    }
+}
+
+/// Whether `host` names this host's loopback without being resolved:
+/// `localhost` (any case, with or without its final dot), any address of
+/// 127.0.0.0/8, `::1`, or an IPv4-mapped `::ffff:127.x.x.x`. Any other name
+/// is not resolved here: one resolving to a loopback address fails at its
+/// dial.
+pub fn loopback(host: &str) -> bool {
+    let host = host.strip_suffix('.').unwrap_or(host);
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(v4)) => v4.is_loopback(),
+        Ok(std::net::IpAddr::V6(v6)) => {
+            v6.is_loopback() || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
+        }
+        Err(_) => false,
     }
 }

@@ -174,13 +174,13 @@ update as its fix
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 
-How the URL is rewritten for a machine is
+The URL is never rewritten for a machine; which URLs a machine refuses is
 [Reach](../machines/workers-and-reach.md#reach-reachrs).
 
 ## Related
 
 - [Stores and projects](README.md): records, routes and leases.
-- [Machines: workers and reach](../machines/workers-and-reach.md): `store.file`, `store.reach` and URL rewriting.
+- [Machines: workers and reach](../machines/workers-and-reach.md): `store.file`, `store.reach` and the loopback refusal.
 - [Backups](../backups/README.md): `Stage` and `Unstage` for `backup.create`.
 - [Store: SQLite](../../engine/store/sqlite.md), [Store: PostgreSQL](../../engine/store/postgresql.md): what the engine opens.
 - [API: store](../../api/sdk/store.md).

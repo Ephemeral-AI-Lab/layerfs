@@ -38,6 +38,15 @@ const BIND: &str = "bind";
 /// The key of the optional runtime line, written once after the fields.
 const RUNTIME: &str = "runtime";
 
+/// The launcher's name-resolution files, which the init stage binds
+/// read-only over the Sandbox root's own: the Sandbox shares the launcher's
+/// network namespace, so it then resolves names as the launcher does
+/// (Docker Desktop's `host.docker.internal`, a VM's hosts entries, any DNS
+/// name). Their place is the root's `/etc`, the image and the Sandbox's own
+/// writable layer, never a Workspace: Workspaces are mounted under the
+/// Sandbox directory, and a diff or a Commit reads nothing else.
+pub const RESOLVER_FILES: [&str; 2] = ["/etc/resolv.conf", "/etc/hosts"];
+
 /// One init stage's decoded inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HelperSpec {
@@ -73,6 +82,28 @@ pub struct HelperSpec {
 }
 
 impl HelperSpec {
+    /// The guest paths the init stage binds [`RESOLVER_FILES`] at. Refused
+    /// when one would land in the Sandbox directory (where its Workspaces
+    /// are mounted) or in a bind, which a resolver file must never enter.
+    pub fn resolver_targets(&self) -> Result<Vec<PathBuf>, String> {
+        let mounted =
+            std::iter::once(&self.sandbox).chain(self.binds.iter().map(|bind| &bind.guest));
+        let mounted: Vec<&PathBuf> = mounted.collect();
+        let mut targets = Vec::new();
+        for file in RESOLVER_FILES {
+            let target = PathBuf::from(file);
+            if let Some(holder) = mounted.iter().find(|path| target.starts_with(path)) {
+                return Err(format!(
+                    "{} is inside {}, which the Sandbox mounts, so the resolver files cannot be bound",
+                    target.display(),
+                    holder.display()
+                ));
+            }
+            targets.push(target);
+        }
+        Ok(targets)
+    }
+
     /// Encodes the fields and the binds; refuses a path that is not
     /// absolute, has `.` or `..` components, or holds a control character.
     pub fn encode(&self) -> Result<Vec<u8>, RuntimeError> {

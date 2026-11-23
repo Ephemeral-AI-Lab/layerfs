@@ -264,32 +264,45 @@ it in the worker server's files alone and refuses a manifest that enables it.
 
 ## Reach (`reach.rs`)
 
-A PostgreSQL Store's URL is written for the caller's host.
-`reach(spec, url)` answers the URL that machine's daemon dials; it starts
-nothing, and no message holds any part of the URL.
+A PostgreSQL Store's URL is the user's configuration: LayerFS dials it
+exactly as configured from every machine, rewrites no part of it and reads
+no port (owner, 2026-11-24, replacing the D-8 rewrite).
+`reach(spec, url)` answers that URL or refuses it; it starts nothing, runs
+no provider command and resolves no name, and no message holds any part
+of the URL but a loopback host. Each adapter declares its `Loopback`.
 
 ```text
- dial(spec, url, loopback)
-   Shared? ------------------------------------------> url as given
-   one postgres[ql]://[user@]host[:port]/... ?  no --> InvalidInput
-   ?host= or ?hostaddr= ------------------------ yes --> Unsupported
-   no host (a Unix socket) --------------------- yes --> Unsupported
-   host not localhost / 127.0.0.1 / ::1 -------- yes --> url as given
-   sslmode=verify-full ------------------------- yes --> Unsupported
-   Alias(a) | Lookup(read) --> with_host(a), every other byte kept
+ dial(spec, url, adapter.loopback(spec))
+   Shared ---------------------------------------------> url as given, unread
+   Apart(this host):
+     hosts = conninfo_hosts(url): the URL's host list and host= / hostaddr=
+             parameters, or libpq's key=value words (no host: the socket)
+     not readable -------------------------------------> InvalidInput
+     a host empty, or a path (a Unix socket) ----------> Unsupported + advice
+     a host is this host's loopback -------------------> Unsupported + advice
+     else ---------------------------------------------> url as given
+   advice: "give the Store a host the machine reaches (<this host>), or give
+            the machine its own URL with `layerfs store connect <store>
+            <url> --machine <m>`"
 ```
 
-| Platform | `Loopback` | A loopback host becomes |
+| Platform | `Loopback` | The refusal names |
 | --- | --- | --- |
-| `native` | `Shared` | unchanged; the URL is not parsed |
-| `docker` | `Shared` on a Linux host; `Lookup` on Docker Desktop | the address the running worker resolves `host.docker.internal` to |
-| `lima` | `Alias` | `192.168.5.2` |
-| `apple-container` | `Alias` (recorded gateway), else `Lookup` | the gateway the last start recorded, else `container inspect`'s while running; a stale recorded gateway is dialled as recorded |
+| `native` | `Shared` | — |
+| `docker` | `Shared` on a Linux host (`--network host`); `Apart` on Docker Desktop | `host.docker.internal` |
+| `lima` | `Apart` | `host.lima.internal` (192.168.5.2) |
+| `apple-container` | `Apart` | the gateway the last start recorded, else `192.168.64.1`; the server must listen on it, not on 127.0.0.1 alone |
 
-`verify-full` is refused because the rewritten host is not in the server's
-certificate: give the Store a URL whose host every machine can verify.
-`PostgresUrl` keeps userinfo byte for byte, brackets an IPv6 alias, and has
-no `Debug`
+| Rule | Detail | Source |
+| --- | --- | --- |
+| Loopback | `localhost` (any case, with or without its final dot), every address of 127.0.0.0/8, `::1` (bracketed or not, any spelling) and IPv4-mapped `::ffff:127.x.x.x`, in any host the URL names | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) `loopback` |
+| Host parameters | `host=` and `hostaddr=` (and libpq's words) are checked like the URL's host, then dialled as given: they were refused only because a rewrite could not reach them | same, `conninfo_hosts` |
+| TLS | `sslmode=verify-full` and `verify-ca` are dialled as given: no host is rewritten, so the certificate's name still matches | `reach.rs` |
+| A name resolving to loopback | Not resolved to be refused: a hosts entry that maps a name to 127.0.0.1 on the machine fails at its one dial (the create's reach check, `store.reach`), and that failure carries the refusal's advice (`loopback_hint`, sent to the worker as `reach_hint`, appended to every `Unavailable` reach failure of an `Apart` machine) | [`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) `loopback_hint`, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reach_check`, [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `from_machine` |
+| Names in the Sandbox | A `namespaces` Sandbox resolves names with its machine's resolver files, bound into its root at start ([Backends](../sandboxes/backends.md)); a remote host is reached through the machine's own NAT and DNS | [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) `resolver` |
+| Per call | A Sandbox call on a PostgreSQL Store still builds its URL in the caller on every call (the worker process reads the Store per call, and the password travels only in that one request), but that is a record read and this check: no `docker exec` or other provider command | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reached` |
+
+`PostgresUrl` keeps no userinfo, has no `Debug` and is never put in a message
 ([`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs)).
 
 ## Forwards

@@ -89,18 +89,21 @@ enum RunRoot {
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
 /// (#535 §7.4): the URL the machine's own connection names, else the record's,
-/// with its password, resolved here in the caller, with a loopback host
-/// rewritten to the machine's alias or refused
-/// (`layerfs_machine::platform::reach`). It travels only in the one request that runs
-/// the call and is never written to a record.
-/// With it, what a failed reach check tells a user to check on that
-/// machine's platform, if anything. `store.update` and `store.status` build their check's
-/// argument here too.
+/// with its password, resolved here in the caller and dialled as it is: a
+/// loopback host the machine does not share is refused, nothing is
+/// rewritten and no machine is asked (`layerfs_machine::platform::reach`).
+/// It travels only in the one request that runs the call and is never
+/// written to a record.
+/// With it, what a failed dial from that machine adds when the machine
+/// does not share this host's loopback (`layerfs_machine::platform::
+/// loopback_hint`): a name resolving to a loopback address there fails
+/// its one dial, never resolved here to be refused up front. `store.update`
+/// and `store.status` build their check's argument here too.
 pub fn reached(
     home: &Path,
     machine: &str,
     record: &StoreRecord,
-) -> Result<(PgSelection, Option<&'static str>)> {
+) -> Result<(PgSelection, Option<String>)> {
     let url = layerfs_store::record::url_on(record, machine)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
@@ -108,9 +111,7 @@ pub fn reached(
     let (url, hint) = {
         let spec =
             layerfs_machine::machine_spec(home, &layerfs_machine::machine_of(home, machine)?)?;
-        let hint = (spec.kind == layerfs_machine::platform::Platform::AppleContainer).then_some(
-            "an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
-        );
+        let hint = layerfs_machine::platform::loopback_hint(&spec);
         let url = layerfs_machine::platform::reach(&spec, &url)
             .map_err(layerfs_machine::machine_refusal)?;
         (url, hint)
@@ -362,7 +363,7 @@ fn host_op(
                     &format!("machine {machine}"),
                     (&target.record, &key, &target.project),
                     postgresql,
-                    hint,
+                    hint.as_deref(),
                 )?;
             }
             let held = postgresql.is_some();
@@ -432,7 +433,7 @@ fn host_op(
                 project_record,
                 choice,
                 machine: postgresql.as_ref().map(|_| machine.to_owned()),
-                reach_hint: postgresql.as_ref().and(hint).map(str::to_owned),
+                reach_hint: postgresql.as_ref().and(hint),
                 postgresql,
             };
             let request = crate::host::encode(&sent)?;
