@@ -60,6 +60,8 @@ SLOW = {
     ("layerfs-control", "observed_application"): 6.30,
     # Linux functional run at the relocated tree, 2026-10-27.
     ("layerfs-persistence", "writer_admission"): 9.74,
+    # Two cases each hold a lane 3 s (finding #20), macOS host, 2026-11-23.
+    ("layerfs-persistence", "diagnostics_during_lane"): 6.06,
     ("layerfs-store-service", "scale_lineage_cap"): 24.3,
     ("layerfs-store-service", "sdk_merge_scale"): 23.8,
     ("layerfs-daemon", "complete_installed_roots"): 9.0,

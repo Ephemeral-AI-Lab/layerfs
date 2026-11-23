@@ -60,7 +60,7 @@ impl Session {
             if !state.connection.is_autocommit() {
                 state.quarantined = true;
             }
-            state.finish_writer()?;
+            state.finish_writer(self.background.as_ref())?;
             let rows = result?;
             let busy = rows.first().ok_or(BackendError::Integrity)?.get::<i64>(0)?;
             Ok(busy == 0)

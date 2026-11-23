@@ -52,7 +52,18 @@ impl LaneHold {
 impl Drop for LaneHold {
     fn drop(&mut self) {
         if let Some(writer) = self.writer.take() {
-            if let Err(retained) = writer.release() {
+            // Nested work that quarantined the session may have left a write
+            // transaction open on its connection. That connection is closed
+            // here, while this thread still holds the lane, before the lane
+            // is released (finding #2); if SQLite refuses the close with a
+            // transaction open, the lane stays with the connection instead.
+            let mut writer = Some(writer);
+            if let Ok(mut state) = self.session.state.lock() {
+                if state.quarantined && !state.close_quarantined(self.session.background.as_ref()) {
+                    state.writer_hold = writer.take();
+                }
+            }
+            if let Some(Err(retained)) = writer.map(Writer::release) {
                 // As a failed per-job release: keep the lock, refuse later work.
                 if let Ok(mut state) = self.session.state.lock() {
                     state.quarantined = true;

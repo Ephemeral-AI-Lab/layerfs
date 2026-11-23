@@ -31,6 +31,32 @@ pub(crate) struct State {
 }
 
 impl State {
+    /// Quarantines the session after an uncertain outcome. An ordinary
+    /// connection is closed (finding #3), so the server ends its backend.
+    /// Kept open, that backend stayed until this process exited: a
+    /// transaction the server aborted with an error has already released its
+    /// row locks, but session advisory keys survive any abort, and an
+    /// uncertain outcome that left the transaction live (a lost reply, or a
+    /// body error classed uncertain) kept every row lock, a write's
+    /// `store_lane` row included, so every other writer met `Busy` after its
+    /// lock wait. Closing ends all of it. Nothing is replayed and the outcome
+    /// stays unknown; every later call is refused before it reaches a
+    /// connection, and the caller opens a new session. GC intent rows are not
+    /// touched: an intent's owner stays live by its recorded process, not by
+    /// this connection. A diagnostic driver keeps its connection: it is
+    /// read-only, holds no lane, and its deadline and cancellation outcome
+    /// are still read.
+    pub(crate) fn quarantine(&mut self) {
+        self.quarantined = true;
+        if matches!(self.client, super::driver::Driver::Sync(_)) {
+            self.statements.clear();
+            drop(std::mem::replace(
+                &mut self.client,
+                super::driver::Driver::Closed,
+            ));
+        }
+    }
+
     /// One prepared statement for `sql`, prepared once per connection.
     pub(crate) fn statement(&mut self, sql: &str) -> Result<Statement, super::driver::Error> {
         if let Some(statement) = self.statements.get(sql) {
@@ -182,7 +208,7 @@ pub(crate) struct Session {
     pub(crate) admission: Admission,
     pub(crate) state: Mutex<State>,
     /// The connection that holds the publication lane, opened on first use.
-    pub(crate) lane: Mutex<Option<Client>>,
+    pub(crate) lane: Mutex<Option<crate::backend::postgresql::lane::lane::LaneConnection>>,
     pub(crate) writable: bool,
     pub(crate) settings: Settings,
     /// The server's version and the Store's frozen policy, read by the

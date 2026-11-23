@@ -274,22 +274,52 @@ impl Session {
         }
         let start = Instant::now();
         let turn = self.admission.enter(self.wait_kind()).map_err(E::from)?;
+        let background = self.background.as_ref();
+        // The cross-process writer lock is waited for before the state lock
+        // (finding #20): a wait on another process's lane must not block
+        // `diagnostics()` or anything else that takes only the state lock.
+        // The FIFO turn already keeps this Session's other callers out, so no
+        // other thread can take this Session's writer meanwhile. A held
+        // publication lane already owns the writer for its nested work.
+        let writer = if writable && !turn.nested {
+            if self
+                .state
+                .lock()
+                .map_err(|_| E::from(BackendError::Unknown))?
+                .quarantined
+            {
+                return Err(BackendError::Unknown.into());
+            }
+            Some(
+                crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)
+                    .map_err(E::from)?,
+            )
+        } else {
+            None
+        };
+        // A poisoned lock drops `writer` here, which releases it: nothing has
+        // been attempted under it.
         let mut s = self
             .state
             .lock()
             .map_err(|_| E::from(BackendError::Unknown))?;
         super::thread_work::attributed(&mut s, |s| {
+            // State owns the writer before BEGIN, including across a poisoned
+            // unwind, and every exit below hands it to `finish_writer`. A
+            // call that took none leaves a writer retained after an earlier
+            // quarantine where it is.
+            if let Some(writer) = writer {
+                s.writer_hold = Some(writer);
+            }
             if s.quarantined {
+                s.finish_writer(background).map_err(E::from)?;
                 return Err(BackendError::Unknown.into());
             }
-            self.check_identity().map_err(E::from)?;
-            // A held publication lane already owns the writer for its nested work.
-            if writable && !turn.nested {
-                // State owns this before BEGIN, including across a poisoned unwind.
-                s.writer_hold = Some(
-                    crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)
-                        .map_err(E::from)?,
-                );
+            // Checked with the lane held, so a Store replaced while this call
+            // waited for it is refused before BEGIN.
+            if let Err(error) = self.check_identity() {
+                s.finish_writer(background).map_err(E::from)?;
+                return Err(error.into());
             }
             let tx = Transaction {
                 connection: &s.connection,
@@ -301,7 +331,7 @@ impl Session {
                 if e == BackendError::Unknown {
                     s.quarantined = true;
                 }
-                s.finish_writer().map_err(E::from)?;
+                s.finish_writer(background).map_err(E::from)?;
                 s.work.borrow_mut().transaction_ns += start.elapsed().as_nanos() as u64;
                 return Err(e.into());
             }
@@ -314,7 +344,7 @@ impl Session {
                 tx.uncertain.get() || result.as_ref().err().is_some_and(OutcomeError::uncertain);
             if uncertain {
                 s.quarantined = true;
-                s.finish_writer().map_err(E::from)?;
+                s.finish_writer(background).map_err(E::from)?;
                 s.work.borrow_mut().transaction_ns += start.elapsed().as_nanos() as u64;
                 return Err(BackendError::Unknown.into());
             }
@@ -384,7 +414,7 @@ impl Session {
                     }
                 }
             };
-            s.finish_writer().map_err(E::from)?;
+            s.finish_writer(background).map_err(E::from)?;
             s.work.borrow_mut().transaction_ns += start.elapsed().as_nanos() as u64;
             // Only a COMMIT can lengthen the log; a rolled-back body must not
             // wake the checkpoint thread as if it had written.
