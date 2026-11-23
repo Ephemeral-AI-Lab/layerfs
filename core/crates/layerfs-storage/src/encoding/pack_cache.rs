@@ -282,6 +282,19 @@ impl PackCache {
         if whole_for_reuse && !matches!(&acquired, super::PackAcquisition::Whole { .. }) {
             return Err(StorageError::Integrity("whole reuse selection reply"));
         }
+        self.admit_groups(source, id, &wanted, &missing, acquired)
+    }
+    /// Admits one acquisition of pack `id`'s `missing` groups, which leaves
+    /// every `wanted` group cached: from [`Self::acquire_groups`], or from a
+    /// group read that already holds the bytes (#758).
+    pub(crate) fn admit_groups(
+        &mut self,
+        source: &dyn crate::source::Source,
+        id: i64,
+        wanted: &BTreeSet<usize>,
+        missing: &[usize],
+        acquired: super::PackAcquisition,
+    ) -> StorageResult<(bool, usize)> {
         let before = self.work;
         let bytes = match acquired {
             super::PackAcquisition::Whole { info, body } => {
@@ -298,7 +311,7 @@ impl PackCache {
                     return Err(StorageError::Integrity("cached whole domain"));
                 }
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
-                crate::pack::layout::validate_group_demand(&body, header, &wanted)?;
+                crate::pack::layout::validate_group_demand(&body, header, wanted)?;
                 let bytes = body.len();
                 let keys: Vec<_> = self
                     .entries
@@ -371,10 +384,10 @@ impl PackCache {
             self.work.evictions - before.evictions,
             self.work.evicted_bytes - before.evicted_bytes,
         );
-        if self.whole_cohort(source, id, &wanted)? {
+        if self.whole_cohort(source, id, wanted)? {
             return Ok((true, bytes));
         }
-        for group in wanted {
+        for &group in wanted {
             if self.group(source, id, group)?.is_none() {
                 return Err(StorageError::Integrity("cohort evicted required group"));
             }

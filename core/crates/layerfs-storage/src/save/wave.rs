@@ -40,7 +40,7 @@ impl State<'_> {
         if objects.is_empty() {
             return Ok(());
         }
-        self.storage.source.begin_demand();
+        self.storage.source.begin_demand(false);
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         let mut start = 0;
         while start < objects.len() {
@@ -52,6 +52,15 @@ impl State<'_> {
             let membership = self.storage.work.span(super::Stage::Membership);
             let (end, ids) = demand(&objects, start);
             self.storage.source.locate(&ids)?;
+            // The slice's stored bases and their chains in one wave (#758).
+            let bases: Vec<ObjectId> = objects[start..end]
+                .iter()
+                .flat_map(|object| object.predecessors().ids())
+                .filter(|id| self.packer.location(*id).is_none())
+                .collect();
+            self.storage
+                .source
+                .prefetch_bases(&bases, &mut self.packs)?;
             // Exact reuse and representation selection walk and authenticate
             // their own required chains. Consume those inputs with the object
             // demand: a wave-wide physical prewalk can exceed retention and

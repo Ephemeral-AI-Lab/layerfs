@@ -109,7 +109,7 @@ impl ReadState {
                 actual: ids.len() as u64,
             });
         }
-        source.begin_demand();
+        source.begin_demand(true);
         self.pool.forget_prepared();
         source.locate(ids)?;
         let roots = ids
@@ -149,14 +149,24 @@ impl ReadState {
             let end = start + source.cohort(order[start..].iter().map(|p| roots[*p].pack_id));
             let cohort: Vec<_> = order[start..end].iter().map(|p| roots[*p]).collect();
             let located: Vec<i64> = cohort.iter().map(|row| row.pack_id).collect();
+            // Roots and their chains' groups first, in one call, when the
+            // locate returned chains (#758); then the whole packs as before.
+            source.prefetch_groups(&cohort, &mut self.packs)?;
             source.whole_packs(&located, &mut self.packs)?;
-            let prefetch = prefetch::chains(
-                source,
-                &cohort,
-                &mut self.packs,
-                workspace,
-                &mut self.groups,
-            )?;
+            let mut walk = || {
+                prefetch::chains(
+                    source,
+                    &cohort,
+                    &mut self.packs,
+                    workspace,
+                    &mut self.groups,
+                )
+            };
+            // A walk a stale hint broke runs once more without hints.
+            let prefetch = match walk() {
+                Err(error) if super::hint_failure(&error) && source.drop_hints(&[])? => walk()?,
+                other => other?,
+            };
             self.prefetch_pool.accumulate(prefetch);
             let mut from = start;
             while from < end {

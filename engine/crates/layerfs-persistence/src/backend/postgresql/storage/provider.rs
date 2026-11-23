@@ -122,6 +122,10 @@ impl PackPersistence for PostgresStorage {
     fn whole_pack_bytes(&self) -> usize {
         layerfs_storage::policy::PACK_LIMIT
     }
+    /// Off until the PostgreSQL chain reads land (#758 phase 2).
+    fn batched_chain_reads(&self) -> bool {
+        false
+    }
     /// Each statement is a round trip and a publication costs about seven
     /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at
     /// once (owner decision, layerfs-project #61); SQLite keeps 4 MiB.

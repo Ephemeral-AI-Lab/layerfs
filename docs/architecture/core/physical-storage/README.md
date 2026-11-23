@@ -26,10 +26,12 @@ are read back authenticated, and the ports a persistence backend implements.
  +------------------------------------|-------------------------------+
                                       | reserve() / publish()
  +--------------------- PackPersistence (engine backend) -------------+
- |  policy locate read_packs read_pack_selection read_scoped_pack     |
- |  inode_values signatures reserve publication_pack_cost publish     |
+ |  policy locate locate_chains read_packs read_groups                |
+ |  read_pack_selection read_scoped_pack inode_values signatures      |
+ |  reserve publication_pack_cost publish                             |
  +------------------------------------^-------------------------------+
-                                      | locate() / read_scoped_pack()
+                                      | locate_chains() / read_groups()
+                                      | / read_scoped_pack()
  +--------------------- Reader (one operation) -----------------------+
  | locate --> prefetch chains --> acquire groups --> PackCache        |
  |        --> resolver: decode base first, hash, compare with the id  |
@@ -137,11 +139,15 @@ keeps its Store open across Saves.
 
 ```text
  read_objects(ids)      <= 4,096 ids, <= 32 MiB canonical
-   1 locate     LocatorCache, then PackPersistence::locate (<= 4,096 ids)
+   1 locate     LocatorCache, then PackPersistence::locate_chains (<= 4,096 ids)
    2 cohorts    packs that fit the 2 MiB pack cache together, in order
-   3 prefetch   level by level: acquire groups, read base ids, locate bases
-   4 fetch      PackCache::acquire_groups(missing groups)
-   5 decode     resolver: walk chain, decode base first, hash each object
+   3 groups     with chains only: roots' and members' uncached groups in one
+                read_groups call (<= 2 MiB), then the whole-pack batch
+   4 prefetch   level by level: acquire groups, read base ids, bind each base
+                to its chain member or locate it
+   5 fetch      PackCache::acquire_groups(missing groups)
+   6 decode     resolver: walk chain, decode base first, hash each object;
+                a failure on a hinted chain rebuilds once without hints
    --> canonical bytes in demand order
 ```
 
@@ -151,11 +157,15 @@ keeps its Store open across Saves.
 | Locator cache | 4,096 entries, second-chance eviction that skips the current demand; after a publication won locations are kept, lost ones invalidated | [`read/locator_cache.rs`](../../../../core/crates/layerfs-storage/src/read/locator_cache.rs) |
 | Absent set | 4,096 ids, cleared at each demand; a base named by a stored record drops its negative mark before it is asked again | [`read/fetch.rs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs) |
 | Whole-pack batch | when the provider takes packs whole (`whole_pack_bytes`: 4,120 B default, 256 KiB on PostgreSQL), a cohort's small uncached packs are read in one `read_packs` call | same |
+| Chain hints (#758) | every locate wave calls `locate_chains`; a malformed answer (unasked root, two chains for one root, more members than the role's depth, a member outside the locator bounds or with length 0, a directory that is not exactly `body[0..body_offset)`) is `Integrity("port chain locator")`, and the whole answer (rows and chains) is checked before any of it is kept. When a walk decodes base `X` from a record whose chain has a member there, `X` is bound to that member and kept as a hinted locator, so the walk's own locate sends nothing; a hinted locator serves only the demand that bound it (every demand starts by evicting them). A member whose id differs from `X`, whose pack descriptor contradicts a known one, or a list that does not end exactly at a FULL record, is stale: dropped, counted (`chain_hint_stale`) and the walk locates on. A failure a hint can cause (`ObjectMissing`, a provider `Missing`, an `Integrity` that is not a provider defect such as a malformed answer) on a chain holding a hinted locator evicts every hinted locator, turns hints off until the next demand and rebuilds once; a second failure stands, and a provider defect is never rebuilt. Pooled leaves and program pages bind no member (their pool reader has no rebuild): their bases are located as before. A Save's demands, and the reads a Save makes of its lost registrations' winners, use chains only to prefetch groups: its selection walks see authoritative locators only | [`read/hints.rs`](../../../../core/crates/layerfs-storage/src/read/hints.rs), [`delta/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/read.rs) |
+| Group reads (#758) | needed groups of several packs in one `read_groups` call of ≤ 2 MiB requested: ranges from `GroupPlan` (`whole_bytes` = 4,120 B) where a directory is known, else the whole pack; packs that do not fit are acquired as before. `Ranges` answers pass through `AcquiredPackRead::acquire` over the directory and returned bytes, so framing checks are those of a scoped read, and every answer is admitted to the pack cache as it came (`PackCache::admit_groups`), with no second read; answers out of request order are `Integrity("group read reply")`. A pack only chain members name is a hint: a member contradicting a known descriptor is left out, and a `Missing` or `Malformed` call, or an answer that fails admission, for such a pack makes the hints stale (counted, off until the next demand) while the read goes on as before; a failure of a pack the rows themselves name stays hard | [`read/hints.rs`](../../../../core/crates/layerfs-storage/src/read/hints.rs) |
+| Local chains (#758) | when the provider's `batched_chain_reads` is true, the same group read also takes the chains the handle's own cache knows: the `base` of rows it published, followed through authoritative locators only (a lost row is invalidated, so its winner is located again) until a base is not cached or the record is FULL. Each Save slice prefetches its stored predecessors' chains this way in one wave. Default false (SQLite): nothing changes | [`read/hints.rs`](../../../../core/crates/layerfs-storage/src/read/hints.rs), [`save/wave.rs`](../../../../core/crates/layerfs-storage/src/save/wave.rs) |
+| Strict hints | `Storage::set_strict_hints(true)`, for tests and benches only: a stale hint fails `Integrity("delta chain hint")` | [`store/handle.rs`](../../../../core/crates/layerfs-storage/src/store/handle.rs) |
 | Read units | `GroupPlan` sees the directory, then takes the pack whole (singleton, small, wanted groups ≥ half or > 4 ranges, already kept) or coalesced ranges; scratch ≤ 2 MiB | [`read/units.rs`](../../../../core/crates/layerfs-storage/src/read/units.rs) |
 | After a Save | only `Storage::reader_after_save` reuses the latest Save's published bodies (2 MiB) and values (512 KiB) | [`read/fetch.rs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs) |
 | Kept caches | `Reader` for one operation; `ReadCache` and `Send`able `KeptReads` (3 MiB) across demands | [`read/provider.rs`](../../../../core/crates/layerfs-storage/src/read/provider.rs) |
 | File lengths | `Reader::file_lengths`: whole files from locator length − 23 without payload; chunked or empty files read only their file state; this attests no payload | [`read/length.rs`](../../../../core/crates/layerfs-storage/src/read/length.rs) |
-| Counters | `Storage::diagnostics`: cumulative counts per handle (port calls, acquisition choices, bytes, cache hits), never timings | [`read/counters.rs`](../../../../core/crates/layerfs-storage/src/read/counters.rs) |
+| Counters | `Storage::diagnostics`: cumulative counts per handle (port calls, acquisition choices, bytes, cache hits, `chain_*` and `group_read*`), never timings | [`read/counters.rs`](../../../../core/crates/layerfs-storage/src/read/counters.rs) |
 
 ### Ports
 
@@ -163,16 +173,20 @@ keeps its Store open across Saves.
 | --- | --- |
 | `policy` | the persisted `StoragePolicy`, once per handle |
 | `locate` | ≤ 4,096 distinct ids; absent ids omitted |
+| `locate_chains` | `locate` plus, per located delta root, at most one `LocatedChain` (members nearest base first, each an optional id, `PackInfo`, group, record and canonical length, the last one FULL) and the `PackDirectory` of packs it names; default `locate` and no chains |
+| `read_groups` | one answer per `GroupRead` in request order: `Whole(PersistedPack)` or `Ranges` (the bytes of each requested range, unauthenticated); ≤ 2 MiB requested per call; an empty range list asks for the whole pack; default `read_packs` per 2 MiB of whole packs |
 | `read_packs` | whole packs ≤ 2 MiB in total, or one singleton, each a length- and SHA-256-checked `PersistedPack` |
 | `read_pack_selection` | strict selected read: the whole pack is scanned and hashed, chosen ranges kept; default `BackendUnavailable` |
 | `read_scoped_pack` | selected units, framing checked, not hashed; each used object is authenticated by its id; default `BackendUnavailable` |
 | `inode_values` | ≤ 4,096 ascending ordinals in one statement |
 | `signatures` | ≤ 8,192 signature-ring rows in insertion order |
 | `reserve` | one block of pack ids and/or ordinals |
-| `publish` | one atomic `Publication` (packs, locators insert-if-absent, inode values, signatures, released ordinals); returns `Published { lost }` |
+| `publish` | one atomic `Publication` (packs, locators insert-if-absent, inode values, signatures, released ordinals); each locator carries its record's logical delta `base`, which a provider may store in any form or ignore; returns `Published { lost }` |
 
 [`port/persistence.rs`](../../../../core/crates/layerfs-storage/src/port/persistence.rs)
-also has `whole_pack_bytes`, `publication_bytes` and `publication_pack_cost`.
+also has `whole_pack_bytes`, `batched_chain_reads` (default false; a provider
+whose every read is a network round trip returns true), `publication_bytes`
+and `publication_pack_cost`.
 A reply that differs from the plan is `Integrity`; a missing selected read is
 `BackendUnavailable`, never a whole-read fallback.
 
@@ -217,6 +231,7 @@ proportional to the bytes requested.
 | Rule | Enforced by |
 | --- | --- |
 | Reads verify what they decode: every chain element is hashed against its locator's id | `Resolver::resolve_charged` in [`delta/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/read.rs) |
+| A chain hint costs speed, never correctness: it is checked against the record and the bytes, and a provider without chains (SQLite) sends exactly the statements it did before | [`read/hints.rs`](../../../../core/crates/layerfs-storage/src/read/hints.rs) |
 | A whole pack across the port matches its length and SHA-256 key | `PersistedPack::authenticate` in [`port/read_pack.rs`](../../../../core/crates/layerfs-storage/src/port/read_pack.rs) |
 | A pack's key is computed once, at seal | `PublishedPack::seal` in [`port/persistence.rs`](../../../../core/crates/layerfs-storage/src/port/persistence.rs) |
 | Header and directory are validated before any body; no trial decoding | `parse_control_header`, `visit_directory` in [`pack/layout.rs`](../../../../core/crates/layerfs-storage/src/pack/layout.rs) |
@@ -252,6 +267,8 @@ command gets a wall timeout of at most 120 s.
 | [`verified_pack_read.rs`](../../../../core/crates/layerfs-storage/tests/verified_pack_read.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test verified_pack_read` | any | A wrong length, digest or domain is refused |
 | [`delta_base_budget.rs`](../../../../core/crates/layerfs-storage/tests/delta_base_budget.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test delta_base_budget` | any | A base over the chain budgets is refused and the object stored FULL; a corrupt base inside them fails the Save |
 | [`capacity_refusal.rs`](../../../../core/crates/layerfs-storage/tests/capacity_refusal.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test capacity_refusal` | any | Only `Refused { status: "Capacity" }` counts as full disk |
+| [`chain_hints.rs`](../../../../core/crates/layerfs-storage/tests/chain_hints.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test chain_hints` | any | A hinted chain is read with one locate and one group read; stale and misplaced members, and member packs that do not answer as named, fall back and are counted, or fail strict; malformed answers are refused and keep nothing; a provider defect is not replayed; a hinted locator serves one demand; a Save, program pages and pooled leaves bind no member; a group read is admitted with no second read; full rewrites send the default calls |
+| [`group_reads.rs`](../../../../core/crates/layerfs-storage/tests/group_reads.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test group_reads` | any | Ranged and whole answers, the per-call byte bound, request order, a cached range refusing its pack under another digest, corrupted ranges caught |
 
 ## Pages
 

@@ -94,6 +94,7 @@ pub fn publish_packs(f: &Fixture, objects: &[FinalizedObject], records: usize) -
                         pack_id: reserved.first_pack_id,
                         group_number: 0,
                         record_number: record,
+                        base: None,
                     })
                     .collect(),
                 ..Publication::default()

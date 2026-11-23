@@ -6,11 +6,15 @@ use std::{cell::Cell, collections::BTreeMap, ops::Bound};
 struct Entry {
     row: LocatedObject,
     referenced: Cell<bool>,
+    /// Bound from a chain member (#758), not located authoritatively.
+    hinted: bool,
 }
 #[derive(Default)]
 pub(crate) struct LocatorCache {
     entries: BTreeMap<ObjectId, Entry>,
     hand: Option<ObjectId>,
+    /// Entries that are hinted, so a demand with none skips the scan.
+    hinted: usize,
 }
 #[derive(Default)]
 pub(crate) struct EvictionWork {
@@ -31,20 +35,46 @@ impl LocatorCache {
         self.get(id).is_some()
     }
     pub(crate) fn remove(&mut self, id: &ObjectId) {
-        self.entries.remove(id);
+        if let Some(entry) = self.entries.remove(id) {
+            self.hinted -= usize::from(entry.hinted);
+        }
     }
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
         self.hand = None;
+        self.hinted = 0;
     }
-    pub(crate) fn insert(&mut self, id: ObjectId, row: LocatedObject) {
-        self.entries.insert(
-            id,
-            Entry {
-                row,
-                referenced: Cell::new(true),
-            },
-        );
+    pub(crate) fn insert_as(&mut self, id: ObjectId, row: LocatedObject, hinted: bool) {
+        let referenced = Cell::new(true);
+        let entry = Entry {
+            row,
+            referenced,
+            hinted,
+        };
+        if let Some(old) = self.entries.insert(id, entry) {
+            self.hinted -= usize::from(old.hinted);
+        }
+        self.hinted += usize::from(hinted);
+    }
+    /// A locator located or published authoritatively, without touching recency.
+    pub(crate) fn authoritative(&self, id: &ObjectId) -> Option<LocatedObject> {
+        self.entries
+            .get(id)
+            .filter(|entry| !entry.hinted)
+            .map(|entry| entry.row)
+    }
+    pub(crate) fn is_hinted(&self, id: &ObjectId) -> bool {
+        self.entries.get(id).is_some_and(|entry| entry.hinted)
+    }
+    /// Removes every hinted locator; returns how many there were.
+    pub(crate) fn remove_hinted(&mut self) -> usize {
+        if self.hinted == 0 {
+            return 0;
+        }
+        let before = self.entries.len();
+        self.entries.retain(|_, entry| !entry.hinted);
+        self.hinted = 0;
+        before - self.entries.len()
     }
     /// Fixed/live field bytes beyond the original map and LocatedObject values.
     /// BTree node capacity and allocator overhead are not included in this count.
@@ -89,7 +119,7 @@ impl LocatorCache {
                 work.second_chances += 1;
                 continue;
             }
-            self.entries.remove(&id);
+            self.remove(&id);
             work.removed += 1;
             return true;
         }

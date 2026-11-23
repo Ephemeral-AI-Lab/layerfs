@@ -140,7 +140,8 @@ refuses by version rather than inside a decode.
 | --- | --- |
 | Owner | one reader, kept read cache or Save; never shared |
 | Changed bytes for a cached id | `Integrity("immutable cached pack changed")` |
-| Acquisition | `acquire_groups` fetches only missing groups, as one body or selected units |
+| Another descriptor for a cached pack id | `Integrity("immutable cached descriptor changed")` |
+| Acquisition | `acquire_groups` fetches only missing groups, as one body or selected units; `admit_groups` admits an acquisition already in hand (a group read, #758) under the same checks |
 | Work counts | `PackCacheWork`: evictions, evicted bytes, peak bytes |
 
 Pack ids only grow and published packs never change, so a kept body cannot

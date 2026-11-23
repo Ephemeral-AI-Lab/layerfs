@@ -46,6 +46,7 @@ fn unit(pack_id: i64, objects: usize) -> Publication {
                 pack_id,
                 group_number: 0,
                 record_number: 0,
+                base: None,
             })
             .collect(),
         ..Publication::default()

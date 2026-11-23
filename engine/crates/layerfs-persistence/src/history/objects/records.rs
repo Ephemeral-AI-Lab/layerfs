@@ -98,6 +98,7 @@ impl Item for Row {
                 pack_id: number(bytes, 32, 8) as i64,
                 group_number: number(bytes, 40, 1) as usize,
                 record_number: number(bytes, 41, 2) as usize,
+                base: None,
             },
             rank: number(bytes, 47, 6),
             kind: bytes[53] >> 6,

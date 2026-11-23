@@ -91,6 +91,7 @@ pub(crate) fn read(
                     pack_id: pack.pack_id,
                     group_number,
                     record_number,
+                    base: None,
                 },
                 pack,
             });
@@ -122,6 +123,7 @@ fn locator(r: &rusqlite::Row<'_>) -> Result<ObjectLocation, BackendError> {
         )
         .map_err(|_| BackendError::Integrity)?,
         canonical_length: number(5)?,
+        base: None,
     })
 }
 
@@ -203,6 +205,7 @@ fn typed_location(r: &rusqlite::Row<'_>) -> Result<LocatedObject, BackendError> 
             pack_id: pack.pack_id,
             group_number: number(3)?,
             record_number: number(4)?,
+            base: None,
         },
         pack,
     })

@@ -120,4 +120,20 @@ impl Source for WaveSource<'_> {
     fn note_pack_cache_hit(&self) {
         self.fetch.note_pack_cache_hit();
     }
+    fn prefetch_chain(
+        &self,
+        location: &ObjectLocation,
+        packs: &mut crate::encoding::PackCache,
+    ) -> StorageResult<()> {
+        match self.packer.location(location.object_id) {
+            Some(_) => Ok(()),
+            None => self.fetch.prefetch_chain(location, packs),
+        }
+    }
+    fn bind_base(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
+        self.fetch.bind_base(child, base)
+    }
+    fn drop_hints(&self, chain: &[ObjectId]) -> StorageResult<bool> {
+        self.fetch.drop_hints(chain)
+    }
 }

@@ -109,6 +109,7 @@ impl BenchSource {
                         pack_id: r.get(3),
                         group_number: r.get::<_, i32>(4) as usize,
                         record_number: r.get::<_, i32>(5) as usize,
+                        base: None,
                     },
                 );
             }

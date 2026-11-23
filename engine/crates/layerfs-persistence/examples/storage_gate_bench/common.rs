@@ -222,27 +222,22 @@ pub fn save(storage: &Storage, emitted: Emitted) -> f64 {
     started.elapsed().as_secs_f64() * 1e3
 }
 
-/// Whether reads run with the test-only `strict_hints` switch.
-///
-/// HOOK(#758 phase 1): Phase 1 adds a test-only `strict_hints` switch on the
-/// storage configuration, under which a stale ancestor hint is an error
-/// instead of a counted fallback. Until it lands this build cannot run
-/// strict, so `--strict-hints` is refused (NOT_WIRED) rather than silently
-/// ignored. Wire it in [`strict`], the one place every read arm calls.
+/// Whether reads run with the test-only `strict_hints` switch (#758 phase
+/// 1), under which a stale chain hint is an error (`delta chain hint`)
+/// instead of a counted fallback. [`strict`] is the one place every read arm
+/// applies it.
 pub fn strict_requested(args: &[String]) -> bool {
     args.iter().any(|a| a == "--strict-hints")
 }
 
 /// Applies the strict-hints switch to `storage` (see [`strict_requested`]).
 pub fn strict(storage: &Storage, requested: bool) -> &'static str {
-    let _ = storage;
+    storage.set_strict_hints(requested);
     if requested {
-        // HOOK(#758 phase 1): replace this refusal with the Phase 1 switch
-        // (the storage config field or setter it adds) and return "on".
-        eprintln!("NOT_WIRED: --strict-hints needs the Phase 1 strict_hints switch");
-        std::process::exit(3);
+        "on"
+    } else {
+        "off"
     }
-    "off"
 }
 
 /// A field of the storage `Diagnostics` `{:?}` dump, or `None` when this

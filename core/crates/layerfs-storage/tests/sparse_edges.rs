@@ -132,6 +132,7 @@ fn location(record_number: usize, canonical_length: usize) -> ObjectLocation {
         pack_id: 7,
         group_number: 0,
         record_number,
+        base: None,
     }
 }
 

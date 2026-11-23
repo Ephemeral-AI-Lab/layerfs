@@ -90,4 +90,24 @@ pub struct Diagnostics {
     pub prefetch_group_decodes: u64,
     /// Lanes sealed because registration requires reference closure.
     pub forced_seals: u64,
+    /// Located rows that came with chain members (#758).
+    pub chain_rows: u64,
+    /// Chain members received.
+    pub chain_members: u64,
+    /// Bases located from a member, with no locate.
+    pub chain_hinted_bases: u64,
+    /// Hints dropped at the walk or at reconstruction.
+    pub chain_hint_stale: u64,
+    /// Delta roots a read walked without a chain, level by level.
+    pub chain_unhinted_roots: u64,
+    /// `read_groups` calls.
+    pub group_reads: u64,
+    /// Packs those calls named.
+    pub group_read_packs: u64,
+    /// Ranges those calls named.
+    pub group_read_ranges: u64,
+    /// Bytes those calls returned.
+    pub group_read_bytes: u64,
+    /// Packs read whole by plan or by the provider's answer.
+    pub group_read_whole: u64,
 }

@@ -56,6 +56,7 @@ fn fixture() -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedObject>, usize) {
                     pack_id: 1,
                     group_number: number,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()
@@ -248,6 +249,7 @@ fn a_sparse_prefix_target_reconstructs_its_required_base_exactly() {
                     pack_id: 1,
                     group_number: number,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()
@@ -330,6 +332,7 @@ fn chunk_fixture(packs: usize) -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedO
                     pack_id: (number / 8) as i64 + 1,
                     group_number: number % 8,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()

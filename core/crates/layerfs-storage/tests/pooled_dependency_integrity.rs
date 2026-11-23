@@ -86,6 +86,7 @@ fn literal_delta_cannot_hide_a_wrong_canonical_base() {
                     pack_id: i as i64 + 1,
                     group_number: 0,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             inode_values: values

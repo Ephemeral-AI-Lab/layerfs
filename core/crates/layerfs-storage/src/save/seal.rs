@@ -17,7 +17,8 @@ pub(super) struct Member {
     pub(super) role: ObjectRole,
     pub(super) length: usize,
     pub(super) references: Vec<ObjectId>,
-    pub(super) prefix: bool,
+    /// The record's delta base; `None` for a FULL record.
+    pub(super) base: Option<ObjectId>,
 }
 #[derive(Default)]
 pub(super) struct Group {
@@ -260,6 +261,7 @@ impl Packer {
                         pack_id,
                         group_number,
                         record_number,
+                        base: member.base,
                     },
                     member,
                 ));

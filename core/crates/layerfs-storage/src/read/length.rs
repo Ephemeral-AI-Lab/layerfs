@@ -18,7 +18,7 @@ pub(super) fn read(
             actual: ids.len() as u64,
         });
     }
-    storage.source.begin_demand();
+    storage.source.begin_demand(true);
     storage.source.locate(ids)?;
     let mut lengths = vec![0; ids.len()];
     let mut states = Vec::new();

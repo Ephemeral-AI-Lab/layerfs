@@ -47,6 +47,7 @@ fn singleton(pack_id: i64, n: u64) -> Publication {
             pack_id,
             group_number: 0,
             record_number: 0,
+            base: None,
         }],
         ..Publication::default()
     }

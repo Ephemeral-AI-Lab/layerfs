@@ -93,6 +93,7 @@ fn publish_files(f: &Fixture, objects: &[FinalizedObject]) -> Vec<i64> {
                         pack_id: reserved.first_pack_id,
                         group_number: 0,
                         record_number: record,
+                        base: None,
                     })
                     .collect(),
                 ..Publication::default()

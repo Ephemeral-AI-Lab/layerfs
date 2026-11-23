@@ -509,6 +509,7 @@ pub(crate) fn apply(connection: &Connection, plan: &Plan, units: bool) -> Histor
             pack_id,
             group_number: number(1)?,
             record_number: number(2)?,
+            base: None,
         };
         let base_only = row.get::<_, i64>(6).map_err(db_error)? != 0;
         if current.is_some_and(|open| open != pack_id) {

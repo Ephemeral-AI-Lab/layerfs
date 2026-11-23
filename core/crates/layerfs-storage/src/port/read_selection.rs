@@ -130,7 +130,7 @@ impl PersistedPackRead {
         }
     }
 }
-pub(super) fn check_ranges(
+pub(crate) fn check_ranges(
     info: PackInfo,
     prefix: usize,
     ranges: &[PackRange],

@@ -20,10 +20,12 @@ pub(crate) fn chains(
     let mut frontier = roots.to_vec();
     let mut visited = BTreeSet::new();
     let mut pooled = crate::encoding::pool::PoolReadCounters::default();
-    for _ in 0..=layerfs_content::MAXIMUM_DELTA_MAX_DEPTH {
+    for level in 0..=layerfs_content::MAXIMUM_DELTA_MAX_DEPTH {
         if frontier.is_empty() {
             return Ok(pooled);
         }
+        // One call for the frontier's and its chains' uncached groups (#758).
+        source.prefetch_groups(&frontier, packs)?;
         // Consume each byte-bounded physical cohort before acquiring another.
         // Discovery and reconstruction share the owning operation's group cache.
         frontier.sort_unstable_by_key(|row| (row.pack_id, row.group_number, row.record_number));
@@ -49,11 +51,12 @@ pub(crate) fn chains(
                     continue;
                 }
                 let before = decodes;
-                if let Some(base) =
-                    stored_base(source, packs, groups, workspace, &mut decodes, location)?
-                {
-                    next.insert(base);
+                let unhinted = level == 0 && !source.has_hint(location.object_id);
+                let base = stored_base(source, packs, groups, workspace, &mut decodes, location)?;
+                if unhinted && base.is_some() {
+                    source.note(|c| c.chain_unhinted_roots += 1);
                 }
+                next.extend(base);
                 if location.role == layerfs_content::ObjectRole::InodeLeaf && decodes > before {
                     pooled.physical_group_decodes += decodes - before;
                     pooled.physical_group_decoded_bytes += groups

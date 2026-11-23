@@ -247,6 +247,7 @@ fn publish_pack_with_values(
                     pack_id: reserved.first_pack_id,
                     group_number,
                     record_number,
+                    base: None,
                 });
             }
         }

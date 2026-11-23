@@ -94,6 +94,8 @@ pub struct Resolver<'a> {
     workspace: &'a mut DecompressionWorkspace,
     counters: &'a mut ChainCounters,
     packs_read: u64,
+    /// Identities the current resolution walked, for the hint fallback.
+    walked: Vec<ObjectId>,
 }
 
 impl<'a> Resolver<'a> {
@@ -116,6 +118,7 @@ impl<'a> Resolver<'a> {
             workspace,
             counters,
             packs_read: 0,
+            walked: Vec::new(),
         }
     }
 
@@ -164,13 +167,38 @@ impl<'a> Resolver<'a> {
         self.resolve_charged(root, false)
     }
 
+    /// One resolution; when it fails in a way a stale delta-chain hint can
+    /// cause and a hinted locator was in use, it is rebuilt once from
+    /// authoritative locators (#758). A second failure stands.
     fn resolve_charged(
+        &mut self,
+        root: ObjectLocation,
+        charge_self: bool,
+    ) -> StorageResult<(Vec<u8>, ObjectId)> {
+        match self.resolve_once(root, charge_self) {
+            Err(error) if crate::read::hint_failure(&error) => {
+                let walked = std::mem::take(&mut self.walked);
+                if !self.connection.drop_hints(&walked)? {
+                    return Err(error);
+                }
+                let root = self
+                    .connection
+                    .location(root.object_id, self.ceiling)?
+                    .ok_or(StorageError::ObjectMissing(root.object_id))?;
+                self.resolve_once(root, charge_self)
+            }
+            other => other,
+        }
+    }
+
+    fn resolve_once(
         &mut self,
         root: ObjectLocation,
         charge_self: bool,
     ) -> StorageResult<(Vec<u8>, ObjectId)> {
         *self.counters = ChainCounters::default();
         self.packs_read = 0;
+        self.walked = vec![root.object_id];
         if root.pack_id > self.ceiling {
             return Err(StorageError::VisibilityCeiling {
                 pack_id: root.pack_id,
@@ -248,6 +276,7 @@ impl<'a> Resolver<'a> {
                 return Err(StorageError::Integrity("dependency cycle"));
             }
             chain.push(current);
+            self.walked.push(current.object_id);
             let Some(base) = self.base_of(&current)? else {
                 break;
             };
@@ -508,7 +537,7 @@ pub fn stored_base(
         view,
         bytes: selected,
     } = selected;
-    match header.lane {
+    let base = match header.lane {
         PackLane::Ordinary => {
             let body: &[u8] = match view.codec {
                 crate::pack::layout::GroupCodec::Raw => selected,
@@ -565,7 +594,9 @@ pub fn stored_base(
                 location.role,
             )
         }
-    }
+    }?;
+    connection.bind_base(location, base)?;
+    Ok(base)
 }
 
 /// Adds one resolved chain's work to an operation's totals.
@@ -593,6 +624,7 @@ fn group_of<'b>(
     connection: &dyn Source,
     location: &ObjectLocation,
 ) -> StorageResult<(crate::encoding::GroupSlice<'b>, bool)> {
+    connection.prefetch_chain(location, packs)?;
     let (fetched, _) =
         packs.acquire_groups(connection, location.pack_id, &[location.group_number])?;
     let selected = packs

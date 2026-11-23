@@ -17,6 +17,10 @@ pub struct ObjectLocation {
     pub group_number: usize,
     /// Record ordinal inside the group.
     pub record_number: usize,
+    /// The direct delta base the record names, `None` when it is FULL (#758).
+    /// A publish input: the provider derives what it stores from it. Rows
+    /// read back carry `None` unless the provider stores base ids.
+    pub base: Option<ObjectId>,
 }
 
 /// One stored inode value: the row a pooled leaf names by its ordinal.
@@ -81,4 +85,50 @@ pub struct LocatedObject {
     pub location: ObjectLocation,
     /// Immutable body descriptor.
     pub pack: PackInfo,
+}
+
+/// One member of a located delta chain, nearest base first (#758). It is a
+/// hint about where a base is stored: the reader binds it to the base the
+/// child record names and verifies it before use.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChainMember {
+    /// The member's id when the provider stores ids; `None` from a physical
+    /// list, where the reader binds the id the child record names.
+    pub object_id: Option<ObjectId>,
+    /// The pack holding the member's record.
+    pub pack: PackInfo,
+    /// Group ordinal inside the pack.
+    pub group_number: usize,
+    /// Record ordinal inside the group.
+    pub record_number: usize,
+    /// Canonical length of the member object.
+    pub canonical_length: usize,
+}
+
+/// One located delta root's chain: every member down to its FULL record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocatedChain {
+    /// A root the caller asked to locate.
+    pub root: ObjectId,
+    /// Members, nearest base first; the last one is the FULL record.
+    pub members: Vec<ChainMember>,
+}
+
+/// A pack's control header and group directory, `body[0..body_offset)`.
+/// Untrusted: the reader parses it against the pack length before use.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackDirectory {
+    /// The pack these bytes open.
+    pub pack: PackInfo,
+    /// The pack's first `body_offset` bytes.
+    pub prefix: Vec<u8>,
+}
+
+/// What a chain locate returns beside the located rows.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LocatedChains {
+    /// At most one chain per located root.
+    pub chains: Vec<LocatedChain>,
+    /// Directories of packs the rows or members name, where known.
+    pub directories: Vec<PackDirectory>,
 }

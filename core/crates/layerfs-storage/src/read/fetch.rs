@@ -65,9 +65,10 @@ impl Published {
     }
 }
 
-/// Restores the earlier serving state when a continuing reader's call ends.
-pub(crate) struct ServePublished<'a>(&'a Cell<bool>, bool);
-impl Drop for ServePublished<'_> {
+/// Restores a flag's earlier value when its scope ends: the serving state
+/// of a continuing reader's call, or the Save mode of a Save's own reads.
+pub(crate) struct Restore<'a>(&'a Cell<bool>, bool);
+impl Drop for Restore<'_> {
     fn drop(&mut self) {
         self.0.set(self.1);
     }
@@ -75,14 +76,27 @@ impl Drop for ServePublished<'_> {
 
 pub(crate) struct Fetch {
     pub(crate) metadata: Arc<dyn PackPersistence>,
-    locators: RefCell<LocatorCache>,
-    absent: RefCell<BTreeSet<ObjectId>>,
-    descriptors: RefCell<BTreeMap<i64, PackInfo>>,
+    pub(super) locators: RefCell<LocatorCache>,
+    pub(super) absent: RefCell<BTreeSet<ObjectId>>,
+    pub(super) descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     signatures: RefCell<Option<Vec<SignatureRow>>>,
     published: RefCell<Published>,
     /// Set while a reader that continues the latest Save reads.
-    serve_published: Cell<bool>,
+    pub(super) serve_published: Cell<bool>,
     counters: Cell<Diagnostics>,
+    /// Chain hints from chain locates (#758).
+    pub(super) hints: RefCell<super::hints::Hints>,
+    /// The handle's chain depth bounds, once its policy is read.
+    pub(crate) capacities: Cell<Option<crate::policy::StorageCapacities>>,
+    /// Tests and benches: a stale hint fails as `delta chain hint`.
+    pub(crate) strict_hints: Cell<bool>,
+    /// A read binds members to locators; a Save only prefetches their groups.
+    pub(super) bind_hints: Cell<bool>,
+    /// Set while a Save reads through a reader (its lost registrations'
+    /// winners): those demands bind nothing either.
+    saving: Cell<bool>,
+    /// Cleared by a failure a hint may have caused, until the next demand.
+    pub(super) trust_hints: Cell<bool>,
 }
 impl Fetch {
     pub(crate) fn new(metadata: Arc<dyn PackPersistence>) -> Self {
@@ -95,6 +109,12 @@ impl Fetch {
             published: RefCell::new(Published::default()),
             serve_published: Cell::new(false),
             counters: Cell::new(Diagnostics::default()),
+            hints: RefCell::default(),
+            capacities: Cell::new(None),
+            strict_hints: Cell::new(false),
+            bind_hints: Cell::new(true),
+            saving: Cell::new(false),
+            trust_hints: Cell::new(true),
         }
     }
     pub(crate) fn note(&self, change: impl FnOnce(&mut Diagnostics)) {
@@ -140,26 +160,8 @@ impl Fetch {
             };
             check_info(pack)?;
             self.remember_pack(pack)?;
-            let mut cache = self.locators.borrow_mut();
-            if cache.len() >= READ_OBJECT_LIMIT {
-                let work = cache.make_room(1, &[]);
-                self.note(|c| {
-                    c.locator_evictions += work.removed;
-                    c.locator_eviction_probes += work.probes;
-                    c.locator_second_chances += work.second_chances;
-                });
-            }
-            if cache.len() >= READ_OBJECT_LIMIT {
-                self.note(|c| c.locator_evictions += cache.len() as u64);
-                cache.clear();
-            }
-            cache.insert(
-                id,
-                crate::location::LocatedObject {
-                    location: *row,
-                    pack,
-                },
-            );
+            let location = *row;
+            self.keep_locator(crate::location::LocatedObject { location, pack }, false);
         }
         let mut published = self.published.borrow_mut();
         for pack in &batch.packs {
@@ -177,8 +179,12 @@ impl Fetch {
         *self.published.borrow_mut() = Published::default();
     }
     /// Serves the latest Save's published bodies until the guard drops.
-    pub(crate) fn serving_published(&self) -> ServePublished<'_> {
-        ServePublished(&self.serve_published, self.serve_published.replace(true))
+    pub(crate) fn serving_published(&self) -> Restore<'_> {
+        Restore(&self.serve_published, self.serve_published.replace(true))
+    }
+    /// Holds every demand to a Save's rule (no binding) until the guard drops.
+    pub(crate) fn save_reads(&self) -> Restore<'_> {
+        Restore(&self.saving, self.saving.replace(true))
     }
     /// A body the latest Save published, to a reader that continues it,
     /// validated as a fetched one would be.
@@ -198,8 +204,44 @@ impl Fetch {
     pub(crate) fn invalidate_signatures(&self) {
         *self.signatures.borrow_mut() = None;
     }
-    pub(crate) fn begin_demand(&self) {
+    /// A read demand binds chain members to locators; a Save's (`bind`
+    /// false), and any demand while [`Self::save_reads`] holds, uses chains
+    /// only to prefetch groups, so its selection walks see authoritative
+    /// locators only. A hinted locator serves only the demand that bound it.
+    pub(crate) fn begin_demand(&self, bind: bool) {
         self.absent.borrow_mut().clear();
+        self.trust_hints.set(true);
+        self.bind_hints.set(bind && !self.saving.get());
+        self.locators.borrow_mut().remove_hinted();
+    }
+    /// Keeps one checked locator within the cache bound.
+    pub(super) fn keep_locator(&self, row: crate::location::LocatedObject, hinted: bool) {
+        let mut cache = self.locators.borrow_mut();
+        if cache.len() >= READ_OBJECT_LIMIT {
+            let work = cache.make_room(1, &[]);
+            self.note(|c| {
+                c.locator_evictions += work.removed;
+                c.locator_eviction_probes += work.probes;
+                c.locator_second_chances += work.second_chances;
+            });
+        }
+        self.insert_locator(&mut cache, row, hinted);
+    }
+    /// Inserts one checked locator, clearing a cache with no room left.
+    fn insert_locator(
+        &self,
+        cache: &mut LocatorCache,
+        row: crate::location::LocatedObject,
+        hinted: bool,
+    ) {
+        if cache.len() >= READ_OBJECT_LIMIT {
+            self.note(|c| c.locator_evictions += cache.len() as u64);
+            cache.clear();
+        }
+        cache.insert_as(row.location.object_id, row, hinted);
+    }
+    pub(super) fn published_has(&self, id: i64) -> bool {
+        self.published.borrow().get(id).is_some()
     }
     pub(crate) fn locate(&self, ids: &[ObjectId]) -> StorageResult<()> {
         let mut missing = BTreeSet::new();
@@ -220,8 +262,9 @@ impl Fetch {
         }
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
+            let mut chains = crate::location::LocatedChains::default();
             self.note(|c| c.locate += 1);
-            self.metadata.locate(page, &mut rows)?;
+            self.metadata.locate_chains(page, &mut rows, &mut chains)?;
             if rows.len() > page.len() {
                 return Err(StorageError::Integrity("locator cardinality"));
             }
@@ -236,27 +279,30 @@ impl Fetch {
                     });
                 }
             }
-            let mut seen = BTreeSet::new();
-            for row in rows {
+            // The whole answer, rows and chains, is checked before any of it
+            // is kept.
+            let mut seen = BTreeMap::new();
+            for row in &rows {
                 let location = row.location;
                 if page.binary_search(&location.object_id).is_err()
-                    || !seen.insert(location.object_id)
+                    || seen.insert(location.object_id, location.role).is_some()
                     || location.pack_id != row.pack.pack_id
                     || location.pack_id <= 0
-                    || location.canonical_length > crate::policy::CANONICAL_LIMIT
-                    || location.group_number >= crate::policy::GROUP_COUNT_LIMIT
-                    || location.record_number >= crate::policy::RECORD_COUNT_LIMIT
+                    || bad_position(
+                        location.group_number,
+                        location.record_number,
+                        location.canonical_length,
+                    )
                 {
                     return Err(StorageError::Integrity("port locator"));
                 }
                 check_info(row.pack)?;
+            }
+            self.install_chains(&seen, chains)?;
+            for row in rows {
                 self.remember_pack(row.pack)?;
                 let mut cache = self.locators.borrow_mut();
-                if cache.len() >= READ_OBJECT_LIMIT {
-                    self.note(|c| c.locator_evictions += cache.len() as u64);
-                    cache.clear();
-                }
-                cache.insert(location.object_id, row);
+                self.insert_locator(&mut cache, row, false);
                 self.note(|c| {
                     c.locator_bookkeeping_live_peak_bytes = c
                         .locator_bookkeeping_live_peak_bytes
@@ -264,7 +310,7 @@ impl Fetch {
                 });
             }
             let mut absent = self.absent.borrow_mut();
-            for id in page.iter().filter(|id| !seen.contains(id)) {
+            for id in page.iter().filter(|id| !seen.contains_key(id)) {
                 if absent.len() >= READ_OBJECT_LIMIT {
                     absent.clear();
                 }
@@ -295,7 +341,7 @@ impl Fetch {
         }
         count
     }
-    fn remember_pack(&self, info: PackInfo) -> StorageResult<()> {
+    pub(super) fn remember_pack(&self, info: PackInfo) -> StorageResult<()> {
         let mut cache = self.descriptors.borrow_mut();
         if cache.get(&info.pack_id).is_some_and(|old| *old != info) {
             return Err(StorageError::Integrity("inconsistent pack descriptor"));
@@ -409,6 +455,26 @@ impl Fetch {
         validate_frame(info, &body)?;
         Ok(body)
     }
+    /// A whole pack a reply returned: refused as `reason` unless it is the
+    /// one asked for (`bound`), else its descriptor is kept and its frame
+    /// checked, and the pack cache may admit it.
+    pub(super) fn whole_reply(
+        &self,
+        bound: bool,
+        reason: &'static str,
+        info: PackInfo,
+        body: Vec<u8>,
+    ) -> StorageResult<crate::encoding::PackAcquisition> {
+        if !bound {
+            return Err(StorageError::Integrity(reason));
+        }
+        self.remember_pack(info)?;
+        validate_frame(info, &body)?;
+        Ok(crate::encoding::PackAcquisition::Whole {
+            info: Some(info),
+            body,
+        })
+    }
 }
 impl Source for Fetch {
     fn ordered_dependencies(&self) -> bool {
@@ -491,11 +557,9 @@ impl Source for Fetch {
         match reply {
             crate::port::AcquiredPackRead::Whole(row) => {
                 let (info, body) = row.into_parts();
-                if info.pack_id != id {
-                    return Err(StorageError::Integrity("selected whole binding"));
-                }
-                self.remember_pack(info)?;
-                validate_frame(info, &body)?;
+                let length = body.len() as u64;
+                let whole =
+                    self.whole_reply(info.pack_id == id, "selected whole binding", info, body)?;
                 self.note(|c| {
                     c.whole_selected += 1;
                     match plan.whole_reason {
@@ -507,15 +571,12 @@ impl Source for Fetch {
                     }
                     if info.domain == PackDomain::Payload {
                         c.payload_reads += 1;
-                        c.payload_read_bytes += body.len() as u64;
+                        c.payload_read_bytes += length;
                     } else {
-                        c.pack_read_bytes += body.len() as u64;
+                        c.pack_read_bytes += length;
                     }
                 });
-                Ok(crate::encoding::PackAcquisition::Whole {
-                    info: Some(info),
-                    body,
-                })
+                Ok(whole)
             }
             crate::port::AcquiredPackRead::Units(row) => {
                 if row.info().pack_id != id {
@@ -621,8 +682,28 @@ impl Source for Fetch {
     fn note_pack_cache_hit(&self) {
         self.note(|c| c.pack_hits += 1);
     }
+    fn prefetch_chain(
+        &self,
+        location: &ObjectLocation,
+        packs: &mut crate::encoding::PackCache,
+    ) -> StorageResult<()> {
+        self.prefetch_groups(std::slice::from_ref(location), packs)
+    }
+    fn bind_base(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
+        self.bind(child, base)
+    }
+    fn drop_hints(&self, chain: &[ObjectId]) -> StorageResult<bool> {
+        Fetch::drop_hints(self, chain)
+    }
 }
-fn check_info(info: PackInfo) -> StorageResult<()> {
+/// Whether a located position is out of bounds: a row's and a chain
+/// member's alike (a member's length must also be at least one).
+pub(super) fn bad_position(group: usize, record: usize, canonical_length: usize) -> bool {
+    canonical_length > crate::policy::CANONICAL_LIMIT
+        || group >= crate::policy::GROUP_COUNT_LIMIT
+        || record >= crate::policy::RECORD_COUNT_LIMIT
+}
+pub(super) fn check_info(info: PackInfo) -> StorageResult<()> {
     if info.pack_id <= 0 || !(32..=SINGLETON_PACK_LIMIT).contains(&info.length) {
         return Err(StorageError::Integrity("port pack descriptor"));
     }
@@ -631,7 +712,7 @@ fn check_info(info: PackInfo) -> StorageResult<()> {
     }
     Ok(())
 }
-fn validate_frame(info: PackInfo, body: &[u8]) -> StorageResult<()> {
+pub(super) fn validate_frame(info: PackInfo, body: &[u8]) -> StorageResult<()> {
     check_info(info)?;
     let header = layout::parse_header(body)?;
     if layout::declared_length(body)? != body.len()

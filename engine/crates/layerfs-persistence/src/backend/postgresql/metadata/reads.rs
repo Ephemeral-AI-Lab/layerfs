@@ -88,6 +88,7 @@ fn location(r: &Record) -> Result<LocatedObject, BackendError> {
             pack_id: pack.pack_id,
             group_number: number(3)?,
             record_number: number(4)?,
+            base: None,
         },
         pack,
     })
@@ -200,6 +201,7 @@ pub(crate) fn locations_after(
             )
             .map_err(|_| BackendError::Integrity)?,
             canonical_length: number(5)?,
+            base: None,
         });
     }
     Ok(())
