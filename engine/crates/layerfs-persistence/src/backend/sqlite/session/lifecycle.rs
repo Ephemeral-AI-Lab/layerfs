@@ -34,6 +34,42 @@ impl Deref for ConnectionSlot {
     }
 }
 
+impl State {
+    /// Ends SQLite's custody of a quarantined connection while the calling
+    /// thread holds the Store's writer lane (finding #2). `sqlite3_close`
+    /// rolls back any transaction the uncertain attempt left open and frees
+    /// SQLite's file locks, so the lane can be released to other processes;
+    /// nothing is replayed and the Session stays quarantined, refusing every
+    /// later call before it touches the connection. The checkpoint thread's
+    /// connection may now be SQLite's last, and it closes without the lane,
+    /// so it is told to close without checkpointing or removing `-wal`/`-shm`.
+    /// `true`: SQLite holds no transaction for this State. `false`: the close
+    /// was refused with a transaction still open, and the caller keeps the
+    /// lane. (rusqlite flushes its statement cache first and every statement
+    /// or BLOB handle borrows the connection, so an owned connection has
+    /// nothing left for SQLite to refuse the close on.)
+    pub(crate) fn close_quarantined(
+        &mut self,
+        background: Option<&super::background::Checkpointer>,
+    ) -> bool {
+        debug_assert!(self.quarantined);
+        let Some(connection) = self.connection.take() else {
+            return true;
+        };
+        if let Some(background) = background {
+            background.close_quietly();
+        }
+        match connection.close() {
+            Ok(()) => true,
+            Err((connection, _)) => {
+                let idle = connection.is_autocommit();
+                self.connection.restore(connection);
+                idle
+            }
+        }
+    }
+}
+
 impl Drop for State {
     fn drop(&mut self) {
         if self.connection.is_closed() {

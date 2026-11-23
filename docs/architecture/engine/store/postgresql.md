@@ -36,7 +36,7 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 | --- | --- | --- |
 | Types and order | `bigint`, `bytea`; history names `COLLATE "C"`, so paging matches SQLite byte order | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Pack bodies | one `bytea` per pack, `STORAGE EXTERNAL` (uncompressed, out of line) for ranged `substring` reads; no `pack_unit` table | same |
-| Object locations | narrow rows; no unique key on the id but a B-tree `object_location_prefix` on its first eight bytes, with the full id compared in the heap; a location is inserted only when its id is absent, which is unique because every location insert holds the lane | [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs), [`metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| Object locations | narrow rows; no unique key on the id but a B-tree `object_location_prefix` on its first eight bytes, with the full id compared in the heap; a location is inserted only when its id is absent, which is unique because every location insert holds the lane, including a nested one whose lane connection dies (see [the lane barrier](#lane-barrier)) | [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs), [`metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 | Short values | bounded `bytea`/`text` columns and both block bodies are `STORAGE PLAIN` (column storage in `CREATE TABLE`, PostgreSQL 16 or newer), so those tables have no TOAST relation | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Merge records | `pg_temp` tables of the writer connection: outside the checked schema, seen by that connection only, gone with it; writes are `Stage` transactions | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
 | Schema version | `SCHEMA_VERSION = 2`; 19 tables, or 22 with acquisition; version 1 is refused (`Integrity`), never converted | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
@@ -101,8 +101,10 @@ compaction holds one already and never retains the URL.
    admission: Admission          FIFO turn, as on SQLite
    state: Mutex<State>           client (statement cache 256),
                                  quarantined, work counters
-   lane: Mutex<Option<Client>>   second connection, opened on first
-                                 hold_lane
+   lane: Mutex<Option<LaneConnection>>
+                                 second connection, opened on first
+                                 hold_lane, with the id of its open
+                                 lane transaction
    settings: schema, synchronous_commit, lock_timeout_ms
    connector: Config + the process's one TLS connector, or none
               for sslmode=disable
@@ -112,7 +114,8 @@ compaction holds one already and never retains the URL.
 | --- | --- | --- |
 | New connection answered with an error | `Rejected` | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs) |
 | No connection made, or none made and logged in within 5 s (the URL's `connect_timeout` when set; LF13) | `Closed` | same |
-| Lost reply inside a transaction | `Unknown`; session quarantined | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| Lost reply inside a transaction, or a SQLSTATE without a definite rule (class 58, class XX, ...) | `Unknown`; session quarantined and its connection closed (below) | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs), [`rows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/rows.rs) |
+| A statement refused with a reply in class 21, 22, 23, 42, P0 (PL/pgSQL, such as the `pack_immutable` trigger's `P0001`) or 54 outside the capacity codes | `Integrity`, definite; the transaction is rolled back | [`rows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/rows.rs) |
 | `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
 | `round_trips` | each exchange that waits for the server; the handshake is not one | same |
 | `prepares`, `connects` | statement-cache misses and COPY statements; new connections (session and lane) | same |
@@ -126,14 +129,29 @@ once per process, at the first connection whose `sslmode` may negotiate TLS.
 Every setting is `SET LOCAL` in the same round trip as `BEGIN`, so a
 transaction-pooling proxy never carries one session's settings to another.
 
+A quarantine closes the session's ordinary connection (finding #3), and
+the server ends its backend. Kept open, that backend stayed until the
+process exited: a transaction the server aborted with an error has already
+released its row locks, but the session's advisory keys (mount and
+compaction presence) survive any abort, and an uncertain outcome that left
+the transaction live (a lost reply, or a body error classed uncertain) kept
+every row lock, a write's `store_lane` row included, so every other writer
+failed `Busy` after its lock wait. Closing ends all of it. Nothing is replayed,
+the outcome stays unknown, every later call is refused before it reaches a
+connection, and `PostgresStorage::usable` answers `false`, so the caller
+opens a new session. GC intent rows are untouched: an intent's owner stays
+live by its recorded process, not by this connection. A diagnostic driver
+keeps its read-only connection, whose deadline and cancellation outcome are
+still read ([`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs)).
+
 ## Transactions
 
 | `Mode` | `BEGIN` | Lane row | Used by |
 | --- | --- | --- | --- |
 | `Read` | `REPEATABLE READ READ ONLY` | no | history reads, policy, signatures |
-| `Write` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE`, unless nested in the held lane | history writes, allocation, acquisition writes |
+| `Write` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` and the lane barrier; nested in the held lane: the barrier key shared and a lane check before `COMMIT` | history writes, allocation, acquisition writes |
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records |
-| `Publish` | as `Write` | `FOR UPDATE` after the pack bodies, unless nested | one Save publication, up to 16 MiB − 1 |
+| `Publish` | as `Write` | `FOR UPDATE` and the lane barrier after the pack bodies; nested: as a nested `Write` | one Save publication, up to 16 MiB − 1 |
 | `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values |
 | `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
@@ -291,9 +309,12 @@ Store.
    validate(batch)                               shared bounds, no SQL
    BEGIN; SET LOCAL ...                          ids already reserved:
    COPY BINARY pack bodies                       no lane needed yet
-   SELECT 1 FROM store_lane ... FOR UPDATE       (skipped if nested)
+   SELECT 1 FROM store_lane ... FOR UPDATE;      (skipped if nested: the
+     lane barrier                                 barrier key is held
+                                                  shared from BEGIN)
    one statement: INSERT locations ... RETURNING, totals, inode value
      blocks, released ordinals, signatures
+   nested? the lane check                        lost -> ROLLBACK, Closed
    COMMIT
    any failure rolls the whole publication back; ids are never reused
 ```
@@ -310,6 +331,36 @@ held, the thread's writes run on the session connection as nested
 transactions. Dropping `LaneHold` rolls the lane transaction back (it wrote
 nothing) and releases the turn
 ([`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/lane/lane.rs)).
+
+### Lane barrier
+
+A nested write commits on the session connection while the row lock lives
+in the lane connection's transaction. That connection can die mid-lane (an
+`idle_in_transaction_session_timeout`, a keepalive, a failover or an
+administrator), freeing the row while a nested write is still running, and
+the head check and the `object_location` existence probe rely on the row
+(finding #10). Two rules keep them exact without a unique key or a second
+database ([`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs)):
+
+```text
+ every writer, right after it locks store_lane (same round trip, same
+ lock_timeout):  pg_advisory_lock(class, key); pg_advisory_unlock(class, key)
+ every nested Write/Publish: BEGIN ...; pg_advisory_xact_lock_shared(class, key)
+   body
+   lane check, one round trip on the lane connection:
+     pg_current_xact_id_if_assigned() = the id recorded at hold_lane?
+     no, or any error -> close the lane connection; ROLLBACK; Closed
+   COMMIT
+```
+
+The barrier key is a two-key advisory lock (a fixed class and a hash of the
+schema name), a key space apart from the GC keys. A new lane holder takes it
+exclusively and lets it go at once, so it cannot read anything until every
+nested write of the previous holder that started before the row was freed
+has ended; a nested write that starts after that point fails its lane
+check, rolls back and answers `Closed` (`OwnershipUnavailable` in history
+terms): nothing of it was kept. Its own holder never takes the key
+exclusively while its lane is held, so its nested writes never wait for it.
 
 | `SynchronousCommit` | Write acknowledged after |
 | --- | --- |

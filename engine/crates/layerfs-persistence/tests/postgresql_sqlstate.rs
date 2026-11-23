@@ -31,3 +31,18 @@ fn the_neighbouring_classes_keep_their_verdicts() {
     assert_eq!(sqlstate("42501"), BackendError::Integrity);
     assert_eq!(sqlstate("08006"), BackendError::Unknown);
 }
+
+/// A statement the server refused with a reply is a definite failure, not an
+/// unknown outcome: `P0001` comes from the `pack_immutable` trigger's RAISE
+/// EXCEPTION, class P0 from any PL/pgSQL error and class 21 from a
+/// cardinality violation (finding #3). Server I/O and internal errors stay
+/// unknown.
+#[test]
+fn refused_statements_are_definite_and_server_failures_stay_unknown() {
+    for code in ["P0001", "P0002", "P0003", "P0004", "21000"] {
+        assert_eq!(sqlstate(code), BackendError::Integrity, "SQLSTATE {code}");
+    }
+    for code in ["58030", "XX000", "XX001"] {
+        assert_eq!(sqlstate(code), BackendError::Unknown, "SQLSTATE {code}");
+    }
+}

@@ -44,6 +44,11 @@ pub fn sqlstate(code: &str) -> BackendError {
         _ if code.starts_with("23") || code.starts_with("22") || code.starts_with("42") => {
             BackendError::Integrity
         }
+        // A statement the server refused with a reply: cardinality violation
+        // (class 21) and PL/pgSQL errors (class P0), among them `P0001` from
+        // the `pack_immutable` trigger's RAISE EXCEPTION. The statement, and
+        // the transaction it ran in, definitely failed; nothing was committed.
+        _ if code.starts_with("21") || code.starts_with("P0") => BackendError::Integrity,
         // Connection, shutdown, resource-class and internal failures: the
         // outcome is unknown.
         _ => BackendError::Unknown,

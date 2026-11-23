@@ -364,10 +364,13 @@ fn commit_store_calls_are_counted_on_both_engines() {
     // The lane: its BEGIN, the head read, commit_branch's BEGIN, the Branch
     // probe, the post-fence re-read, Commit insert, parent line, lineage
     // insert, the position read, advance and COMMIT, the T6.5 epoch READ and
-    // its FOR SHARE re-check, and the lane's ROLLBACK. The second Branch read
-    // is the spec §5 fence window: the probe learns the project, the fence
-    // opens, and the re-read sees a removal that committed in between.
-    assert_eq!(pg("lane + head + commit_branch").round_trips, 14);
+    // its FOR SHARE re-check, the lane check on the lane connection before
+    // commit_branch's COMMIT (finding #10), and the lane's ROLLBACK. The
+    // second Branch read is the spec §5 fence window: the probe learns the
+    // project, the fence opens, and the re-read sees a removal that committed
+    // in between. The lane barrier rides in the lane's BEGIN and the nested
+    // write's BEGIN, so it adds no round trip.
+    assert_eq!(pg("lane + head + commit_branch").round_trips, 15);
     // #70: descriptors and bodies in one statement, found or missing.
     assert_eq!(pg("read_packs 2").round_trips, 1);
     assert_eq!(pg("read_packs missing").round_trips, 1);

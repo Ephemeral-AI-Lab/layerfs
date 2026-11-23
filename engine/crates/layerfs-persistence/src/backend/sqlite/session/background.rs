@@ -16,6 +16,7 @@ use super::{query, rows};
 use crate::backend::records::BackendError;
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 
@@ -25,6 +26,10 @@ const LOG_BYTES: u64 = 4_194_304;
 pub(crate) struct Checkpointer {
     /// Held by the thread for one pass, and by an idle checkpoint.
     pass: Arc<Mutex<()>>,
+    /// Set once the session's own connection was closed under quarantine
+    /// (finding #2): this connection may then be SQLite's last, and it closes
+    /// without the lane, so it must not checkpoint or remove `-wal`/`-shm`.
+    quiet: Arc<AtomicBool>,
     wake: Option<mpsc::SyncSender<()>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -39,7 +44,16 @@ impl Checkpointer {
     /// frames into the database file, so it must synchronize exactly as the
     /// session does: under NORMAL a pass at 0 would mark frames copied that
     /// never reached the disk, and the writer would restart the log over them.
-    pub(crate) fn start(path: &Path, synchronous: i64) -> Result<Self, BackendError> {
+    ///
+    /// The connection sets `checkpoint_fullfsync=0` and reads it back: a
+    /// routine pass syncs the Store file with plain `fsync`, which on macOS
+    /// does not flush the drive's cache (owner, 2026-11-23: F_FULLFSYNC on
+    /// every pass pushed write-heavy suites past the 120 s test ceiling). The
+    /// idle TRUNCATE and the last close run on the session's own connection,
+    /// which sets `checkpoint_fullfsync=1` (`profile.rs`, finding #11); the
+    /// window this leaves is in `docs/architecture/engine/store/sqlite.md`.
+    /// Returns the read-back value.
+    pub(crate) fn start(path: &Path, synchronous: i64) -> Result<(Self, i64), BackendError> {
         let connection = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -55,6 +69,7 @@ impl Checkpointer {
         for pragma in [
             format!("PRAGMA synchronous={synchronous}"),
             "PRAGMA fullfsync=0".to_owned(),
+            "PRAGMA checkpoint_fullfsync=0".to_owned(),
             "PRAGMA wal_autocheckpoint=0".to_owned(),
         ] {
             query::run(&connection, &pragma, vec![], &work)?;
@@ -66,6 +81,14 @@ impl Checkpointer {
         if applied != synchronous {
             return Err(BackendError::Integrity);
         }
+        let checkpoint_fullfsync =
+            query::run(&connection, "PRAGMA checkpoint_fullfsync", vec![], &work)?
+                .first()
+                .ok_or(BackendError::Integrity)?
+                .get::<i64>(0)?;
+        if checkpoint_fullfsync != 0 {
+            return Err(BackendError::Integrity);
+        }
         let mode = query::run(&connection, "PRAGMA journal_mode", vec![], &work)?
             .first()
             .ok_or(BackendError::Integrity)?
@@ -74,8 +97,10 @@ impl Checkpointer {
             return Err(BackendError::Integrity);
         }
         let pass = Arc::new(Mutex::new(()));
+        let quiet = Arc::new(AtomicBool::new(false));
         let (wake, woken) = mpsc::sync_channel::<()>(1);
         let held = pass.clone();
+        let quietly = quiet.clone();
         let thread = std::thread::Builder::new()
             .name("layerfs-store-checkpoint".to_owned())
             .spawn(move || {
@@ -86,13 +111,35 @@ impl Checkpointer {
                     let _ =
                         query::run(&connection, "PRAGMA wal_checkpoint(PASSIVE)", vec![], &work);
                 }
+                if quietly.load(Ordering::Acquire)
+                    && connection
+                        .set_db_config(
+                            rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+                            true,
+                        )
+                        .is_err()
+                {
+                    // As `State::drop`: retain it until process exit rather
+                    // than tear the WAL down outside the lane.
+                    std::mem::forget(connection);
+                }
             })
             .map_err(|_| BackendError::Unknown)?;
-        Ok(Self {
-            pass,
-            wake: Some(wake),
-            thread: Some(thread),
-        })
+        Ok((
+            Self {
+                pass,
+                quiet,
+                wake: Some(wake),
+                thread: Some(thread),
+            },
+            checkpoint_fullfsync,
+        ))
+    }
+
+    /// Makes this connection's eventual close skip SQLite's checkpoint and
+    /// sidecar removal (finding #2): see `State::close_quarantined`.
+    pub(crate) fn close_quietly(&self) {
+        self.quiet.store(true, Ordering::Release);
     }
 
     /// After a write commits: wakes the thread when the log at `path` is
@@ -115,9 +162,11 @@ impl Checkpointer {
 impl Drop for Checkpointer {
     /// Ends the thread after its current pass and closes its connection,
     /// before the session's own connection closes.
-    /// This connection is therefore never SQLite's last one: State still owns
-    /// the main connection. Do not reacquire its directory lane here; a
-    /// quarantined State may already retain it while this join completes.
+    /// This connection is SQLite's last one only after a quarantined State
+    /// closed the main connection, and that close set `quiet`, so this close
+    /// then neither checkpoints nor removes the WAL and SHM files. Do not
+    /// reacquire the directory lane here; a quarantined State may still
+    /// retain it while this join completes.
     fn drop(&mut self) {
         self.wake.take();
         if let Some(thread) = self.thread.take() {

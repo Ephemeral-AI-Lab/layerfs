@@ -2,12 +2,14 @@
 //! 2026-11-07; Normal since 2026-11-17): COMMIT does not checkpoint
 //! (`wal_autocheckpoint=0`); a log longer than 4 MiB is copied into the Store
 //! file while the session stays open, with no idle checkpoint, seal or close.
+//! Routine passes sync with plain fsync; the idle checkpoint and the last
+//! close run on the session's connection with `checkpoint_fullfsync=1`.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 mod support;
 
 use layerfs_content::{construct_bytes, read_range};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile, StoreFile};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use std::path::Path;
@@ -63,6 +65,15 @@ fn copied(profile: SqlitePersistenceProfile, synchronous: i64) {
     assert_eq!(handles.profile().synchronous, synchronous);
     assert_eq!(handles.profile().fullfsync, 0);
     assert_eq!(handles.profile().wal_autocheckpoint, 0);
+    // Routine passes run on the checkpoint thread's connection with plain
+    // fsync; the idle TRUNCATE and the last close run on the session's own
+    // connection with F_FULLFSYNC on macOS (finding #11, narrowed by the
+    // owner 2026-11-23). Neither connection changes its setting after open.
+    assert_eq!(handles.profile().checkpoint_fullfsync, 1);
+    assert_eq!(
+        handles.profile().checkpoint_thread_checkpoint_fullfsync,
+        Some(0)
+    );
     let storage = Storage::new(handles.storage.clone()).unwrap();
     let bytes = random(BYTES);
     let save = storage.begin_save().unwrap();
@@ -103,10 +114,16 @@ fn copied(profile: SqlitePersistenceProfile, synchronous: i64) {
     .0
     .unwrap();
     assert!(read == bytes);
+    // The routine passes above copied the frames but never shrink the log:
+    // PASSIVE neither truncates nor deletes it. The idle checkpoint does, and
+    // only the session's own connection (checkpoint_fullfsync=1) runs it.
+    let mut wal = path.as_os_str().to_os_string();
+    wal.push("-wal");
+    assert!(size(Path::new(&wal)) > 0, "a routine pass leaves the log");
+    assert!(StoreFile::checkpoint(&*handles.storage).unwrap());
+    assert_eq!(size(Path::new(&wal)), 0, "the idle checkpoint truncates it");
     drop(storage);
     drop(handles);
     // The last close leaves no log behind.
-    let mut wal = path.as_os_str().to_os_string();
-    wal.push("-wal");
     assert_eq!(size(Path::new(&wal)), 0);
 }

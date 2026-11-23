@@ -173,7 +173,7 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | `BackendError` | `PersistenceError` | `HistoryError` | Meaning |
 | --- | --- | --- | --- |
 | `Busy` | `Busy` | `Busy` | Another writer held the lock |
-| `Closed` | `Refused "Closed"` | `OwnershipUnavailable` | Store closed before this call's turn |
+| `Closed` | `Refused "Closed"` | `OwnershipUnavailable` | Store closed before this call's turn, or (PostgreSQL) a nested write found its lane lost and rolled back |
 | `Rejected` | `Refused "Rejected"` | `OwnershipUnavailable` | PostgreSQL refused a new connection |
 | `Cancelled` | `Refused "Cancelled"` | `OwnershipUnavailable` | A signal interrupted the writer wait (Linux and macOS) |
 | `ReadOnly` | `Refused "ReadOnly"` | `ContinuityUnavailable` | Write on a read-only session |
@@ -181,7 +181,7 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | `Integrity` | `Malformed` | `Integrity("persistence")` | Stored or supplied data broke a rule |
 | `SchemaVersion1` | `Refused` (names the conversion) | `Integrity` | A schema version 1 SQLite Store |
 | `UnsupportedSchemaVersion` | `Refused` | `Unsupported` | Diagnostic open of an unknown layout |
-| `Unknown` | `Uncertain` | `UnknownOutcome` | Outcome unknown; session quarantined |
+| `Unknown` | `Uncertain` | `UnknownOutcome` | Outcome unknown; session quarantined, its connection closed and the writer lane released ([SQLite](sqlite.md#quarantine), [PostgreSQL](postgresql.md#session)) |
 
 Source: [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs).
 
@@ -191,7 +191,9 @@ Source: [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend
 | --- | --- | --- | --- |
 | [`heads.rs`](../../../../engine/crates/layerfs-persistence/tests/heads.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test heads` | macOS, Linux (no-sidecar check Linux only) | Project, fork and Commit change the heads exactly; a snapshot has the same heads |
 | [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/tests/writer_admission.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test writer_admission` | macOS, Linux (`Cancelled` Linux only) | FIFO order, `Closed` on close, writers queued behind the lane, self re-entry refused, the directory lock across processes and concurrent opens, its hand-over, and `Cancelled` |
-| [`diagnostics_during_lane.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostics_during_lane.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostics_during_lane` | any | Counter reads return while another thread holds the lane |
+| [`diagnostics_during_lane.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostics_during_lane.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostics_during_lane` | any (the foreign-lane case macOS, Linux) | Counter reads return while another thread holds the lane, and while the session waits for another session's lane |
+| [`sqlite_quarantine_release.rs`](../../../../engine/crates/layerfs-persistence/tests/sqlite_quarantine_release.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test sqlite_quarantine_release` | macOS, Linux; needs `python3` | An uncertain write, alone or nested in a held lane, closes its connection and frees the lane: a raw writer and a second session write at once, and the first session stays quarantined |
+| [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_lane_liveness` | a PostgreSQL server; prints `NOT_RUN` without the variable | A quarantined session closes its connection (no backend is left idle in its aborted transaction) and the lane row is free; a nested write after its lane connection was terminated fails `Closed` and writes nothing |
 | [`layerstack_removal.rs`](../../../../engine/crates/layerfs-persistence/tests/layerstack_removal.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test layerstack_removal` | macOS, Linux; also PostgreSQL when `LAYERFS_TEST_POSTGRES_URL` is set | Removing one of two projects leaves the other whole, frees the name and takes its logical bytes out of the totals |
 | [`binding_hint_blocks.rs`](../../../../engine/crates/layerfs-persistence/tests/binding_hint_blocks.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test binding_hint_blocks` | macOS, Linux | Hints merge across blocks without repeats |
 | [`postgresql_acquisition.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition` | a PostgreSQL server; prints `NOT_RUN` without the variable | Creating a PostgreSQL Store, refusing a second create, and Init's acquisition over it |

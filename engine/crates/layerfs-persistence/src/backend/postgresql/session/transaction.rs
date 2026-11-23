@@ -230,7 +230,7 @@ impl Transaction<'_> {
     /// transaction that is not already inside this thread's held lane.
     pub(crate) fn lane(&self) -> Result<(), BackendError> {
         if self.lane.replace(false) {
-            self.query(super::profile::Settings::LANE_ROW, Vec::new())?;
+            self.batch(&super::profile::Settings::lane_row(self.schema))?;
         }
         Ok(())
     }
@@ -346,11 +346,17 @@ impl Session {
         );
         let expected = generation.filter(|_| transactional);
         let autocommit = generation.filter(|_| matches!(mode, Mode::Immutable | Mode::Statement));
+        // A write nested in this thread's held lane relies on the lane
+        // connection's row lock: it holds the lane barrier shared and checks
+        // that lane transaction before its COMMIT (finding #10).
+        let in_lane = turn.nested && matches!(mode, Mode::Write | Mode::Publish);
         let begin = match mode {
             Mode::Read => self.settings.read_begin(),
             Mode::Snapshot => self.settings.snapshot_begin(),
-            Mode::Write => self.settings.write_begin(!turn.nested),
+            Mode::Write if in_lane => self.settings.write_begin(false) + &self.settings.in_lane(),
+            Mode::Write => self.settings.write_begin(true),
             Mode::Stage => self.settings.write_begin(false),
+            Mode::Publish if in_lane => self.settings.publish_begin() + &self.settings.in_lane(),
             Mode::Publish => self.settings.publish_begin(),
             Mode::Immutable | Mode::Statement => {
                 let single = (mode == Mode::Statement).then(|| Cell::new(false));
@@ -379,7 +385,7 @@ impl Session {
                             .ok_or(BackendError::Integrity)?;
                         if generation != expected {
                             if rollback(state).is_err() {
-                                state.quarantined = true;
+                                state.quarantine();
                                 return Err(BackendError::Unknown.into());
                             }
                             state.work.rollbacks += 1;
@@ -389,7 +395,7 @@ impl Session {
                     Err(e) => {
                         let error = e.backend();
                         if error == BackendError::Unknown || rollback(state).is_err() {
-                            state.quarantined = true;
+                            state.quarantine();
                             return Err(BackendError::Unknown.into());
                         }
                         state.work.rollbacks += 1;
@@ -399,7 +405,7 @@ impl Session {
             } else if let Err(e) = state.client.batch_execute(&begin) {
                 let error = e.backend();
                 if error == BackendError::Unknown || rollback(state).is_err() {
-                    state.quarantined = true;
+                    state.quarantine();
                     return Err(BackendError::Unknown.into());
                 }
                 state.work.rollbacks += 1;
@@ -428,10 +434,19 @@ impl Session {
                 (result, uncertain)
             };
             if uncertain {
-                state.quarantined = true;
+                state.quarantine();
                 return Err(BackendError::Unknown.into());
             }
             match result {
+                Ok(_) if in_lane && self.lane_still_held().is_err() => {
+                    // The lane was lost: nothing of this write is kept.
+                    if rollback(state).is_err() {
+                        state.quarantine();
+                        return Err(BackendError::Unknown.into());
+                    }
+                    state.work.rollbacks += 1;
+                    Err(BackendError::Closed.into())
+                }
                 Ok(value) => {
                     let commit = Instant::now();
                     state.work.round_trips += 1;
@@ -450,7 +465,7 @@ impl Session {
                             // the server refused (a deferred constraint) rolled back.
                             let error = e.backend();
                             if error == BackendError::Unknown {
-                                state.quarantined = true;
+                                state.quarantine();
                             } else {
                                 state.work.rollbacks += 1;
                             }
@@ -460,7 +475,7 @@ impl Session {
                 }
                 Err(e) => {
                     if rollback(state).is_err() {
-                        state.quarantined = true;
+                        state.quarantine();
                         return Err(BackendError::Unknown.into());
                     }
                     state.work.rollbacks += 1;
@@ -563,7 +578,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
         (result, uncertain)
     };
     if uncertain || result.as_ref().err().is_some_and(OutcomeError::uncertain) {
-        state.quarantined = true;
+        state.quarantine();
         return Err(BackendError::Unknown.into());
     }
     result

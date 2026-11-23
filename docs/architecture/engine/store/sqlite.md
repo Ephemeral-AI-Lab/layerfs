@@ -55,8 +55,8 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Open | `READ_WRITE` or `READ_ONLY`, `NO_MUTEX`; statement cache 64 | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back into `ConnectionProfile`; a mismatch is `Integrity`; an existing Store not in `wal` mode is refused | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
-| Checkpoint thread | writable Normal session only: a second connection on its own thread, opened with the session's `synchronous` value and read back; failure to start it refuses the open | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
-| Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files and takes no lane, so it never waits behind a writer kept after an uncertain write. The checkpoint thread's connection closes first and never takes it. One exception: an open whose checkpoint thread fails to start drops its new connection after the open's lane is released | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
+| Checkpoint thread | writable Normal session only: a second connection on its own thread, opened with the session's `synchronous` value and `checkpoint_fullfsync=0`, both read back (the second as `ConnectionProfile::checkpoint_thread_checkpoint_fullfsync`); failure to start it refuses the open. It runs only the routine PASSIVE passes; the idle TRUNCATE and the last close run on the session's own connection, which has `checkpoint_fullfsync=1` (finding #11, narrowed by the owner 2026-11-23; see [Checkpoints](#checkpoints)) | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
+| Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files and takes no lane. The checkpoint thread's connection closes first and never takes it; after a quarantine closed the session's connection (see [Quarantine](#quarantine)) it may be SQLite's last, so it then closes with `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` and leaves `-wal`/`-shm` in place (kept until process exit if that setting fails). One exception: an open whose checkpoint thread fails to start drops its new connection after the open's lane is released | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
 
 | Setting | Normal | Source |
 | --- | --- | --- |
@@ -83,12 +83,14 @@ SQL work to the calling thread's counters
 ```text
  SQLite write: Session::run(true, body)
    1 admission.enter        in-process FIFO turn on this session
-   2 state mutex            the connection
-   3 Writer::acquire        flock(LOCK_EX) on the Store's parent directory
+   2 Writer::acquire        flock(LOCK_EX) on the Store's parent directory
                             (Linux and macOS)          (skipped if nested)
+   3 state mutex            the connection; quarantined? release, Unknown;
+                            identity checked under the lane
    4 BEGIN IMMEDIATE        busy_timeout 0 -> Busy
    5 body; COMMIT           or ROLLBACK; Unknown -> quarantine
-   6 release the flock; drop the turn
+   6 release the flock (after closing a quarantined connection);
+     drop the turn
 
  Session::hold_lane() -> LaneHold (!Send)
    writable? else ReadOnly; admission turn (nested -> Integrity);
@@ -100,7 +102,10 @@ The lock is taken on a separate descriptor of the Store's directory (on
 macOS, a `flock` on the main file itself would meet SQLite's own `fcntl`
 locks), never on the main, WAL or SHM file: closing a main-file descriptor
 would drop SQLite's own POSIX locks. Several Store files in one directory
-share it. It is the same lane on Linux and macOS: a holder process that
+share it. The kernel wait happens before the state mutex, so a write
+waiting for another process's lane never blocks `diagnostics()` or anything
+else that takes only that mutex (finding #20); the FIFO turn already keeps
+the session's other callers out. It is the same lane on Linux and macOS: a holder process that
 exits releases it, a signal during the wait is `Cancelled`, and a writable
 open takes it too, so concurrent first openers serialize their opening
 PRAGMA statements instead of meeting SQLite's `Busy`; the schema statements
@@ -108,10 +113,35 @@ a first open runs then take it once per transaction. Only a writer that
 bypasses the lane is left with the exact `Busy`. The lane is one held
 admission turn plus that lock, kept by one thread across several short
 transactions, and no publication of any process interleaves. `LaneHold` is
-`!Send`: it belongs to the thread that took it; a failed release on its drop
-quarantines the session and keeps the lock
+`!Send`: it belongs to the thread that took it; its drop first closes the
+connection of a session that nested work quarantined (see below), and a
+failed release quarantines the session and keeps the lock
 ([`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs),
 [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/lane.rs)).
+
+### Quarantine
+
+An unknown outcome (`SQLITE_IOERR`, `SQLITE_CANTOPEN`, a generic
+`SQLITE_ERROR` and every other code without a definite rule, or a body
+error that is uncertain at a higher level) quarantines the session: every
+later call is refused `Unknown` and nothing is replayed. SQLite may still
+hold the attempt's write transaction, which keeps other connections out
+just as the lane does, so the lane cannot simply be released. Instead,
+while the lane is still held by this thread (the job's own writer, or a
+held `LaneHold` around nested work), the quarantined connection is closed:
+`sqlite3_close` rolls back whatever transaction is open and drops SQLite's
+locks, and may run SQLite's last-close checkpoint under that same lane.
+Only then is the lane released, so SQLite teardown still precedes advisory
+release, and other sessions and processes take the lane at once instead
+of waiting until this session drops, which for a daemon was process exit
+(finding #2). The outcome stays unknown and the session stays quarantined;
+its caller opens a new session. rusqlite flushes its statement cache before
+the close and every statement or BLOB handle borrows the connection, so
+SQLite has nothing to refuse the close on; if it ever did with a
+transaction still open, the lane would stay with the connection until the
+session drops, as before
+([`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs)).
+A read that quarantines holds no lane and closes nothing.
 
 ## Checkpoints
 
@@ -133,6 +163,8 @@ quarantines the session and keeps the lock
 | --- | --- |
 | A pass that cannot copy every frame leaves them valid; the next wake, the idle checkpoint or the last close copies them. Each wake is a new pass, never a retry. | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
 | A PASSIVE checkpoint takes no lock a writer needs, so it adds no `Busy`. | same |
+| Routine passes sync the Store file with plain `fsync` (`checkpoint_fullfsync=0` on the thread's connection). The idle TRUNCATE, `checkpoint_holding` and the last close run on the session's own connection with `checkpoint_fullfsync=1`, so on macOS a checkpoint there syncs with `F_FULLFSYNC` (owner, 2026-11-23: narrowed from every pass, which on the macOS host pushed `kept_node_closure`, `kept_objects_sort_files` and store-service `scale_lineage_cap` past the 120 s test ceiling; one sample each). Linux ignores both settings. | same |
+| **Remaining window (macOS only).** On macOS `fsync` does not flush the drive's write cache, so after a routine pass the copied pages may still sit only in that cache. Once a pass has copied every frame, the next write restarts the log over those frames; a power loss before the pages leave the cache can then lose database pages, not only the last commits. A later `F_FULLFSYNC` flushes the whole drive cache and closes the window, but SQLite syncs the Store file during a checkpoint only when that checkpoint copies at least one frame: an idle TRUNCATE or last close that finds every frame already copied truncates or deletes the log with no sync at all. Linux is unaffected. No power-loss guarantee is claimed for the Normal profile until layerfs-project#155 §7.5/§7.6 runs. | [`sqlite3.c`](https://sqlite.org/src/file/src/wal.c) `walCheckpoint` |
 | The idle TRUNCATE takes the writer lane first, because it holds SQLite's WAL write lock; `Ok(false)` is never retried. The Store stays open. Every host that opens a SQLite Store takes this lane, so a writer waits for it or the checkpoint is left, and only a writer that bypasses the lane meets exact `Busy`. | [`checkpoint.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/checkpoint.rs) |
 | Control's open-Store cache calls it when the last call or Sandbox on a Store returns. | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 

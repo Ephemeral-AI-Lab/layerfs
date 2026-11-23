@@ -79,7 +79,7 @@ impl Settings {
 
     /// A publication: like `write_begin(false)` with the lane's
     /// `lock_timeout`; the body takes the lane row itself, after its pack
-    /// bodies are sent, with [`Self::LANE_ROW`].
+    /// bodies are sent, with [`Self::lane_row`].
     pub(crate) fn publish_begin(&self) -> String {
         format!(
             "{}; SET LOCAL lock_timeout TO {}",
@@ -88,8 +88,22 @@ impl Settings {
         )
     }
 
-    /// The statement that waits for and locks the Store's lane row.
-    pub(crate) const LANE_ROW: &'static str = "SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE";
+    /// The statements that wait for and lock the Store's lane row, then pass
+    /// the lane barrier (see [`lane_barrier`]).
+    pub(crate) fn lane_row(schema: &str) -> String {
+        format!(
+            "SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; {}",
+            lane_barrier(schema)
+        )
+    }
+
+    /// Appended to the `BEGIN` of a write nested in this thread's held lane:
+    /// the barrier key, held shared until the transaction ends, so a new lane
+    /// holder's barrier waits for this write (see [`lane_barrier`]).
+    pub(crate) fn in_lane(&self) -> String {
+        let (class, key) = barrier_key(&self.schema);
+        format!("; SELECT pg_advisory_xact_lock_shared({class}, {key})")
+    }
 
     /// The held publication lane: one open transaction owning the lane row.
     pub(crate) fn lane_begin(&self) -> String {
@@ -104,7 +118,35 @@ impl Settings {
         format!(
             "; SET LOCAL lock_timeout TO {}; {}",
             self.lock_timeout_ms,
-            Self::LANE_ROW
+            Self::lane_row(&self.schema)
         )
     }
+}
+
+/// The two-key advisory lock of one Store's lane barrier (finding #10): a
+/// fixed class and a stable hash of the schema name. The two-key form is a
+/// separate key space from the one-key GC advisory keys; two schemas whose
+/// hashes collide only share a barrier, which can make one wait, never pass.
+fn barrier_key(schema: &str) -> (i32, i32) {
+    // FNV-1a, 32 bits: stable across processes, builds and machines.
+    let hash = schema.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    });
+    (0x4c46_4c4e, hash as i32)
+}
+
+/// Run by every writer right after it locks the lane row, under the same
+/// `lock_timeout`. Writes nested in a held lane commit on the session
+/// connection while the row lock lives in the lane connection's transaction;
+/// if that connection dies (an idle-in-transaction timeout, a keepalive or an
+/// administrator), the row is free while such a write may still be running.
+/// Each nested write holds the barrier key shared for its whole transaction
+/// and checks before `COMMIT` that its lane transaction is still open; a new
+/// holder takes the key exclusively and lets it go at once, so it waits for
+/// any nested write of the previous holder still in flight before it reads
+/// anything. Together they keep the head check and the `object_location`
+/// existence probe exact without a unique key or a second database.
+fn lane_barrier(schema: &str) -> String {
+    let (class, key) = barrier_key(schema);
+    format!("SELECT pg_advisory_lock({class}, {key}); SELECT pg_advisory_unlock({class}, {key})")
 }
