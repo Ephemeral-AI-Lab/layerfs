@@ -1,13 +1,17 @@
 //! How an admitted request ends itself instead of being retained with its
 //! mount fenced: after its mount's stopped fence refused it before an
-//! attempt, or after a base demand made for it alone failed.
+//! attempt, after a base demand made for it alone failed, or after a read or
+//! directory visit found that the serial it names was dropped by an install.
 //!
 //! Forced teardown stops the fence after its abort write. A request waiting
 //! for owner admission or a Store reader then fails with `Fenced` instead of
 //! attempting anything; its single reply attempt answers [`STOPPED`] and is
 //! counted on the fence. A request whose canonical base demand failed carries
 //! `BaseDemandFailed`; its single reply attempt answers `EIO`, its cause is
-//! already in the mount's bounded record, and later requests are served.
+//! already in the mount's bounded record, and later requests are served. A
+//! read or directory request whose serial an install dropped while the kernel
+//! held it (`stale()`: a merge rebuilt that directory or file under a fresh
+//! serial) answers `ESTALE` and is not recorded; the mount serves on.
 //!
 //! Either way the request then releases what it still owns through the
 //! disposal ports, which the fence never refuses, and makes no further demand.
@@ -27,10 +31,13 @@ use layerfs_mount_ports::{
 /// the request's reply ownership.
 pub(super) const STOPPED: Errno = Errno::ENOTCONN;
 
-/// The one reply of a failed request: stopped, or a failure of its own.
-pub(super) fn errno(fenced: bool) -> Errno {
+/// The one reply of a failed request: stopped, a stale serial, or a failure
+/// of its own.
+pub(super) fn errno(fenced: bool, stale: bool) -> Errno {
     if fenced {
         STOPPED
+    } else if stale {
+        Errno::ESTALE
     } else {
         Errno::EIO
     }
@@ -38,7 +45,7 @@ pub(super) fn errno(fenced: bool) -> Errno {
 pub(super) async fn read(fence: &Fence, failure: ReadFailure) -> RequestDisposition {
     if failure.fenced() {
         fence.replied();
-    } else if failure.base_demand().is_none() {
+    } else if failure.base_demand().is_none() && !failure.stale() {
         return RequestDisposition::Retained(Box::new(failure));
     }
     match failure.relinquish().await {
@@ -62,7 +69,7 @@ pub(super) async fn mutation(fence: &Fence, failure: MutationFailure) -> Request
 pub(super) async fn directory(fence: &Fence, failure: DirectoryFailure) -> RequestDisposition {
     if failure.fenced() {
         fence.replied();
-    } else if failure.base_demand().is_none() {
+    } else if failure.base_demand().is_none() && !failure.stale() {
         return RequestDisposition::Retained(Box::new(failure));
     }
     match failure.relinquish().await {

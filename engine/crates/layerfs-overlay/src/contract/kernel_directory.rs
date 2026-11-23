@@ -127,18 +127,24 @@ impl KernelCookieOffer {
     /// The entries whose handles this publication hands out, in reply order:
     /// the publishing visit takes one kernel lookup reference for each of
     /// them and records a directory's parent, so a handle the client later
-    /// presents resolves without a LOOKUP of its own.
-    pub fn adopt(&mut self, entries: impl IntoIterator<Item = (u64, bool)>) {
+    /// presents resolves without a LOOKUP of its own. Each entry is its
+    /// serial, whether it is a directory and its name in the listing.
+    pub fn adopt(&mut self, entries: impl IntoIterator<Item = (u64, bool, Vec<u8>)>) {
         self.handled = entries
             .into_iter()
-            .map(|(serial, directory)| KernelCookieEntry { serial, directory })
+            .map(|(serial, directory, name)| KernelCookieEntry {
+                serial,
+                directory,
+                name,
+            })
             .collect();
     }
 }
 /// One entry whose handle a READDIRPLUS reply hands out.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KernelCookieEntry {
     pub serial: u64,
-    /// A directory's parent is recorded with its reference.
+    /// A directory's parent and name are recorded with its reference.
     pub directory: bool,
+    pub name: Vec<u8>,
 }

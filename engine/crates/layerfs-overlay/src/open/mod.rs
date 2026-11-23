@@ -7,4 +7,4 @@ pub use directories::OpenDisposals;
 pub(crate) use directories::{CookiePage, DirectoryState};
 pub(crate) mod files;
 mod kernel;
-pub(crate) use kernel::{KernelReference, OpenState};
+pub(crate) use kernel::{KernelParent, KernelReference, OpenState};

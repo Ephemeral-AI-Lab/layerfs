@@ -1,5 +1,5 @@
 //! LOOKUP/GETATTR/OPEN/OPENDIR share the existing atomic semantic plan.
-use crate::ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply};
+use crate::ports::{stale, BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply};
 use layerfs_overlay::KernelMount;
 use layerfs_workspace::{
     KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue,
@@ -101,11 +101,17 @@ impl ReadFailure {
     pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
         self.reason.downcast_ref()
     }
-    /// Ends a request that was fenced or whose base demand failed. It holds
-    /// nothing in the engine, so nothing is released and no job is
-    /// submitted. Any other failure is returned unchanged.
+    /// The kernel named a serial an install dropped ([`stale`]): ESTALE for
+    /// this request alone.
+    pub fn stale(&self) -> bool {
+        stale(&self.reason)
+    }
+    /// Ends a request that was fenced, whose base demand failed or whose
+    /// serial is stale. It holds nothing in the engine, so nothing is
+    /// released and no job is submitted. Any other failure is returned
+    /// unchanged.
     pub async fn relinquish(self) -> Result<(), ReadFailure> {
-        if !self.fenced() && self.base_demand().is_none() {
+        if !self.fenced() && self.base_demand().is_none() && !self.stale() {
             return Err(self);
         }
         Ok(())

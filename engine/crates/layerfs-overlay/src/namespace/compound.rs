@@ -24,7 +24,7 @@ pub struct SourceRows<'a> {
 /// Validated name keys of one compound job, computed before its transaction.
 pub(crate) struct CheckedChanges {
     keys: Vec<(i64, Option<i64>)>,
-    moved_directory: Option<(i64, i64)>,
+    moved_directory: Option<(i64, i64, Vec<u8>)>,
 }
 impl Overlay {
     /// Checks source custody once for the bounded point reads of one job.
@@ -85,12 +85,13 @@ impl Overlay {
             return Err(OverlayError::Invalid("created inode final"));
         }
         let moved_directory = changes.moved_directory.map(|(serial, parent)| {
-            if serial == parent || !changes.directory_entries.iter().any(|entry| {
+            let binding = changes.directory_entries.iter().find(|entry| {
                 entry.parent == parent && matches!(entry.binding, crate::Binding::Bound { serial: target, .. } if target == serial)
-            }) {
+            });
+            let Some(binding) = binding.filter(|_| serial != parent) else {
                 return Err(OverlayError::Invalid("moved directory final binding"));
-            }
-            Ok((integer(serial)?, integer(parent)?))
+            };
+            Ok((integer(serial)?, integer(parent)?, binding.name.clone()))
         }).transpose()?;
         for (index, inode) in changes.inodes.iter().enumerate() {
             check(inode)?;
@@ -255,15 +256,25 @@ impl Overlay {
                 )? as i64;
             }
         }
-        if let Some((serial, parent)) = moved_directory {
+        if let Some((serial, parent, name)) = moved_directory {
             let key = *serial as u64;
-            let held = self.open.borrow().parents.rows.get(&key).copied();
-            if let Some((mount, old)) = held {
+            let held = self
+                .open
+                .borrow()
+                .parents
+                .rows
+                .get(&key)
+                .map(|row| (row.owner, row.parent));
+            if let Some((owner, old)) = held {
                 if old != *serial as u64 {
-                    self.open
-                        .borrow_mut()
-                        .parents
-                        .put(key, (mount, *parent as u64));
+                    self.open.borrow_mut().parents.put(
+                        key,
+                        crate::open::KernelParent {
+                            owner,
+                            parent: *parent as u64,
+                            name: name.as_slice().into(),
+                        },
+                    );
                 }
             }
         }

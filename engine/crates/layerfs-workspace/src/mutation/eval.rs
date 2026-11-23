@@ -2,7 +2,9 @@
 use crate::{BaseFacts, Need, Refusal, Time, WorkspaceError, WorkspaceResult};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::ContentError;
-use layerfs_overlay::{Inode, InodeKind, KernelMount, NameLayers, Overlay, SourceRows};
+use layerfs_overlay::{
+    Inode, InodeKind, KernelMount, NameLayers, Overlay, OverlayError, SourceRows,
+};
 
 /// One evaluation inside a single owner job. Every answer comes from rows read
 /// in this job or from base facts that cannot change while the source is owned.
@@ -114,6 +116,29 @@ impl Eval<'_> {
             None => Ok(None),
             Some(Some(inode)) => Ok(Some(inode)),
             Some(None) => Err(ContentError::InvalidRecord("bound inode is absent").into()),
+        }
+    }
+    /// The inode a kernel request names by its serial alone: GETATTR, OPEN,
+    /// READLINK, OPENDIR and a LOOKUP's directory. The kernel learned the
+    /// serial from an earlier view. With no local row and no base inode, an
+    /// install has dropped it (a merge rebuilt the directory or file under a
+    /// fresh serial), so the kernel's handle is stale: `OverlayError::Stale`
+    /// for this request alone, not corruption of the Workspace.
+    pub fn held(&mut self, serial: u64) -> WorkspaceResult<Option<Inode>> {
+        match self.inode(serial)? {
+            None => Ok(None),
+            Some(Some(inode)) => Ok(Some(inode)),
+            Some(None) => Err(OverlayError::Stale.into()),
+        }
+    }
+    /// [`Self::held`] for a directory: a removed one is Missing and another
+    /// kind NotDirectory, as [`Self::directory`] answers.
+    pub fn held_directory(&mut self, serial: u64) -> WorkspaceResult<Option<Inode>> {
+        match self.held(serial)? {
+            None => Ok(None),
+            Some(inode) if !self.alive(&inode) => refuse(Refusal::Missing),
+            Some(inode) if inode.kind != InodeKind::Directory => refuse(Refusal::NotDirectory),
+            Some(inode) => Ok(Some(inode)),
         }
     }
 }

@@ -36,7 +36,7 @@ fn remembered_regular_file_allocation_is_measured_without_a_population_cap() {
     db.open_workspace([2; 32]).unwrap();
     let mount = db.create_kernel_mount(1).unwrap();
     let lookup = |serial| {
-        let outcome = db.observe_kernel_visit(mount, 1, None, true, |_, _| {
+        let outcome = db.observe_kernel_visit(mount, 1, None, Some(b"file"), |_, _| {
             Ok(KernelDecision::Finished {
                 inode: Some(Inode {
                     serial,

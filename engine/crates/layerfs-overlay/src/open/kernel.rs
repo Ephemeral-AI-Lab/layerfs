@@ -14,10 +14,18 @@ pub(crate) struct KernelReference {
     pub count: u64,
     pub implicit: bool,
 }
+/// One kernel-known directory's retained position: the mount owner that
+/// knows it, its parent and its name in that parent when it was recorded.
+#[derive(Clone)]
+pub(crate) struct KernelParent {
+    pub owner: u64,
+    pub parent: u64,
+    pub name: Box<[u8]>,
+}
 #[derive(Default)]
 pub(crate) struct OpenState {
     pub kernel: JournalMap<(u64, u64), KernelReference>,
-    pub parents: JournalMap<u64, (u64, u64)>,
+    pub parents: JournalMap<u64, KernelParent>,
     /// Descriptors by owner; requests are (kernel mount owner or 0, request).
     pub files: OwnerTable<(u64, i64), OpenFile>,
     pub reads: OwnerTable<i64, FileRead>,

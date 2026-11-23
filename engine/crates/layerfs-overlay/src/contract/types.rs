@@ -129,7 +129,8 @@ pub struct DirectoryEntryChange {
 pub struct Changes {
     /// Semantically removed non-root inode; distinguishes zero-count root metadata.
     pub detached: Option<u64>,
-    /// A directory moved to another parent by this same name publication.
+    /// A directory moved to another parent, or renamed in its own, by this
+    /// same name publication.
     /// Updates retained kernel parent identity without enumerating open handles.
     pub moved_directory: Option<(u64, u64)>,
     /// Exact descriptor authority for mutations of independently owned orphans.

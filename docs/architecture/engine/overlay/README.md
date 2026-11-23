@@ -131,7 +131,7 @@ commits or rolls back with that job's SQL through undo journals.
 
 | Map | Holds | Source |
 | --- | --- | --- |
-| `mount`, `kernel`, `parents` | One kernel connection, `(mount, serial)` lookup counts, retained directory parents | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
+| `mount`, `kernel`, `parents` | One kernel connection, `(mount, serial)` lookup counts, retained directory parents with the name each was recorded under (an install rewrites none; `kernel_ancestors` returns the links for the caller to check against its view) | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
 | `files`, `directories`, `cookies` | Open descriptors, open directories and published READDIR cookie pages | same, [`open/directories.rs`](../../../../engine/crates/layerfs-overlay/src/open/directories.rs) |
 | `reads`, `lookups`, `operations`, `captured` | Read windows, lookup references, operation owners, captured readers | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
 | `custody`, `sources`, `orphans` | Per-serial opens, lookups and readers; held `BaseSource` windows; orphans | same |

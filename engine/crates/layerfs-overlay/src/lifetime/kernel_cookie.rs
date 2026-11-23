@@ -141,7 +141,12 @@ impl Overlay {
             for entry in &offer.handled {
                 self.add_kernel_lookup(directory.mount, entry.serial)?;
                 if entry.directory {
-                    self.set_kernel_parent(directory.mount, entry.serial, directory.serial)?;
+                    self.set_kernel_parent(
+                        directory.mount,
+                        entry.serial,
+                        directory.serial,
+                        &entry.name,
+                    )?;
                 }
             }
             Ok(())

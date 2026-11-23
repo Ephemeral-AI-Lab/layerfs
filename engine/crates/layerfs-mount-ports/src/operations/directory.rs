@@ -104,12 +104,18 @@ impl DirectoryFailure {
     pub fn rewound(&self) -> bool {
         self.reason.is::<Rewound>()
     }
-    /// Ends an enumeration that was fenced, whose base demand failed or
-    /// whose offset a rewind retired. It holds nothing in the engine, so
-    /// nothing is released and no job is submitted; an unpublished batch
-    /// made no offset valid. Any other failure is returned unchanged.
+    /// The open directory's serial is one an install dropped
+    /// ([`crate::ports::stale`]): ESTALE for this request alone.
+    pub fn stale(&self) -> bool {
+        crate::ports::stale(&self.reason)
+    }
+    /// Ends an enumeration that was fenced, whose base demand failed, whose
+    /// offset a rewind retired or whose serial is stale. It holds nothing in
+    /// the engine, so nothing is released and no job is submitted; an
+    /// unpublished batch made no offset valid. Any other failure is returned
+    /// unchanged.
     pub async fn relinquish(self) -> Result<(), DirectoryFailure> {
-        if !self.fenced() && self.base_demand().is_none() && !self.rewound() {
+        if !self.fenced() && self.base_demand().is_none() && !self.rewound() && !self.stale() {
             return Err(self);
         }
         Ok(())
@@ -287,10 +293,18 @@ impl DirectoryBatch {
     /// `accepted` is the prefix the reply buffer took; only published offsets
     /// can make a handle's fence answer, so a reused reply adopts nothing.
     pub fn adopt(&mut self, accepted: usize) {
-        let entries: Vec<(u64, bool)> = self.batch.entries[..accepted]
+        let entries: Vec<(u64, bool, Vec<u8>)> = self.batch.entries[..accepted]
             .iter()
             .filter(|entry| entry.stat.is_some())
-            .map(|entry| (entry.serial, entry.kind == InodeKind::Directory))
+            .map(|entry| {
+                let directory = entry.kind == InodeKind::Directory;
+                let name = if directory {
+                    entry.name.clone()
+                } else {
+                    Vec::new()
+                };
+                (entry.serial, directory, name)
+            })
             .collect();
         if let Some(offer) = self.batch.publish.as_mut() {
             offer.adopt(entries);
