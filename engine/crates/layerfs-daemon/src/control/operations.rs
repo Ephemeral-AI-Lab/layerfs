@@ -147,6 +147,7 @@ impl Service {
                 workspace.commit_captured(&CommitOptions {
                     force: control.force,
                     message: control.message.clone(),
+                    expected: control.expected,
                 })
             }),
             Request::Unmount(control) => self.unmount(*control),

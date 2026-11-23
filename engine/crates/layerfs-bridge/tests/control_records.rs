@@ -74,6 +74,7 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
             token,
             force: false,
             message: Some("agent".into()),
+            expected: None,
         }),
         Request::Status(token),
         Request::Unmount(UnmountControl {

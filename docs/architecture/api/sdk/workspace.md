@@ -323,8 +323,11 @@ long form adds `outcome`, `branch`, `parent` (the Commit before it, or for a
 Branch's first Commit the publication it was forked at; null when
 unchanged), `root`, `message`, `created_at` and `merged_from`. `--expected
 C` refuses `Conflict` unless the Branch's head is `C`, an id or a prefix of
-8 or more characters resolved as `commit get` resolves it; the check is one
-read before the Commit.
+8 or more characters resolved as `commit get` resolves it. It is checked
+before the Commit and again inside the publication's own transaction: a head
+that moves after the first check is refused the same way, with nothing
+committed, and is never merged with. `--force --expected C` replaces only
+`C`.
 
 | Refusal | When |
 | --- | --- |

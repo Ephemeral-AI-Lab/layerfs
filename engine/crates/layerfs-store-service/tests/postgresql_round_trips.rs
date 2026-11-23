@@ -531,6 +531,7 @@ impl Run {
             workspace.commit_captured(&CommitOptions {
                 force: false,
                 message: Some(name.to_owned()),
+                expected: None,
             })
         });
         let reports = recording.finish();

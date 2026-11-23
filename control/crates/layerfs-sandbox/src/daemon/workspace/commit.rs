@@ -30,6 +30,7 @@ impl WorkspaceApi<'_> {
             token,
             force: false,
             message: None,
+            expected: None,
         });
         match self.exchange(request.clone())? {
             Reply::Committed(outcome) => Ok(outcome),

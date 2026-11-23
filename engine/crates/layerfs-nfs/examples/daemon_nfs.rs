@@ -110,6 +110,7 @@ fn main() {
                 token,
                 force: false,
                 message: Some("a3 over nfs".into()),
+                expected: None,
             }));
             let ms = at.elapsed().as_millis();
             match done {

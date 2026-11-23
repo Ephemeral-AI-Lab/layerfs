@@ -131,6 +131,7 @@ fn options() -> CommitOptions {
     CommitOptions {
         force: false,
         message: Some("pipeline".into()),
+        expected: None,
     }
 }
 

@@ -250,6 +250,7 @@ fn independent_history_lineage_checks_accept_real_forks_and_detect_damage() {
                 second_parent: None,
                 meta: CommitMeta::new(CommitVia::Files),
                 force: false,
+                required_head: None,
             })
             .unwrap();
         let CommitOutcome::Committed { record, .. } = outcome else {

@@ -187,6 +187,7 @@ fn commit(handles: &PostgresHandles, branch: BranchId, tag: u8) -> CommitRecord 
             second_parent: None,
             meta: CommitMeta::new(CommitVia::Files),
             force: false,
+            required_head: None,
         })
         .unwrap()
     {

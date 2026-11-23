@@ -324,6 +324,35 @@ pub fn listed_head(listed: &SdkValue, id: BranchId) -> Option<String> {
 /// resolver, a full id or a prefix of 8 or more of its characters.
 pub type Resolve<'a> = dyn FnMut(&str) -> Outcome + 'a;
 
+/// The daemon's `HeadMoved` for a Commit sent with `--expected`: the head
+/// moved after the check above, and the publication refused it with nothing
+/// committed. Answered as the check answers a head that is not the expected
+/// one: `Conflict`, naming the head as `commit`.
+fn moved_from_expected(
+    expected: Option<layerfs_history::NodeId>,
+    failure: &crate::OperationFailure,
+) -> Option<SdkRefusal> {
+    let OperationCause::Remote(refused) = &failure.cause else {
+        return None;
+    };
+    let moved = match (expected, refused.code, &refused.moved) {
+        (Some(_), layerfs_bridge::control::ControlCode::HeadMoved, Some(moved)) => moved,
+        _ => return None,
+    };
+    let head = layerfs_bridge::sdk_values::node_text(moved.actual_head.map_or(
+        layerfs_history::NodeId::Layer(moved.actual_base),
+        layerfs_history::NodeId::Commit,
+    ));
+    let refusal = layerfs_home::outcome::refused(
+        "Conflict",
+        format!(
+            "the Branch's head moved to {head} after --expected was checked; nothing was committed"
+        ),
+    );
+    let refusal = with_next(refusal, "commit", SdkValue::text(head));
+    Some(with_next(refusal, "conflicts", SdkValue::List(Vec::new())))
+}
+
 /// The full id of the Commit `--expected` names, resolved in the Store: a
 /// prefix more than one Commit starts with is refused `InvalidInput` with
 /// `matches` beside it; one no Commit has, `NoSuchCommit`.
@@ -350,9 +379,10 @@ fn expected_id(text: &str, resolve: &mut Resolve<'_>) -> Result<String, SdkRefus
 /// made over: a head that is not it refuses the Commit `Conflict`, naming
 /// the head as `commit`, before anything is captured. The head is the one
 /// `branch get` answers, so a Branch with no Commit of its own is at the
-/// Commit it was forked at (RC-A F2). The check is one read before the
-/// Commit is sent; a head that moves after it is merged as any Commit
-/// merges.
+/// Commit it was forked at (RC-A F2). The expected head also travels with
+/// the Commit: the daemon merges only with it, and the publication checks it
+/// again inside its own transaction, so a head that moves after this read is
+/// refused `HeadMoved` with nothing published, forced or not.
 pub fn commit_with(
     host: &Host,
     path: Option<&str>,
@@ -396,13 +426,29 @@ pub fn commit_with(
             return Err(with_next(refusal, "conflicts", SdkValue::List(Vec::new())));
         }
     }
+    let expected = expected
+        .map(|text| {
+            layerfs_bridge::sdk_values::unhex(text)
+                .and_then(|bytes| layerfs_history::NodeId::from_slice(&bytes).ok())
+                .ok_or_else(|| {
+                    layerfs_home::outcome::refused(
+                        "Failed",
+                        "the Store named no Commit id for --expected; nothing was committed",
+                    )
+                })
+        })
+        .transpose()?;
     let reply = workspace(&mut control)
         .commit_with(CommitControl {
             token,
             force,
             message: host.message.text().map(str::to_owned),
+            expected,
         })
-        .map_err(values::failure)?;
+        .map_err(|failure| match moved_from_expected(expected, &failure) {
+            Some(refusal) => refusal,
+            None => values::failure(failure),
+        })?;
     let value = values::commit(&reply)?;
     // the Layer the Branch was forked at, from the mount this process
     // holds (no read): an unchanged fresh fork's head (call surface 2.0)

@@ -107,13 +107,15 @@ pub(crate) fn commit_branch(
     }
     let moved =
         branch.base_layer != request.expected_base || branch.head_commit != request.expected_head;
-    if moved && (!request.force || branch.base_layer != request.expected_base) {
-        return Err(HistoryError::HeadMoved(Box::new(MovedState {
-            expected_head: request.expected_head,
-            actual_head: branch.head_commit,
-            expected_base: request.expected_base,
-            actual_base: branch.base_layer,
-        })));
+    let answered = branch
+        .head_commit
+        .map_or(NodeId::Layer(branch.base_layer), NodeId::Commit);
+    let refused = (moved && (!request.force || branch.base_layer != request.expected_base))
+        || request
+            .required_head
+            .is_some_and(|required| required != answered);
+    if refused {
+        return Err(head_moved(request, &branch));
     }
     // Past the check above the expected base is the Branch's own.
     let base_root = rows
@@ -159,6 +161,9 @@ pub(crate) fn commit_branch(
             ..request.meta.clone()
         },
     )?;
+    // The advance replaces only the head this transaction read: if another
+    // writer moved the Branch meanwhile (a PostgreSQL lane connection lost
+    // inside the lane), no row matches and nothing is published.
     let advanced = tx
         .execute(
             ADVANCE_BRANCH,
@@ -166,11 +171,18 @@ pub(crate) fn commit_branch(
                 record.id.as_slice(),
                 branch.id.as_slice(),
                 request.expected_base.as_slice(),
+                branch.head_commit.map(|id| id.to_bytes().to_vec()),
             ],
         )
         .map_err(sql)?;
-    if advanced != 1 {
-        return Err(HistoryError::Integrity("Branch advance"));
+    match advanced {
+        1 => {}
+        0 => {
+            let now = super::branch::snapshot_rows(tx, request.branch)?
+                .ok_or(HistoryError::Missing(Missing::Branch))?;
+            return Err(head_moved(request, &now.branch));
+        }
+        _ => return Err(HistoryError::Integrity("Branch advance")),
     }
     fence.confirm(tx)?;
     let displaced = branch.head_commit.filter(|_| moved);
@@ -178,6 +190,19 @@ pub(crate) fn commit_branch(
         record: Box::new(record),
         displaced,
     })
+}
+
+/// The refusal of a publication over a head other than the one it expects.
+fn head_moved(
+    request: &CommitRequest,
+    branch: &layerfs_history::records::BranchRecord,
+) -> HistoryError {
+    HistoryError::HeadMoved(Box::new(MovedState {
+        expected_head: request.expected_head,
+        actual_head: branch.head_commit,
+        expected_base: request.expected_base,
+        actual_base: branch.base_layer,
+    }))
 }
 
 /// Derives, checks and inserts one Commit made on `branch` now, or verifies

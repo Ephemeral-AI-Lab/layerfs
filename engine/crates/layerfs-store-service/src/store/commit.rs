@@ -5,12 +5,38 @@ use super::{
 };
 use crate::telemetry::phase;
 use layerfs_content::filesystem::FilesystemRootId;
-use layerfs_history::{BranchSnapshot, CommitMeta, CommitOutcome, CommitRequest, CommitVia};
+use layerfs_history::{
+    error::MovedState, BranchSnapshot, CommitMeta, CommitOutcome, CommitRequest, CommitVia,
+    HistoryError, NodeId,
+};
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::{Active, TimingScope};
 use layerfs_workspace::WorkspaceError;
 use std::sync::{atomic::Ordering, Arc};
+
+/// The node a Branch answers as its head: its head Commit, else its base
+/// Layer (`branch get`, `--expected`).
+fn answered(snapshot: &BranchSnapshot) -> NodeId {
+    snapshot
+        .branch
+        .head_commit
+        .map_or(NodeId::Layer(snapshot.branch.base_layer), NodeId::Commit)
+}
+
+/// `HeadMoved` for a Branch whose head is not the `expected` one.
+fn expected_moved(expected: NodeId, current: &BranchSnapshot) -> CommitError {
+    let (expected_head, expected_base) = match expected {
+        NodeId::Commit(id) => (Some(id), current.branch.base_layer),
+        NodeId::Layer(layer) => (None, layer),
+    };
+    CommitError::History(HistoryError::HeadMoved(Box::new(MovedState {
+        expected_head,
+        actual_head: current.branch.head_commit,
+        expected_base,
+        actual_base: current.branch.base_layer,
+    })))
+}
 
 /// Admission belongs to exactly one invocation. It stays held unless that
 /// invocation establishes a safe disposition, including its captured releases.
@@ -210,6 +236,13 @@ impl BoundWorkspace {
                 })?;
                 let moved = current.branch.head_commit != snapshot.branch.head_commit
                     || current.branch.base_layer != snapshot.branch.base_layer;
+                // `expected`: the Commit is made over that head only; the
+                // publication checks it again in its own transaction.
+                if let Some(expected) = options.expected {
+                    if answered(&current) != expected {
+                        return Err(expected_moved(expected, &current));
+                    }
+                }
                 let root = if moved && !force {
                     let (root, report) = phase(timing, "merge", || {
                         self.merge_candidate(&save, &snapshot, &current, candidate)
@@ -278,8 +311,10 @@ impl BoundWorkspace {
                             .map_err(CommitError::History)
                     })?)
                 };
-                let (current, root, moved, logical) = if force || conflicted {
-                    (current, root, moved, logical)
+                // A forced Commit is decided by the publication itself,
+                // which reads the head inside the lane.
+                let (current, root, logical) = if force || conflicted {
+                    (current, root, logical)
                 } else {
                     let now = phase(timing, "head.lane", || {
                         self.store
@@ -288,10 +323,13 @@ impl BoundWorkspace {
                             .map_err(CommitError::History)?
                             .ok_or(CommitError::Context("bound Branch is absent"))
                     })?;
-                    if now.branch.head_commit == current.branch.head_commit
-                        && now.branch.base_layer == current.branch.base_layer
+                    // With `expected`, a head that moved again is not merged
+                    // with: the publication refuses it `HeadMoved`.
+                    if (now.branch.head_commit == current.branch.head_commit
+                        && now.branch.base_layer == current.branch.base_layer)
+                        || options.expected.is_some()
                     {
-                        (current, root, moved, logical)
+                        (current, root, logical)
                     } else {
                         // The in-lane step has its own Save; its count and
                         // hints cover only what it changed in the result.
@@ -328,13 +366,13 @@ impl BoundWorkspace {
                             },
                             None => step,
                         });
-                        (now, stepped, true, logical)
+                        (now, stepped, logical)
                     }
                 };
-                Ok((root, candidate, current, moved, logical, lane, early))
+                Ok((root, candidate, current, logical, lane, early))
             })();
             retained.storage = Some(super::producer::since(storage.diagnostics(), before));
-            let (candidate, ours, current, moved, logical, lane, early) = built?;
+            let (candidate, ours, current, logical, lane, early) = built?;
             if candidate != ours {
                 replaced = Some((ours.0, candidate.0));
             }
@@ -391,7 +429,10 @@ impl BoundWorkspace {
                             .map_or_else(Vec::new, |report| report.lww.clone()),
                         ..CommitMeta::new(via)
                     },
-                    force: force && moved,
+                    // The transaction reads the head in the lane: forced
+                    // over whatever head it finds there, unless `expected`.
+                    force,
+                    required_head: options.expected,
                 });
             }
             retained.phase = CommitPhase::Validate;

@@ -213,6 +213,7 @@ fn run(engine: &Engine<'_>, branch: BranchId) -> Vec<(&'static str, Delta)> {
                 second_parent: None,
                 meta: CommitMeta::new(CommitVia::Files),
                 force: false,
+                required_head: None,
             })
             .unwrap();
         drop(lane);

@@ -128,6 +128,7 @@ fn commits(handles: &SqliteHandles, branch: BranchId, seed: u64, count: u64) -> 
                 second_parent: None,
                 meta: CommitMeta::new(CommitVia::Files),
                 force: false,
+                required_head: None,
             })
             .unwrap()
         {

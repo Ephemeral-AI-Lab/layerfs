@@ -84,6 +84,7 @@ fn commit_request(history: &dyn HistoryCatalog, branch: BranchId, tag: u8) -> Co
         second_parent: None,
         meta: CommitMeta::new(CommitVia::Files),
         force: false,
+        required_head: None,
     }
 }
 

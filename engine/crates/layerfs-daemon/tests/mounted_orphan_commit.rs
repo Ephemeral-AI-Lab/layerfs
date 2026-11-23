@@ -363,6 +363,7 @@ fn commit(service: Arc<Service>, token: WorkspaceToken) -> JoinHandle<Finished> 
             token,
             force: false,
             message: None,
+            expected: None,
         });
         match service.execute_control(&request) {
             Ok(done) => Finished {

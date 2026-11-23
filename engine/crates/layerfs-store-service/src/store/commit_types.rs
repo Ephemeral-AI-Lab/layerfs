@@ -92,6 +92,12 @@ pub struct CommitOptions {
     pub force: bool,
     /// Description of the captured filesystem change.
     pub message: Option<String>,
+    /// The head the Commit must be made over (`--expected`): the node the
+    /// Branch answers as its head, its head Commit or else its base Layer.
+    /// Checked when the head is read and again inside the publication's
+    /// own transaction; another head is refused `HeadMoved` and nothing is
+    /// published. A forced Commit then displaces only this head.
+    pub expected: Option<layerfs_history::NodeId>,
 }
 /// A Commit merged with a Branch head that moved since the Workspace bound.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -127,6 +127,7 @@ fn commit_together(
                             token,
                             force: false,
                             message: None,
+                            expected: None,
                         }))
                         .map(|done| done.reply)
                 })

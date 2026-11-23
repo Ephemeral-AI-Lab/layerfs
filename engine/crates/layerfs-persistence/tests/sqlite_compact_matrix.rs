@@ -705,6 +705,7 @@ fn commit_once(path: &Path) -> Result<(Vec<u8>, [u8; 32]), String> {
         second_parent: None,
         meta: CommitMeta::new(CommitVia::Files),
         force: false,
+        required_head: None,
     });
     match outcome {
         Ok(CommitOutcome::Committed { record, .. }) => {

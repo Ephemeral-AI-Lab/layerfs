@@ -49,6 +49,7 @@ fn one_checked_scoped_layer_preserves_point_request_capacity() {
             token,
             force: false,
             message: None,
+            expected: None,
         }),
         Request::Status(token),
         Request::Unmount(UnmountControl {

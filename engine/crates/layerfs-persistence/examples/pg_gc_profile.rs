@@ -297,6 +297,7 @@ fn commit_and_publish(
             second_parent: None,
             meta,
             force: false,
+            required_head: None,
         })
         .expect("commit")
     {

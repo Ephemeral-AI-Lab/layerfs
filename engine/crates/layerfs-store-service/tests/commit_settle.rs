@@ -37,7 +37,7 @@ fn options() -> CommitOptions {
     CommitOptions {
         force: false,
         message: Some("settle".into()),
-        ..CommitOptions::default()
+        expected: None,
     }
 }
 

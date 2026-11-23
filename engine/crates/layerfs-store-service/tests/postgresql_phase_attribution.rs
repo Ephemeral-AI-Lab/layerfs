@@ -532,6 +532,7 @@ impl Run {
                 workspace.commit_captured(&CommitOptions {
                     force: false,
                     message: Some(label.to_owned()),
+                    expected: None,
                 })
             },
             vec![],
