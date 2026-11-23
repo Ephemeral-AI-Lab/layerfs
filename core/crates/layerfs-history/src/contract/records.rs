@@ -338,6 +338,11 @@ pub struct CommitRequest {
     pub meta: CommitMeta,
     /// Overwrite a head that moved instead of refusing.
     pub force: bool,
+    /// The node the Branch must answer as its head (its head Commit, else
+    /// its base Layer) when the transaction publishes, whatever `force`
+    /// says; another head is refused `HeadMoved`. `None` checks only
+    /// `expected_head` and `force`.
+    pub required_head: Option<NodeId>,
 }
 
 /// One side of a Branch merge.

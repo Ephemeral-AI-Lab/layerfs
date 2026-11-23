@@ -5,11 +5,13 @@
 //! out. Paths and lines are never cut in the middle.
 use crate::{
     control::{ControlError, WorkspaceToken},
-    control_history::{boolean, head, outcome, put_head, put_outcome, put_token, token},
+    control_history::{
+        boolean, head, node, outcome, put_head, put_node, put_outcome, put_token, token,
+    },
     wire::{Reader, Writer, LIMIT},
 };
 use layerfs_content::merge::{Conflict, ConflictKind, Hunk, LwwDecision};
-use layerfs_history::{CommitId, CommitOutcome, MAXIMUM_MESSAGE_BYTES};
+use layerfs_history::{CommitId, CommitOutcome, NodeId, MAXIMUM_MESSAGE_BYTES};
 
 /// Longest path or line carried.
 pub const TEXT_FIELD_LIMIT: usize = 4096;
@@ -25,6 +27,10 @@ pub struct CommitControl {
     pub force: bool,
     /// Description of the captured filesystem change.
     pub message: Option<String>,
+    /// The head the Commit must be made over (`--expected`), as the Branch
+    /// answers it: its head Commit, else its base Layer. The publication
+    /// checks it in its own transaction; another head is `HeadMoved`.
+    pub expected: Option<NodeId>,
 }
 
 /// A Commit published after merging with a moved head.
@@ -72,7 +78,7 @@ pub(crate) fn put_commit_control(
         }
         out.blob(text.as_bytes())?;
     }
-    Ok(())
+    put_node(out, value.expected)
 }
 
 pub(crate) fn commit_control(input: &mut Reader<'_>) -> Result<CommitControl, ControlError> {
@@ -86,10 +92,12 @@ pub(crate) fn commit_control(input: &mut Reader<'_>) -> Result<CommitControl, Co
         }
     };
     let message = text()?;
+    let expected = node(input)?;
     Ok(CommitControl {
         token,
         force,
         message,
+        expected,
     })
 }
 

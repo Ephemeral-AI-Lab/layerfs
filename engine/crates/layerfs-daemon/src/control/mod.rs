@@ -18,6 +18,7 @@ mod kernel;
 mod observation;
 mod operations;
 mod registry;
+mod resolve;
 mod serve;
 #[cfg(target_os = "linux")]
 mod serving;

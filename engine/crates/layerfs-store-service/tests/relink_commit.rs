@@ -191,6 +191,7 @@ fn relink(
             &layerfs_store_service::store::CommitOptions {
                 force: false,
                 message: Some("relink".to_owned()),
+                expected: None,
             },
             CommitVia::Files,
         )

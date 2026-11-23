@@ -6,6 +6,7 @@ pub mod commit_merge;
 pub mod commit_types;
 pub mod digests;
 pub mod hints;
+mod live;
 pub mod open;
 pub mod operation;
 mod pipeline;
@@ -14,6 +15,7 @@ pub mod producer;
 pub mod read_handle;
 pub mod read_service;
 pub mod recognizer;
+pub mod resolve;
 pub mod settle;
 pub mod statistics;
 pub mod types;
@@ -21,6 +23,7 @@ pub use bind::checked_base;
 pub use commit_merge::{Stale, StaleError, LANE_MERGE_PATHS};
 pub use hints::record_new_bindings;
 pub use hints::CatalogHints;
+pub use live::LIVE_CONFLICT_PATHS;
 
 pub use commit_types::{
     CapturedConstruction, CommitError, CommitFailure, CommitOptions, CommitPhase, CommitSuccess,
@@ -32,6 +35,7 @@ pub use ports::{PortError, StorePorts};
 pub use read_handle::StoreReader;
 pub use read_service::{ReadAdmissionError, ReadServiceWork, ReaderFactory};
 pub use recognizer::{Recognizer, RecognizerWork, RECOGNIZER_SLOTS};
+pub use resolve::{Resolution, Unresolved};
 pub use types::{
     BindError, BindIntent, BindPhase, BindRefusal, BindRequest, BindSuccess, CloseError,
     NamedBindRequest,

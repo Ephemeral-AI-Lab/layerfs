@@ -110,6 +110,7 @@ fn parallel_workspace_commits_keep_distinct_captures_and_one_admission_each() {
                     token,
                     force: false,
                     message: None,
+                    expected: None,
                 },
             ));
             let _ = tx.send((tag, result));

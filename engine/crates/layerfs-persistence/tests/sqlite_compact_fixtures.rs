@@ -355,6 +355,7 @@ fn commit(
             second_parent: None,
             meta,
             force: false,
+            required_head: None,
         })
         .unwrap()
     {

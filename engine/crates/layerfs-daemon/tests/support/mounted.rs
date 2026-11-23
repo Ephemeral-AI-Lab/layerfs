@@ -152,6 +152,7 @@ impl Harness {
                 token,
                 force: false,
                 message: None,
+                expected: None,
             }))
     }
     pub fn try_unmount(&self, token: WorkspaceToken) -> Result<Success, Failure> {

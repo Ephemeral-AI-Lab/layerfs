@@ -2,7 +2,7 @@
 use super::PortError;
 use crate::OwnerError;
 use layerfs_content::{
-    filesystem::FilesystemUpdateCounters,
+    filesystem::{FilesystemRootId, FilesystemUpdateCounters},
     merge::{Conflict, LwwDecision},
     ContentError, ObjectId,
 };
@@ -53,6 +53,14 @@ pub enum CommitError {
         paths: u64,
         limit: u64,
     },
+    /// A merge would install a root other than the Workspace's own while
+    /// rows written after the capture change what the merge changed: those
+    /// rows were computed against the old base (`live.rs`). Nothing is
+    /// published; the capture folds back, and a later Commit takes those
+    /// rows too. `paths` names some of them, at most `LIVE_CONFLICT_PATHS`.
+    LiveConflict {
+        paths: Vec<String>,
+    },
 }
 /// What the product constructor's one namespace attempt acquired, counted and
 /// released. A named reader or owner here was acquired and is not known
@@ -92,6 +100,12 @@ pub struct CommitOptions {
     pub force: bool,
     /// Description of the captured filesystem change.
     pub message: Option<String>,
+    /// The head the Commit must be made over (`--expected`): the node the
+    /// Branch answers as its head, its head Commit or else its base Layer.
+    /// Checked when the head is read and again inside the publication's
+    /// own transaction; another head is refused `HeadMoved` and nothing is
+    /// published. A forced Commit then displaces only this head.
+    pub expected: Option<layerfs_history::NodeId>,
 }
 /// A Commit merged with a Branch head that moved since the Workspace bound.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -153,6 +167,10 @@ pub struct CommitFailure {
     pub locally_settled: bool,
     /// The product constructor's receipt, when its closure ran.
     pub namespace: Option<CapturedConstruction>,
+    /// For a merge: the Workspace's own constructed root and the serials
+    /// the merge changed against it (`live.rs`), which an install of the
+    /// merged root checks again.
+    pub merged_over: Option<(FilesystemRootId, Arc<[u64]>)>,
 }
 impl CommitFailure {
     pub(super) fn new(error: CommitError, workspace: WorkspaceId, route: Route) -> Self {
@@ -171,6 +189,20 @@ impl CommitFailure {
             local_error: None,
             locally_settled: false,
             namespace: None,
+            merged_over: None,
+        }
+    }
+}
+impl CommitFailure {
+    /// Whether this failure leaves its outcome unknown. Before the Publish
+    /// phase nothing in history can have changed (`commit_branch` is the
+    /// only write that publishes), so only local uncertainty counts there,
+    /// as it does after a known publication; an unanswered publication is
+    /// uncertain on any unknown outcome.
+    pub fn uncertain(&self) -> bool {
+        match self.phase {
+            CommitPhase::Publish if self.published.is_none() => self.error.uncertain(),
+            _ => self.error.locally_uncertain(),
         }
     }
 }
@@ -215,6 +247,33 @@ impl CommitError {
                 layerfs_overlay::OverlayError::Uncertain { .. }
                 | layerfs_overlay::OverlayError::Quarantined,
             )) => true,
+            _ => false,
+        }
+    }
+}
+impl CommitError {
+    /// Uncertainty about local state alone: the overlay engine, an owner job
+    /// or the Workspace binding. A Store, Content or History failure is not
+    /// here: before publication it cannot have changed history.
+    pub fn locally_uncertain(&self) -> bool {
+        match self {
+            Self::Construction { original, .. } => original.locally_uncertain(),
+            Self::Content {
+                provider: Some(provider),
+                ..
+            } => matches!(
+                provider.as_ref(),
+                PortError::Poisoned | PortError::ReadAdmission(super::ReadAdmissionError::Poisoned)
+            ),
+            Self::Owner(error) => owner_uncertain(error),
+            Self::Workspace(
+                WorkspaceError::BindingPoisoned
+                | WorkspaceError::Service(_)
+                | WorkspaceError::Overlay(
+                    layerfs_overlay::OverlayError::Uncertain { .. }
+                    | layerfs_overlay::OverlayError::Quarantined,
+                ),
+            ) => true,
             _ => false,
         }
     }

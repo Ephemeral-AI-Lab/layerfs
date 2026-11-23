@@ -120,7 +120,7 @@ Store I/O ([`ports/overlay.rs`](../../../../engine/crates/layerfs-workspace/src/
 | Route | `Route { namespace > 0, engine != 0, incarnation != 0 }`; every source, file, capture and kernel mount is checked against its engine, else `Stale` | [`route.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/route.rs) |
 | Source view | `view_for_source(BaseSource)` checks engine and current root (`BaseChanged`); `stat` reads overlay, base, then overlay again, so a row published meanwhile wins | [`view.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/view.rs) |
 | Serials | Reserved from the scope's `InodeSerials` allocator `SERIAL_REFILL` (1,024) at a time, outside every lock; consumed, never recycled; one call makes at most one allocator request; an optional low-water refills early | [`serials.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/serials.rs) |
-| Install | `prepare_base_install(capture, root)` opens the new root with no lock; `install_prepared_base` holds the base write lock for one SQL step (`overlay.install`), with nothing fallible after it; later changes stay | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
+| Install | `prepare_base_install(capture, root)` opens the new root with no lock; `install_prepared_base` holds the base write lock for one SQL step (`overlay.install_merged`, which for a merged root also drops carried mtime-only rows of changed serials), with nothing fallible after it; later changes stay | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
 
 ### Ports
 

@@ -45,6 +45,7 @@ fn commit(f: &Fixture, b: BranchId, n: u8, second: Option<NodeId>) -> CommitReco
             second_parent: second,
             force: false,
             meta: CommitMeta::new(CommitVia::Files),
+            required_head: None,
         })
         .unwrap()
     else {
@@ -169,6 +170,7 @@ fn valid_forced_history_and_removed_project_retained_objects_pass() {
             second_parent: None,
             force: true,
             meta: CommitMeta::new(CommitVia::Files),
+            required_head: None,
         })
         .unwrap();
     assert!(matches!(result, CommitOutcome::Committed { .. }));

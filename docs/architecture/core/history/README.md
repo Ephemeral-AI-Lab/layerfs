@@ -96,7 +96,9 @@ or any process, memory, socket or stdout/stderr state.
 | --- | --- |
 | Stack profile or scope differs | `Integrity("Commit context")` |
 | Base moved, or head moved without `force` | `HeadMoved(MovedState)` with expected and actual head and base |
-| Head moved, `force`, base unchanged | new Commit keeps `expected_head` as parent; `displaced` names the old head |
+| `required_head` set and the Branch answers another head (its head Commit, else its base Layer), forced or not | `HeadMoved(MovedState)` |
+| Head moved, `force`, base unchanged | new Commit keeps `expected_head` as parent; `displaced` names the head the transaction read. Commits between `expected_head` and it stay on its first-parent chain, so `displaced` and parent links reach them all (and keep them, for collection) |
+| Branch advance matches no row | `HeadMoved`: the advance replaces only the head this transaction read (`commit_advance_branch` has a `head_commit_id` predicate), so a writer that moved the Branch meanwhile (a PostgreSQL lane connection lost inside the lane) publishes nothing over it |
 | `candidate_root` equals the effective root | `UpToDate { head, root }` |
 | Otherwise | `Committed { record, displaced: None }` |
 

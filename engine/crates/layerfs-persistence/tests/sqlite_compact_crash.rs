@@ -240,6 +240,7 @@ fn commit(handles: &SqliteHandles, branch: BranchId, candidate_root: ObjectId) -
             second_parent: None,
             meta: CommitMeta::new(CommitVia::Files),
             force: false,
+            required_head: None,
         })
         .unwrap()
     {

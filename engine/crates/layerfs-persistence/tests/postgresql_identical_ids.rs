@@ -85,6 +85,7 @@ fn commit(history: &dyn HistoryCatalog, branch: BranchId, candidate: ObjectId) -
             second_parent: None,
             meta: CommitMeta::new(CommitVia::Files),
             force: false,
+            required_head: None,
         })
         .unwrap();
     let CommitOutcome::Committed { record, .. } = outcome else {

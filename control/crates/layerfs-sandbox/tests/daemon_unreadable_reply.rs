@@ -44,6 +44,7 @@ fn an_unreadable_commit_answer_leaves_its_outcome_unknown() {
         token: token(),
         force: false,
         message: None,
+        expected: None,
     });
     let refused = refusal(&unreadable(commit)).unwrap();
     assert_eq!(refused.code, "Unknown");

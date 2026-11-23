@@ -159,6 +159,7 @@ fn main() {
                 second_parent: None,
                 meta,
                 force: false,
+                required_head: None,
             })
             .unwrap();
         if let CommitOutcome::Committed { record, .. } = result {

@@ -38,7 +38,8 @@ Capturing a Workspace's published frontier, constructing it, publishing a Commit
 `BoundWorkspace::commit_admitted` runs every phase on the Commit thread; each
 phase is a telemetry child (`uptodate.state`, `capture`, `producer`, `begin`,
 `construct`, `head`, `merge`, `finish`, `validate`, `lane`, `head.lane`,
-`publish`, `install`).
+`live`, `publish`, `install`; a merge adds `merge.changed`, and an in-lane
+step `merge.lane.changed`).
 
 | Phase (`CommitPhase`) | Lock held | Source |
 | --- | --- | --- |
@@ -64,12 +65,14 @@ phase is a telemetry child (`uptodate.state`, `capture`, `producer`, `begin`,
 | Head unchanged | `Committed` against the head the Workspace bound | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Head moved, `force` false | `merge_candidate`: `merge_roots(base, ours, theirs)` in the Commit's own Save, before the lane; published against the head it merged with (`MergeReport`) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Head moved again before the lane | `merge_in_lane`: only what landed in between, with its own Save, at most `LANE_MERGE_PATHS` serials | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Merge conflict | Nothing published; the merge with marker blocks becomes the local base, `PendingMerge` is kept and the history binding moves to the head. The lane is released when the Commit returns | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs), [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
-| `force` with a moved head | No merge; published over the head, the displaced head recorded | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| Merge conflict | Nothing published; the merge with marker blocks becomes the local base, `PendingMerge` is kept and the history binding moves to the head. A conflict found before the lane never takes it; one found by the in-lane step releases it before validation and install. Only a publication holds the lane | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs), [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| `force` with a moved head | No merge, and no head read decides it before the lane: the publication's own transaction, inside the lane, reads the head and publishes over it, recording it as `displaced` (the Commits before it stay on its first-parent chain) |
+| `expected` (`--expected`) | `CommitOptions::expected`, the node the Branch must answer as its head, is checked when the head is read (another head: `HeadMoved` before any merge) and travels in the publish intent as `CommitRequest::required_head`, checked again inside `commit_branch`'s transaction. A head that moves again before the lane is not merged with; the publication refuses it. With `force`, only that head is displaced | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Relink (unlink and re-create with equal bytes) | A fresh chunked file whose overlay digest names an already saved root reuses it (`files_reused`); others are built and `record_file_digests` stores their digest. Files below the Store's `small_file_threshold_bytes` are rebuilt to the same object id | [`digests.rs`](../../../../engine/crates/layerfs-store-service/src/store/digests.rs), [`digest.rs`](../../../../engine/crates/layerfs-overlay/src/payload/digest.rs) |
 | Install | `prepare_base_install` rebinds the base to the new root without a tree walk; after publish, `install_prepared_base` waits for `base_readers == 0`, then `Overlay::install` sets `base_root`, `installed := G`, `captured := None` and queues `RETIRE` of G, in one SQL transaction | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs), [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
-| Rows written after the capture | Untouched by install; still the top of the effective view. An mtime-only change keeps the base row and carries its live row into G+1 (`keep_live_row`); until a write, that row is not dirty and `active_inodes` (Dirty check, `workspace status`) leaves it out | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
-| Kernel caches after install | Own root installed: nothing sent, the visible tree is unchanged. A merge root: the daemon invalidates the entries `stale_after_install` names before it answers | [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
+| Rows written after the capture | Untouched by the install of the Workspace's own root; still the top of the effective view. An mtime-only change keeps the base row and carries its live row into G+1 (`keep_live_row`); until a write, that row is not dirty and `active_inodes` (Dirty check, `workspace status`) leaves it out |
+| Rows written after the capture, merged install | A G+1 row holds absolute facts (size, inherited cutoff, link and entry counts, inherited bits) computed against the old base, so a merge must not change what it covers. Before publishing a merge (or installing a conflicted one) the Commit takes a `MutationHold` (the Workspace's mutations wait; reads and other jobs run), lists the serials whose value differs between its candidate and the merged root (`changed_serials`, the in-lane step's added), and reads the active rows: an inode row of a changed serial, or a name binding under a changed directory, refuses the Commit `LiveConflict { paths }` (code `Busy`). Nothing is published, the capture folds back and the next Commit takes those rows too. Without overlap the hold lasts through publication and install. A carried mtime-only row is no overlap; `install_merged` deletes it when its serial changed (its live mtime is never committed), so the view and a later `UpToDate` agree with the head. Rows of unchanged serials stay valid: the merged root holds the same value for them | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
+| Kernel caches after install | Own root installed: nothing sent, the visible tree is unchanged. A merge root: the visible tree changes where the merge changed it (no row written after the capture covers that); the daemon invalidates the entries `stale_after_install` names before it answers | [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
 | Cache admission | Objects the construction staged enter the shared object cache only in the `published` callback; every other path drops them | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
 | SDK `file.*` writes | Same route through a private Workspace, `CommitVia::Files` | [`files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | Where a control Commit runs | On the daemon's control thread; the Commit spawns its one construction thread | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
@@ -91,8 +94,8 @@ is a different install, placing a sealed Store file into a project volume; see
          --> acquire_operation(request) --> construct ... outcome known
          --> release reader, then operation owner --> answer --> reclaim
 
- failure --> published or uncertain? --yes--> keep all custody
-               | no
+ failure --> published, or CommitFailure::uncertain()? --yes--> keep all custody
+               | no      (before Publish only local uncertainty counts)
              capture taken? --no--> locally_settled
                | yes
              resolve_failed(capture) --ok--> locally_settled
@@ -110,13 +113,60 @@ is a different install, placing a sealed Store file into a project volume; see
 the work counted and the release error that stopped the sequence
 ([`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs)).
 `CommitFailure` carries `phase`, `intent`, `capture`, `prepared`, `saved`,
-`published` and `locally_settled`.
+`published`, `locally_settled` and, for a merge, `merged_over` (its own root and the serials the merge changed).
 
 | Failure kind | Daemon activity | Next Commit | Source |
 | --- | --- | --- | --- |
 | Definite, settled, owners released | `Idle` | Admitted | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Published, then install or a release failed | `LocalFailure` | Refused: code `Unknown`, phase `admission`; the daemon keeps `published`, the SDK refusal does not carry it | [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
-| Uncertain (`CommitError::uncertain()`) | `Uncertain` | Refused as above | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+| Published, then install or a release failed | `LocalFailure` | Its one resolution first (below); unresolved, refused: code `Unknown`, phase `admission`; the daemon keeps `published`, the SDK refusal does not carry it | [`resolve.rs`](../../../../engine/crates/layerfs-daemon/src/control/resolve.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+| Uncertain (`CommitFailure::uncertain()`) | `Uncertain` | As above | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+
+`CommitFailure::uncertain()` depends on the phase. `commit_branch` is the
+only write that publishes, so before the `Publish` phase nothing in history
+can have changed: a Store, Content or History failure there (a merge-stage
+Save read, a logical count, binding hints, removals, an unknown Storage
+error from `Save::finish`) is a definite nonpublication, folded back with
+`resolve_failed`, and the reply's code is `Failed`, not `Unknown`. Only local
+uncertainty keeps custody there (`CommitError::locally_uncertain()`: an
+uncertain or quarantined overlay, an uncertain owner job, a poisoned binding
+or port). From the `Publish` phase until the answer is known,
+`CommitError::uncertain()` decides. A merge-stage failure reports the Save's
+own failure (`Save::take_failure`) as its first cause when there is one.
+
+### One resolution of retained custody
+
+A Commit whose publication answered with an unknown outcome (phase
+`Publish`, nothing known published), or whose install failed definitely after
+a known publication (phase `Install`), keeps a record beside its custody: the
+capture, the intent, the binding, the known publication, the merge's own root
+and changed serials, and the captured reader and operation owner
+([`resolve.rs`](../../../../engine/crates/layerfs-store-service/src/store/resolve.rs)).
+Local uncertainty (an uncertain overlay or owner job, a poisoned binding) and
+a namespace receipt with unreleased custody or a release error keep no
+record: their custody stays until force unmount, as before.
+
+The Workspace's next Commit request runs `BoundWorkspace::resolve_retained`
+once, before its own admission (daemon
+[`resolve.rs`](../../../../engine/crates/layerfs-daemon/src/control/resolve.rs),
+activity `Committing`, phase `resolve`). It is not a retry: nothing is
+resent, the head is read once and the record is used once, whatever it finds.
+
+| Head read through the control reader | Step | Then |
+| --- | --- | --- |
+| Publication already known | Install its root (same validation, live check and mutation hold as a merged install) | Custody released, `Idle`; the Commit is admitted |
+| A Commit with our candidate root, parent and base Layer equal to the head and base we published against | Install it, as above | As above |
+| Still the head we published against, with another root | Nothing was published: `resolve_failed` folds the capture back | As above |
+| Still that head, with our root | `UpToDate`: install it | As above |
+| Anything else, a failed read, or a failed install or fold-back | None | Custody stays (`LocalFailure` once a publication is known, else as it was); the Commit is refused `Unknown` with the reason |
+
+The head is read on the control reader's own connection, so a writer session
+that the unknown outcome quarantined does not stop it. The read follows the
+next Commit request, not the failure. On PostgreSQL a COMMIT whose
+connection was lost may still finish on the server shortly after; reading
+the old head then folds the capture back, and the next Commit finds the
+head moved and merges the kept change with it. A known
+install after a merge with overlapping live rows is refused like a
+Commit's own (`LiveConflict` in the reason), and the custody stays.
 
 ## Invariants
 
@@ -128,7 +178,7 @@ the work counted and the release error that stopped the sequence
 | No Workspace lock across construction or Store I/O | Every overlay call is one short owner job: [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) |
 | Short holds: work that grows with the Commit (Save finish, logical count, binding hints, first merge, validation) runs before the lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Content, Storage and Persistence are shared with Init; no Commit-only encoder | Objects go to `Save::sink`: [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
-| Install keeps later mutations and changes only base root, floor and captured state | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Install keeps later mutations and changes only base root, floor and captured state; a merged install also deletes carried mtime-only rows of serials the merge changed, and is refused while any other later row overlaps what it changed | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
 | Root inode identity never changes at install | `validate_candidate` refuses "candidate changes root inode identity": [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | A lost reply does not remove a published Commit | Publication is one history transaction; `published` is kept and blocks the next Commit: [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
 | No retry, replay or guessed outcome | `settle_failure` resolves only a definite nonpublication and never reads history to guess: [`settle.rs`](../../../../engine/crates/layerfs-store-service/src/store/settle.rs) |
@@ -142,11 +192,12 @@ the work counted and the release error that stopped the sequence
 | Captured page | `PAGE_ROWS` = 1,024 rows | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
 | Head moved again after the merge | Up to `LANE_MERGE_PATHS` = 1,024 serials merged in the lane, else `CommitError::LaneMerge { paths, limit }`; nothing published | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Paths listed for a conflict | `WRITTEN_PATHS` = 4,096 (`written_truncated` when cut) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Marker blocks still present | `CommitError::Markers`; nothing published | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| Marker blocks still present | `CommitError::Markers`; nothing published |
+| Rows written after the capture overlap a merge | `CommitError::LiveConflict { paths }`, at most `LIVE_CONFLICT_PATHS` = 16 named; nothing published; code `Busy` | [`live.rs`](../../../../engine/crates/layerfs-store-service/src/store/live.rs) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Moved head without merge | `HeadMoved` from `commit_branch` unless `force` | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Base sources still open at install | Install waits; `OverlayError::BaseSourcesPending` if called unready | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
 | Install failed after publish | `OwnerError::Install` with the `PreparedBase`, never replayed; `CommitFailure.published` is `Some`; activity `LocalFailure` | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Uncertain outcome | `CommitError::uncertain()` true, code `Unknown`; custody kept | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
+| Uncertain outcome | `CommitFailure::uncertain()` true, code `Unknown`; custody kept | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
 | Concurrent Commits on other Workspaces | Correct, serialized by the publication lane; not the optimized case | [Store](../store/README.md) |
 
 No total file, edit or Commit size cap exists: captured input is paged and
@@ -161,6 +212,10 @@ construction state lives in indexed operation records.
 | [`lane_merge.rs`](../../../../engine/crates/layerfs-daemon/tests/lane_merge.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test lane_merge` | any | A Commit landing while another waits for the lane is merged in the lane; over the bound is `LaneMerge` |
 | [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/tests/captured_namespace.rs) | `cargo +1.85.1 test --locked -p layerfs-workspace --test captured_namespace` | any | One captured reader becomes one complete root; mutations after the capture land only in the next |
 | [`mounted_install.rs`](../../../../engine/crates/layerfs-daemon/tests/mounted_install.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test mounted_install` | Linux, `/dev/fuse` | Installing the Workspace's own root sends no notification; the mount reads the same through open descriptors, caches and `O_DIRECT` |
+| [`commit_settle.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_settle.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_settle` | any | A failure before publication folds back; local uncertainty keeps custody; a conflicted merge takes no lane |
+| [`commit_expected.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_expected.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_expected` | any | `--expected` is checked inside the publication; `--force` publishes over the head read in the lane |
+| [`commit_live_merge.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_live_merge.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_live_merge` | any | A merged install that overlaps rows written after the capture is refused `LiveConflict`; one with no overlap publishes |
+| [`store_commit.rs`](../../../../engine/crates/layerfs-daemon/tests/store_commit.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test store_commit` | any | Custody and settle by phase; one resolution of an unknown outcome installs a landed Commit, folds a lost one back and leaves a moved head retained |
 
 Run each under a wall timeout of at most 120 s.
 

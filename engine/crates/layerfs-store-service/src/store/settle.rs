@@ -13,8 +13,11 @@ impl BoundWorkspace {
     ) -> Result<T, OwnerError> {
         command(&self.owner, self.route())
     }
+    /// Keeps custody of a known publication or an uncertain outcome
+    /// ([`CommitFailure::uncertain`]: before the Publish phase only local
+    /// uncertainty counts); folds a definite nonpublication's capture back.
     pub(super) fn settle_failure(&self, mut failure: CommitFailure) -> Box<CommitFailure> {
-        if failure.published.is_some() || failure.error.uncertain() {
+        if failure.published.is_some() || failure.uncertain() {
             return Box::new(failure);
         }
         let Some(capture) = failure.capture else {

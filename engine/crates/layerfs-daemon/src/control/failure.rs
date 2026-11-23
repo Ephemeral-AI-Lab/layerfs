@@ -99,6 +99,11 @@ impl Failure {
             }
             Self::Commit(failed) => {
                 let (mut code, moved, mut detail) = commit(&failed.error);
+                // Before publication only local uncertainty is unknown: a
+                // Store or Content failure there is a definite refusal.
+                if code == ControlCode::Unknown && !failed.uncertain() {
+                    code = ControlCode::Failed;
+                }
                 // A settled failure whose reader or owner was not released
                 // still leaves custody; the reply must not read as settled.
                 if code != ControlCode::Unknown
@@ -211,6 +216,9 @@ fn commit(error: &CommitError) -> (ControlCode, Option<MovedState>, String) {
                 storage(error)
             }
             CommitError::Owner(error) => owner(error),
+            // The live view changed what the merge changed: nothing was
+            // published and the next Commit takes it.
+            CommitError::LiveConflict { .. } => ControlCode::Busy,
             _ => ControlCode::Failed,
         }
     };
@@ -225,6 +233,13 @@ fn commit(error: &CommitError) -> (ControlCode, Option<MovedState>, String) {
         CommitError::Context(reason) => (*reason).into(),
         CommitError::History(error) => error.to_string(),
         CommitError::Markers(paths) => format!("{} files still hold conflict markers", paths.len()),
+        CommitError::LiveConflict { paths } => format!(
+            "files changed during the Commit overlap what the merge changed{}; nothing was published, commit again",
+            match paths.first() {
+                Some(path) => format!(" ({path}, {} in all named)", paths.len()),
+                None => String::new(),
+            }
+        ),
         CommitError::LaneMerge { paths, limit } => {
             format!("the head moved again by more than {limit} paths ({paths}) after the merge")
         }

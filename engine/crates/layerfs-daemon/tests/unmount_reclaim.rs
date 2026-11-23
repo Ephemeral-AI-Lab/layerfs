@@ -121,6 +121,7 @@ fn committed(fixture: &Fixture, id: u8) -> WorkspaceToken {
             token,
             force: false,
             message: None,
+            expected: None,
         }))
         .unwrap_or_else(|failure| panic!("Commit: {failure:?}"));
     assert!(

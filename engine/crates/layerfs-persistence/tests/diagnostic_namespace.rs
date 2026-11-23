@@ -155,6 +155,7 @@ fn c09_old_corrupt_namespace_is_checked_after_current_head_becomes_valid() {
             second_parent: None,
             meta: CommitMeta::new(CommitVia::Files),
             force: false,
+            required_head: None,
         })
         .unwrap()
     else {

@@ -322,6 +322,7 @@ impl Fixture {
             .commit_captured(&CommitOptions {
                 force: false,
                 message: Some("Workspace changes".into()),
+                expected: None,
             })
             .unwrap_or_else(|failure| panic!("Workspace Commit: {failure:?}"));
         workspace.close().unwrap();

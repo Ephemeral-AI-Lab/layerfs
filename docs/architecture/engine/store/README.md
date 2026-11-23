@@ -81,7 +81,7 @@ except the statements PostgreSQL replaces
 | --- | --- | --- | --- |
 | `initialize_layerstack` | Insert the stack and its genesis Layer | name or identity taken: `Integrity` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | `fork` | Insert one Branch row at a Layer, or at a Commit on the source Branch's first-parent chain; nothing is copied | Commit not in history: `NotInHistory` | [`branch.rs`](../../../../engine/crates/layerfs-persistence/src/history/branch.rs) |
-| `commit_branch` | Check the expected head and base, insert or verify the Commit, record its lineage, advance the Branch | moved head: `HeadMoved` unless `force` with the same base; same root: `UpToDate` | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| `commit_branch` | Check the expected head and base (and `required_head`), insert or verify the Commit, record its lineage, advance the Branch from the head it read | moved head: `HeadMoved` unless `force` with the same base; another `required_head`, or an advance that matches no row: `HeadMoved`; same root: `UpToDate` | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | `add_layer` | Publish a Branch head Commit as a Layer on the stack head and record the Layers it overwrote | `HeadMoved`, `StackMoved`, `BaseMismatch`; outcomes `UpToDate`, `NoChanges` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | `merge_branch` | Check both sides still sit at the merged nodes, then insert a new Branch: a fast-forward to a Layer or Commit, or a merge Commit with `second_parent` | moved side: `StackMoved` / `HeadMoved` | [`merge.rs`](../../../../engine/crates/layerfs-persistence/src/history/merge.rs) |
 | `reserve_inodes` | Consume a half-open inode range for a scope; serials are never recycled | past `i64::MAX`: `Capacity` | [`allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/allocation.rs) |
@@ -118,7 +118,9 @@ open, filled once by `backfill_lineage`
  install the new base
 ```
 
-`branch_snapshot` reads a Branch with its stack, base root and head Commit in
+A merge that conflicted publishes nothing and so takes no lane; when the
+in-lane step is what conflicts, the lane is released before validation and
+the local install. `branch_snapshot` reads a Branch with its stack, base root and head Commit in
 one statement. Work that grows with the Commit runs before the lane
 ([`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs)).
 `fork`, `merge_branch` and `add_layer` check their expected heads inside their

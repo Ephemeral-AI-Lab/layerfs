@@ -125,6 +125,7 @@ pub fn commit(
         &crate::store::CommitOptions {
             force: false,
             message: Some(message.unwrap_or("Apply filesystem changes").to_owned()),
+            expected: None,
         },
         CommitVia::Files,
     );
