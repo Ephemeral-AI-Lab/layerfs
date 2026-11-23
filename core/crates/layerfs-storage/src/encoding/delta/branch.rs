@@ -12,8 +12,11 @@
 //! fit the budgets in the same way. Exactly one trial runs, with the pooled
 //! producer and its match budget; the program is kept only when it is shorter
 //! than the whole record, and for a directory page only when it saves at least a
-//! quarter of it (`worth`). Every refusal stores the page whole, which
-//! is what every Store before this form holds.
+//! quarter of it (`worth`). A program against a re-based root is kept only when
+//! it is at most half the whole record as well (`select::rebased_delta_kept`,
+//! #758), so a page that drifts from its root starts a new chain instead of
+//! anchoring every read of it to a growing program. Every refusal stores the
+//! page whole, which is what every Store before this form holds.
 
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -45,6 +48,9 @@ pub struct BranchCounters {
     pub work_exceeded: u64,
     /// Predecessors replaced by the whole branch at the root of their chain (#89).
     pub rebased: u64,
+    /// Programs against a re-based root longer than half the whole record,
+    /// stored whole instead (#758).
+    pub rebased_full: u64,
     /// Branches stored, by chain depth (whole is 0).
     pub depths: super::select::DepthHistogram,
 }
@@ -60,6 +66,7 @@ impl BranchCounters {
             (&mut self.depth_capped, other.depth_capped),
             (&mut self.work_exceeded, other.work_exceeded),
             (&mut self.rebased, other.rebased),
+            (&mut self.rebased_full, other.rebased_full),
         ] {
             *total = total.saturating_add(value);
         }
@@ -115,6 +122,7 @@ fn trial(
     }
     let capacities = input.capacities;
     let mut base_id = base_id;
+    let mut rebased = false;
     let (mut base, mut chain) = acquire(input, location)?;
     let capped = chain.depth >= capacities.metadata_delta_max_depth;
     if capped {
@@ -133,6 +141,7 @@ fn trial(
             return Err(crate::error::StorageError::Integrity("branch chain root"));
         }
         base_id = root.object_id;
+        rebased = true;
         let branch = counters(input.counters, role);
         branch.rebased = branch.rebased.saturating_add(1);
     } else if capped {
@@ -152,6 +161,11 @@ fn trial(
         return Ok(None);
     };
     if !worth(role, program.len(), full.record.len()) {
+        return Ok(None);
+    }
+    if rebased && !select::rebased_delta_kept(program.len(), full.record.len()) {
+        let branch = counters(input.counters, role);
+        branch.rebased_full = branch.rebased_full.saturating_add(1);
         return Ok(None);
     }
     let branch = counters(input.counters, role);

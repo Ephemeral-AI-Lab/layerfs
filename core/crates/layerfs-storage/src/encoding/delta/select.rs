@@ -17,6 +17,14 @@
 //! acquired and authenticated. A codec, allocation or read failure is returned as
 //! a failure and never becomes an alternative representation.
 //!
+//! A re-based trial keeps its PREFIX only when the record is at most half the
+//! object's FULL record ([`rebased_delta_kept`], #758): the root delta is the one
+//! record of a chain whose base can be any number of versions older than its
+//! target, so without a limit it grows as the object drifts, and every read of
+//! the chain pays it. Past half, the FULL repays its extra stored bytes within
+//! one read and starts a new chain. A trial against the named candidate, even a
+//! FULL one, is one version's change and is not limited.
+//!
 //! A chunk offered a base that its last trials in this Save all lost against,
 //! or won by less than 1/8 of the FULL record, is stored FULL without a trial,
 //! with retries at doubling gaps ([`LosingBases`]): an incompressible append
@@ -69,6 +77,9 @@ pub struct DeltaCounters {
     /// reached the depth cap or would exceed a work budget with the new object on
     /// it (#89). The one trial runs against the root.
     pub rebased: u64,
+    /// Re-based trials whose PREFIX record exceeded half the FULL record and
+    /// stored FULL ([`rebased_delta_kept`]); each also counts in `full_losses`.
+    pub rebased_full: u64,
     /// Chunk candidates not tried because this Save's trials against the same
     /// base kept losing ([`LosingBases`]); each stored FULL without a trial.
     pub losing_skipped: u64,
@@ -104,6 +115,7 @@ impl DeltaCounters {
             (&mut self.work_exceeded, other.work_exceeded),
             (&mut self.depth_capped, other.depth_capped),
             (&mut self.rebased, other.rebased),
+            (&mut self.rebased_full, other.rebased_full),
             (&mut self.losing_skipped, other.losing_skipped),
         ] {
             *total = total.saturating_add(value);
@@ -323,6 +335,25 @@ pub const LOSING_BASE_MIN_SAVING: usize = 8;
 const LOSING_BASE_MAX_GAP_LOG2: u32 = 16;
 /// Live entries of the per-save losing-base memo.
 const LOSING_BASE_ENTRIES: usize = 4_096;
+
+/// A re-based delta is kept only when its record is at most 1/`REBASED_DELTA_DIVISOR`
+/// of the object's FULL record (#758).
+///
+/// The bound it keeps: the anchor of a re-based chain, its root plus the one delta
+/// against it, costs a read at most the root's FULL plus half the target's FULL
+/// (1.5 FULL records for equal sizes), instead of up to two. Storing the FULL
+/// costs `full - delta` more bytes once and saves about `delta` on every later
+/// read through that record, so it repays itself within one read exactly when
+/// `delta > full / 2`. The fraction is fixed: it never depends on sizes, counts,
+/// history or engine.
+pub const REBASED_DELTA_DIVISOR: usize = 2;
+
+/// True when a delta record of `delta` bytes against a re-based chain root is
+/// kept over the FULL record of `full` bytes ([`REBASED_DELTA_DIVISOR`]). Both are
+/// stored record lengths, the quantities the selection's own comparison uses.
+pub fn rebased_delta_kept(delta: usize, full: usize) -> bool {
+    delta.saturating_mul(REBASED_DELTA_DIVISOR) <= full
+}
 
 /// Per-save memo of chunk delta bases whose trials keep losing.
 ///
@@ -595,7 +626,7 @@ pub fn select(
     // re-basing may replace (`LosingBases`).
     let offered = (role == ObjectRole::Chunk).then_some(base_id);
     let base_cost = chain_cost(input, base_id)?;
-    let Some((base_id, base_cost)) =
+    let Some((base_id, base_cost, rebased)) =
         trial_base(input, base_id, base_cost, canonical.len() as u64, depth_cap)?
     else {
         return refused_by_budget(input, id, role, raw, prehashed, full);
@@ -641,14 +672,21 @@ pub fn select(
     );
     SaveProfile::charge(&mut input.profile.delta_ns, started);
     let prefix = prefix?;
-    let won = prefix.record.len() < full.record.len();
+    // A re-based PREFIX over half the FULL record stores FULL (#758): it would
+    // anchor the chain, and every read of it, to a delta that grows with drift.
+    let over_root_fraction = rebased && !rebased_delta_kept(prefix.record.len(), full.record.len());
+    if over_root_fraction {
+        input.counters.rebased_full = input.counters.rebased_full.saturating_add(1);
+    }
+    let won = prefix.record.len() < full.record.len() && !over_root_fraction;
     if let Some(offered) = offered {
         // A win that saves less than 1/LOSING_BASE_MIN_SAVING of the FULL
-        // record is still stored, but counts as a loss for the memo.
+        // record is still stored, but counts as a loss for the memo; so does a
+        // PREFIX not stored.
         let saving = full.record.len().saturating_sub(prefix.record.len());
         input.losing.note(
             offered,
-            saving * LOSING_BASE_MIN_SAVING >= full.record.len(),
+            won && saving * LOSING_BASE_MIN_SAVING >= full.record.len(),
         );
     }
     if won {
@@ -724,11 +762,12 @@ fn chain_cost(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<ChainC
     cost?.ok_or(StorageError::Integrity("selected base is not stored"))
 }
 
-/// The base the one trial runs against, and its chain cost (#89).
+/// The base the one trial runs against, its chain cost, and whether it is the
+/// re-based root (#89).
 ///
 /// The candidate itself when its chain is below the role's depth cap and can take
 /// a `target`-byte object within both work budgets; otherwise the FULL root of
-/// that chain. The budget test is the one acquisition applies afterwards, made
+/// that chain, flagged `true`. The budget test is the one acquisition applies afterwards, made
 /// here from the chain's stored sizes, so a candidate that will not fit is never
 /// reconstructed. A FULL candidate is its own root and is returned as it is, for
 /// the budget checks to decide. `None` stores FULL by policy: a root this Save's
@@ -739,7 +778,7 @@ fn trial_base(
     cost: ChainCost,
     target: u64,
     depth_cap: u8,
-) -> StorageResult<Option<(ObjectId, ChainCost)>> {
+) -> StorageResult<Option<(ObjectId, ChainCost, bool)>> {
     let capped = cost.depth >= depth_cap;
     if capped {
         input.counters.depth_capped = input.counters.depth_capped.saturating_add(1);
@@ -747,7 +786,7 @@ fn trial_base(
     let fits = cost.canonical.saturating_add(target) <= input.capacities.chain_canonical_limit
         && cost.encoded.saturating_add(target) <= input.capacities.chain_encoded_limit;
     if cost.depth == 0 || (fits && !capped) {
-        return Ok(Some((id, cost)));
+        return Ok(Some((id, cost, false)));
     }
     let started = Instant::now();
     let root = chain_root(input.connection, input.packs, input.decode, id);
@@ -758,7 +797,7 @@ fn trial_base(
         return Ok(None);
     }
     input.counters.rebased = input.counters.rebased.saturating_add(1);
-    Ok(Some((root, root_cost)))
+    Ok(Some((root, root_cost, true)))
 }
 
 /// Location of the FULL record at the bottom of `id`'s stored chain.

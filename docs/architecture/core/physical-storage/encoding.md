@@ -66,7 +66,30 @@ for one whole-file or chunk payload:
 | 4 Eligibility | stored, same role, below the depth cap; else FULL |
 | 5 Chain budget | from stored record sizes; a delta candidate that does not fit is replaced by its chain's independent root; still over budget: FULL |
 | 6 One trial | the base is read and authenticated, then one PREFIX frame is built; chain plus object must still fit |
-| 7 Compare | PREFIX wins only when its record is shorter than FULL |
+| 7 Compare | PREFIX wins only when its record is shorter than FULL; a PREFIX against a re-based root (step 5) also has to be at most half the FULL record, else FULL (`rebased_delta_kept`, #758 fix 4) |
+
+**Re-based delta limit (#758 fix 4).** A re-based trial (step 5) runs
+against a root that can be any number of versions older than its target, so
+as an object drifts the delta against it grows with history, and every read
+of the chain pays it. The trial keeps its PREFIX (or a program page its
+program) only when `2 × delta record ≤ FULL record`, both the stored record
+lengths the step 7 comparison already uses (`REBASED_DELTA_DIVISOR` = 2 in
+[`delta/select.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/select.rs)).
+Bound: the anchor of a re-based chain (root plus the one delta against it)
+costs a read at most the root's FULL plus half the target's FULL, 1.5 FULL
+records for equal sizes instead of up to two, and a member at depth `d` at
+most that plus its `d − 1` one-version deltas (depth caps 16 / 8 / 8). Storing
+the FULL costs `full − delta` more bytes once and saves about `delta` on every
+later read through it, so it repays itself within one read exactly past half.
+A firing can only happen at a re-base, at most once per `C + 1` versions of a
+lineage, so it adds less than `F / (2(C + 1))` stored bytes per version. The
+fraction is fixed: no branch on size, count, history or engine. A trial
+against the candidate the caller named (even a FULL one) is one version's
+change and is not limited; pooled leaves never re-base and are unchanged.
+This is a write-behaviour change for every Store, SQLite included; reads and
+the format are unchanged (a FULL is an existing record). A firing counts in
+`full_losses` and `DeltaCounters::rebased_full` (`BranchCounters::rebased_full`
+for program pages); for a chunk the losing-base memo notes it as a loss.
 
 A whole-file object stored FULL enters the signature ring: 8,192 slots,
 `INDEX_BYTES` 704 KiB, rows persisted through `signatures`
@@ -116,7 +139,7 @@ Decoded ordinary group bodies are kept in a `GroupCache` of 512 KiB.
 | COPY/INSERT | 4,096-bucket table over 16-byte seeds, 128 KiB match budget (an exhausted budget yields no program); program ≤ 64 KiB | [`pool/delta.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/delta.rs) |
 | Leaf record | ≤ 8,192 bytes | [`pool/leaf.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/leaf.rs) |
 | Program pages | candidate is the first advisory predecessor (the replaced page, or for extent pages the stored page at the same level and position) with the same role; one trial; kept only when shorter, and for a directory page only when it saves at least a quarter | [`pool/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/branch.rs), [`delta/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/branch.rs) |
-| Re-base | a candidate chain at its depth cap or budgets restarts at the whole page at its root (depth one) instead of storing the page whole | [`delta/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/branch.rs) |
+| Re-base | a candidate chain at its depth cap or budgets restarts at the whole page at its root (depth one) instead of storing the page whole; that program is kept only when it is at most half the whole record, else the page is stored whole (#758 fix 4) | [`delta/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/branch.rs) |
 | Metadata chain budgets | depth 8 by default; 65,536 canonical and 139,281 encoded bytes | [`store/policy.rs`](../../../../core/crates/layerfs-storage/src/store/policy.rs) |
 | Read | rebuild the body from the chain, look up all ordinals in one call, rebuild the leaf, check its id; a demand of several leaves prepares up to 128 leaves (1 MiB of bodies) ahead and looks up their ordinals together | [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs) |
 | Chain memo | off unless the reader's owner asks (`PoolReader::with_chain_memo(bytes)`). The reader then keeps each chain element it rebuilt and checked against its identity (a program page's canonical bytes, a pooled leaf's body) with the depth, canonical bytes, record bytes and highest pack of the chain below it, and a later chain stops at the first element held. The depth cap, the chain budgets and the visibility ceiling are applied to the kept figures, so every answer and refusal is that of a full walk. Two generations of half the byte limit each; the old one is dropped when the young one fills | [`pool/memo.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/memo.rs), [`pool/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/branch.rs), [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs) |
