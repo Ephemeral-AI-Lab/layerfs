@@ -146,13 +146,14 @@ impl Overlay {
     /// decision over current rows and base facts it holds or reads from
     /// memory; it performs no provider I/O. A decision that still needs a
     /// base fact changes nothing here. A positive LOOKUP takes its kernel
-    /// lookup reference in the same transaction as the answer.
+    /// lookup reference in the same transaction as the answer. `lookup` is
+    /// the LOOKUP's name, recorded with a found directory's parent.
     pub fn observe_kernel_visit<T>(
         &self,
         mount: KernelMount,
         serial: u64,
         handle: Option<u64>,
-        lookup: bool,
+        lookup: Option<&[u8]>,
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<KernelDecision<T>>,
     ) -> KernelObservation<T> {
         self.observe_visit(mount, serial, handle, lookup, None, decide)
@@ -173,7 +174,7 @@ impl Overlay {
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<KernelDecision<T>>,
     ) -> KernelObservation<T> {
         let opened = Opened::File { request, writable };
-        self.observe_visit(mount, serial, None, false, Some(opened), decide)
+        self.observe_visit(mount, serial, None, None, Some(opened), decide)
     }
     /// OPENDIR in one visit, under the kernel's lookup reference on the
     /// inode. When the same bounded decision finishes with the directory,
@@ -189,14 +190,14 @@ impl Overlay {
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<KernelDecision<T>>,
     ) -> KernelObservation<T> {
         let opened = Opened::Directory { request };
-        self.observe_visit(mount, serial, None, false, Some(opened), decide)
+        self.observe_visit(mount, serial, None, None, Some(opened), decide)
     }
     fn observe_visit<T>(
         &self,
         mount: KernelMount,
         serial: u64,
         handle: Option<u64>,
-        lookup: bool,
+        lookup: Option<&[u8]>,
         open: Option<Opened>,
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<KernelDecision<T>>,
     ) -> KernelObservation<T> {
@@ -223,13 +224,13 @@ impl Overlay {
                 };
                 let Some(inode) = inode else { return Ok(()) };
                 inode::check(&inode)?;
-                if lookup {
+                if let Some(name) = lookup {
                     if inode.nlink == 0 && inode.serial != mount.root {
                         return Err(OverlayError::Missing);
                     }
                     self.add_kernel_lookup(mount, inode.serial)?;
                     if inode.kind == InodeKind::Directory {
-                        self.set_kernel_parent(mount, inode.serial, serial)?;
+                        self.set_kernel_parent(mount, inode.serial, serial, name)?;
                     }
                 } else if inode.serial != serial {
                     return Err(OverlayError::Invalid("kernel observation serial"));

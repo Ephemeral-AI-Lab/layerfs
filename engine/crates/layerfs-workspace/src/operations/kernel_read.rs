@@ -145,14 +145,15 @@ fn decide(
 ) -> WorkspaceResult<Option<Decided>> {
     match operation {
         // The source's independent read reference permits removed metadata.
+        // A serial no row or base inode has any more is stale (`held`).
         KernelReadOperation::Getattr { serial } | KernelReadOperation::Data { serial } => {
-            Ok(eval.target(*serial)?.map(|inode| Decided {
+            Ok(eval.held(*serial)?.map(|inode| Decided {
                 inode,
                 parent: None,
             }))
         }
         KernelReadOperation::Opendir { serial } => {
-            Ok(eval.directory(*serial)?.map(|inode| Decided {
+            Ok(eval.held_directory(*serial)?.map(|inode| Decided {
                 inode,
                 parent: None,
             }))
@@ -161,7 +162,7 @@ fn decide(
         // last name is gone stays openable under that reference, so a
         // path open racing an unlink or replacement gets the old file.
         KernelReadOperation::Open { serial, .. } => {
-            let inode = eval.target(*serial)?;
+            let inode = eval.held(*serial)?;
             match inode {
                 Some(inode) if inode.kind == InodeKind::File => Ok(Some(Decided {
                     inode,
@@ -175,7 +176,7 @@ fn decide(
             }
         }
         KernelReadOperation::Lookup { parent, name } => {
-            let directory = eval.directory(*parent)?;
+            let directory = eval.held_directory(*parent)?;
             let layers = eval.layers(*parent, name)?;
             let bound = eval.bound(*parent, directory.as_ref(), name, layers);
             let (Some(directory), Some(bound)) = (directory, bound) else {

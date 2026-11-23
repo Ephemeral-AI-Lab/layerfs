@@ -1,7 +1,15 @@
 //! Bounded three-way ordered name merge; deletion work advances its resume key.
 use crate::{OverlayRead, SourceView, WorkspaceResult};
+use layerfs_content::filesystem::limits::MAXIMUM_NAME_BYTES;
+use layerfs_content::filesystem::sorted::format::{DIRECTORY_LEAF_SERIAL_BYTES, NAME_LENGTH_BYTES};
 use layerfs_content::ContentError;
 use layerfs_overlay::{DirectoryEntry, DirectoryEntryWindow, PAGE_ROWS};
+
+/// The bytes one base page may spend: what the directory reader charges a
+/// row of the longest name, `PAGE_ROWS` times, so a page of any names holds
+/// `PAGE_ROWS` rows and ends on its row bound rather than its byte bound.
+const PAGE_BYTES: usize =
+    PAGE_ROWS * (NAME_LENGTH_BYTES + DIRECTORY_LEAF_SERIAL_BYTES + MAXIMUM_NAME_BYTES);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ViewListing {
     pub entries: Vec<(Vec<u8>, u64)>,
@@ -43,7 +51,7 @@ impl SourceView {
         }
         let base = if self.inherits(parent, local.parent_inode.as_ref())? {
             self.base
-                .list_after_bytes(parent, after, PAGE_ROWS, PAGE_ROWS * 264)?
+                .list_after_bytes(parent, after, PAGE_ROWS, PAGE_BYTES)?
         } else {
             layerfs_content::filesystem::DirectoryListing {
                 entries: Vec::new(),
@@ -70,6 +78,13 @@ impl SourceView {
         let mut visited = 0;
         let mut last = None;
         while visited < PAGE_ROWS {
+            // A base page that ended with a continuation says nothing about
+            // the names after its last one: a local key past it would skip
+            // the base names between. The window stops at that last name,
+            // and the next window resumes after it.
+            if b == base.entries.len() && base.continuation.is_some() {
+                break;
+            }
             let key = [
                 base.entries.get(b).map(|(name, _)| name.as_bytes()),
                 local.active.get(a).map(|row| row.name.as_slice()),

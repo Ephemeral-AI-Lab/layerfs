@@ -1,7 +1,7 @@
 //! rename: one atomic move, with replacement, parent effects and cycle refusal.
 use crate::eval::{refuse, touched, Eval};
 use crate::remove::{dereferenced, unbind};
-use crate::{Refusal, Time, WorkspaceResult};
+use crate::{Refusal, Time, WorkspaceError, WorkspaceResult};
 use layerfs_content::filesystem::limits::MAXIMUM_PATH_COMPONENTS;
 use layerfs_content::filesystem::PathName;
 use layerfs_overlay::{Binding, Changes, DirectoryEntryChange, Inode, InodeKind};
@@ -22,14 +22,35 @@ pub(crate) struct Move<'a> {
 ///
 /// A kernel request carries serials only. Its evidence is the connection's
 /// retained parent index instead: one row per kernel-known directory, written
-/// by the transactions that looked it up, created it or moved it, and read
-/// here in the publishing job. It is engine state, not a caller's claim.
+/// by the transactions that looked it up, created it or moved it, with the
+/// name it had there, and read here in the publishing job. It is engine
+/// state, not a caller's claim. An install never rewrites those rows, and a
+/// merged install can move a directory the kernel still holds as a cwd or an
+/// open descriptor without any LOOKUP refreshing its row. So every link of
+/// the chain is checked against the current view in this job: its parent
+/// must still bind its name to it. Directories have exactly one binding, so
+/// a chain whose every link holds is the destination's whole current
+/// ancestry. A link that no longer holds is refused as a mismatch (EINVAL);
+/// the kernel's next LOOKUP of that directory records its current place.
 fn outside(eval: &mut Eval<'_>, moved: u64, action: &Move<'_>) -> WorkspaceResult<Option<()>> {
     if let Some((db, mount)) = eval.kernel {
-        if db
-            .kernel_ancestors(mount, action.new_parent)?
-            .contains(&moved)
-        {
+        let chain = db.kernel_ancestors(mount, action.new_parent)?;
+        let mut decided = true;
+        for link in &chain {
+            let name = PathName::from_bytes(&link.name)
+                .map_err(|_| WorkspaceError::Refused(Refusal::AncestryMismatch))?;
+            let local = eval.rows.inode(link.parent)?;
+            let layers = eval.layers(link.parent, &name)?;
+            match eval.bound(link.parent, local.as_ref(), &name, layers) {
+                None => decided = false,
+                Some(Some(serial)) if serial == link.serial => {}
+                Some(_) => return refuse(Refusal::AncestryMismatch),
+            }
+        }
+        if !decided {
+            return Ok(None);
+        }
+        if chain.iter().any(|link| link.serial == moved) {
             return refuse(Refusal::Invalid);
         }
         return Ok(Some(()));
@@ -143,12 +164,13 @@ pub(crate) fn rename(
         inodes.push(dereferenced(old));
     }
     // The moved inode keeps its serial and attributes: no row for it, and no
-    // row for anything beneath a moved directory.
+    // row for anything beneath a moved directory. A moved or renamed
+    // directory's retained kernel parent and name follow it.
     Ok(Some(Some(Changes {
         open: None,
         created: None,
         detached: None,
-        moved_directory: (moved.kind == InodeKind::Directory && !same)
+        moved_directory: (moved.kind == InodeKind::Directory)
             .then_some((moved.serial, action.new_parent)),
         inodes,
         directory_entries: vec![

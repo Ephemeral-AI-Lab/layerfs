@@ -1,8 +1,8 @@
 //! One kernel mutation transaction: its publication together with the kernel
 //! lookup and open custody that the mutation's own reply hands to the kernel.
 use crate::{
-    db::integer, Changes, KernelApplied, KernelEffect, KernelMount, Overlay, OverlayError,
-    OverlayResult,
+    db::integer, Changes, KernelApplied, KernelEffect, KernelLink, KernelMount, Overlay,
+    OverlayError, OverlayResult,
 };
 
 /// Longest parent chain one cycle check reads: the canonical component limit
@@ -76,7 +76,17 @@ impl Overlay {
             }
         };
         if directory {
-            self.set_kernel_parent(mount, serial, parent)?;
+            // The one binding this job published for the directory.
+            let name = changes
+                .directory_entries
+                .iter()
+                .find(|entry| {
+                    entry.parent == parent
+                        && matches!(entry.binding, crate::Binding::Bound { serial: bound, .. } if bound == serial)
+                })
+                .map(|entry| entry.name.as_slice())
+                .ok_or(OverlayError::Invalid("kernel entry binding"))?;
+            self.set_kernel_parent(mount, serial, parent, name)?;
         }
         Ok(KernelApplied { publication, file })
     }
@@ -140,20 +150,28 @@ impl Overlay {
         }
         Ok(())
     }
-    /// The retained parent chain of one kernel-known directory, from itself to
-    /// the root. Every step is an indexed point read of a row this connection
-    /// recorded at LOOKUP, MKDIR or a directory move; a missing step is Stale,
-    /// never an assumed root. No name, reverse index or subtree is read.
-    pub fn kernel_ancestors(&self, mount: KernelMount, serial: u64) -> OverlayResult<Vec<u64>> {
+    /// The retained parent chain of one kernel-known directory, from itself up
+    /// to the root: one link per directory below the root, each with the name
+    /// it was recorded under. Every step is an indexed point read of a row
+    /// this connection recorded at LOOKUP, MKDIR, a READDIRPLUS handle or a
+    /// move; a missing step is Stale, never an assumed root. No reverse index
+    /// or subtree is read. An install does not rewrite these rows, so a
+    /// caller that relies on the chain checks each link against its view.
+    pub fn kernel_ancestors(
+        &self,
+        mount: KernelMount,
+        serial: u64,
+    ) -> OverlayResult<Vec<KernelLink>> {
         self.check_kernel_attached(mount)?;
-        let mut chain = vec![serial];
+        let mut chain = Vec::new();
         let mut current = serial;
         while current != mount.root {
-            if chain.len() == ANCESTRY_STEPS {
+            if chain.len() + 1 == ANCESTRY_STEPS {
                 return Err(OverlayError::Invalid("kernel ancestry depth"));
             }
-            current = self.kernel_parent(mount, current)?;
-            chain.push(current);
+            let link = self.kernel_link(mount, current)?;
+            current = link.parent;
+            chain.push(link);
         }
         Ok(chain)
     }

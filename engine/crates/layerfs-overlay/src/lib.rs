@@ -38,7 +38,8 @@ pub use contract::indexed_operation_record::{
     OperationRecordExpectedValue,
 };
 pub use contract::kernel::{
-    KernelApplied, KernelDecision, KernelEffect, KernelMount, KernelMountState, KernelObservation,
+    KernelApplied, KernelDecision, KernelEffect, KernelLink, KernelMount, KernelMountState,
+    KernelObservation,
 };
 pub use contract::kernel_directory::{
     KernelCookieOffer, KernelDirectory, KernelDirectoryCursor, KernelDirectoryPage,

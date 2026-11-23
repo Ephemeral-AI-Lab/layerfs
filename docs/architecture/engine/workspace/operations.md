@@ -37,6 +37,7 @@ What each filesystem operation on a [Workspace](README.md) reads and publishes, 
 | --- | --- |
 | A removed inode keeps a row with `nlink` 0, so serial-addressed access does not fall through to the base | [`remove.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/remove.rs) |
 | Moving a directory to another parent needs ancestry evidence: a path caller passes `destination_path`, walked from the root and verified; a kernel caller uses the connection's retained parent index | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs), [`types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs) |
+| The retained parent index keeps, per kernel-known directory, its parent and its name there, written by LOOKUP, MKDIR, a READDIRPLUS handle and a rename (to another parent or in place). An install rewrites none of it, and a merged install can move a directory the kernel holds as a cwd or descriptor with no LOOKUP to follow. So a kernel rename of a directory checks every link from the destination up to the root against the current view (the parent must still bind that name to that directory) before its cycle check; a link that no longer holds is `AncestryMismatch` (EINVAL), and the next LOOKUP of that directory records its current place | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs), [`kernel_mutation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_mutation.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_directory.rs) |
 | Renaming one name of an inode onto another name of the same inode succeeds and changes nothing | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs) |
 | A file renamed over a file records a `predecessor`, offered to Commit as a delta base | same |
 | Parent `entries` and `subdirs` move in the same row as the binding; leaving range is an error, never clamped | [`eval.rs`](../../../../engine/crates/layerfs-workspace/src/mutation/eval.rs) |
@@ -59,7 +60,12 @@ What each filesystem operation on a [Workspace](README.md) reads and publishes, 
 window, whiteouts included, so a window can be empty and still continue. A
 name bound for the whole enumeration is returned exactly once; names changed
 meanwhile may or may not appear. A directory created above the installed
-floor makes no base demand
+floor makes no base demand. The base page may spend `PAGE_ROWS` rows of the
+longest name, as the directory reader charges them (`NAME_LENGTH_BYTES` +
+`DIRECTORY_LEAF_SERIAL_BYTES` + 255 bytes each), so it ends on its row bound.
+Should a base page still end with a continuation before the window's other
+keys, the merge stops at the base's last fetched name: a local key past it
+would skip the base names between
 ([`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs)).
 
 ## Attributes
@@ -143,7 +149,12 @@ Facts carried between visits are used only while the Workspace still has the
 base they came from, so an install between visits costs another read, never
 a stale answer. OPEN names an inode the kernel still references, so a file
 whose last name is gone stays openable. A data visit holds nothing after its
-job.
+job. A serial the kernel names by itself (GETATTR, OPEN, OPENDIR, a LOOKUP's
+directory, READ, READLINK and READDIR of an open handle) that no local row or
+base inode has any more was dropped by an install while the kernel held it:
+the request fails with `OverlayError::Stale` (ESTALE on FUSE, `NFS3ERR_STALE`
+on NFS) and nothing else changes (`Eval::held`). A name bound to an absent
+inode is still `InvalidRecord`.
 
 ## Kernel directories
 

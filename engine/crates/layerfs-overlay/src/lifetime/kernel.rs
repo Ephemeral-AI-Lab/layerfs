@@ -28,7 +28,7 @@ impl Overlay {
             };
             self.open.borrow_mut().mount = Some((mount, false));
             self.insert_kernel_lookup(mount, root, true, 0)?;
-            self.set_kernel_parent(mount, root, root)?;
+            self.set_kernel_parent(mount, root, root, &[])?;
             Ok(mount)
         })
     }
@@ -48,7 +48,7 @@ impl Overlay {
                 .parents
                 .rows
                 .iter()
-                .filter(|(_, (owner, _))| *owner == revoked.owner)
+                .filter(|(_, row)| row.owner == revoked.owner)
                 .map(|(key, _)| *key)
                 .collect::<Vec<_>>();
             (references, parents)

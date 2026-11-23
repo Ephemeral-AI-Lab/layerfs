@@ -16,7 +16,7 @@
 //! still read once for each entry that needs them. The request then fills its
 //! reply and a publishing visit records exactly the accepted names. Nothing
 //! is held between the two visits or after the reply.
-use crate::{BaseView, SourceView, ViewStat, Workspace, WorkspaceResult};
+use crate::{BaseView, SourceView, ViewStat, Workspace, WorkspaceError, WorkspaceResult};
 use layerfs_content::filesystem::inode::{lookup_many, InodeReadWork};
 use layerfs_content::filesystem::Resolved;
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
@@ -482,7 +482,16 @@ fn merge(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<MergedN
         }
     }
     let listing =
-        view.list_from_window(page.local.parent, page.after.as_deref(), page.local.clone())?;
+        match view.list_from_window(page.local.parent, page.after.as_deref(), page.local.clone()) {
+            // An open handle on a directory with no local row that the base no
+            // longer has: an install dropped the serial the kernel still holds.
+            Err(WorkspaceError::Content(ContentError::PathNotFound))
+                if page.local.parent_inode.is_none() =>
+            {
+                return Err(OverlayError::Stale.into());
+            }
+            listing => listing?,
+        };
     Ok(MergedNames {
         names: listing.entries,
         continuation: listing.continuation,

@@ -1,8 +1,8 @@
 //! External engine/Store boundaries; all waiting returns to the kernel pool.
-use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
+use layerfs_overlay::{KernelCookieOffer, KernelMount, OverlayError, Publication};
 use layerfs_workspace::{
-    BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome,
-    KernelVisitRequest, KernelWindow, VisitFacts, WriteData,
+    BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadFailure, KernelReadOperation,
+    KernelReadOutcome, KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData,
 };
 use std::{
     error::Error,
@@ -109,6 +109,27 @@ impl Fence {
         self.0.terminal_replies.fetch_add(1, Ordering::AcqRel);
     }
 }
+/// Whether a failed read or directory step is the engine's own answer that
+/// the kernel named a serial the current view no longer has: an install
+/// dropped it while the kernel still held it (a cwd, an open descriptor or a
+/// cached inode). Only two shapes qualify: a reading visit whose job answered
+/// `OverlayError::Stale` and rolled back, and the Workspace's `Stale` from the
+/// window finished outside the owner. Both precede any publication and own
+/// nothing in the engine, so the request alone answers ESTALE. No wrapper is
+/// looked through: an uncertain, retained or owner failure that merely
+/// carries a `Stale` cause is not stale.
+pub fn stale(reason: &ServiceError) -> bool {
+    let reason: &(dyn Error + 'static) = reason.as_ref();
+    if let Some(failure) = reason.downcast_ref::<KernelReadFailure>() {
+        return failure.original.decision.is_none()
+            && matches!(failure.original.result, Err(OverlayError::Stale));
+    }
+    matches!(
+        reason.downcast_ref::<WorkspaceError>(),
+        Some(WorkspaceError::Overlay(OverlayError::Stale))
+    )
+}
+
 /// A stopped fence refused this acquisition before any attempt: no job was
 /// submitted and no provider demand was made. It is never the result of an
 /// attempted operation.

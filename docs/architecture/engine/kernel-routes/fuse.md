@@ -93,6 +93,9 @@ installed a root other than the one shown, for each `Stale::Inode` or
      Retained(error) or panic -> failure kept, mount terminal
 ```
 
+A request that ends itself (fenced, failed base demand, stale serial) is
+`Complete`, not `Retained`, so it never makes the mount terminal.
+
 | Item | Meaning | Source |
 | --- | --- | --- |
 | `MountRequests` | Per-mount request owner: counts, retained failures, parked threads, its `Fence`; no daemon-wide dispatcher | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
@@ -109,6 +112,7 @@ reader holds its loop; two loops let one request proceed while another waits.
 | --- | --- | --- |
 | Fenced step (forced teardown) | `ENOTCONN`, counted on the fence | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs) |
 | Failed base demand of this request | `EIO`; the mount keeps serving | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs) |
+| Stale serial: a LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK or READDIR names a serial that neither a local row nor the base has, because an install dropped it while the kernel held it (a merge rebuilt that directory or file under a fresh serial, or took the other side's removal) | `ESTALE` for that request alone; nothing is retained and the mount keeps serving. Only the engine's own `Stale` answer counts (`ports::stale`): an uncertain, retained or owner failure that carries one stays retained. A name that binds an absent inode, or a count leaving its range, is still corruption and still retained | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs), [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs), [`eval.rs`](../../../../engine/crates/layerfs-workspace/src/mutation/eval.rs) |
 | `Refusal` | `EEXIST`, `ENOENT`, `ENOTDIR`, `EISDIR`, `ENOTEMPTY`, `EPERM`, `EOPNOTSUPP`, `EINVAL`, `EMLINK`, `EFBIG` | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
 | `Declined::NoSpace`, `Contended`, `TargetTooLong` | `ENOSPC`, `EAGAIN`, `ENAMETOOLONG` | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
 | Missing LOOKUP name | Negative entry (node 0), 60 s entry TTL; every create, link, mkdir, symlink or rename through the mount replaces it | [`reply.rs`](../../../../engine/crates/layerfs-fuse/src/request/reply.rs) |

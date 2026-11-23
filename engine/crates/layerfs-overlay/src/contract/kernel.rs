@@ -20,6 +20,18 @@ impl KernelMount {
     }
 }
 
+/// One step of a kernel-known directory's retained parent chain: the
+/// directory, its parent and the name it had there when the step was recorded
+/// (at LOOKUP, MKDIR, a READDIRPLUS handle or a move through the mount). An
+/// install can change the view beneath a recorded step; a caller that needs
+/// the current ancestry checks each step's name against the current view.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KernelLink {
+    pub serial: u64,
+    pub parent: u64,
+    pub name: Vec<u8>,
+}
+
 /// Result of the caller's bounded semantic decision over one SourceRows view.
 /// None requires no acquisition (for example missing facts or a negative name).
 pub enum KernelDecision<T> {

@@ -9,10 +9,12 @@ use common::name;
 use harness::{create, resize, write, Bench, T1};
 use layerfs_content::filesystem::SymlinkTarget;
 use layerfs_overlay::{
-    Inode, InodeKind, KernelDecision, KernelMount, StatementKind, StoredCounts, WorkspaceState,
-    READ_WINDOW,
+    Inode, InodeKind, KernelDecision, KernelMount, OverlayError, StatementKind, StoredCounts,
+    WorkspaceState, READ_WINDOW,
 };
-use layerfs_workspace::{CanonicalCache, CanonicalClient, KernelWindow, Operation, Refusal};
+use layerfs_workspace::{
+    CanonicalCache, CanonicalClient, KernelWindow, Operation, Refusal, WorkspaceError,
+};
 use std::sync::Arc;
 
 const SMALL: &[u8] = b"original\0\xff";
@@ -57,7 +59,7 @@ fn hold(b: &Bench, mount: KernelMount, serial: u64, kind: InodeKind) {
         subdirs: 0,
     };
     b.overlay
-        .observe_kernel_visit(mount, 1, None, true, |_, _| {
+        .observe_kernel_visit(mount, 1, None, Some(b"file"), |_, _| {
             Ok(KernelDecision::Finished {
                 inode: Some(inode),
                 value: (),
@@ -165,13 +167,16 @@ fn every_window_is_the_ordinary_read_and_takes_the_base_only_for_what_it_inherit
         reply(&b, window, 3, 0, 4096, true),
         (Ok(TARGET.to_vec()), true)
     );
-    // An inode the kernel holds that neither the base nor a local row has.
+    // An inode the kernel holds that neither the base nor a local row has:
+    // an install dropped its serial, so the kernel's handle is stale. The
+    // same one base read finds it, and the request alone fails with Stale.
     hold(&b, mount, 99, InodeKind::File);
     let window = visit(&b, empty(), mount, 99, 0, 4096);
-    assert_eq!(
-        reply(&b, window, 99, 0, 4096, false),
-        (Err(Refusal::Missing), true)
-    );
+    assert!(window.inherits(0, false));
+    assert!(matches!(
+        window.finish(Some(&base), 99, 0, 4096, false),
+        Err(WorkspaceError::Overlay(OverlayError::Stale))
+    ));
 
     // Once the daemon has seen the files, memory answers the inode and the
     // length inside the job: a window at or beyond the end, and a refusal

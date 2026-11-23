@@ -61,6 +61,12 @@ impl KernelFilesystem {
                         reply.error(Errno::EINVAL);
                         RequestDisposition::Complete
                     }
+                    // The open directory's serial was dropped by an install:
+                    // this request alone answers ESTALE.
+                    Ok(Err(failure)) if failure.stale() => {
+                        reply.error(Errno::ESTALE);
+                        terminal::directory(&fence, failure).await
+                    }
                     // The typed failure still owns whatever was acquired.
                     Ok(Err(failure)) if failure.fenced() => {
                         reply.error(terminal::STOPPED);
@@ -173,7 +179,7 @@ async fn enumerate(
             }
             Ok(DirectoryStep::Batch(batch)) => batch,
             Err(error) => {
-                reply.error(terminal::errno(error.fenced()));
+                reply.error(terminal::errno(error.fenced(), error.stale()));
                 return terminal::directory(fence, error).await;
             }
         };
@@ -215,7 +221,7 @@ async fn enumerate(
             // A fenced publication published nothing: the offered entries
             // are never sent. Any other failure here is retained.
             Err(error) => {
-                reply.error(terminal::errno(error.fenced()));
+                reply.error(terminal::errno(error.fenced(), error.stale()));
                 return terminal::directory(fence, error).await;
             }
         };
