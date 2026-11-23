@@ -28,7 +28,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 /// projects can be added to it later.
 #[derive(Debug)]
 pub struct CreateRequest {
-    /// New Store file, explicit Disposable profile; must not exist. For
+    /// New Store file, explicit Normal profile; must not exist. For
     /// [`super::ProjectApi::create_postgresql_store`], the PostgreSQL
     /// selection whose schema must not exist.
     pub store: StoreSelection,
@@ -43,7 +43,7 @@ pub struct CreateRequest {
 pub struct AddRequest {
     /// Complete source directory, with no Git-ignore filtering.
     pub source: PathBuf,
-    /// The live Store: a SQLite file with the explicit Disposable profile,
+    /// The live Store: a SQLite file with the explicit Normal profile,
     /// or a PostgreSQL schema ([`StoreSelection::Postgres`]).
     pub store: StoreSelection,
     /// The Store's binding key.
@@ -94,15 +94,15 @@ impl std::fmt::Display for AddFailure {
 }
 impl std::error::Error for AddFailure {}
 
-/// The profile rule (Normal, or Disposable in a test) applies to a SQLite
+/// The profile rule (Normal only) applies to a SQLite
 /// Store only; a PostgreSQL Store has no SQLite profile and passes.
-fn disposable(store: &StoreSelection) -> Result<(), InitError> {
+fn normal_profile(store: &StoreSelection) -> Result<(), InitError> {
     let StoreSelection::Sqlite(store) = store else {
         return Ok(());
     };
     if !store.sqlite_profile.permitted() {
         return Err(InitError::Manifest(
-            "explicit Normal or Disposable Store profile required",
+            "explicit Normal Store profile required",
         ));
     }
     Ok(())
@@ -110,7 +110,7 @@ fn disposable(store: &StoreSelection) -> Result<(), InitError> {
 
 /// Creates and seals one Store holding no project.
 pub(crate) fn create(request: CreateRequest) -> Result<SealedStore, InitError> {
-    disposable(&request.store)?;
+    normal_profile(&request.store)?;
     let StoreSelection::Sqlite(config) = request.store else {
         return Err(InitError::Manifest("a Store file selection required"));
     };
@@ -128,7 +128,7 @@ pub(crate) fn add(
 ) -> Result<AddedProject, Box<AddFailure>> {
     let mut initialized = None;
     let result = (|| {
-        disposable(&request.store)?;
+        normal_profile(&request.store)?;
         let handles = Opened::writable(&request.store, &request.binding, request.cursor_key)?;
         let history = handles.history();
         // A held name (live, retired or deleted) is refused before the folder

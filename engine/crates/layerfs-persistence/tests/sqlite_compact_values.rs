@@ -257,7 +257,7 @@ fn initialize(handles: &SqliteHandles, tag: u8, genesis: ObjectId) {
 fn reopen(path: &Path) -> SqliteHandles {
     SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path.to_path_buf())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         b"doctor-adversarial",
         [71; 32],
     )

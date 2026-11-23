@@ -12,7 +12,7 @@ fn open(path: &str, binding: &[u8]) -> f64 {
     let start = Instant::now();
     let handles = SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
         binding,
         [53; 32],
@@ -34,5 +34,5 @@ fn backfill_on_a_store_copy() {
         .collect();
     let migrating = open(&path, &binding);
     let plain = open(&path, &binding);
-    println!("LINEAGE_BACKFILL open_with_backfill_ms={migrating:.1} open_after_ms={plain:.1} profile=Disposable samples=1");
+    println!("LINEAGE_BACKFILL open_with_backfill_ms={migrating:.1} open_after_ms={plain:.1} profile=Normal samples=1");
 }

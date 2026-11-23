@@ -193,7 +193,7 @@ fn many_commits_and_packs_are_marked_through_bounded_lists() {
         .unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
     let reopened = SqliteHandles::open_writable(
-        PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         b"doctor-adversarial",
         [71; 32],
     )

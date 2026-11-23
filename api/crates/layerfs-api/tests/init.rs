@@ -19,7 +19,7 @@ fn request(directory: &Path) -> InitRequest {
     InitRequest {
         source: directory.join("source"),
         store: PersistenceConfig::sqlite(directory.join("sealed.sqlite"))
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         locator: "/store/store.sqlite".into(),
         policy: StoragePolicy::frozen_default(),
         catalog: HistoryCatalogConfig {
@@ -59,7 +59,7 @@ fn init_seals_complete_root_and_first_branch_without_retained_handles() {
     .unwrap();
     assert_eq!(project.initialized.entries, 6);
     assert_eq!(project.manifest.provider, ProviderKind::Sqlite);
-    assert_eq!(project.manifest.profile, StoreProfile::Disposable);
+    assert_eq!(project.manifest.profile, StoreProfile::Normal);
     assert_eq!(project.manifest.locator, "/store/store.sqlite");
     assert_eq!(
         project.manifest.bytes,
@@ -82,7 +82,7 @@ fn init_seals_complete_root_and_first_branch_without_retained_handles() {
     )
     .unwrap();
     assert_eq!(handles.profile().journal_mode, "wal");
-    assert_eq!(handles.profile().synchronous, 0);
+    assert_eq!(handles.profile().synchronous, 1);
     assert_eq!(
         handles
             .history
@@ -131,7 +131,7 @@ fn init_seals_complete_root_and_first_branch_without_retained_handles() {
                 .as_bytes(),
             b"../file"
         );
-        println!("SDK_INIT entries=6 full_file_oracle_bytes=140014 host_sqlite={} store_bytes={} profile=Disposable",project.manifest.host_sqlite,project.manifest.bytes);
+        println!("SDK_INIT entries=6 full_file_oracle_bytes=140014 host_sqlite={} store_bytes={} profile=Normal",project.manifest.host_sqlite,project.manifest.bytes);
     }
     drop(storage);
     handles.seal().unwrap();

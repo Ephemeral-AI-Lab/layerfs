@@ -11,7 +11,7 @@
 //! Workspace scans its whole tree in a loop, the other keeps completing
 //! reads.
 //!
-//! Counts only; nothing is timed. Real Disposable Store, real owner, no
+//! Counts only; nothing is timed. Real Normal Store, real owner, no
 //! mount. Public API only; every wait is bounded.
 #[allow(dead_code)]
 #[path = "support/captured_drive.rs"]

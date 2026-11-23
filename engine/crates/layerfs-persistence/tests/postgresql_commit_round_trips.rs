@@ -318,7 +318,7 @@ fn commit_store_calls_are_counted_on_both_engines() {
     let temp = Temp::new("commit-round-trips");
     let sqlite = SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store"))
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &catalog(),
     )

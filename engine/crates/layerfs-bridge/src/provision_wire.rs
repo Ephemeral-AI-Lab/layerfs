@@ -16,7 +16,7 @@ impl StoreManifest {
         })?;
         out.byte(match self.profile {
             StoreProfile::Durable => 1,
-            StoreProfile::Disposable => 2,
+            StoreProfile::Normal => 2,
         })?;
         out.blob(self.locator.as_bytes())?;
         out.blob(&self.binding)?;
@@ -39,7 +39,7 @@ impl StoreManifest {
         };
         let profile = match input.byte()? {
             1 => StoreProfile::Durable,
-            2 => StoreProfile::Disposable,
+            2 => StoreProfile::Normal,
             _ => return Err(ControlError("Store profile")),
         };
         let locator = input.text(4096)?;

@@ -45,9 +45,9 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
 | [`store.doctor`](#storedoctor) | both | the doctor report | `admin` |
 
 A sqlite Store is opened with the Normal profile (WAL,
-`synchronous=NORMAL`); its record and manifest still carry the label
-`disposable`, which names the non-durable WAL Store, not the connection's
-synchronization. Durable execution is `NOT_RUN — disabled by owner until
+`synchronous=NORMAL`), the only SQLite Store profile; its record carries the
+label `normal`, and a record written before 2026-11-23 that says `disposable`
+answers `normal` (it is never rewritten for it). Durable execution is `NOT_RUN — disabled by owner until
 explicit reauthorization`. A PostgreSQL Store has no profile: its write
 setting is `synchronous_commit`. A Store name is 1 to 63 of
 `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows

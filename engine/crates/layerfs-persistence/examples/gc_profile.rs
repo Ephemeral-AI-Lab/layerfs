@@ -49,7 +49,7 @@ fn open(store: &Path) -> SqliteHandles {
         .expect("GC_CURSOR_HEX is 32 bytes");
     SqliteHandles::open_writable(
         PersistenceConfig::sqlite(store.to_path_buf())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &unhex("GC_BINDING_HEX", &binding),
         cursor,
     )

@@ -164,7 +164,7 @@ listed conflict with a defined result.
 ## Demonstration
 
 `layerfs-content` tests use in-memory trees. The `layerfs-store-service` tests
-run Project Init into a temporary Disposable SQLite Store and call the SDK
+run Project Init into a temporary SQLite Store and call the SDK
 method table in process; they need no Docker, root or PostgreSQL server.
 Each command gets a wall timeout of at most 120 s.
 

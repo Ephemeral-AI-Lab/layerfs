@@ -7,7 +7,7 @@
 //! `LAYERFS_TEST_POSTGRES_URL` is set.
 //! The line also carries the resident set when the read starts and the
 //! process's resident peak during it (the daemon serves in this process).
-//! Disposable profile; the daemon's 64 MiB object cache.
+//! Normal profile; the daemon's 64 MiB object cache.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]

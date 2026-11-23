@@ -16,7 +16,7 @@ use support::*;
 
 fn writable(path: &std::path::Path) -> SqliteHandles {
     SqliteHandles::open_writable(
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         BINDING,
         [71; 32],
     )

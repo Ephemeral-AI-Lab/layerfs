@@ -17,7 +17,7 @@ was run too, in Node and Python (the shell run is in
 | [`python_sync_flow.py`](python_sync_flow.py) | Python, synchronous |
 | [`python_async_flow.py`](python_async_flow.py) | Python, `layerfs.aio` |
 
-Every file makes its own Disposable home and project folder in a temporary
+Every file makes its own temporary home and project folder in a temporary
 directory and removes them. On Linux the temporary directory must be on a
 filesystem with SQLite locks (ext4, xfs, btrfs; set `TMPDIR` if `/tmp` is
 not).

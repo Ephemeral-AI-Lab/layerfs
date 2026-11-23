@@ -49,7 +49,7 @@ fn wide_diff_pages_have_bounded_store_demand() {
         let beyond_work = fixture.since(before);
         assert!(items(&beyond).is_empty());
         assert!(!beyond.get_bool("hasMore"));
-        println!("SDK_DIFF_WIDE files={count} first={first_work:?} second={second_work:?} beyond={beyond_work:?} profile=Disposable cache=uncontrolled diagnostic_count_gate=true");
+        println!("SDK_DIFF_WIDE files={count} first={first_work:?} second={second_work:?} beyond={beyond_work:?} profile=Normal cache=uncontrolled diagnostic_count_gate=true");
         observed.push((count, first_work, second_work, beyond_work));
         fixture.cleanup();
     }
@@ -79,7 +79,7 @@ fn equal_roots_require_no_namespace_scan() {
     let demand = fixture.since(before);
     assert!(items(&result).is_empty());
     assert!(!result.get_bool("hasMore"));
-    println!("SDK_DIFF_EQUAL files=2048 work={demand:?} profile=Disposable");
+    println!("SDK_DIFF_EQUAL files=2048 work={demand:?} profile=Normal");
     fixture.cleanup();
     assert!(
         demand.object_batches <= 32,

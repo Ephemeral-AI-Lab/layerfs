@@ -204,7 +204,7 @@ fn a_project_s_record_is_checked_against_its_store() {
     let manifest = layerfs_bridge::provision::StoreManifest {
         provider: layerfs_bridge::provision::ProviderKind::Sqlite,
         locator: "/layerfs-store/global/store.sqlite".into(),
-        profile: layerfs_bridge::provision::StoreProfile::Disposable,
+        profile: layerfs_bridge::provision::StoreProfile::Normal,
         binding: vec![1; 16],
         cursor_key: [7; 32],
         stack: [2; 17],

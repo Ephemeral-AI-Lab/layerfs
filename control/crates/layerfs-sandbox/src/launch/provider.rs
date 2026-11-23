@@ -17,7 +17,7 @@ use std::{fmt, sync::Arc};
 pub struct ProviderCreate {
     /// Runtime launch; configuration is encoded from setup after validation.
     pub launch: LaunchRequest,
-    /// Explicit Disposable daemon topology and Store selection.
+    /// Explicit Normal daemon topology and Store selection.
     pub setup: DaemonSetup,
     /// Controller secret; never printed or sent in argv/environment.
     pub controller_private: [u8; 32],

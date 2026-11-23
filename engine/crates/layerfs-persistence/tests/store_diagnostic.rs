@@ -1,4 +1,4 @@
-//! Integrity diagnosis against real Disposable databases, including live WAL.
+//! Integrity diagnosis against real Normal databases, including live WAL.
 mod support;
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
@@ -18,7 +18,7 @@ fn authority() -> HistoryCatalogConfig {
     }
 }
 fn config(path: &std::path::Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 fn observations(handles: &SqliteHandles, quick: bool) -> Vec<Observation> {
     let mut result = Vec::new();

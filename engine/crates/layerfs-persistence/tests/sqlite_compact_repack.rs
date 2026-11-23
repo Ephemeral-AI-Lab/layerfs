@@ -46,7 +46,7 @@ fn create(layout: SqlitePackLayout) -> (Temp, SqliteHandles, PathBuf) {
     let path = temp.join("store.sqlite");
     let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(path.clone())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .with_sqlite_pack_layout(layout)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::default()),
         StoragePolicy::frozen_default(),
@@ -63,7 +63,7 @@ fn create(layout: SqlitePackLayout) -> (Temp, SqliteHandles, PathBuf) {
 fn reopen(path: &Path, layout: SqlitePackLayout) -> SqliteHandles {
     SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path.to_path_buf())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .with_sqlite_pack_layout(layout)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::default()),
         BINDING,

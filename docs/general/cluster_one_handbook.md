@@ -668,16 +668,17 @@ Source: [Save lifecycle](../../core/crates/layerfs-storage/src/save/operation.rs
 | Choice | Current behavior |
 | --- | --- |
 | Durable | Retained WAL / FULL source may compile; execution disabled until explicit owner reauthorization |
-| Disposable | Sole active profile, selected explicitly: SQLite WAL / OFF; process-crash survival, no kernel/VM-crash durability |
+| Normal | Sole SQLite Store profile since 2026-11-23, selected explicitly: SQLite WAL / NORMAL; its safety gate has not run, so only process-crash survival is claimed (the former Disposable WAL / OFF profile was removed) |
 | Monolithic | Creation layout schema1; complete pack BLOBs |
 | GroupRows | Creation layout schema2; independently stored complete encoded units |
 | GroupRowsIndexed | Creation layout schema3; group rows with covering mapping index |
 
 Source update after `727476a4d`, 2026-10-07: Persistence now opens on macOS and
 Linux, using system SQLite on macOS and the existing bundled dependency on Linux.
-Normal shared creation uses WAL for both profiles. Open verifies WAL without setting/converting
-journal mode; old memory-journal Disposable Stores must be regenerated. Profile
-identities are `sqlite-wal-full-v2` and `sqlite-wal-off-v2`. Mixed profile selection
+Shared creation uses WAL for both profiles. Open verifies WAL without setting/converting
+journal mode; old memory-journal Stores must be regenerated. Profile
+identities are `sqlite-wal-full-v2` and `sqlite-wal-normal-v2` (the removed
+Disposable profile was `sqlite-wal-off-v2`). Mixed profile selection
 on a shared WAL file is a provisioning fact and cannot be detected at open.
 
 Opening supports schemas1–3 and acquisition variants4–6 without migration.
@@ -734,7 +735,9 @@ separate MEMORY/OFF database and receives no global-Store profile change.
 
 The [foundation checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F1-F4-20261007.md) owns
 functional evidence and remaining integration work. Durable builds but new Durable
-execution is NOT_RUN — deferred by owner for Disposable-only development. All
+execution is `NOT_RUN — disabled by owner until explicit reauthorization`. The
+Disposable rows below were measured with the former WAL / OFF profile, removed
+on 2026-11-23. All
 historical timing/storage failures below retain their original mechanisms,
 profiles, identities and verdicts. Removal of allocation is not an optimization
 claim or a pass of the old strict-allocation gate.

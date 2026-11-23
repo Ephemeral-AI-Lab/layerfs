@@ -1,4 +1,4 @@
-//! Persisted Disposable Doctor fixtures bypassing trusted Save only for corruption setup.
+//! Persisted Normal Doctor fixtures bypassing trusted Save only for corruption setup.
 #![allow(dead_code)]
 use super::Temp;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
@@ -29,7 +29,7 @@ impl Fixture {
         let temp = Temp::new("doctor-adversarial");
         let handles = SqliteHandles::create(
             PersistenceConfig::sqlite(temp.join("store.sqlite"))
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             policy,
             &HistoryCatalogConfig {
                 binding_key: b"doctor-adversarial".to_vec(),

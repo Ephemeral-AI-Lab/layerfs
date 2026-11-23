@@ -1,4 +1,4 @@
-//! Saved file queries over a real Disposable Store, without a daemon or UI model.
+//! Saved file queries over a real Normal Store, without a daemon or UI model.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;

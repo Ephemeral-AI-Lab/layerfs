@@ -87,7 +87,7 @@ fn a_restored_project_reads_as_a_sandbox_reads_it() {
     let project = discovery::project(Some(&home), Some(STORE), Some(PROJECT))
         .expect("a Sandbox finds the restored project");
     assert_eq!(project.manifest.provider, ProviderKind::Sqlite);
-    assert_eq!(project.manifest.profile, StoreProfile::Disposable);
+    assert_eq!(project.manifest.profile, StoreProfile::Normal);
     assert_eq!(project.manifest.binding, vec![7; 32]);
     assert_eq!(project.manifest.cursor_key, [9; 32]);
     assert_eq!(project.manifest.stack, main_branch().stack.to_bytes());

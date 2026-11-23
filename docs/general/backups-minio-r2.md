@@ -111,7 +111,7 @@ layerfs branch publish shop/api dev
 ```
 
 `store create` answers
-`{"name":"shop","kind":"sqlite","machine":"native","profile":"disposable",…}`.
+`{"name":"shop","kind":"sqlite","machine":"native","profile":"normal",…}`.
 `main` is read-only; changes go on a branch and `branch publish` moves
 them to `main`.
 
@@ -275,4 +275,4 @@ Delete test objects with `mc rm --recursive --force lab/layerfs-test/backups/`
 - A backup copies the Store as of one read transaction while writers carry
   on; the restored history is one consistent point (tested with 148
   concurrent commits).
-- Durable Stores are not run; backups were tested on Disposable Stores.
+- Durable Stores are not run; backups were tested on Stores of the former Disposable profile (`synchronous=OFF`); Stores now open Normal (`synchronous=NORMAL`).

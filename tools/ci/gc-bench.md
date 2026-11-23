@@ -47,8 +47,10 @@ longer "one whole-file object per pack and one genesis Layer per project":
   `object_bytes` (<= 131,071 B). Chunked files, extent trees, merges and retired
   Branches are not built; see the caveat below.
 
-Only the Disposable (WAL/synchronous=OFF) profile is built and measured: owner
-direction 2026-10-07 disabled Durable execution indefinitely.
+The recorded receipts were built and measured with the former Disposable
+(WAL/synchronous=OFF) profile; new runs use Normal (WAL/synchronous=NORMAL), the
+only SQLite Store profile since owner direction 2026-11-23. Durable execution is
+`NOT_RUN — disabled by owner until explicit reauthorization`.
 
 ## Scales
 
@@ -209,8 +211,9 @@ is still synthetic. Read a receipt with these limits:
   reference and delta-base paths but do not reproduce a real sharing ratio.
 - **No merge, retired-Branch or `remove_file` history.** Those history edges
   and markers are covered by the contract tests, not by this timing fixture.
-- **One profile.** Disposable (WAL/`synchronous=OFF`) only, per owner direction
-  2026-10-07.
+- **One profile.** The recorded receipts used the former Disposable
+  (WAL/`synchronous=OFF`) profile; new runs use Normal (WAL/`synchronous=NORMAL`)
+  per owner direction 2026-11-23; compare timings only within one profile.
 - **Small host sample.** The declared R730/PERC/rotational class is a single
   host; per-GB rates carry that class and the cold method.
 
@@ -289,9 +292,10 @@ cache state; it is not this committed receipt.
 
 The committed fixture-B receipt declares or records:
 
-- `profile`: `SqlitePersistenceProfile::Disposable` - `journal_mode=wal`,
+- `profile`: the former `SqlitePersistenceProfile::Disposable` - `journal_mode=wal`,
   `synchronous=OFF` (the `synchronous_commit` equivalent), `page_size=4096` as
-  the creation profile sets it;
+  the creation profile set it (a new run records `SqlitePersistenceProfile::Normal`,
+  `synchronous=NORMAL`);
 - bytes written: per-run `processIo.writeBytes` (median 9,839,857,664 B for
   `rebuild`, 7,086,080 B for `none`) and `wchar`;
 - peak disk: `peakTempBytes` (9,836,421,120 B median) and `sampledTemp`;

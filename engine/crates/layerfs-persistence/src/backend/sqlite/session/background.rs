@@ -1,4 +1,4 @@
-//! A Disposable Store's WAL checkpoints, off the commit path (owner
+//! A Normal Store's WAL checkpoints, off the commit path (owner
 //! approval, 2026-11-07). The writing connection runs with
 //! `wal_autocheckpoint=0`, so a COMMIT only appends its frames to the log.
 //! When a write leaves the log longer than `journal_size_limit` (about the

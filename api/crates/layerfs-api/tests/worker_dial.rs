@@ -52,7 +52,7 @@ fn home_on_box(tag: &str, address: SocketAddr) -> PathBuf {
             ("kind", t("sqlite")),
             ("binding", SdkValue::Bytes(vec![7; 16])),
             ("cursor", SdkValue::Bytes(vec![8; 32])),
-            ("profile", t("disposable")),
+            ("profile", t("normal")),
             ("machine", t("box")),
         ]),
     )

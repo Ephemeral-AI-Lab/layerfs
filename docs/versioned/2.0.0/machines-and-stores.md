@@ -298,7 +298,7 @@ A sqlite Store is one file on one machine at a time. A postgresql Store is
 one database. There is no conversion between the two kinds (D2). Every
 sqlite Store is opened with WAL and `synchronous=NORMAL` (owner, 2026-11-17,
 ahead of its safety gate: no power-loss guarantee is claimed); its record's
-profile label stays `disposable`. A PostgreSQL Store's write setting is
+profile label is `normal` (a record that says `disposable` reads as `normal`). A PostgreSQL Store's write setting is
 `synchronous_commit`.
 
 ### sqlite Stores

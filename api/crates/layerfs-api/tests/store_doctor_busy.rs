@@ -60,7 +60,7 @@ fn a_store_another_writer_holds_is_busy_not_a_schema_error() {
     drop(
         SqliteHandles::create(
             PersistenceConfig::sqlite(&file)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {
                 binding_key: BINDING.to_vec(),

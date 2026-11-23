@@ -13,7 +13,7 @@ use support::Temp;
 fn scoped_registry_interleaves_pending_reads_finish_abort_and_slot_reuse() {
     let temp = Temp::new("interleaved-saves");
     let mut config = PersistenceConfig::sqlite(temp.join("store"));
-    config.sqlite_profile = SqlitePersistenceProfile::Disposable;
+    config.sqlite_profile = SqlitePersistenceProfile::Normal;
     let handles = SqliteHandles::create(
         config,
         StoragePolicy::frozen_default(),

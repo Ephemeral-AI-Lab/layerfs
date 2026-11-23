@@ -245,7 +245,7 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
             .unwrap()
             .unwrap()
             .get_text("profile"),
-        Some("disposable")
+        Some("normal")
     );
     call(
         &home,

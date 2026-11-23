@@ -51,7 +51,7 @@ fn binding_mismatch_keeps_logical_access_unavailable_without_corruption() {
     use layerfs_storage::StoragePolicy;
     let path = scratch("binding").join("store.sqlite");
     let handles = SqliteHandles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &layerfs_history::HistoryCatalogConfig {
             binding_key: b"correct-binding".to_vec(),

@@ -42,8 +42,8 @@ are read back authenticated, and the ports a persistence backend implements.
 is the handle over one `PackPersistence`. It reads the policy once, derives
 `StorageCapacities`, owns the locator cache and signature ring, and opens one
 Save at a time. The SQLite and PostgreSQL implementations live in
-`layerfs-persistence` ([Engine: Store](../../engine/store/README.md)). Only
-the Disposable profile (SQLite WAL, `synchronous=OFF`) may be run; Durable
+`layerfs-persistence` ([Engine: Store](../../engine/store/README.md)). Product
+paths open the Normal profile (SQLite WAL, `synchronous=NORMAL`); Durable
 execution is `NOT_RUN — disabled by owner until explicit reauthorization`.
 
 ## What it does

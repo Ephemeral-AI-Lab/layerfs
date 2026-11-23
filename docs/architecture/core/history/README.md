@@ -42,7 +42,7 @@ identities, and the one catalog contract a persistence provider implements.
 The crate opens no database, reads no pack and never reads a clock or PID to
 invent an identity. A root is an `ObjectId`; history records which root a
 Commit or Layer holds and never reads its content. The provider runs on the
-Disposable profile only; Durable execution is
+Normal profile only; Durable execution is
 `NOT_RUN — disabled by owner until explicit reauthorization`.
 
 ## What it does
@@ -213,7 +213,7 @@ Callers match variants; nothing parses message text.
 ## Demonstration
 
 `layerfs-history` has one test of its own; the provider tests exercise the
-contract on Disposable SQLite Stores. Each command gets a wall timeout of at
+contract on Normal SQLite Stores. Each command gets a wall timeout of at
 most 120 s.
 
 | Test or example | Command | Platform | Shows |

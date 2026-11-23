@@ -179,11 +179,11 @@ fn record(
 }
 
 /// True when `record` holds what `discovery::project` reads: a `manifest`
-/// and an `installed` manifest, each of which decodes with `Disposable`.
+/// and an `installed` manifest, each of which decodes with `Normal`.
 pub fn complete(record: &ProjectRecord) -> bool {
     let decodes = |name: &str| match record.to_record().get(name) {
         Some(SdkValue::Bytes(bytes)) => {
-            StoreManifest::decode(bytes).is_ok_and(|m| m.profile == StoreProfile::Disposable)
+            StoreManifest::decode(bytes).is_ok_and(|m| m.profile == StoreProfile::Normal)
         }
         _ => false,
     };

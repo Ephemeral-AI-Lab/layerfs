@@ -1,7 +1,7 @@
 //! Real kernel mounts: every product control Commit has one construction
 //! producer, the one Store session stays open across Commits, and that
-//! writer session's own read-back profile is Disposable / WAL /
-//! synchronous=OFF (row R5-10).
+//! writer session's own read-back profile is Normal / WAL /
+//! synchronous=NORMAL (row R5-10).
 //!
 //! The Store is composed from the same public pieces `open_store` composes,
 //! so that the writable `SqliteHandles` stay in the test's hands: `open_store`
@@ -264,10 +264,10 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
         base_tree(source);
         Model::host(source).1
     });
-    // The profile is selected explicitly, and it is Disposable.
+    // The profile is selected explicitly, and it is Normal.
     assert_eq!(
         fixture.config.sqlite_profile,
-        SqlitePersistenceProfile::Disposable
+        SqlitePersistenceProfile::Normal
     );
     let config = || fixture.config.clone();
     let database = fixture.config.path.clone();
@@ -278,9 +278,9 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     );
     // Its own read-back: what this session read from itself when it opened.
     let profile = handles.profile().clone();
-    assert_eq!(profile.persistence, SqlitePersistenceProfile::Disposable);
+    assert_eq!(profile.persistence, SqlitePersistenceProfile::Normal);
     assert_eq!(profile.journal_mode, "wal");
-    assert_eq!(profile.synchronous, 0, "synchronous=OFF");
+    assert_eq!(profile.synchronous, 1, "synchronous=NORMAL");
     assert_eq!(profile.fullfsync, 0);
     println!(
         "{name} WRITER_PROFILE session=writable(SqliteHandles::open_writable) selected={:?} readback(persistence={:?} identity={} journal_mode={} synchronous={} fullfsync={} mmap_size={} busy_timeout={} sqlite={}) durable=NOT_RUN",
@@ -451,7 +451,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
                 read_back.journal_mode.as_str(),
                 read_back.synchronous
             ),
-            (SqlitePersistenceProfile::Disposable, "wal", 0)
+            (SqlitePersistenceProfile::Normal, "wal", 1)
         );
 
         // The Commit is exact, with its predecessor as parent.
@@ -495,7 +495,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     quiet(&harness, ready.token);
     harness.unmount(&ready);
     println!(
-        "{name} RESULT commits={} mounts=2 producers_per_commit=1 store=one_arc_never_dropped session=one_writable_never_sealed_or_reopened profile=Disposable/wal/synchronous=0 durable=NOT_RUN composing_calls={:?} LAYERFS_CONSTRUCTION_WORKERS=not_read_by_engine/crates/*/src",
+        "{name} RESULT commits={} mounts=2 producers_per_commit=1 store=one_arc_never_dropped session=one_writable_never_sealed_or_reopened profile=Normal/wal/synchronous=0 durable=NOT_RUN composing_calls={:?} LAYERFS_CONSTRUCTION_WORKERS=not_read_by_engine/crates/*/src",
         records.len(),
         composing.iter().map(|seen| seen.port).collect::<Vec<_>>()
     );

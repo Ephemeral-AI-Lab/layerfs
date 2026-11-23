@@ -115,7 +115,8 @@ each old name):
 
 The Store profile changed: every sqlite Store is opened with WAL and `synchronous=NORMAL` (owner,
 2026-11-17, ahead of its safety gate, so no power-loss guarantee is
-claimed); its record's profile label stays `disposable` (1.1.0 used
+claimed); its record's profile label is `normal`, and a record written
+earlier that says `disposable` reads as `normal` (1.1.0 used
 `synchronous=OFF`). Durable execution is `NOT_RUN — disabled by owner until
 explicit reauthorization`. Every call is one attempt: there is no retry,
 busy handler or replay.

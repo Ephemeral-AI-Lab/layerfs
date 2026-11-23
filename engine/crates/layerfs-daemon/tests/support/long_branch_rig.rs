@@ -1,6 +1,6 @@
 //! A branch with many earlier Commits, kept as a Store file that later test
 //! invocations extend and measure. The history is made by the product: every
-//! Commit is `BoundWorkspace::commit_captured` over a real Disposable Store
+//! Commit is `BoundWorkspace::commit_captured` over a real Normal Store
 //! and the real local owner, from a Workspace that is closed and replaced
 //! after `SESSION` Commits, without a mount. Nothing here reads a benchmark
 //! size or path; the shapes are this file's own.
@@ -221,7 +221,7 @@ pub fn copy_store(from: &Path, to: &Path) {
 }
 pub fn config(store: &Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(store)
-        .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+        .with_sqlite_profile(SqlitePersistenceProfile::Normal)
         .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)
 }
 

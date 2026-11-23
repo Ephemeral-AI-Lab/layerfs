@@ -287,7 +287,7 @@ The first call on an empty or missing folder creates it with
 ```console
 $ export LAYERFS_HOME=/tmp/lfs-new
 $ layerfs store create shop
-{"name":"shop","kind":"sqlite","machine":"native","profile":"disposable",…}
+{"name":"shop","kind":"sqlite","machine":"native","profile":"normal",…}
 $ cat /tmp/lfs-new/layerfs.json
 {"layout":3,"id":"2f51a567b6f153b6e914393cab0904b6"}
 ```

@@ -37,7 +37,7 @@ pub fn manifest(
     let manifest = StoreManifest {
         provider: ProviderKind::Sqlite,
         locator: crate::project::init::LOCATOR.into(),
-        profile: StoreProfile::Disposable,
+        profile: StoreProfile::Normal,
         binding: identity.binding.clone(),
         cursor_key: identity.cursor_key,
         stack: stack.to_bytes(),

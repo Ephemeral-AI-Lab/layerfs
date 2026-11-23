@@ -64,7 +64,7 @@ output. It retains the original eleven-field InitRequest and caller timer: sourc
 Store configuration, daemon locator, storage policy, catalog authority, stack and
 Branch identities/names, inode scope seed and explicit Init deadline. This refactor
 does not select new defaults or change the supported Namespace Init profile.
-Every permitted new Store explicitly selects Disposable/WAL/synchronous=OFF.
+Every new Store explicitly selects the Normal profile (WAL, `synchronous=NORMAL`).
 Init publishes its original initial Layer and Branch, seals the sole Store, and
 returns a closed file and the actual original acknowledgements.
 

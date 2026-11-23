@@ -18,7 +18,7 @@ const MAX_ENTRIES: usize = 100_000;
 
 /// True when a process other than this one already holds the Store at `store`
 /// open, through its main file or a sidecar. The compaction's own connections
-/// (its session and, on a Disposable profile, the checkpoint thread) are in
+/// (its session and, on a Normal profile, the checkpoint thread) are in
 /// this process and are not evidence; a caller that keeps another in-process
 /// connection open is still caught by the seal's sidecar fence.
 #[cfg(target_os = "linux")]

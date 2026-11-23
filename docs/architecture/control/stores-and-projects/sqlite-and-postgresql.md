@@ -11,8 +11,8 @@ checked from a machine and opened, within [Stores and projects](README.md).
 | Source | [`layerfs-store/src/sqlite/`](../../../../control/crates/layerfs-store/src/sqlite), [`layerfs-store/src/postgresql/`](../../../../control/crates/layerfs-store/src/postgresql), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs), [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 
 `sqlite/` and `postgresql/` never import each other; the kind-neutral root
-chooses by `StoreKind`. Every new Store runs the Disposable profile
-(WAL, synchronous=OFF), the only permitted one; Durable execution is
+chooses by `StoreKind`. Every sqlite Store opens with the Normal profile
+(WAL, synchronous=NORMAL; its record's label is `normal`); Durable execution is
 `NOT_RUN — disabled by owner until explicit reauthorization`.
 
 ## Create and remove (`sqlite/create.rs`, `sqlite/remove.rs`)

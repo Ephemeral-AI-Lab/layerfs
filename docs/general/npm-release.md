@@ -229,7 +229,8 @@ before relying on the window.
 - macOS, Windows, Linux arm64 and musl: no prebuilds; npm refuses them.
 - Linux x64 with glibc older than 2.39: installs, then the addon fails to
   load; npm can check the libc family but not its version.
-- Durable Stores: disabled by the owner; only Disposable/WAL runs.
+- Durable Stores: disabled by the owner; a sqlite Store opens with WAL and
+  `synchronous=NORMAL` (no power-loss guarantee is claimed yet).
 - TLS: not in the default build; an `https://` remote is refused
   `Unsupported`. It needs `--features tls` at build time. PostgreSQL Stores
   are always built in.

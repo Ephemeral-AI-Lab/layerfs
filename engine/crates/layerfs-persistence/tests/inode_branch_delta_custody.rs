@@ -117,7 +117,7 @@ fn expected(versions: &[u64]) -> Vec<Option<InodeValue>> {
 fn create(temp: &support::Temp) -> SqliteHandles {
     SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

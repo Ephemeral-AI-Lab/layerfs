@@ -29,7 +29,7 @@ fn sealed(directory: &Path) -> SealedProject {
     let request = InitRequest {
         source: directory.join("source"),
         store: PersistenceConfig::sqlite(directory.join("sealed.sqlite"))
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         locator: "/layerfs-store/global/store.sqlite".into(),
         policy: StoragePolicy::frozen_default(),
         catalog: HistoryCatalogConfig {

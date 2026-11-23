@@ -296,8 +296,8 @@ fn decoded(path: &Path, value: &SdkValue) -> Result<Project> {
         _ => Err(refused("NoSuchProject", "no complete project manifest")),
     };
     let manifest = decode("manifest")?;
-    if manifest.profile != layerfs_bridge::provision::StoreProfile::Disposable {
-        return Err(refused("InvalidInput", "Disposable required"));
+    if manifest.profile != layerfs_bridge::provision::StoreProfile::Normal {
+        return Err(refused("InvalidInput", "Normal required"));
     }
     let installed = if matches!(value.get("installed"), Some(SdkValue::Bytes(_))) {
         Some(decode("installed")?)

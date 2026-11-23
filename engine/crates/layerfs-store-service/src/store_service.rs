@@ -88,7 +88,7 @@ impl StoreService {
 
     /// Opens the installed Store at `store` for this process's Store calls.
     /// The kernel guard runs first, before any file is opened; then the
-    /// Store, selected Disposable explicitly, and the overlay template at
+    /// Store, selected Normal explicitly, and the overlay template at
     /// `template` (a local file, created here) for the calls' private
     /// Workspaces. No busy handler, retry or fsync: one more opener, as a
     /// daemon is.

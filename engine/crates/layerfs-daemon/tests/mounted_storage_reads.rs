@@ -2,7 +2,7 @@
 //! Workspace's overlay database, never the base tree from the Store (#508).
 //! State reads call it for every mounted Workspace; walking a large base tree
 //! there cost minutes of Store reads per call and saturated the daemon.
-//! `list_changes` still names the changed paths on request. Disposable profile.
+//! `list_changes` still names the changed paths on request. Normal profile.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]

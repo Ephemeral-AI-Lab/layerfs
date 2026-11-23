@@ -1,5 +1,5 @@
 //! Several Workspaces of one daemon on branches forked from one Layer, over
-//! a real sealed Disposable Store and the real local owner, without a mount.
+//! a real sealed Normal Store and the real local owner, without a mount.
 //! A daemon here is one opened Store with its one shared canonical cache and
 //! one owner; stopping it and opening another gives an empty cache over the
 //! same Store file. Every wait is bounded.

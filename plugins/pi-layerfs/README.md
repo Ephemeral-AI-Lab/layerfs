@@ -29,7 +29,7 @@ The built archive contains the plugin, the LayerFS packages, native binding and 
 
 - The install prompt covers Linux x86_64. The `linux/arm64` archive built from the same commit also passed the plugin's real-host acceptance on an Apple Silicon Mac with OrbStack ([macOS notes](https://github.com/anyin233/pi-layerfs/blob/main/docs/macos.md)); no macOS archive is released.
 - LayerFS 1.1.0 can refuse to unmount a Workspace and keep it wedged ([#426](https://github.com/Ephemeral-AI-Lab/layerfs/issues/426)). The plugin avoids the deterministic trigger by waiting until a new Sandbox is 1.5 s old before mounting. The rarer variant can still occur after a timed-out command; start a new session if it does.
-- LayerFS here uses a Disposable Store (WAL, `synchronous=OFF`): history persists across normal sessions but has no crash or power-loss durability. Keep another copy of irreplaceable source data.
+- LayerFS here opens its Store with WAL and `synchronous=NORMAL`: history survives a process crash, but a kernel, VM or power failure can lose the commits since the last synchronized checkpoint, and no power-loss guarantee is claimed yet. Keep another copy of irreplaceable source data.
 - `edit` takes `{path, oldText, newText}`, not Pi's `edits[]`; `read` is bounded UTF-8 text. Binary files go through base64 in `layerfs_fs`.
 - Foreground commands cannot be aborted mid-run; cancellation waits for the command (or its timeout) to finish, then discards. A Workspace is not a security sandbox, and other extensions or direct host APIs can bypass the integration.
 - Initialization and removal locks have no automatic stale takeover; after a crash, recovery is manual and evidence is kept rather than deleted.

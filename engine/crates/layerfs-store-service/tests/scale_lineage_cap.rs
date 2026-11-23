@@ -5,7 +5,7 @@
 //! (b) Layers between two sides;
 //! (c) fork from a Commit deep on its Branch's first-parent chain.
 //! Long histories are built through the catalog with real roots alternating,
-//! so the SDK merge and publish at the end read real trees. Disposable profile.
+//! so the SDK merge and publish at the end read real trees. Normal profile.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
@@ -239,7 +239,7 @@ fn a_commits_since_the_layer() {
         publishes.push((count, work));
     }
     println!(
-        "SCALE_353a ancestry={walks:?} merge={merges:?} elapsed_ms={} profile=Disposable",
+        "SCALE_353a ancestry={walks:?} merge={merges:?} elapsed_ms={} profile=Normal",
         start.elapsed().as_millis()
     );
     flat("ancestry", &walks);
@@ -372,7 +372,7 @@ fn b_layers_between_two_sides() {
     let tail = operator::dispatch(&fixture.service, &call).unwrap();
     assert_eq!(support::items(&tail).len(), 10, "{tail:?}");
     assert_eq!(tail.get("hasMore"), Some(&SdkValue::Bool(false)));
-    println!("SCALE_353b ancestry={walks:?} merge={merges:?} publish_probe={publishes:?} publish_x={work:?} overwroteCount={:?} profile=Disposable", published.get("overwroteCount"));
+    println!("SCALE_353b ancestry={walks:?} merge={merges:?} publish_probe={publishes:?} publish_x={work:?} overwroteCount={:?} profile=Normal", published.get("overwroteCount"));
     flat("ancestry", &walks);
     flat("merge", &merges);
     flat("publish", &publishes);
@@ -413,7 +413,7 @@ fn c_fork_from_a_deep_commit() {
         );
         forks.push((count, fixture.since(before)));
     }
-    println!("SCALE_353c first_parent_depth={COUNTS:?} fork={forks:?} profile=Disposable");
+    println!("SCALE_353c first_parent_depth={COUNTS:?} fork={forks:?} profile=Normal");
     flat("fork", &forks);
     fixture.cleanup();
 }

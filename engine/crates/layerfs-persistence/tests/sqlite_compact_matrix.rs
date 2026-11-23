@@ -74,7 +74,7 @@ fn create_store() -> (Temp, SqliteHandles, PathBuf) {
     let path = temp.join("store.sqlite");
     let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(path.clone())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: BINDING.to_vec(),
@@ -89,7 +89,7 @@ fn create_store() -> (Temp, SqliteHandles, PathBuf) {
 fn reopen(path: &Path) -> SqliteHandles {
     SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path.to_path_buf())
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         BINDING,
         [71; 32],
     )
@@ -883,7 +883,7 @@ fn arm_measurement() {
          \"minMicros\": {},\n  \"maxMicros\": {},\n  \"deadBytesBound\": {},\n  \
          \"physicalShrink\": {},\n  \"peakTempBytes\": {},\n  \
          \"liveRoots\": 20,\n  \"deadPacks\": 20,\n  \
-         \"profile\": \"SqlitePersistenceProfile::Disposable (WAL/OFF)\",\n  \
+         \"profile\": \"SqlitePersistenceProfile::Normal (WAL/NORMAL)\",\n  \
          \"platform\": \"{}-{}\",\n  \"rustc\": \"{}\"\n}}\n",
         runs.len(),
         runs[0].0,

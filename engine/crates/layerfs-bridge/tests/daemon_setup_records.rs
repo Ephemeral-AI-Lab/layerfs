@@ -7,7 +7,7 @@ fn manifest() -> StoreManifest {
     StoreManifest {
         provider: ProviderKind::Sqlite,
         locator: "/layerfs-store/global/store.sqlite".into(),
-        profile: StoreProfile::Disposable,
+        profile: StoreProfile::Normal,
         binding: vec![7; 32],
         cursor_key: [9; 32],
         stack: [0; 17],

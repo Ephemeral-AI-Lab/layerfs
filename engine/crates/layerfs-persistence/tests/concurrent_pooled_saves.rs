@@ -38,7 +38,7 @@ fn earlier_reserved_save_finishes_after_a_higher_block_was_published() {
     let temp = support::Temp::new("concurrent-pooled-saves");
     let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"concurrent-pooled-saves".to_vec(),

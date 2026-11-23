@@ -125,7 +125,7 @@ absence is reported as `Unsupported` with the missing path (seen on
 ## Runs from the installed artifacts
 
 Each in a fresh directory on ext4, `NODE_PATH`, `PYTHONPATH`, `LAYERFS_NATIVE`
-and `LAYERFS_HOME` unset, a private mode-0700 home, Disposable profile.
+and `LAYERFS_HOME` unset, a private mode-0700 home, the then-Disposable profile (`synchronous=OFF`; Stores now open Normal).
 
 | Case | Result |
 | --- | --- |
@@ -196,7 +196,7 @@ tree these artifacts were built from (`ce9cd4144`, baseline `d4304741` plus four
 current base: the policy of layerfs-project#7 landed in `b919f50ea` ("permanently disable Firecracker and SSH
 without removing adapters", #577), which `d4304741` does not contain and `02133596a` and later do.
 
-Checked on a debug `layerfs` command built from the current base (`02133596a`), in an empty Disposable home:
+Checked on a debug `layerfs` command built from the current base (`02133596a`), in an empty home (then the Disposable profile):
 
 - `machine platforms`: `firecracker` and `ssh` are `ready: false`, reason "permanently disabled by product policy
   (layerfs-project#7)"; `lima` is `ready: false` ("lima runs on macOS hosts only").

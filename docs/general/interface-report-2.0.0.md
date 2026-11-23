@@ -46,7 +46,7 @@ what was run for this report.
 | Capability | Status | Evidence in the repository | Run here |
 | --- | --- | --- | --- |
 | One call table: 61 calls in nine families, generated into Node, Python (sync and `aio`) and the command | implemented | [coverage.md](../architecture/api/calls/coverage.md) (generated matrix, `gen-coverage.mjs --check`), [table.md](../architecture/api/calls/README.md) | `gen-coverage.mjs --check` exit 0; `node --test test/coverage.mjs test/contract.mjs`: 14 tests, 13 pass, 0 fail, 1 skipped (the `Unknown`/`Unresolved` case, NOT RUN) |
-| Same answers and refusals in all front ends (110 steps, fresh Disposable homes) | implemented | [coverage.md: what is checked](../architecture/api/calls/coverage.md#what-is-checked-across-the-front-ends) | the run above |
+| Same answers and refusals in all front ends (110 steps, fresh temporary homes) | implemented | [coverage.md: what is checked](../architecture/api/calls/coverage.md#what-is-checked-across-the-front-ends) | the run above |
 | Mountless file and history work (write, read, list, edit, fork, diff, merge, `commit.list`) | implemented | [examples](../versioned/2.0.0/examples/README.md), [calls](../versioned/2.0.0/calls.md) | the four example flows from installed artifacts, all exit 0 |
 | Installed from artifacts outside the checkout | implemented (Linux x64 only) | [artifact-qualification-2.0.0.md](artifact-qualification-2.0.0.md), [api/README.md](../../api/README.md#package-and-install) | tarball, wheel and the lone binary installed and used |
 | Node package `layerfs`: ES module, Node 22, MIT, typings | changed (was `@layerfs/agent`) | [node.md](../architecture/api/front-ends/bindings.md#layerfs-node) | installed from the tarball |
@@ -90,7 +90,7 @@ reason and a pointer for every row, is the
 | Progress and events | event streams, job registry, trace feed | `on_progress` on five calls | yes |
 | Settings | the 1.1.0 platform settings | `LAYERFS_HOME` and records; a 1.1.0 environment is not imported | yes |
 | Homes | 1.1.0 layout | not converted: refused with the fix `mv <home> <home>.old && layerfs home init` | yes |
-| Store profile | Disposable | Disposable; Durable disabled | no |
+| Store profile | Disposable (`synchronous=OFF`) | Normal (`synchronous=NORMAL`), the only SQLite profile; Durable disabled | no |
 | Attempts | one attempt, no replay | one attempt, no replay | no |
 | MCP | `@layerfs/mcp` (#521) | none | yes (#521 only) |
 | Plugins in `plugins/` | `@layerfs/agent` and others | not migrated | yes |

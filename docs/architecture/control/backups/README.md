@@ -25,7 +25,7 @@ that know nothing about Stores.
 |  create: stage on the Store's machine (store.file)    pieces + manifest     |
 |    [worker: 8 MiB reads into this process] -------->  upload                |
 |  restore: install, <------- load: download, verify,   download              |
-|    records                  open Disposable, link        |                  |
+|    records                  open Normal, link            |                  |
 +----------------------------------------------------------|-----------------+
                                                            v once per request
      local_folder (tests)  |  minio --+--> s3_api: SigV4 over HTTP/1.1
@@ -79,7 +79,7 @@ A PostgreSQL Store is not backed up here.
 | 1 | Existing `store/<name>` folder (if present): `store.create`'s kernel guard requires a real `0700` directory of this user (`Unsupported`, `chmod 700` before any staging). Existing Store: refuse PostgreSQL; under the home lock and the Store's lock check `replaceable`: on `native`, no unfinished operation, this process's open copy closed, no other lease holder or running Sandbox (`store_idle`), heads equal to the link's, no `-wal` or `-shm`. Then hold its lease. A new Store gets a fresh cursor key. | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | 2 | Make `store/.restore-<random>/` with a held `lock` file; first remove older restore folders whose lock can be taken (killed restores). | same, `Staging`, `sweep` |
 | 3 | `load` into it: `installer_user` (daemons' user), make the destination directory `0700` when absent (`install::make_private_directory`), `kernel_guard` on the Store file (a guard refusal removes only the still-empty directory this call's `mkdir` made; installer-user or `mkdir` failure removes nothing), no Store at the target, no sidecars; stat the object and take `layerfs-binding` and `layerfs-sqlite`; download to `<target>.pulling` (0600, create-new) through `pieces::download`. | [`restore.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
-| 4 | `verify`: open the bytes as a Disposable Store with that binding and cursor key, close, read heads, require no `-wal`/`-shm` left; `install`: hard link into place. | same |
+| 4 | `verify`: open the bytes as a Normal Store with that binding and cursor key, close, read heads, require no `-wal`/`-shm` left; `install`: hard link into place. | same |
 | 5 | The binding must be the existing Store's. Read the Store's projects and each one's `main` Branch on a connection of the call's own. | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), `projects_in` |
 | 6 | Under the home lock: plan each project's record before the install (rebuilt as `project.init` writes it with `manifest` and `installed` from `main`, binding, cursor key, file length and `layerfs-sqlite` version; complete records kept, incomplete ones completed, no `main` keeps the listing record; an unencodable manifest refuses here). Then `backup::restore::install` re-checks the target's folder with the kernel guard, so a folder that appeared or lost its privacy during the download is refused `Unsupported` with nothing installed. A new Store is hard-linked (never over one that appeared) and recorded; replacing an existing Store takes the Store lock to re-check binding and `replaceable` and rename over, then drops it. `write_link` takes the Store lock on its own; `Records::write` writes the planned project records and removes records of absent projects under the home lock alone. The staging folder goes when the call ends. | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), [`restored.rs`](../../../../control/crates/layerfs-store/src/backup/restored.rs), [`family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs) |
 
@@ -88,7 +88,7 @@ lock; the home lock covers planning each project's record (without the Store
 lock), the install (taking the Store lock only to re-check and rename over an
 existing Store), `write_link` (which takes the Store lock separately) and
 writing the project records (without the Store lock). A restore opens the bytes
-with the Disposable profile (WAL, `synchronous=OFF`), the only permitted Store
+with the Normal profile (WAL, `synchronous=NORMAL`), the only SQLite Store
 profile; Durable execution is `NOT_RUN — disabled by owner until explicit
 reauthorization`.
 
@@ -101,7 +101,7 @@ reauthorization`.
 | Each request is attempted once; an unknown outcome is reported, never resent. | [`error.rs`](../../../../control/crates/layerfs-bucket/src/bucket/error.rs) |
 | A create overwrites only the copy this home last moved through the link, or nothing; a copy another home wrote is never overwritten. Not compare-and-swap: a write between the check and the upload is not detected. | `check` in [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
 | One create of a Store at a time per home (`backup.lock`). | `Creating` in [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
-| Restored bytes pass every sha256 check and open as a Disposable Store with the right binding before they are installed. | `fetch` in [`restore.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| Restored bytes pass every sha256 check and open as a Normal Store with the right binding before they are installed. | `fetch` in [`restore.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | A restore replaces only an idle Store on `native` unchanged since its last transfer through that bucket; a new Store never replaces one that appeared meanwhile. | `replaceable` in [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | Disconnect deletes no object; the only deletes are stale pieces beyond a new upload's count. | [`family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs), [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
 

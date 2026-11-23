@@ -1,4 +1,4 @@
-//! Saved branch reads exercise actual Disposable Store history and provenance.
+//! Saved branch reads exercise actual Normal Store history and provenance.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;

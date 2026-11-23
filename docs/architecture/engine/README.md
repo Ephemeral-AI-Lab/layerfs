@@ -61,7 +61,7 @@ crate except `layerfs-project`.
 | Rule | Where it is held |
 | --- | --- |
 | Engine crates depend only on core and other engine crates, never on control or API crates. | [`tools/check_product_boundary.py`](../../../tools/check_product_boundary.py), [engine guide](../../../engine/AGENTS.md) |
-| Disposable / WAL / synchronous=OFF is the only permitted Store profile; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization`. | [Store](store/README.md), [repository guide](../../../AGENTS.md) |
+| Every SQLite Store opens with the Normal profile (WAL, synchronous=NORMAL), tests and diagnostics included; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization`. | [Store](store/README.md), [repository guide](../../../AGENTS.md) |
 | One attempted operation: no retry, busy handler or replay of a failed or uncertain call. | [Store](store/README.md), [engine guide](../../../engine/AGENTS.md) |
 | One global database, one writer, short holds: only the atomic publish step holds the lane. | [Store](store/README.md), [Commit](commit/README.md) |
 | SDK Store calls run in the caller's process on Linux; the daemon serves only Workspace calls. | [Store calls](store-calls/README.md) |

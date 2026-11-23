@@ -66,7 +66,7 @@ fn a_pack_batch_is_refused_while_the_margin_is_still_free() {
     );
     let path = root.join("headroom-store.sqlite");
     let h = SqliteHandles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &config(),
     )

@@ -31,7 +31,7 @@ const bad = (id, group, call, args, expect, opts = {}, more = {}) => ({ id, grou
 
 export const steps = [
   // --- setup: a Store, a project from a folder, a Branch
-  ok("store", "setup", "store.create", ["shop"], { detail: true }, { check: (v) => assert.equal(v.profile, "disposable") }),
+  ok("store", "setup", "store.create", ["shop"], { detail: true }, { check: (v) => assert.equal(v.profile, "normal") }),
   ok("init", "setup", "project.init", (ctx) => [P, ctx.folder], { detail: true }, { check: (v) => assert.equal(v.project, P) }),
   ok("fork", "setup", "branch.fork", [P, B, "main"], { detail: true }, { check: (v) => assert.equal(v.outcome, "forked") }),
 

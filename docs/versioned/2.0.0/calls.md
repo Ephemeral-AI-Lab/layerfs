@@ -1479,7 +1479,7 @@ $ layerfs store list
 $ layerfs store get shop
 {"engine":"sqlite","state":"ready","machine":"native"}
 $ layerfs store get shop --with live --detail
-{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"disposable","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
+{"engine":"sqlite","state":"ready","machine":"native","auth":null,"connections":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"normal","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
 $ layerfs store list --with stats
 {"items":[{"store":"shop","engine":"sqlite","machine":"native","size":270336}]}
 $ layerfs store compact shop

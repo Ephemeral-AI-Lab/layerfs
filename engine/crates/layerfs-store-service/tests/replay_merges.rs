@@ -96,7 +96,7 @@ fn recorded_branch_merges_merge_again() {
             .collect()
     };
     let config =
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable);
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal);
     let owner_config = OwnerConfig::default();
     let opened = open_store_observed(
         config,

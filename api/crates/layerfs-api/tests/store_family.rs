@@ -435,7 +435,7 @@ fn a_killed_opener_leaves_its_log_frames() {
     let identity = layerfs_store::identity::identity_of(&record).unwrap();
     let handles = layerfs_persistence::SqliteHandles::open_writable(
         layerfs_persistence::PersistenceConfig::sqlite(&file)
-            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Normal),
         &identity.binding,
         identity.cursor_key,
     )
@@ -588,7 +588,7 @@ fn compact_of_a_remote_sqlite_store_takes_its_machines_worker_route() {
             ("kind", t("sqlite")),
             ("binding", SdkValue::Bytes(vec![7; 16])),
             ("cursor", SdkValue::Bytes(vec![8; 32])),
-            ("profile", t("disposable")),
+            ("profile", t("normal")),
             ("machine", t("box")),
         ]),
     )

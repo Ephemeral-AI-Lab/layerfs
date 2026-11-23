@@ -14,7 +14,7 @@ assignment. Earlier wording of these guides is in the
 
 | Rule | Where |
 | --- | --- |
-| Normal / WAL / synchronous=NORMAL is the product SQLite Store profile; Durable execution is `NOT_RUN` | [Persistence profile](#active-persistence-profile--owner-direction-2026-11-17) |
+| Normal / WAL / synchronous=NORMAL is the only SQLite Store profile (Disposable removed 2026-11-23); Durable execution is `NOT_RUN` | [Persistence profile](#active-persistence-profile--owner-direction-2026-11-17) |
 | One attempted operation: no automatic retry, busy handler, refresh or replay | [§4](#4-code-build-and-docs) |
 | Build tests with `--no-run` first; every test command stops at 120 s, and reaching it is a hang | [§4](#4-code-build-and-docs) |
 | CI reports and never gates; verify your own change and report checks and gaps | [§4](#4-code-build-and-docs) |
@@ -105,12 +105,13 @@ assignment. Earlier wording of these guides is in the
   from 2026-10-07). The owner enabled it ahead of its safety and performance
   gate ([layerfs-project#155](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/155)
   §7.5 and §7.6), which has **not** been run: claim no power-loss guarantee
-  from it yet. Store files written outside SQLite (install, transfer, restore,
-  snapshot) are still not synchronized (#155 §7.3).
-- Disposable / synchronous=OFF remains selectable, and existing tests,
-  diagnostics and measurements that select it explicitly keep doing so. A
-  Store's manifest and record still carry the `disposable` label; it names the
-  non-durable WAL Store, not the connection's synchronization.
+  from it yet. Store files written outside SQLite (install, transfer, restore)
+  are still not synchronized (#155 §7.3).
+- **Normal is the only SQLite Store profile** (owner, 2026-11-23): the former
+  Disposable / synchronous=OFF profile was removed, so tests, diagnostics,
+  measurements and snapshot copies open Stores Normal too. New Store records
+  carry the profile label `normal`; a record written earlier that says
+  `disposable` reads as `normal` and is never rewritten for it.
 - Durable execution is disabled indefinitely, until the owner explicitly
   allows it again. A milestone, old benchmark selection, default argument or
   passing build does not reauthorize Durable; never execute it or fall back to
@@ -118,7 +119,7 @@ assignment. Earlier wording of these guides is in the
   `NOT_RUN — disabled by owner until explicit reauthorization`. Historical
   Durable receipts keep their verdicts. This policy does not claim the Durable
   API was removed.
-- A Normal or Disposable COMMIT does not checkpoint (`wal_autocheckpoint=0`);
+- A Normal COMMIT does not checkpoint (`wal_autocheckpoint=0`);
   the writing session's own thread checkpoints the WAL off the commit path
   with the session's synchronization (owner approval, 2026-11-07;
   [SQLite checkpoints](docs/architecture/engine/store/sqlite.md#checkpoints)).

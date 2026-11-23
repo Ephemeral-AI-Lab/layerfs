@@ -90,7 +90,7 @@ esac
             ("name", t("shop")),
             ("kind", t("sqlite")),
             ("machine", t("vm")),
-            ("profile", t("disposable")),
+            ("profile", t("normal")),
         ]),
     )
     .unwrap();

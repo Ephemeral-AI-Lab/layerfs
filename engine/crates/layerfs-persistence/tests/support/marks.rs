@@ -204,7 +204,7 @@ pub struct UnderBudget {
 
 fn open(path: &std::path::Path) -> SqliteHandles {
     SqliteHandles::open_writable(
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         b"doctor-adversarial",
         [71; 32],
     )

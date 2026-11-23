@@ -58,7 +58,7 @@ fn grep_reads_each_root_once_whatever_its_size() {
     }
     let small = grep(&fixture, "/small.txt");
     let large = grep(&fixture, "/large.txt");
-    println!("SDK_GREP_READS small={small:?} large={large:?} large_bytes={} profile=Disposable cache=uncontrolled diagnostic_count_gate=true", text(2800, "large 2").len());
+    println!("SDK_GREP_READS small={small:?} large={large:?} large_bytes={} profile=Normal cache=uncontrolled diagnostic_count_gate=true", text(2800, "large 2").len());
     assert!(text(2800, "large 2").len() > 6 * 16384 && text(2800, "large 2").len() < 131072);
     assert_eq!(
         (small.object_batches, small.object_ids),

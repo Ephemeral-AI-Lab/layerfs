@@ -53,7 +53,7 @@ fn main() {
         .create_new(true)
         .open(&args[2])
         .unwrap();
-    writeln!(out,"{{\"schema\":\"pre-s8-growth-start-v1\",\"mode\":\"{mode}\",\"files\":{names},\"amount\":{amount},\"profile\":\"sqlite-wal-off-v2\",\"allocation_scope\":\"all-process Rust requested live bytes; excludes C, slack, stack and kernel\"}}").unwrap();
+    writeln!(out,"{{\"schema\":\"pre-s8-growth-start-v1\",\"mode\":\"{mode}\",\"files\":{names},\"amount\":{amount},\"profile\":\"sqlite-wal-normal-v2\",\"allocation_scope\":\"all-process Rust requested live bytes; excludes C, slack, stack and kernel\"}}").unwrap();
     observe::phase("clone");
     let f = fixture::Fixture::prepared_wide(Path::new(&args[3]));
     println!("STORE_ARTIFACT_DIRECTORY {}", f.directory.display());

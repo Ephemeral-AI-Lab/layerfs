@@ -110,7 +110,7 @@ fn refresh_lookups() {
     let open = |overlay: &str| {
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&path)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
             &binding,
             installed::CURSOR,
             OwnerConfig::default().namespaces,

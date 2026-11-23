@@ -63,9 +63,9 @@ fn install_manifest(
     let result = (|| {
         let mut manifest = manifest?;
         retained.manifest = Some(manifest.clone());
-        if manifest.profile != StoreProfile::Disposable {
+        if manifest.profile != StoreProfile::Normal {
             return Err(InstallError::Protocol(ControlError(
-                "explicit Disposable Store profile required",
+                "explicit Normal Store profile required",
             )));
         }
         if Path::new(&manifest.locator) != destination || manifest.daemon_sqlite.is_some() {
@@ -135,7 +135,7 @@ fn install_manifest(
         let profile = match manifest.profile {
             StoreProfile::Durable => SqlitePersistenceProfile::Durable,
             // The manifest's non-durable label; its connections open Normal.
-            StoreProfile::Disposable => SqlitePersistenceProfile::Normal,
+            StoreProfile::Normal => SqlitePersistenceProfile::Normal,
         };
         retained.opened = Some(
             open_store_observed(

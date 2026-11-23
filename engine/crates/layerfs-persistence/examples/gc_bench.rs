@@ -35,7 +35,7 @@
 //! the caller launched the harness in. A refused method is recorded as warm,
 //! never as cold. `--keep` keeps the temporary Store.
 //!
-//! Only the Disposable (WAL/synchronous=OFF) profile is measured; owner
+//! Only the Normal (WAL/synchronous=NORMAL) profile is measured; owner
 //! direction 2026-10-07 disabled Durable execution indefinitely.
 
 #[path = "gc_bench/gc_fixture.rs"]
@@ -1584,7 +1584,7 @@ fn run() -> Result<()> {
         out,
         "{{\n  \"schema\": \"{SCHEMA}\",\n  \"generatedAtUnixMs\": {generated},\n  \
          \"notRun\": false,\n  \"scale\": \"{}\",\n  \"ownerOnly\": {},\n  \
-         \"runsPerArm\": {},\n  \"profile\": \"SqlitePersistenceProfile::Disposable (WAL/OFF)\",\n  \
+         \"runsPerArm\": {},\n  \"profile\": \"SqlitePersistenceProfile::Normal (WAL/NORMAL)\",\n  \
          \"host\": {},\n  \"cache\": {{\n    \"requested\": {},\n    \"method\": \"{}\",\n    \
          \"applied\": {},\n    \"refused\": {},\n    \"state\": {},\n    \"note\": {}\n  }},\n  \
          \"fixture\": {{\n    \"groups\": {},\n    \"stacks\": {},\n    \

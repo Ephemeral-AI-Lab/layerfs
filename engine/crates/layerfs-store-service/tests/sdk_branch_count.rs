@@ -42,7 +42,7 @@ fn fork_and_branch_reads_are_independent_of_branch_count() {
         let stat = stat();
         let read = fixture.since(before);
         assert_eq!(stat.get_text("type"), Some("file"));
-        println!("SDK_BRANCH_COUNT branches={count} fork={fork:?} stat={read:?} profile=Disposable cache=warm-repeat diagnostic_count_gate=true");
+        println!("SDK_BRANCH_COUNT branches={count} fork={fork:?} stat={read:?} profile=Normal cache=warm-repeat diagnostic_count_gate=true");
         observed.push((count, fork, read));
     }
     let (_, fork_few, read_few) = observed[0];

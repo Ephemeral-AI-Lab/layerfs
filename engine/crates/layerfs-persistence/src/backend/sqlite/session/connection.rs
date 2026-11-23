@@ -32,7 +32,7 @@ pub struct ConnectionProfile {
     pub compile_options: Vec<String>,
     /// Selected journal mode, checked on every relevant connection.
     pub journal_mode: String,
-    /// FULL is 2; OFF is 0 for Disposable.
+    /// FULL is 2 (Durable); NORMAL is 1 (Normal).
     pub synchronous: i64,
     /// Foreign keys must be enabled.
     pub foreign_keys: i64,
@@ -157,7 +157,7 @@ pub(crate) struct State {
 }
 pub(crate) struct Session {
     pub(crate) diagnostic: bool,
-    /// A writable Disposable session's checkpoint thread; dropped first, so
+    /// A writable Normal session's checkpoint thread; dropped first, so
     /// it ends before the session's own connection closes.
     pub(crate) background: Option<super::background::Checkpointer>,
     pub(crate) admission: crate::backend::admission::Admission,
@@ -195,7 +195,7 @@ impl Session {
             path,
             false,
             false,
-            SqlitePersistenceProfile::Disposable,
+            SqlitePersistenceProfile::Normal,
             crate::SqlitePackLayout::Monolithic,
             crate::SqliteAcquisitionSchema::Absent,
             true,

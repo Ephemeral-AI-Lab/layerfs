@@ -1,4 +1,4 @@
-//! Disposable serverless Store proofs through the real public provider.
+//! Normal serverless Store proofs through the real public provider.
 mod support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryError, ReserveRequest};
@@ -25,7 +25,7 @@ fn authority() -> HistoryCatalogConfig {
     }
 }
 fn config(path: &Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 fn create(path: &Path) -> SqliteHandles {
     SqliteHandles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
@@ -172,14 +172,14 @@ fn disposable_create_publish_seal_and_reopen_all_layouts() {
         )
         .unwrap();
         let profile = handles.profile();
-        assert_eq!(profile.identity, "sqlite-wal-off-v2");
+        assert_eq!(profile.identity, "sqlite-wal-normal-v2");
         assert_eq!(
             (
                 &*profile.journal_mode,
                 profile.synchronous,
                 profile.busy_timeout
             ),
-            ("wal", 0, 0)
+            ("wal", 1, 0)
         );
         assert_eq!(
             (

@@ -3,7 +3,7 @@
 //! daemon, so the dsh project page starts no Sandbox to show a project. It
 //! lists the Branches, their Commits and the Layers, names the Branches the
 //! Workspaces are mounted on, and `since` its version answers `unchanged`
-//! until what it shows moves. Disposable profile.
+//! until what it shows moves. Normal profile.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;

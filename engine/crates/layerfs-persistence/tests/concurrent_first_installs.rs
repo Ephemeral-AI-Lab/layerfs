@@ -27,7 +27,7 @@ fn authority() -> HistoryCatalogConfig {
     }
 }
 fn config(path: &Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 
 /// A whole-file object for `raw`, built the way C1 frames small files.

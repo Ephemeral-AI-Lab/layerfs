@@ -120,7 +120,7 @@ fn write_cost() {
     permissions.set_readonly(false);
     std::fs::set_permissions(&path, permissions).unwrap();
     let opened = open_store_observed(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &binding,
         installed::CURSOR,
         OwnerConfig::default().namespaces,

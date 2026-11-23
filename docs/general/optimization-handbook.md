@@ -67,8 +67,9 @@ situations.
 - **Stop and write a proposal** for anything that changes an interface between
   crates, the canonical format, a persistence profile, the negotiated FUSE
   profile, a public contract or a threshold. Those belong to the owner.
-- **Global Store profile is Disposable / WAL / synchronous=OFF only.** Durable
-  is `NOT_RUN — disabled by owner until explicit reauthorization`.
+- **Global Store profile is Normal / WAL / synchronous=NORMAL** (owner,
+  2026-11-17), the only SQLite Store profile; Disposable / WAL / OFF was
+  removed (owner, 2026-11-23). Durable is `NOT_RUN — disabled by owner until explicit reauthorization`.
 
 ## 3. Instruments that already exist
 

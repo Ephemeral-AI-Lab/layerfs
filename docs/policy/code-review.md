@@ -13,7 +13,7 @@ repeat them:
 | Rule | Owner |
 | --- | --- |
 | Measurement: one sample, declared cache state, speed and storage, 5 ms floor | [measurement workflow](../general/agent-measurement-policy.md), [benchmark rules](../general/benchmark_rules.md) |
-| One attempted operation, no retries; Disposable only, Durable `NOT_RUN` | root [`AGENTS.md`](../../AGENTS.md) §Active persistence profile and §4; [engine guide](../../engine/AGENTS.md#failure-persistence-and-dependencies) |
+| One attempted operation, no retries; SQLite Stores Normal only, Durable `NOT_RUN` | root [`AGENTS.md`](../../AGENTS.md) §Active persistence profile and §4; [engine guide](../../engine/AGENTS.md#failure-persistence-and-dependencies) |
 | Tests built with `--no-run` first, then each run under a 120-second wall timeout | root `AGENTS.md` §4 |
 | Production LOC in every commit | root `AGENTS.md` §Production LOC comparison |
 | 999/200-line ceilings, no tests in `src/`, unsafe allowlist | [engine guide](../../engine/AGENTS.md#production-file-size-and-responsibility) |
@@ -152,7 +152,7 @@ whatever the reviewer runs again.
 | Performance: speed **and** storage under the measurement workflow, or a count-driven diagnostic | C: `perf` set | C: `perf` set | — | — |
 | Compatibility (below) | C: `risk:format` | C: `risk:format`, `risk:wire` | C: same | — |
 | `Docs:` topics updated, or `Docs: no architecture impact (<reason>)` | R | R | R | R |
-| `Durable: NOT_RUN — disabled by owner until explicit reauthorization`; new Stores select Disposable explicitly | C: `risk:store` | C: `risk:store` | C: `risk:store` | — |
+| `Durable: NOT_RUN — disabled by owner until explicit reauthorization`; every Store selects Normal explicitly | C: `risk:store` | C: `risk:store` | C: `risk:store` | — |
 | A test that protected data survives | C: `risk:delete` | C: `risk:delete` | C: `risk:delete` | C: `risk:delete` |
 | Lock order and hold described; nothing in the publication lane grows with tree, history or Branch count | C: locks or lane changed | C: same | C: same | — |
 | Deleted tests listed, with surviving behaviour covered again | C | C | C | C |

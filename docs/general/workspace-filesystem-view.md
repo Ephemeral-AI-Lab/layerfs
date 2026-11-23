@@ -181,8 +181,9 @@ directory. See the
 database path. Global means the committed Store shared by the relevant
 Workspaces, not a mandatory universal database for every project on the host.
 
-The host Store's selected Durable/Disposable profile and the daemon's
-disposable overlay profile are separate contracts. The cache and overlay do not
+The host Store's Normal profile (Durable is `NOT_RUN — disabled by owner until
+explicit reauthorization`) and the daemon's disposable overlay profile are
+separate contracts. The cache and overlay do not
 inherit a durability guarantee merely because the global Store uses Durable.
 
 ## 4. What lazy FUSE access means

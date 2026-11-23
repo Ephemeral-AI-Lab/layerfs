@@ -55,7 +55,7 @@ fn a_wrapped_ring_reads_back_in_stamp_order_and_proposes_its_newest_entries() {
     let temp = support::Temp::new("signature-ring-order");
     let path = temp.join("store.sqlite");
     let handles = SqliteHandles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"signature-ring-order".to_vec(),

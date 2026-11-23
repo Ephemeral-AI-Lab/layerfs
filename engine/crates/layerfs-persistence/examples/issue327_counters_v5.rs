@@ -19,7 +19,7 @@ fn authority() -> HistoryCatalogConfig {
     }
 }
 fn config(path: &Path) -> PersistenceConfig {
-    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+    PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)
 }
 fn fixture() -> Vec<Vec<u8>> {
     let mut seed = 327u64;

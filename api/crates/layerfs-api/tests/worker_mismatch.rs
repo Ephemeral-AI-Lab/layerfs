@@ -22,7 +22,7 @@ fn a_store_call_to_an_old_worker_names_stop_then_start_and_sends_nothing() {
         ("kind", t("sqlite")),
         ("binding", SdkValue::Bytes(vec![7; 16])),
         ("cursor", SdkValue::Bytes(vec![8; 32])),
-        ("profile", t("disposable")),
+        ("profile", t("normal")),
         ("machine", t("box")),
     ]);
     write_record(&paths::store_record(&home, "shop"), &store).unwrap();

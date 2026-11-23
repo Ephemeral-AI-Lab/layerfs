@@ -115,7 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let selected = match args[3].as_str() {
         "durable" => SqlitePersistenceProfile::Durable,
-        "disposable" => SqlitePersistenceProfile::Disposable,
+        "disposable" => SqlitePersistenceProfile::Normal,
         _ => return Err("explicit profile required".into()),
     };
     let handles = SqliteHandles::create(

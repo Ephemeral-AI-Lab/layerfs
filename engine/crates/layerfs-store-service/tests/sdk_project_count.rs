@@ -59,7 +59,7 @@ fn project_reads_are_independent_of_project_count() {
         let stat = stat();
         let read = fixture.since(before);
         assert_eq!(stat.get_text("type"), Some("file"));
-        println!("SDK_PROJECT_COUNT projects={count} stat={read:?} profile=Disposable cache=warm-repeat diagnostic_count_gate=true");
+        println!("SDK_PROJECT_COUNT projects={count} stat={read:?} profile=Normal cache=warm-repeat diagnostic_count_gate=true");
         observed.push((count, read));
     }
     let (_, few) = observed[0];

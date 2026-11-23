@@ -60,7 +60,7 @@ layerfs-daemon --config <file>
 | Chooses the route | `fuse` or `nfs`; macOS accepts only `nfs` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
 | Starts the overlay owner | Creates and closes the overlay template (`pager_kib`, `namespaces`); every later start failure is `AfterOverlay`, keeping the owner | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [Overlay](../overlay/README.md) |
 | Takes a fresh incarnation | `generate_keypair()`; the public half is `DaemonStatus.instance` | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
-| Opens the Store | An installed SQLite file with the `Disposable` profile, or PostgreSQL; `Sqlite { install: None }` waits for an install | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
+| Opens the Store | An installed SQLite file with the `Normal` profile, or PostgreSQL; `Sqlite { install: None }` waits for an install | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs), [`Cargo.toml`](../../../../engine/crates/layerfs-daemon/Cargo.toml) |
 | Starts FUSE serving (Linux) | `/dev/fuse` to `0600`, checks the mount home, mounts a private `fusectl` tree for abort controls; if that fails, writes `LAYERFS_DAEMON_ABORT_UNBOUND` and starts without forced unmount | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
 | Starts NFS serving | `ExportServing`; force-unmounts client mounts a previous daemon left (`LAYERFS_NFS_RECLAIM` lines); the same reclaim deletes `<mounts>/.appledouble`, the AppleDouble companions' disposable scratch area (directories `0700`, files `0600`, no fsync, no space reserved ahead), and touches nothing else under the mount home; helper overrides `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE`, `_FLUSH` | [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
@@ -156,11 +156,11 @@ the port contract is in [Kernel routes](../kernel-routes/README.md).
 | Phase | Daemon step | On failure | Source |
 | --- | --- | --- | --- |
 | Admission | Only in `InstallPending`; phase becomes `Installing` | Second installer `Refused(Request, Exists)` | [`application/serve.rs`](../../../../engine/crates/layerfs-daemon/src/application/serve.rs) |
-| `Request` | Manifest is `Disposable`, names the configured Store path, carries no `daemon_sqlite` | Protocol refusal | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
+| `Request` | Manifest is `Normal`, names the configured Store path, carries no `daemon_sqlite` | Protocol refusal | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
 | `Claim` | `create_new` of the temporary name; target absent; send `Ready` | Claim name recorded before the attempt | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs), [`install_file.rs`](../../../../engine/crates/layerfs-daemon/src/install_file.rs) |
 | `Transfer` | Write each record until `bytes`; then `INSTALL_FINISH` | Partial file kept | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
 | `Publish` | One `rename` to the Store path, no sync | — | same |
-| `Open` | Open with the `Disposable` profile; check the initial Branch and root | Opened Store kept in `InstallFailure` | same |
+| `Open` | Open with the `Normal` profile; check the initial Branch and root | Opened Store kept in `InstallFailure` | same |
 | `Reply` | `Installed(manifest + daemon_sqlite)`; build `Service`, phase `ControlReady` | Published and checked: still `ControlReady`; otherwise `Retained` | [`application/serve.rs`](../../../../engine/crates/layerfs-daemon/src/application/serve.rs) |
 
 Every failure sends one `Refused(InstallRefusal)` unless the channel itself
@@ -168,7 +168,7 @@ failed; files are never removed automatically. `InstallWork` counts records,
 writes, bytes, sync calls and the largest record
 ([`install_types.rs`](../../../../engine/crates/layerfs-daemon/src/install_types.rs)).
 Durable execution is `NOT_RUN — disabled by owner until explicit
-reauthorization`: the `Request` check refuses any non-`Disposable` manifest
+reauthorization`: the `Request` check refuses any non-`Normal` manifest
 before the Durable sync branches in `install.rs` can run.
 
 ## Invariants
@@ -178,7 +178,7 @@ before the Durable sync branches in `install.rs` can run.
 | The daemon launches and supervises no command; Sandbox or an external executor owns launch, streams, exit status and cancellation | [`application/cli.rs`](../../../../engine/crates/layerfs-daemon/src/application/cli.rs), [`lib.rs`](../../../../engine/crates/layerfs-daemon/src/lib.rs) |
 | The daemon serves no Store calls: `Fork`, `History`, `Branches` are `Invalid`; off-table SDK methods are `UnknownMethod` | [`control/operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs), [`operator/dispatch.rs`](../../../../engine/crates/layerfs-daemon/src/operator/dispatch.rs) |
 | Commands run as a distinct non-root identity; daemon backing files stay outside the mount home | [`application/config.rs`](../../../../engine/crates/layerfs-daemon/src/application/config.rs), [`daemon_setup.rs`](../../../../engine/crates/layerfs-bridge/src/daemon_setup.rs) |
-| A Store install must be `Disposable` | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
+| A Store install must be `Normal` | [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs) |
 | No connection failure owns a slot; a stale or duplicate finish changes nothing | [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) (`Slots::finish`) |
 | One attempt per operation; a stop after an effect keeps the exact owner and is reported, never retried or settled by a later read | [`control/detach.rs`](../../../../engine/crates/layerfs-daemon/src/control/detach.rs), [`control/types.rs`](../../../../engine/crates/layerfs-daemon/src/control/types.rs) |
 | Whole operations run outside the registry mutex; admission checks and marks inside it | [`control/registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs), [`control/operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |

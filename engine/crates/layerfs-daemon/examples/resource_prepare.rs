@@ -38,7 +38,7 @@ fn main() {
             InitRequest {
                 source: source.clone(),
                 store: PersistenceConfig::sqlite(folder.join("prepared.sqlite"))
-                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                    .with_sqlite_profile(SqlitePersistenceProfile::Normal),
                 locator: folder.join("installed.sqlite").to_str().unwrap().into(),
                 policy: StoragePolicy::frozen_default(),
                 catalog: HistoryCatalogConfig {

@@ -7,7 +7,7 @@ use layerfs_storage::{Storage, StoragePolicy};
 fn create(path: &std::path::Path) -> SqliteHandles {
     SqliteHandles::create(
         PersistenceConfig::sqlite(path)
-            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"transaction-units".to_vec(),

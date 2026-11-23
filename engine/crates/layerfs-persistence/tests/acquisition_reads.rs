@@ -180,7 +180,7 @@ fn typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds
     let temp = Temp::new("owned-window-reads");
     let handles = create(
         &temp.join("store.sqlite"),
-        SqlitePersistenceProfile::Disposable,
+        SqlitePersistenceProfile::Normal,
     );
     let port = &handles.acquisition;
     let first = begin(&handles);
@@ -290,8 +290,8 @@ fn typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds
     assert_eq!(port.job(other, 3).unwrap(), None);
 }
 
-/// Owner direction 2026-10-07: Disposable is the sole active development
+/// Owner direction 2026-11-23: Normal is the sole active development
 /// verification profile. Durable execution of these bodies is NOT_RUN —
-/// deferred by owner for Disposable-only development. Durable support and its
+/// deferred by owner for Normal-only development. Durable support and its
 /// retained historical receipts are unchanged.
-const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Normal];
