@@ -782,3 +782,198 @@ fn nested_storage_unknown_before_publication_folds_back() {
     drop(store);
     f.cleanup();
 }
+
+/// An unknown publication outcome in one Workspace of an observed Store:
+/// the Commit of `value` fails in the Publish phase and keeps custody.
+fn unknown_publication(
+    label: &str,
+    boundary: history_boundary::Boundary,
+    value: &[u8],
+) -> (
+    support::Fixture,
+    Arc<Store>,
+    Owner,
+    Arc<BoundWorkspace>,
+    Box<layerfs_daemon::store::CommitFailure>,
+) {
+    let f = support::Fixture::new(8, label);
+    let (store, _handles) = observed_store(&f, boundary);
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let workspace = bind(&store, &owner, &f, 1);
+    write(&workspace, value);
+    let failed = workspace
+        .commit(|save, _, snapshot| construct(save, snapshot, value, store.policy().construction()))
+        .unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Publish);
+    assert!(matches!(
+        failed.error,
+        CommitError::History(HistoryError::UnknownOutcome)
+    ));
+    assert!(!failed.locally_settled && failed.published.is_none());
+    assert!(workspace.has_retained(), "custody kept for its resolution");
+    (f, store, owner, workspace, failed)
+}
+
+/// Finding #5: the head shows the Commit whose acknowledgement was lost, so
+/// its one resolution installs it and releases the custody; the next Commit
+/// is admitted and publishes.
+#[test]
+fn a_lost_acknowledgement_is_resolved_by_installing_the_commit() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-landed",
+        history_boundary::Boundary::LostAcknowledgement,
+        &bytes(b'R'),
+    );
+    let candidate = failed.intent.as_ref().unwrap().candidate_root;
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    let Some(CommitOutcome::Committed { record, displaced }) = resolved.outcome else {
+        panic!("{resolved:?}");
+    };
+    assert_eq!((record.root, displaced), (candidate, None));
+    let bound = workspace.snapshot().unwrap();
+    assert_eq!(bound.branch.head_commit, Some(record.id));
+    assert_eq!(bound.effective_root, candidate);
+    assert!(!workspace.has_retained());
+    assert_eq!(read(&workspace), bytes(b'R'));
+    // The record is used once: nothing is left to resolve.
+    assert!(workspace.resolve_retained().unwrap().is_none());
+    write(&workspace, &bytes(b'S'));
+    let later = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'S'), store.policy().construction())
+        })
+        .unwrap();
+    let Some(CommitOutcome::Committed { record: next, .. }) = &later.history else {
+        panic!("{:?}", later.history);
+    };
+    assert_eq!(
+        next.parent,
+        Some(record.id),
+        "published over the resolved Commit"
+    );
+    drop((later, failed));
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// The head is still the one the Commit was published against: nothing was
+/// published, so the capture folds back, the change stays and the next
+/// Commit publishes it.
+#[test]
+fn a_lost_request_is_resolved_by_folding_the_capture_back() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-lost",
+        history_boundary::Boundary::LostRequest,
+        &bytes(b'T'),
+    );
+    let original = failed.binding.clone().unwrap();
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(resolved.outcome.is_none() && resolved.replaced.is_none());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert_eq!(read(&workspace), bytes(b'T'));
+    let later = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'T'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(matches!(
+        later.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    drop((later, failed));
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// Another Commit moved the head after the lost request: the head is
+/// neither this Commit nor the head it expected, so the attempt does not
+/// resolve, the custody stays and the Workspace still refuses a Commit.
+#[test]
+fn an_unknown_outcome_under_a_moved_head_stays_retained() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-moved",
+        history_boundary::Boundary::LostRequest,
+        &bytes(b'U'),
+    );
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'V'));
+    let landed = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'V'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(matches!(
+        landed.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    let unresolved = workspace.resolve_retained().unwrap_err();
+    assert!(unresolved.published.is_none(), "{unresolved:?}");
+    assert!(
+        unresolved.reason.contains("neither this Commit"),
+        "{unresolved:?}"
+    );
+    assert!(matches!(
+        workspace
+            .commit(|_, _, _| unreachable!())
+            .unwrap_err()
+            .error,
+        CommitError::InFlight
+    ));
+    // One attempt: the record is spent.
+    assert!(!workspace.has_retained());
+    assert_eq!(read(&workspace), bytes(b'U'));
+    drop((landed, failed));
+    close(&owner, &other);
+    owner.stop().unwrap();
+    drop((workspace, store));
+    f.cleanup();
+}
+
+/// The product Commit keeps its captured reader and operation owner with an
+/// unknown outcome; the resolution releases them with the custody, and the
+/// next product Commit is admitted.
+#[test]
+fn resolving_a_product_commit_releases_its_captured_owners() {
+    let f = support::Fixture::new(8, "resolve-captured");
+    let (store, _handles) = observed_store(&f, history_boundary::Boundary::LostAcknowledgement);
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let workspace = bind(&store, &owner, &f, 1);
+    write(&workspace, &bytes(b'W'));
+    let failed = workspace.commit_captured(&Default::default()).unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Publish);
+    assert!(failed
+        .namespace
+        .as_ref()
+        .is_some_and(|held| held.retained()));
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(matches!(
+        resolved.outcome,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    assert_eq!(read(&workspace), bytes(b'W'));
+    write(&workspace, &bytes(b'X'));
+    let later = workspace.commit_captured(&Default::default()).unwrap();
+    assert!(matches!(
+        later.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    drop((later, failed));
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}

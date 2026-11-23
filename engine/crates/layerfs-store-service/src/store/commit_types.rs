@@ -2,7 +2,7 @@
 use super::PortError;
 use crate::OwnerError;
 use layerfs_content::{
-    filesystem::FilesystemUpdateCounters,
+    filesystem::{FilesystemRootId, FilesystemUpdateCounters},
     merge::{Conflict, LwwDecision},
     ContentError, ObjectId,
 };
@@ -167,6 +167,10 @@ pub struct CommitFailure {
     pub locally_settled: bool,
     /// The product constructor's receipt, when its closure ran.
     pub namespace: Option<CapturedConstruction>,
+    /// For a merge: the Workspace's own constructed root and the serials
+    /// the merge changed against it (`live.rs`), which an install of the
+    /// merged root checks again.
+    pub merged_over: Option<(FilesystemRootId, Arc<[u64]>)>,
 }
 impl CommitFailure {
     pub(super) fn new(error: CommitError, workspace: WorkspaceId, route: Route) -> Self {
@@ -185,6 +189,7 @@ impl CommitFailure {
             local_error: None,
             locally_settled: false,
             namespace: None,
+            merged_over: None,
         }
     }
 }

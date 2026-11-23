@@ -15,6 +15,7 @@ pub mod producer;
 pub mod read_handle;
 pub mod read_service;
 pub mod recognizer;
+pub mod resolve;
 pub mod settle;
 pub mod statistics;
 pub mod types;
@@ -34,6 +35,7 @@ pub use ports::{PortError, StorePorts};
 pub use read_handle::StoreReader;
 pub use read_service::{ReadAdmissionError, ReadServiceWork, ReaderFactory};
 pub use recognizer::{Recognizer, RecognizerWork, RECOGNIZER_SLOTS};
+pub use resolve::{Resolution, Unresolved};
 pub use types::{
     BindError, BindIntent, BindPhase, BindRefusal, BindRequest, BindSuccess, CloseError,
     NamedBindRequest,

@@ -334,7 +334,7 @@ committed, and is never merged with. `--force --expected C` replaces only
 | `Conflict` | a path conflicts, or the head is not `--expected`; nothing is committed. It carries `commit` (the head), `conflicts` (the first 20 paths) and `conflicts_count` |
 | `InvalidInput` | an `--expected` prefix several Commits start with (`matches`) |
 | `Busy` | another control operation runs on the Workspace ([`control/registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs)) |
-| `Unknown` | an earlier Commit's install was uncertain or failed (`detail.phase: "admission"`): the daemon keeps that custody and refuses new Commits; or the reply was lost |
+| `Unknown` | an earlier Commit's outcome was unknown or its install failed, and the one resolution this Commit ran first did not settle it (`detail.phase: "admission"`, the reason in `detail`): the daemon keeps that custody and refuses new Commits; or the reply was lost |
 
 After an uncertain Commit read `commit list` (a new head?) and
 `workspace status`. A lost reply does not remove a published Commit.

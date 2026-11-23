@@ -82,6 +82,9 @@ impl BoundWorkspace {
             Ok(_) => true,
             Err(failure) => failure.locally_settled,
         };
+        if let Err(failure) = &result {
+            self.retain(failure, None);
+        }
         result
     }
     pub(super) fn admit_commit(&self) -> Result<CommitAdmission<'_>, Box<CommitFailure>> {
@@ -468,6 +471,7 @@ impl BoundWorkspace {
                     return Err(self.live_conflict(snapshot.scope, ours, candidate, &overlap));
                 }
                 let changed: Arc<[u64]> = changed.into();
+                retained.merged_over = Some((ours, changed.clone()));
                 retained.prepared = retained.prepared.take().map(|ready| ready.merged(changed));
                 Some(hold)
             } else {
@@ -551,7 +555,7 @@ impl BoundWorkspace {
     /// its local install; reads only immutable published objects, through
     /// the Workspace's own reader, opened at bind (#95: a Commit opens no
     /// control reader for them).
-    fn validate_candidate(
+    pub(super) fn validate_candidate(
         &self,
         target: &BranchSnapshot,
         candidate: FilesystemRootId,

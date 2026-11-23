@@ -17,6 +17,8 @@ pub struct BoundWorkspace {
     pub(super) producer: super::producer::Producer,
     /// A conflicted merge installed locally and not yet committed.
     pub(super) pending: Mutex<Option<super::commit_merge::PendingMerge>>,
+    /// A Commit's retained custody awaiting its one resolution (`resolve.rs`).
+    pub(super) retained: Mutex<Option<super::resolve::RetainedCommit>>,
 }
 pub struct StoreOperation {
     workspace: Workspace,

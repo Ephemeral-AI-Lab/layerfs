@@ -43,6 +43,7 @@ Service.entries: Mutex<BTreeMap<WorkspaceId, Entry>>
 | --- | --- |
 | A token is `(WorkspaceId, namespace)`; a stale namespace is refused, never redirected | [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
 | Admission requires `Idle` and marks the activity inside the lock; `Uncertain` or `LocalFailure` answers `Unknown` with the retained publication | [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+| A Commit request on an `Uncertain` or `LocalFailure` Workspace that kept a resolution record first runs its one resolution ([Commit](../commit/README.md#one-resolution-of-retained-custody)): resolved, the entry is `Idle` and admission follows; unresolved, it answers `Unknown` with the reason | [`resolve.rs`](../../../../engine/crates/layerfs-daemon/src/control/resolve.rs) |
 | Mount checks, inside the lock, that no entry exists, capacity remains and no maintenance failure is retained, then inserts `Entry::Binding` | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
 | The registry is the sole authority for which kernel connection an entry owns | [`kernel.rs`](../../../../engine/crates/layerfs-daemon/src/control/kernel.rs) |
 | A Commit whose captured reader or operation owner could not be released leaves `LocalFailure`; nothing later is admitted past it | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |

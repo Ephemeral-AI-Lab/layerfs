@@ -280,6 +280,9 @@ impl Service {
         token: WorkspaceToken,
         run: impl FnOnce(&BoundWorkspace) -> Result<CommitSuccess, Box<CommitFailure>>,
     ) -> Result<Success, Failure> {
+        // Retained custody of an earlier Commit gets its one resolution
+        // first; unresolved, it refuses this Commit as admission would.
+        self.resolve_custody(token)?;
         let workspace = self.admit(token, Activity::Committing)?;
         // NFS route: what the client buffered is written back first, as a
         // FUSE write has already reached the Workspace when it returned.
