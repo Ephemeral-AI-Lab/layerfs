@@ -259,8 +259,12 @@ fn another_control_channel_observes_running_commit_and_refuses_unmount_before_ef
     f.cleanup();
 }
 
+/// An original local uncertainty (the overlay's outcome unknown) keeps the
+/// capture: the Workspace is `Uncertain` and refuses another Commit and a
+/// normal unmount. Before the Publish phase only local uncertainty does
+/// this; a Store unknown there folds back (next test).
 #[test]
-fn an_original_unknown_blocks_another_commit_and_normal_unmount() {
+fn an_original_local_unknown_blocks_another_commit_and_normal_unmount() {
     let f = fixture::Fixture::new("control-unknown");
     let branch = f.host.project.branch.branch.id;
     let service = f.service.clone();
@@ -272,12 +276,13 @@ fn an_original_unknown_blocks_another_commit_and_normal_unmount() {
         );
         let original = service
             .serve_one(connection, |_, _, _| {
-                Err(layerfs_daemon::store::CommitError::Storage(
-                    layerfs_storage::StorageError::UnknownOutcome {
-                        original: Box::new(layerfs_storage::StorageError::Integrity(
-                            "original producer uncertainty",
-                        )),
-                    },
+                Err(layerfs_daemon::store::CommitError::Workspace(
+                    layerfs_workspace::WorkspaceError::Overlay(
+                        layerfs_overlay::OverlayError::Uncertain {
+                            cause: Box::new(layerfs_overlay::OverlayError::Quarantined),
+                            completion: None,
+                        },
+                    ),
                 ))
             })
             .unwrap();
@@ -317,6 +322,85 @@ fn an_original_unknown_blocks_another_commit_and_normal_unmount() {
     assert!(retained.outcome.is_err());
     println!("CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true");
     drop(retained);
+    f.cleanup();
+}
+
+/// Finding #4: an unknown Store outcome during construction, before the
+/// Publish phase, cannot have published. The capture folds back, the reply
+/// is `Failed`, the Workspace stays `Idle`, the change is kept, and a later
+/// Commit and a normal unmount are admitted.
+#[test]
+fn a_store_unknown_before_publication_folds_back_and_admits_a_commit() {
+    let f = fixture::Fixture::new("control-unknown-folds");
+    let branch = f.host.project.branch.branch.id;
+    let service = f.service.clone();
+    let policy = f.installed.opened.store.policy().construction();
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        let original = service
+            .serve_one(connection, |_, _, _| {
+                Err(layerfs_daemon::store::CommitError::Storage(
+                    layerfs_storage::StorageError::UnknownOutcome {
+                        original: Box::new(layerfs_storage::StorageError::Integrity(
+                            "original producer uncertainty",
+                        )),
+                    },
+                ))
+            })
+            .unwrap();
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        drop(
+            service
+                .serve_one(connection, |save, _, snapshot| {
+                    fixture::construct(save, snapshot, b'U', policy)
+                })
+                .unwrap(),
+        );
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, binding) = mount(&mut client, identity(90), branch);
+    fixture::write(&f.service, token, b'U');
+    let reply = client
+        .call(Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+            expected: None,
+        }))
+        .unwrap();
+    assert!(
+        matches!(&reply, Reply::Refused(value) if value.code == ControlCode::Failed),
+        "{reply:?}"
+    );
+    let observed = status(&mut client, token);
+    assert_eq!(observed.activity, Activity::Idle);
+    assert_eq!(observed.binding, binding);
+    assert!(observed.published.is_none());
+    let record = committed(&mut client, token);
+    assert_eq!(record.parent, binding.branch.head_commit);
+    close(&mut client, token);
+    let original = worker.join();
+    let failed = match &original.outcome {
+        Err(layerfs_daemon::control::Failure::Commit(failed)) => failed,
+        other => panic!("{:?}", other.as_ref().err()),
+    };
+    assert!(failed.locally_settled && !failed.uncertain());
+    println!("CONTROL_UNKNOWN_FOLDS producer_unknown_before_publish=Failed capture=folded_back later_commit=Committed normal_unmount=allowed");
+    drop(original);
     f.cleanup();
 }
 #[test]
