@@ -81,7 +81,10 @@ including a server silent past the 5 s connect-and-login limit
 connection is dialled on its own thread and waited for within that limit; a
 dial left waiting ends when the server answers or the socket closes. The
 diagnostic driver gives its connect and login the same limit under a longer
-deadline. The
+deadline. `Connector::new` pairs a single `localhost` host (with no
+`hostaddr`) with `127.0.0.1` and `::1` via `hostaddr` while keeping
+`localhost` for TLS verification, so roots without `/etc/hosts` reach
+either IPv4 or IPv6 loopback without DNS. The
 session keeps the frozen policy and server version the open check read, so
 `PackPersistence::policy` costs no round trip afterwards.
 `compaction_missing(session)` applies the same five Store-wide checks to the

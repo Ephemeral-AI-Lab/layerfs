@@ -146,6 +146,14 @@ fn start_named(
     let labels = crate::lifecycle::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
     let options = launch_options(backend, identity, host)?;
+    let pg_host = match &setup.store {
+        DaemonStore::Postgres { url, .. } => Some(
+            layerfs_sandbox_backend::PostgresUrl::parse(url)
+                .map(|parsed| parsed.host().to_owned())
+                .unwrap_or_default(),
+        ),
+        DaemonStore::Sqlite { .. } => None,
+    };
     let request = ProviderCreate {
         launch: LaunchRequest {
             name: sandbox_name.clone(),
@@ -169,6 +177,16 @@ fn start_named(
     };
     let created = created.map_err(|mut failure| {
         drop(failure.control.take());
+        let pg = pg_host
+            .as_deref()
+            .filter(|_| failure.phase == crate::SandboxPhase::Listener)
+            .map(|pg_host| {
+                (
+                    pg_host,
+                    host.store.as_str(),
+                    backend == crate::runtime::Backend::Namespaces,
+                )
+            });
         abandon(
             id,
             format!(
@@ -178,6 +196,7 @@ fn start_named(
             ),
             failure.runtime.take(),
             &executable,
+            pg,
         )
     })?;
     let instance = created.startup.instance;
@@ -193,6 +212,7 @@ fn start_named(
                 ),
                 Some(sandbox),
                 &executable,
+                None,
             ));
         }
     };
@@ -238,6 +258,7 @@ fn start_named(
             ),
             runtime,
             &executable,
+            None,
         ));
     }
     let state = Arc::new(state);
@@ -433,15 +454,18 @@ fn abandon(
     mut cause: String,
     sandbox: Option<Box<Sandbox>>,
     daemon: &Path,
+    pg: Option<(&str, &str, bool)>,
 ) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;
+    let mut last_line = None;
     let mut left = None;
     if let Some(mut sandbox) = sandbox {
         match sandbox.log_tail(crate::lifecycle::LOG_LINES, crate::lifecycle::LOG_BYTES) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).trim_end().to_owned();
                 if let Some(last) = text.lines().rev().map(str::trim).find(|l| !l.is_empty()) {
+                    last_line = Some(last.to_owned());
                     cause = format!("{cause}. Its daemon's last error: {last}");
                 }
                 log = Some(text);
@@ -456,9 +480,34 @@ fn abandon(
             )
         });
     }
-    let (code, message, removed) = match left {
-        None => ("Failed", cause, container.is_some()),
-        Some(left) => (
+    let pg_unreachable = left.is_none()
+        && pg.is_some()
+        && last_line.as_deref().is_some_and(|line| {
+            line.contains("cannot reach PostgreSQL Store")
+                || line.contains("Store open: physical Store I/O: pack persistence: Refused { status: \"Closed\" }")
+        });
+    let (code, message, removed) = match (left, pg_unreachable, pg) {
+        (None, true, Some((pg_host, store_name, namespaces))) => {
+            let message = if pg_host.is_empty() {
+                format!(
+                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server"
+                )
+            } else if namespaces
+                && !pg_host.eq_ignore_ascii_case("localhost")
+                && pg_host.parse::<std::net::IpAddr>().is_err()
+            {
+                format!(
+                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server at {pg_host} (the Sandbox root has no /etc/hosts or /etc/resolv.conf, so a hostname may not resolve there; use an IP address)"
+                )
+            } else {
+                format!(
+                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server at {pg_host}"
+                )
+            };
+            ("Unavailable", message, container.is_some())
+        }
+        (None, _, _) => ("Failed", cause, container.is_some()),
+        (Some(left), _, _) => (
             "Unknown",
             format!("creation of Sandbox {id} failed ({cause}); {left}"),
             false,

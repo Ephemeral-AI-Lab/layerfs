@@ -112,8 +112,13 @@ A create whose outcome is not known is `Unknown`; its record keeps the
 
 A start that fails is `Failed` in words: "Sandbox `<name>` did not start:
 it stopped `<where>`: `<cause>`", then "Its daemon's last error: …" from
-its log. Its `detail` holds `daemon` (the program that was started),
-`log` (its last lines), `container` and `removed`
+its log, except when a PostgreSQL Sandbox daemon could not reach its
+Store's server at startup (`Unavailable`: "Sandbox `<name>` did not start:
+its daemon cannot reach PostgreSQL Store `<store>`'s server at `<host>`",
+noting on `namespaces` when `<host>` is a hostname that the Sandbox root
+has no `/etc/hosts` or `/etc/resolv.conf`). Its `detail` holds `daemon`
+(the program that was started), `log` (its last lines), `container` and
+`removed`
 ([`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon`).
 Its `fix` is `layerfs machine doctor <machine>` unless the refusal names a
 closer one. On `native`, when `detail.daemon` is the native machine's
