@@ -188,6 +188,7 @@ stable media.
 | [`requests.rs`](../../../../engine/crates/layerfs-fuse/tests/requests.rs) | `cargo +1.85.1 test --locked -p layerfs-fuse --test requests` | any (no kernel) | A parked request resumes on its own thread and drain waits for it; a panic keeps its future and another mount stays usable |
 | [`protocol.rs`](../../../../engine/crates/layerfs-nfs/tests/protocol.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test protocol` | any (no network) | XDR round trips and bounds, fragment joining and `RECORD_LIMIT`, `AUTH_UNIX` headers, handles stable per mount and stale after it |
 | [`write.rs`](../../../../engine/crates/layerfs-nfs/tests/write.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test write` | any (in-process loopback export, no kernel mount) | Every changing NFS procedure; tickets released only after the reply; silly renames and AppleDouble names |
+| [`apple_double_view.rs`](../../../../engine/crates/layerfs-nfs/tests/apple_double_view.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test apple_double_view` | any (in-process loopback export, no kernel mount) | A `._` file the Workspace holds is listed, read, written, replaced and removed as any other file and committed; a new companion still stays in export memory |
 
 Run each under a wall timeout of at most 120 s. The nightly lane runs each
 kernel binary alone in a container with `--device /dev/fuse --cap-add

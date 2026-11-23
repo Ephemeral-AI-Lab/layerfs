@@ -7,15 +7,25 @@
 //! WRITE, SETATTR, COMMIT, REMOVE, a LINK to another AppleDouble name and a
 //! RENAME to another AppleDouble name
 //! work on it, READDIR does not list it, and no mutation of it ever reaches
-//! the engine, so the Workspace stays clean and no Commit can capture it.
+//! the engine (a LOOKUP of its name in the view is the one engine call), so
+//! the Workspace stays clean and no Commit can capture it.
 //! Everything is dropped when the export is released.
 //!
-//! The tree is not consulted for such a name: while this mode is on, a
-//! LOOKUP of a `._` name answers `NFS3ERR_NOENT` unless the export holds that
-//! companion, which is what a READDIR of that directory already shows by not
-//! listing them, so the two agree. Such a change also never touches the
-//! directory it names, so its `wcc_data` answers both halves from the last
-//! facts the export saw for it (see [`Kernel::directory_wcc`]).
+//! Only a name the Workspace view does not hold is a companion's: a `._` file
+//! that is really in the tree (committed, or made in the view by another
+//! route) is an ordinary Workspace file, which READDIR lists. So a LOOKUP of
+//! a `._` name asks the view first and answers the companion only when the
+//! view has no such name ([`Kernel::lookup_apple_double`]), and LOOKUP and
+//! READDIR agree. CREATE, REMOVE and RENAME of a `._` name ask the view the
+//! same way: CREATE of a name the view holds is the ordinary CREATE of that
+//! file (UNCHECKED opens it, GUARDED and EXCLUSIVE answer `NFS3ERR_EXIST`),
+//! so no companion is made to shadow it, and the attributes a macOS client
+//! then stores there go into the Workspace file, as on any NFSv3 server; a
+//! RENAME may replace such a file. A companion whose name the view gains
+//! later (an install, another route) is shadowed by the real file and stays
+//! unreachable by that name. A companion change never touches the directory
+//! it names, so its `wcc_data` answers both halves from the last facts the
+//! export saw for it (see [`Kernel::directory_wcc`]).
 //!
 //! A companion created while the export knows its main file (`<name>` in the
 //! same directory) belongs to that inode: any name of the inode reaches it, so
@@ -329,6 +339,36 @@ impl Kernel {
         let stat = Companions::stat(serial?, companions.files.get(&serial?)?);
         companions.use_serial(serial?);
         Some(stat)
+    }
+    /// LOOKUP of a `._` name while companions are kept: the view answers
+    /// first, so a real Workspace file of that name (one READDIR lists) is
+    /// never hidden or shadowed, and only a name the view does not hold
+    /// answers the companion, if one is held, a companion answering with no
+    /// directory row.
+    pub(crate) fn lookup_apple_double(
+        &self,
+        parent: u64,
+        name: &[u8],
+    ) -> Result<(ViewStat, Option<ViewStat>), crate::read::Refused> {
+        match self.lookup_view(parent, name) {
+            Err(refused) if refused.status == Status::NoEnt => {
+                match self.companion_named(parent, name) {
+                    Some(stat) => Ok((stat, None)),
+                    None => Err(refused),
+                }
+            }
+            answer => answer,
+        }
+    }
+    /// Whether the Workspace view holds `name` in `parent`: such a `._` name
+    /// is an ordinary Workspace file, never a companion's. A view that holds
+    /// it takes the export's one engine reference, as any LOOKUP does.
+    pub(crate) fn view_holds(&self, parent: u64, name: &[u8]) -> Result<bool, Status> {
+        match self.lookup_view(parent, name) {
+            Ok(_) => Ok(true),
+            Err(refused) if refused.status == Status::NoEnt => Ok(false),
+            Err(refused) => Err(refused.status),
+        }
     }
     /// CREATE of an already-held companion name: UNCHECKED applies its size,
     /// as an open with truncation would; GUARDED and EXCLUSIVE find it taken.

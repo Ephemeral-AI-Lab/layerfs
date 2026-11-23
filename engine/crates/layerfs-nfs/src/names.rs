@@ -16,7 +16,9 @@
 //!   attribute write (`copyfile`, `cp`, `std::fs::copy`, `ditto`, `tar`)
 //!   succeeds and reads back for the export's life, and nothing reaches the
 //!   Workspace. Any other kind under such a name (directory, symlink, link,
-//!   rename target) is refused with `NFS3ERR_ACCES`.
+//!   rename target) is refused with `NFS3ERR_ACCES`. A `._` name the
+//!   Workspace view already holds is not a companion: it is served, listed
+//!   and changed as any other Workspace file.
 //!
 //! The patterns are exact so that a user's own `.nfsrc` or `._config` is an
 //! ordinary name (the AppleDouble refusal is the one deliberate exception

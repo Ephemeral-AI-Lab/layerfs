@@ -154,7 +154,7 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | Rule | Source |
 | --- | --- |
 | One owner visit answers a LOOKUP: the job that resolves a name has already read the directory's own row, so the reply's `dir_attributes` cost no second visit | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
-| A LOOKUP that fails answers the directory's own fresh facts whenever the job that failed read its row, which is every name this export looks up: a name that binds nothing still read its parent's row in the same visit. `.`, `..`, a silly name, an AppleDouble companion and a refusal decided before any visit read no directory row and send no `dir_attributes`, so the client falls back to its own `actimeo`; RFC 1813 makes both fields optional. No LOOKUP answer repeats the export's last observation of the directory, which nothing ages. A failed LOOKUP's directory row is kept as the export's observation, as a successful one's is | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
+| A LOOKUP that fails answers the directory's own fresh facts whenever the job that failed read its row, which is every name this export looks up: a name that binds nothing still read its parent's row in the same visit. `.`, `..`, a silly name, an AppleDouble companion (whose LOOKUP asks the view first, and answers the companion only after the view had no such name) and a refusal decided before any visit send no `dir_attributes`, so the client falls back to its own `actimeo`; RFC 1813 makes both fields optional. No LOOKUP answer repeats the export's last observation of the directory, which nothing ages. A failed LOOKUP's directory row is kept as the export's observation, as a successful one's is | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
 | `read.rs` holds what a read answers: the entry, its directory and its descriptors, and the refusal with its status (`NFS3ERR_STALE` for an engine `Stale`, else `NFS3ERR_IO`) and the directory row the job read | [`read.rs`](../../../../engine/crates/layerfs-nfs/src/read.rs) |
 | An export remembers the facts it last published or observed for a directory (LOOKUP, GETATTR, OPENDIR, a publishing change) and answers from them only where no job reads that directory: an AppleDouble companion's `wcc_data`, whose change never touches it. A directory listing is not such a place: its reply says only what its own window read | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
@@ -180,13 +180,28 @@ drawn once per export; it makes guessing costly and does not authenticate.
 
 On NFSv3 the macOS client keeps extended attributes and resource forks in
 `._<name>` files (at least one byte after `._`). With `refuse_apple_double`, a
-regular `._` file lives in export state only (`Companions`, serials
-`SERIALS` = 2^62 and above): LOOKUP, GETATTR, ACCESS, READ, WRITE, SETATTR,
-COMMIT, REMOVE and RENAME to another `._` name are served there, READDIR
-never lists it and the engine is never called. Any other kind is
+regular `._` file the client creates under a name the Workspace view does not
+hold lives in export state only (`Companions`, serials `SERIALS` = 2^62 and
+above): LOOKUP, GETATTR, ACCESS, READ, WRITE, SETATTR, COMMIT, REMOVE and
+RENAME to another `._` name are served there, READDIR never lists it and no
+engine mutation is made for it. Any other new kind under a `._` name is
 `NFS3ERR_ACCES`. `cp`, `copyfile`, `ditto` and `tar` succeed while nothing
 reaches the Workspace, SQLite overlay or a Commit; everything is dropped with
 the export.
+
+A `._` name the view holds (a file committed under that name, or made in the
+view by another route) is an ordinary Workspace file, never hidden: READDIR
+lists it, and LOOKUP, GETATTR, READ, WRITE, SETATTR, REMOVE and RENAME reach
+the engine as for any other name, so the two agree. To decide, LOOKUP, CREATE,
+REMOVE and RENAME of a `._` name ask the view first (one engine LOOKUP, also
+for a name that turns out to be a companion's or absent); only a name the view
+does not hold uses the companions.
+
+| Case | Answer |
+| --- | --- |
+| CREATE of a `._` name the view holds | The ordinary CREATE of that file: UNCHECKED opens it (applying a requested size), GUARDED and EXCLUSIVE answer `NFS3ERR_EXIST`. No companion is made, so nothing shadows it; the attributes a macOS client then stores there go into the Workspace file and a Commit captures them, as on any NFSv3 server |
+| RENAME onto a `._` name the view holds | An ordinary RENAME that replaces it; onto a `._` name the view lacks it stays `NFS3ERR_ACCES` |
+| A companion whose name the view gains later (an install, another route) | The real file answers that name; the companion is unreachable by it and goes with the export or orphan reclamation |
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |

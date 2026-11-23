@@ -97,6 +97,13 @@ pub enum How {
     Exclusive([u8; 8]),
 }
 /// What a published result must carry for its reply to be composed.
+/// The route of a name while `._` names are kept out (see [`Kernel::kept_name`]).
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Kept {
+    Ordinary,
+    Workspace,
+    Companion,
+}
 #[derive(Clone, Copy)]
 enum Expect {
     Nothing,
@@ -258,6 +265,19 @@ impl Kernel {
         }
         PathName::from_bytes(name).map_err(|_| Status::Inval)
     }
+    /// Which route a name takes while `._` names are kept out of the
+    /// Workspace: a `._` name the view holds is an ordinary Workspace file,
+    /// one it does not hold is a companion's (see `crate::apple_double`).
+    /// Only a `._` name asks the view.
+    fn kept_name(&self, parent: u64, name: &[u8]) -> Result<Kept, Status> {
+        if !(self.refuses_apple_double() && names::apple_double(name)) || name.len() > 255 {
+            return Ok(Kept::Ordinary);
+        }
+        Ok(match self.view_holds(parent, name)? {
+            true => Kept::Workspace,
+            false => Kept::Companion,
+        })
+    }
     /// The entry a name binds now, or none.
     fn existing(&self, parent: u64, name: &[u8]) -> Result<Option<ViewStat>, Status> {
         match self.lookup(parent, name) {
@@ -276,10 +296,14 @@ impl Kernel {
         how: How,
         tickets: &mut Tickets,
     ) -> Result<(ViewStat, Wcc), Status> {
-        if self.refuses_apple_double() && names::apple_double(name) && name.len() <= 255 {
-            return self.companion_create(parent, name, how, tickets);
-        }
-        let checked = self.checked(name, true)?;
+        // A `._` name the view holds is that Workspace file: its CREATE is the
+        // ordinary one (UNCHECKED opens it, GUARDED and EXCLUSIVE find it
+        // taken) and never makes a companion that would shadow it.
+        let checked = match self.kept_name(parent, name)? {
+            Kept::Companion => return self.companion_create(parent, name, how, tickets),
+            Kept::Workspace => PathName::from_bytes(name).map_err(|_| Status::Inval)?,
+            Kept::Ordinary => self.checked(name, true)?,
+        };
         let key = (parent, name.to_vec());
         if let How::Exclusive(verifier) = how {
             // A retransmitted EXCLUSIVE CREATE finds its own file.
@@ -485,8 +509,10 @@ impl Kernel {
     }
     /// REMOVE of a non-directory name.
     pub fn remove(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<Wcc, Status> {
-        if let Some(wcc) = self.companion_remove(parent, name) {
-            return Ok(wcc);
+        if self.kept_name(parent, name)? == Kept::Companion {
+            if let Some(wcc) = self.companion_remove(parent, name) {
+                return Ok(wcc);
+            }
         }
         if self.silly_entry(parent, name).is_some() {
             self.drop_silly(parent, name);
@@ -533,7 +559,11 @@ impl Kernel {
         new_name: &[u8],
         tickets: &mut Tickets,
     ) -> Result<[Wcc; 2], Status> {
-        if let Some(renamed) = self.companion_rename(from, name, to, new_name) {
+        let companion = self.kept_name(from, name)? == Kept::Companion;
+        if let Some(renamed) = companion
+            .then(|| self.companion_rename(from, name, to, new_name))
+            .flatten()
+        {
             // The companion lives in the export alone: neither directory's own
             // facts change, so both halves of each answer from the last ones
             // this export saw (see `Kernel::directory_wcc`).
@@ -566,7 +596,11 @@ impl Kernel {
             return Ok([wcc, destination]);
         }
         let source_name = self.checked(name, false)?;
-        let destination_name = self.checked(new_name, true)?;
+        // Replacing a `._` file the view holds is an ordinary RENAME.
+        let destination_name = match self.kept_name(to, new_name)? {
+            Kept::Workspace => PathName::from_bytes(new_name).map_err(|_| Status::Inval)?,
+            _ => self.checked(new_name, true)?,
+        };
         if names::silly(new_name) {
             // The client renamed a file it still has open: only a regular
             // file keeps such a name, so this case reads the entry once.
