@@ -37,10 +37,13 @@ When [Overlay](README.md) state can be released and how it is reclaimed: generat
 | --- | --- | --- |
 | Capture | `capture()`: active g becomes captured, active g+1; dirty counts 0; copies no rows | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
 | Known success | `install(capture, root)`: `installed = g`, `base_root = root`, queue `RETIRE g` | same |
+| Known success, merged root | `install_merged(capture, root, changed)`: as `install`, and in the same transaction deletes the active row `keep_live_row` carried for each serial in `changed` (it would let bytes fall through to the merge's different ones). The caller refuses the install while any other active row overlaps `changed`, and holds mutations from that check to the install ([Commit](../commit/README.md#what-it-does)) | same |
 | Definite failure | `resolve_failed_capture`: `consolidating = g`, queue `FOLD g` | [`composition.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/composition.rs) |
 
 The frontier rule lives in the Workspace lock, not the engine: while a
-Capture waits, later mutations wait before any effect; while a known install
+Capture waits, later mutations wait before any effect; while a merged Commit
+holds the Workspace (`MutationHold`, from its check of the active rows to its
+install), mutations wait too; while a known install
 waits, later base-source acquisitions wait
 ([`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs),
 [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs)).

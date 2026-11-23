@@ -10,6 +10,9 @@ pub struct PreparedBase {
     capture: Capture,
     expected: FilesystemRootId,
     next: BaseView,
+    /// Sorted serials a merge changed against the root constructed from the
+    /// capture; empty when that root itself is installed.
+    merged: std::sync::Arc<[u64]>,
 }
 impl PreparedBase {
     pub const fn capture(&self) -> Capture {
@@ -17,6 +20,14 @@ impl PreparedBase {
     }
     pub fn root(&self) -> FilesystemRootId {
         self.next.identity()
+    }
+    /// The install of a merge: `changed` lists, sorted, the serials whose
+    /// value differs between the root constructed from the capture and this
+    /// one ([`Overlay::install_merged`]).
+    #[must_use]
+    pub fn merged(mut self, changed: std::sync::Arc<[u64]>) -> Self {
+        self.merged = changed;
+        self
     }
 }
 impl Workspace {
@@ -43,6 +54,7 @@ impl Workspace {
             capture,
             expected,
             next,
+            merged: std::sync::Arc::from([]),
         })
     }
     /// One local install after exact known upstream publication/UpToDate.
@@ -71,8 +83,11 @@ impl Workspace {
                 prepared,
             ));
         }
-        if let Err(error) = overlay.install(prepared.capture, prepared.next.identity().0.to_bytes())
-        {
+        if let Err(error) = overlay.install_merged(
+            prepared.capture,
+            prepared.next.identity().0.to_bytes(),
+            &prepared.merged,
+        ) {
             return Err((error.into(), prepared));
         }
         // No fallible work follows known SQL success; old immutable plans own

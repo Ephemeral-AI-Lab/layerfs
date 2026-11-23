@@ -55,7 +55,10 @@ A conflict is decided, not left open: text files get marker blocks, binary or
 type conflicts keep one side, and each path is listed with a `ConflictKind`.
 `branch.merge` refuses a conflicted result; merge-on-commit installs it as the
 Workspace's base and refuses the next Commit while a listed file still holds a
-complete marker block ([Merge](merge.md)).
+complete marker block ([Merge](merge.md)). The Workspace's view changes where
+the merge changed it; a merge whose changes rows written after the capture
+cover is not installed at all, clean or conflicted (`LiveConflict`,
+[Commit](../../engine/commit/README.md#what-it-does)).
 
 ### Tree comparison
 

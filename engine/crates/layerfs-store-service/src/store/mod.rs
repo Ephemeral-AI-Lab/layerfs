@@ -6,6 +6,7 @@ pub mod commit_merge;
 pub mod commit_types;
 pub mod digests;
 pub mod hints;
+mod live;
 pub mod open;
 pub mod operation;
 mod pipeline;
@@ -21,6 +22,7 @@ pub use bind::checked_base;
 pub use commit_merge::{Stale, StaleError, LANE_MERGE_PATHS};
 pub use hints::record_new_bindings;
 pub use hints::CatalogHints;
+pub use live::LIVE_CONFLICT_PATHS;
 
 pub use commit_types::{
     CapturedConstruction, CommitError, CommitFailure, CommitOptions, CommitPhase, CommitSuccess,

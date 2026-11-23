@@ -28,10 +28,14 @@
                                         head re-read           writer lock]
                                         moved again? merge
                                         validate, prepare
+                                        merge? hold mutations;
+                                        later rows overlap it?
+                                        -> LiveConflict
                                         commit_branch ------> 1 write tx
                                         drop lane ==========> [FREE]
                                         install job (base :=
-                                        new root; G+1 stays)
+                                        new root; G+1 stays),
+                                        release the hold
                      <--- Committed | MergeCommitted | Conflict
  <== {kind, head, commit, merged, lww} | Conflict refusal ==|
 ```
@@ -54,7 +58,7 @@ reply arrives, and nothing guesses or resends.
 | 6 | One producer constructs the candidate root from the capture; unchanged input is reused, changed files are chunked into the Commit's Save. | [Commit: construction](../engine/commit/construction.md), [Files: edits](../core/files/edits.md), [Filesystem trees: updates](../core/filesystem-trees/updates.md), [Physical storage: saves](../core/physical-storage/README.md#saves) |
 | 7 | If the head moved and `force` is false, the candidate is merged with the head in the same Save; then `Save::finish`, before the lane. | [Commit: what it does](../engine/commit/README.md#what-it-does), [Compare and merge: merge](../core/compare-and-merge/merge.md) |
 | 8 | Under the lane: head re-read, an in-lane merge of only what landed, then one write transaction that checks the expected head and advances the Branch. | [Store: the publish lane in a Commit](../engine/store/README.md#the-publish-lane-in-a-commit), [History: operations](../core/history/README.md#operations) |
-| 9 | After the lane, install sets the base to the published root; rows written after the capture stay on top of the view. | [Commit: what it does](../engine/commit/README.md#what-it-does), [Workspace: state, serials and install](../engine/workspace/README.md#state-serials-and-install) |
+| 9 | After the lane, install sets the base to the published root; rows written after the capture stay on top of the view. A merged root is installed only when no such row covers what the merge changed (else `LiveConflict`, nothing published, the capture folds back); mutations wait from that check to the install. | [Commit: what it does](../engine/commit/README.md#what-it-does), [Workspace: state, serials and install](../engine/workspace/README.md#state-serials-and-install) |
 | 10 | For a merged root, the daemon invalidates the kernel entries that changed before it replies. | [Kernel routes: coherence](../engine/kernel-routes/README.md#coherence) |
 | 11 | The reply is `Committed` or `UpToDate`; a conflict is the `Conflict` refusal and nothing is published. A published Commit whose install failed, or an uncertain outcome, is kept as custody and refuses the next Commit. | [Commit: custody and settle](../engine/commit/README.md#custody-and-settle), [Errors and events](../api/calls/errors-and-events.md) |
 

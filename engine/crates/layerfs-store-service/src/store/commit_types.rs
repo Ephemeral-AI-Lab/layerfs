@@ -53,6 +53,14 @@ pub enum CommitError {
         paths: u64,
         limit: u64,
     },
+    /// A merge would install a root other than the Workspace's own while
+    /// rows written after the capture change what the merge changed: those
+    /// rows were computed against the old base (`live.rs`). Nothing is
+    /// published; the capture folds back, and a later Commit takes those
+    /// rows too. `paths` names some of them, at most `LIVE_CONFLICT_PATHS`.
+    LiveConflict {
+        paths: Vec<String>,
+    },
 }
 /// What the product constructor's one namespace attempt acquired, counted and
 /// released. A named reader or owner here was acquired and is not known

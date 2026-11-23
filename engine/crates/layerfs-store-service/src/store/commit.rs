@@ -243,11 +243,17 @@ impl BoundWorkspace {
                         return Err(expected_moved(expected, &current));
                     }
                 }
+                // What a merge changed against our candidate, for the check of
+                // rows written since the capture (`live.rs`).
+                let mut changed = Vec::new();
                 let root = if moved && !force {
                     let (root, report) = phase(timing, "merge", || {
                         self.merge_candidate(&save, &snapshot, &current, candidate)
                     })?;
                     merge = Some(report);
+                    changed = phase(timing, "merge.changed", || {
+                        super::live::changed_serials(&save, candidate, root)
+                    })?;
                     root
                 } else {
                     candidate
@@ -358,6 +364,10 @@ impl BoundWorkspace {
                                 stepped,
                             )
                         })?;
+                        let step_changed = phase(timing, "merge.lane.changed", || {
+                            super::live::changed_serials(&reader, root, stepped)
+                        })?;
+                        changed = super::live::union(&changed, &step_changed);
                         merge = Some(match merge.take() {
                             Some(first) => MergeReport {
                                 from: first.from,
@@ -369,10 +379,10 @@ impl BoundWorkspace {
                         (now, stepped, logical)
                     }
                 };
-                Ok((root, candidate, current, logical, lane, early))
+                Ok((root, candidate, current, logical, lane, early, changed))
             })();
             retained.storage = Some(super::producer::since(storage.diagnostics(), before));
-            let (candidate, ours, current, logical, lane, early) = built?;
+            let (candidate, ours, current, logical, lane, early, changed) = built?;
             if candidate != ours {
                 replaced = Some((ours.0, candidate.0));
             }
@@ -445,6 +455,24 @@ impl BoundWorkspace {
                     self.validate_candidate(target, candidate, capture, &original_base)
                 })?
             });
+            // A merge installs a root other than our own. Rows written since
+            // the capture were computed against the old base: mutations are
+            // held from here through the install, and an active row that
+            // overlaps what the merge changed refuses it before anything is
+            // published or installed (`live.rs`).
+            let held = if candidate != ours {
+                let (hold, overlap) = phase(timing, "live", || self.hold_live(&changed))?;
+                if !overlap.is_empty() {
+                    drop(hold);
+                    drop(lane);
+                    return Err(self.live_conflict(snapshot.scope, ours, candidate, &overlap));
+                }
+                let changed: Arc<[u64]> = changed.into();
+                retained.prepared = retained.prepared.take().map(|ready| ready.merged(changed));
+                Some(hold)
+            } else {
+                None
+            };
             let pending = if conflicted {
                 // Nothing is published: the history binding follows the head
                 // merged with, and the merge stays the local base.
@@ -490,6 +518,7 @@ impl BoundWorkspace {
                 })
                 .map_err(CommitError::Owner)
             })?;
+            drop(held);
             *self
                 .snapshot
                 .lock()

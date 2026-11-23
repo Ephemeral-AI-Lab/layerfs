@@ -19,6 +19,9 @@ pub struct State {
     /// waiting for earlier base sources: their frontiers stay finite.
     pub captures_waiting: u32,
     pub installs_waiting: u32,
+    /// Merged Commits between their check of the active rows and their
+    /// install (`hold.rs` `MutationHold`): mutations wait behind them.
+    pub mutation_holds: u32,
 }
 pub struct Shared {
     pub namespace: i64,
@@ -49,6 +52,7 @@ impl Shared {
                 backing: None,
                 captures_waiting: 0,
                 installs_waiting: 0,
+                mutation_holds: 0,
             }),
             changed: Condvar::new(),
             held: AtomicU32::new(0),
@@ -57,11 +61,11 @@ impl Shared {
     }
 }
 impl State {
-    /// A later mutation waits behind a waiting Capture, and a later source
-    /// acquisition behind a waiting known install.
+    /// A later mutation waits behind a waiting Capture or a held merged
+    /// install, and a later source acquisition behind a waiting known install.
     pub fn behind_frontier(&self, class: ServiceClass) -> bool {
         match class {
-            ServiceClass::Mutation => self.captures_waiting != 0,
+            ServiceClass::Mutation => self.captures_waiting != 0 || self.mutation_holds != 0,
             ServiceClass::Source => self.installs_waiting != 0,
             _ => false,
         }
