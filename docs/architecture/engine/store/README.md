@@ -118,7 +118,9 @@ open, filled once by `backfill_lineage`
  install the new base
 ```
 
-`branch_snapshot` reads a Branch with its stack, base root and head Commit in
+A merge that conflicted publishes nothing and so takes no lane; when the
+in-lane step is what conflicts, the lane is released before validation and
+the local install. `branch_snapshot` reads a Branch with its stack, base root and head Commit in
 one statement. Work that grows with the Commit runs before the lane
 ([`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs)).
 `fork`, `merge_branch` and `add_layer` check their expected heads inside their

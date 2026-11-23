@@ -263,15 +263,21 @@ impl BoundWorkspace {
                 })?;
                 let early = (Self::target_key(early_target, root), early);
                 retained.phase = CommitPhase::Finish;
-                let lane = phase(timing, "lane", || {
-                    self.store
-                        .history
-                        .publish_lane()
-                        .map_err(CommitError::History)
-                })?;
+                // A conflicted merge publishes nothing, so it never takes the
+                // lane.
                 let conflicted = merge
                     .as_ref()
                     .is_some_and(|report: &MergeReport| !report.conflicts.is_empty());
+                let lane = if conflicted {
+                    None
+                } else {
+                    Some(phase(timing, "lane", || {
+                        self.store
+                            .history
+                            .publish_lane()
+                            .map_err(CommitError::History)
+                    })?)
+                };
                 let (current, root, moved, logical) = if force || conflicted {
                     (current, root, moved, logical)
                 } else {
@@ -336,6 +342,9 @@ impl BoundWorkspace {
             let conflicted = merge
                 .as_ref()
                 .is_some_and(|report: &MergeReport| !report.conflicts.is_empty());
+            // Only a publication holds the lane: an in-lane step that
+            // conflicted releases it before validation and install.
+            let lane = lane.filter(|_| !conflicted);
             // A merge is published against the head it merged with; a forced
             // or unmoved Commit against the head the Workspace bound.
             let target = if merge.is_some() { &current } else { &snapshot };
@@ -414,12 +423,13 @@ impl BoundWorkspace {
                         .history
                         .commit_branch(intent)
                         .map_err(CommitError::History)
-                })?;
+                });
+                drop(lane);
+                let outcome = outcome?;
                 let (head, root) = match &outcome {
                     CommitOutcome::Committed { record, .. } => (Some(record.id), record.root),
                     CommitOutcome::UpToDate { head, root } => (*head, *root),
                 };
-                drop(lane);
                 retained.published = Some(outcome);
                 if root != candidate.0 {
                     return Err(CommitError::Context(

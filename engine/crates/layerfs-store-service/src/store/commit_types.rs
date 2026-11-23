@@ -174,6 +174,19 @@ impl CommitFailure {
         }
     }
 }
+impl CommitFailure {
+    /// Whether this failure leaves its outcome unknown. Before the Publish
+    /// phase nothing in history can have changed (`commit_branch` is the
+    /// only write that publishes), so only local uncertainty counts there,
+    /// as it does after a known publication; an unanswered publication is
+    /// uncertain on any unknown outcome.
+    pub fn uncertain(&self) -> bool {
+        match self.phase {
+            CommitPhase::Publish if self.published.is_none() => self.error.uncertain(),
+            _ => self.error.locally_uncertain(),
+        }
+    }
+}
 impl fmt::Display for CommitFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Store Commit at {:?}: {:?}", self.phase, self.error)
@@ -215,6 +228,33 @@ impl CommitError {
                 layerfs_overlay::OverlayError::Uncertain { .. }
                 | layerfs_overlay::OverlayError::Quarantined,
             )) => true,
+            _ => false,
+        }
+    }
+}
+impl CommitError {
+    /// Uncertainty about local state alone: the overlay engine, an owner job
+    /// or the Workspace binding. A Store, Content or History failure is not
+    /// here: before publication it cannot have changed history.
+    pub fn locally_uncertain(&self) -> bool {
+        match self {
+            Self::Construction { original, .. } => original.locally_uncertain(),
+            Self::Content {
+                provider: Some(provider),
+                ..
+            } => matches!(
+                provider.as_ref(),
+                PortError::Poisoned | PortError::ReadAdmission(super::ReadAdmissionError::Poisoned)
+            ),
+            Self::Owner(error) => owner_uncertain(error),
+            Self::Workspace(
+                WorkspaceError::BindingPoisoned
+                | WorkspaceError::Service(_)
+                | WorkspaceError::Overlay(
+                    layerfs_overlay::OverlayError::Uncertain { .. }
+                    | layerfs_overlay::OverlayError::Quarantined,
+                ),
+            ) => true,
             _ => false,
         }
     }

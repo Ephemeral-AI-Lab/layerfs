@@ -37,7 +37,8 @@
 ```
 
 The publish lane is held only for the head re-check and the publish; all
-work that grows with the Commit runs before it. Publication is one history
+work that grows with the Commit runs before it, and a conflicted merge,
+which publishes nothing, never holds it through validation or install. Publication is one history
 write transaction: once it commits, the Commit exists whether or not the
 reply arrives, and nothing guesses or resends.
 

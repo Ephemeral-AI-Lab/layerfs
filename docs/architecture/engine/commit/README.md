@@ -64,7 +64,7 @@ phase is a telemetry child (`uptodate.state`, `capture`, `producer`, `begin`,
 | Head unchanged | `Committed` against the head the Workspace bound | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Head moved, `force` false | `merge_candidate`: `merge_roots(base, ours, theirs)` in the Commit's own Save, before the lane; published against the head it merged with (`MergeReport`) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Head moved again before the lane | `merge_in_lane`: only what landed in between, with its own Save, at most `LANE_MERGE_PATHS` serials | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Merge conflict | Nothing published; the merge with marker blocks becomes the local base, `PendingMerge` is kept and the history binding moves to the head. The lane is released when the Commit returns | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs), [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| Merge conflict | Nothing published; the merge with marker blocks becomes the local base, `PendingMerge` is kept and the history binding moves to the head. A conflict found before the lane never takes it; one found by the in-lane step releases it before validation and install. Only a publication holds the lane | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs), [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | `force` with a moved head | No merge; published over the head, the displaced head recorded | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Relink (unlink and re-create with equal bytes) | A fresh chunked file whose overlay digest names an already saved root reuses it (`files_reused`); others are built and `record_file_digests` stores their digest. Files below the Store's `small_file_threshold_bytes` are rebuilt to the same object id | [`digests.rs`](../../../../engine/crates/layerfs-store-service/src/store/digests.rs), [`digest.rs`](../../../../engine/crates/layerfs-overlay/src/payload/digest.rs) |
 | Install | `prepare_base_install` rebinds the base to the new root without a tree walk; after publish, `install_prepared_base` waits for `base_readers == 0`, then `Overlay::install` sets `base_root`, `installed := G`, `captured := None` and queues `RETIRE` of G, in one SQL transaction | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs), [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
@@ -91,8 +91,8 @@ is a different install, placing a sealed Store file into a project volume; see
          --> acquire_operation(request) --> construct ... outcome known
          --> release reader, then operation owner --> answer --> reclaim
 
- failure --> published or uncertain? --yes--> keep all custody
-               | no
+ failure --> published, or CommitFailure::uncertain()? --yes--> keep all custody
+               | no      (before Publish only local uncertainty counts)
              capture taken? --no--> locally_settled
                | yes
              resolve_failed(capture) --ok--> locally_settled
@@ -116,7 +116,19 @@ the work counted and the release error that stopped the sequence
 | --- | --- | --- | --- |
 | Definite, settled, owners released | `Idle` | Admitted | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
 | Published, then install or a release failed | `LocalFailure` | Refused: code `Unknown`, phase `admission`; the daemon keeps `published`, the SDK refusal does not carry it | [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
-| Uncertain (`CommitError::uncertain()`) | `Uncertain` | Refused as above | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+| Uncertain (`CommitFailure::uncertain()`) | `Uncertain` | Refused as above | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+
+`CommitFailure::uncertain()` depends on the phase. `commit_branch` is the
+only write that publishes, so before the `Publish` phase nothing in history
+can have changed: a Store, Content or History failure there (a merge-stage
+Save read, a logical count, binding hints, removals, an unknown Storage
+error from `Save::finish`) is a definite nonpublication, folded back with
+`resolve_failed`, and the reply's code is `Failed`, not `Unknown`. Only local
+uncertainty keeps custody there (`CommitError::locally_uncertain()`: an
+uncertain or quarantined overlay, an uncertain owner job, a poisoned binding
+or port). From the `Publish` phase until the answer is known,
+`CommitError::uncertain()` decides. A merge-stage failure reports the Save's
+own failure (`Save::take_failure`) as its first cause when there is one.
 
 ## Invariants
 
@@ -146,7 +158,7 @@ the work counted and the release error that stopped the sequence
 | Moved head without merge | `HeadMoved` from `commit_branch` unless `force` | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Base sources still open at install | Install waits; `OverlayError::BaseSourcesPending` if called unready | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
 | Install failed after publish | `OwnerError::Install` with the `PreparedBase`, never replayed; `CommitFailure.published` is `Some`; activity `LocalFailure` | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Uncertain outcome | `CommitError::uncertain()` true, code `Unknown`; custody kept | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
+| Uncertain outcome | `CommitFailure::uncertain()` true, code `Unknown`; custody kept | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
 | Concurrent Commits on other Workspaces | Correct, serialized by the publication lane; not the optimized case | [Store](../store/README.md) |
 
 No total file, edit or Commit size cap exists: captured input is paged and

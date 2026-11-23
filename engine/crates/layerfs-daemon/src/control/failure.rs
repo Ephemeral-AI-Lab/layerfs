@@ -99,6 +99,11 @@ impl Failure {
             }
             Self::Commit(failed) => {
                 let (mut code, moved, mut detail) = commit(&failed.error);
+                // Before publication only local uncertainty is unknown: a
+                // Store or Content failure there is a definite refusal.
+                if code == ControlCode::Unknown && !failed.uncertain() {
+                    code = ControlCode::Failed;
+                }
                 // A settled failure whose reader or owner was not released
                 // still leaves custody; the reply must not read as settled.
                 if code != ControlCode::Unknown
