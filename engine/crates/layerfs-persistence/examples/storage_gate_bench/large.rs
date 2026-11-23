@@ -21,16 +21,62 @@
 //! **Attribution (B4).** Server statements are classed by text
 //! (`monitor::Monitor::stat_classes`) per phase: construction (the content
 //! layer reading the previous version) and the Save (`begin_save` to
-//! `finish`). Base-fetch round trips of the Save = its `locate` calls plus
-//! its `pack_read` calls (each one round trip in the synchronous driver);
-//! `publication_calls` = every other server call of the Save (lock,
-//! reserve, control, meta, publication; a COPY counts two on the client). The client's own round-trip and
-//! prepare counters per phase are printed beside them as the cross-check.
+//! `finish`). The client's own round-trip and prepare counters per phase are
+//! printed beside them as the cross-check.
+//!
+//! The gate's base-fetch figure counts the Save's delta-base fetches only
+//! (spec `SPEC-758-2.0.md` 4.3; write-path spec: per Save "about 45
+//! base-pack reads, 6.5 publication, 3 reservation, 2 locates"), so the
+//! Save's port calls are attributed on the client by a pass-through port
+//! wrapper ([`Attributing`]), each call's statements and round trips taken
+//! from the port's own `SqlWork` counters around it. The classes follow the
+//! call sites in `layerfs-storage` (#758 phase 3):
+//!
+//! - **membership** (`membership_locates`): the per-wave locate in
+//!   `save/wave.rs` (`State::wave`), one `locate_chains` per wave of at most
+//!   READ_OBJECT_LIMIT named ids (the demand names each object's own id, its
+//!   references and its predecessors); recognised by its ids holding one of
+//!   the Save's own new object ids. Its first statement (`chain_roots`, with
+//!   any prepare round trips) is membership; a second statement in the same
+//!   call (`chain_packs`: the member packs of the located bases' chains) is a
+//!   base locate.
+//! - **closure** (`closure_locates`): `save/publication.rs`'s locate of
+//!   references outside the publication (ids all references of the Save's
+//!   own objects, none of them its own); reported apart and not counted as
+//!   base fetch.
+//! - **base locates**: every other locate during the Save: the selection
+//!   walk's `Fetch::location` per chain level (`read/fetch.rs`, from
+//!   `encoding/delta/select.rs` and `save/select.rs`), the proposed base in
+//!   `save/select.rs`, prefetch locates, plus the `chain_packs` statements
+//!   above.
+//! - **base reads**: every `read_groups`, `read_packs`, `read_scoped_pack`
+//!   and `read_pack_selection` during the Save: the Save reads only stored
+//!   bases' (and exact-reuse chains') bytes through `read::Fetch`
+//!   (`save/source.rs`).
+//! - **other**: reserve, publish, inode values, signatures and policy.
+//!
+//! `base_fetch_round_trips` = base locates + base reads (client round
+//! trips; gate <= 40). The phase-0 figure (every server `locate` and
+//! `pack_read` call of the Save, `old_base_fetch_round_trips`) and the old
+//! all-locates total (`server_locate_calls`) are printed beside it.
+//! `attributed_round_trips` must equal the Save's `round_trips`.
 use crate::b1::{classes_line, fetched_bytes};
 use crate::common::*;
 use crate::model;
 use crate::monitor::{self, Monitor};
-use layerfs_storage::Storage;
+use layerfs_content::ObjectId;
+use layerfs_storage::{
+    location::{InodeValueRow, LocatedChains, LocatedObject, SignatureRow},
+    policy::StoragePolicy,
+    port::{
+        AcquiredPackRead, GroupRead, GroupReadAnswer, PackPersistence, PackReadPlan, PersistedPack,
+        PersistedPackRead, PersistenceError, Publication, Published, PublishedPack, Reserve,
+        Reserved,
+    },
+    Storage,
+};
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 const MIB: usize = 1 << 20;
@@ -170,12 +216,12 @@ pub fn b3_read(args: &[String]) {
     );
     let (tx, rx) = monitor::wire_delta(wire0, wire1);
     let model = model::needed_groups(url, schema, port, &[root]);
+    // One root: the per-read and union models are equal by construction.
     println!(
-        "{schema} b3_cold_read_bytes: wire_tx_bytes={tx} wire_rx_bytes={rx} product_fetched_bytes={fetched} {} ratio_product={:.3} ratio_wire={}",
+        "{schema} b3_cold_read_bytes: wire_tx_bytes={tx} wire_rx_bytes={rx} product_fetched_bytes={fetched} {} {} models_equal={}",
         model.line(),
-        fetched as f64 / model.bytes() as f64,
-        tx.parse::<f64>()
-            .map_or("NA".to_owned(), |t| format!("{:.3}", t / model.bytes() as f64))
+        model.ratios(fetched, &tx),
+        model.per_read.bytes() == model.union.bytes()
     );
     println!(
         "{schema} b3_cold_read_server: {} server_ms={:.2}",
@@ -190,6 +236,174 @@ fn calls(classes: &[monitor::Class], names: &[&str]) -> i64 {
         .filter(|c| names.contains(&c.class.as_str()))
         .map(|c| c.calls)
         .sum()
+}
+
+/// The B4 Save's port calls by class (see the header).
+#[derive(Default)]
+struct Attribution {
+    active: bool,
+    own: BTreeSet<ObjectId>,
+    references: BTreeSet<ObjectId>,
+    membership: (u64, Work),
+    closure: (u64, Work),
+    base_locate: (u64, Work),
+    base_read: (u64, Work),
+    other: (u64, Work),
+}
+
+impl Attribution {
+    fn add(slot: &mut (u64, Work), work: Work) {
+        slot.0 += 1;
+        slot.1 += work;
+    }
+    fn line(&self) -> String {
+        let f = |name: &str, (calls, w): &(u64, Work)| {
+            format!(
+                "{name}_calls={calls} {name}_statements={} {name}_round_trips={}",
+                w.statements, w.round_trips
+            )
+        };
+        [
+            f("membership", &self.membership),
+            f("closure", &self.closure),
+            f("base_locate", &self.base_locate),
+            f("base_read", &self.base_read),
+            f("other", &self.other),
+        ]
+        .join(" ")
+    }
+}
+
+/// A pass-through port that attributes each call while `active`; it forwards
+/// every method, so the product sees the wrapped port's behaviour.
+struct Attributing {
+    inner: Arc<dyn PackPersistence>,
+    work: Arc<dyn Fn() -> Work + Send + Sync>,
+    state: Mutex<Attribution>,
+}
+
+#[derive(Clone, Copy)]
+enum Kind {
+    Locate,
+    Read,
+    Other,
+}
+
+impl Attributing {
+    fn call<T>(&self, kind: Kind, ids: &[ObjectId], f: impl FnOnce() -> T) -> T {
+        let w0 = (self.work)();
+        let out = f();
+        let w = (self.work)() - w0;
+        let mut s = self.state.lock().unwrap();
+        if !s.active {
+            return out;
+        }
+        match kind {
+            Kind::Read => Attribution::add(&mut s.base_read, w),
+            Kind::Other => Attribution::add(&mut s.other, w),
+            Kind::Locate if ids.iter().any(|id| s.own.contains(id)) => {
+                // Statement 1 (with any prepares) is membership; the rest of
+                // the call is `chain_packs` for the located bases' chains.
+                let extra = w.statements.saturating_sub(1);
+                let base = Work {
+                    statements: extra,
+                    round_trips: extra,
+                    prepares: 0,
+                };
+                Attribution::add(&mut s.membership, w - base);
+                if extra > 0 {
+                    Attribution::add(&mut s.base_locate, base);
+                }
+            }
+            Kind::Locate if !ids.is_empty() && ids.iter().all(|id| s.references.contains(id)) => {
+                Attribution::add(&mut s.closure, w)
+            }
+            Kind::Locate => Attribution::add(&mut s.base_locate, w),
+        }
+        out
+    }
+}
+
+impl PackPersistence for Attributing {
+    fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
+        self.call(Kind::Other, &[], || self.inner.policy())
+    }
+    fn locate(
+        &self,
+        ids: &[ObjectId],
+        out: &mut Vec<LocatedObject>,
+    ) -> Result<(), PersistenceError> {
+        self.call(Kind::Locate, ids, || self.inner.locate(ids, out))
+    }
+    fn locate_chains(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+    ) -> Result<(), PersistenceError> {
+        self.call(Kind::Locate, roots, || {
+            self.inner.locate_chains(roots, rows, chains)
+        })
+    }
+    fn read_groups(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<GroupReadAnswer>,
+    ) -> Result<(), PersistenceError> {
+        self.call(Kind::Read, &[], || self.inner.read_groups(reads, out))
+    }
+    fn read_packs(
+        &self,
+        ids: &[i64],
+        out: &mut Vec<PersistedPack>,
+    ) -> Result<(), PersistenceError> {
+        self.call(Kind::Read, &[], || self.inner.read_packs(ids, out))
+    }
+    fn read_pack_selection(
+        &self,
+        id: i64,
+        plan: &mut dyn PackReadPlan,
+    ) -> Result<PersistedPackRead, PersistenceError> {
+        self.call(Kind::Read, &[], || self.inner.read_pack_selection(id, plan))
+    }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn PackReadPlan,
+    ) -> Result<AcquiredPackRead, PersistenceError> {
+        self.call(Kind::Read, &[], || self.inner.read_scoped_pack(id, plan))
+    }
+    fn inode_values(
+        &self,
+        ordinals: &[u32],
+        out: &mut Vec<InodeValueRow>,
+    ) -> Result<(), PersistenceError> {
+        self.call(Kind::Other, &[], || self.inner.inode_values(ordinals, out))
+    }
+    fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError> {
+        self.call(Kind::Other, &[], || self.inner.signatures(out))
+    }
+    fn reserve(&self, request: Reserve) -> Result<Reserved, PersistenceError> {
+        self.call(Kind::Other, &[], || self.inner.reserve(request))
+    }
+    fn whole_pack_bytes(&self) -> usize {
+        self.inner.whole_pack_bytes()
+    }
+    fn batched_chain_reads(&self) -> bool {
+        self.inner.batched_chain_reads()
+    }
+    fn publication_bytes(&self) -> u64 {
+        self.inner.publication_bytes()
+    }
+    fn publication_pack_cost(
+        &self,
+        pack: &PublishedPack,
+    ) -> Result<(usize, u64), PersistenceError> {
+        self.inner.publication_pack_cost(pack)
+    }
+    fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        self.call(Kind::Other, &[], || self.inner.publish(batch))
+    }
 }
 
 /// `b4 save <conninfo> <schema>`: the one large-commit Save on B3's history.
@@ -230,7 +444,13 @@ pub fn b4_save(args: &[String]) {
     );
     let engine = Engine::postgres(url, schema);
     let (port, work) = engine.port(false);
-    let storage = Storage::new(port).unwrap();
+    let work: Arc<dyn Fn() -> Work + Send + Sync> = Arc::from(work);
+    let attributing = Arc::new(Attributing {
+        inner: port,
+        work: work.clone(),
+        state: Mutex::default(),
+    });
+    let storage = Storage::new(attributing.clone()).unwrap();
     let packs0 = m.catalog(schema).packs;
 
     m.stat_reset();
@@ -255,27 +475,60 @@ pub fn b4_save(args: &[String]) {
         classes_line(&cc)
     );
 
+    {
+        let mut s = attributing.state.lock().unwrap();
+        s.own = emitted.0.iter().map(|o| o.id()).collect();
+        s.references = emitted
+            .0
+            .iter()
+            .flat_map(|o| o.references().iter().copied())
+            .filter(|id| !s.own.contains(id))
+            .collect();
+    }
     m.stat_reset();
     let wal0 = m.wal_lsn();
     let w1 = work();
+    attributing.state.lock().unwrap().active = true;
     let save_ms = save(&storage, emitted);
+    attributing.state.lock().unwrap().active = false;
     let ws = work() - w1;
     let sc = m.stat_classes();
     let wal1 = m.wal_lsn();
     let packs = m.catalog(schema).packs - packs0;
-    let base_fetch = calls(&sc, &["locate", "pack_read"]);
+    let old_base_fetch = calls(&sc, &["locate", "pack_read"]);
+    let a = attributing.state.lock().unwrap();
+    let base_fetch = a.base_locate.1.round_trips + a.base_read.1.round_trips;
+    let attributed: u64 = [
+        &a.membership,
+        &a.closure,
+        &a.base_locate,
+        &a.base_read,
+        &a.other,
+    ]
+    .iter()
+    .map(|slot| slot.1.round_trips)
+    .sum();
     println!(
         "{schema} b4_save: ms={save_ms:.1} statements={} round_trips={} prepares={} packs_added={packs} shape_ok={} \
-         base_fetch_round_trips={base_fetch} a_b4_ok={} publication_calls={} wal_bytes={} {}",
+         base_fetch_round_trips={base_fetch} a_b4_ok={} membership_locates={} old_base_fetch_round_trips={old_base_fetch} \
+         old_a_b4_ok={} server_locate_calls={} server_pack_read_calls={} attributed_round_trips={attributed} attribution_complete={} \
+         publication_calls={} wal_bytes={} {} {}",
         ws.statements,
         ws.round_trips,
         ws.prepares,
         packs >= 578,
         base_fetch <= 40,
-        sc.iter().map(|c| c.calls).sum::<i64>() - base_fetch,
+        a.membership.0,
+        old_base_fetch <= 40,
+        calls(&sc, &["locate"]),
+        calls(&sc, &["pack_read"]),
+        attributed == ws.round_trips,
+        sc.iter().map(|c| c.calls).sum::<i64>() - old_base_fetch,
         m.wal_bytes(&wal0, &wal1),
+        a.line(),
         classes_line(&sc)
     );
+    drop(a);
     m.state_set(schema, "b4_root", &roots_bytes(&[next]));
     m.state_set_u64(schema, "b4_done", 1);
 }

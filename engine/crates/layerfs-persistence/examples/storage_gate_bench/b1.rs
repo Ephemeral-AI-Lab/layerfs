@@ -126,11 +126,9 @@ pub fn run(args: &[String]) {
         let fetched = fetched_bytes(&diag);
         let model = model::needed_groups(url, schema, port.clone(), &roots);
         println!(
-            "{label} cold_read_bytes: wire_tx_bytes={tx} wire_rx_bytes={rx} product_fetched_bytes={fetched} {} ratio_product={:.3} ratio_wire={}",
+            "{label} cold_read_bytes: wire_tx_bytes={tx} wire_rx_bytes={rx} product_fetched_bytes={fetched} {} {}",
             model.line(),
-            fetched as f64 / model.bytes() as f64,
-            tx.parse::<f64>()
-                .map_or("NA".to_owned(), |t| format!("{:.3}", t / model.bytes() as f64))
+            model.ratios(fetched, &tx)
         );
         println!(
             "{label} cold_read_server: {} server_ms={:.2}",

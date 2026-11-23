@@ -108,6 +108,13 @@ pub struct Work {
     pub round_trips: u64,
     pub prepares: u64,
 }
+impl std::ops::AddAssign for Work {
+    fn add_assign(&mut self, o: Work) {
+        self.statements += o.statements;
+        self.round_trips += o.round_trips;
+        self.prepares += o.prepares;
+    }
+}
 impl std::ops::Sub for Work {
     type Output = Work;
     fn sub(self, o: Work) -> Work {
@@ -120,7 +127,10 @@ impl std::ops::Sub for Work {
 }
 
 /// A Store port and a reader of its [`Work`] counters.
-pub type Port = (Arc<dyn PackPersistence>, Box<dyn Fn() -> Work>);
+pub type Port = (
+    Arc<dyn PackPersistence>,
+    Box<dyn Fn() -> Work + Send + Sync>,
+);
 
 pub enum Engine {
     Sqlite(std::path::PathBuf),

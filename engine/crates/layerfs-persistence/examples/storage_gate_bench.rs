@@ -19,10 +19,10 @@
 //!
 //! | Row | Commands, in order | Key output |
 //! |---|---|---|
-//! | B1 | `$BIN b1 postgresql "$U" g0_b1 g0` | `write:` `catalog:` `cold_read:` (as the baselines), `cold_read_counters:`, `cold_read_bytes:` (model, ratios), `cold_read_server:` |
+//! | B1 | `$BIN b1 postgresql "$U" g0_b1 g0` | `write:` `catalog:` `cold_read:` (as the baselines), `cold_read_counters:`, `cold_read_bytes:` (`model_per_read` (gate), `model_union`, `ratio_product`, `ratio_union`), `cold_read_server:` |
 //! | B2 | `$BIN netem add`; `$BIN b1 postgresql "$U" g0_b2 g0+1ms`; `$BIN netem del` | as B1; `arm: rtt_select1_median_us` shows the delay |
-//! | B3 | `$BIN reset "$U" g0_b3`; `$BIN b3 build "$U" g0_b3 --to 4`; `... --to 7`; `... --to 10`; `$BIN b3 read "$U" g0_b3` | `b3_save:` per version; `b3_cold_read:` (`locate_waves`, `round_trips`, `a8_budget_round_trips`), `b3_cold_read_bytes:` (`model_bytes`, ratios) |
-//! | B4 | `$BIN b4 save "$U" g0_b3` (after B3) | `b4_shape:`, `b4_construct:`, `b4_save:` (`packs_added`, `shape_ok`, `base_fetch_round_trips`, `publication_calls`) |
+//! | B3 | `$BIN reset "$U" g0_b3`; `$BIN b3 build "$U" g0_b3 --to 4`; `... --to 7`; `... --to 10`; `$BIN b3 read "$U" g0_b3` | `b3_save:` per version; `b3_cold_read:` (`locate_waves`, `round_trips`, `a8_budget_round_trips`), `b3_cold_read_bytes:` (`model_per_read`, `model_union`, `ratio_product`, `ratio_union`) |
+//! | B4 | `$BIN b4 save "$U" g0_b3` (after B3) | `b4_shape:`, `b4_construct:`, `b4_save:` (`packs_added`, `shape_ok`, `base_fetch_round_trips` (client-attributed base locates + base reads), `membership_locates`, `old_base_fetch_round_trips`, per-class calls) |
 //! | B7 | `$BIN reset "$U" g0_b7`; `b7 grow --to 100`; `b7 probe`; `b7 grow --to 400`; `b7 probe`; `b7 grow --to 1000`; `b7 grow --to 1600`; `b7 probe` (each `"$U" g0_b7`, probes with `--chain-sql FILE` once Phase 2 exists) | `b7_grow:`, `b7_catalog:`, `b7_cold_read:`, `b7_chain_statement:`, `b7_save:` |
 //! | B8 | per size S in {`g0_b8_x1` (copy 0), `g0_b8_x10` (copies 0-9)}: `b8 create "$U" S --pack-lengths packs.tsv`; `b8 load "$U" S --copy C` per copy; `b8 index`; [`b8 sql "$U" S extra.sql`]; `b8 analyze`; `b8 samples`; `b8 measure "$U" S --sql STATEMENT --label L`; after both sizes, `b8 drop` each | `b8_catalog:` (`bytes_per_locator`), `b8_statement:` per sample (`exec_ms`, `buffers`, `plan_md5`, `plan`) |
 //!
