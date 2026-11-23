@@ -26,8 +26,13 @@
 //! schema name. Parameter `$1` is the sample's ids as `bytea[]` and, when
 //! the statement has a second parameter, `$2` their prefix keys as
 //! `bigint[]` (first 8 id bytes, big-endian signed), the shape of today's
-//! locate statement. The product's 2.0 chain statement (Phase 2) goes in a
-//! file of the same form.
+//! locate statement and of the product's chain statement 1
+//! (`sql/postgresql/chain_roots.sql`, #758 phase 2). A statement whose one
+//! parameter is `bigint[]` is chain statement 2
+//! (`sql/postgresql/chain_packs.sql`): `$1` is then the member pack ids the
+//! sample's ancestor lists name beyond its roots' own packs, found by
+//! running the product's statement 1 (compiled in from the same file) and
+//! decoding the lists, unmeasured, before the warm-up.
 //!
 //! **Measurement (declared warm server cache).** Per sample: one unmeasured
 //! execution of the statement, then one `EXPLAIN (ANALYZE, BUFFERS, TIMING
@@ -94,14 +99,21 @@ pub fn explain(client: &mut Client, schema: &str, sql: &str, ids: &[Vec<u8>]) ->
     let sql = sql.replace("{schema}", schema);
     let sql = sql.trim().trim_end_matches(';');
     let keys: Vec<i64> = ids.iter().map(|i| key(i)).collect();
-    let run = |client: &mut Client, text: &str| {
+    let mut packs: Option<Vec<i64>> = None;
+    let mut run = |client: &mut Client, text: &str| {
         let statement = client
             .prepare(text)
             .unwrap_or_else(|e| panic!("{text}: {e}"));
         match statement.params().len() {
+            1 if statement.params()[0] == Type::INT8_ARRAY => {
+                let packs = packs.get_or_insert_with(|| member_packs(client, schema, ids, &keys));
+                client.query(&statement, &[&*packs])
+            }
             1 => client.query(&statement, &[&ids]),
             2 => client.query(&statement, &[&ids, &keys]),
-            n => panic!("statement takes {n} parameters; the harness binds $1 ids and $2 keys"),
+            n => panic!(
+                "statement takes {n} parameters; the harness binds $1 ids and $2 keys, or $1 member pack ids"
+            ),
         }
         .unwrap_or_else(|e| panic!("{text}: {e}"))
     };
@@ -138,6 +150,56 @@ pub fn explain(client: &mut Client, schema: &str, sql: &str, ids: &[Vec<u8>]) ->
         plan,
         plan_md5,
     }
+}
+
+/// The product's chain statement 1 (#758 phase 2).
+const CHAIN_ROOTS: &str = include_str!("../../sql/postgresql/chain_roots.sql");
+
+/// The packs the ancestor lists of `ids` name that are not the roots' own:
+/// chain statement 2's `$1`. Lists use the D1 entry form
+/// `varint(zigzag(pack - previous)) || group || varint(record) ||
+/// varint(length - 1)`, `previous` starting at the row's own pack.
+fn member_packs(client: &mut Client, schema: &str, ids: &[Vec<u8>], keys: &[i64]) -> Vec<i64> {
+    let sql = CHAIN_ROOTS.replace("{schema}", schema);
+    let rows = client
+        .query(sql.trim().trim_end_matches(';'), &[&ids, &keys])
+        .unwrap_or_else(|e| panic!("chain statement 1: {e}"));
+    let (mut own, mut named) = (
+        std::collections::BTreeSet::new(),
+        std::collections::BTreeSet::new(),
+    );
+    for row in &rows {
+        let pack: i64 = row.get(6);
+        own.insert(pack);
+        if row.get::<_, i32>(0) != 0 {
+            continue;
+        }
+        let Some(list) = row.get::<_, Option<Vec<u8>>>(7) else {
+            continue;
+        };
+        let (mut at, mut previous) = (0, pack);
+        let varint = |at: &mut usize| {
+            let (mut value, mut shift) = (0u64, 0);
+            loop {
+                let byte = list[*at];
+                *at += 1;
+                value |= u64::from(byte & 0x7f) << shift;
+                shift += 7;
+                if byte < 0x80 {
+                    return value;
+                }
+            }
+        };
+        while at < list.len() {
+            let zigzag = varint(&mut at);
+            previous += ((zigzag >> 1) as i64) ^ -((zigzag & 1) as i64);
+            named.insert(previous);
+            at += 1;
+            varint(&mut at);
+            varint(&mut at);
+        }
+    }
+    named.difference(&own).copied().collect()
 }
 
 fn arg(args: &[String], name: &str) -> Option<String> {

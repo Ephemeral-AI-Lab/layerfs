@@ -1,4 +1,4 @@
-//! Normative schema-2 live-object signatures; generated from the shipped DDL.
+//! Normative schema-3 (2.0) live-object signatures; generated from the shipped DDL.
 //! PostgreSQL 17 deparse, whitespace normalized; healthy DDL fixtures verify drift.
 pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "absorbed", "absorbed_depth_check", "CHECK (depth >= 1)"),
@@ -61,7 +61,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "history_meta", "history_meta_id_check", "CHECK (id = 1)"),
     ("C", "history_meta", "history_meta_identity_format_check", "CHECK (identity_format = 3)"),
     ("C", "history_meta", "history_meta_pkey", "PRIMARY KEY (id)"),
-    ("C", "history_meta", "history_meta_schema_version_check", "CHECK (schema_version = 2)"),
+    ("C", "history_meta", "history_meta_schema_version_check", "CHECK (schema_version = 3)"),
     ("C", "init_entry", "init_entry_canonical_position_check", "CHECK (canonical_position > 0)"),
     ("C", "init_entry", "init_entry_content_root_check", "CHECK (octet_length(content_root) = 32)"),
     ("C", "init_entry", "init_entry_host_identity_check", "CHECK (octet_length(host_identity) = 60)"),
@@ -125,6 +125,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "layer_stack", "layer_stack_pkey", "PRIMARY KEY (layer_stack_id)"),
     ("C", "layer_stack", "layer_stack_profile_id_check", "CHECK (octet_length(profile_id) = 32)"),
     ("C", "layer_stack", "layer_stack_scope_id_check", "CHECK (octet_length(scope_id) = 32)"),
+    ("C", "object_location", "object_location_ancestors_check", "CHECK (octet_length(ancestors) <= 850)"),
     ("C", "object_location", "object_location_canonical_length_check", "CHECK (canonical_length >= 1 AND canonical_length <= 16777216)"),
     ("C", "object_location", "object_location_group_number_check", "CHECK (group_number >= 0 AND group_number <= 255)"),
     ("C", "object_location", "object_location_object_id_check", "CHECK (octet_length(object_id) = 32)"),
@@ -134,6 +135,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "pack", "pack_check", "CHECK (octet_length(body) = length)"),
     ("C", "pack", "pack_check1", "CHECK (domain = 1 OR length <= 262144)"),
     ("C", "pack", "pack_digest_check", "CHECK (octet_length(digest) = 32)"),
+    ("C", "pack", "pack_directory_check", "CHECK (octet_length(directory) >= 24 AND directory = SUBSTRING(body FROM 1 FOR octet_length(directory)))"),
     ("C", "pack", "pack_domain_check", "CHECK (domain = ANY (ARRAY[0::bigint, 1::bigint]))"),
     ("C", "pack", "pack_length_check", "CHECK (length >= 32 AND length <= 16781312)"),
     ("C", "pack", "pack_pack_id_check", "CHECK (pack_id > 0)"),
@@ -154,7 +156,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "store_policy", "store_policy_next_ordinal_check", "CHECK (next_ordinal >= 1 AND next_ordinal <= '4294967296'::bigint)"),
     ("C", "store_policy", "store_policy_next_pack_id_check", "CHECK (next_pack_id > 0)"),
     ("C", "store_policy", "store_policy_pkey", "PRIMARY KEY (id)"),
-    ("C", "store_policy", "store_policy_schema_version_check", "CHECK (schema_version = 2)"),
+    ("C", "store_policy", "store_policy_schema_version_check", "CHECK (schema_version = 3)"),
     ("C", "store_policy", "store_policy_small_file_threshold_bytes_check", "CHECK (small_file_threshold_bytes >= 131072 AND small_file_threshold_bytes <= 1048576)"),
     ("C", "store_policy", "store_policy_whole_file_delta_max_depth_check", "CHECK (whole_file_delta_max_depth >= 0 AND whole_file_delta_max_depth <= 50)"),
     ("C", "store_totals", "store_totals_canonical_check", "CHECK (canonical >= 0)"),
@@ -171,6 +173,9 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "store_totals", "store_totals_pkey", "PRIMARY KEY (id)"),
     ("C", "store_totals", "store_totals_stored_check", "CHECK (stored >= 0)"),
     ("F", "_", "add_logical", "BEGIN UPDATE store_totals SET logical = logical + NEW.logical WHERE id = 1; RETURN NULL; END"),
+    ("F", "_", "ancestor_entries", "DECLARE at integer := 0; width integer := octet_length(list); v bigint; shift integer; b integer; part integer; moved numeric; BEGIN n := 0; pack_id := own; WHILE at < width LOOP n := n + 1; FOR part IN 1..3 LOOP v := 0; shift := 0; LOOP IF at >= width OR shift > 63 THEN pack_id := NULL; RETURN NEXT; RETURN; END IF; b := get_byte(list, at); at := at + 1; v := v | ((b & 127)::bigint << shift); shift := shift + 7; EXIT WHEN b < 128; END LOOP; IF part = 1 THEN moved := pack_id::numeric + (((v >> 1) & 9223372036854775807) # -(v & 1)); IF at >= width OR moved NOT BETWEEN 1 AND 9223372036854775807 THEN pack_id := NULL; RETURN NEXT; RETURN; END IF; pack_id := moved; group_number := get_byte(list, at); at := at + 1; ELSIF part = 2 THEN record_number := v; ELSE canonical_length := v + 1; END IF; END LOOP; next := at + 1; RETURN NEXT; END LOOP; END"),
+    ("F", "_", "ancestor_entry", "SELECT ancestor_varint(zigzag) || substring(int2send(grp::smallint) FROM 2) || ancestor_varint(rec) || ancestor_varint(len_less_one)"),
+    ("F", "_", "ancestor_varint", "SELECT CASE WHEN v >= 0 AND v < 128 THEN substring(int8send((v & 127)) FROM 8) WHEN v >= 0 AND v < 16384 THEN substring(int8send((((v & 127) | 128) << 8) | ((v >> 7) & 127)) FROM 7) WHEN v >= 0 AND v < 2097152 THEN substring(int8send((((v & 127) | 128) << 16) | ((((v >> 7) & 127) | 128) << 8) | ((v >> 14) & 127)) FROM 6) WHEN v >= 0 AND v < 268435456 THEN substring(int8send((((v & 127) | 128) << 24) | ((((v >> 7) & 127) | 128) << 16) | ((((v >> 14) & 127) | 128) << 8) | ((v >> 21) & 127)) FROM 5) WHEN v >= 0 AND v < 34359738368 THEN substring(int8send((((v & 127) | 128) << 32) | ((((v >> 7) & 127) | 128) << 24) | ((((v >> 14) & 127) | 128) << 16) | ((((v >> 21) & 127) | 128) << 8) | ((v >> 28) & 127)) FROM 4) WHEN v >= 0 AND v < 4398046511104 THEN substring(int8send((((v & 127) | 128) << 40) | ((((v >> 7) & 127) | 128) << 32) | ((((v >> 14) & 127) | 128) << 24) | ((((v >> 21) & 127) | 128) << 16) | ((((v >> 28) & 127) | 128) << 8) | ((v >> 35) & 127)) FROM 3) WHEN v >= 0 AND v < 562949953421312 THEN substring(int8send((((v & 127) | 128) << 48) | ((((v >> 7) & 127) | 128) << 40) | ((((v >> 14) & 127) | 128) << 32) | ((((v >> 21) & 127) | 128) << 24) | ((((v >> 28) & 127) | 128) << 16) | ((((v >> 35) & 127) | 128) << 8) | ((v >> 42) & 127)) FROM 2) WHEN v >= 0 AND v < 72057594037927936 THEN substring(int8send((((v & 127) | 128) << 56) | ((((v >> 7) & 127) | 128) << 48) | ((((v >> 14) & 127) | 128) << 40) | ((((v >> 21) & 127) | 128) << 32) | ((((v >> 28) & 127) | 128) << 24) | ((((v >> 35) & 127) | 128) << 16) | ((((v >> 42) & 127) | 128) << 8) | ((v >> 49) & 127)) FROM 1) WHEN v >= 0 THEN substring(int8send((((v & 127) | 128) << 56) | ((((v >> 7) & 127) | 128) << 48) | ((((v >> 14) & 127) | 128) << 40) | ((((v >> 21) & 127) | 128) << 32) | ((((v >> 28) & 127) | 128) << 24) | ((((v >> 35) & 127) | 128) << 16) | ((((v >> 42) & 127) | 128) << 8) | (((v >> 49) & 127) | 128)) FROM 1) || substring(int8send(((v >> 56) & 127)) FROM 8) ELSE substring(int8send((((v & 127) | 128) << 56) | ((((v >> 7) & 127) | 128) << 48) | ((((v >> 14) & 127) | 128) << 40) | ((((v >> 21) & 127) | 128) << 32) | ((((v >> 28) & 127) | 128) << 24) | ((((v >> 35) & 127) | 128) << 16) | ((((v >> 42) & 127) | 128) << 8) | (((v >> 49) & 127) | 128)) FROM 1) || substring(int8send(((((v >> 56) & 127) | 128) << 8) | 1::bigint) FROM 7) END"),
     ("F", "_", "pack_immutable", "BEGIN RAISE EXCEPTION 'published pack immutable'; END"),
     ("I", "absorbed", "absorbed_heights", "CREATE INDEX absorbed_heights ON absorbed USING btree (run, height)"),
     ("I", "absorbed", "absorbed_pkey", "CREATE UNIQUE INDEX absorbed_pkey ON absorbed USING btree (run, depth)"),

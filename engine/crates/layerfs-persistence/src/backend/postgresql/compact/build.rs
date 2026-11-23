@@ -1,4 +1,15 @@
 //! §8 Phase A: the retained-payload scratch build and its stored totals.
+//!
+//! **Ancestor lists (#758).** Every `object_location.ancestors` entry names a
+//! record by pack id, group and record number. Phase A copies retained packs
+//! whole under their own ids and retained rows byte for byte, and the mark
+//! retains every base of every retained delta, so each list stays exact. The
+//! scan [`verify_ancestors`] checks that before anything is swapped. A
+//! compaction that repacks (moves records into new packs or renumbers them)
+//! must remap every list that names a moved record in the same transaction
+//! that swaps in the new locations, or set it to NULL (unrecorded); copying
+//! the old lists would leave hints that a strict reader refuses
+//! (`chain_hint_stale`).
 
 use super::op::quote_ident;
 use super::op::scalar;
@@ -107,9 +118,13 @@ pub(crate) fn table_storage(
     table: &str,
 ) -> HistoryResult<(String, Vec<String>)> {
     {
+        // The TOAST relation's options (the early-freeze settings on `pack`)
+        // are carried as `toast.` options, or the rebuilt table loses them.
         let rows = tx.query(
             "SELECT COALESCE((SELECT t.spcname FROM pg_tablespace t WHERE t.oid=c.reltablespace),''), \
-                    COALESCE(array_to_string(c.reloptions,','),'') \
+                    concat_ws(',',NULLIF(array_to_string(c.reloptions,','),''),\
+                     (SELECT NULLIF(array_to_string(ARRAY(SELECT 'toast.'||o FROM unnest(t.reloptions) o),','),'') \
+                      FROM pg_class t WHERE t.oid=c.reltoastrelid)) \
              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace \
              WHERE n.nspname=$1 AND c.relname=$2",
             vec![Param::Text(schema.to_owned()), Param::Text(table.to_owned())],
@@ -161,6 +176,31 @@ pub(crate) fn create_scratch(
         ))?;
         Ok(())
     })
+}
+
+/// The #758 invariant on the scratch copy: every entry of every retained
+/// row's ancestor list names a pack of `{scratch}.pack` and a group below
+/// that pack's group count (from its directory copy), and no list is
+/// malformed. One statement, linear in the entries checked; a failure is
+/// `Integrity` before anything is swapped. NULL lists (unrecorded) have no
+/// entries to check.
+fn verify_ancestors(session: &Arc<Session>, schema: &str, scratch: &str) -> HistoryResult<()> {
+    let unresolved = stage(session, |tx| {
+        scalar(
+            tx,
+            &format!(
+                "SELECT count(*) FROM {scratch}.object_location o \
+                 CROSS JOIN LATERAL {schema}.ancestor_entries(o.pack_id,o.ancestors) e \
+                 WHERE e.pack_id IS NULL OR NOT EXISTS (SELECT 1 FROM {scratch}.pack p WHERE p.pack_id=e.pack_id \
+                  AND e.group_number < (get_byte(p.directory,12)|(get_byte(p.directory,13)<<8)|(get_byte(p.directory,14)<<16)|(get_byte(p.directory,15)<<24)))"
+            ),
+            Vec::new(),
+        )
+    })?;
+    if unresolved != 0 {
+        return Err(HistoryError::Integrity("compaction ancestor lists"));
+    }
+    Ok(())
 }
 
 /// Phase A copies about this many retained pack body bytes per transaction:
@@ -290,6 +330,7 @@ pub(crate) fn build(
     if copied_rows != visited {
         return Err(HistoryError::Integrity("compaction batch count"));
     }
+    verify_ancestors(session, schema, scratch)?;
     stage(session, |tx| {
         tx.batch(&format!(
             "CREATE INDEX object_location_prefix ON {scratch}.object_location \

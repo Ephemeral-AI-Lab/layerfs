@@ -118,7 +118,7 @@ fn both_checks_refuse_a_changed_incarnation_or_schema_version() {
         assert!(schema.open(check, BINDING).is_err(), "{check:?}: version");
     }
     schema.sql(&format!(
-        "UPDATE {s}.history_meta SET schema_version=2, identity_format=2"
+        "UPDATE {s}.history_meta SET schema_version=3, identity_format=2"
     ));
     for check in CHECKS {
         assert!(schema.open(check, BINDING).is_err(), "{check:?}: format");

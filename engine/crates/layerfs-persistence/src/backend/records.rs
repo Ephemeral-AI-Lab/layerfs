@@ -129,6 +129,9 @@ pub enum BackendError {
     /// A SQLite Store of schema version 1 (before #91): refused at open with
     /// the offline conversion named, never misread.
     SchemaVersion1,
+    /// A PostgreSQL Store of schema version 2, written before 2.0's ancestor
+    /// lists and pack directories (#758): refused at open, never converted.
+    PostgresSchema2,
     /// Stored SQLite layout is not implemented; this is not a corruption verdict.
     UnsupportedSchemaVersion(i64),
     /// The outcome is not proven: the failure may have committed.
@@ -138,6 +141,10 @@ pub enum BackendError {
 pub(crate) const SCHEMA_VERSION_1: &str =
     "schema version 1 Store (one row per inode value and binding hint, before #91): \
 convert a closed copy offline with tools/store_blocks.py migrate";
+/// The refusal a PostgreSQL Store of schema version 2 gets at open (#758 D5).
+pub(crate) const POSTGRES_SCHEMA_2: &str =
+    "PostgreSQL Store schema version 2 (before 2.0's ancestor lists and pack directories, #758): \
+not supported by this release and not migrated; create a new Store";
 impl From<BackendError> for layerfs_storage::port::PersistenceError {
     fn from(e: BackendError) -> Self {
         match e {
@@ -146,6 +153,9 @@ impl From<BackendError> for layerfs_storage::port::PersistenceError {
             BackendError::Integrity => Self::Malformed,
             BackendError::SchemaVersion1 => Self::Refused {
                 status: SCHEMA_VERSION_1.to_owned(),
+            },
+            BackendError::PostgresSchema2 => Self::Refused {
+                status: POSTGRES_SCHEMA_2.to_owned(),
             },
             BackendError::UnsupportedSchemaVersion(version) => Self::Refused {
                 status: format!("unsupported SQLite Store schema version {version}; supported versions are 36/37/38 and 42/43/44; no migration performed"),
@@ -175,6 +185,7 @@ impl From<BackendError> for layerfs_history::HistoryError {
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
             BackendError::SchemaVersion1 => Self::Integrity(SCHEMA_VERSION_1),
+            BackendError::PostgresSchema2 => Self::Integrity(POSTGRES_SCHEMA_2),
             BackendError::UnsupportedSchemaVersion(_) => {
                 Self::Unsupported("SQLite Store schema version")
             }

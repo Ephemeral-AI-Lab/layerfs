@@ -41,6 +41,7 @@ pub(super) fn run(
         return Ok(());
     }
     packs(view, options, observer)?;
+    chains(view, options, observer)?;
     let reader = Reader::new(view, ceiling, options).map_err(|_| BackendError::Integrity)?;
     objects(view, &reader, options, observer)?;
     super::auxiliary::run(view, Some(&reader), options, observer)?;
@@ -124,6 +125,24 @@ fn packs(
         format!("{checked} packs acquired and length/digest/directory checked; {failed} failed"),
     );
     Ok(())
+}
+
+/// PostgreSQL ancestor lists (#758), full mode only: every entry must name a
+/// stored pack and a group below its group count, and each list must be the
+/// first entry's row's list behind that entry, exactly what a strict reader
+/// verifies (`chain_hint_stale`); a stale or unresolvable list costs a reader
+/// speed, never correctness, but no 2.0 publication or compaction makes one.
+/// Linear in the entries checked.
+fn chains(
+    view: &dyn View,
+    options: Options,
+    observer: &mut dyn FnMut(Observation),
+) -> Result<(), BackendError> {
+    if !view.has_table("store_lane")? {
+        return Ok(());
+    }
+    super::catalog::check(view,options,observer,"store.catalog.chain_entries","SELECT count(*) FROM object_location o CROSS JOIN LATERAL ancestor_entries(o.pack_id,o.ancestors) e WHERE e.pack_id IS NULL OR NOT EXISTS (SELECT 1 FROM pack p WHERE p.pack_id=e.pack_id AND e.group_number<(get_byte(p.directory,12)|(get_byte(p.directory,13)<<8)|(get_byte(p.directory,14)<<16)|(get_byte(p.directory,15)<<24)))","malformed ancestor lists or entries naming no stored pack or group")?;
+    super::catalog::check(view,options,observer,"store.catalog.chain_hints","SELECT count(*) FROM object_location o CROSS JOIN LATERAL ancestor_entries(o.pack_id,o.ancestors) e WHERE e.n=1 AND e.pack_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM object_location b WHERE b.pack_id=e.pack_id AND b.group_number=e.group_number AND b.record_number=e.record_number AND b.canonical_length=e.canonical_length AND b.ancestors=substring(o.ancestors FROM e.next))","ancestor lists whose first entry names no stored row or whose rest is not that row's list (stale chain hints a strict read refuses)")
 }
 
 fn objects(

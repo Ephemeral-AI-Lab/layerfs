@@ -35,6 +35,11 @@ pub(crate) fn cursor(tx: &Transaction<'_>) -> Result<(i64, i64), BackendError> {
     Ok((r.get(0)?, r.get(1)?))
 }
 
+/// The locate statement, `{schema}` substituted; `$1` ids, `$2` their prefix
+/// keys. The bench's `b8_locate.sql` is this text (checked by the
+/// `postgresql_history_scaling` test).
+pub(crate) const LOCATE: &str = include_str!("../../../../sql/postgresql/locate.sql");
+
 /// Every stored location among `ids`, in one statement that names the
 /// schema, so it also runs outside a transaction.
 pub(crate) fn locate(
@@ -57,13 +62,7 @@ pub(crate) fn locate(
     // Each id finds its rows through the prefix index, then the full id is
     // compared (#90); `OFFSET 0` keeps that a probe per id rather than a hash
     // of the whole table.
-    let sql = format!(
-        "SELECT CASE WHEN octet_length(o.object_id)=32 THEN o.object_id END,o.role::bigint,o.canonical_length::bigint,o.group_number::bigint,o.record_number::bigint,p.pack_id,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest END,p.length \
-         FROM unnest($1::bytea[],$2::bigint[]) k(i,k) CROSS JOIN LATERAL (SELECT * FROM {s}.object_location x \
-         WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=k.k AND x.object_id=k.i OFFSET 0) o \
-         JOIN {s}.pack p ON p.pack_id=o.pack_id",
-        s = tx.schema
-    );
+    let sql = LOCATE.replace("{schema}", tx.schema);
     let rows = tx.typed(&sql, &[&ids, &keys], ids.len() as u64 * 40)?;
     for row in rows {
         let r = super::super::session::rows::record(&row)?;

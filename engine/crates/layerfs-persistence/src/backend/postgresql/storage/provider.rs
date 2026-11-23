@@ -6,7 +6,7 @@ use super::super::{
 use crate::{metadata, publication, SqlWork};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedChains, LocatedObject, SignatureRow},
     port::*,
     StoragePolicy,
 };
@@ -74,6 +74,65 @@ impl PackPersistence for PostgresStorage {
         self.session
             .read_immutable(|tx| metadata::locations::read(tx, ids, out))
     }
+    /// Design B (#758): the roots, their lists and their packs in one
+    /// statement, then the member packs it did not return in a second, both
+    /// autocommit reads of immutable rows (`metadata::chains`).
+    fn locate_chains(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+    ) -> Result<(), PersistenceError> {
+        rows.clear();
+        chains.chains.clear();
+        chains.directories.clear();
+        let policy = self.policy()?;
+        self.session.read_immutable(|tx| {
+            super::super::metadata::chains::locate_chains(tx, &policy, roots, rows, chains)
+        })
+    }
+    /// Whole packs for every read (#758 phase 2; group ranges are phase 3):
+    /// one `read_packs` statement per 2 MiB of packs, as the port's default,
+    /// but answered in request order, which `read_packs` (pack-id order) is
+    /// not.
+    fn read_groups(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<GroupReadAnswer>,
+    ) -> Result<(), PersistenceError> {
+        out.clear();
+        let mut rest = reads;
+        while !rest.is_empty() {
+            let mut bytes = 0;
+            let take = rest
+                .iter()
+                .take_while(|read| {
+                    bytes += read.pack.length;
+                    bytes <= layerfs_storage::policy::DEPENDENCY_PACK_CACHE_BYTES
+                })
+                .count()
+                .max(1);
+            let ids: Vec<i64> = rest[..take].iter().map(|read| read.pack.pack_id).collect();
+            let mut packs = Vec::new();
+            self.read_packs(&ids, &mut packs)?;
+            let mut by_id: std::collections::HashMap<i64, PersistedPack> = packs
+                .into_iter()
+                .map(|pack| (pack.info().pack_id, pack))
+                .collect();
+            for (at, id) in ids.iter().enumerate() {
+                // A pack asked twice is copied for all but its last read.
+                let pack = match ids[at + 1..].contains(id) {
+                    true => by_id.get(id).cloned(),
+                    false => by_id.remove(id),
+                };
+                out.push(GroupReadAnswer::Whole(
+                    pack.ok_or(PersistenceError::Missing)?,
+                ));
+            }
+            rest = &rest[take..];
+        }
+        Ok(())
+    }
     fn read_packs(
         &self,
         ids: &[i64],
@@ -122,9 +181,10 @@ impl PackPersistence for PostgresStorage {
     fn whole_pack_bytes(&self) -> usize {
         layerfs_storage::policy::PACK_LIMIT
     }
-    /// Off until the PostgreSQL chain reads land (#758 phase 2).
+    /// Every read is a round trip, so the bases this handle published are
+    /// fetched in the same group-read wave as provider chains (#758).
     fn batched_chain_reads(&self) -> bool {
-        false
+        true
     }
     /// Each statement is a round trip and a publication costs about seven
     /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at

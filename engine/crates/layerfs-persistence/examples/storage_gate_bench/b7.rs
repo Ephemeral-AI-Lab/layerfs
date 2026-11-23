@@ -13,7 +13,9 @@
 //!    `Storage`: wall, statements, round trips, bytes, wire bytes, server
 //!    time by class, `chain_hint_stale`;
 //! 3. **chain statement** for the same 72 roots, from `--chain-sql FILE`
-//!    (the Phase 2 product statement, B8 file form); NOT_RUN without it;
+//!    (B8 file form: the product's `sql/postgresql/chain_roots.sql`, or
+//!    `chain_packs.sql` for statement 2 over the roots' member packs);
+//!    NOT_RUN without it;
 //! 4. **Save**: version V+1, measured alone on a fresh `Storage` (cold
 //!    client caches, the same at every probe, unlike the warm `grow`
 //!    Saves): construction and Save wall,

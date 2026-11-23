@@ -48,13 +48,13 @@ pub(super) fn check(
             && major != 17
         {
             incomplete = true;
-            emit(observer,"store.schema.objects",Outcome::Unknown,format!("live schema object {kind} {table}/{name} definition differs from the PostgreSQL 17 schema-2 signature; server-major {major} deparse compatibility is unverified"));
+            emit(observer,"store.schema.objects",Outcome::Unknown,format!("live schema object {kind} {table}/{name} definition differs from the PostgreSQL 17 schema-3 signature; server-major {major} deparse compatibility is unverified"));
         } else if row.get::<i64>(0)? != 1 || row.get::<i64>(1)? != 1 || row.get::<i64>(2)? != 1 {
             failed += 1;
-            emit(observer,"store.schema.objects",Outcome::Fail,format!("live schema object {kind} {table}/{name} is absent, disabled, invalid or differs from the schema-2 contract; this is a schema/authority failure, not a content-corruption claim"));
+            emit(observer,"store.schema.objects",Outcome::Fail,format!("live schema object {kind} {table}/{name} is absent, disabled, invalid or differs from the schema-3 contract; this is a schema/authority failure, not a content-corruption claim"));
         }
     }
-    emit(observer,"store.schema.objects.summary",if failed>0{Outcome::Fail}else if incomplete{Outcome::Unknown}else{Outcome::Pass},format!("{checked} live constraints, indexes, triggers and immutable-pack trigger functions compared independently with the shipped schema-2 contract; {failed} differ"));
+    emit(observer,"store.schema.objects.summary",if failed>0{Outcome::Fail}else if incomplete{Outcome::Unknown}else{Outcome::Pass},format!("{checked} live constraints, indexes, triggers and immutable-pack trigger and ancestor-list functions compared independently with the shipped schema-3 contract; {failed} differ"));
     Ok(())
 }
 

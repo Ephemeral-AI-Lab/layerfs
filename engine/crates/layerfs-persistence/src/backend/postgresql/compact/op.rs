@@ -55,7 +55,7 @@ pub(crate) fn quote_ident(name: &str) -> String {
 }
 
 /// The `pg_attribute`/`attstorage`/`reloptions`/`tablespace` fingerprint of
-/// one table. The mark records both payload tables' fingerprints in `gc_op`;
+/// one table, with its TOAST relation's reloptions. The mark records both payload tables' fingerprints in `gc_op`;
 /// the swap compares them with the tables it moves back into the Store, so a
 /// scratch table that lost a storage class, option or tablespace is an
 /// `Integrity` failure rather than a silent layout change.
@@ -68,7 +68,8 @@ pub(crate) fn table_fingerprint(
         "SELECT COALESCE((SELECT string_agg(a.attname::text || ':' || format_type(a.atttypid,a.atttypmod) || ':' || a.attnotnull::text || ':' || a.attstorage::text || ':' || COALESCE(a.attcompression::text,'') || ':' || a.attnum::text, ',' ORDER BY a.attnum) \
            FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'') || '|' || \
              COALESCE((SELECT t.spcname::text FROM pg_tablespace t WHERE t.oid=c.reltablespace),'') || '|' || \
-             COALESCE(array_to_string(c.reloptions,','),'') \
+             COALESCE(array_to_string(c.reloptions,','),'') || '|' || \
+             COALESCE((SELECT array_to_string(t.reloptions,',') FROM pg_class t WHERE t.oid=c.reltoastrelid),'') \
          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace \
          WHERE n.nspname=$1 AND c.relname=$2",
         vec![Param::Text(schema.to_owned()), Param::Text(table.to_owned())],

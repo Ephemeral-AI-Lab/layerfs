@@ -53,6 +53,8 @@ pub(super) fn run(
     ]{check(view,options,observer,id,sql,problem)?;}
     if view.has_table("store_lane")? {
         check(view,options,observer,"store.catalog.lane","SELECT CASE WHEN count(*)=1 AND min(id)=1 AND max(id)=1 THEN 0 ELSE 1 END FROM store_lane","malformed PostgreSQL publication-lane singleton; no lane lock taken")?;
+        // #758: a 2.0 publication records a list for every row ('' for FULL).
+        check(view,options,observer,"store.catalog.chain_lists","SELECT count(*) FROM object_location WHERE ancestors IS NULL","PostgreSQL locations without a recorded ancestor list; their reads locate each base level by level")?;
     }
     if view.has_table("sqlite_sequence")? {
         // sqlite_sequence records allocation history, not a demand that current

@@ -2271,3 +2271,90 @@ fn a_digest_root_updated_after_the_mark_survives_cleanup() {
     assert_eq!(root, retained.as_bytes().to_vec());
     assert_settled(schema, 0x42);
 }
+
+/// #758 phase 2: compaction repacks every live row, so it must carry each
+/// row's ancestor list to the new pack positions (its verification scan
+/// refuses a list naming a pack or group the rebuilt Store lacks). A live
+/// whole-file delta chain survives two compactions, and a strict cold read
+/// of every version afterwards binds bases from the lists with no stale
+/// hint.
+#[test]
+fn ancestor_lists_stay_exact_across_two_compactions() {
+    use layerfs_content::{
+        construct_bytes_with_predecessor, ConstructionPolicy, ContentResult, FinalizedConsumer,
+        PredecessorBase,
+    };
+    #[derive(Default)]
+    struct Emitted(Vec<FinalizedObject>);
+    impl FinalizedConsumer for Emitted {
+        fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+            self.0.push(object);
+            Ok(())
+        }
+    }
+    let Some(url) = url() else { return };
+    let f = Fixture::new(&url, "chains");
+    let storage = Storage::new(f.handles.storage.clone()).expect("storage");
+    let policy = ConstructionPolicy::frozen_default();
+    let mut bytes = pseudo_bytes(40_000, 7);
+    let mut roots: Vec<ObjectId> = Vec::new();
+    for version in 0..6usize {
+        let at = 997 * version % (bytes.len() - 64);
+        bytes[at..at + 64].copy_from_slice(&pseudo_bytes(64, 100 + version as u8));
+        let reader = storage.reader().expect("reader");
+        let mut emitted = Emitted::default();
+        let built = layerfs_telemetry::timer::Timing::disabled("test.construct", |scope| {
+            construct_bytes_with_predecessor(
+                policy,
+                &policy.capacities(),
+                &bytes,
+                roots
+                    .last()
+                    .map(|base| PredecessorBase::new(&reader, *base)),
+                &mut emitted,
+                scope.child("content"),
+            )
+        });
+        roots.push(built.0.expect("construct").root);
+        drop(reader);
+        let save = storage.begin_save().expect("begin save");
+        for object in emitted.0 {
+            save.accept(object).expect("accept");
+        }
+        save.finish().expect("finish");
+    }
+    drop(storage);
+    let _stack = initialize(&f.handles, 1, tree(&f, *roots.last().unwrap(), 1));
+    let lists = "SELECT count(*) FROM {s}.object_location WHERE octet_length(ancestors)>0";
+    assert!(
+        f.schema.scalar(lists) >= 5,
+        "the live chain is stored as deltas"
+    );
+    for op in [0x61, 0x62] {
+        // A large dead object, so each compaction rebuilds.
+        let dead = saved_whole_file(&f.handles, &pseudo_bytes(120_000, op));
+        let receipt = f.handles.compact(&request(op)).unwrap();
+        assert_eq!(receipt.path, CompactPath::Rebuild, "compaction {op:#x}");
+        assert!(!located(&f.handles, dead));
+        assert_phase_c_settled(&f.schema, op);
+    }
+    assert!(
+        f.schema.scalar(lists) >= 5,
+        "the lists survive both compactions"
+    );
+    // A compaction admits a new incarnation: the doctor and the read run on
+    // a session opened after it.
+    let handles = f.schema.open();
+    assert_doctor_clean(&handles);
+    let reader = Storage::new(handles.storage.clone()).expect("storage");
+    reader.set_strict_hints(true);
+    let read = reader
+        .reader()
+        .expect("reader")
+        .read_objects(roots.last().map(std::slice::from_ref).unwrap())
+        .expect("strict read after two compactions");
+    assert_eq!(read.len(), 1);
+    let diagnostics = reader.diagnostics();
+    assert_eq!(diagnostics.chain_hint_stale, 0, "{diagnostics:?}");
+    assert!(diagnostics.chain_hinted_bases >= 5, "{diagnostics:?}");
+}

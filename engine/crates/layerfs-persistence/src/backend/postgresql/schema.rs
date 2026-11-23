@@ -52,10 +52,17 @@ const ACQUISITION: &str = include_str!("../../../sql/postgresql/acquisition.sql"
 /// The acquisition tables, in name order.
 const ACQUISITION_TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_operation"];
 /// The engine-scoped schema version in `store_policy` and `history_meta`.
-/// Version 2 keeps inode values and binding hints in append-only blocks
+/// Version 2 kept inode values and binding hints in append-only blocks
 /// (#91) and object locations in narrow rows under an 8-byte-prefix index
-/// (#90); a version 1 schema is refused at open, never converted.
-pub(crate) const SCHEMA_VERSION: i64 = 2;
+/// (#90). Version 3 (2.0, #758) adds each location's ancestor list
+/// (`object_location.ancestors`), each pack's directory copy
+/// (`pack.directory`) and the early-freeze reloptions. A version 2 schema is
+/// refused at open with [`POSTGRES_SCHEMA_2`](crate::backend::records::POSTGRES_SCHEMA_2)
+/// and a version 1 schema as malformed; neither is converted.
+pub(crate) const SCHEMA_VERSION: i64 = 3;
+/// The schema version 2.0 refuses by name (D5): the Store layout before
+/// [`SCHEMA_VERSION`] 3.
+const PRE_2_0_VERSION: i64 = 2;
 /// Every table of one Store schema, in name order.
 pub(crate) const TABLES: [&str; 27] = [
     "absorbed",
@@ -497,8 +504,9 @@ pub(crate) fn check(
                 .iter()
                 .map(|r| text(r, 0).map(str::to_owned))
                 .collect::<Result<Vec<_>, _>>()?;
-            let acquisition = table_set(&actual)?;
             let row = single(rows)?;
+            refuse_pre_2_0(&row, 2)?;
+            let acquisition = table_set(&actual)?;
             let mut definition = String::new();
             for column in columns {
                 for index in 0..4 {
@@ -523,6 +531,7 @@ pub(crate) fn check(
             );
             let groups = session.simple(&sql, false)?;
             let row = single(groups.into_iter().next().unwrap_or_default())?;
+            refuse_pre_2_0(&row, 2)?;
             let acquisition = match int(&row, 1)? {
                 0 => false,
                 3 => true,
@@ -567,6 +576,16 @@ pub(crate) fn check(
         server_version: text(&row, at + 11)?.to_owned(),
         trace_salt,
     })
+}
+
+/// Refuses a schema version 2 Store by name (D5) before any source or table
+/// comparison, which would otherwise call it malformed: `row` holds the
+/// [`meta_columns`] from column `at`.
+fn refuse_pre_2_0(row: &SimpleQueryRow, at: usize) -> Result<(), BackendError> {
+    match (int(row, at + 4), int(row, at + 10)) {
+        (Ok(PRE_2_0_VERSION), _) | (_, Ok(PRE_2_0_VERSION)) => Err(BackendError::PostgresSchema2),
+        _ => Ok(()),
+    }
 }
 
 const TABLE_NAMES: &str = "SELECT table_name::text FROM information_schema.tables \

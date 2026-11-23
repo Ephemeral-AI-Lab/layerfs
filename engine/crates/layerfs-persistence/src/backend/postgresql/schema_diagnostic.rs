@@ -1,5 +1,5 @@
 //! Bounded diagnostic admission projections; ordinary writer checks are unchanged.
-//! Normative schema-2 columns; healthy shipped-DDL fixtures detect drift.
+//! Normative schema-3 (2.0) columns; healthy shipped-DDL fixtures detect drift.
 const COLUMNS: &str = r#"absorbed run bytea NO
 absorbed depth bigint NO
 absorbed height bigint NO
@@ -165,11 +165,13 @@ object_location role smallint NO
 object_location group_number smallint NO
 object_location record_number smallint NO
 object_location object_id bytea NO
+object_location ancestors bytea YES
 pack pack_id bigint NO
 pack domain bigint NO
 pack digest bytea NO
 pack length bigint NO
 pack body bytea NO
+pack directory bytea NO
 path_removed layer_stack_id bytea NO
 path_removed path_key bytea NO
 path_removed path bytea NO
@@ -207,7 +209,9 @@ store_totals init_stored bigint NO
 store_totals init_metadata bigint NO
 store_totals init_millis bigint NO
 "#;
-use super::{int, meta_columns, single, ACQUISITION, ACQUISITION_TABLES, SCHEMA, TABLES};
+use super::{
+    int, meta_columns, refuse_pre_2_0, single, ACQUISITION, ACQUISITION_TABLES, SCHEMA, TABLES,
+};
 use crate::backend::{postgresql::session::connection::Session, records::BackendError};
 use postgres::SimpleQueryRow;
 
@@ -238,6 +242,7 @@ pub(super) fn row(session: &Session) -> Result<(SimpleQueryRow, bool), BackendEr
         return Err(BackendError::Integrity);
     }
     let row = single(groups.swap_remove(2))?;
+    refuse_pre_2_0(&row, 2)?;
     let acquisition = match int(&row, 0)? {
         0 => false,
         1 => true,
