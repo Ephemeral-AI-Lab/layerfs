@@ -29,10 +29,14 @@ esac"#,
 fn docker_stopped_missing_foreign_and_transitional_are_distinct() {
     let scratch = Scratch::new("doctor-states");
     for (answer, expected) in [
-        ("printf 'exited\\tmachine-worker\\n'", Some(State::Stopped)),
-        ("echo no such object >&2; exit 1", Some(State::Missing)),
-        ("printf 'running\\tother\\n'", None),
-        ("printf 'paused\\tmachine-worker\\n'", None),
+        ("printf 'exited\\tmachine-worker\\n'", Ok(State::Stopped)),
+        ("echo no such object >&2; exit 1", Ok(State::Missing)),
+        // a foreign container is `Exists`, as start and stop refuse it
+        ("printf 'running\\tother\\n'", Err(Code::Exists)),
+        (
+            "printf 'paused\\tmachine-worker\\n'",
+            Err(Code::Unavailable),
+        ),
     ] {
         scratch.tool(
             "docker",
@@ -43,8 +47,8 @@ fn docker_stopped_missing_foreign_and_transitional_are_distinct() {
             Instant::now() + Duration::from_secs(10),
         );
         match expected {
-            Some(state) => assert_eq!(result.unwrap().state, state),
-            None => assert!(result.is_err()),
+            Ok(state) => assert_eq!(result.unwrap().state, state),
+            Err(code) => assert_eq!(result.unwrap_err().code, code),
         }
     }
 }

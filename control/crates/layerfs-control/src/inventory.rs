@@ -42,12 +42,12 @@ pub use layerfs_sandbox::record::{sandbox, sandboxes};
 /// `native` is ready, `docker` stopped and any other `broken` `missing`.
 /// What the home's tree, a Store's or Sandbox's `blocked_by` and the
 /// doctor say of a machine, as `machine list` and `machine get` do.
-/// A record with no 2.0 name shows the line that removes what is
-/// recorded on it first ([`Held`]); its Stores and old Firecracker records
-/// are read for it alone.
+/// A record with no 2.0 name, or whose VM a live read found gone, shows
+/// the line that removes what is recorded on it first ([`Held`]); its
+/// Stores and old Firecracker records are read for it alone.
 pub fn machine_state(home: &Path, name: &str, record: Option<&MachineRecord>) -> Result<State> {
     let held = match record {
-        Some(record) if record.nameless() => Held::read(home, name)?,
+        Some(record) if record.gone() => Held::read(home, name)?,
         Some(_) => Held {
             sandboxes: sandboxes_on(home, name)?,
             ..Held::default()
@@ -189,14 +189,18 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
         .collect();
     let mut message = format!("machine {name} holds {}", holds.join("; "));
     let record = MachineRecord::read(home, name)?;
-    // a record without a 2.0 name: each holder's remove takes its records
-    // alone (nothing on the machine is reached), so the fix forgets them,
-    // then the machine
-    let nameless = record.as_ref().is_some_and(MachineRecord::nameless);
+    // a record without a 2.0 name, or whose VM is gone (area 10): each
+    // holder's remove takes its records alone (nothing on the machine is
+    // reached), so the fix forgets them, then the machine
+    let nameless = record.as_ref().is_some_and(MachineRecord::gone);
     if nameless {
-        message.push_str(
-            "; its record has no 2.0 name, so removing each of them forgets its records alone",
-        );
+        let why = match record.as_ref().is_some_and(MachineRecord::nameless) {
+            true => "its record has no 2.0 name",
+            false => "its VM is gone",
+        };
+        message.push_str(&format!(
+            "; {why}, so removing each of them forgets its records alone"
+        ));
     }
     // a stopped machine's Sandboxes cannot be removed: `sandbox remove`
     // reaches their daemons only while it runs, so no removal is offered

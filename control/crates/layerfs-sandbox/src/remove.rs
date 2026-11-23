@@ -1,5 +1,8 @@
 //! `sandbox.remove` (call surface 2.0; `sandbox.close` before it), and the
-//! removal of a Sandbox whose create never recorded an id.
+//! removal of a Sandbox whose create never recorded an id: one whose create
+//! may have started a daemon (its record names one on `native`; its
+//! machine's worker may keep one elsewhere) is closed as a started one is,
+//! so its daemon is stopped, or the remove is refused and the record kept.
 //!
 //! A remove records its `op` intent (`sandbox.remove`, #536 §7.1) under the
 //! home and Sandbox locks before it stops the runtime, and removes the
@@ -97,12 +100,18 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     // nothing on that machine is reached, its worker included
     let machine = found.machine();
     let on = layerfs_machine::record::MachineRecord::read(&home, machine)?;
-    if on.is_some_and(|record| record.nameless()) {
-        let first = format!(
-            "machine {machine}'s record has no 2.0 name, so nothing on it was touched: the \
-             Sandbox's daemon and run folder there, if any, stay in the VM or container an \
-             earlier build made, which no call reaches"
-        );
+    if let Some(on) = on.filter(|record| record.gone()) {
+        let first = match on.nameless() {
+            true => format!(
+                "machine {machine}'s record has no 2.0 name, so nothing on it was touched: the \
+                 Sandbox's daemon and run folder there, if any, stay in the VM or container an \
+                 earlier build made, which no call reaches"
+            ),
+            false => format!(
+                "machine {machine}'s VM is gone, so only the Sandbox's records were removed: \
+                 its daemon and run folder were in that VM, which its provider no longer holds"
+            ),
+        };
         return forget(&home, events, name, first, Worker::Skip);
     }
     if let Some(unnamed) = foreign(&home, &found)? {
@@ -118,6 +127,13 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             return forget(&home, events, name, first, Worker::Ask);
         }
     }
+    // a machine recorded stopped runs no daemon and its worker is not
+    // reached: a Sandbox whose runtime a forced `machine.stop` ended, or any
+    // with `force`, goes by its records alone; without either, the remove
+    // says how it can go
+    if let Some(first) = stopped_on(&home, &found, request.force)? {
+        return forget(&home, events, name, first, Worker::Skip);
+    }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
     let running = match force {
@@ -126,19 +142,22 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     };
     let first = if running.is_empty() { "stop" } else { "cancel" };
     let op = Op::begin(OP, first, SdkValue::map([("force", SdkValue::Bool(force))]))?;
-    let record = {
+    // an unstarted Sandbox whose create may have started a daemon is closed
+    // like a started one; its create's intent comes back if the close fails
+    let (record, created) = {
         let _lock = home::lock::take(&home)?;
         let _sandbox = record::lock(&home, name)?;
         let Some(record) = SandboxRecord::read(&home, name)? else {
             return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
         };
         clearable(&record)?;
-        if record.id().is_none() {
+        if record.id().is_none() && !may_run(&record) {
             return remove_unstarted(&home, &record);
         }
+        let created = record.id().is_none().then(|| record.op()).flatten();
         let record = record.with_op(&op);
         record.write(&home)?;
-        record
+        (record, created)
     };
     for (done, _) in running.iter().enumerate() {
         phase(events, "cancel", Some((done, running.len())));
@@ -258,14 +277,16 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             op.log_uncertain(&home, "sandbox", name, &refusal.message);
             Err(shown(refusal, &handle_of))
         }
-        // a certain failure leaves the Sandbox as it was, except a forced
-        // remove whose runtime already stopped: the record says so
+        // a certain failure leaves the Sandbox as it was, its create's
+        // intent included, except a forced remove whose runtime already
+        // stopped: the record says so
         Err(refusal) => {
             if let Some(now) = SandboxRecord::read(&home, name)? {
                 let stopped = refusal.detail.get_bool(crate::force::RUNTIME_STOPPED);
-                match stopped {
-                    true => now.without_op().with_machine_stop(true),
-                    false => now.without_op(),
+                match (stopped, &created) {
+                    (true, _) => now.without_op().with_machine_stop(true),
+                    (false, Some(created)) => now.with_op(created),
+                    (false, None) => now.without_op(),
                 }
                 .write(&home)?;
             }
@@ -407,6 +428,48 @@ fn forget(
     })
 }
 
+/// What a remove of Sandbox `record` leaves on its machine when that
+/// machine is recorded `stopped` (no worker runs, and no daemon with it)
+/// and the Sandbox may go by its records alone: its runtime a forced
+/// `machine.stop` ended (`machine_stopped`), or the remove is forced. The
+/// worker's own record and run folder of it stay on the machine until its
+/// worker next starts, which removes them (`crate::sweep::worker_start`).
+/// `None` on `native`, which this process closes itself, and on a machine
+/// not recorded stopped; refused `Unavailable` on a stopped machine
+/// without either, naming both ways on.
+fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option<String>> {
+    let machine = record.machine();
+    let stopped = (machine != "native")
+        && layerfs_machine::record::MachineRecord::read(home, machine)?
+            .is_some_and(|on| on.recorded_state() == Some("stopped"));
+    if !stopped {
+        return Ok(None);
+    }
+    let (name, word) = (record.name(), shell_word(machine));
+    if !force && !record.machine_stopped() {
+        let refusal = refused(
+            "Unavailable",
+            format!(
+                "machine {machine} is stopped, so Sandbox {name}'s daemon is not reached: \
+                 `layerfs machine start {word}` lets the remove stop it, or `layerfs sandbox \
+                 remove {} --force` removes its records here and leaves the rest to the \
+                 machine's worker when it next starts",
+                shell_word(name)
+            ),
+        );
+        return Err(layerfs_home::outcome::with_fix(
+            refusal,
+            format!("layerfs machine start {word}"),
+        ));
+    }
+    Ok(Some(format!(
+        "machine {machine} is stopped, so only the Sandbox's records here were removed and its \
+         worker was not asked: its daemon ended with the machine, and the worker's own record \
+         and run folder of it stay on the machine until its worker next starts, which removes \
+         them"
+    )))
+}
+
 /// Whether [`forget`] asks the Sandbox's machine's worker to drop its own
 /// record of it.
 #[derive(Clone, Copy)]
@@ -427,10 +490,24 @@ fn clearable(record: &SandboxRecord) -> Result<()> {
     }
 }
 
-/// Removes Sandbox `record`, which has no id: its create's outcome was not
-/// known, or its process ended before recording one. The folder goes and
-/// the name is free. The caller holds the home and Sandbox locks and has
-/// refused a live create.
+/// Whether Sandbox `record`, which has no id, may have a daemon its create
+/// started, which its remove then stops through the close a started one
+/// takes: on `native` when its record names one (`daemon`, which its own
+/// side writes before the create records the id); on a machine with a
+/// worker, which keeps its own record of it, once its create got past
+/// claiming the name.
+fn may_run(record: &SandboxRecord) -> bool {
+    match record.machine() {
+        "native" => record.daemon().is_some(),
+        _ => record.op().is_none_or(|op| op.phase() != "claim"),
+    }
+}
+
+/// Removes Sandbox `record`, which has no id and no daemon its create may
+/// have started ([`may_run`]): its create's outcome was not known, or its
+/// process ended before recording one. The folder goes and the name is
+/// free. The caller holds the home and Sandbox locks and has refused a
+/// live create.
 fn remove_unstarted(home: &Path, record: &SandboxRecord) -> Result<Removed> {
     let unresolved = (record.op()).is_some_and(|op| op.standing() == Standing::Unresolved);
     remove_folder(&record.dir(home))?;

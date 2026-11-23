@@ -248,3 +248,70 @@ fn an_entry_of_a_project_the_store_lacks_is_removed() {
         .expect("written");
     assert!(!paths::project_dir(&home, STORE, "gone").exists());
 }
+
+#[test]
+fn repair_project_completes_an_incomplete_record_from_sqlite_store() {
+    let home = home("repair");
+    let store_record = match layerfs_store::sqlite::create::create(&home, STORE, None) {
+        Ok(_) => layerfs_store::record::StoreRecord::read(&home, STORE)
+            .unwrap()
+            .unwrap(),
+        Err(refusal) if refusal.code == "Unsupported" => {
+            eprintln!("NOT_RUN: unsupported Store filesystem: {refusal:?}");
+            let _ = std::fs::remove_dir_all(&home);
+            return;
+        }
+        Err(refusal) => panic!("create: {refusal:?}"),
+    };
+    let source = home.join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("a.txt"), b"hello\n").unwrap();
+    let added =
+        layerfs_store::project::add::add_project(&layerfs_store::project::add::ProjectAdd {
+            home: home.clone(),
+            store: layerfs_home::names::StoreName::parse(STORE).unwrap(),
+            name: PROJECT.to_owned(),
+            source,
+            timeout_ms: Some(60_000),
+            store_record: None,
+        })
+        .unwrap();
+    layerfs_store::open::close_idle(std::time::Duration::ZERO);
+
+    let stack = added.get_text("stack").unwrap().to_owned();
+    ProjectRecord::from_record(
+        STORE,
+        PROJECT,
+        SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", SdkValue::text(PROJECT)),
+            ("stack", SdkValue::text(&stack)),
+            ("created", SdkValue::Int(77)),
+        ]),
+    )
+    .write(&home)
+    .unwrap();
+    assert_eq!(
+        discovery::project(Some(&home), Some(STORE), Some(PROJECT))
+            .err()
+            .map(|r| r.code),
+        Some("NoSuchProject".to_owned())
+    );
+
+    let id = layerfs_store::identity::identity_in(&store_record).unwrap();
+    let repaired = layerfs_store::backup::restored::repair_project(
+        &home,
+        STORE,
+        PROJECT,
+        id,
+        &paths::store_file(&home, STORE),
+    )
+    .unwrap();
+    assert!(repaired.is_some_and(|record| layerfs_store::backup::restored::complete(&record)));
+    let project = discovery::project(Some(&home), Some(STORE), Some(PROJECT))
+        .expect("repaired record opens in Sandbox");
+    assert!(project.installed.is_some());
+    let record = ProjectRecord::read(&home, STORE, PROJECT).unwrap().unwrap();
+    assert_eq!(record.created(), Some(&SdkValue::Int(77)));
+    let _ = std::fs::remove_dir_all(&home);
+}

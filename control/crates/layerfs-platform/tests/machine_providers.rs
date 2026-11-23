@@ -3,7 +3,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_platform::{self as machine, Code, HostOs, Platform, State};
+use layerfs_platform::{self as machine, native_missing, Code, HostOs, Platform, State};
 use standin::Scratch;
 
 fn line<'a>(log: &'a str, prefix: &str) -> &'a str {
@@ -84,6 +84,39 @@ esac"#,
 }
 
 #[test]
+fn apple_container_maps_a_passing_state_unavailable_and_failed_failed() {
+    let answer = |state: &str| {
+        let scratch = Scratch::new("apple-states");
+        scratch.tool(
+            "container",
+            &format!(
+                r#"case "$1" in
+  inspect) echo '[{{"status":{{"state":"{state}"}}}}]' ;;
+  --version) echo "container CLI version 1.6.1" ;;
+  *) exit 99 ;;
+esac"#
+            ),
+        );
+        let spec = scratch.spec(Platform::AppleContainer);
+        let status = machine::status(&spec);
+        let start = machine::start(&spec, &scratch.bundle());
+        (status, start.map(drop), scratch.log())
+    };
+    for state in ["stopping", "unknown", "starting"] {
+        let (status, start, log) = answer(state);
+        // between states, or a word this adapter does not know: no verdict,
+        // as lima and docker answer, never recorded `failed`
+        assert_eq!(status.unwrap_err().code, Code::Unavailable, "{state}");
+        assert_eq!(start.unwrap_err().code, Code::Unavailable, "{state}");
+        assert!(!log.contains("container start"), "{state}: {log}");
+    }
+    let (status, _, _) = answer("failed");
+    let status = status.unwrap();
+    assert_eq!(status.kernel, Some(State::Failed));
+    assert_eq!((status.word(), status.reason()), ("broken", Some("failed")));
+}
+
+#[test]
 fn a_docker_engine_that_does_not_answer_is_broken_engine_down() {
     let scratch = Scratch::new("engine-down");
     scratch.tool(
@@ -117,13 +150,23 @@ fn built_in_machines_are_never_created_or_removed() {
         .unwrap()
         .is_none());
     machine::stop(&native).unwrap();
-    let status = machine::status(&native).unwrap();
-    assert_eq!(status.state, State::Running);
-    // its calls run in the caller's process: no worker to ask, and ready
-    assert_eq!(
-        (status.worker, status.word(), status.reason()),
-        (None, "ready", None)
-    );
+    let missing = native_missing(HostOs::current());
+    match machine::status(&native) {
+        Ok(status) => {
+            assert!(missing.is_empty(), "ready while missing {missing:?}");
+            assert_eq!(status.state, State::Running);
+            // its calls run in the caller's process: no worker to ask, and ready
+            assert_eq!(
+                (status.worker, status.word(), status.reason()),
+                (None, "ready", None)
+            );
+        }
+        // a host that lacks what Sandboxes need never reads ready
+        Err(error) => {
+            assert_eq!(error.code, Code::Unsupported, "{error}");
+            assert_eq!(error.missing, missing);
+        }
+    }
     assert!(scratch.log().is_empty());
 }
 

@@ -6,13 +6,21 @@ use crate::setup::worker;
 use crate::setup::State;
 use crate::spec::{Bundle, Lasting, Running, Spec};
 
+/// Lima reports an instance `Broken` when it cannot read the instance's own
+/// files, and `limactl start` refuses one itself ("errors inspecting
+/// instance"), so a start cannot repair it and is refused before any call.
+/// apple-container has no such provider refusal and tries its `Failed` once
+/// (`apple_container/power.rs`).
 pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     let port = recorded_port(spec)?;
     match observe(spec)?.0 {
         State::Missing => Err(not_found(spec)),
         State::Failed => Err(MachineError::new(
             Code::Failed,
-            format!("the Lima instance {} is broken", spec.vm_name),
+            format!(
+                "the Lima instance {} is broken: Lima cannot read its files, so it cannot be started; `limactl list {}` says why",
+                spec.vm_name, spec.vm_name
+            ),
         )),
         State::Stopped => boot_and_bring_up(spec, bundle, port, true),
         State::Running => boot_and_bring_up(spec, bundle, port, false),

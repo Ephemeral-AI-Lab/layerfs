@@ -33,7 +33,7 @@ pub struct Related {
 impl Related {
     /// `refusal` of a call that needs machine `name`'s VM, with the fix
     /// every view of its state shows when its record has no `vm_name`
-    /// (UI2-8): the bare `machine remove` it carries is refused `InUse`
+    /// (UI2-8) or its VM is gone (area 10): the bare `machine remove` it carries is refused `InUse`
     /// while things are recorded on the machine, so the chain that removes
     /// them first replaces it. The holders are read only here, on the
     /// refusal path; any other refusal, or one whose reads fail, is kept.
@@ -44,9 +44,9 @@ impl Related {
             return refusal;
         }
         let read = || -> Result<_, SdkRefusal> {
-            let nameless = MachineRecord::read(home, name)?.is_some_and(|r| r.nameless());
+            let gone = MachineRecord::read(home, name)?.is_some_and(|r| r.gone());
             let names = [self.sandboxes_on, self.stores_on, self.hosted_on];
-            let found: Vec<Vec<String>> = match nameless {
+            let found: Vec<Vec<String>> = match gone {
                 true => names
                     .iter()
                     .map(|on| on(home, name))

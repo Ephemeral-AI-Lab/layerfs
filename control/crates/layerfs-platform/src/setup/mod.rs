@@ -11,6 +11,6 @@ pub(crate) use calls::with_worker;
 pub use calls::{
     cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
     name_limit, provider_within, reach, remove, start, status, status_within, stop, stop_force,
-    State, Status,
+    worker_port, State, Status,
 };
 pub use tool::find_tool;

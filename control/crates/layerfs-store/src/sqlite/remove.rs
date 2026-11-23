@@ -134,11 +134,12 @@ fn answer(name: &str, left: Vec<String>) -> SdkValue {
     layerfs_home::helpers::map_of(fields)
 }
 
-/// Whether machine `machine`'s record has no 2.0 name (RV3 FAIL 1): this
-/// build reaches nothing on it, so a Store on it goes by its records alone.
+/// Whether machine `machine`'s record has no 2.0 name (RV3 FAIL 1), or a
+/// live read found its VM gone (area 10): this build reaches nothing on
+/// it, so a Store on it goes by its records alone.
 fn nameless(home: &Path, machine: &str) -> Result<bool, layerfs_bridge::control::SdkRefusal> {
     let record = layerfs_machine::record::MachineRecord::read(home, machine)?;
-    Ok(record.is_some_and(|record| record.nameless()))
+    Ok(record.is_some_and(|record| record.gone()))
 }
 
 /// Forgets sqlite Store `name` on machine `machine`, whose record has no
@@ -169,11 +170,18 @@ fn forget_on_nameless(
     let leftover = crate::sqlite::transfer::resolve::leftover(&now).filter(|l| l.on != machine);
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     layerfs_home::home::generation::moved(home);
-    let mut left = vec![format!(
-        "machine {machine}'s record has no 2.0 name, so only Store {name}'s records were \
-         removed: its file stays on that machine's disk, in the VM or container an earlier \
-         build made, which no call reaches"
-    )];
+    let on = layerfs_machine::record::MachineRecord::read(home, machine)?;
+    let mut left = vec![match on.is_some_and(|record| record.nameless()) {
+        true => format!(
+            "machine {machine}'s record has no 2.0 name, so only Store {name}'s records were \
+             removed: its file stays on that machine's disk, in the VM or container an earlier \
+             build made, which no call reaches"
+        ),
+        false => format!(
+            "machine {machine}'s VM is gone, so only Store {name}'s records were removed: its \
+             file was on that VM's disk, which its provider no longer holds"
+        ),
+    }];
     if let Some(leftover) = leftover {
         left.push(format!(
             "the copy an ended move left on machine {} was not touched either",

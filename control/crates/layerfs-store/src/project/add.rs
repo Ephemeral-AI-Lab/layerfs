@@ -184,17 +184,17 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
         Err(failure) => return Err(add_failure(failure.error, Some(&entry), name, store)),
     };
     let root = added.initialized.root.to_bytes();
-    save_entry(
-        &entry,
-        manifest(
-            &identity,
-            &store_file,
-            stack,
-            branch,
-            root,
-            &added.sqlite_version,
-        )?,
+    let (manifest, installed) = manifest(
+        &identity,
+        &store_file,
+        stack,
+        branch,
+        root,
+        &added.sqlite_version,
     )?;
+    let manifest_bytes = manifest.encode().map_err(failed)?;
+    let installed_bytes = installed.encode().map_err(failed)?;
+    save_entry(&entry, (manifest, installed))?;
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Initialized")),
         ("project", SdkValue::text(name)),
@@ -212,6 +212,8 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
             "storePath",
             SdkValue::text(store_file.display().to_string()),
         ),
+        ("manifest", SdkValue::Bytes(manifest_bytes)),
+        ("installed", SdkValue::Bytes(installed_bytes)),
     ]))
 }
 

@@ -11,8 +11,9 @@
 //! is `engine_down`, whose fix starts Docker; a VM the provider does not
 //! hold is `missing`; one it reports broken `failed`; a running machine's
 //! worker that does not answer is `not_answering`, one of another build
-//! `outdated` (fix: stop and start, the stop forced while Sandboxes are
-//! recorded on it). A check that does not apply is left out: `native` has
+//! `outdated` (each fixed by a stop and a start, the stop forced while
+//! Sandboxes are recorded on it: a start does not replace a running
+//! machine's worker). A check that does not apply is left out: `native` has
 //! no provider, worker or data disk, and a stopped machine's worker checks
 //! are not made (stopped on purpose is not a finding). After a failed
 //! check the ones that need it are not made.
@@ -354,10 +355,14 @@ impl Machine<'_> {
             Some(State::Missing) => {
                 let message = format!("its provider holds no VM named {}", spec.vm_name);
                 self.checks.fail(ID, message);
-                self.checks.fix(
-                    ID,
-                    format!("layerfs machine remove {name}", name = shell_word(name)),
-                );
+                // the line that removes what is on it first, as its
+                // remove's `InUse` refusal carries (area 10)
+                let held = crate::inventory::Held::read(self.home, name);
+                let fix = match held {
+                    Ok(held) => layerfs_machine::record::no_vm_name_fix(name, held.holders()),
+                    Err(_) => format!("layerfs machine remove {name}", name = shell_word(name)),
+                };
+                self.checks.fix(ID, fix);
                 Some("missing")
             }
             Some(State::Failed) => {
@@ -487,8 +492,9 @@ impl Machine<'_> {
                     return Err(None);
                 }
                 if matches!(error.code.as_str(), "Timeout" | "Unavailable") {
+                    // a start is refused over a running machine's silent worker
                     let message = format!("its worker does not answer: {}", error.message);
-                    self.failed("machine.worker.auth", &message, &start);
+                    self.failed("machine.worker.auth", &message, &replace);
                 } else {
                     let message = format!("its worker refused the saved secret ({})", error.code);
                     self.failed("machine.worker.auth", &message, &replace);

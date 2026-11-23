@@ -223,7 +223,11 @@ fn list_and_get_answer_the_records_then_the_live_state() {
     let forward = listed(&list, "fwd");
     assert_eq!(forward.get_text("state"), Some("broken"), "{forward:?}");
     assert_eq!(forward.get_text("reason"), Some("not_answering"));
-    assert_eq!(forward.get_text("fix"), Some("layerfs machine start fwd"));
+    // a start does not replace a worker that runs and does not answer
+    assert_eq!(
+        forward.get_text("fix"),
+        Some("layerfs machine stop fwd && layerfs machine start fwd")
+    );
     assert_eq!(listed(&list, "up").get_text("state"), Some("ready"));
     assert_eq!(fwd.join().unwrap(), None);
     assert_eq!(up.join().unwrap(), Some(false), "the probe sent a request");

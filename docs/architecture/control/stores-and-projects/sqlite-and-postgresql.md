@@ -41,7 +41,10 @@ own operation
            store.sqlite.incoming                     progress {done,total}
  verify    target: the copy's bytes, sha256 and heads are the snapshot's
  install   (op written uncertain first) rename incoming -> store.sqlite
- record    record names the new machine; last_transfer {.., retired:false}
+ record    incomplete SQLite project records without an `op` are completed
+           read-only from the local `store.sqlite` (`restored::complete_existing`),
+           best effort: each one left incomplete is a line of log/repair.jsonl;
+           record names the new machine; last_transfer {.., retired:false}
  retire    delete the source's copy; retired: true; op dropped
 ```
 

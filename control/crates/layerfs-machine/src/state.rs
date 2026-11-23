@@ -85,8 +85,9 @@ pub fn settle(machine: &str, op: &Op) -> String {
 fn fix(machine: &str, reason: Reason, removed: bool, sandboxes: usize) -> Option<String> {
     match reason {
         Reason::EngineDown => Some(start_docker().to_owned()),
-        Reason::Outdated => Some(replace_worker(machine, sandboxes)),
-        Reason::NotAnswering | Reason::Failed => Some(format!(
+        // a start does not replace a worker that runs and does not answer
+        Reason::Outdated | Reason::NotAnswering => Some(replace_worker(machine, sandboxes)),
+        Reason::Failed => Some(format!(
             "layerfs machine start {machine}",
             machine = shell_word(machine)
         )),
@@ -103,7 +104,7 @@ fn fix(machine: &str, reason: Reason, removed: bool, sandboxes: usize) -> Option
 }
 
 /// How many Sandboxes are on it, as a sentence's end.
-fn count(sandboxes: usize) -> String {
+pub(crate) fn count(sandboxes: usize) -> String {
     match sandboxes {
         1 => "1 Sandbox is on it".to_owned(),
         n => format!("{n} Sandboxes are on it"),
@@ -120,6 +121,37 @@ impl MachineRecord {
     pub fn broken_as(self, reason: Reason, message: &str) -> Self {
         let record = self.with(REASON, SdkValue::text(reason.word()));
         record.with("error", SdkValue::text(message))
+    }
+
+    /// Whether nothing on the machine can be reached again: its record has
+    /// no 2.0 name (an earlier build's), or a live read found that its
+    /// provider holds no VM of its name (`missing`, area 10). A Store or
+    /// Sandbox recorded on it then goes by its records alone, and its fix
+    /// removes those first, then the machine.
+    pub fn gone(&self) -> bool {
+        self.nameless() || (self.name() != "native" && self.reason() == Some(Reason::Missing))
+    }
+
+    /// Refuses a call that needs the VM of a machine a live read found
+    /// `missing`: `Failed`, its remove as the fix, which the call boundary
+    /// widens to the chain of what is on it (as for a record with no
+    /// `vm_name`). A live read still probes it, and mends it if the VM is back.
+    pub fn vm_present(&self) -> Result<(), SdkRefusal> {
+        if self.nameless() || !self.gone() {
+            return Ok(());
+        }
+        let said = self
+            .text("error")
+            .unwrap_or("its provider holds no VM of its name");
+        let message = format!(
+            "machine {}'s VM is gone ({said}); only its records remain",
+            self.name()
+        );
+        let fix = super::record::no_vm_name_fix(self.name(), Holders::default());
+        Err(with_fix(
+            layerfs_home::outcome::refused("Failed", message),
+            fix,
+        ))
     }
 
     /// The record with no reason and no `error`: the machine is not broken.
@@ -172,19 +204,19 @@ impl MachineRecord {
     }
 
     /// [`Self::status`] with what is recorded on the machine named
-    /// (`held`): a record with no `vm_name` that still holds Sandboxes,
-    /// Stores or old Firecracker records shows the line its remove's
-    /// `InUse` refusal carries ([`super::record::no_vm_name_fix`]), not a
-    /// bare remove that is refused. Of such a record only the `vm_name`
-    /// branch answers `broken` `outdated`.
+    /// (`held`): a record with no `vm_name`, or one whose VM a live read
+    /// found `missing` ([`Self::gone`]), that still holds Sandboxes, Stores
+    /// or old Firecracker records shows the line its remove's `InUse`
+    /// refusal carries ([`super::record::no_vm_name_fix`]), not a bare
+    /// remove that is refused.
     pub fn status_held(&self, removed: bool, held: Holders<'_>) -> State {
         match self.status(removed, held.sandboxes.len()) {
             State::Broken {
-                reason: Reason::Outdated,
+                reason: reason @ (Reason::Outdated | Reason::Missing),
                 ..
-            } if self.nameless() => {
+            } if self.gone() => {
                 let fix = super::record::no_vm_name_fix(self.name(), held);
-                State::broken(Reason::Outdated, Some(&fix))
+                State::broken(reason, Some(&fix))
             }
             state => state,
         }

@@ -41,7 +41,7 @@ different string and is not what records store.
 | Stored name | `native` | `namespaces` |
 | Description | "Sandboxes run as this user's processes, served over loopback NFS" | "Sandboxes run in Linux namespaces and a cgroup" |
 | `capabilities.name` | `native-macos` | `namespaces-linux` |
-| `isolation` | `HostProcess` | `MicroVm` (the VM or container holding the kernel is the boundary) |
+| `isolation` | `HostProcess` | `Namespaces`: mount, PID and IPC namespaces and a cgroup on the kernel that runs it (a VM's, or the host's own on a Linux host); no network namespace and no VM of its own |
 | `mount_driver` | `LoopbackNfs` | `Fuse` |
 | `requires_image` | no | yes |
 | `search_path_policy` | `InheritHost` | `FixedContainer` |
@@ -56,10 +56,23 @@ different string and is not what records store.
 Neither backend isolates the network (layerfs-project#164, #551): a
 `native` Sandbox's commands use this host's network, and a `namespaces`
 Sandbox unshares mount, pid and IPC namespaces but no network namespace, so
-its commands use the network of the kernel that runs it (the VM, or the
-`docker` machine's container). No call option, record or answer has an
-`isolation` or `scheduling` field; `isolation` above is this in-memory
-capability only.
+its commands use the network of the kernel that runs it:
+
+| Machine | Kernel the commands run on | Network they use |
+| --- | --- | --- |
+| `native` on macOS (`HostProcess`) | this host's | this host's, its `127.0.0.1` included |
+| `native` on a Linux host | this host's | this host's, its `127.0.0.1` included |
+| `docker` on a Linux host | this host's (a `--privileged` worker container) | this host's: the worker runs with `--network host`, so a command reaches every service listening on the host's `127.0.0.1` |
+| `docker` on macOS (Docker Desktop) | Docker Desktop's VM | the worker container's own bridge network |
+| `lima`, `apple-container` | the VM's | the VM's |
+
+On a Linux host, then, a `namespaces` Sandbox on `native` or `docker` shares
+the host's kernel and network: its separation is its namespaces, cgroup,
+seccomp filter and command identity (uid 501), not a VM. No call option,
+record or answer has an `isolation` or `scheduling` field; `isolation` above
+is this in-memory capability only, fixed per backend, so it never counts a
+VM the machine may add (`IsolationModel::Namespaces`,
+[`types/capabilities.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/capabilities.rs)).
 
 Capabilities "describe support, not qualification"
 ([`types/capabilities.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/capabilities.rs)).

@@ -43,7 +43,7 @@ impl Adapter for Native {
         Ok(crate::setup::State::Running)
     }
     fn status(&self, _spec: &Spec) -> Result<Status, MachineError> {
-        Ok(status())
+        status()
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Shared)
