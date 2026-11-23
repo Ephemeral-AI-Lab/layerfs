@@ -71,6 +71,7 @@ const FORM: Form = Form::of(
         "route",
         "created_at",
         "workspace_capacity",
+        "network",
     ],
 )
 .parts(&[("workspaces", Part::Rows(&WORKSPACE))]);
@@ -129,6 +130,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ),
     ];
     fields.extend(facts(&got.record));
+    fields.push(("network", SdkValue::opt_text(got.record.network())));
     if request.stats {
         fields.push(("stats", stats(&got)));
     }

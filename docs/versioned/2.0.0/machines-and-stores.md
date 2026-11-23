@@ -43,6 +43,20 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   create` takes; the same rows as `control/SUPPORT.json`. See
   [`machine`](calls.md#machine-14) for every key.
 - `native` and `docker` are never created or removed.
+- Every namespaces Sandbox's commands have a network of their own: two
+  Sandboxes can both listen on `127.0.0.1:3000`, a Sandbox reaches the
+  internet, this computer and the machine's services as before, and it
+  cannot reach another Sandbox, the daemon's or the worker's port, or the
+  machine's own `127.0.0.1`. The daemon stays on the machine's network, so a
+  PostgreSQL Store URL is dialled as before. On a Linux host (`native`,
+  `docker` on a Linux Engine) LayerFS adds the firewall table
+  `inet layerfs` and one `lfs<id>` link per Sandbox to this host's network,
+  never changes `net.ipv4.ip_forward`, and refuses `sandbox.create`
+  (`Unavailable`, with the fix) when forwarding is off, when another
+  table's forward chain would drop the Sandboxes' traffic (a Docker host's
+  `FORWARD` policy, ufw), or when the resolver is loopback only with no
+  upstream. macOS `native` Sandboxes keep this computer's network
+  ([Backends](../../architecture/control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 ### Removed platforms: Firecracker, Microsandbox and SSH
 

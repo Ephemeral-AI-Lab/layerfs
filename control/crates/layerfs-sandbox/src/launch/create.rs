@@ -92,6 +92,7 @@ impl fmt::Display for SandboxCause {
                 RuntimeError::Io(error) => write!(f, "{error}"),
                 RuntimeError::Protocol(said) => f.write_str(said),
                 RuntimeError::Unsupported(what) => write!(f, "not supported here: {what}"),
+                RuntimeError::Unavailable(why) => f.write_str(why),
             },
             Self::Channel(error) => write!(f, "{error}"),
             Self::Control(failure) => write!(f, "{failure}"),

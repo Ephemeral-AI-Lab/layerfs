@@ -8,8 +8,10 @@
 //! The Sandbox's copy of the bundle's runtime layer, when its spec names one,
 //! is bound read-only, nosuid and nodev at `/.layerfs/runtime` (R5). This
 //! host's `/etc/resolv.conf` and `/etc/hosts` are bound read-only over the
-//! image's, so the Sandbox, which shares this host's network, resolves names
-//! as this host does.
+//! image's, so the Sandbox resolves names as this host does; where this
+//! host's resolver is a loopback one, which the Sandbox's own network
+//! cannot reach, the file the launcher wrote with its upstream servers
+//! (the spec's `resolver`) is bound at `/etc/resolv.conf` instead.
 //! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
 //! this mount namespace private first.
 use layerfs_sandbox_backend::HelperSpec;
@@ -74,7 +76,8 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
 }
 
 /// This host's [`RESOLVER_FILES`], each bound read-only at its own path in
-/// the root, over the image's file. A mount point the image lacks (its copy
+/// the root, over the image's file (the spec's `resolver` in place of this
+/// host's `/etc/resolv.conf` when it names one). A mount point the image lacks (its copy
 /// leaves both files out) is made empty, 0644, in the Sandbox's own
 /// writable layer, and one that is a link or another non-file is replaced
 /// there. An image whose `/etc` is not a plain directory keeps its own
@@ -91,11 +94,17 @@ fn resolver(spec: &HelperSpec) -> Result<(), String> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => directory(&etc, 0o755)?,
         Err(error) => return Err(format!("{}: {error}", etc.display())),
     }
-    for source in targets {
+    for guest in targets {
+        // the file the launcher wrote for the Sandbox's own network, when
+        // its resolver names a loopback nameserver (`network::resolver`)
+        let source = match (&spec.resolver, guest.as_path()) {
+            (Some(written), path) if path == Path::new(RESOLV_CONF) => written.clone(),
+            _ => guest.clone(),
+        };
         if !fs::metadata(&source).is_ok_and(|metadata| metadata.is_file()) {
             continue;
         }
-        let target = inside_file(&spec.root, &source);
+        let target = inside_file(&spec.root, &guest);
         match fs::symlink_metadata(&target) {
             Ok(metadata) if metadata.is_file() => {}
             Ok(metadata) if metadata.is_dir() => continue,
@@ -111,6 +120,9 @@ fn resolver(spec: &HelperSpec) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// The resolver file's place, which a written one replaces.
+const RESOLV_CONF: &str = "/etc/resolv.conf";
 
 /// `path`'s place inside `root`, not made: `/a/b` becomes `<root>/a/b`.
 fn inside_file(root: &Path, path: &Path) -> PathBuf {

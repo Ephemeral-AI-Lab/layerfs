@@ -211,7 +211,7 @@ Python  layerfs.sandbox.get(sandbox, *, with_=None)
 | Answer | Keys |
 | --- | --- |
 | short | `state`; when set: `workspaces`, `op`, `blocked_by`, `reason`, `fix`, `observed_at` |
-| long | `state, workspaces, op, blocked_by, reason, fix, observed_at, message, sandbox, project, machine, platform, image, backend, route, created_at, workspace_capacity` |
+| long | `state, workspaces, op, blocked_by, reason, fix, observed_at, message, sandbox, project, machine, platform, image, backend, route, created_at, workspace_capacity, network` |
 | `workspaces[]` short | `workspace`, `branch`; when set: `running`, `state`, `op`, `reason`, `fix` |
 | `workspaces[]` long | `workspace, branch, running, state, op, reason, fix, path, commit, base_layer, mounted_at, branch_moved, pending_merge, commands, id` |
 | `workspaces[].running[]` short | each a `exec` |
@@ -239,10 +239,14 @@ row adds `path`, `commit`, `base_layer`, `mounted_at`, `branch_moved`,
 `pending_merge`, `commands` (`[{exec, started_at, program, tag}]`; no
 argument or environment value is shown) and `id`. The Sandbox's long form
 adds `sandbox, project, machine, platform, image, backend, route,
-created_at` and `workspace_capacity` (16). `platform` is `docker`, `mac` or
+created_at`, `workspace_capacity` (16) and `network`. `platform` is `docker`, `mac` or
 `linux`; `backend` `native` (a macOS host process) or `namespaces`; `route`
 `nfs` for a macOS host process, else `fuse`
 ([`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs)).
+`network` is a `namespaces` Sandbox's own network as its record keeps it
+from the create: its host end on the machine and its commands' address,
+`lfs<id12> <address>/31` (null for a native Sandbox;
+[Backends: own network](../../control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 `--with stats` adds `stats`, null unless the Sandbox is ready: `daemon`
 (`{pid, started_at}`), `usage` (`{cpu_ms, memory_bytes, memory_peak_bytes,

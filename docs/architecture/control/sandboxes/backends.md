@@ -41,46 +41,104 @@ different string and is not what records store.
 | Stored name | `native` | `namespaces` |
 | Description | "Sandboxes run as this user's processes, served over loopback NFS" | "Sandboxes run in Linux namespaces and a cgroup" |
 | `capabilities.name` | `native-macos` | `namespaces-linux` |
-| `isolation` | `HostProcess` | `Namespaces`: mount, PID and IPC namespaces and a cgroup on the kernel that runs it (a VM's, or the host's own on a Linux host); no network namespace and no VM of its own |
+| `isolation` | `HostProcess` | `Namespaces`: mount, PID and IPC namespaces, a cgroup and a network namespace for its commands on the kernel that runs it (a VM's, or the host's own on a Linux host); no VM of its own |
 | `mount_driver` | `LoopbackNfs` | `Fuse` |
 | `requires_image` | no | yes |
 | `search_path_policy` | `InheritHost` | `FixedContainer` |
 | `supports_resource_limits` | no | no |
 | `direct_store_access` | yes | yes |
-| Launch options | `ProviderLaunchOptions::Local` | `::Namespaces` (identity, environment, image digest, archive) |
-| Record | `SandboxRecord::Local` | `SandboxRecord::Namespaces` (local facts + image) |
+| Launch options | `ProviderLaunchOptions::Local` | `::Namespaces` (identity, environment, image digest, archive, closed ports) |
+| Record | `SandboxRecord::Local` | `SandboxRecord::Namespaces` (local facts + image + network) |
 | Process boundary | named process groups | cgroup v2 directory |
 | Kernel requirements | none | cgroup v2 with `cgroup.kill` (Linux 5.14), and `clone3` with `CLONE_INTO_CGROUP` allowed (Linux 5.7; not answered `ENOSYS` or `EPERM` by a seccomp filter around the worker): every command is created inside its cgroup, with no fallback |
 | Source | [`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
 
-Neither backend isolates the network (layerfs-project#164, #551): a
-`native` Sandbox's commands use this host's network, and a `namespaces`
-Sandbox unshares mount, pid and IPC namespaces but no network namespace, so
-its commands use the network of the kernel that runs it:
+### Every `namespaces` Sandbox's own network
 
-| Machine | Kernel the commands run on | Network they use |
+A `native` Sandbox's commands use this host's network, its `127.0.0.1`
+included (`HostProcess`, macOS: the documented exception). Every
+`namespaces` Sandbox's commands run in a network namespace of their own
+(2026-11-24, spec "every Sandbox gets its own private network"): they bind
+any port, `127.0.0.1:3000` in two Sandboxes at once; they reach the
+internet, this host and the machine's other services as before; they cannot
+reach another Sandbox's commands, its daemon's control port or a worker's
+listening port. Nothing chooses it: no call option, flag, record field or
+setting turns it off, and `sandbox.create` has no new input. The daemon
+stays on the machine's network, so its loopback listener, the worker's
+dial, lima's forward and the daemon's Store connection (the URL as
+configured) are what they were.
+
+| Machine | Where the namespace, its host end and the table live | Commands reach |
 | --- | --- | --- |
-| `native` on macOS (`HostProcess`) | this host's | this host's, its `127.0.0.1` included |
-| `native` on a Linux host | this host's | this host's, its `127.0.0.1` included |
-| `docker` on a Linux host | this host's (a `--privileged` worker container) | this host's: the worker runs with `--network host`, so a command reaches every service listening on the host's `127.0.0.1` |
-| `docker` on macOS (Docker Desktop) | Docker Desktop's VM | the worker container's own bridge network |
-| `lima`, `apple-container` | the VM's | the VM's |
+| `native` on macOS (`HostProcess`) | none | this host's network, its `127.0.0.1` included |
+| `native` on a Linux host | this host's network namespace | out through this host (masqueraded); not this host's `127.0.0.1` |
+| `docker` on a Linux host | this host's network namespace (`--network host` worker) | as `native` on Linux |
+| `docker` on macOS (Docker Desktop) | the worker container's namespace | out through the worker's bridge; not the worker's port 7070 |
+| `lima` | the VM's | out through the VM; not the VM's `127.0.0.1` (its worker, its daemons) |
+| `apple-container` | the container's in its VM | out through the container; not the worker's port 7070 |
 
-A `namespaces` Sandbox also resolves names as the kernel that runs it does:
-the init stage binds that machine's `/etc/resolv.conf` and `/etc/hosts`
+```text
+ machine netns            | Sandbox netns (one per Sandbox)
+   daemon 127.0.0.1:<p>   |   commands: lo, eth0 10.213.0.2k+1/31,
+   worker, lima ssh -L    |   default via 10.213.0.2k
+   lfs<id12> 10.213.0.2k/31 ===== veth ===== eth0
+   table inet layerfs: forward (siblings dropped, out accepted, replies
+   only in), input (the launcher's non-loopback port dropped), postrouting
+   (pool masqueraded)
+```
+
+| Item | Rule | Source |
+| --- | --- | --- |
+| Holder | The outer `helper init` stage (deviation D1): it is the process the launcher records (pid, start time, boot), checks at reopen and names to every exec as `--init`; it is in the Sandbox's leaf, so one `cgroup.kill` ends the namespace with everything else, and it exits when the daemon's stage does. No nsfs bind mount is made, so a crash leaves nothing to unmount. | [`helper init.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs), [`helper network.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/network.rs) |
+| Order (D18) | After its mount, pid and IPC `unshare` and the private mount propagation, outer keeps a handle on the machine's namespace, takes the lock, plans a slot, `unshare(CLONE_NEWNET)`, opens the new namespace, creates the veth pair from a routing socket opened in the machine's namespace (peer `eth0` created directly in the new one with `IFLA_NET_NS_FD`), addresses the host end, unlocks, configures the inside, writes `<sandbox>/network`, then `setns` back to the machine's namespace, spawns `init-inner` (which with the daemon inherits the machine's network) and `setns` into the Sandbox's namespace again to hold it. All host-path work (`/proc/self/ns`, `/proc/sys`, the lock) is done before `init-inner` starts, because its `pivot_root` moves the root of every process in the mount namespace, outer's included. A failure before the spawn ends the stage and the start, so the launcher's listener wait implies a wired network. No gate between the two stages is needed with this order. | `helper init.rs`, `helper network.rs` |
+| Names | Host end `lfs` + the first 12 hex digits of the `ContainerId` (15 bytes, the kernel's limit); guest end `eth0`, never in the machine's namespace. | [`network/plan.rs`](../../../../control/crates/layerfs-sandbox-backend/src/network/plan.rs) `link_name` |
+| Pool and slot (D3, D4) | One /16 per network namespace: the pool of the `lfs*` links already there (all must agree, else `Unavailable` naming both), else the first of `10.213.0.0/16`, `10.214.0.0/16`, `10.215.0.0/16`, `172.30.0.0/16`, `172.31.0.0/16` that overlaps no route (the default excepted) and no address; none free, or a pool in use that now clashes, is `Unavailable` naming the routes in the way; nothing is renumbered. One /31 per Sandbox, host `.2k`, guest `.2k+1`: the lowest whose host address is on no `lfs*` link. The address on the link is the allocation, freed by the kernel with the namespace; a lingering link keeps its slot. The kernel is the record, not the machine record (owner to confirm): on a Linux host several machines and homes share one namespace, and only its own links are seen by all of them. | `network/plan.rs`, [`net/link.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/net/link.rs), [`net/wire.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/net/wire.rs) |
+| Lock (D17) | The abstract Unix socket `@layerfs/network`, bound in the machine's namespace (abstract names are per network namespace, the resource's own scope, across the host's and a Linux Engine worker's filesystems); a waiter connects and waits for end of file, bounded by 10 s. Held for the slot, the pair and the host address only. | [`net/lock.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/net/lock.rs) |
+| Inside | `lo` up; `eth0` with IPv6 off (`lo` keeps `::1`), the /31, up, default route via the host end; `net.ipv4.ping_group_range = 0 2147483647` (D9; a fresh namespace refuses unprivileged ICMP). The pair's MTU is the machine's default-route interface's (D10). The host end has no IPv6 link-local address (D11). | `net/wire.rs` `configure`, `net/link.rs` |
+| Record | `<sandbox>/network` (0644, `lfs<id12> <guest>/31`), read by the launcher after the listener (missing or empty fails the start in its listener phase) into the namespace record and the daemon record, and the home's Sandbox record (`network`), which [`sandbox.get`](../../api/sdk/sandbox.md#sandboxget)'s long form answers. State for reopen, doctor and tests; nothing allocates from it. | [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs), [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
+| Firewall (D6, D7, D8, D15, D20) | `table inet layerfs`, one nfnetlink transaction at every Sandbox create and every worker start (owner to confirm): `NEWTABLE` and three base chains (forward filter 0, input filter 0, postrouting nat 100, policy accept, no `EXCL`), a flush of the table's rules, then the rules: forward `iifname "lfs*" oifname "lfs*" drop`, `iifname "lfs*" accept`, `oifname "lfs*" ct state established,related accept`, `oifname "lfs*" drop`; input `iifname "lfs*" tcp dport <port> drop` per closed port (the chain is always there, empty with none); postrouting `ip saddr <pool> oifname != "lfs*" masquerade`. Idempotent, atomic, and self-healing after an `nft flush ruleset`. Only `meta`, `cmp`, `ct`, `bitwise`, `payload`, `immediate` and `masq`: no `fib` (Docker Desktop's kernel has none). No chain drops by policy, so Docker's and lima's tables keep working. | [`net/nft.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/net/nft.rs), [`net/netlink.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/net/netlink.rs) |
+| Closed ports (D7) | A command's loopback is its own, so every daemon (`127.0.0.1`, which the listener parse asserts) and every worker on loopback (lima, a Linux Engine) is out of reach by construction. The input chain drops the launcher's own listening port when its address is not loopback: Docker Desktop's and apple-container's worker, `0.0.0.0:7070` (`launch::network::serving_on`, set by `layerfs worker` after it binds). On a Linux host no user port is closed. | [`layerfs-sandbox launch/network.rs`](../../../../control/crates/layerfs-sandbox/src/launch/network.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `prepare_network` |
+| Forwarding | LayerFS sets `net.ipv4.ip_forward=1` only where it owns the namespace: the lima and apple-container preparation (`PREPARE`, every start) and Docker Desktop's worker entry (not a Linux Engine's `--network host` worker). On a Linux host (`native`, Linux Engine `docker`) it never writes it, and a start reads it first: 0 is `Unavailable`, naming the setting (owner to confirm). | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs), `net/wire.rs` `forwarding` |
+| Dropping forward chains (D19) | In nftables an accept in one table does not override a drop in another at the same hook. A start refuses `Unavailable` when a forward-hook base chain of an `ip` or `inet` table has policy drop and its table has no rule accepting `iifname "lfs*"` and none accepting `oifname "lfs*"` (Docker's `filter FORWARD` once it enabled forwarding; ufw's default), naming the chain and the rules that admit the host ends (`iptables -I DOCKER-USER -i lfs+ -j ACCEPT` and the return rule; owner to confirm). A rule matching the `lfs` prefix, as iptables-nft writes `-i lfs+`, is recognised, so a host that added them is admitted. Legacy (x_tables) iptables is not visible over nfnetlink and is not checked. | `net/nft.rs` `dropping_forward`, `net/wire.rs` `forward_policy` |
+| Resolver (D12, D13) | Decided by the launcher before any effect from its `/etc/resolv.conf`: no loopback `nameserver`, its file is bound as before (Docker Desktop `192.168.65.7`); a loopback one (systemd-resolved's `127.0.0.53`, a local dnsmasq), `<sandbox>/resolv.conf` (0644) is written with its `search`, `domain` and `options` lines, its other nameservers and, for `127.0.0.53`, those of `/run/systemd/resolve/resolv.conf` (lima: `192.168.5.2`), and bound in its place (spec `resolver=`); none left, `Unavailable` naming the loopback server and the fix: LayerFS runs no DNS forwarder (owner to confirm). `/etc/hosts` is bound unchanged; its `localhost` now means the Sandbox. | [`network/resolver.rs`](../../../../control/crates/layerfs-sandbox-backend/src/network/resolver.rs), `namespaces/create.rs`, [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) |
+| Joining | Every command helper opens `/proc/<init>/ns/net` with the other handles and its own `/proc/self/ns/net`; equal `(st_dev, st_ino)` (a Sandbox started by an earlier build, or a reused pid) ends the stage by a signal before anything runs, so a command never runs on the machine's network. Then it enters the network namespace first, before the mount, pid and IPC ones, no-new-privs and the uid change: one open, two `fstat`, one `setns` per command. | [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| Reopen (D16) | Also requires that the recorded init holds a network namespace other than the launcher's (`network::private`): a Sandbox started before this change is not reopened and answers its broken state with the `sandbox remove` fix (no backward compatibility in 2.0). | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
+| Leftovers (D5) | A pair dies with its namespace, which dies with the Sandbox's cgroup; a host end outlives it only while something outside holds the namespace (a user's `nsenter`) or during the kernel's asynchronous teardown (under a second). Doctor reports and never removes (owner to confirm): `machine.network` lists `lfs*` links no recorded Sandbox is named for, a missing table while Sandboxes are recorded and `ip_forward` 0, each with its fix; `sandbox.network` checks a running Sandbox's init namespace and host end. On a Linux host a link may be another home's or machine's, so nothing is swept. | [`doctor/network.rs`](../../../../control/crates/layerfs-control/src/doctor/network.rs) |
+| Removal | lima, apple-container and Docker Desktop lose the namespace, links and table with the VM or container. On a Linux host the `native` and `docker` machines are built in and never removed, so nothing removes this host's `table inet layerfs` (owner to confirm): with no `lfs*` link left it matches nothing, and `nft delete table inet layerfs` removes it. | — |
+
+Breaking changes (2.0; no backward compatibility, owner 2026-11-19): a
+command that relied on reaching a service on its machine's `127.0.0.1`
+(another Sandbox's server, the daemon, a Linux host's loopback service)
+reaches it at the machine's address instead, or not at all for another
+Sandbox; a Sandbox started by a build before this change is broken after
+the upgrade (`layerfs sandbox remove <sandbox>` and create it again); a
+Linux host with `net.ipv4.ip_forward=0`, a dropping forward chain or a
+loopback-only resolver refuses `sandbox.create` with `Unavailable` and the
+fix; IPv6 destinations other than `::1` fail at once (`ENETUNREACH`).
+
+Owner to confirm (built as the conservative defaults, 2026-11-24): a Linux
+host's `ip_forward=0` is refused, never written; a dropping forward chain
+is detected and refused with the rules to add; no pool copy in the machine
+record; a loopback-only resolver with no upstream is refused; the table is
+rewritten at every create and worker start; doctor reports leftovers only;
+a Linux host's table is left behind and doctor lists what is left.
+
+A `namespaces` Sandbox resolves names as the kernel that runs it does: the
+init stage binds that machine's `/etc/hosts` and its resolver file (above)
 read-only over the image's, so Docker Desktop's `host.docker.internal`, a
 lima guest's `host.lima.internal`, a Linux Engine's `--add-host` entry and
 any DNS name the machine resolves resolve in the Sandbox too. The image
 copy leaves both files out: the binds are the Sandbox's only resolver
 files. What a PostgreSQL Store's URL may name on each machine is
-[Reach](../machines/workers-and-reach.md#reach-reachrs).
+[Reach](../machines/workers-and-reach.md#reach-reachrs); the daemon dials
+it from the machine's network.
 
 On a Linux host, then, a `namespaces` Sandbox on `native` or `docker` shares
-the host's kernel and network: its separation is its namespaces, cgroup,
-seccomp filter and command identity (uid 501), not a VM. No call option,
-record or answer has an `isolation` or `scheduling` field; `isolation` above
-is this in-memory capability only, fixed per backend, so it never counts a
-VM the machine may add (`IsolationModel::Namespaces`,
+the host's kernel: its separation is its namespaces (its network among
+them), cgroup, seccomp filter and command identity (uid 501), not a VM. No
+call option, record or answer has an `isolation` or `scheduling` field;
+`isolation` above is this in-memory capability only, fixed per backend, so
+it never counts a VM the machine may add (`IsolationModel::Namespaces`,
 [`types/capabilities.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/capabilities.rs)).
 
 Capabilities "describe support, not qualification"
@@ -239,37 +297,42 @@ environment
    check binds; rootfs: unpack the docker-archive once per digest
    prepare: Local parts + copied daemon, helper and runtime layer + spec
             + upper/work
+   start_request (before any effect): ip_forward 1, no dropping forward
+     chain, the pool, the resolver plan; else Unavailable
    cgroup::create /sys/fs/cgroup/layerfs/<id>  (needs cgroup.kill)
      layerfs/ gives its children +memory +pids, those its parent lists
      (give_controllers; a failed write is one log line, not a failure)
      split: makes the leaf <id>/init, then <id> gives its children the
      same controllers it has (a failed write is one log line)
+   network::table: table inet layerfs, one transaction
    spawn: helper init --spec <spec>
-            joins <id>/init; unshare(NEWNS | NEWPID | NEWIPC); private
-            v
+            joins <id>/init; unshare(NEWNS | NEWPID | NEWIPC); private;
+            lock, slot, unshare(NEWNET), veth lfs<id12>/eth0, unlock,
+            configure, write <sandbox>/network; setns(machine netns)
+            v                                    then setns(own netns): holder
           helper init-inner --spec <spec>          PID 1 of the namespace
             overlay(lower = image, upper/work = the Sandbox's), /proc,
             /dev (fuse null zero full random urandom tty, pts, shm), /tmp,
             Sandbox directory and each Bind at their own paths, the
             runtime layer read-only at /.layerfs/runtime, this host's
-            /etc/resolv.conf and /etc/hosts read-only over the root's; pivot
+            /etc/hosts and resolver file read-only over the root's; pivot
             v
           /.layerfs/runtime/lib/ld-linux-<arch> --inhibit-cache
             --library-path /.layerfs/runtime/lib layerfs-daemon --config
             <setup> as root (layerfs-daemon --config <setup> without a
-            runtime layer); init reaps
-   await_listener on daemon.log
+            runtime layer), on the machine's network; init reaps
+   await_listener on daemon.log; read <sandbox>/network
 ```
 
 | Item | Rule | Source |
 | --- | --- | --- |
-| `HelperSpec` | One 0600 file of absolute paths (`root`, `sandbox`, `daemon`, `config`, `cgroup`, `lower`, `upper`, `work`), an optional `runtime=` line (the Sandbox's copy of the runtime layer) and `bind=<rw\|ro>\t<host>\t<guest>` lines. A spec without `runtime=` (written before it) still parses and reopens unchanged. No secret: the helper never reads the daemon setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
+| `HelperSpec` | One 0600 file of absolute paths (`root`, `sandbox`, `daemon`, `config`, `cgroup`, `lower`, `upper`, `work`), an optional `runtime=` line (the Sandbox's copy of the runtime layer), `bind=<rw\|ro>\t<host>\t<guest>` lines, `network=<pool>\t<link>` (its pool and host end name) and an optional `resolver=<file>` (the resolver file written for it). A spec without `runtime=` (written before it) still parses and reopens unchanged. No secret: the helper never reads the daemon setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
 | `Bind` | A sqlite Store's directory, read-write at its own path, so SQLite's WAL and the writers' lock see one inode; none for a PostgreSQL Store. A bind may not hold the runtime root, the Sandbox directory or its private root. | [`types/bind.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/bind.rs), `check_bind` in [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Image | `sha256:<64 hex>`, the archive's config digest; a `docker save` archive with uncompressed layers (gzip or zstd layers refused); unpacked once per digest under `<root>/images` and shared read-only. A reopen unpacks nothing: an image gone is refused. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs), [`types/image.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/image.rs), [`namespaces/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs) |
 | Helper | `LAYERFS_SANDBOX_HELPER`, else beside the daemon or this executable; copied into the Sandbox's `bin/`, which a reopen uses. | `namespaces/provider.rs` |
 | Runtime layer | `runtime/` beside the daemon (the sealed bundle's, R5), when it holds this architecture's loader; else none, and the daemon runs on the image's own loader and libraries as before. Copied into the Sandbox's `runtime/` (regular files of `lib/` and `bin/` only; anything else refused; the loader and programs 0755, the libraries 0644), so a bundle replaced under a running Sandbox changes nothing. The init stage binds it read-only, nosuid and nodev at `/.layerfs/runtime`, refusing an image whose `/.layerfs` or `/.layerfs/runtime` is not a plain directory, and starts the daemon through its loader (`--inhibit-cache --library-path /.layerfs/runtime/lib`) with `LAYERFS_SANDBOX_RUNTIME=/.layerfs/runtime` and no `LD_*` variable: the image's loader, libraries and `/etc/ld.so.cache` are never used, so an image with an older glibc, musl or no libc starts it. The image's `/etc/ld.so.preload` is still read by the loader. Its files are unmodified Debian binaries (glibc's loader and libraries, `libgcc_s`, OpenSSL, `getent`, `bash-static`, `busybox-static`), several GPL or LGPL: the bundle's `licenses/` holds each package's copyright file and `SOURCES`, the written source offer naming every file's Debian source package, version and snapshot.debian.org page (`sandbox_runtime.sources` in `bundle.json`); `tools/linux_bundle.py sources` downloads exactly those sources to publish beside a release. | `namespaces/provider.rs`, `namespaces/create.rs`, [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs), [`helper init.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs), [`sandbox_runtime.rs`](../../../../engine/crates/layerfs-bridge/src/sandbox_runtime.rs) |
-| Resolver files | `RESOLVER_FILES` (`/etc/resolv.conf`, `/etc/hosts`) of the launcher's root, each bound read-only at its own path in the Sandbox root, so the Sandbox, which shares the launcher's network namespace, resolves names as the launcher does. A mount point the image lacks is made empty, 0644, in the Sandbox's own writable layer, and one that is a link or another non-file is replaced there; an image whose `/etc` is not a plain directory (a bind through a link would leave the root before the pivot), or whose entry is a directory, keeps its own; a file the launcher lacks is not bound. They are never in a Workspace, a diff or a Commit: they land on the root's `/etc` (the image and the Sandbox's upper layer), Workspaces are mounted under the Sandbox directory, and `HelperSpec::resolver_targets` refuses the start when the Sandbox directory or a bind would hold one | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs), [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) `resolver` |
-| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: forks itself into the Sandbox's leaf group `<id>/init`, the only group a command helper uses (`clone3` with `CLONE_INTO_CGROUP`; the parent, outside it, waits and ends as its child did, a signal included), the child enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| Resolver files | `RESOLVER_FILES` (`/etc/resolv.conf`, `/etc/hosts`) of the launcher's root, each bound read-only at its own path in the Sandbox root, so the Sandbox resolves names as the launcher does; `resolv.conf` is the spec's `resolver=` file instead when the launcher's names a loopback server (Resolver, above). A mount point the image lacks is made empty, 0644, in the Sandbox's own writable layer, and one that is a link or another non-file is replaced there; an image whose `/etc` is not a plain directory (a bind through a link would leave the root before the pivot), or whose entry is a directory, keeps its own; a file the launcher lacks is not bound. They are never in a Workspace, a diff or a Commit: they land on the root's `/etc` (the image and the Sandbox's upper layer), Workspaces are mounted under the Sandbox directory, and `HelperSpec::resolver_targets` refuses the start when the Sandbox directory or a bind would hold one | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs), [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) `resolver` |
+| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: forks itself into the Sandbox's leaf group `<id>/init`, the only group a command helper uses (`clone3` with `CLONE_INTO_CGROUP`; the parent, outside it, waits and ends as its child did, a signal included), the child enters the namespaces, the init stage's network namespace first (Joining, above), becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
 | Command cgroup | With an exec slot, the command (never the helper) is created inside `ws-<workspace>/exec-<exec>` (`clone3` with `CLONE_INTO_CGROUP`), without one inside the helper's (the leaf); once its exec succeeded the helper writes one byte on a socket it was given as stdin, and only then is the stop handle told. A command that cannot be created there never runs. No exec moves a process between groups: a write to `cgroup.procs` waits for an RCU grace period (5–28 ms after an idle spell), which every command paid before. Only the init stage joins its group, once per Sandbox. | `namespaces/exec.rs`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs) |
 | Sandbox group layout | The Sandbox's group `<id>` holds no process: its init stages, daemon, command helpers and commands with no exec slot are in its leaf `<id>/init`, commands with one in `ws-<workspace>/exec-<exec>`. cgroup v2's no-internal-process rule allows only such a group to enable controllers for its children, so `create` splits it before any process joins and gives `init` and each `ws-<workspace>` the memory and pids controllers it has: a Workspace's memory, processes and OOM kills can be read ([`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) `workspaces[].usage`), and `<id>`'s own files still count everything. `ws-<workspace>` enables nothing for its command groups. No limit is ever written. | `namespaces/cgroup.rs` `create`, `split`, `leaf` |
 | End | One `cgroup.kill` on `<id>` ends everything the Sandbox started, its leaf and Workspace groups included, whatever session it left; `track` is a no-op. Reopen checks the recorded init and its membership of the leaf. | `namespaces/cgroup.rs`, [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) `in_cgroup` |
@@ -292,6 +355,9 @@ bundle's image archive. The bundle is bound into the container, so its
 (that would change the whole Docker host), so the command filter alone blocks
 user namespaces. Its Sandboxes resolve names with the worker's resolver
 files (above): `host.docker.internal` names this host on Docker Desktop.
+Their commands' networks are in the worker container's namespace on Docker
+Desktop and in this host's on a Linux Engine, and the worker's own port is
+closed to them (Every `namespaces` Sandbox's own network, above).
 Docker publishes ports only when a container starts, so the
 machine refuses a forward and every call goes through the worker
 ([Machines: platforms](../machines/platforms.md)).
@@ -323,7 +389,7 @@ here times a command out
 
 | Module | What | Source |
 | --- | --- | --- |
-| `types/` | `LaunchRequest`, `ProviderLaunchOptions`, `LocalRecord`, `NamespaceRecord`, `SandboxRecord`, `ExecRequest`, `ExecExit`, `SandboxInspection`, `CommandIdentity`, `Bind`, `Image`, `ContainerId` (a random 64-hex id per Sandbox), `RuntimeError` (`Io`, `Protocol`, `Unsupported`), `WireFailure` (whether attempted). They compile on Windows too. | [`types/`](../../../../control/crates/layerfs-sandbox-backend/src/types) |
+| `types/` | `LaunchRequest`, `ProviderLaunchOptions`, `LocalRecord`, `NamespaceRecord`, `SandboxRecord`, `ExecRequest`, `ExecExit`, `SandboxInspection`, `CommandIdentity`, `Bind`, `Image`, `ContainerId` (a random 64-hex id per Sandbox), `RuntimeError` (`Io`, `Protocol`, `Unsupported`, `Unavailable`: the machine cannot give a Sandbox its network, answered `Unavailable` once the start is undone), `WireFailure` (whether attempted). They compile on Windows too. | [`types/`](../../../../control/crates/layerfs-sandbox-backend/src/types) |
 | `steps.rs` | Step times of a traced command (`exec.*`, and the helper's `helper.*` via `--trace <file>`). | [`steps.rs`](../../../../control/crates/layerfs-sandbox-backend/src/steps.rs) |
 | `postgres_url.rs` | Reads every server host a `postgres://` URL names, as its client (tokio-postgres) reads them (`url_hosts`: the host list and `host`/`hostaddr` parameters, percent-decoded), and says which name this host's loopback (`loopback`, with `ip` reading every IPv4 form `inet_aton` reads and IPv6 zone ids), so a machine that does not share it can refuse it; the URL is never rewritten and never in a message. | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
 | `platform_policy.rs` | Platforms removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): a record naming one is refused, never run. | [`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs) |

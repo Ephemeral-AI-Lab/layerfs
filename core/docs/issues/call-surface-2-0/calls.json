@@ -256,6 +256,11 @@
      "check": "machine.capacity",
      "what": "its data disk has room",
      "full_only": false
+    },
+    {
+     "check": "machine.network",
+     "what": "its Sandboxes' network is in place: forwarding on, the firewall table present, and no host end of a Sandbox that is gone",
+     "full_only": false
     }
    ],
    "store": [
@@ -341,6 +346,11 @@
     {
      "check": "sandbox.runtime",
      "what": "its recorded runtime process runs, by id, start time and boot",
+     "full_only": false
+    },
+    {
+     "check": "sandbox.network",
+     "what": "its commands' network namespace is its own, not the machine's",
      "full_only": false
     },
     {
@@ -3072,7 +3082,8 @@
       "backend",
       "route",
       "created_at",
-      "workspace_capacity"
+      "workspace_capacity",
+      "network"
      ],
      "item": null,
      "examples": {
@@ -3086,7 +3097,7 @@
        "a Workspace mid-Commit: {\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"state\":\"busy\",\"op\":{\"name\":\"commit\",\"phase\":\"publish\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
        "--with stats: {\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"stats\":{\"daemon\":{\"pid\":4121,\"started_at\":\"2026-11-18T09:02:11Z\"},\"usage\":{\"cpu_ms\":8120,\"memory_bytes\":48234496,\"memory_peak_bytes\":61865984,\"memory_file_bytes\":12582912,\"pid_count\":3,\"oom_kill_count\":0},\"workspaces\":[{\"workspace\":\"tests:agent\",\"overlay_bytes\":8675328}]}}"
       ],
-      "long": "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"],\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"path\":\"/workspaces/1\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"mounted_at\":\"2026-11-18T09:02:11Z\",\"branch_moved\":false,\"pending_merge\":false,\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"started_at\":\"2026-11-18T09:16:59Z\",\"program\":\"npm\",\"tag\":null}],\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\"}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"message\":null,\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"created_at\":\"2026-11-18T09:02:11Z\",\"workspace_capacity\":16}"
+      "long": "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"],\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"path\":\"/workspaces/1\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"mounted_at\":\"2026-11-18T09:02:11Z\",\"branch_moved\":false,\"pending_merge\":false,\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"started_at\":\"2026-11-18T09:16:59Z\",\"program\":\"npm\",\"tag\":null}],\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\"}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"message\":null,\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"created_at\":\"2026-11-18T09:02:11Z\",\"workspace_capacity\":16,\"network\":\"lfs9c0f2a7b41d6 10.213.0.1/31\"}"
      },
      "dropped": [
       {
@@ -3577,6 +3588,11 @@
        {
         "check": "sandbox.runtime",
         "what": "its recorded runtime process runs, by id, start time and boot",
+        "full_only": false
+       },
+       {
+        "check": "sandbox.network",
+        "what": "its commands' network namespace is its own, not the machine's",
         "full_only": false
        },
        {
@@ -7280,6 +7296,11 @@
        {
         "check": "machine.capacity",
         "what": "its data disk has room",
+        "full_only": false
+       },
+       {
+        "check": "machine.network",
+        "what": "its Sandboxes' network is in place: forwarding on, the firewall table present, and no host end of a Sandbox that is gone",
         "full_only": false
        }
       ]

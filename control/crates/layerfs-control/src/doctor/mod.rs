@@ -24,6 +24,8 @@ pub use report::{Kind, Node, Report, Thing};
 
 mod host_target;
 mod machine_target;
+mod network;
+pub(crate) use network::{inspect_in_worker as inspect_network_in_worker, OP as NETWORK_OP};
 mod project_target;
 mod sandbox_target;
 mod workspace_target;

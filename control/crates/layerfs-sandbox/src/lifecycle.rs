@@ -217,7 +217,8 @@ pub fn start(
 /// `sandbox.create(sandbox, { image, platform })`: under its folder's guard,
 /// starts the Sandbox the call names on the call's image (`deploy.image`)
 /// and waits for its daemon: `{ sandbox, name, image, platform, runtime,
-/// route, runtime_id }`. A folder that already records a started Sandbox
+/// route, runtime_id, network }` (`network` for a namespaces Sandbox: its
+/// host end and its commands' address). A folder that already records a started Sandbox
 /// is `Exists`; one the retired docker backend recorded is forgotten first,
 /// as `sandbox remove` forgets it (D-8). `deploy.sandbox` names its backend, `native` or
 /// `namespaces`; a native one's `image` is `local`. `platform` (#529) is
@@ -282,6 +283,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
         runtime: Some(crate::runtime::kind(runtime).to_owned()),
         route: Some(crate::files::route(runtime).to_owned()),
         runtime_id: Some(runtime.identity().to_string()),
+        network: crate::runtime::network(runtime),
         control: None,
     };
     Ok(started.encode())

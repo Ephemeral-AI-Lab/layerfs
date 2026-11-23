@@ -798,7 +798,9 @@ Checks a machine (`machine.record`, `machine.operation`,
 `machine.configuration`, `machine.provider`, `machine.state`, then its
 worker: `machine.worker.endpoint`, `machine.worker.auth`,
 `machine.worker.compatibility`, `machine.worker.ping` and the rest of its
-kind's list), then gives each sqlite Store and each Sandbox on it a shallow
+kind's list, `machine.capacity` and `machine.network`, its Sandboxes'
+network: forwarding, the firewall table and host ends of no recorded
+Sandbox, reported and never removed), then gives each sqlite Store and each Sandbox on it a shallow
 check; a check that does not apply is left out. A stopped machine gets no
 worker checks, and under a stopped machine, or one whose provider or worker
 failed its check, nothing on it is tried (`not_checked` with `blocked_by`).

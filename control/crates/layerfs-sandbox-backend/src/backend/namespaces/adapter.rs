@@ -12,11 +12,11 @@ impl BackendAdapter for NamespacesBackend {
     fn description(&self) -> &'static str {
         "Sandboxes run in Linux namespaces and a cgroup"
     }
-    /// A Sandbox owns its mount, PID and IPC namespaces and its cgroup on
-    /// the kernel that runs it: a VM's on `lima` and `apple-container`, the
-    /// host's own on a Linux host's `native` and `docker` machines. No VM or
-    /// network namespace of its own, so the claim is `Namespaces`, whatever
-    /// the machine around it adds.
+    /// A Sandbox owns its mount, PID and IPC namespaces, its cgroup and its
+    /// commands' network namespace on the kernel that runs it: a VM's on
+    /// `lima` and `apple-container`, the host's own on a Linux host's
+    /// `native` and `docker` machines. No VM of its own, so the claim is
+    /// `Namespaces`, whatever the machine around it adds.
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             name: "namespaces-linux",

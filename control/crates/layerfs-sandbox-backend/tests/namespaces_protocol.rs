@@ -26,6 +26,8 @@ fn spec() -> HelperSpec {
         work: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/work"),
         binds: vec![Bind::store(Path::new("/layerfs-store/project/store.sqlite")).unwrap()],
         runtime: None,
+        network: None,
+        resolver: None,
     }
 }
 
@@ -335,6 +337,7 @@ fn a_namespaces_record_is_its_own_variant_and_keeps_the_local_facts() {
     let namespace = NamespaceRecord {
         local: local.clone(),
         image: image(),
+        network: None,
     };
     let record = SandboxRecord::Namespaces(namespace.clone());
     assert_eq!(record.namespaces(), Some(&namespace));

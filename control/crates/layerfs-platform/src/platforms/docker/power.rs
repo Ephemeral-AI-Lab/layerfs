@@ -29,14 +29,23 @@ const ROLE: &str = "layerfs.role=machine-worker";
 /// Before anything else is exec'd into the container's cgroup namespace,
 /// its processes move to a leaf and its root gives Sandboxes the memory and
 /// pids controllers ([`worker::CGROUP_LEAF`], layerfs-project#182 L4); each
-/// start makes a new container, so each start does it.
-fn entry() -> String {
+/// start makes a new container, so each start does it. On Docker Desktop
+/// (not `host_network`) it also turns IPv4 forwarding on in the container's
+/// own namespace, which its Sandboxes route through.
+fn entry(host_network: bool) -> String {
+    // the container's own namespace, on Docker Desktop, is LayerFS's: its
+    // Sandboxes route through it. A Linux Engine's is the host's, whose
+    // setting LayerFS never changes (a Sandbox start refuses when it is off)
+    let forward = match host_network {
+        true => "",
+        false => "echo 1 > /proc/sys/net/ipv4/ip_forward\n",
+    };
     format!(
         r#"set -e
 umask 022
 mkdir -p /layerfs/data/store /layerfs/data/sandbox
 chmod 755 /layerfs/data /layerfs/data/store /layerfs/data/sandbox
-{}
+{forward}{}
 {}
 echo $$ > /layerfs/state/worker.pid
 i=0
@@ -97,11 +106,11 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     let bundle_label = format!("layerfs.bundle={}", bundle.hash);
     let secret_file = format!("LAYERFS_WORKER_SECRET={STATE}/secret");
     let log = format!("LAYERFS_WORKER_LOG={WORKER_LOG}");
-    let entry = entry();
     let tmpfs = format!("{STATE}:mode=0700");
     // On a Linux Engine the worker shares the host's network and listens on
     // a host loopback port. Docker Desktop's worker publishes its port.
     let host_network = cfg!(target_os = "linux");
+    let entry = entry(host_network);
     let port = if host_network { tool::free_port()? } else { 0 };
     let listen = match host_network {
         true => format!("LAYERFS_WORKER_LISTEN=127.0.0.1:{port}"),

@@ -97,6 +97,7 @@ fn daemon(process: LocalProcess, runtime: &'static str, directory: &Path) -> Dae
         port: 1,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     })
 }
 

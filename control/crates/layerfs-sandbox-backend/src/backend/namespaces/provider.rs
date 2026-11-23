@@ -65,7 +65,7 @@ impl NamespaceProvider {
             environment,
             image,
             archive,
-            ..
+            closed_ports,
         } = request.options.clone()
         else {
             return Err(fail(RuntimeError::Unsupported(
@@ -81,6 +81,7 @@ impl NamespaceProvider {
             image,
             archive,
             runtime: runtime(&request.daemon_executable),
+            closed_ports,
         };
         create::create(&self.local, &helper, &request, &options).map_err(|failure| {
             let CreateFailure {
@@ -102,8 +103,8 @@ impl NamespaceProvider {
         })
     }
 
-    /// Reopen starts nothing: it checks the recorded init process, its cgroup
-    /// and its listener.
+    /// Reopen starts nothing: it checks the recorded init process, its cgroup,
+    /// that it holds a network namespace of its own, and its listener.
     pub fn reopen(
         &self,
         id: ContainerId,
@@ -127,6 +128,7 @@ impl NamespaceProvider {
             port: record.local().port,
             labels: record.local().labels.clone(),
             image,
+            network: record.network.clone(),
         };
         Sandbox::reopen(paths, cgroup::path(&id), id, helper, recorded)
     }
@@ -155,6 +157,7 @@ impl NamespaceProvider {
             port: record.local().port,
             labels: record.local().labels.clone(),
             image,
+            network: record.network.clone(),
         };
         Ok(Sandbox::stopped(
             paths,

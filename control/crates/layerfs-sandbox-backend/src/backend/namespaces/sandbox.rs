@@ -33,6 +33,7 @@ pub(crate) struct Recorded {
     pub(crate) port: u16,
     pub(crate) labels: Vec<(String, String)>,
     pub(crate) image: ImageRoot,
+    pub(crate) network: Option<String>,
 }
 
 /// Pause between two looks at a killed init process.
@@ -57,6 +58,9 @@ pub struct Sandbox {
     pub(super) child: Mutex<Option<Child>>,
     pub(super) init: Option<LocalProcess>,
     pub(super) port: u16,
+    /// Its network, `<host end> <guest address>/31`: read from the file its
+    /// init stage wrote, or from its record after a reopen.
+    pub(super) network: Option<String>,
     pub(super) stop_attempted: bool,
     pub(super) stopped: bool,
     pub(super) delete_attempted: bool,
@@ -84,6 +88,7 @@ impl Sandbox {
             child: Mutex::new(None),
             init: None,
             port: 0,
+            network: None,
             stop_attempted: false,
             stopped: false,
             delete_attempted: false,
@@ -92,8 +97,10 @@ impl Sandbox {
     }
 
     /// Reopens a recorded Sandbox whose init stage still runs: the same
-    /// process (id, start time and boot), in its own cgroup's leaf, and its loopback
-    /// port. It starts nothing.
+    /// process (id, start time and boot), in its own cgroup's leaf, holding a
+    /// network namespace of its own, and its loopback port. It starts
+    /// nothing. An init stage on the machine's network (an earlier build's
+    /// Sandbox) is the stopped state, whose fix is its removal.
     pub(crate) fn reopen(
         paths: Paths,
         cgroup: std::path::PathBuf,
@@ -106,15 +113,18 @@ impl Sandbox {
             port,
             labels,
             image,
+            network,
         } = recorded;
         let mut owner = Self::unstarted(id, paths, cgroup, labels, helper, image);
         owner.init = Some(init);
         owner.port = port;
+        owner.network = network;
         if !owner.paths.local.directory.is_absolute() || port == 0 {
             return Err(owner.invalid("saved namespaces Sandbox"));
         }
         let grouped = host::in_cgroup(init.pid, &cgroup::leaf(&owner.cgroup));
-        if !init.alive() || !grouped {
+        let private = crate::network::private(init.pid).unwrap_or(false);
+        if !init.alive() || !grouped || !private {
             let mut failure = owner.invalid(crate::types::STOPPED);
             failure.observed_container = Some(owner.id);
             return Err(failure);
@@ -135,6 +145,7 @@ impl Sandbox {
         let mut owner = Self::unstarted(id, paths, cgroup, recorded.labels, helper, recorded.image);
         owner.init = Some(recorded.init);
         owner.port = recorded.port;
+        owner.network = recorded.network;
         owner.stop_attempted = true;
         owner.stopped = true;
         owner
@@ -163,6 +174,11 @@ impl Sandbox {
     /// The loopback port its daemon listens on, once observed.
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    /// Its network, `<host end> <guest address>/31`, once started.
+    pub fn network(&self) -> Option<&str> {
+        self.network.as_deref()
     }
 
     /// The labels it was created with, kept in its record.
@@ -195,6 +211,7 @@ impl Sandbox {
         Some(SandboxRecord::Namespaces(NamespaceRecord {
             local,
             image: self.image.image().clone(),
+            network: self.network.clone(),
         }))
     }
 

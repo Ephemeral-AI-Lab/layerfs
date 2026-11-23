@@ -137,6 +137,7 @@ fn local_sandbox(root: &Path) -> PathBuf {
         port: 1,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(root, "s1"),

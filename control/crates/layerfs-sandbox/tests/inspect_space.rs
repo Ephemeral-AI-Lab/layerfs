@@ -75,6 +75,7 @@ fn daemon(directory: &Path) -> DaemonRecord {
         port: 1,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     })
 }
 

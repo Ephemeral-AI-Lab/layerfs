@@ -135,6 +135,7 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
         port: 1,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(root, name),

@@ -7,7 +7,9 @@
 //! in [`super`]. `seccomp` is the filter every namespaces command runs
 //! under and the helper's fork into a cgroup, the crate's one audited
 //! `unsafe` module. `confined` is the open
-//! and `stat` of an inspection read (layerfs-project#178).
+//! and `stat` of an inspection read (layerfs-project#178). `net` is a
+//! Sandbox's own network namespace, veth pair and LayerFS's firewall table.
 pub(crate) mod confined;
 pub(crate) mod mounts;
+pub(crate) mod net;
 pub(crate) mod seccomp;

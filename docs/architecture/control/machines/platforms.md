@@ -77,7 +77,9 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
      --tmpfs /layerfs/state:mode=0700
      -e LAYERFS_WORKER_LOG=/layerfs/data/log/worker.log
      --entrypoint sh <image> -c ENTRY
-   ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; the log's folder and
+   ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; macOS only: echo 1 >
+          /proc/sys/net/ipv4/ip_forward (the container's own namespace; a
+          Linux Engine's host network is never written); the log's folder and
           its one rotation; CGROUP_LEAF (every process of the namespace's
           cgroup root into /sys/fs/cgroup/layerfs-worker, then
           "+memory +pids" to the root's cgroup.subtree_control);

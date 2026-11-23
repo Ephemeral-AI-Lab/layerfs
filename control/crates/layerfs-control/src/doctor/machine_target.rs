@@ -3,7 +3,9 @@
 //! `machine.operation`, `machine.configuration`, `machine.provider`,
 //! `machine.state`, `machine.worker.endpoint`, `machine.worker.auth`,
 //! `machine.worker.compatibility`, `machine.worker.ping`,
-//! `machine.capacity`. Nothing is started, stopped or written.
+//! `machine.capacity`, `machine.network` (the Sandbox network, read by the
+//! worker, or here for `native` on Linux; left out for `native` on macOS).
+//! Nothing is started, stopped or written.
 //!
 //! What a probe finds is read as `machine get --with live` reads it (its
 //! state words, reasons and fixes from `layerfs_machine::state`): the
@@ -69,14 +71,27 @@ pub(super) fn diagnose(
             "machine.state",
             "it runs whenever this computer does, as its record says",
         );
+        // `native` on Linux runs namespaces Sandboxes on this host's
+        // network, and only for root: for anyone else it does not apply
+        #[cfg(target_os = "linux")]
+        if layerfs_sandbox_backend::network::privileged() {
+            match super::network::report(home, Some(name)) {
+                Ok(report) => super::network::machine(&report, (name, sandboxes, true), checks),
+                Err(refusal) => checks.unknown("machine.network", refusal.message),
+            }
+        }
         return Ok(());
     }
+    // a Linux Engine's docker worker shares this host's network
+    let host_network =
+        cfg!(target_os = "linux") && kind == layerfs_machine::platform::Platform::Docker;
     let mut machine = Machine {
         home,
         name,
         budget,
         checks,
         sandboxes,
+        host_network,
     };
     machine.probe(&record)
 }
@@ -230,6 +245,9 @@ struct Machine<'a> {
     checks: &'a mut Checks,
     /// How many Sandboxes are recorded on it.
     sandboxes: usize,
+    /// Whether its Sandboxes' network is this Linux host's, shared with
+    /// other homes and machines.
+    host_network: bool,
 }
 
 #[cfg(feature = "machine")]
@@ -523,7 +541,38 @@ impl Machine<'_> {
             "machine.worker.compatibility",
             "its worker is from this build",
         );
-        self.ping(worker, free, &start, &replace)
+        let free = self.ping(worker, free, &start, &replace)?;
+        self.network(&endpoint, stop);
+        Ok(free)
+    }
+
+    /// `machine.network`: its worker reads its Sandbox network
+    /// (`network.inspect`), on a connection of its own. A worker that does
+    /// not answer leaves the check without a verdict.
+    fn network(&mut self, endpoint: &layerfs_machine::worker::Endpoint, stop: std::time::Instant) {
+        use layerfs_machine::worker::{diagnostic_connect, DiagnosticOperation};
+        const ID: &str = "machine.network";
+        let answer = diagnostic_connect(endpoint, stop).and_then(|worker| {
+            worker.diagnose(
+                DiagnosticOperation::Network,
+                layerfs_bridge::control::SdkValue::Null,
+                &mut |_| Ok(()),
+            )
+        });
+        match answer {
+            Ok(report) => super::network::machine(
+                &report,
+                (self.name, self.sandboxes, self.host_network),
+                self.checks,
+            ),
+            Err(error) => self.checks.unknown(
+                ID,
+                format!(
+                    "its worker did not read its Sandbox network: {}",
+                    error.message
+                ),
+            ),
+        }
     }
 
     /// `machine.worker.ping`: the worker answers one read-only request with

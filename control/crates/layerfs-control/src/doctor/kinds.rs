@@ -45,6 +45,7 @@ const MACHINE: &[CheckId] = &[
     CheckId::own("machine.worker.compatibility"),
     CheckId::own("machine.worker.ping"),
     CheckId::own("machine.capacity"),
+    CheckId::own("machine.network"),
 ];
 
 /// A Sandbox's checks; its Workspaces' are `workspace_target::CHECKS`.
@@ -56,6 +57,7 @@ const SANDBOX: &[CheckId] = &[
     CheckId::own("sandbox.store_placement"),
     CheckId::own("sandbox.operation"),
     CheckId::own("sandbox.runtime"),
+    CheckId::own("sandbox.network"),
     CheckId::own("sandbox.route"),
     CheckId::own("sandbox.forward_process"),
     CheckId::own("sandbox.worker_compatibility"),

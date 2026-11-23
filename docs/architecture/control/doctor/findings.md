@@ -28,7 +28,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `home.artifacts` | Configured per-machine daemon path missing or not executable | `path` | `layerfs machine update <m> --daemon <path>` | `safe` |
 | `home.capacity` | Free disk space on home filesystem cannot be measured or is critically low | `free_bytes`, `total_bytes` | Free disk space or run `layerfs store compact <s>` | `safe` |
 
-## 2. `machine.doctor` (`machine.*`, 10 checks; `native` runs 3)
+## 2. `machine.doctor` (`machine.*`, 11 checks; `native` runs 3, 4 on Linux as root)
 
 | Check ID | Failure / Warning Cause | `evidence` Keys (`--detail`) | Remedy (`fix` / Next Step) | Safety |
 | --- | --- | --- | --- | --- |
@@ -42,6 +42,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `machine.worker.compatibility` | Worker build does not match calling `layerfs` build | — | `layerfs machine stop <m> && layerfs machine start <m>` (or `--force` if Sandboxes are running) | `disruptive` |
 | `machine.worker.ping` | Worker does not answer ping within budget | — | `layerfs machine stop <m> && layerfs machine start <m>` | `disruptive` |
 | `machine.capacity` | Machine data disk is low on free space | `reclaimable_image_bytes`, `free_bytes` | `layerfs machine prune <m> --unused` | `safe` |
+| `machine.network` | IPv4 forwarding off; `table inet layerfs` missing while Sandboxes are recorded; `lfs*` links named for no recorded Sandbox (a warning: on a Linux host they may be another home's) | `table`, `forwarding`, `links[{link, addresses, sandbox}]` | stop and start the machine (a Linux host: `sysctl -w net.ipv4.ip_forward=1`; a Sandbox start writes the table); for links, `ip link delete <link>` on the machine once nothing holds them | `disruptive` |
 
 ## 3. `store.doctor` (`store.*`, 6 checks)
 
@@ -62,7 +63,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `project.listed` | Project record exists in home, but Store catalog does not list it (`notice`) | — | `layerfs project delete <store>/<project>` | `destructive` |
 | `project.data` (`--full`) | Missing or corrupted object/pack reachable from `main` or any Branch head | — | Restore Store from backup (`layerfs backup restore`) or authoritative copy; never delete the Store blindly | `disruptive` |
 
-## 5. `sandbox.doctor` (`sandbox.*`, 17 checks; `native` runs 15) & `workspace.*` (2 checks)
+## 5. `sandbox.doctor` (`sandbox.*`, 18 checks; `native` runs 15) & `workspace.*` (2 checks)
 
 | Check ID | Failure / Warning Cause | `evidence` Keys (`--detail`) | Remedy (`fix` / Next Step) | Safety |
 | --- | --- | --- | --- | --- |
@@ -73,6 +74,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `sandbox.store_placement` | SQLite Store and Sandbox are recorded on different machines | — | `layerfs store move <s> <machine>` or recreate Sandbox on the Store's machine | `disruptive` |
 | `sandbox.operation` | Unresolved `op` from ended owner on Sandbox record | — | `layerfs sandbox remove <x>` | `destructive` |
 | `sandbox.runtime` | Recorded daemon runtime process ended or PID/start/boot changed | — | `layerfs sandbox remove <x> --force` (warns uncommitted Workspace data will be discarded) | `destructive` |
+| `sandbox.network` | A running namespaces Sandbox's init holds no network namespace of its own, or its host end `lfs<id12>` is missing or lacks its recorded address (omitted for a native Sandbox, and when the route is forwarded) | `link`, `network` | `layerfs sandbox remove <x>` | `destructive` |
 | `sandbox.route` | Saved daemon route (worker or forward) unusable | — | Start/restart machine or `layerfs sandbox remove <x> --force` | `disruptive` |
 | `sandbox.forward_process` | Forward process exited (omitted on `native`) | — | Restart machine or `layerfs sandbox remove <x> --force` | `disruptive` |
 | `sandbox.worker_compatibility` | Machine worker build mismatch (omitted on `native`) | — | `layerfs machine stop <m> && layerfs machine start <m>` | `disruptive` |

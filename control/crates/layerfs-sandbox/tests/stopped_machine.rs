@@ -159,6 +159,7 @@ fn worker_record(root: &Path, name: &str, process: LocalProcess) -> PathBuf {
         port: 9,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(root, name),

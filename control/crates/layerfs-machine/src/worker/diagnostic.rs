@@ -13,6 +13,8 @@ pub enum DiagnosticOperation {
     Sandbox,
     /// Fixed-root SQLite integrity observation.
     Store,
+    /// The machine's Sandbox network (`machine.network`).
+    Network,
 }
 /// An authenticated diagnostic connection; nothing is automatically retried.
 pub struct DiagnosticWorker {
@@ -101,6 +103,7 @@ impl DiagnosticWorker {
         let op = match operation {
             DiagnosticOperation::Sandbox => "doctor.sandbox",
             DiagnosticOperation::Store => "store.diagnose",
+            DiagnosticOperation::Network => "network.inspect",
         };
         let request = frame_bytes(&SdkValue::map([("op", SdkValue::text(op)), ("args", args)]))?;
         if request.len() > 64 * 1024 {

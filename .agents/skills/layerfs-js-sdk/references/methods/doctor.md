@@ -94,14 +94,15 @@ for (const n of report.not_checked) console.log("not checked:", JSON.stringify(n
   bucket whose backup is behind, `fix` `layerfs backup create <store> <bucket>`).
   No Store data is scanned.
 - **`sandbox.doctor`**: the Sandbox's record and references, its operation,
-  runtime, route and daemon (`sandbox.record` … `sandbox.observation`), then one
+  runtime, network, route and daemon (`sandbox.record` … `sandbox.observation`), then one
   node per Workspace (`workspace.mounted`, `workspace.activity`); a failed or
   uncertain Workspace is an error fixed by
   `layerfs workspace unmount <workspace> --discard --force`.
 - **`machine.doctor`**: `machine.record`, `machine.operation`,
   `machine.configuration`, `machine.provider`, `machine.state`, the worker
-  checks (`machine.worker.endpoint`, `.auth`, `.compatibility`, `.ping`) and
-  `machine.capacity`, each where it applies (`native` answered only
+  checks (`machine.worker.endpoint`, `.auth`, `.compatibility`, `.ping`),
+  `machine.capacity` and `machine.network` (its Sandboxes' network), each
+  where it applies (`native` answered only
   `record`, `operation` and `state` in the run); then each Store and Sandbox
   on it. A stopped machine gets no worker checks.
 - **`home.doctor`**: `home.build`, `home.prerequisites`, `home.layout`,

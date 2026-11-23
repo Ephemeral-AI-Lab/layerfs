@@ -340,6 +340,9 @@ pub struct Started {
     pub route: Option<String>,
     /// Its runtime's identity.
     pub runtime_id: Option<String>,
+    /// A namespaces Sandbox's own network, `<host end> <guest
+    /// address>/31`.
+    pub network: Option<String>,
     /// Its daemon's endpoint in the machine and control keys (a worker's).
     pub control: Option<SdkValue>,
 }

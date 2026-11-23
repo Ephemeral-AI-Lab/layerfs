@@ -177,11 +177,18 @@ fn start_named(
     };
     let created = created.map_err(|mut failure| {
         drop(failure.control.take());
+        // the machine cannot give the Sandbox its network: `Unavailable`,
+        // naming the fix, once whatever the start made is removed
+        let unavailable = matches!(
+            &failure.cause,
+            crate::SandboxCause::Provider(provider)
+                if matches!(provider.cause, layerfs_sandbox_backend::RuntimeError::Unavailable(_))
+        );
         let pg = pg_host
             .as_deref()
             .filter(|_| failure.phase == crate::SandboxPhase::Listener)
             .map(|pg_host| (pg_host, host.store.as_str(), host.reach_hint.as_deref()));
-        abandon(
+        let mut refusal = abandon(
             id,
             format!(
                 "Sandbox {id} did not start: it stopped {}: {}",
@@ -191,7 +198,11 @@ fn start_named(
             failure.runtime.take(),
             &executable,
             pg,
-        )
+        );
+        if unavailable && refusal.code == "Failed" {
+            refusal.code = "Unavailable".to_owned();
+        }
+        refusal
     })?;
     let instance = created.startup.instance;
     let (sandbox, control, identity) = crate::internal::split_provider(created);
@@ -312,6 +323,7 @@ fn launch_options(
                 environment: Vec::new(),
                 image,
                 archive,
+                closed_ports: crate::launch::network::closed_ports(),
             }
         }
     })

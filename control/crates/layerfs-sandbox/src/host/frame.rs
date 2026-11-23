@@ -391,6 +391,7 @@ impl Started {
             runtime: text("runtime"),
             route: text("route"),
             runtime_id: text("runtime_id"),
+            network: text("network"),
             control: value.get("control").cloned(),
         }
     }
@@ -406,6 +407,11 @@ impl Started {
             ("route", opt(&self.route)),
             ("runtime_id", opt(&self.runtime_id)),
         ];
+        fields.extend(
+            self.network
+                .as_ref()
+                .map(|network| ("network", SdkValue::text(network))),
+        );
         fields.extend(self.control.clone().map(|keys| ("control", keys)));
         map(fields)
     }

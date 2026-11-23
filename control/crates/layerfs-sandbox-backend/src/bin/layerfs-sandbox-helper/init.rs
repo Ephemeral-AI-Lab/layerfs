@@ -1,12 +1,16 @@
-//! The two init stages. The outer one creates the namespaces and joins the
-//! cgroup; its first child, the inner one, is PID 1 of the new PID namespace,
-//! so it builds the private root, starts the daemon and reaps. Neither stage
-//! retries anything: a failure ends the stage and is written to the Sandbox's
-//! daemon log, which the start's error keeps.
-use super::mounts;
+//! The two init stages. The outer one creates the namespaces, joins the
+//! cgroup and wires the Sandbox's own network, whose namespace it then
+//! holds; its first child, the inner one, is PID 1 of the new PID
+//! namespace, so it builds the private root, starts the daemon and reaps.
+//! The inner stage and the daemon stay on the machine's network: the
+//! daemon's loopback listener, the worker's dial and its Store connection
+//! are unchanged. Only commands join the Sandbox's network (`exec`).
+//! Neither stage retries anything: a failure ends the stage and is written
+//! to the Sandbox's daemon log, which the start's error keeps.
+use super::{mounts, network};
 use layerfs_sandbox_backend::HelperSpec;
 use nix::{
-    sched::{unshare, CloneFlags},
+    sched::{setns, unshare, CloneFlags},
     sys::wait::{waitpid, WaitStatus},
     unistd::Pid,
 };
@@ -18,8 +22,10 @@ use std::{
 };
 
 /// The outer init stage: joins the Sandbox's cgroup, becomes the first
-/// process of its mount, PID and IPC namespaces, and starts the inner stage.
-/// Its exit code is the daemon's, so the Sandbox ends when the daemon does.
+/// process of its mount, PID and IPC namespaces, wires the Sandbox's network
+/// (`network::wire`), starts the inner stage on the machine's network and
+/// then holds the Sandbox's. Its exit code is the daemon's, so the Sandbox
+/// ends when the daemon does, and its network with it.
 pub(super) fn outer(spec_path: &Path) -> Result<i32, String> {
     let spec = read(spec_path)?;
     join(&spec.cgroup)?;
@@ -37,12 +43,24 @@ pub(super) fn outer(spec_path: &Path) -> Result<i32, String> {
     .map_err(|error| format!("making the Sandbox's mount tree private: {error}"))?;
     let executable =
         std::env::current_exe().map_err(|error| format!("this helper's own path: {error}"))?;
+    let (machine, sandbox) = network::wire(&spec)?;
+    // the inner stage, and the daemon it starts, keep the machine's network
+    setns(&machine, CloneFlags::CLONE_NEWNET)
+        .map_err(|error| format!("returning to the machine's network: {error}"))?;
     let mut inner = Command::new(executable)
         .arg("init-inner")
         .arg("--spec")
         .arg(spec_path)
         .spawn()
         .map_err(|error| format!("starting the Sandbox's init stage: {error}"))?;
+    // this process holds the Sandbox's network: every command joins it
+    // through `/proc/<this pid>/ns/net`
+    if let Err(error) = setns(&sandbox, CloneFlags::CLONE_NEWNET) {
+        let _ = inner.kill();
+        let _ = inner.wait();
+        return Err(format!("holding the Sandbox's network: {error}"));
+    }
+    drop((machine, sandbox));
     let status = inner
         .wait()
         .map_err(|error| format!("waiting for the Sandbox's init stage: {error}"))?;

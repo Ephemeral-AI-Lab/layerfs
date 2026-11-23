@@ -408,6 +408,7 @@ fn sandbox_named(root: &Path, name: &str, endpoint: SocketAddr, items: &[SdkValu
         port: endpoint.port(),
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(root, "s1"),

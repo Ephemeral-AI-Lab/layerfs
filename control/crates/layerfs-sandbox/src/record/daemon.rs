@@ -32,6 +32,7 @@ enum Field {
     Image(String),
     Labels(Vec<(String, String)>),
     Forward(Forward),
+    Network(String),
 }
 
 /// Labels stored as `[{ key, value }]`, each exactly those two texts.
@@ -73,6 +74,7 @@ impl fields::Field for Field {
             "image" => Self::Image(text()?),
             "labels" => Self::Labels(labels(value)?),
             "forward" => Self::Forward(Forward::decode(value)?),
+            "network" => Self::Network(text()?),
             _ => return None,
         })
     }
@@ -93,6 +95,7 @@ impl fields::Field for Field {
             Self::Image(_) => "image",
             Self::Labels(_) => "labels",
             Self::Forward(_) => "forward",
+            Self::Network(_) => "network",
         }
     }
 
@@ -117,7 +120,8 @@ impl fields::Field for Field {
             | Self::Directory(text)
             | Self::Start(text)
             | Self::Boot(text)
-            | Self::Image(text) => SdkValue::text(text),
+            | Self::Image(text)
+            | Self::Network(text) => SdkValue::text(text),
         }
     }
 }
@@ -146,6 +150,8 @@ pub struct Local {
     pub image: String,
     /// Its labels.
     pub labels: Vec<(String, String)>,
+    /// A namespaces Sandbox's own network, `<host end> <guest address>/31`.
+    pub network: Option<String>,
 }
 
 /// One Sandbox's daemon record.
@@ -175,7 +181,7 @@ impl DaemonRecord {
     /// A local daemon (native) or init (namespaces) process.
     pub fn local(local: Local) -> Self {
         let (pid, start, boot) = local.process;
-        Self {
+        let mut record = Self {
             fields: Fields::of([
                 Field::Platform(local.platform),
                 Field::Name(local.name),
@@ -191,7 +197,11 @@ impl DaemonRecord {
                 Field::Image(local.image),
                 Field::Labels(local.labels),
             ]),
+        };
+        if let Some(network) = local.network {
+            record.fields.set(Field::Network(network));
         }
+        record
     }
 
     /// A worker's Sandbox reached through `forward`, with what its create
@@ -311,6 +321,15 @@ impl DaemonRecord {
     pub fn image(&self) -> Option<&str> {
         self.text(|f| match f {
             Field::Image(text) => Some(text),
+            _ => None,
+        })
+    }
+
+    /// A namespaces Sandbox's own network, `<host end> <guest
+    /// address>/31`, when recorded.
+    pub fn network(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Network(text) => Some(text),
             _ => None,
         })
     }

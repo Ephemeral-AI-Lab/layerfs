@@ -139,6 +139,7 @@ fn record(fx: &Fixture, runtime: &'static str, process: Recorded) {
         port: 1,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(&fx.data, "s1"),

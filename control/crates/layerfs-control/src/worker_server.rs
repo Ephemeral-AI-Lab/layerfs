@@ -104,6 +104,30 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     Server::new(secret, root).run(&listener)
 }
 
+/// Prepares this machine for its Sandboxes' own networks as its worker
+/// starts listening on `address`: a non-loopback address is closed to
+/// every Sandbox's commands, and on Linux the firewall table is written
+/// once for the machine's pool (each Sandbox start writes it again). The
+/// line the worker logs; a table that cannot be written is logged, not
+/// fatal: each Sandbox start then refuses with its own reason.
+pub fn prepare_network(address: std::net::SocketAddr) -> String {
+    layerfs_sandbox::launch::network::serving_on(address);
+    network_table()
+}
+
+#[cfg(target_os = "linux")]
+fn network_table() -> String {
+    match layerfs_sandbox::launch::network::worker_start() {
+        Ok(pool) => format!("Sandbox networks: table inet layerfs written for pool {pool}"),
+        Err(why) => format!("Sandbox networks: the table was not written: {why}"),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn network_table() -> String {
+    "Sandbox networks: none on this OS".to_owned()
+}
+
 /// [`serve`] with the switches and waits of `faults`.
 #[cfg(feature = "worker-fault")]
 pub fn serve_with(

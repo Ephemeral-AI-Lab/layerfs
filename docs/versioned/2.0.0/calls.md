@@ -788,7 +788,9 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   `pending_merge`, `commands` (`[{exec, started_at, program, tag}]`: no
   argument and no environment value is shown) and `id`. The Sandbox's long
   form adds `sandbox, project, machine, platform, image, backend, route,
-  created_at` and `workspace_capacity` (16, whatever its state).
+  created_at`, `workspace_capacity` (16, whatever its state) and `network`
+  (a namespaces Sandbox's host end and its commands' address,
+  `lfs<id12> <address>/31`; null for a native one).
   ```text
   $ layerfs sandbox get s1
   {"workspaces":[{"workspace":"s1:w","branch":"dev","running":["exec-9c0f6f0d2a1b4e77"]}]}

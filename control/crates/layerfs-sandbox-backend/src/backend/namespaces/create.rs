@@ -1,7 +1,10 @@
 //! One namespace Sandbox start: its private directory (setup, executable,
-//! overlay, mounts), its cgroup and one spawn of the init stage, then the
-//! wait for its daemon's listener. Nothing is retried, and a failure returns
-//! what it made so the caller can end and delete it once.
+//! overlay, mounts), its cgroup, the machine's firewall table and one spawn
+//! of the init stage, then the wait for its daemon's listener. Before any
+//! effect it checks what the Sandbox's own network needs of the machine
+//! (forwarding on, no forward chain that drops it, a free pool, a resolver
+//! the Sandbox reaches). Nothing is retried, and a failure returns what it
+//! made so the caller can end and delete it once.
 use super::{
     cgroup, host,
     paths::Paths,
@@ -10,8 +13,9 @@ use super::{
 };
 use crate::local::listener;
 use crate::local::{search::search_path, Local, LocalPhase};
-use crate::HelperSpec;
+use crate::network::{self, plan::Ipv4Net, resolver::Resolver};
 use crate::{Bind, CommandIdentity, Image, RuntimeError};
+use crate::{HelperSpec, SpecNetwork};
 use layerfs_bridge::process::LocalProcess;
 use nix::fcntl::OFlag;
 use std::{
@@ -40,7 +44,23 @@ pub(crate) struct Options {
     /// The bundle's runtime layer beside the daemon (R5), when it has one:
     /// copied into the Sandbox and named in its spec.
     pub(crate) runtime: Option<PathBuf>,
+    /// The launcher's own listening ports that are not on loopback (a
+    /// worker on `0.0.0.0`), closed to the Sandbox's commands by the
+    /// firewall table; none for a loopback worker or `native`.
+    pub(crate) closed_ports: Vec<u16>,
 }
+
+/// What a start checked of the machine's network, before any effect.
+struct NetworkPlan {
+    pool: Ipv4Net,
+    resolver: Resolver,
+}
+
+/// The Sandbox directory's resolver file, written when the launcher's
+/// names a loopback nameserver.
+const RESOLVER_FILE: &str = "resolv.conf";
+/// The file the init stage writes the Sandbox's network to.
+const NETWORK_FILE: &str = "network";
 
 /// A failed start. `sandbox` holds what it made (its directory, cgroup and,
 /// once spawned, its init stage) for the caller to end and delete once.
@@ -67,7 +87,7 @@ pub(crate) fn create(
     };
     // the image's lock stays shared until the spec names it (`hold`), so a
     // prune never removes the image between its unpack and this Sandbox
-    let (paths, image, hold) = start_request(local, helper, request, options)
+    let (paths, image, hold, plan) = start_request(local, helper, request, options)
         .map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
     let id =
         crate::ContainerId::random().map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
@@ -85,7 +105,7 @@ pub(crate) fn create(
         helper.to_owned(),
         image.clone(),
     );
-    let log = match prepare(&paths, (request, helper), options, &id, &image) {
+    let log = match prepare(&paths, (request, helper), options, (&id, &plan), &image) {
         Ok(log) => log,
         Err(cause) => return Err(fail(LocalPhase::Create, Some(sandbox), cause)),
     };
@@ -93,6 +113,11 @@ pub(crate) fn create(
     match cgroup::create(&id) {
         Ok(_) => {}
         Err(error) => return Err(fail(LocalPhase::Create, Some(sandbox), error.into())),
+    }
+    // the table carries the current pool and closed ports: written again,
+    // whole, at every start (and at every worker start)
+    if let Err(cause) = network::table(plan.pool, &options.closed_ports) {
+        return Err(fail(LocalPhase::Create, Some(sandbox), cause));
     }
     let spawned = log.try_clone().and_then(|output| {
         Command::new(helper)
@@ -132,6 +157,16 @@ pub(crate) fn create(
     }) {
         Ok(port) => {
             sandbox.port = port;
+            // written by the init stage before the daemon started
+            let line = fs::read_to_string(paths.local.directory.join(NETWORK_FILE));
+            match line.map(|line| line.trim().to_owned()) {
+                Ok(line) if !line.is_empty() => sandbox.network = Some(line),
+                Ok(_) => {
+                    let cause = RuntimeError::Protocol("the Sandbox's network file is empty");
+                    return Err(fail(LocalPhase::Listener, Some(sandbox), cause));
+                }
+                Err(error) => return Err(fail(LocalPhase::Listener, Some(sandbox), error.into())),
+            }
             Ok(sandbox)
         }
         Err(cause) => Err(fail(LocalPhase::Listener, Some(sandbox), cause)),
@@ -139,7 +174,8 @@ pub(crate) fn create(
 }
 
 /// Everything a start refuses before it makes anything: the request's own
-/// fields, this host's runtime prerequisites, each bind against the private
+/// fields, this host's runtime prerequisites, what the Sandbox's network
+/// needs of this machine (`network_plan`), each bind against the private
 /// root's (none for a PostgreSQL Store), the helper, and the image the
 /// bundle carries. Getting
 /// the image's root may unpack it, once per digest for the whole runtime root.
@@ -148,7 +184,7 @@ fn start_request(
     helper: &Path,
     request: &crate::LaunchRequest,
     options: &Options,
-) -> Result<(Paths, ImageRoot, rootfs::ImageHold), RuntimeError> {
+) -> Result<(Paths, ImageRoot, rootfs::ImageHold, NetworkPlan), RuntimeError> {
     let paths = {
         let named = local.clone().naming(&request.name)?;
         Paths::of(named.paths()?)?
@@ -160,6 +196,7 @@ fn start_request(
     let root = (paths.local.directory.parent())
         .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
     host::require_overlay_upper(root)?;
+    let plan = network_plan()?;
     options.command_identity.check()?;
     let executable = &request.daemon_executable;
     let metadata = fs::metadata(executable)?;
@@ -193,7 +230,29 @@ fn start_request(
         .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
     let (image, hold) =
         rootfs::ensure_held(&options.archive, &options.image, &rootfs::cache(root))?;
-    Ok((paths, image, hold))
+    Ok((paths, image, hold, plan))
+}
+
+/// What the Sandbox's own network needs of this machine, checked before any
+/// effect: IPv4 forwarding on (never written here), no other table's
+/// forward chain dropping its traffic, a pool free of this machine's routes
+/// and addresses, and a resolver its namespace can reach
+/// (`network::resolver`).
+fn network_plan() -> Result<NetworkPlan, RuntimeError> {
+    network::forwarding()?;
+    network::forward_policy()?;
+    let pool = network::pool()?;
+    let launcher = match fs::read_to_string(network::resolver::LAUNCHER) {
+        Ok(text) => text,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let systemd = fs::read_to_string(network::resolver::SYSTEMD_UPSTREAM).ok();
+    let resolver = network::resolver::resolver_file(&launcher, systemd.as_deref());
+    if let Resolver::Refuse(why) = resolver {
+        return Err(RuntimeError::Unavailable(why));
+    }
+    Ok(NetworkPlan { pool, resolver })
 }
 
 /// The daemon starts with the search path, this backend's kernel route
@@ -249,7 +308,7 @@ fn prepare(
     paths: &Paths,
     (request, helper): (&crate::LaunchRequest, &Path),
     options: &Options,
-    id: &crate::ContainerId,
+    (id, plan): (&crate::ContainerId, &NetworkPlan),
     image: &ImageRoot,
 ) -> Result<File, RuntimeError> {
     fs::set_permissions(&paths.local.directory, Permissions::from_mode(0o755))?;
@@ -284,6 +343,20 @@ fn prepare(
     if let Some(runtime) = &options.runtime {
         copy_runtime(runtime, &paths.runtime)?;
     }
+    let resolver = match &plan.resolver {
+        Resolver::Write(text) => {
+            let file = paths.local.directory.join(RESOLVER_FILE);
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o644)
+                .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC).bits())
+                .open(&file)?
+                .write_all(text.as_bytes())?;
+            Some(file)
+        }
+        Resolver::Bind | Resolver::Refuse(_) => None,
+    };
     let spec = HelperSpec {
         root: paths.root.clone(),
         sandbox: paths.local.directory.clone(),
@@ -296,6 +369,11 @@ fn prepare(
         work: paths.work.clone(),
         binds: options.binds.clone(),
         runtime: options.runtime.as_ref().map(|_| paths.runtime.clone()),
+        network: Some(SpecNetwork {
+            pool: plan.pool,
+            link: network::plan::link_name(id.as_str()),
+        }),
+        resolver,
     };
     private(&paths.spec)?.write_all(&spec.encode()?)?;
     Ok(private(&paths.local.log)?)

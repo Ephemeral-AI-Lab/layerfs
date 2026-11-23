@@ -22,7 +22,9 @@ request carries what its operation needs. Which calls take a worker is the
 ```text
  1 adapter makes or boots the kernel; data disk at /layerfs/data
  2 prepare  mkdir /layerfs/data/{store,sandbox}, /layerfs/state 0700;
-            echo 0 > /proc/sys/user/max_user_namespaces, read back
+            echo 0 > /proc/sys/user/max_user_namespaces, read back;
+            echo 1 > /proc/sys/net/ipv4/ip_forward (the guest's own
+            namespace: its Sandboxes' networks route through it)
    install  bundle files (layerfs, layerfs-daemon, layerfs-sandbox-helper,
             sandbox-image.tar) copied per file when their hash changed;
             runtime/ (the Sandbox runtime layer) copied whole when
@@ -46,7 +48,8 @@ request carries what its operation needs. Which calls take a worker is the
 
 The `docker` machine does steps 2 and 3 in its own container start (bundle
 mounted read-only, entry script makes the folders and the log and writes
-`/layerfs/state/worker.pid`, no sysctl write);
+`/layerfs/state/worker.pid`; its one sysctl write is `ip_forward` on Docker
+Desktop, never on a Linux Engine, whose namespace is the host's);
 step 4 is shared ([Platforms](platforms.md#docker-platformsdocker)).
 
 ### The worker's log
@@ -103,8 +106,14 @@ Every host-side address is loopback; the secret guards the worker on every
 bind address. `layerfs worker` reads its two settings, makes its root
 (`/layerfs/data`, or `LAYERFS_WORKER_ROOT` in tests) `0701`, sweeps its run
 root of what interrupted Sandbox starts and removals left (once, before it
-accepts; [Checks: leftovers](../doctor/checks.md#leftovers)) and serves
-until `machine.stop`: it never stops by itself
+accepts; [Checks: leftovers](../doctor/checks.md#leftovers)), and once it
+has bound prepares its Sandboxes' networks (`prepare_network`): a listen
+address that is not loopback is closed to every Sandbox's commands, and on
+Linux `table inet layerfs` is written for the machine's pool, one log line
+either way (a table that cannot be written is logged, and each Sandbox
+start then refuses with its own reason;
+[Backends: own network](../sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
+It serves until `machine.stop`: it never stops by itself
 ([`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs)).
 
 ## Protocol (`layerfs-machine/src/worker/`)
@@ -165,6 +174,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.file` | one step of a `store.move` (either direction), `store.remove`, stat or backup, with `progress` events for hashing steps |
 | `store.reach` | the check of this machine's connection to a PostgreSQL Store, for `store.update --machine` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
+| `network.inspect` | doctor's read-only observation of the machine's Sandbox network for `machine.network`: `{ table, forwarding, links: [{ link, addresses, sandbox }] }`, `sandbox` the recorded Sandbox the link is named for, or null |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |
 | `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.delete`, `project.delete.admit`, `project.delete.entry`, `project.delete.release` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; admit, mark, remove the entry of and release a project's deletion |
@@ -206,7 +216,7 @@ Nothing here is a retry: no request is read twice and none is resent.
 | Stalled caller | `store.file` and `sandbox.host` ignore the failed event and end their step; `project.export` returns at its next part, closes the Store and releases its lease; the thread then ends | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs), [`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | After the answer | the worker waits at most 30 s for the caller's close, once | `Wire::answer` |
 | Panic | `catch_unwind` around each connection. One line `<op> panicked: <message>` (300 characters at most; never arguments, a secret or a request), then the connection closes with no answer: `Unknown` (layerfs-project#179 D7) | `connection::serve` |
-| Panic, read-only | `worker.ping`, `machine.images`, `store.reach`, `doctor.sandbox`, `store.diagnose` and `inspect` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
+| Panic, read-only | `worker.ping`, `network.inspect`, `machine.images`, `store.reach`, `doctor.sandbox`, `store.diagnose` and `inspect` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
 
 **No connection cap, and no bound on frame memory** (decided in
 layerfs-project#177). A cap must make a connection wait, never refuse it

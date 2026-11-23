@@ -308,7 +308,12 @@ fn namespaces(
             ),
         )
     })?;
-    let record = layerfs_sandbox_backend::NamespaceRecord { local, image };
+    let network = value.network().map(str::to_owned);
+    let record = layerfs_sandbox_backend::NamespaceRecord {
+        local,
+        image,
+        network,
+    };
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
     let provider =

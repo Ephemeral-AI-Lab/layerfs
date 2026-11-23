@@ -35,6 +35,9 @@ use support::image::{archive, hex, unpacked_at, Tar, DIGEST};
 
 /// The port the stub daemon claims; nothing listens on it.
 const PORT: u16 = 40404;
+/// The port every Sandbox here closes to its commands, as a worker closes
+/// its own listening port.
+const CLOSED: u16 = 7070;
 
 /// The programs the checks below run: each is copied into the image from this
 /// host, with the libraries `ldd` names for it.
@@ -118,6 +121,10 @@ impl Fixture {
                 environment: Vec::new(),
                 image: self.image(),
                 archive: self.archive.clone(),
+                // the machine's one table is rewritten at every start: the
+                // Sandboxes of one process all close the same port, as a
+                // worker's do (`CLOSED`)
+                closed_ports: vec![CLOSED],
             },
         }
     }
@@ -630,6 +637,7 @@ fn a_request_is_refused_before_any_effect() {
         environment: Vec::new(),
         image: fixture.image(),
         archive: fixture.archive.clone(),
+        closed_ports: Vec::new(),
     };
     let failure = provider
         .launch_with_binds(request, vec![fixture.store_bind()])
@@ -657,6 +665,7 @@ fn a_request_is_refused_before_any_effect() {
         environment: Vec::new(),
         image: fixture.image(),
         archive: fixture.archive.clone(),
+        closed_ports: Vec::new(),
     };
     let exposed = Bind::store(&fixture.root.join("sealed.sqlite")).unwrap();
     let failure = provider
@@ -671,6 +680,7 @@ fn a_request_is_refused_before_any_effect() {
         environment: Vec::new(),
         image: fixture.image(),
         archive: fixture.base.join("no-such-image.tar"),
+        closed_ports: Vec::new(),
     };
     let failure = provider
         .launch_with_binds(request, vec![fixture.store_bind()])
@@ -686,6 +696,7 @@ fn a_request_is_refused_before_any_effect() {
         environment: Vec::new(),
         image: other.clone(),
         archive: fixture.archive.clone(),
+        closed_ports: Vec::new(),
     };
     let failure = provider
         .launch_with_binds(request, vec![fixture.store_bind()])
@@ -1180,4 +1191,324 @@ fn a_command_running_when_its_sandbox_is_killed_ends_without_a_status() {
     sandbox.stop(5).unwrap();
     sandbox.delete().unwrap();
     assert!(!sandbox_group.exists());
+}
+
+/// The network namespace identity `/proc/<pid>/ns/net` names.
+fn netns(pid: &str) -> String {
+    fs::read_link(format!("/proc/{pid}/ns/net"))
+        .unwrap()
+        .display()
+        .to_string()
+}
+
+/// Waits (bounded) until the machine has no link named `link`: a network
+/// namespace is torn down by the kernel after its last process ends.
+fn link_gone(link: &str) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let links = layerfs_sandbox_backend::network::inspect().unwrap().links;
+        if !links.iter().any(|(name, _)| name == link) {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Every namespaces Sandbox's commands run in a network namespace of their
+/// own, held by its init stage, joined to the machine by its own host end
+/// `lfs<id12>` with one /31 of the pool; the init's inner stage (and the
+/// daemon) stay on the machine's network; the firewall table is there; the
+/// host end goes with the Sandbox, and the record keeps the network across
+/// a reopen.
+#[test]
+fn each_sandbox_s_commands_have_a_network_of_their_own() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces network: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("network");
+    let provider = fixture.provider().unwrap();
+    let mut first = fixture.launch(&provider, "sandbox-1").unwrap();
+    let mut second = fixture.launch(&provider, "sandbox-2").unwrap();
+    let host = netns("self");
+    let mut seen = Vec::new();
+    for sandbox in [&first, &second] {
+        let id = sandbox.identity().as_str().to_owned();
+        let link = format!("lfs{}", &id[..12]);
+        let network = sandbox
+            .network()
+            .expect("a started Sandbox names its network");
+        let (named, guest) = network.split_once(' ').unwrap();
+        assert_eq!(named, link, "{network}");
+        assert!(guest.ends_with("/31"), "{network}");
+        // the record keeps it
+        let record = sandbox.record().unwrap();
+        assert_eq!(record.namespaces().unwrap().network(), Some(network));
+        // the init stage holds another network than the machine's; its
+        // inner stage, and so the daemon, keeps the machine's
+        let init = sandbox.process().unwrap().pid.to_string();
+        assert_ne!(netns(&init), host);
+        let children = fs::read_to_string(format!("/proc/{init}/task/{init}/children")).unwrap();
+        let inner = children.split_whitespace().next().unwrap().to_owned();
+        assert_eq!(
+            netns(&inner),
+            host,
+            "the daemon's side left the machine's network"
+        );
+        // a command sees only its own loopback and guest end
+        let (code, out, _) = run(sandbox, &["/bin/cat", "/proc/net/dev"], &[]);
+        assert_eq!(code, 0);
+        let names: Vec<&str> = (out.lines().skip(2))
+            .filter_map(|line| line.split(':').next())
+            .map(str::trim)
+            .collect();
+        assert_eq!(
+            names.iter().copied().collect::<BTreeSet<_>>(),
+            BTreeSet::from(["eth0", "lo"]),
+            "{out}"
+        );
+        let (code, out, _) = run(sandbox, &["/bin/ls", "-l", "/proc/self/ns/net"], &[]);
+        assert_eq!(code, 0);
+        assert!(out.trim_end().ends_with(&netns(&init)), "{out}");
+        // the host end is on the machine, with the other address of the /31
+        let links = layerfs_sandbox_backend::network::inspect().unwrap();
+        assert!(links.table, "the firewall table is missing");
+        let (_, addresses) = links.links.iter().find(|(name, _)| *name == link).unwrap();
+        let guest = layerfs_sandbox_backend::network::plan::Ipv4Net::parse(guest).unwrap();
+        assert!(
+            addresses
+                .iter()
+                .any(|a| a.base() == guest.base() && a.address != guest.address),
+            "{addresses:?} {guest}"
+        );
+        seen.push((netns(&init), guest));
+    }
+    assert_ne!(seen[0].0, seen[1].0, "two Sandboxes share a network");
+    assert_ne!(seen[0].1, seen[1].1, "two Sandboxes share an address");
+    // a reopen keeps the network, as the kernel does
+    let record = first.record().unwrap();
+    let reopened = provider.reopen(first.identity(), &record).unwrap();
+    assert_eq!(reopened.network(), first.network());
+    drop(reopened);
+    // the host end ends with its Sandbox; the other's stays
+    let first_link = format!("lfs{}", &first.identity().as_str()[..12]);
+    let second_link = format!("lfs{}", &second.identity().as_str()[..12]);
+    first.stop(5).unwrap();
+    first.delete().unwrap();
+    assert!(link_gone(&first_link), "{first_link} outlived its Sandbox");
+    let links = layerfs_sandbox_backend::network::inspect().unwrap().links;
+    assert!(links.iter().any(|(name, _)| *name == second_link));
+    second.stop(5).unwrap();
+    second.delete().unwrap();
+    assert!(
+        link_gone(&second_link),
+        "{second_link} outlived its Sandbox"
+    );
+}
+
+/// The Sandbox's resolver file: where this machine's resolver is a loopback
+/// stub (systemd-resolved's `127.0.0.53`, a lima guest), the Sandbox gets
+/// the stub's upstream servers instead, with the search and options lines
+/// kept; otherwise this machine's own file.
+#[test]
+fn a_sandbox_resolves_through_a_server_its_network_reaches() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces resolver: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("resolver");
+    let provider = fixture.provider().unwrap();
+    let mut sandbox = fixture.launch(&provider, "sandbox-1").unwrap();
+    let (code, inside, _) = run(&sandbox, &["/bin/cat", "/etc/resolv.conf"], &[]);
+    assert_eq!(code, 0);
+    let launcher = fs::read_to_string("/etc/resolv.conf").unwrap_or_default();
+    let systemd = fs::read_to_string("/run/systemd/resolve/resolv.conf").ok();
+    match layerfs_sandbox_backend::network::resolver::resolver_file(&launcher, systemd.as_deref()) {
+        layerfs_sandbox_backend::network::resolver::Resolver::Bind => assert_eq!(inside, launcher),
+        layerfs_sandbox_backend::network::resolver::Resolver::Write(text) => {
+            assert_eq!(inside, text);
+            assert!(!inside.contains("nameserver 127."), "{inside}");
+            eprintln!("RESOLVER written: {inside}");
+        }
+        layerfs_sandbox_backend::network::resolver::Resolver::Refuse(why) => {
+            panic!("this host's resolver is refused yet a Sandbox started: {why}")
+        }
+    }
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+}
+
+/// The table, as `nft` lists it, when the machine has `nft`: the rules the
+/// design names, with a closed port.
+#[test]
+fn the_firewall_table_holds_the_design_s_rules() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces table: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("table");
+    let provider = fixture.provider().unwrap();
+    let request = fixture.request("sandbox-1");
+    let mut sandbox = provider
+        .launch_with_binds(request, vec![fixture.store_bind()])
+        .unwrap();
+    match std::process::Command::new("nft")
+        .args(["list", "table", "inet", "layerfs"])
+        .output()
+    {
+        Ok(listed) if listed.status.success() => {
+            let text = String::from_utf8_lossy(&listed.stdout);
+            for rule in [
+                "type filter hook forward priority filter; policy accept;",
+                "iifname \"lfs*\" oifname \"lfs*\" drop",
+                "iifname \"lfs*\" accept",
+                "oifname \"lfs*\" ct state established,related accept",
+                "oifname \"lfs*\" drop",
+                "iifname \"lfs*\" tcp dport 7070 drop",
+                "type nat hook postrouting priority srcnat; policy accept;",
+                "oifname != \"lfs*\" masquerade",
+            ] {
+                assert!(text.contains(rule), "missing {rule}: {text}");
+            }
+            eprintln!("TABLE {text}");
+        }
+        other => eprintln!("NOT_RUN table listing: no usable nft ({other:?})"),
+    }
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+}
+
+/// A command whose Sandbox's network cannot be joined never runs: an init
+/// stage on the machine's network (here a process with its own mount, PID
+/// and IPC namespaces but the machine's network, as an earlier build's init
+/// stage was) makes the helper end with a signal before the command starts.
+#[test]
+fn a_command_never_runs_where_its_network_cannot_be_joined() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces join failure: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("join");
+    let mut holder = std::process::Command::new("unshare")
+        .args(["--mount", "--pid", "--ipc", "--fork", "/bin/sleep", "30"])
+        .spawn()
+        .unwrap();
+    // wait (bounded) until the holder's own namespaces exist
+    let pid = holder.id().to_string();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while fs::read_link(format!("/proc/{pid}/ns/mnt")).ok()
+        == fs::read_link("/proc/self/ns/mnt").ok()
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "unshare made no namespaces"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let group =
+        Path::new("/sys/fs/cgroup").join(format!("layerfs-join-test-{}", std::process::id()));
+    fs::create_dir(&group).unwrap();
+    let marker = fixture.base.join("ran");
+    let writable = fixture.base.join("w");
+    fs::create_dir(&writable).unwrap();
+    fs::set_permissions(&writable, fs::Permissions::from_mode(0o777)).unwrap();
+    let status = std::process::Command::new(helper())
+        .args(["exec", "--init", &pid, "--cgroup"])
+        .arg(&group)
+        .args([
+            "--uid", "501", "--gid", "20", "--cwd", "/", "--", "/bin/sh", "-c",
+        ])
+        .arg(format!("echo ran > {}", marker.display()))
+        .status()
+        .unwrap();
+    let _ = holder.kill();
+    let _ = holder.wait();
+    let _ = fs::remove_dir(&group);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(status.signal(), Some(9), "{status:?}");
+    assert!(!marker.exists(), "the command ran on the machine's network");
+}
+
+/// A machine that forwards no IPv4, or whose forward chain drops what it
+/// does not accept, refuses a start before any effect, naming the fix; the
+/// rules the refusal names admit the Sandboxes. Changes this machine's
+/// `net.ipv4.ip_forward` and iptables FORWARD policy for its duration and
+/// restores them: run it alone (`--test-threads=1`).
+#[test]
+fn a_machine_that_would_drop_sandbox_traffic_refuses_the_start() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces forwarding refusals: {reason}");
+        return;
+    }
+    if std::env::var_os("LAYERFS_TEST_NETWORK_ALONE").is_none() {
+        eprintln!("NOT_RUN: set LAYERFS_TEST_NETWORK_ALONE=1 and run with --test-threads=1");
+        return;
+    }
+    let fixture = Fixture::new("refusals");
+    let provider = fixture.provider().unwrap();
+    let forward = "/proc/sys/net/ipv4/ip_forward";
+    let before = fs::read_to_string(forward).unwrap();
+    fs::write(forward, "0").unwrap();
+    let refused = fixture.launch(&provider, "sandbox-1");
+    fs::write(forward, before.trim()).unwrap();
+    let failure = refused.expect_err("a machine that forwards nothing started a Sandbox");
+    assert!(failure.instance.is_none(), "a refused start made something");
+    let said = failure.cause.to_string();
+    assert!(said.contains("net.ipv4.ip_forward=0"), "{said}");
+    assert!(
+        matches!(failure.cause, RuntimeError::Unavailable(_)),
+        "{said}"
+    );
+    let iptables = |args: &[&str]| {
+        std::process::Command::new("iptables")
+            .args(args)
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    if !iptables(&["-P", "FORWARD", "DROP"]) {
+        eprintln!("NOT_RUN forward policy half: no usable iptables");
+        return;
+    }
+    let dropped = fixture.launch(&provider, "sandbox-2");
+    let admit = [
+        vec!["FORWARD", "-i", "lfs+", "-j", "ACCEPT"],
+        vec![
+            "FORWARD",
+            "-o",
+            "lfs+",
+            "-m",
+            "conntrack",
+            "--ctstate",
+            "RELATED,ESTABLISHED",
+            "-j",
+            "ACCEPT",
+        ],
+    ];
+    let mut admitted_ok = true;
+    for rule in &admit {
+        let mut args = vec!["-I"];
+        args.extend(rule.iter().copied());
+        admitted_ok &= iptables(&args);
+    }
+    let admitted = fixture.launch(&provider, "sandbox-3");
+    for rule in &admit {
+        let mut args = vec!["-D"];
+        args.extend(rule.iter().copied());
+        iptables(&args);
+    }
+    iptables(&["-P", "FORWARD", "ACCEPT"]);
+    let failure = dropped.expect_err("a dropping forward chain started a Sandbox");
+    assert!(failure.instance.is_none());
+    let said = failure.cause.to_string();
+    assert!(
+        said.contains("forward chain FORWARD") && said.contains("lfs+"),
+        "{said}"
+    );
+    assert!(admitted_ok);
+    let mut admitted = admitted.expect("the admitted machine refused a Sandbox");
+    admitted.stop(5).unwrap();
+    admitted.delete().unwrap();
 }

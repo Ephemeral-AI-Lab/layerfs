@@ -443,6 +443,7 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         port: 9,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(home, "sb1"),

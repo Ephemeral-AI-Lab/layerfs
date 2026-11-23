@@ -6,8 +6,9 @@
 //! once it is gone; the parent, outside it, only waits and ends as the child
 //! did. No process ever moves between groups: a move (a pid written to
 //! `cgroup.procs`) waits for an RCU grace period, 5–28 ms after an idle
-//! spell, which every command used to pay. The child opens the three
-//! namespace handles, then enters them (after entering the Sandbox's mount
+//! spell, which every command used to pay. The child opens the four
+//! namespace handles (the Sandbox's network one too, refused when it is the
+//! machine's), then enters them (after entering the Sandbox's mount
 //! namespace the host's cgroup and `/proc` paths no longer resolve). Its own
 //! child, the command, is created inside the Sandbox's PID namespace, runs
 //! as the requested uid:gid and inherits no-new-privs, so file capabilities
@@ -97,8 +98,12 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         None => drop(sandbox),
     }
     stamps.mark("helper.cgroup_join");
-    let namespaces = Namespaces::open(run.init)?;
-    namespaces.enter()?;
+    // a stage that cannot enter every namespace, its network one included,
+    // ends with a signal: the command never runs
+    let namespaces = Namespaces::open(run.init).unwrap_or_else(|error| fail(&error));
+    if let Err(error) = namespaces.enter() {
+        fail(&error)
+    }
     set_no_new_privs().map_err(|error| format!("setting no-new-privs: {error}"))?;
     stamps.mark("helper.setns");
     let (program, rest) = run.arguments.split_first().ok_or("no command")?;
@@ -227,31 +232,59 @@ impl Stamps {
     }
 }
 
-/// The three namespace handles of a Sandbox's init stage, all opened before
+/// The four namespace handles of a Sandbox's init stage, all opened before
 /// any is entered: after entering the Sandbox's mount namespace this host's
 /// `/proc/<pid>/ns` no longer resolves.
 struct Namespaces {
     mount: File,
     pid: File,
     ipc: File,
+    net: File,
 }
 
 impl Namespaces {
+    /// The init stage's handles. Its network namespace must be another than
+    /// this process's (the machine's): an init stage that holds none (an
+    /// earlier build's, or a reused pid) is refused, so a command never
+    /// runs on the machine's network.
     fn open(init: u32) -> Result<Self, String> {
         let directory = PathBuf::from(format!("/proc/{init}/ns"));
         let open = |name: &str| {
             File::open(directory.join(name))
                 .map_err(|error| format!("{}: {error}", directory.join(name).display()))
         };
+        let net = open("net")?;
+        let own = File::open("/proc/self/ns/net")
+            .map_err(|error| format!("/proc/self/ns/net: {error}"))?;
+        let identity = |file: &File| {
+            nix::sys::stat::fstat(file.as_fd())
+                .map(|stat| (stat.st_dev, stat.st_ino))
+                .map_err(|error| format!("reading a network namespace handle: {error}"))
+        };
+        if identity(&net)? == identity(&own)? {
+            return Err(
+                "the Sandbox's init stage holds no network namespace of its own, so the command \
+                 is not run on the machine's network"
+                    .to_owned(),
+            );
+        }
         Ok(Self {
             mount: open("mnt")?,
             pid: open("pid_for_children").or_else(|_| open("pid"))?,
             ipc: open("ipc")?,
+            net,
         })
     }
 
     fn enter(self) -> Result<(), String> {
-        let Self { mount, pid, ipc } = self;
+        let Self {
+            mount,
+            pid,
+            ipc,
+            net,
+        } = self;
+        setns(net, CloneFlags::CLONE_NEWNET)
+            .map_err(|error| format!("entering the Sandbox's network namespace: {error}"))?;
         setns(mount, CloneFlags::CLONE_NEWNS)
             .map_err(|error| format!("entering the Sandbox's mount namespace: {error}"))?;
         setns(pid, CloneFlags::CLONE_NEWPID)
