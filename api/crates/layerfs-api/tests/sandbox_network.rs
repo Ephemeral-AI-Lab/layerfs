@@ -13,7 +13,8 @@
 //! without it the PostgreSQL probe of check 3 says NOT_RUN.
 //! LAYERFS_TEST_NET_PROXY names, per machine, an HTTP proxy on the host
 //! for `git ls-remote` where direct HTTPS to GitHub is filtered
-//! (`lima=http://192.168.5.2:15236`). Commands use
+//! (`lima=http://192.168.5.2:15236`), and LAYERFS_TEST_NET_GIT another
+//! public remote (`apple-container=https://gitlab.com/gitlab-org/gitlab-foss.git`). Commands use
 //! only what the runtime layer guarantees: `bash` (`/dev/tcp`, `/dev/udp`),
 //! `busybox` and `getent`. A missing setting says NOT_RUN and passes.
 //!
@@ -316,16 +317,19 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         "busybox timeout 10 bash -c 'exec 3<>/dev/tcp/github.com/22; head -c 4 <&3'",
     );
     assert_eq!(ssh, (0, "SSH-".to_owned()), "{ssh:?}");
-    // where direct HTTPS to GitHub is filtered, git goes through the
-    // machine's HTTP proxy, an address on the host its network reaches
+    // a public remote (GitHub's by default); where direct HTTPS to it is
+    // filtered, git goes through the machine's HTTP proxy, an address on
+    // the host its network reaches, or another public remote is named
     let proxy = per_machine("LAYERFS_TEST_NET_PROXY", machine)
         .map_or(String::new(), |at| format!("https_proxy={at} "));
+    let remote = per_machine("LAYERFS_TEST_NET_GIT", machine)
+        .unwrap_or_else(|| "https://github.com/git/git".to_owned());
     let git = exec(
         home,
         &a.ws,
         &format!(
             "command -v git >/dev/null || {{ echo NOGIT; exit 0; }}; \
-             {proxy}busybox timeout 30 git ls-remote https://github.com/git/git HEAD 2>&1 >/tmp/ls; \
+             {proxy}busybox timeout 30 git ls-remote {remote} HEAD 2>&1 >/tmp/ls; \
              r=$?; busybox cat /tmp/ls; exit $r"
         ),
     );
@@ -333,7 +337,7 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         true => eprintln!("NOT_RUN git ls-remote on {machine}: the image has no git"),
         false => assert!(git.0 == 0 && git.1.contains("HEAD"), "{proxy}{git:?}"),
     }
-    eprintln!("RAN git ls-remote on {machine} {proxy}");
+    eprintln!("RAN git ls-remote {remote} on {machine} {proxy}");
     let pg = per_machine("LAYERFS_TEST_NET_PG", machine);
     match pg {
         Some(at) => {
@@ -418,9 +422,12 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         addressed.contains(&format!("{}/31", a.guest)),
         "{addressed}"
     );
-    // a planted leftover is reported by doctor until it is deleted
+    // a planted leftover (a veth pair, which every machine's kernel has)
+    // is reported by doctor until it is deleted
     let planted = "lfs000000000000";
-    let (made, said) = host.shell(&format!("busybox ip link add {planted} type dummy"));
+    let (made, said) = host.shell(&format!(
+        "busybox ip link add {planted} type veth peer name lfs000000000001"
+    ));
     assert!(made, "{said}");
     let report = ok(home, "machine.doctor", &[("machine", t(machine))]);
     let printed = format!("{report:?}");
@@ -438,7 +445,10 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         "{:?}",
         ok(home, "machine.doctor", &[("machine", t(machine))])
     );
-    assert!(!clean.contains(planted), "{clean}");
+    assert!(
+        !clean.contains(planted) && !clean.contains("lfs000000000001"),
+        "{clean}"
+    );
     // remove: A's host end goes
     ok(home, "workspace.unmount", &[("workspace", t(&a.ws))]);
     ok(home, "sandbox.remove", &[("sandbox", t(&a.name))]);
