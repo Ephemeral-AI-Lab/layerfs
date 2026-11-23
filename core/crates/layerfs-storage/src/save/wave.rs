@@ -161,7 +161,7 @@ impl State<'_> {
         }
         Ok(())
     }
-    /// Rebuilds the stored base of each object whose chain selection walks
+    /// Rebuilds the stored base of each object whose chain selection may walk
     /// and that came with a chain, binding its members (#758), and keeps the
     /// bound locators as authoritative once the rebuild has hashed every
     /// element of the chain, so selection walks those chains with no locate
@@ -207,6 +207,7 @@ impl State<'_> {
                 continue;
             }
             if is_program_role(base.role) {
+                let stale_before = fetch.counters().chain_hint_stale;
                 let caches = PooledCaches {
                     encoded: &mut self.packs,
                     decoded: &mut self.groups,
@@ -222,7 +223,9 @@ impl State<'_> {
                 match rebuilt {
                     Ok(_) => {}
                     Err(error) if hint_failure(&error) && pages.hint_blamed() => {
-                        fetch.hint_stale()?;
+                        // One stale hint, counted once.
+                        let counted = fetch.counters().chain_hint_stale > stale_before;
+                        fetch.hint_stale(counted)?;
                         continue;
                     }
                     Err(error) => return Err(error),
@@ -246,9 +249,11 @@ impl State<'_> {
         }
         Ok(())
     }
-    /// The stored base whose chain selection will walk for `object`, among
+    /// The stored base whose chain selection may walk for `object`, among
     /// `stored` (its stored predecessors, none private, in order), if it is
-    /// one a Save checks. A program page's is its first advisory predecessor
+    /// one a Save checks. Wider than selection: `object` may still turn out
+    /// private to this Save or repeated in the wave (never selected), and an
+    /// ordinary role whose selection walks no base is checked too. A program page's is its first advisory predecessor
     /// when stored with the page's role (`encoding::delta::branch::trial`);
     /// any other object's is its first stored predecessor of an ordinary
     /// role, unless the Save already knows its depth. Pooled leaves bind no

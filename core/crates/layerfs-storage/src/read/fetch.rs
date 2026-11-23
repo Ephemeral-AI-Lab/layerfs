@@ -357,10 +357,20 @@ impl Fetch {
         }
         count
     }
-    /// Keeps a descriptor an authoritative source gave. It confirms one only
-    /// a chain member named (#758, `remember_member_pack`); one that
-    /// contradicts such a descriptor makes the hint stale (counted, strict
-    /// refuses) instead of failing as an inconsistent descriptor.
+    /// Keeps a descriptor a source gave, and confirms one only a chain member
+    /// named (#758, `remember_member_pack`). Every caller confirms: locate
+    /// rows, whole-pack replies (length and digest authenticated), but also
+    /// a group read's ranged admission and a pack-cache hit, whose descriptor
+    /// may itself be a member's, so a member's descriptor whose group was
+    /// read counts as authoritative from then on. A descriptor that
+    /// contradicts a still-marked one makes the hint stale (counted, strict
+    /// refuses) and drops every hint at once, so a later failure of that
+    /// walk at a hinted element is no longer rebuilt on a read (it fails, as
+    /// it did before #758) and is not counted again by a Save's check; one
+    /// that contradicts an unmarked descriptor fails as
+    /// `inconsistent pack descriptor`. Pack ids are never reused, so either
+    /// contradiction means a provider answered a chain unlike its own pack
+    /// row.
     pub(super) fn remember_pack(&self, info: PackInfo) -> StorageResult<()> {
         let from_member = self.confirm_member_pack(info.pack_id);
         let old = self.descriptors.borrow().get(&info.pack_id).copied();

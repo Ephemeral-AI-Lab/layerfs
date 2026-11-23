@@ -312,13 +312,19 @@ impl Fetch {
         }
         self.stale().map(|()| true)
     }
-    /// A failure a stale hint may have caused, at an element a hint located,
-    /// in a walk that has no rebuild of its own (a Save's check of a
-    /// program-page base, `save/wave.rs`): uses no hint until the next
-    /// demand and counts the stale hint (strict refuses).
-    pub(crate) fn hint_stale(&self) -> StorageResult<()> {
+    /// A failure a stale hint may have caused, at an element a hint located
+    /// or reached through one, in a walk that has no rebuild of its own (a
+    /// Save's check of a program-page base, `save/wave.rs`): uses no hint
+    /// until the next demand and counts the stale hint (strict refuses),
+    /// unless `counted`: the walk already counted that stale hint (a member
+    /// that disagreed with its record, or a descriptor that contradicted a
+    /// member's), which is counted once.
+    pub(crate) fn hint_stale(&self, counted: bool) -> StorageResult<()> {
         self.forget_hints();
-        self.stale()
+        match counted {
+            true => Ok(()),
+            false => self.stale(),
+        }
     }
     /// Uses no hint until the next demand; returns how many hinted locators
     /// were evicted. The descriptors only their members gave go with them.

@@ -197,8 +197,12 @@ impl PoolReader {
     }
 
     /// `suspect` is left true when a failure is attributable to an element
-    /// a chain hint located: the element being read or decoded, or any
-    /// element of a walk that ran past the depth cap.
+    /// a chain hint located, or to an element reached through one: every
+    /// element below the first hinted one was named by an unauthenticated
+    /// record (the hinted element's own, or one below it), so a failure while
+    /// reading, binding or decoding any of them, or of a walk past the depth
+    /// cap, may be the hint's. A failure above the first hinted element is
+    /// never a hint's.
     #[allow(clippy::too_many_arguments)]
     fn reconstruct_branch(
         &mut self,
@@ -224,7 +228,7 @@ impl PoolReader {
         // and authenticated it: the chain below it is not read again.
         let mut known: Option<(ObjectId, Known)> = None;
         loop {
-            *suspect = current_hinted;
+            *suspect = current_hinted || hinted.contains(&true);
             if current.pack_id > ceiling {
                 return Err(StorageError::VisibilityCeiling {
                     pack_id: current.pack_id,
@@ -303,12 +307,16 @@ impl PoolReader {
         let mut highest_pack = known.as_ref().map_or(0, |(_, held)| held.highest_pack);
         let mut page: Option<(ObjectId, Vec<u8>)> = known.map(|(id, held)| (id, held.bytes));
         let mut applies = 0_u64;
+        // The first hinted element, root first: it and every element below
+        // it were located through a record not yet authenticated.
+        let first_hinted = hinted.iter().position(|from_hint| *from_hint);
         for (position, ((location, record), from_hint)) in
             chain.iter().zip(&hinted).rev().enumerate()
         {
             // Elements below this one are authenticated: a failure from here
-            // to the next element is this one's.
-            *suspect = *from_hint;
+            // to the next element is this one's, and a hint's when this one
+            // is at or below the first hinted element.
+            *suspect = first_hinted.is_some_and(|first| chain.len() - 1 - position >= first);
             work.canonical = work
                 .canonical
                 .saturating_add(location.canonical_length as u64);

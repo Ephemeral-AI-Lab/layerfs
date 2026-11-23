@@ -1219,3 +1219,167 @@ fn chain_of(
     }
     chain
 }
+
+/// [`directory_change`] with one more change of the same pages Saved on
+/// that handle after the returned objects were constructed, so the pages
+/// the returned objects replace have stored descendants.
+fn directory_change_with_sibling(
+    rounds: u64,
+) -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedObject>) {
+    let memory = Arc::new(metadata::MemoryMetadata::default());
+    let storage = Storage::new(memory.clone()).unwrap();
+    let change = |root: Option<DirectoryRoot>, removed: u64, added: u64| {
+        let reader = storage.reader().unwrap();
+        let mut emitted = Emitted::default();
+        let root = {
+            let mut objects = FilesystemObjects::new(&reader, &mut emitted);
+            match root {
+                None => {
+                    build_directory(&mut objects, (1..=4_000).map(|s| Ok((name(s), s))))
+                        .unwrap()
+                        .0
+                }
+                Some(base) => {
+                    let mut changes = vec![(name(removed), None), (name(added), Some(added))];
+                    changes.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+                    apply_bindings(
+                        &mut objects,
+                        Some(base),
+                        changes.into_iter().map(Ok),
+                        layerfs_content::filesystem::MAXIMUM_SCRATCH_BYTES,
+                        &mut |_, _| Ok(()),
+                    )
+                    .unwrap()
+                    .0
+                }
+            }
+        };
+        (root, emitted.0)
+    };
+    let save = |objects: Vec<FinalizedObject>| {
+        let save = storage.begin_save().unwrap();
+        for object in objects {
+            save.accept(object).unwrap();
+        }
+        save.finish().unwrap();
+    };
+    let mut root = None;
+    for round in 0..rounds {
+        let (next, objects) = change(root, 10 + round, 4_001 + round);
+        save(objects);
+        root = Some(next);
+    }
+    let (_, returned) = change(root, 10 + rounds, 4_001 + rounds);
+    let (_, sibling) = change(root, 11 + rounds, 5_001 + rounds);
+    save(sibling);
+    (memory, returned)
+}
+
+#[test]
+fn a_hinted_element_whose_record_leads_back_to_an_authoritative_one_is_a_stale_hint() {
+    // A program base R with a stored descendant S (stored against R): the
+    // member under R moved onto S's record leads the Save's check from that
+    // hinted element back to R, located authoritatively, so the walk fails
+    // as a cycle at an element only an unauthenticated record named. That
+    // is the hint's failure: counted once (strict refuses) and selection
+    // walks the chain from authoritative locates; the Save stores what the
+    // default port stores.
+    let (memory, objects) = directory_change_with_sibling(6);
+    let (base, member) = {
+        let state = memory.state.lock().unwrap();
+        let found = objects.iter().find_map(|object| {
+            let first = object.predecessors().ids().next()?;
+            let row = state.objects.get(&first)?;
+            if !is_program(object.role()) || row.role != object.role() || row.base.is_none() {
+                return None;
+            }
+            let descendant = state.objects.values().find(|other| {
+                other.base == Some(first) && objects.iter().all(|o| o.id() != other.object_id)
+            })?;
+            Some((first, *descendant))
+        });
+        let (base, descendant) = found.expect("a program base with a stored descendant");
+        let member = ChainMember {
+            object_id: None,
+            pack: state.packs[&descendant.pack_id].info,
+            group_number: descendant.group_number,
+            record_number: descendant.record_number,
+            canonical_length: descendant.canonical_length,
+        };
+        (base, member)
+    };
+    let plain = copy(&memory);
+    fresh_save(plain.clone(), &objects, true).0.unwrap();
+    for strict in [false, true] {
+        let provider = editing(chain_port(&memory), move |chains| {
+            for chain in chains.chains.iter_mut().filter(|c| c.root == base) {
+                chain.members[0] = member;
+            }
+        });
+        let (done, work, _) = fresh_save(provider.clone(), &objects, strict);
+        assert_eq!(work.chain_hint_stale, 1, "{done:?} {work:?}");
+        if strict {
+            assert!(
+                matches!(done, Err(StorageError::Integrity("delta chain hint"))),
+                "{done:?}"
+            );
+            continue;
+        }
+        done.unwrap();
+        same_store(&plain, &provider.inner);
+    }
+}
+
+#[test]
+fn an_authoritative_descriptor_that_contradicts_a_member_s_makes_the_hint_stale() {
+    // Two roots read together whose bases share one pack P. The member under
+    // the first names P under another digest and a group P lacks (with a
+    // matching directory), so no group read reaches it and its descriptor
+    // stays a member's; the second comes with no chain, so its base is
+    // located at the next level and brings P's real descriptor. That
+    // contradiction is a stale hint (counted once; strict refuses), every
+    // hint is dropped, and the read stays correct.
+    let (memory, roots, _) = history(EDITS, |m| m);
+    let (first, second, pack) = {
+        let state = memory.state.lock().unwrap();
+        let base = |id: &ObjectId| state.objects[&state.objects[id].base.unwrap()];
+        let chained: Vec<ObjectId> = roots
+            .iter()
+            .copied()
+            .filter(|id| state.objects[id].base.is_some())
+            .collect();
+        let (first, second) = chained
+            .iter()
+            .flat_map(|a| chained.iter().map(move |b| (*a, *b)))
+            .find(|(a, b)| a != b && base(a).pack_id == base(b).pack_id)
+            .expect("two roots whose bases share a pack");
+        (first, second, state.packs[&base(&first).pack_id].info)
+    };
+    let named = layerfs_storage::location::PackInfo {
+        key: ObjectKey::for_bytes(b"another digest"),
+        ..pack
+    };
+    let (expected, _) = read(copy(&memory), &[first, second], true);
+    for strict in [false, true] {
+        let provider = editing(chain_port(&memory), move |chains| {
+            chains.chains.retain(|c| c.root != second);
+            for chain in chains.chains.iter_mut().filter(|c| c.root == first) {
+                chain.members[0].pack = named;
+                chain.members[0].group_number = GROUP_COUNT_LIMIT - 1;
+            }
+            for directory in &mut chains.directories {
+                if directory.pack == pack {
+                    directory.pack = named;
+                }
+            }
+        });
+        let (got, after) = read(provider.clone(), &[first, second], strict);
+        assert_eq!(after.chain_hint_stale, 1, "{got:?} {after:?}");
+        if strict {
+            refused(&got, "delta chain hint");
+            continue;
+        }
+        assert_eq!(got.unwrap(), *expected.as_ref().unwrap());
+        assert_eq!(after.chain_hinted_bases, 1, "the member was bound first");
+    }
+}
