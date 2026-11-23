@@ -62,19 +62,27 @@ pub const REFRESHED: usize = 4096;
 pub const REFRESH: &str = "LAYERFS_NFS_REFRESH";
 
 /// One mode-preserving chmod of each path below `root`, through the host's
-/// NFS client; a symbolic link (chmod would follow it) and a path that is
-/// gone are skipped. The export answers each without a change.
-fn refresh(root: &std::path::Path, paths: &[PathBuf]) {
+/// NFS client, in order and at most once each. A symbolic link (chmod would
+/// follow it), a path that is gone and a path that now names another inode
+/// than its serial are skipped. Each chmod asks the mode the client shows
+/// and is marked with exactly that mode first, so the export answers it
+/// without a change; a client chmod to another mode is still applied, and
+/// stays (see `layerfs_nfs::refresh`). Stops when the export is gone.
+fn refresh(root: &std::path::Path, refresher: &layerfs_nfs::Refresher, paths: &[(u64, PathBuf)]) {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    for path in paths {
+    for (serial, path) in paths {
         let path = root.join(path);
         let Ok(metadata) = std::fs::symlink_metadata(&path) else {
             continue;
         };
-        if !metadata.file_type().is_symlink() {
-            let mode = std::fs::Permissions::from_mode(metadata.mode() & 0o7777);
-            let _ = std::fs::set_permissions(&path, mode);
+        if metadata.file_type().is_symlink() || metadata.ino() != *serial {
+            continue;
         }
+        let mode = metadata.mode() & 0o7777;
+        if !refresher.arm(*serial, mode) {
+            return;
+        }
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode));
     }
 }
 /// How the host's NFS client mounts, flushes and unmounts an export.
@@ -581,7 +589,9 @@ impl Service {
     /// the client may cache are refreshed through the mount point (see
     /// `layerfs_nfs::refresh`): a mode-preserving chmod of each, at most
     /// [`REFRESHED`], on a thread of its own after this returns, so the
-    /// Commit reply never waits on the client. False without an export.
+    /// Commit reply never waits on the client. Best effort: a walk that stops
+    /// at the bound, a chmod that fails or one the client never sends leaves
+    /// the rest to the client's own revalidation. False without an export.
     pub(super) fn installed_export(
         &self,
         token: WorkspaceToken,
@@ -620,9 +630,10 @@ impl Service {
         let paths = server.refresh(stale);
         if !paths.is_empty() {
             let root = PathBuf::from(directory);
+            let refresher = server.refresher();
             let _ = std::thread::Builder::new()
                 .name("layerfs-nfs-refresh".into())
-                .spawn(move || refresh(&root, &paths));
+                .spawn(move || refresh(&root, &refresher, &paths));
         }
         Ok(true)
     }

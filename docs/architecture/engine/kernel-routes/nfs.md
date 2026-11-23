@@ -164,16 +164,23 @@ drawn once per export; it makes guessing costly and does not authenticate.
  Commit installed R' while the export showed R  (R' != R)
    Server::installed(): close file and directory descriptors
    stale_after_install(R, R') -> serials (at most REFRESHED = 4096)
-   Server::refresh(serials): mark them, return their paths
-   thread layerfs-nfs-refresh: chmod(path, same mode) per path
-     client SETATTR -> marked and mode-only? answer current attrs,
-     change nothing -> new post-op attrs -> client drops its cache
+   Server::refresh(serials): (serial, path) of each the export knows
+   Commit reply sent; thread layerfs-nfs-refresh, per path in order:
+     lstat through the mount (skip a symlink, a vanished path, another inode)
+     Refresher::arm(serial, mode the client shows)   -- one mark, that mode
+     chmod(path, that mode)
+       client SETATTR -> mode-only, marked, asking the marked mode?
+         answer current attrs, change nothing, take the mark
+         -> new post-op attrs -> client drops its cache
+       any other SETATTR (another mode included) -> applied as always
 ```
 
 | Rule | Source |
 | --- | --- |
-| A mark is taken by one mode-only SETATTR and ends after `MARK_LIFE` (30 s); a serial the client never saw is left out; symlinks and vanished paths are skipped | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| One inode is marked right before its own refresh chmod, with the exact mode that chmod asks (the one the client shows through the mount point). A mark is taken by one mode-only SETATTR asking that mode and ends after `MARK_LIFE` (30 s); a serial the client never saw is left out; symlinks, vanished paths and paths that now name another inode are skipped; the thread stops once the export is gone or stopping | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs), [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | The refresh never writes into the Workspace and never reverts a mode the install changed | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
+| The mark suppresses only the refresh's own chmod. A client SETATTR asking another mode is applied even on a marked inode, and the refresh chmod still on its way is then answered without a change, so it never overwrites the newer mode. The one request the export cannot tell from the refresh's is a client chmod to the very mode just marked, sent in the microseconds between the mark and the refresh's chmod: it is answered unchanged and the refresh's chmod that follows applies that same mode | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
+| Best effort: the refresh runs after the Commit reply, so a client may still serve its cached attributes and listings for a moment after it; the walk stops at `REFRESHED` (4,096) stale inodes, and a failed walk, a failed chmod or one the client never sends leaves the rest to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | `LAYERFS_NFS_REFRESH=0` leaves the client to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
 ## AppleDouble files (`apple_double.rs`, `apple_double/edit.rs`, `apple_double/index.rs`, `apple_double/reclaim.rs`, `apple_double_codec.rs`, `apple_double_spill.rs`)

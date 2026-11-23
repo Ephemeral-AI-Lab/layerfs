@@ -127,6 +127,25 @@ impl Counters {
     }
 }
 
+/// Marks a refresh chmod on the export it came from (see [`crate::refresh`]);
+/// holds no reference that keeps a stopped export alive.
+#[derive(Clone)]
+pub struct Refresher(std::sync::Weak<Shared>);
+impl Refresher {
+    /// Marks `serial` for the refresh chmod to `mode` about to be sent;
+    /// false once the export is gone or stopping, when no chmod is due.
+    pub fn arm(&self, serial: u64, mode: u32) -> bool {
+        let Some(shared) = self.0.upgrade() else {
+            return false;
+        };
+        if shared.stopping.load(Ordering::Acquire) {
+            return false;
+        }
+        shared.kernel.arm_refresh(serial, mode);
+        true
+    }
+}
+
 struct Shared {
     kernel: Kernel,
     /// The WRITE/COMMIT verifier: fresh for every export.
@@ -207,18 +226,27 @@ impl Server {
             self.shared.kernel.close_directories(),
         )
     }
-    /// After an install: marks the stale `serials` the client may cache and
-    /// returns their paths below the mount point, for the mode-preserving
-    /// SETATTR that makes the client drop its cache (see [`crate::refresh`]).
-    pub fn refresh(&self, serials: impl IntoIterator<Item = u64>) -> Vec<std::path::PathBuf> {
+    /// After an install: the paths below the mount point of the stale
+    /// `serials` the client may cache, each with its serial, for the
+    /// mode-preserving SETATTR that makes the client drop its cache (see
+    /// [`crate::refresh`]). Marks nothing: [`Refresher::arm`] does, per path.
+    pub fn refresh(
+        &self,
+        serials: impl IntoIterator<Item = u64>,
+    ) -> Vec<(u64, std::path::PathBuf)> {
         use std::os::unix::ffi::OsStrExt;
         (self.shared.kernel.refresh(serials).into_iter())
-            .map(|names| {
-                (names.iter())
+            .map(|(serial, names)| {
+                let path = (names.iter())
                     .map(|name| std::ffi::OsStr::from_bytes(name))
-                    .collect()
+                    .collect();
+                (serial, path)
             })
             .collect()
+    }
+    /// A handle that marks refresh chmods without keeping the export alive.
+    pub fn refresher(&self) -> Refresher {
+        Refresher(Arc::downgrade(&self.shared))
     }
     /// The write verifier this export answers WRITE and COMMIT with.
     pub fn verifier(&self) -> [u8; 8] {

@@ -121,8 +121,8 @@ pub(crate) struct Table {
     pub aliases: HashMap<u64, Vec<Named>>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
-    /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
-    pub refreshing: HashMap<u64, std::time::Instant>,
+    /// Serials marked for a cache refresh: the mode asked, and when.
+    pub refreshing: HashMap<u64, (u32, std::time::Instant)>,
     /// Directory serial -> the facts last published or observed for it. A
     /// change of an AppleDouble companion names a directory but changes
     /// nothing in it, so its `wcc_data` answers from here (see
