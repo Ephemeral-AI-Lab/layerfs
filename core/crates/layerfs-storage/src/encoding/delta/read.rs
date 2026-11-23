@@ -590,24 +590,39 @@ fn record_base(
 /// The base the record at `location` names, read only from bytes `packs`
 /// and `groups` already hold, leaving both as they were (#758): a guess
 /// for a locate, never trusted, so any miss or malformed byte is `None`.
-/// The record is not authenticated and `location` may be wrong.
+/// The record is not authenticated and `location` may be wrong. A group
+/// neither `groups` nor the caller's own `decoded` cache holds is
+/// decompressed, counted in `decodes` and kept in `decoded` (when it fits
+/// that cache's byte bound), so the caller decodes it once.
 pub(crate) fn cached_base(
     packs: &crate::encoding::PackCache,
     groups: &GroupCache,
+    decoded: &mut GroupCache,
     workspace: &mut DecompressionWorkspace,
+    decodes: &mut u64,
     location: &ObjectLocation,
 ) -> Option<ObjectId> {
     let selected = packs.peek_group(location.pack_id, location.group_number)?;
-    let decoded;
+    let fresh;
     let body: &[u8] = match (selected.header.lane, selected.view.codec) {
         (PackLane::Ordinary, crate::pack::layout::GroupCodec::Zstandard) => {
-            match groups.peek(location.pack_id, location.group_number) {
+            let key = (location.pack_id, location.group_number);
+            match groups.peek(key.0, key.1) {
                 Some(cached) => cached,
+                None if decoded.peek(key.0, key.1).is_some() => decoded.peek(key.0, key.1)?,
                 None => {
-                    decoded = workspace
+                    *decodes = decodes.saturating_add(1);
+                    let body = workspace
                         .decompress_group(selected.bytes, selected.view.decoded_length)
                         .ok()?;
-                    &decoded
+                    // A body over the bound is used once and not kept.
+                    if body.len() > crate::policy::DECODED_GROUP_CACHE_BYTES {
+                        fresh = body;
+                        &fresh
+                    } else {
+                        decoded.insert(key.0, key.1, body).ok()?;
+                        decoded.peek(key.0, key.1)?
+                    }
                 }
             }
         }

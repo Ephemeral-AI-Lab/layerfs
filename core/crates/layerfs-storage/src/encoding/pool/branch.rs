@@ -202,7 +202,8 @@ impl PoolReader {
     /// record (the hinted element's own, or one below it), so a failure while
     /// reading, binding or decoding any of them, or of a walk past the depth
     /// cap, may be the hint's. A failure above the first hinted element is
-    /// never a hint's.
+    /// never a hint's, except the chain work check: its totals include the
+    /// elements below, so it is suspect whenever any element was hinted.
     #[allow(clippy::too_many_arguments)]
     fn reconstruct_branch(
         &mut self,
@@ -324,6 +325,11 @@ impl PoolReader {
             if work.canonical > capacities.metadata_chain_canonical_limit
                 || work.encoded > capacities.metadata_chain_encoded_limit
             {
+                // The totals include every element below this one, so a
+                // hinted element's record or canonical length may be what
+                // crossed the limit, even at an authoritative element above
+                // it (fix 3b).
+                *suspect = first_hinted.is_some();
                 return Err(StorageError::Integrity("branch chain work"));
             }
             let decoded = match parse(record)? {

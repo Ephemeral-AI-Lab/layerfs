@@ -365,8 +365,8 @@ impl Fetch {
     /// read counts as authoritative from then on. A descriptor that
     /// contradicts a still-marked one makes the hint stale (counted, strict
     /// refuses) and drops every hint at once, so a later failure of that
-    /// walk at a hinted element is no longer rebuilt on a read (it fails, as
-    /// it did before #758) and is not counted again by a Save's check; one
+    /// walk at a hinted element is no longer rebuilt on a read (the failure
+    /// stands) and is not counted again by a Save's check; one
     /// that contradicts an unmarked descriptor fails as
     /// `inconsistent pack descriptor`. Pack ids are never reused, so either
     /// contradiction means a provider answered a chain unlike its own pack

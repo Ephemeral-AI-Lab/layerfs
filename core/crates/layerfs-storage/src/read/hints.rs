@@ -354,9 +354,23 @@ impl Fetch {
     /// location; a wrong guess only leaves the next level to locate its base
     /// as before. Empty unless this level locates anyway (`level` holds an
     /// id the cache lacks), and never more than fills that locate's page, so
-    /// no statement is added. Bases a member binds are cached already, so
-    /// this serves the chains a read does not bind (program pages, pooled
-    /// leaves) and a Save's reads, which bind none.
+    /// that locate is the only statement the guesses join. Only the chains of
+    /// edges whose base this level has to locate are followed: a base already
+    /// cached was bound from a member or located earlier, and a chain a read
+    /// binds binds its deeper bases with no locate (fix 3b). So this serves
+    /// the chains a read does not bind (program pages, pooled leaves) and a
+    /// Save's reads, which bind none.
+    ///
+    /// Presence checks set no locator-cache referenced bit and the pack and
+    /// decoded-group caches are only peeked. Effects that remain: a wrong
+    /// guess's row is cached (or, when absent, remembered as absent), adding
+    /// locator-cache pressure, and a guessed row's authoritative descriptor
+    /// that contradicts a marked member descriptor makes the hints stale
+    /// ([`Fetch::remember_pack`]). A group a guess needs decoded is
+    /// decompressed at most once per call, into a decoded-group cache of
+    /// this call's own (bounded by [`crate::policy::DECODED_GROUP_CACHE_BYTES`]
+    /// and dropped on return), and every such decompression is counted in
+    /// `prefetch_group_decodes`.
     pub(crate) fn chain_ahead(
         &self,
         level: &[ObjectId],
@@ -365,22 +379,32 @@ impl Fetch {
         groups: &crate::encoding::GroupCache,
         workspace: &mut crate::encoding::codec::DecompressionWorkspace,
     ) -> Vec<ObjectId> {
-        let cached = |id: &ObjectId| {
-            self.locators.borrow().contains_key(id) || self.absent.borrow().contains(id)
-        };
+        if !self.trust_hints.get() {
+            return Vec::new();
+        }
+        let cached =
+            |id: &ObjectId| self.locators.borrow().holds(id) || self.absent.borrow().contains(id);
         let missing: BTreeSet<_> = level.iter().filter(|id| !cached(id)).collect();
-        if missing.is_empty() || !self.trust_hints.get() {
+        if missing.is_empty() {
             return Vec::new();
         }
         let room = READ_OBJECT_LIMIT.saturating_sub(missing.len());
         let hints = self.hints.borrow();
         let mut ahead = BTreeSet::new();
-        for (child, base) in edges {
+        let mut decoded = crate::encoding::GroupCache::new();
+        let mut decodes = 0_u64;
+        'edges: for (child, base) in edges {
+            if !missing.contains(base) {
+                continue;
+            }
             let Some((_, _, _, rest)) = hints.rest(child.object_id) else {
                 continue;
             };
             let mut id = *base;
             for member in rest.iter().take_while(|m| self.known(m)) {
+                if ahead.len() >= room {
+                    break 'edges;
+                }
                 let location = ObjectLocation {
                     object_id: id,
                     role: child.role,
@@ -390,17 +414,25 @@ impl Fetch {
                     record_number: member.record_number,
                     base: None,
                 };
-                let Some(next) = cached_base(packs, groups, workspace, &location) else {
+                let next = cached_base(
+                    packs,
+                    groups,
+                    &mut decoded,
+                    workspace,
+                    &mut decodes,
+                    &location,
+                );
+                let Some(next) = next else {
                     break;
                 };
-                if ahead.len() >= room {
-                    break;
-                }
                 if !cached(&next) && !missing.contains(&next) {
                     ahead.insert(next);
                 }
                 id = next;
             }
+        }
+        if decodes > 0 {
+            self.note(|c| c.prefetch_group_decodes += decodes);
         }
         ahead.into_iter().collect()
     }

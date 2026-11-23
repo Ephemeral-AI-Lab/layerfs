@@ -34,6 +34,11 @@ impl LocatorCache {
     pub(crate) fn contains_key(&self, id: &ObjectId) -> bool {
         self.get(id).is_some()
     }
+    /// Presence only: unlike [`Self::contains_key`], sets no referenced bit,
+    /// so the second-chance order is left as it was.
+    pub(crate) fn holds(&self, id: &ObjectId) -> bool {
+        self.entries.contains_key(id)
+    }
     pub(crate) fn remove(&mut self, id: &ObjectId) {
         if let Some(entry) = self.entries.remove(id) {
             self.hinted -= usize::from(entry.hinted);

@@ -253,8 +253,9 @@ impl State<'_> {
     /// `stored` (its stored predecessors, none private, in order), if it is
     /// one a Save checks. Wider than selection: `object` may still turn out
     /// private to this Save or repeated in the wave (never selected), and an
-    /// ordinary role whose selection walks no base is checked too. A program page's is its first advisory predecessor
-    /// when stored with the page's role (`encoding::delta::branch::trial`);
+    /// ordinary role whose selection walks no base is checked too. A program
+    /// page's is its first advisory predecessor when stored with the page's
+    /// role (`encoding::delta::branch::trial`);
     /// any other object's is its first stored predecessor of an ordinary
     /// role, unless the Save already knows its depth. Pooled leaves bind no
     /// member (`Fetch::bind`).

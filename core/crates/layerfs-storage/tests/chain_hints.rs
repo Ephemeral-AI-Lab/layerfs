@@ -1383,3 +1383,92 @@ fn an_authoritative_descriptor_that_contradicts_a_member_s_makes_the_hint_stale(
         assert_eq!(after.chain_hinted_bases, 1, "the member was bound first");
     }
 }
+
+#[test]
+fn a_chain_a_read_binds_adds_no_guesses_to_another_chain_s_locate() {
+    // Two chained roots with disjoint chains, the second answered without
+    // its chain: the first root's members bind every level of its chain with
+    // no locate, so the locates the second root's levels make carry none of
+    // the first chain's ids (fix 3b; before it, the second locate carried the
+    // first chain's deeper bases as guesses).
+    let (memory, roots, _) = history(EDITS, |m| m);
+    let (first, second, first_chain) = {
+        let state = memory.state.lock().unwrap();
+        let chained: Vec<ObjectId> = roots
+            .iter()
+            .copied()
+            .filter(|id| state.objects[id].base.is_some())
+            .collect();
+        let (first, second) = chained
+            .iter()
+            .flat_map(|a| chained.iter().map(move |b| (*a, *b)))
+            .find(|(a, b)| {
+                let ca = chain_of(&state.objects, *a);
+                let cb = chain_of(&state.objects, *b);
+                a != b && ca.iter().all(|x| !cb.contains(x))
+            })
+            .expect("two chained roots with disjoint chains");
+        (first, second, chain_of(&state.objects, first))
+    };
+    assert!(depth(&memory, first) >= 2, "a chain with deeper levels");
+    let (expected, _) = read(copy(&memory), &[first, second], true);
+    let (_, alone) = read(Arc::new(chain_port(&memory)), &[first], true);
+    assert!(alone.chain_hinted_bases > 0, "{alone:?}");
+    let provider = editing(chain_port(&memory), move |chains| {
+        chains.chains.retain(|c| c.root != second);
+    });
+    let (got, after) = read(provider.clone(), &[first, second], true);
+    assert_eq!(got.unwrap(), expected.unwrap());
+    let asked = provider.asked.lock().unwrap().clone();
+    assert!(asked.len() >= 2, "{asked:?}");
+    for (call, ids) in asked.iter().enumerate().skip(1) {
+        let carried = ids.iter().filter(|id| first_chain.contains(id)).count();
+        assert_eq!(carried, 0, "locate {call} carries the bound chain's ids");
+    }
+    // Every level of the first chain is bound (here by the level walk and
+    // again by the resolution), never located.
+    assert!(
+        after.chain_hinted_bases >= alone.chain_hinted_bases,
+        "{after:?}"
+    );
+    assert_eq!(after.chain_hint_stale, 0);
+}
+
+#[test]
+fn guesses_decode_each_group_once_per_level_and_count_it() {
+    // Every program page of a changed directory read at once: their chains'
+    // records lie in the groups of the Saves that wrote them, which several
+    // pages share. A level's guesses decode each such group at most once and
+    // count it in `prefetch_group_decodes` (fix 3b; before it, they decoded
+    // a shared group once per page and counted nothing).
+    let (memory, _) = directory_change(6);
+    let (pages, chain_groups) = {
+        let state = memory.state.lock().unwrap();
+        let pages: Vec<ObjectId> = state
+            .objects
+            .values()
+            .filter(|row| is_program(row.role) && row.base.is_some())
+            .map(|row| row.object_id)
+            .collect();
+        let groups: std::collections::BTreeSet<(i64, usize)> = pages
+            .iter()
+            .flat_map(|page| chain_of(&state.objects, *page).into_iter().skip(1))
+            .map(|id| (state.objects[&id].pack_id, state.objects[&id].group_number))
+            .collect();
+        (pages, groups.len() as u64)
+    };
+    assert!(pages.len() >= 2, "several program pages");
+    let (expected, plain) = read(copy(&memory), &pages, true);
+    let provider = Arc::new(chain_port(&memory));
+    let (got, after) = read(provider, &pages, true);
+    assert_eq!(got.unwrap(), expected.unwrap());
+    assert_eq!(after.chain_hinted_bases, 0, "no member trusted");
+    let guessed = after
+        .prefetch_group_decodes
+        .saturating_sub(plain.prefetch_group_decodes);
+    assert!(guessed >= 1, "the guesses' decodes are counted: {after:?}");
+    assert!(
+        guessed <= chain_groups,
+        "at most once per group: {guessed} > {chain_groups}"
+    );
+}
