@@ -44,7 +44,13 @@ impl Checkpointer {
     /// frames into the database file, so it must synchronize exactly as the
     /// session does: under NORMAL a pass at 0 would mark frames copied that
     /// never reached the disk, and the writer would restart the log over them.
-    pub(crate) fn start(path: &Path, synchronous: i64) -> Result<Self, BackendError> {
+    ///
+    /// The connection also sets `checkpoint_fullfsync=1`, as the session's
+    /// own connection does (`profile.rs`): with `wal_autocheckpoint=0` nearly
+    /// every checkpoint runs here, and on macOS without it each pass would
+    /// sync the Store file with plain `fsync` before the writer restarts the
+    /// log over the copied frames (finding #11). Returns the read-back value.
+    pub(crate) fn start(path: &Path, synchronous: i64) -> Result<(Self, i64), BackendError> {
         let connection = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -60,6 +66,7 @@ impl Checkpointer {
         for pragma in [
             format!("PRAGMA synchronous={synchronous}"),
             "PRAGMA fullfsync=0".to_owned(),
+            "PRAGMA checkpoint_fullfsync=1".to_owned(),
             "PRAGMA wal_autocheckpoint=0".to_owned(),
         ] {
             query::run(&connection, &pragma, vec![], &work)?;
@@ -69,6 +76,14 @@ impl Checkpointer {
             .ok_or(BackendError::Integrity)?
             .get::<i64>(0)?;
         if applied != synchronous {
+            return Err(BackendError::Integrity);
+        }
+        let checkpoint_fullfsync =
+            query::run(&connection, "PRAGMA checkpoint_fullfsync", vec![], &work)?
+                .first()
+                .ok_or(BackendError::Integrity)?
+                .get::<i64>(0)?;
+        if checkpoint_fullfsync != 1 {
             return Err(BackendError::Integrity);
         }
         let mode = query::run(&connection, "PRAGMA journal_mode", vec![], &work)?
@@ -107,12 +122,15 @@ impl Checkpointer {
                 }
             })
             .map_err(|_| BackendError::Unknown)?;
-        Ok(Self {
-            pass,
-            quiet,
-            wake: Some(wake),
-            thread: Some(thread),
-        })
+        Ok((
+            Self {
+                pass,
+                quiet,
+                wake: Some(wake),
+                thread: Some(thread),
+            },
+            checkpoint_fullfsync,
+        ))
     }
 
     /// Makes this connection's eventual close skip SQLite's checkpoint and

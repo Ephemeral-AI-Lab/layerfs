@@ -40,6 +40,10 @@ pub struct ConnectionProfile {
     pub fullfsync: i64,
     /// macOS checkpoint full-sync selection.
     pub checkpoint_fullfsync: i64,
+    /// The same setting read back from the checkpoint thread's connection,
+    /// which runs nearly every checkpoint of a Normal session; `None` when the
+    /// session has no checkpoint thread (read-only and diagnostic sessions).
+    pub checkpoint_thread_checkpoint_fullfsync: Option<i64>,
     /// Database page bytes.
     pub page_size: i64,
     /// Stored page-reclamation mode: 0 for retained Stores, 2 for new acquisition Stores.
@@ -290,7 +294,7 @@ impl Session {
             .iter()
             .map(|r| r.get::<String>(0))
             .collect::<Result<Vec<_>, _>>()?;
-        let profile = ConnectionProfile {
+        let mut profile = ConnectionProfile {
             persistence: selected,
             pack_layout: layout,
             acquisition,
@@ -304,6 +308,7 @@ impl Session {
             foreign_keys: integer("foreign_keys")?,
             fullfsync: integer("fullfsync")?,
             checkpoint_fullfsync: integer("checkpoint_fullfsync")?,
+            checkpoint_thread_checkpoint_fullfsync: None,
             page_size: integer("page_size")?,
             auto_vacuum: integer("auto_vacuum")?,
             wal_autocheckpoint: integer("wal_autocheckpoint")?,
@@ -332,9 +337,16 @@ impl Session {
             writer.release().map_err(|_| BackendError::Unknown)?;
         }
         super::thread_work::add(&work.borrow());
-        let background = (writable && selected.background_checkpoint())
+        let background = match (writable && selected.background_checkpoint())
             .then(|| super::background::Checkpointer::start(path, selected.synchronous()))
-            .transpose()?;
+            .transpose()?
+        {
+            Some((background, checkpoint_fullfsync)) => {
+                profile.checkpoint_thread_checkpoint_fullfsync = Some(checkpoint_fullfsync);
+                Some(background)
+            }
+            None => None,
+        };
         // §10: the record every later transaction is fenced against.
         let identity = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
         Ok(Self {

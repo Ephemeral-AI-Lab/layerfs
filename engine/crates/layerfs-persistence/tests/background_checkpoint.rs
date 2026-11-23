@@ -63,6 +63,13 @@ fn copied(profile: SqlitePersistenceProfile, synchronous: i64) {
     assert_eq!(handles.profile().synchronous, synchronous);
     assert_eq!(handles.profile().fullfsync, 0);
     assert_eq!(handles.profile().wal_autocheckpoint, 0);
+    // The checkpoint thread's own connection reads back
+    // checkpoint_fullfsync=1, as the session's does (finding #11).
+    assert_eq!(handles.profile().checkpoint_fullfsync, 1);
+    assert_eq!(
+        handles.profile().checkpoint_thread_checkpoint_fullfsync,
+        Some(1)
+    );
     let storage = Storage::new(handles.storage.clone()).unwrap();
     let bytes = random(BYTES);
     let save = storage.begin_save().unwrap();
