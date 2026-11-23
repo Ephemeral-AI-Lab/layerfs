@@ -38,6 +38,25 @@
 //! execution of the statement, then one `EXPLAIN (ANALYZE, BUFFERS, TIMING
 //! OFF, SUMMARY ON, FORMAT JSON)` execution (the B5 baseline used ANALYZE,
 //! TIMING OFF, SUMMARY ON). One sample per case.
+//!
+//! **B5 real-history samples (gate-tooling round, added rows).** `b8 samples
+//! ... --commit-packs FILE` also inserts samples `early` and `late`: 4,096
+//! `r758.lvar` rows each (first by `sha256(id)`, as `deep`) from the objects
+//! of the first and the last 10 % of quarry's commits. `r758` holds no
+//! commits, so the order comes from quarry's own Store (research758
+//! `store.sqlite`, read only): FILE has one line per commit, `history_serial
+//! created_ms root_pack_id`, in `history_serial` order (serials 1..4,514,
+//! never decreasing in `created_ms`), where `root_pack_id` is the pack holding
+//! the commit's root object. An object's commit is not recorded, so its pack
+//! id is the proxy: `early` = rows with `pack_id <=` the largest root pack of
+//! the first 10 % of commits (this includes Project Init's packs, which
+//! precede commit 1); `late` = rows with `pack_id >` the smallest root pack of
+//! the last 10 %. Pack ids are reserved in 4,096-id blocks per writer, so
+//! root packs are not strictly monotonic in commit order (131 of 4,513 steps
+//! decrease); taking the max / min over each tenth keeps every commit of the
+//! tenth inside its bucket. `measure` then prints `b8_statement:` lines for
+//! these kinds too, and one `b5_real_history:` line (late / early ratios).
+//! The `random` and `deep` lines are unchanged.
 use crate::monitor::{self, Monitor, TAG};
 use postgres::types::{FromSql, Type};
 use postgres::Client;
@@ -263,7 +282,7 @@ pub fn run(args: &[String]) {
             m.batch(&text.replace("{schema}", schema));
             println!("b8 sql {schema}: applied {}", args[5]);
         }
-        "samples" => samples(&mut m, schema),
+        "samples" => samples(&mut m, schema, arg(args, "--commit-packs")),
         "measure" => measure(&mut m, schema, args),
         "drop" => {
             assert!(marked(&mut m, schema), "not a B8 schema: refusing to drop");
@@ -382,7 +401,7 @@ fn entries(list: &[u8]) -> usize {
     n
 }
 
-fn samples(m: &mut Monitor, schema: &str) {
+fn samples(m: &mut Monitor, schema: &str, commit_packs: Option<String>) {
     assert!(marked(m, schema), "not a B8 schema");
     m.batch(&format!(
         "CREATE TABLE {schema}.b8_sample (kind text, n int, object_id bytea NOT NULL, PRIMARY KEY (kind,n)); \
@@ -422,6 +441,73 @@ fn samples(m: &mut Monitor, schema: &str) {
         deep.len(),
         depth_sum as f64 / deep.len().max(1) as f64
     );
+    if let Some(path) = commit_packs {
+        history_samples(m, schema, &path);
+    }
+}
+
+/// The B5 real-history samples `early` and `late` (see the module doc).
+fn history_samples(m: &mut Monitor, schema: &str, path: &str) {
+    let text = std::fs::read_to_string(path).unwrap();
+    let mut commits: Vec<(i64, i64, i64)> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| {
+            let f: Vec<i64> = l.split_whitespace().map(|v| v.parse().unwrap()).collect();
+            assert_eq!(
+                f.len(),
+                3,
+                "commit-packs line: serial created_ms root_pack_id"
+            );
+            (f[0], f[1], f[2])
+        })
+        .collect();
+    commits.sort();
+    let n = commits.len();
+    assert!(n >= 10, "need at least 10 commits");
+    let tenth = n.div_ceil(10);
+    let early_max = commits[..tenth].iter().map(|c| c.2).max().unwrap();
+    let late_min = commits[n - tenth..].iter().map(|c| c.2).min().unwrap();
+    let decreases = commits.windows(2).filter(|w| w[1].2 < w[0].2).count();
+    for (kind, cond) in [
+        ("early", format!("pack_id <= {early_max}")),
+        ("late", format!("pack_id > {late_min}")),
+    ] {
+        let rows = m
+            .client
+            .query(
+                &format!(
+                    "{TAG} SELECT object_id, coalesce(ancestors, ''::bytea) FROM r758.lvar WHERE {cond} ORDER BY sha256(object_id)"
+                ),
+                &[],
+            )
+            .unwrap();
+        let candidates = rows.len();
+        let picked: Vec<&postgres::Row> = rows.iter().take(4096).collect();
+        let depth_sum: usize = picked.iter().map(|r| entries(r.get::<_, &[u8]>(1))).sum();
+        let full = picked
+            .iter()
+            .filter(|r| r.get::<_, &[u8]>(1).is_empty())
+            .count();
+        let ids: Vec<Vec<u8>> = picked.iter().map(|r| r.get::<_, Vec<u8>>(0)).collect();
+        m.client
+            .execute(
+                &format!(
+                    "{TAG} INSERT INTO {schema}.b8_sample SELECT $1, n, i FROM unnest($2::bytea[]) WITH ORDINALITY u(i,n)"
+                ),
+                &[&kind, &ids],
+            )
+            .unwrap();
+        println!(
+            "b8 samples {schema}: {kind}={} of {candidates} rows ({cond}; first by sha256(id)) mean_depth={:.2} full_rows={full}",
+            ids.len(),
+            depth_sum as f64 / ids.len().max(1) as f64
+        );
+    }
+    println!(
+        "b8 samples {schema}: commits={n} tenth={tenth} early_commits=1..{tenth} late_commits={}..{n} early_max_root_pack={early_max} late_min_root_pack={late_min} root_pack_decreases={decreases} proxy=pack_id (commit-packs {path})",
+        n - tenth + 1
+    );
 }
 
 fn measure(m: &mut Monitor, schema: &str, args: &[String]) {
@@ -449,7 +535,8 @@ fn measure(m: &mut Monitor, schema: &str, args: &[String]) {
         r.get::<_, i64>(3),
         r.get::<_, i64>(4)
     );
-    for kind in ["random", "deep"] {
+    let mut history: Vec<(&str, Explain)> = Vec::new();
+    for kind in ["random", "deep", "early", "late"] {
         let ids: Vec<Vec<u8>> = m
             .client
             .query(
@@ -460,7 +547,29 @@ fn measure(m: &mut Monitor, schema: &str, args: &[String]) {
             .iter()
             .map(|r| r.get(0))
             .collect();
+        if ids.is_empty() && matches!(kind, "early" | "late") {
+            continue; // the B5 real-history samples exist only with --commit-packs
+        }
         let e = explain(&mut m.client, schema, &sql, &ids);
         println!("{label} b8_statement: sample={kind} {}", e.line(ids.len()));
+        if matches!(kind, "early" | "late") {
+            history.push((kind, e));
+        }
+    }
+    if let [(_, early), (_, late)] = history.as_slice() {
+        println!(
+            "{label} b5_real_history: early_exec_ms={:.3} late_exec_ms={:.3} late_over_early_exec={:.3} early_buffers={} late_buffers={} late_over_early_buffers={:.3} early_rows={} late_rows={} plans_equal={}",
+            early.exec_ms,
+            late.exec_ms,
+            late.exec_ms / early.exec_ms,
+            early.hit + early.read,
+            late.hit + late.read,
+            (late.hit + late.read) as f64 / (early.hit + early.read) as f64,
+            early.rows,
+            late.rows,
+            early.plan_md5 == late.plan_md5
+        );
+    } else {
+        println!("{label} b5_real_history: NOT_RUN (no early/late samples; run b8 samples with --commit-packs)");
     }
 }
