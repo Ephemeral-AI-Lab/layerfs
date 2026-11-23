@@ -96,6 +96,8 @@ pub struct Diagnostics {
     pub chain_members: u64,
     /// Bases located from a member, with no locate.
     pub chain_hinted_bases: u64,
+    /// Hinted bases a Save kept as authoritative after hashing their chains.
+    pub chain_verified_bases: u64,
     /// Hints dropped at the walk or at reconstruction.
     pub chain_hint_stale: u64,
     /// Delta roots a read walked without a chain, level by level.

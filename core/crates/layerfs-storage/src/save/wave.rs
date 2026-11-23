@@ -1,8 +1,9 @@
 //! Membership, exact reuse and one preparation wave.
 use super::{source::WaveSource, state::State};
 use crate::{
-    encoding::delta::read::{BodyCaches, Resolver},
+    encoding::delta::read::{BodyCaches, ChainCounters, Resolver},
     error::{StorageError, StorageResult},
+    location::ObjectLocation,
     policy::READ_OBJECT_LIMIT,
     source::Source,
 };
@@ -52,26 +53,44 @@ impl State<'_> {
             let membership = self.storage.work.span(super::Stage::Membership);
             let (end, ids) = demand(&objects, start);
             self.storage.source.locate(&ids)?;
-            // The slice's stored bases and their chains in one wave (#758).
-            let bases: Vec<ObjectId> = objects[start..end]
+            // The stored bases, none of them private to the Save, of each
+            // object that is not stored itself (an exact reuse reads none).
+            let fetch = &self.storage.source;
+            let bases: Vec<Vec<ObjectLocation>> = objects[start..end]
                 .iter()
-                .flat_map(|object| object.predecessors().ids())
-                .filter(|id| self.packer.location(*id).is_none())
+                .map(
+                    |object| match fetch.located(std::iter::once(object.id())).is_empty() {
+                        true => {
+                            let ids = object.predecessors().ids();
+                            fetch.located(ids.filter(|id| self.packer.location(*id).is_none()))
+                        }
+                        false => Vec::new(),
+                    },
+                )
                 .collect();
-            self.storage
-                .source
-                .prefetch_bases(&bases, &mut self.packs)?;
+            drop(membership);
             // Exact reuse and representation selection walk and authenticate
             // their own required chains. Consume those inputs with the object
             // demand: a wave-wide physical prewalk can exceed retention and
             // evict them before admission, or acquire candidates selection
-            // never needs.
-            drop(membership);
-            let admission = self.storage.work.span(super::Stage::Admission);
-            for index in start..end {
-                self.admit(&objects, index, &mut prepared)?;
+            // never needs. When the provider batches chains (#758), the
+            // objects are admitted a page at a time: one group read holds
+            // their bases' chains, consumed before the next.
+            let mut index = start;
+            while index < end {
+                let admission = self.storage.work.span(super::Stage::Admission);
+                let pages = bases[index - start..].iter().map(Vec::as_slice);
+                let next = match self.storage.source.page(pages, &mut self.packs)? {
+                    0 => end,
+                    covered => index + covered,
+                };
+                self.verify_bases(&bases[index - start..next - start])?;
+                for at in index..next {
+                    self.admit(&objects, at, &mut prepared)?;
+                }
+                drop(admission);
+                index = next;
             }
-            drop(admission);
             start = end;
         }
         let flush = self.storage.work.span(super::Stage::Flush);
@@ -135,6 +154,61 @@ impl State<'_> {
             let required = self.packer.finish_pack_bound() + 1;
             self.reserve_packs(required)?;
             self.offer(object)?;
+        }
+        Ok(())
+    }
+    /// Rebuilds each object's first stored base that came with a chain,
+    /// binding its members (#758), and keeps the bound locators as
+    /// authoritative once the rebuild has hashed every element of the chain,
+    /// so selection walks those chains with no locate per level. Selection
+    /// still sees authoritative locators only: an element whose hash failed
+    /// is never kept, the rebuild falls back to authoritative locates (a
+    /// stale hint, counted), and a chain with no member is walked as before.
+    fn verify_bases(&mut self, bases: &[Vec<ObjectLocation>]) -> StorageResult<()> {
+        let fetch = &self.storage.source;
+        let mut seen = BTreeSet::new();
+        let chained: Vec<ObjectLocation> = bases
+            .iter()
+            .filter_map(|stored| stored.first().copied())
+            .filter(|base| fetch.has_hint(base.object_id) && !self.depths.knows(base.object_id))
+            // Pooled leaves and program pages bind no member (`Fetch::bind`).
+            .filter(|base| {
+                base.role != layerfs_content::ObjectRole::InodeLeaf
+                    && !crate::encoding::pool::branch::is_program_role(base.role)
+            })
+            .filter(|base| seen.insert(base.object_id))
+            .collect();
+        if chained.is_empty() {
+            return Ok(());
+        }
+        let _bind = fetch.binding();
+        let view = WaveSource {
+            fetch,
+            packer: &self.packer,
+            signatures: &self.signatures,
+            values: &self.values,
+        };
+        let capacities = self.storage.capacities();
+        let mut counters = ChainCounters::default();
+        for base in chained {
+            // A stale hint on an earlier base drops every hint.
+            if !fetch.has_hint(base.object_id) {
+                continue;
+            }
+            Resolver::new(
+                &view,
+                i64::MAX,
+                &capacities,
+                BodyCaches {
+                    packs: &mut self.packs,
+                    pool: &mut self.pool,
+                },
+                &mut self.groups,
+                &mut self.decode,
+                &mut counters,
+            )
+            .resolve_at(base)?;
+            fetch.promote_hints();
         }
         Ok(())
     }

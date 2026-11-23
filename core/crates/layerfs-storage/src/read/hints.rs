@@ -16,11 +16,11 @@ use crate::{
     location::{ChainMember, LocatedChains, LocatedObject, ObjectLocation, PackInfo},
     pack::layout,
     policy::{DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT},
+    port::PersistenceError,
     port::{AcquiredPackRead, GroupRead, GroupReadAnswer, PackReadChoice, PackReadPlan},
-    port::{PersistenceError, PACK_READ_PREFIX_BYTES},
 };
 use layerfs_content::{ObjectId, ObjectRole};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Positions one chain contributes at most: its root and every member.
 const CHAIN_ENTRIES: usize = layerfs_content::MAXIMUM_DELTA_MAX_DEPTH as usize + 1;
@@ -37,11 +37,34 @@ pub(super) struct Hints {
     generation: u64,
 }
 impl Hints {
+    /// Keeps one checked pack directory within the bound.
+    fn directory(&mut self, pack: PackInfo, prefix: Vec<u8>) {
+        if self.directory_bytes + prefix.len() > DEPENDENCY_PACK_CACHE_BYTES {
+            (self.directories, self.directory_bytes) = Default::default();
+        }
+        self.directory_bytes += prefix.len();
+        self.directories.insert(pack.pack_id, (pack, prefix));
+    }
     /// `child`'s chain position: root, generation, depth and the remaining members.
     fn rest(&self, child: ObjectId) -> Option<(ObjectId, u64, usize, &[ChainMember])> {
         let &(root, generation, depth) = self.next.get(&child)?;
         let (current, members) = self.chains.get(&root)?;
         (*current == generation).then(|| (root, generation, depth, &members[depth..]))
+    }
+}
+
+/// One pack a page plans: its uncached wanted groups, sorted, whether an
+/// authoritative row names it, and its request with its returned-byte cost.
+#[derive(Clone)]
+struct Planned {
+    info: PackInfo,
+    groups: Vec<usize>,
+    own: bool,
+    read: Option<(GroupRead, usize)>,
+}
+impl Planned {
+    fn cost(&self) -> usize {
+        self.read.as_ref().map_or(0, |read| read.1)
     }
 }
 
@@ -138,14 +161,23 @@ impl Fetch {
             hints.next.insert(chain.root, (chain.root, generation, 0));
         }
         for directory in answer.directories {
-            if hints.directory_bytes + directory.prefix.len() > DEPENDENCY_PACK_CACHE_BYTES {
-                (hints.directories, hints.directory_bytes) = Default::default();
-            }
-            hints.directory_bytes += directory.prefix.len();
-            let entry = (directory.pack, directory.prefix);
-            hints.directories.insert(entry.0.pack_id, entry);
+            hints.directory(directory.pack, directory.prefix);
         }
         Ok(())
+    }
+    /// Keeps the directories of the packs this handle published, so a group
+    /// read plans their ranges (#758), when the provider batches chains.
+    pub(super) fn published_directories(&self, packs: &[crate::port::PublishedPack]) {
+        if !self.metadata.batched_chain_reads() {
+            return;
+        }
+        let mut hints = self.hints.borrow_mut();
+        for pack in packs {
+            let body = pack.body();
+            if let Ok(header) = layout::parse_header(body) {
+                hints.directory(pack.info(), body[..header.body_offset].to_vec());
+            }
+        }
     }
     fn depth_for(&self, role: ObjectRole) -> usize {
         usize::from(
@@ -245,94 +277,150 @@ impl Fetch {
         *self.hints.borrow_mut() = Hints::default();
         self.locators.borrow_mut().remove_hinted()
     }
-    /// Fetches the uncached groups of `locations` and of their chains' members
-    /// in one `read_groups` call of at most [`DEPENDENCY_PACK_CACHE_BYTES`],
-    /// into `packs`. Nothing happens unless a member is involved, so rows with
-    /// no chain keep today's acquisition. Packs left out are acquired as before.
-    ///
-    /// A pack only members name is a hint: a member whose descriptor
-    /// contradicts a known one is left out, and a failure of a read planned
-    /// for members alone makes the hints stale (counted, not used again this
-    /// demand) while the read goes on as before. A failure of a pack that
-    /// `locations` themselves name stays hard.
+    /// Keeps every hinted locator as authoritative. Called only after a
+    /// reconstruction hashed every element of the chain that bound them
+    /// (a Save's check of its bases, `save/wave.rs`).
+    pub(crate) fn promote_hints(&self) {
+        let promoted = self.locators.borrow_mut().promote_hinted() as u64;
+        self.note(|c| c.chain_verified_bases += promoted);
+    }
+    /// Fetches the uncached groups `locations` and their chains need in one
+    /// `read_groups` call, as the first page of [`Self::page`] does. Nothing
+    /// happens unless a member or a local chain is involved, so rows with no
+    /// chain keep today's acquisition.
     pub(crate) fn prefetch_groups(
         &self,
         locations: &[ObjectLocation],
         packs: &mut PackCache,
     ) -> StorageResult<()> {
+        self.fetch_page([locations], packs, true).map(drop)
+    }
+    /// Pages a demand (#758): fetches the uncached groups of the longest
+    /// leading run of `consumers` (each the rows one consumer reads next) and
+    /// of their chains in one `read_groups` call of at most
+    /// [`DEPENDENCY_PACK_CACHE_BYTES`] of returned bytes, into `packs`, and
+    /// returns that run's length. The caller consumes the run before it asks
+    /// for the next page, so the pack cache still holds every group of it. A
+    /// first consumer that does not fit alone has the packs that fit read and
+    /// counts as covered. Returns 0, reading nothing, when the provider has no
+    /// chains to batch: the caller acquires as before.
+    pub(crate) fn page<'a>(
+        &self,
+        consumers: impl IntoIterator<Item = &'a [ObjectLocation]>,
+        packs: &mut PackCache,
+    ) -> StorageResult<usize> {
+        self.fetch_page(consumers, packs, false)
+    }
+    /// [`Self::page`]; with `chained`, nothing is read unless a member or a
+    /// local chain is involved.
+    ///
+    /// A pack only members name is a hint: a member whose descriptor
+    /// contradicts a known one is left out, and a failure of a read planned
+    /// for members alone makes the hints stale (counted, not used again this
+    /// demand) while the read goes on as before. A failure of a pack that
+    /// the rows themselves name stays hard.
+    fn fetch_page<'a>(
+        &self,
+        consumers: impl IntoIterator<Item = &'a [ObjectLocation]>,
+        packs: &mut PackCache,
+        chained: bool,
+    ) -> StorageResult<usize> {
         let batched = self.metadata.batched_chain_reads();
         if !self.trust_hints.get() || !batched && self.hints.borrow().chains.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
-        // Each pack with its groups and whether an authoritative row names it.
-        let mut wanted: Vec<(PackInfo, Vec<usize>, bool)> = Vec::new();
-        let mut members = false;
-        {
-            let hints = self.hints.borrow();
-            let descriptors = self.descriptors.borrow();
-            let mut add = |info: PackInfo, group: usize, own: bool| match wanted
-                .iter_mut()
-                .find(|(known, _, _)| known.pack_id == info.pack_id)
-            {
-                Some((_, groups, owned)) => {
-                    *owned |= own;
-                    if !groups.contains(&group) {
-                        groups.push(group);
+        let (mut page, mut bytes, mut covered, mut members) = (Vec::<Planned>::new(), 0, 0, false);
+        // Cached entries the page keeps resident, counted in its bytes.
+        let mut kept = BTreeSet::new();
+        for rows in consumers {
+            let mut needs = Vec::new();
+            members |= self.needs(rows, batched, &mut needs);
+            // This consumer's packs, each with the page's groups and its own,
+            // and the cached entries it adds to the page.
+            let mut trial: Vec<Planned> = Vec::new();
+            let mut keep = BTreeMap::new();
+            for (info, group, own) in needs {
+                if self.serve_published.get() && self.published_has(info.pack_id) {
+                    continue;
+                }
+                if packs.group(self, info.pack_id, group)?.is_some() {
+                    keep.extend(
+                        packs
+                            .held(info.pack_id, group)
+                            .filter(|e| !kept.contains(&e.0)),
+                    );
+                    continue;
+                }
+                let at = match trial.iter().position(|p| p.info.pack_id == info.pack_id) {
+                    Some(at) => at,
+                    None => {
+                        let known = page.iter().find(|p| p.info.pack_id == info.pack_id);
+                        trial.push(known.cloned().unwrap_or(Planned {
+                            info,
+                            groups: Vec::new(),
+                            own: false,
+                            read: None,
+                        }));
+                        trial.len() - 1
                     }
+                };
+                trial[at].own |= own;
+                if let Err(slot) = trial[at].groups.binary_search(&group) {
+                    trial[at].groups.insert(slot, group);
                 }
-                None => wanted.push((info, vec![group], own)),
+            }
+            let cost = |page: &[Planned], id: i64| {
+                page.iter()
+                    .find(|p| p.info.pack_id == id)
+                    .map_or(0, Planned::cost)
             };
-            for location in locations {
-                if let Some(info) = descriptors.get(&location.pack_id) {
-                    add(*info, location.group_number, true);
+            let mut next = bytes + keep.values().sum::<usize>();
+            for planned in &mut trial {
+                next -= cost(&page, planned.info.pack_id);
+                planned.read = self.plan_read(planned.info, &planned.groups);
+                next += planned.cost();
+            }
+            if next > DEPENDENCY_PACK_CACHE_BYTES && covered > 0 {
+                break;
+            }
+            bytes += keep.values().sum::<usize>();
+            kept.extend(keep.into_keys());
+            for planned in trial {
+                // A first consumer over the bound keeps the packs that fit.
+                let after = bytes - cost(&page, planned.info.pack_id) + planned.cost();
+                if after > DEPENDENCY_PACK_CACHE_BYTES {
+                    continue;
                 }
-                let rest = hints
-                    .rest(location.object_id)
-                    .map_or(&[][..], |hint| hint.3);
-                members |= !rest.is_empty();
-                for member in rest.iter().filter(|m| self.known(m)) {
-                    add(member.pack, member.group_number, false);
+                bytes = after;
+                match page
+                    .iter()
+                    .position(|p| p.info.pack_id == planned.info.pack_id)
+                {
+                    Some(at) => page[at] = planned,
+                    None => page.push(planned),
                 }
-                if batched {
-                    members |=
-                        self.local_chain(location, &mut |info, group| add(info, group, true));
-                }
+            }
+            covered += 1;
+            if next > DEPENDENCY_PACK_CACHE_BYTES {
+                break;
             }
         }
-        if !members {
-            return Ok(());
+        if chained && !members {
+            return Ok(covered);
         }
-        let (mut reads, mut planned, mut bytes) = (Vec::new(), Vec::new(), 0);
-        for (info, mut groups, own) in wanted {
-            groups.sort_unstable();
-            let published = self.serve_published.get() && self.published_has(info.pack_id);
-            let mut missing = Vec::new();
-            for group in groups {
-                if packs.group(self, info.pack_id, group)?.is_none() {
-                    missing.push(group);
-                }
-            }
-            if missing.is_empty() || published {
-                continue;
-            }
-            let Some((read, cost)) = self.plan_read(info, &missing) else {
-                continue;
-            };
-            if bytes + cost <= DEPENDENCY_PACK_CACHE_BYTES {
-                bytes += cost;
-                reads.push(read);
-                planned.push((missing, own));
-            }
-        }
+        let (reads, planned): (Vec<GroupRead>, Vec<(Vec<usize>, bool)>) = page
+            .into_iter()
+            .filter_map(|p| p.read.map(|(read, _)| (read, (p.groups, p.own))))
+            .unzip();
         if reads.is_empty() {
-            return Ok(());
+            return Ok(covered);
         }
         let hinted_only = planned.iter().any(|(_, own)| !own);
         let mut answers = Vec::new();
         match self.metadata.read_groups(&reads, &mut answers) {
             Err(PersistenceError::Missing | PersistenceError::Malformed) if hinted_only => {
                 self.forget_hints();
-                return self.stale();
+                return self.stale().map(|()| covered);
             }
             other => other?,
         }
@@ -360,9 +448,38 @@ impl Fetch {
         }
         if stale {
             self.forget_hints();
-            return self.stale();
+            return self.stale().map(|()| covered);
         }
-        Ok(())
+        Ok(covered)
+    }
+    /// The groups `rows` need, each with its pack and whether an
+    /// authoritative row names it: their own, their chains' members and,
+    /// when the provider batches them, their local chains. True when a member
+    /// or a local chain is involved.
+    fn needs(
+        &self,
+        rows: &[ObjectLocation],
+        batched: bool,
+        out: &mut Vec<(PackInfo, usize, bool)>,
+    ) -> bool {
+        let hints = self.hints.borrow();
+        let mut members = false;
+        for location in rows {
+            let info = self.descriptors.borrow().get(&location.pack_id).copied();
+            out.extend(info.map(|info| (info, location.group_number, true)));
+            let rest = hints
+                .rest(location.object_id)
+                .map_or(&[][..], |hint| hint.3);
+            members |= !rest.is_empty();
+            let known = rest.iter().filter(|m| self.known(m));
+            out.extend(known.map(|m| (m.pack, m.group_number, false)));
+            if batched {
+                members |= self.local_chain(location, &mut |info, group| {
+                    out.push((info, group, true));
+                });
+            }
+        }
+        members
     }
     /// Adds the groups of `location`'s chain as this handle's cache knows
     /// it: published rows carry their `base`, followed through authoritative
@@ -386,23 +503,11 @@ impl Fetch {
         }
         found
     }
-    /// A Save slice's stored bases (`ids`, none of them private to the Save)
-    /// and their chains in one group read, when the provider batches them.
-    pub(crate) fn prefetch_bases(
-        &self,
-        ids: &[ObjectId],
-        packs: &mut PackCache,
-    ) -> StorageResult<()> {
-        if !self.metadata.batched_chain_reads() {
-            return Ok(());
-        }
-        let bases: Vec<ObjectLocation> = {
-            let cache = self.locators.borrow();
-            ids.iter()
-                .filter_map(|id| cache.authoritative(id).map(|row| row.location))
-                .collect()
-        };
-        self.prefetch_groups(&bases, packs)
+    /// The authoritative locations this handle holds for `ids`, in order.
+    pub(crate) fn located(&self, ids: impl Iterator<Item = ObjectId>) -> Vec<ObjectLocation> {
+        let cache = self.locators.borrow();
+        ids.filter_map(|id| cache.authoritative(&id).map(|row| row.location))
+            .collect()
     }
     /// One pack's request and its returned-byte cost: the planned ranges where
     /// a directory is known, else the whole pack; `None` when the request
@@ -420,7 +525,7 @@ impl Fetch {
         let Some((_, prefix)) = hints.directories.get(&info.pack_id).filter(|d| d.0 == info) else {
             return whole;
         };
-        let mut plan = GroupPlan::new(info.pack_id, groups, false, PACK_READ_PREFIX_BYTES);
+        let mut plan = GroupPlan::ranged(info.pack_id, groups);
         match plan.select(info, prefix) {
             Ok(PackReadChoice::Ranges(ranges))
                 if crate::port::check_ranges(info, prefix.len(), &ranges).is_ok() =>
@@ -464,8 +569,7 @@ impl Fetch {
                 if !lengths.eq(read.ranges.iter().map(|range| range.length)) {
                     return Err(bad);
                 }
-                let mut plan =
-                    GroupPlan::new(read.pack.pack_id, groups, false, PACK_READ_PREFIX_BYTES);
+                let mut plan = GroupPlan::ranged(read.pack.pack_id, groups);
                 let acquired = AcquiredPackRead::acquire(read.pack, &mut plan, |at, out| {
                     let end = at + out.len();
                     if end <= prefix.len() {

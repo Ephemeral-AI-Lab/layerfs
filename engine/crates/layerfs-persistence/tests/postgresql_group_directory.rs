@@ -7,7 +7,7 @@
 mod chains;
 
 use chains::*;
-use layerfs_storage::{location::LocatedChains, pack::layout, port::PackPersistence};
+use layerfs_storage::{location::LocatedChains, pack::layout, port::PackPersistence, Storage};
 use std::collections::BTreeSet;
 
 #[test]
@@ -125,4 +125,42 @@ fn the_chain_locate_returns_the_directories_of_root_and_member_packs() {
         assert_eq!(directory.prefix, body[..header.body_offset]);
         assert_eq!(directory.pack.length, body.len());
     }
+}
+
+/// One demand whose needed groups pass 2 MiB (#758 phase 3): one locate
+/// wave, then one ranged group read per page of at most 2 MiB of returned
+/// bytes, each consumed before the next. The amended A8 holds: at most 3
+/// round trips per wave with chains plus 1 per 2 MiB returned.
+#[test]
+fn a_demand_past_2_mib_reads_its_groups_in_ranged_pages() {
+    let Some(url) = url() else { return };
+    let store = Store::new(&url, "pages");
+    let storage = storage(&store.handles);
+    let mut files = Files::new(48, 60_000, 13);
+    for _ in 0..6 {
+        files.step(&storage, false);
+    }
+    let heads = files.latest();
+    let handles = store.open();
+    let (plain, _) = cold_read(&handles, &heads, false);
+    let reader = Storage::new(handles.storage.clone()).unwrap();
+    reader.set_strict_hints(true);
+    let before = handles.diagnostics().unwrap();
+    let read = reader.reader().unwrap().read_objects(&heads);
+    let after = handles.diagnostics().unwrap();
+    let work = reader.diagnostics();
+    let cost = Cost::of(&before, &after, &work);
+    eprintln!("{cost:?}");
+    assert_eq!(read.unwrap(), plain.unwrap());
+    assert_eq!(
+        (cost.waves, cost.stale, cost.prepares),
+        (1, 0, 0),
+        "{cost:?}"
+    );
+    assert!(cost.read_bytes > 2 << 20, "{cost:?}");
+    assert!(cost.group_reads >= 2, "{cost:?}");
+    assert!(work.group_read_ranges > 0, "{work:?}");
+    assert_eq!(work.read_pack_selections + work.read_packs, 0, "{work:?}");
+    assert_eq!(cost.round_trips, cost.statements, "{cost:?}");
+    assert!(cost.round_trips <= cost.a8_budget(), "{cost:?}");
 }

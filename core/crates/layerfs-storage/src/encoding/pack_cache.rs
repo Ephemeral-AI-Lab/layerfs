@@ -202,6 +202,13 @@ impl PackCache {
             }))
         }
     }
+    /// The entry that holds `id`'s group `number` (its whole body or that
+    /// group's unit) and its retained bytes, without touching recency.
+    pub(crate) fn held(&self, id: i64, number: usize) -> Option<((i64, Option<usize>), usize)> {
+        [(id, None), (id, Some(number))]
+            .into_iter()
+            .find_map(|key| self.entries.get(&key).map(|entry| (key, entry.body.len())))
+    }
     // A whole body's immutable directory is shared only within this cohort.
     // Descriptor eligibility and recency still apply separately to every hit.
     fn whole_cohort(

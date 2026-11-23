@@ -1,9 +1,10 @@
 //! Delta-chain hints (#758): a chain locate lets a read walk every level with
 //! no further locate, a hint that disagrees with its record or its bytes is
 //! dropped and counted while the read stays correct, strict handles fail on
-//! it, a malformed answer fails hard and keeps nothing, a Save binds no
-//! member, a hinted locator serves one demand, and a Store without chains
-//! costs exactly the default calls.
+//! it, a malformed answer fails hard and keeps nothing, a Save binds members
+//! only to rebuild and hash its bases (keeping what passed), a hinted locator
+//! serves one demand, and a Store without chains costs exactly the default
+//! calls.
 #[path = "support/chain_provider.rs"]
 mod chains;
 #[path = "support/memory_metadata.rs"]
@@ -101,6 +102,74 @@ fn saves_through_a_chain_port_store_what_the_default_port_stores() {
     assert_eq!(plain.packs, hinted.packs);
     assert!(work.chain_rows > 0, "Saves located chains");
     assert_eq!(work.chain_hint_stale, 0);
+}
+
+#[test]
+fn a_fresh_handle_save_rebuilds_its_bases_without_a_locate_per_level() {
+    // 24 files whose bases are chains of depth >= 7; the last Save opens a
+    // fresh handle, so none of its bases' chain elements is located yet.
+    let shape = Shape {
+        files: 24,
+        versions: 9,
+        reopen: Some(8),
+        ..EDITS
+    };
+    let last = shape.versions - 1;
+    let count = |calls: &[(&str, usize)], name| calls.iter().filter(|c| c.0 == name).count();
+    let (plain, roots, _) = history(shape, |m| m);
+    let levels = roots.iter().map(|root| depth(&plain, *root)).min().unwrap();
+    assert!(levels >= 7, "fixture depth {levels}");
+    let plain_save = last_save(&plain, last);
+    // Today: a locate per base per level.
+    assert!(count(&plain_save, "locate") >= shape.files * (levels - 1));
+    for batched in [false, true] {
+        let mut work = None;
+        let (memory, hinted_roots, _) = history_with(
+            shape,
+            |m| {
+                let mut provider = ChainProvider::new(m);
+                provider.batched = batched;
+                Arc::new(provider)
+            },
+            |storage, objects| {
+                let before = storage.diagnostics();
+                let save = storage.begin_save().unwrap();
+                for object in objects {
+                    save.accept(object).unwrap();
+                }
+                save.finish().unwrap();
+                work = Some((before, storage.diagnostics()));
+            },
+        );
+        assert_eq!(roots, hinted_roots);
+        {
+            let (a, b) = (plain.state.lock().unwrap(), memory.state.lock().unwrap());
+            assert_eq!(a.objects, b.objects, "the same records");
+            assert_eq!(a.packs, b.packs, "byte-identical packs");
+        }
+        let (before, after) = work.unwrap();
+        let save = last_save(&memory, last);
+        // The membership locate of each wave and one group read per 2 MiB
+        // page; every base's chain hashed and kept, none located by level.
+        let waves = after.locate - before.locate;
+        let bytes = after.group_read_bytes - before.group_read_bytes;
+        assert_eq!(count(&save, "locate") as u64, waves, "{save:?}");
+        assert!(waves <= 2, "{save:?}");
+        assert!(
+            count(&save, "read_groups") as u64 <= waves + bytes.div_ceil(2 << 20),
+            "{save:?}"
+        );
+        assert_eq!(
+            count(&save, "read_scoped_pack") + count(&save, "read_packs"),
+            0
+        );
+        let verified = after.chain_verified_bases - before.chain_verified_bases;
+        assert!(
+            verified >= (shape.files * (levels - 1)) as u64,
+            "{verified}"
+        );
+        assert_eq!(after.chain_hint_stale, 0);
+    }
 }
 
 /// The calls of the last version's Save, after its construction reads.

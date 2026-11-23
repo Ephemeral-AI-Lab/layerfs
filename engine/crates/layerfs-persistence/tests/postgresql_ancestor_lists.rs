@@ -403,7 +403,8 @@ fn eight_concurrent_writers_leave_every_row_recorded() {
 }
 
 /// A depth-d chain read cold: one chain locate (statement 1 and the member
-/// packs' statement 2) and its whole-pack group reads, whatever d is.
+/// packs' statement 2) and its group read, whatever d is; the session keeps
+/// the member packs' rows, so its next cold read skips statement 2.
 #[test]
 fn a_cold_read_of_a_delta_chain_costs_one_chain_locate() {
     let Some(url) = url() else { return };
@@ -420,7 +421,6 @@ fn a_cold_read_of_a_delta_chain_costs_one_chain_locate() {
     };
     assert!(depth >= 5, "fixture depth {depth}");
     let handles = store.open();
-    let _ = cold_read(&handles, &[root], true); // prepares the statements
     let (read, cost) = cold_read(&handles, &[root], true);
     let (plain, _) = cold_read(&handles, &[root], false);
     assert_eq!(read.unwrap(), plain.unwrap());
@@ -429,12 +429,22 @@ fn a_cold_read_of_a_delta_chain_costs_one_chain_locate() {
         cost.hinted, depth as u64,
         "every base bound from its member"
     );
-    assert_eq!((cost.stale, cost.prepares), (0, 0));
-    assert_eq!(cost.round_trips, cost.statements);
-    // statement 1, statement 2 and one whole-pack read of under 2 MiB
+    assert_eq!(cost.stale, 0);
+    // statement 1, statement 2 and one group read of under 2 MiB, each
+    // prepared once on this fresh session
     assert!(cost.read_bytes < 2 * 1024 * 1024);
-    assert_eq!(cost.round_trips, 3, "{cost:?}");
-    assert!(cost.round_trips <= cost.a8_budget());
+    assert_eq!((cost.statements, cost.prepares), (3, 3), "{cost:?}");
+    assert_eq!(cost.round_trips, cost.statements + cost.prepares);
+    assert!(cost.statements <= cost.a8_budget());
+    // Again on the same session: statement 1 and the group read.
+    let (_, again) = cold_read(&handles, &[root], true);
+    assert_eq!(
+        (again.waves, again.stale, again.prepares),
+        (1, 0, 0),
+        "{again:?}"
+    );
+    assert_eq!(again.round_trips, 2, "{again:?}");
+    assert!(again.round_trips <= again.a8_budget());
     // the default port pays a locate per level
     let plain_port = Storage::new(Arc::new(Plain(handles.storage.clone()))).unwrap();
     let _ = plain_port.reader().unwrap().read_objects(&[root]).unwrap();

@@ -163,6 +163,7 @@ impl Fetch {
             let location = *row;
             self.keep_locator(crate::location::LocatedObject { location, pack }, false);
         }
+        self.published_directories(&batch.packs);
         let mut published = self.published.borrow_mut();
         for pack in &batch.packs {
             if pack.info().domain == PackDomain::Metadata {
@@ -185,6 +186,11 @@ impl Fetch {
     /// Holds every demand to a Save's rule (no binding) until the guard drops.
     pub(crate) fn save_reads(&self) -> Restore<'_> {
         Restore(&self.saving, self.saving.replace(true))
+    }
+    /// Binds chain members, for a Save's check of its bases, until the guard
+    /// drops.
+    pub(crate) fn binding(&self) -> Restore<'_> {
+        Restore(&self.bind_hints, self.bind_hints.replace(true))
     }
     /// A body the latest Save published, to a reader that continues it,
     /// validated as a fetched one would be.

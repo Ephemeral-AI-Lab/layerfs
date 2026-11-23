@@ -39,12 +39,14 @@ fn catalog() -> HistoryCatalogConfig {
     }
 }
 
-/// One disposable Store schema, dropped when the test ends.
+/// One disposable Store schema, dropped when the test ends unless kept.
 pub struct Store {
     pub url: String,
     pub name: String,
     pub selection: PostgresSelection,
     pub handles: PostgresHandles,
+    /// Left in place when dropped, for a later test process ([`Store::kept`]).
+    pub keep: bool,
 }
 
 impl Store {
@@ -61,6 +63,26 @@ impl Store {
             name,
             selection,
             handles,
+            keep: false,
+        }
+    }
+    /// The Store schema `name`, kept across test processes: created afresh
+    /// when `create`, else opened. Never dropped here; [`drop_schema`] it.
+    pub fn kept(url: &str, name: &str, create: bool) -> Self {
+        let selection = PostgresSelection::new(url, name);
+        let handles = if create {
+            drop_schema(url, name);
+            PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &catalog())
+                .expect("create")
+        } else {
+            PostgresHandles::open_writable(&selection, BINDING, CURSOR).expect("open")
+        };
+        Self {
+            url: url.to_owned(),
+            name: name.to_owned(),
+            selection,
+            handles,
+            keep: true,
         }
     }
     /// A second writable session over the same Store.
@@ -82,11 +104,13 @@ impl Store {
 
 impl Drop for Store {
     fn drop(&mut self) {
-        drop_schema(&self.url, &self.name);
+        if !self.keep {
+            drop_schema(&self.url, &self.name);
+        }
     }
 }
 
-fn drop_schema(url: &str, name: &str) {
+pub fn drop_schema(url: &str, name: &str) {
     if let Ok(mut client) = postgres::Client::connect(url, postgres::NoTls) {
         let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {name} CASCADE"));
     }

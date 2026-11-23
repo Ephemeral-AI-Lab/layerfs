@@ -76,6 +76,13 @@ impl LocatorCache {
         self.hinted = 0;
         before - self.entries.len()
     }
+    /// Keeps every hinted locator as authoritative; returns how many.
+    pub(crate) fn promote_hinted(&mut self) -> usize {
+        for entry in self.entries.values_mut() {
+            entry.hinted = false;
+        }
+        std::mem::take(&mut self.hinted)
+    }
     /// Fixed/live field bytes beyond the original map and LocatedObject values.
     /// BTree node capacity and allocator overhead are not included in this count.
     pub(crate) fn bookkeeping_bytes(&self) -> usize {

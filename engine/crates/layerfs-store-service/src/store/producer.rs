@@ -104,6 +104,7 @@ pub(super) fn since(after: Diagnostics, before: Diagnostics) -> Diagnostics {
         chain_rows: after.chain_rows - before.chain_rows,
         chain_members: after.chain_members - before.chain_members,
         chain_hinted_bases: after.chain_hinted_bases - before.chain_hinted_bases,
+        chain_verified_bases: after.chain_verified_bases - before.chain_verified_bases,
         chain_hint_stale: after.chain_hint_stale - before.chain_hint_stale,
         chain_unhinted_roots: after.chain_unhinted_roots - before.chain_unhinted_roots,
         group_reads: after.group_reads - before.group_reads,

@@ -230,6 +230,8 @@ pub(crate) struct Session {
     /// every write transaction against it. `0` until an open's check set it,
     /// which keeps the check's own pre-open reads unfenced.
     pub(crate) incarnation: AtomicU64,
+    /// Pack rows chain locates returned (#758, `metadata::chains`).
+    pub(crate) chain_packs: Mutex<super::super::metadata::chains::ChainPacks>,
 }
 
 /// Connections opened and round trips made on the lane connection.
@@ -280,6 +282,7 @@ impl Session {
             lane_work: LaneWork::default(),
             backend_pid: AtomicI64::new(0),
             incarnation: AtomicU64::new(0),
+            chain_packs: Mutex::default(),
         })
     }
     pub(crate) fn connect(
@@ -310,6 +313,7 @@ impl Session {
             lane_work: LaneWork::default(),
             backend_pid: AtomicI64::new(0),
             incarnation: AtomicU64::new(0),
+            chain_packs: Mutex::default(),
         })
     }
 

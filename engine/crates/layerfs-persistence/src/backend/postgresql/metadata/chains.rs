@@ -10,8 +10,8 @@
 //!    of the member packs statement 1 did not return. It is skipped when there
 //!    are none, so a wave without chains costs one statement.
 //!
-//! Nothing is kept between calls: a cold read pays for every pack row it is
-//! handed. A chain is left out (the reader then locates its bases level by
+//! The session keeps the pack rows both statements returned ([`ChainPacks`]),
+//! so statement 2 reads only member packs it has not seen. A chain is left out (the reader then locates its bases level by
 //! level, counted as an unhinted root) when its list is NULL (unrecorded),
 //! malformed, longer than the root role's depth bound, or names a pack that
 //! is not stored; it is never repaired or guessed. A FULL root (`''`) has no
@@ -24,7 +24,7 @@ use layerfs_storage::{
         ChainMember, LocatedChain, LocatedChains, LocatedObject, ObjectLocation, PackDirectory,
         PackInfo,
     },
-    policy::{CANONICAL_LIMIT, GROUP_COUNT_LIMIT, RECORD_COUNT_LIMIT},
+    policy::{CANONICAL_LIMIT, DEPENDENCY_PACK_CACHE_BYTES, GROUP_COUNT_LIMIT, RECORD_COUNT_LIMIT},
     port::PersistenceError,
     StoragePolicy,
 };
@@ -39,6 +39,37 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(crate) const ROOTS: &str = include_str!("../../../../sql/postgresql/chain_roots.sql");
 /// Statement 2, `{schema}` substituted; `$1` member pack ids.
 pub(crate) const PACKS: &str = include_str!("../../../../sql/postgresql/chain_packs.sql");
+
+/// Pack rows (descriptor and directory copy) chain locates returned, kept by
+/// one session so statement 2 reads only member packs it has not seen: rows
+/// of immutable packs, whose ids are never reused, kept per catalog
+/// incarnation and within [`DEPENDENCY_PACK_CACHE_BYTES`] of directories,
+/// cleared whole at the bound. Every pack a retained row's list names stays
+/// stored, so a kept row stays true.
+#[derive(Default)]
+pub(crate) struct ChainPacks {
+    incarnation: u64,
+    rows: BTreeMap<i64, (PackInfo, Vec<u8>)>,
+    bytes: usize,
+}
+impl ChainPacks {
+    fn keep(&mut self, incarnation: u64, packs: &BTreeMap<i64, (PackInfo, Vec<u8>)>) {
+        if self.incarnation != incarnation {
+            *self = Self {
+                incarnation,
+                ..Self::default()
+            };
+        }
+        for (id, row) in packs {
+            if self.bytes + row.1.len() > DEPENDENCY_PACK_CACHE_BYTES {
+                (self.rows, self.bytes) = Default::default();
+            }
+            if self.rows.insert(*id, row.clone()).is_none() {
+                self.bytes += row.1.len();
+            }
+        }
+    }
+}
 
 /// One located row's role and raw list, kept until the packs are known.
 struct Located {
@@ -130,10 +161,12 @@ fn pack_row(row: &Row, at: usize) -> Result<(PackInfo, Vec<u8>), BackendError> {
 }
 
 /// Locates `roots` like `locate` into `rows` and returns the chains of the
-/// located delta roots with the directories of every pack named.
+/// located delta roots with the directories of every pack named; `kept` is
+/// the session's [`ChainPacks`] at catalog `incarnation`.
 pub(crate) fn locate_chains(
     tx: &Transaction<'_>,
     policy: &StoragePolicy,
+    (kept_packs, incarnation): (&std::sync::Mutex<ChainPacks>, u64),
     roots: &[ObjectId],
     rows: &mut Vec<LocatedObject>,
     chains: &mut LocatedChains,
@@ -211,6 +244,18 @@ pub(crate) fn locate_chains(
         }
         decoded.push(entries);
     }
+    {
+        let cache = kept_packs.lock().map_err(|_| BackendError::Integrity)?;
+        if cache.incarnation == incarnation {
+            missing.retain(|id| match cache.rows.get(id) {
+                Some(row) => {
+                    packs.insert(*id, row.clone());
+                    false
+                }
+                None => true,
+            });
+        }
+    }
     if !missing.is_empty() {
         let ids: Vec<i64> = missing.into_iter().collect();
         let sql = PACKS.replace("{schema}", tx.schema);
@@ -219,6 +264,10 @@ pub(crate) fn locate_chains(
             packs.insert(info.pack_id, (info, directory));
         }
     }
+    kept_packs
+        .lock()
+        .map_err(|_| BackendError::Integrity)?
+        .keep(incarnation, &packs);
     let (mut named, mut chained) = (BTreeSet::new(), BTreeSet::new());
     for (row, entries) in kept.iter().zip(decoded) {
         named.insert(row.object.location.pack_id);

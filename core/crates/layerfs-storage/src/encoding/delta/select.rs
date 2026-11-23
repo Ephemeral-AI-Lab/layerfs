@@ -176,6 +176,11 @@ impl DepthCache {
         self.costs.is_empty()
     }
 
+    /// True when `id`'s cost is cached.
+    pub fn knows(&self, id: ObjectId) -> bool {
+        self.costs.contains_key(&id)
+    }
+
     /// Depth of `id` in its dependency chain, or `None` when it is not stored.
     pub fn depth_of<F>(
         &mut self,

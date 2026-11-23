@@ -11,6 +11,8 @@ pub(crate) struct GroupPlan<'a> {
     groups: &'a [usize],
     whole_for_reuse: bool,
     whole_bytes: usize,
+    /// A group read's plan (#758): ranges however sparse or many they are.
+    ranged: bool,
     pub(crate) error: Option<StorageError>,
     pub(crate) selected_info: Option<PackInfo>,
     pub(crate) selected_choice: Option<PackReadChoice>,
@@ -29,10 +31,20 @@ impl<'a> GroupPlan<'a> {
             groups,
             whole_for_reuse,
             whole_bytes,
+            ranged: false,
             error: None,
             selected_info: None,
             selected_choice: None,
             whole_reason: None,
+        }
+    }
+    /// A group read's plan: whole only for a singleton or a pack within the
+    /// control prefix, else the groups' ranges, all in one call.
+    pub(crate) fn ranged(id: i64, groups: &'a [usize]) -> Self {
+        let plan = Self::new(id, groups, false, crate::port::PACK_READ_PREFIX_BYTES);
+        Self {
+            ranged: true,
+            ..plan
         }
     }
     fn choice(&mut self, info: PackInfo, prefix: &[u8]) -> StorageResult<PackReadChoice> {
@@ -77,7 +89,7 @@ impl<'a> GroupPlan<'a> {
             Some("singleton")
         } else if info.length <= self.whole_bytes.max(crate::port::PACK_READ_PREFIX_BYTES) {
             Some("small")
-        } else if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
+        } else if !self.ranged && (useful >= info.length.div_ceil(2) || ranges.len() > 4) {
             Some("density")
         } else if self.whole_for_reuse {
             Some("reuse")

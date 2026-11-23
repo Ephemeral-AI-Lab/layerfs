@@ -141,27 +141,27 @@ impl ReadState {
             (row.pack_id, row.group_number, row.record_number)
         });
         let mut out = vec![Vec::new(); ids.len()];
+        let sorted: Vec<_> = order.iter().map(|p| roots[*p]).collect();
         // A demand whose packs pass the pack cache's bound is served one
         // cohort of packs at a time, each within the bound, so a pack it
-        // acquires stays cached until its objects are resolved (#97).
+        // acquires stays cached until its objects are resolved (#97). When
+        // the locate returned chains (#758), a cohort is the roots one page
+        // of groups covers, their chains' included, in one call.
         let mut start = 0;
         while start < order.len() {
-            let end = start + source.cohort(order[start..].iter().map(|p| roots[*p].pack_id));
-            let cohort: Vec<_> = order[start..end].iter().map(|p| roots[*p]).collect();
-            let located: Vec<i64> = cohort.iter().map(|row| row.pack_id).collect();
-            // Roots and their chains' groups first, in one call, when the
-            // locate returned chains (#758); then the whole packs as before.
-            source.prefetch_groups(&cohort, &mut self.packs)?;
-            source.whole_packs(&located, &mut self.packs)?;
-            let mut walk = || {
-                prefetch::chains(
-                    source,
-                    &cohort,
-                    &mut self.packs,
-                    workspace,
-                    &mut self.groups,
-                )
-            };
+            let paged = source.page(sorted[start..].chunks(1), &mut self.packs)?;
+            let end = start
+                + match paged {
+                    0 => source.cohort(sorted[start..].iter().map(|row| row.pack_id)),
+                    covered => covered,
+                };
+            let cohort = &sorted[start..end];
+            if paged == 0 {
+                let located: Vec<i64> = cohort.iter().map(|row| row.pack_id).collect();
+                source.whole_packs(&located, &mut self.packs)?;
+            }
+            let mut walk =
+                || prefetch::chains(source, cohort, &mut self.packs, workspace, &mut self.groups);
             // A walk a stale hint broke runs once more without hints.
             let prefetch = match walk() {
                 Err(error) if super::hint_failure(&error) && source.drop_hints(&[])? => walk()?,

@@ -87,14 +87,20 @@ impl PackPersistence for PostgresStorage {
         chains.chains.clear();
         chains.directories.clear();
         let policy = self.policy()?;
+        let incarnation = self
+            .session
+            .incarnation
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let kept = (&self.session.chain_packs, incarnation);
         self.session.read_immutable(|tx| {
-            super::super::metadata::chains::locate_chains(tx, &policy, roots, rows, chains)
+            super::super::metadata::chains::locate_chains(tx, &policy, kept, roots, rows, chains)
         })
     }
-    /// Whole packs for every read (#758 phase 2; group ranges are phase 3):
-    /// one `read_packs` statement per 2 MiB of packs, as the port's default,
-    /// but answered in request order, which `read_packs` (pack-id order) is
-    /// not.
+    /// Group reads (#758): every read's bytes in one statement per 2 MiB of
+    /// returned bytes, through the multi-range `substring` reader
+    /// (`objects::read::ranges`): a ranged read's ranges, and a whole read's
+    /// body as one range, authenticated against the descriptor it named.
+    /// Answers come in request order; an absent pack is `Missing`.
     fn read_groups(
         &self,
         reads: &[GroupRead],
@@ -107,27 +113,38 @@ impl PackPersistence for PostgresStorage {
             let take = rest
                 .iter()
                 .take_while(|read| {
-                    bytes += read.pack.length;
+                    bytes += match read.ranges.is_empty() {
+                        true => read.pack.length,
+                        false => read.ranges.iter().map(|range| range.length).sum(),
+                    };
                     bytes <= layerfs_storage::policy::DEPENDENCY_PACK_CACHE_BYTES
                 })
                 .count()
                 .max(1);
-            let ids: Vec<i64> = rest[..take].iter().map(|read| read.pack.pack_id).collect();
-            let mut packs = Vec::new();
-            self.read_packs(&ids, &mut packs)?;
-            let mut by_id: std::collections::HashMap<i64, PersistedPack> = packs
-                .into_iter()
-                .map(|pack| (pack.info().pack_id, pack))
+            let requests: Vec<(i64, Vec<PackRange>)> = rest[..take]
+                .iter()
+                .map(|read| match read.ranges.is_empty() {
+                    true => (
+                        read.pack.pack_id,
+                        vec![PackRange {
+                            offset: 0,
+                            length: read.pack.length,
+                        }],
+                    ),
+                    false => (read.pack.pack_id, read.ranges.clone()),
+                })
                 .collect();
-            for (at, id) in ids.iter().enumerate() {
-                // A pack asked twice is copied for all but its last read.
-                let pack = match ids[at + 1..].contains(id) {
-                    true => by_id.get(id).cloned(),
-                    false => by_id.remove(id),
-                };
-                out.push(GroupReadAnswer::Whole(
-                    pack.ok_or(PersistenceError::Missing)?,
-                ));
+            let mut bodies = Vec::new();
+            self.session
+                .read_immutable(|tx| objects::read::ranges(tx, &requests, &mut bodies))?;
+            for (read, mut body) in rest[..take].iter().zip(bodies) {
+                out.push(match read.ranges.is_empty() {
+                    true => GroupReadAnswer::Whole(PersistedPack::authenticate(
+                        read.pack,
+                        body.pop().ok_or(PersistenceError::Malformed)?,
+                    )?),
+                    false => GroupReadAnswer::Ranges(body),
+                });
             }
             rest = &rest[take..];
         }
