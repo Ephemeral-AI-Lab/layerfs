@@ -11,7 +11,9 @@
 //! - F2: the same real held writer, taken around the real `commit_branch`
 //!   by the external catalog wrapper of `support/history_boundary.rs`.
 //! - F3: external catalog boundary scope; not a kernel SQLite I/O failure. The
-//!   wrapper performs the real publication and reports an unknown outcome.
+//!   wrapper performs the real publication and reports an unknown outcome;
+//!   the next Commit request's one resolution finds that Commit as the head
+//!   and installs it (finding #5).
 //! - F4: external catalog boundary scope. The wrapper performs the real
 //!   publication and then reserves every free admission registration of the
 //!   local owner through its public `submit_when_available`, submitting
@@ -33,7 +35,8 @@
 //!   that was attempted and failed is not staged anywhere.
 //! - F3 covers only the world where the publication happened and its
 //!   acknowledgement was lost. An unknown outcome where nothing was published
-//!   is not staged.
+//!   (resolved by folding the capture back) is staged without a mount, in
+//!   `store_commit.rs`.
 //!
 //! Product expectations are collected and reported after the mount has been
 //! torn down, so a deviation still leaves its whole evidence and no mount.
@@ -59,8 +62,7 @@ mod mounted;
 mod rig;
 use history_boundary::{Boundary, ObservedHistory};
 use layerfs_bridge::control::{
-    Activity, ControlCode, ControlRefusal, MountPhase, ReadyMount, Reply, Request, WorkspaceStatus,
-    WorkspaceToken,
+    Activity, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
 };
 use layerfs_content::{ContentError, ObjectId};
 use layerfs_daemon::{
@@ -83,14 +85,12 @@ use rig::{base_tree, bash_in, host, passed, root};
 use std::{
     cell::Cell,
     fmt::Debug,
-    fs,
     path::Path,
     process::Command as Process,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    time::{Duration, Instant},
 };
 
 /// External storage boundary scope: test code at the public pack persistence
@@ -209,7 +209,6 @@ head -c 6291456 /dev/urandom > made/big.bin
 "#;
 const AFTER: &str = "made/after-failure.txt";
 const FIRST: &[u8] = b"written after the failed Commit\n";
-const SECOND: &[u8] = b"and after the refused unmount\n";
 
 /// A bounded description of an original value for an evidence line.
 fn brief(value: &impl Debug) -> String {
@@ -272,16 +271,6 @@ enum Staging {
     History(Boundary),
     /// `storage_boundary::PublishBoundary` around the real writer.
     Publication,
-}
-/// Why a failure's custody stays, which decides what the retained tail
-/// expects of the driver's local resolution and of the Branch.
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum Kept {
-    /// The publication happened; the driver attempted no local resolution.
-    Published,
-    /// Nothing was published; the driver's one local resolution was itself
-    /// refused before effect.
-    ResolutionRefused,
 }
 /// One installed Normal Store, opened once and kept open, and one real
 /// kernel serving assembly over it: `Harness::new`, as `rig::Rig` uses it.
@@ -470,14 +459,6 @@ fn quiet(harness: &Harness, token: WorkspaceToken) {
         last = Some(now);
         settled
     });
-}
-/// A refusal for retained original custody, made before any effect.
-fn refused(result: Result<Success, Failure>, what: &str) -> ControlRefusal {
-    match result {
-        Err(Failure::Custody(refusal)) => *refusal,
-        Ok(done) => panic!("{what}: admitted past retained custody: {:?}", done.reply),
-        Err(other) => panic!("{what}: {}", brief(&other)),
-    }
 }
 /// The same mount after the failure: the view is what it was before the
 /// Commit, and one more write by externally launched bash is served and read
@@ -922,22 +903,14 @@ impl Case {
         drop(mounted);
         checks.done(name);
     }
-    /// A failure whose custody stays: the failure and the engine name the
-    /// same reader and owner, later Commit and normal unmount are refused
-    /// Unknown before any effect, the mount keeps serving, and an independent
-    /// observation of the Branch settles nothing. The test then detaches the
-    /// kernel mount itself.
-    fn retained_tail(
-        mut self,
-        left: Left,
-        failure: Box<CommitFailure>,
-        activity: Activity,
-        why: Kept,
-    ) {
+    /// An unknown publication outcome whose Commit did land (finding #5):
+    /// custody stays after the failure (`Uncertain`, both owners kept) and
+    /// the mount keeps serving; the next Commit request runs the one
+    /// resolution, which reads the head, finds exactly this Commit and
+    /// installs it, so that Commit is admitted, publishes over it (no second
+    /// publication of the same changes) and is exact; unmount is normal.
+    fn resolved_tail(mut self, left: Left, failure: Box<CommitFailure>) {
         let name = self.name;
-        let token = self.token();
-        let _request = left.request();
-        let directory = self.ready.directory.clone();
         let mount = root(&self.ready).to_path_buf();
         expect!(
             self.checks,
@@ -947,119 +920,44 @@ impl Case {
         );
         expect!(
             self.checks,
-            !left.settled
-                && left.local.is_none()
-                && left.local_error.is_some() == (why == Kept::ResolutionRefused),
-            "{name}: nothing local is resolved: settled={} local={:?} local_error={:?}",
+            !left.settled && left.local.is_none() && left.local_error.is_none(),
+            "{name}: nothing local is resolved by the failure: settled={} local={:?} local_error={:?}",
             left.settled,
             left.local,
             left.local_error
         );
         expect!(
             self.checks,
-            left.namespace.as_ref().is_some_and(Owners::kept),
+            left.namespace.as_ref().is_some_and(Owners::kept)
+                && failure
+                    .namespace
+                    .as_ref()
+                    .is_some_and(CapturedConstruction::retained),
             "{name}: an unsettled failure keeps the reader and the operation owner: {:?}",
             left.namespace
         );
-        expect!(
-            self.checks,
-            failure
-                .namespace
-                .as_ref()
-                .is_some_and(CapturedConstruction::retained),
-            "{name}: the original failure carries the retained owners"
-        );
-        let _kept = left
-            .namespace
-            .as_ref()
-            .map(|owners| (owners.reader, owners.operation));
-
+        drop(failure);
         let status = self.status();
         let captured = status.local.as_ref().and_then(|local| local.captured);
         expect!(
             self.checks,
-            status.activity == activity
-                && status.published == left.published
+            status.activity == Activity::Uncertain
+                && status.published.is_none()
                 && status.binding == self.bound.binding
                 && captured == Some(left.capture.generation.number()),
             "{name}: registry after the failure: activity={:?} published={:?} captured={captured:?}",
             status.activity,
             status.published
         );
-
         let after = still_serving(&mount, &self.before, name);
         println!(
             "{name} MOUNT same_view_after_failure=true new_write_served=true paths={}",
             after.len()
         );
 
-        // A later Commit is refused before any effect: no new capture, no
-        // registry change, the same owners in the engine.
-        let same = |a: &WorkspaceStatus, b: &WorkspaceStatus| {
-            a.epoch == b.epoch
-                && a.activity == b.activity
-                && a.published == b.published
-                && a.binding == b.binding
-                && a.local == b.local
-        };
-        let before_commit = self.status();
-        let commit = refused(self.fx.harness.try_commit(token), "a later Commit");
-        let _after_commit = self.status();
-        expect!(
-            self.checks,
-            commit.code == ControlCode::Unknown && commit.published == left.published,
-            "{name}: a later Commit is refused Unknown with the known publication: {commit:?}"
-        );
-
-        // Normal unmount is refused the same way and detaches nothing.
-        let unmount = refused(self.fx.harness.try_unmount(token), "normal unmount");
-        let after_unmount = self.status();
-        let phase = after_unmount.kernel.as_ref().map(|kernel| kernel.phase);
-        expect!(
-            self.checks,
-            unmount.code == ControlCode::Unknown && unmount.published == left.published,
-            "{name}: normal unmount is refused Unknown: {unmount:?}"
-        );
-        expect!(
-            self.checks,
-            same(&before_commit, &after_unmount)
-                && phase == Some(MountPhase::Ready)
-                && mount_entry(&directory).is_some(),
-            "{name}: the refused unmount had an effect: phase={phase:?} mounted={}",
-            mount_entry(&directory).is_some()
-        );
-        println!(
-            "{name} REFUSALS later_commit=code:{:?},phase:{},published:{} unmount=code:{:?},phase:{} epoch_unchanged={} captured_unchanged={} kernel_phase={phase:?} mount_table_entry=present",
-            commit.code,
-            commit.phase,
-            commit.published.is_some(),
-            unmount.code,
-            unmount.phase,
-            before_commit.epoch == after_unmount.epoch,
-            before_commit.local == after_unmount.local
-        );
-        // The mount goes on serving reads and writes under retained custody.
-        passed(
-            &bash_in(
-                COMMAND,
-                &mount,
-                &format!(
-                    "set -euo pipefail; printf 'and after the refused unmount\\n' >> {AFTER}; cat README.md target/debug/app > /dev/null"
-                ),
-            ),
-            "write after the refused unmount",
-        );
-        assert_eq!(
-            fs::read(mount.join(AFTER)).unwrap(),
-            [FIRST, SECOND].concat()
-        );
-        println!("{name} MOUNT serves_reads_and_writes_under_retained_custody=true");
-
-        // Observations that do not go through this Workspace: a separate
-        // read-only session of the Store and, after a publication, a fresh
-        // bind of the Branch. A published candidate is the Branch root and
-        // its tree is the captured frontier; otherwise the Branch is what
-        // this Workspace bound.
+        // An independent session: the Branch head is one Commit of the
+        // candidate root, published once, over the bound head.
+        let candidate = left.candidate.expect("the staged candidate");
         let observer = SqliteHandles::open_read_only(
             self.fx.fixture.config.clone(),
             installed::BINDING,
@@ -1071,99 +969,65 @@ impl Case {
             .branch_snapshot(self.fx.harness.branch)
             .unwrap()
             .unwrap();
+        let landed = observed
+            .branch
+            .head_commit
+            .and_then(|id| observer.history.commit(id).unwrap());
         drop(observer);
-        let branch = match why {
-            Kept::Published => {
-                let candidate = left.candidate.expect("the staged candidate");
-                expect!(
-                    self.checks,
-                    observed.effective_root == candidate
-                        && observed.branch.head_commit.is_some()
-                        && candidate != self.bound.binding.effective_root,
-                    "{name}: an independent session reads the candidate as the Branch root: observed={:?} candidate={candidate:?}",
-                    observed.effective_root
-                );
-                let published = self.fx.published(candidate);
-                assert_same(
-                    &self.before,
-                    &published,
-                    &format!("{name}: the published candidate, fresh bind"),
-                );
-                format!(
-                    "independent_session_root=candidate head={:?} fresh_bind_root=candidate fresh_bind_paths={}",
-                    observed.branch.head_commit,
-                    published.len()
-                )
-            }
-            Kept::ResolutionRefused => {
-                expect!(
-                    self.checks,
-                    left.candidate.is_none()
-                        && observed.effective_root == self.bound.binding.effective_root
-                        && observed.branch.head_commit == self.bound.binding.branch.head_commit,
-                    "{name}: an independent session reads the bound Branch unchanged: observed={:?} head={:?} candidate={:?}",
-                    observed.effective_root,
-                    observed.branch.head_commit,
-                    left.candidate
-                );
-                format!(
-                    "independent_session_root=bound_root_unchanged head={:?} candidate={:?}",
-                    observed.branch.head_commit, left.candidate
-                )
-            }
-        };
-        // No observation settles the original failure.
-        let observed_status = self.status();
         expect!(
             self.checks,
-            observed_status.activity == activity
-                && observed_status.published == left.published
-                && observed_status.binding == self.bound.binding
-                && observed_status.epoch == before_commit.epoch,
-            "{name}: an observation settled the original failure: activity={:?} published={:?} epoch={}",
-            observed_status.activity,
-            observed_status.published,
-            observed_status.epoch
+            landed.as_ref().is_some_and(|record| record.root == candidate
+                && record.parent == self.bound.binding.branch.head_commit),
+            "{name}: the head is the landed Commit over the bound head: {landed:?} candidate={candidate:?}"
         );
-        println!(
-            "{name} OBSERVED {branch} original_failure_settled_by_observation=false activity={:?}",
-            observed_status.activity
+        let published = self.fx.published(candidate);
+        assert_same(
+            &self.before,
+            &published,
+            &format!("{name}: the landed candidate, fresh bind"),
         );
 
-        // Teardown by the test. The product refuses normal unmount for this
-        // custody and has no forced unmount: one plain umount(8), launched
-        // and reaped here, detaches the kernel mount. The registry entry and
-        // its session are then dropped with the serving assembly.
-        quiet(&self.fx.harness, token);
-        let detached = Process::new("umount").arg(&directory).output().unwrap();
-        assert!(detached.status.success(), "{detached:?}");
-        assert!(mount_entry(&directory).is_none());
-        let deadline = Instant::now() + Duration::from_secs(3);
-        let (loops, phase) = loop {
-            let kernel = self.fx.harness.status(token).kernel.unwrap();
-            let loops = kernel
-                .work
-                .map_or((0, 0), |work| (work.loops_exited, work.loops_configured));
-            if (loops.0 == loops.1 && loops.1 != 0) || Instant::now() >= deadline {
-                break (loops, kernel.phase);
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        };
-        println!(
-            "{name} TEARDOWN by_test=plain umount(8) of {directory} status={:?} mount_table_entry=gone receive_loops_exited={}/{} registry_phase_after={phase:?} product_unmount=refused forced_unmount=none deviations={}",
-            detached.status,
-            loops.0,
-            loops.1,
-            self.checks.0.len()
+        // The next Commit request resolves the custody and is admitted: it
+        // publishes the write made since, over the landed Commit, and
+        // installs exactly the tree the mount shows.
+        let head = landed.map(|record| record.id);
+        let later = self.later_exact(&mount, head);
+        expect!(
+            self.checks,
+            later
+                .as_ref()
+                .is_some_and(|record| record.root != candidate),
+            "{name}: the later Commit carries the write made after the failure: {later:?}"
         );
+        passed(
+            &bash_in(
+                COMMAND,
+                &mount,
+                "set -euo pipefail; cat README.md target/debug/app > /dev/null",
+            ),
+            "reads after the resolution",
+        );
+        println!(
+            "{name} RESOLVED landed={head:?} later_parent=landed later_root_differs={} mount_served_throughout=true",
+            later.as_ref().is_some_and(|record| record.root != candidate)
+        );
+
+        let unmounted = self.unmount();
+        let directory = self.ready.directory.clone();
+        if mount_entry(&directory).is_some() {
+            let done = Process::new("umount").arg(&directory).output().unwrap();
+            println!(
+                "{name} TEARDOWN by_test=plain umount(8) status={:?}",
+                done.status
+            );
+        }
         let Self {
             fx,
             mounted,
             checks,
             ..
         } = self;
-        drop(failure);
-        fx.finish(false);
+        fx.finish(unmounted);
         drop(mounted);
         checks.done(name);
     }
@@ -1226,9 +1090,10 @@ fn f2_store_busy_at_publication_is_settled_and_releases_both_owners() {
 
 /// F3. Lost History acknowledgement. External catalog boundary scope; not a
 /// kernel SQLite I/O failure: the wrapper performs the real publication and
-/// then reports an unknown outcome.
+/// then reports an unknown outcome. Custody stays until the next Commit
+/// request, whose one resolution finds the landed Commit and installs it.
 #[test]
-fn f3_unknown_history_outcome_keeps_custody_and_the_mount_still_serves() {
+fn f3_unknown_history_outcome_is_resolved_by_the_next_commit_and_the_mount_still_serves() {
     let mut case = Case::start(
         "F3",
         "external catalog boundary scope; not a kernel SQLite I/O failure (support/history_boundary.rs Boundary::LostAcknowledgement: real publication, then UnknownOutcome)",
@@ -1246,7 +1111,7 @@ fn f3_unknown_history_outcome_keeps_custody_and_the_mount_still_serves() {
         left.phase,
         left.published
     );
-    case.retained_tail(left, failure, Activity::Uncertain, Kept::Published);
+    case.resolved_tail(left, failure);
 }
 
 /// F5. A definite failure inside the producer: real Store Busy. A change
