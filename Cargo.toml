@@ -16,10 +16,18 @@ version = "2.0.0"
 rust-version = "1.85"
 license = "MIT"
 
+# Development builds keep file:line debug info only: backtraces stay useful,
+# targets are smaller and links faster. For full debugger variables set
+# CARGO_PROFILE_DEV_DEBUG=2 (or CARGO_PROFILE_TEST_DEBUG=2). The release
+# profile is unchanged.
+[profile.dev]
+debug = "line-tables-only"
+
 # Keep the large boundary fixtures cheap without removing cases or assertions.
-# Product dev/release profiles and test debug assertions stay unchanged.
+# Test debug assertions stay unchanged.
 [profile.test]
 opt-level = 1
+debug = "line-tables-only"
 
 [profile.test.package.zstd-sys]
 opt-level = 3
