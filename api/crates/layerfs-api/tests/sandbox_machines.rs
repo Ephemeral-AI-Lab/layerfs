@@ -411,11 +411,11 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         ok(
             &home,
             "machine.update",
-            &[("name", t("docker")), ("image", t(&image))],
+            &[("machine", t("docker")), ("image", t(&image))],
         );
         let outcome = std::panic::catch_unwind(|| {
             // only `machine.start` starts a machine (D11)
-            ok(&home, "machine.start", &[("name", t("docker"))]);
+            ok(&home, "machine.start", &[("machine", t("docker"))]);
             let create = || {
                 call(
                     &home,
@@ -574,7 +574,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
     ok(
         &home,
         "machine.update",
-        &[("name", t("docker")), ("image", t(&image))],
+        &[("machine", t("docker")), ("image", t(&image))],
     );
     ok(&home, "store.create", &[("name", t("shop"))]);
     ok(
@@ -587,7 +587,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
     );
     let outcome = std::panic::catch_unwind(|| {
         // only `machine.start` starts a machine (D11)
-        ok(&home, "machine.start", &[("name", t("docker"))]);
+        ok(&home, "machine.start", &[("machine", t("docker"))]);
         let moved = ok(
             &home,
             "store.move",
