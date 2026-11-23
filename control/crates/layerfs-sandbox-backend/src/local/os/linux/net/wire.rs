@@ -1,8 +1,8 @@
 //! A Sandbox's network as its parts do it: the init stage plans a slot and
 //! wires the pair (`plan`, `connect`, `configure`), the launcher checks the
 //! machine and writes the table (`forwarding`, `forward_policy`, `pool`,
-//! `table`, `prepare`), and doctor and machine removal read or remove what is left
-//! (`inspect`, `remove_unused_table`, `private`). Every call acts once.
+//! `table`, `prepare`), and doctor reads what is there (`inspect`,
+//! `private`). Every call acts once.
 use super::link::Routes;
 use super::nft;
 use crate::network::plan::{self, Ipv4Net};
