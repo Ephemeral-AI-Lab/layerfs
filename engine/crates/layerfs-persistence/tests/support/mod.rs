@@ -115,8 +115,7 @@ pub mod sqlite {
         config: &HistoryCatalogConfig,
     ) -> HistoryResult<SqliteCatalog> {
         SqliteHandles::create(
-            PersistenceConfig::sqlite(path)
-                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
+            PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             StoragePolicy::frozen_default(),
             config,
         )
@@ -129,8 +128,7 @@ pub mod sqlite {
         cursor: [u8; 32],
     ) -> HistoryResult<SqliteCatalog> {
         SqliteHandles::open_read_only(
-            PersistenceConfig::sqlite(path)
-                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
+            PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             binding,
             cursor,
         )
