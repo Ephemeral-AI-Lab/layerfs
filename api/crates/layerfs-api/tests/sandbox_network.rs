@@ -19,7 +19,9 @@
 //! `busybox` and `getent`. A missing setting says NOT_RUN and passes.
 //!
 //! Checks, per machine: 1 two Sandboxes both bind `127.0.0.1:3000`; 2 a
-//! sibling's address is unreachable by TCP, ICMP and UDP; 3 outbound TCP to
+//! sibling's address is unreachable by TCP, ICMP and UDP, while the same
+//! ICMP and UDP probes reach B's own host end and A counts what reaches it
+//! (the controls); 3 outbound TCP to
 //! the internet, `git ls-remote` when the image has git, and PostgreSQL by
 //! the machine's host name; 4 names resolve; 5 the daemon's control port and
 //! a worker's non-loopback port are closed; 7 remove and a killed daemon
@@ -223,27 +225,29 @@ fn sandbox(home: &Path, project: &str, name: &str, machine: &str) -> Box {
     }
 }
 
+/// The sum of `names` of `proto` in the Sandbox's own `/proc/net/snmp`.
+fn snmp(home: &Path, ws: &str, proto: &str, names: &[&str]) -> u64 {
+    let (code, out) = exec(home, ws, "cat /proc/net/snmp");
+    assert_eq!(code, 0, "{out}");
+    let mut lines = out.lines().filter(|l| l.starts_with(&format!("{proto}:")));
+    let header: Vec<&str> = lines.next().unwrap().split_whitespace().collect();
+    let values: Vec<&str> = lines.next().unwrap().split_whitespace().collect();
+    names
+        .iter()
+        .map(|n| {
+            values[header.iter().position(|h| h == n).unwrap()]
+                .parse::<u64>()
+                .unwrap()
+        })
+        .sum()
+}
+
 /// The Sandbox's network as its kernel counts it: UDP datagrams in and to
 /// no port, ICMP echo requests in.
 fn counters(home: &Path, ws: &str) -> (u64, u64) {
-    let (code, out) = exec(home, ws, "cat /proc/net/snmp");
-    assert_eq!(code, 0, "{out}");
-    let field = |proto: &str, names: &[&str]| -> u64 {
-        let mut lines = out.lines().filter(|l| l.starts_with(&format!("{proto}:")));
-        let header: Vec<&str> = lines.next().unwrap().split_whitespace().collect();
-        let values: Vec<&str> = lines.next().unwrap().split_whitespace().collect();
-        names
-            .iter()
-            .map(|n| {
-                values[header.iter().position(|h| h == n).unwrap()]
-                    .parse::<u64>()
-                    .unwrap()
-            })
-            .sum()
-    };
     (
-        field("Udp", &["InDatagrams", "NoPorts"]),
-        field("Icmp", &["InEchos"]),
+        snmp(home, ws, "Udp", &["InDatagrams", "NoPorts"]),
+        snmp(home, ws, "Icmp", &["InEchos"]),
     )
 }
 
@@ -293,18 +297,52 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
             "B reached A at {at}: {tried:?}"
         );
     }
-    let (udp_before, echo_before) = counters(home, &a.ws);
-    let ping = exec(
+    let ping = |to: &str| format!("busybox ping -c 2 -W 2 {to} && echo answered");
+    let udp =
+        |to: &str| format!("for i in 1 2 3; do echo probe > /dev/udp/{to}/4001; done; echo sent");
+    // the controls: B sends ICMP and UDP out (the same probes, to its own
+    // host end, which answers: an echo reply, and a port unreachable that
+    // B's own kernel counts), and A's counters count what reaches A (an
+    // echo from the machine; UDP A sends itself to its own address), so the
+    // sibling checks below cannot pass because B sends nothing or because
+    // A counts nothing
+    let gateway = exec(
         home,
         &b.ws,
-        &format!("busybox ping -c 2 -W 2 {} && echo answered", a.guest),
+        "busybox ip route | busybox awk '/default/ {print $3}'",
+    )
+    .1;
+    let gateway = gateway.trim().to_owned();
+    assert!(!gateway.is_empty(), "B has no default route");
+    let answered = exec(home, &b.ws, &ping(&gateway));
+    assert!(
+        answered.1.contains("answered"),
+        "B's ICMP out: {answered:?}"
     );
-    assert!(!ping.1.contains("answered"), "{ping:?}");
-    let udp = format!(
-        "for i in 1 2 3; do echo probe > /dev/udp/{}/4001; done; echo sent",
-        a.guest
+    let unreachable_before = snmp(home, &b.ws, "Icmp", &["InDestUnreachs"]);
+    exec(home, &b.ws, &udp(&gateway));
+    let unreachable_after = snmp(home, &b.ws, "Icmp", &["InDestUnreachs"]);
+    assert!(
+        unreachable_after > unreachable_before,
+        "B's UDP to its host end got no answer: {unreachable_before} -> {unreachable_after}"
     );
-    exec(home, &b.ws, &udp);
+    let (udp_before, echo_before) = counters(home, &a.ws);
+    let (pinged, said) = host.shell(&format!("busybox ping -c 1 -W 2 {}", a.guest));
+    exec(home, &a.ws, &udp(&a.guest));
+    let (udp_after, echo_after) = counters(home, &a.ws);
+    assert!(
+        pinged && echo_after > echo_before,
+        "A counted no echo from the machine: {said}"
+    );
+    assert!(
+        udp_after >= udp_before + 3,
+        "A counted no UDP: {udp_before} -> {udp_after}"
+    );
+    // B to A: nothing arrives
+    let (udp_before, echo_before) = (udp_after, echo_after);
+    let tried = exec(home, &b.ws, &ping(&a.guest));
+    assert!(!tried.1.contains("answered"), "{tried:?}");
+    exec(home, &b.ws, &udp(&a.guest));
     let (udp_after, echo_after) = counters(home, &a.ws);
     assert_eq!(udp_after, udp_before, "a UDP datagram from B reached A");
     assert_eq!(echo_after, echo_before, "an ICMP echo from B reached A");

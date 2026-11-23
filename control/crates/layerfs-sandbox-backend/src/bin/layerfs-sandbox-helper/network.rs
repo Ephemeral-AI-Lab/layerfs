@@ -7,11 +7,14 @@
 //! inside and writes `<sandbox>/network`. It returns the handles of both
 //! namespaces, so the caller can start the inner stage (and the daemon) on
 //! the machine's network and then hold the Sandbox's. Nothing is retried; a
-//! failure ends the stage, and the namespace and the pair end with it.
+//! failure ends the stage, and the namespace and the pair end with it; a
+//! pool or link the machine no longer gives is said on an `UNAVAILABLE` line
+//! first.
+use layerfs_sandbox_backend::network::plan::UNAVAILABLE;
 use layerfs_sandbox_backend::network::{
     configure, connect, plan_slot, NetworkLock, Routes, Wiring,
 };
-use layerfs_sandbox_backend::HelperSpec;
+use layerfs_sandbox_backend::{HelperSpec, RuntimeError};
 use nix::sched::{unshare, CloneFlags};
 use std::{
     fs::{self, File},
@@ -40,8 +43,16 @@ pub(super) fn wire(spec: &HelperSpec) -> Result<(File, File), String> {
         Routes::open().map_err(|error| format!("opening the machine's routing socket: {error}"))?;
     let lock = NetworkLock::take(LOCK_WAIT)
         .map_err(|error| format!("taking the machine's network lock: {error}"))?;
-    let wiring = plan_slot(&mut machine, network.pool, &network.link)
-        .map_err(|error| format!("choosing the Sandbox's address: {error}"))?;
+    let wiring = match plan_slot(&mut machine, network.pool, &network.link) {
+        Ok(wiring) => wiring,
+        // the machine changed since the launcher checked it: its log line
+        // makes the start `Unavailable`, as the launcher's own check does
+        Err(RuntimeError::Unavailable(why)) => {
+            eprintln!("{UNAVAILABLE}{}", why.replace('\n', " "));
+            return Err(format!("choosing the Sandbox's address: {why}"));
+        }
+        Err(error) => return Err(format!("choosing the Sandbox's address: {error}")),
+    };
     unshare(CloneFlags::CLONE_NEWNET)
         .map_err(|error| format!("creating the Sandbox's network namespace: {error}"))?;
     let sandbox_handle = File::open(OWN).map_err(|error| format!("{OWN}: {error}"))?;

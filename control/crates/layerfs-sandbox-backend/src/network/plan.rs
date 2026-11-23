@@ -197,6 +197,20 @@ pub fn is_link(name: &str) -> bool {
     name.starts_with(LINK_PREFIX)
 }
 
+/// The line an init stage writes to its Sandbox's log when the machine
+/// cannot give the Sandbox its network after the launcher checked it (the
+/// pool changed or now clashes, or the link exists): the launcher then
+/// answers the start `Unavailable` with the rest of the line (spec §3.2),
+/// not as a stage that failed.
+pub const UNAVAILABLE: &str = "LAYERFS_SANDBOX_UNAVAILABLE ";
+
+/// The reason an init stage's log `log` gives on an [`UNAVAILABLE`] line.
+pub fn unavailable_in(log: &str) -> Option<String> {
+    (log.lines())
+        .find_map(|line| line.strip_prefix(UNAVAILABLE))
+        .map(str::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +338,26 @@ mod tests {
         assert_eq!(net("192.168.5.15/24").base(), net("192.168.5.0/24"));
         assert!(Ipv4Net::parse("1.2.3.4/33").is_none());
         assert_eq!(net("10.213.0.1/31").to_string(), "10.213.0.1/31");
+    }
+
+    #[test]
+    fn an_init_stage_s_unavailable_line_is_its_reason() {
+        let log = "layerfs-sandbox-helper: starting\n\
+                   LAYERFS_SANDBOX_UNAVAILABLE this machine's Sandbox pool is 10.214.0.0/16, \
+                   not 10.213.0.0/16 as when this start was checked\n\
+                   layerfs-sandbox-helper: choosing the Sandbox's address: …\n";
+        assert_eq!(
+            unavailable_in(log).as_deref(),
+            Some(
+                "this machine's Sandbox pool is 10.214.0.0/16, not 10.213.0.0/16 as when this \
+                 start was checked"
+            )
+        );
+        // a stage that failed otherwise, or a line that only mentions it
+        assert_eq!(
+            unavailable_in("layerfs-sandbox-helper: pivoting: EPERM\n"),
+            None
+        );
+        assert_eq!(unavailable_in("said LAYERFS_SANDBOX_UNAVAILABLE x\n"), None);
     }
 }

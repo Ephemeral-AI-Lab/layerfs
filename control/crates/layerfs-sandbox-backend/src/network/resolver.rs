@@ -1,17 +1,18 @@
 //! The resolver file a Sandbox's commands see. They run in a network
-//! namespace of their own, so a loopback nameserver in the launcher's
-//! `/etc/resolv.conf` (systemd-resolved's `127.0.0.53`, a local dnsmasq) is
-//! the Sandbox's own loopback and answers nothing. Pure, so the rule is
-//! tested on any OS:
+//! namespace of their own, with no IPv6, so a loopback nameserver in the
+//! launcher's `/etc/resolv.conf` (systemd-resolved's `127.0.0.53`, a local
+//! dnsmasq) is the Sandbox's own loopback and answers nothing, and an IPv6
+//! one is unreachable. Pure, so the rule is tested on any OS:
 //!
-//! 1. no loopback `nameserver`: the launcher's file is bound as it is;
-//! 2. a loopback one: LayerFS writes the Sandbox a file with the launcher's
-//!    `search`, `domain` and `options` lines, its other nameservers and,
-//!    when `127.0.0.53` is among the loopback ones, the nameservers of
-//!    systemd-resolved's upstream file;
-//! 3. no nameserver left: refused, naming the loopback one and the fix.
+//! 1. no loopback and no IPv6 `nameserver`: the launcher's file is bound as
+//!    it is;
+//! 2. else LayerFS writes the Sandbox a file with the launcher's `search`,
+//!    `domain` and `options` lines, its IPv4 nameservers that are not this
+//!    host's own and, when `127.0.0.53` is among the loopback ones, the IPv4
+//!    nameservers of systemd-resolved's upstream file;
+//! 3. no IPv4 nameserver left: refused, naming the file and the fix.
 //!    LayerFS runs no DNS forwarder.
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 /// systemd-resolved's stub address, whose upstream servers are listed in
 /// [`SYSTEMD_UPSTREAM`].
@@ -32,17 +33,33 @@ pub enum Resolver {
     Refuse(String),
 }
 
-/// Whether a `nameserver` value is a loopback address (`127.0.0.0/8`,
-/// `::1`, or IPv4-mapped loopback). A value that is not an address (a
-/// malformed line) is not one.
+/// A `nameserver` value as an address, its IPv6 zone (`%wlp2s0`) left out;
+/// a value that is not an address (a malformed line) is none.
+fn address(value: &str) -> Option<IpAddr> {
+    value.split('%').next().unwrap_or(value).parse().ok()
+}
+
+/// Whether a `nameserver` value is this host's own: a loopback address
+/// (`127.0.0.0/8`, `::1`, IPv4-mapped loopback) or the unspecified one
+/// (`0.0.0.0`, `::`), which reaches this host too.
 fn loopback(value: &str) -> bool {
-    let address = value.split('%').next().unwrap_or(value);
-    match address.parse::<IpAddr>() {
-        Ok(IpAddr::V4(v4)) => v4.is_loopback(),
-        Ok(IpAddr::V6(v6)) => {
-            v6.is_loopback() || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
+    match address(value) {
+        Some(IpAddr::V4(v4)) => v4.is_loopback() || v4.is_unspecified(),
+        Some(IpAddr::V6(v6)) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
         }
-        Err(_) => false,
+        None => false,
+    }
+}
+
+/// A `nameserver` value a Sandbox reaches: an IPv4 address that is not
+/// this host's own.
+fn reachable(value: &str) -> Option<Ipv4Addr> {
+    match address(value) {
+        Some(IpAddr::V4(v4)) if !loopback(value) => Some(v4),
+        _ => None,
     }
 }
 
@@ -59,13 +76,14 @@ fn nameserver(line: &str) -> Option<&str> {
 pub fn resolver_file(launcher: &str, systemd: Option<&str>) -> Resolver {
     let servers: Vec<&str> = launcher.lines().filter_map(nameserver).collect();
     let local: Vec<&str> = servers.iter().copied().filter(|s| loopback(s)).collect();
-    if local.is_empty() {
+    let ipv6 = (servers.iter()).any(|s| !loopback(s) && matches!(address(s), Some(IpAddr::V6(_))));
+    if local.is_empty() && !ipv6 {
         return Resolver::Bind;
     }
-    let mut kept: Vec<String> = Vec::new();
+    let mut kept: Vec<Ipv4Addr> = Vec::new();
     let mut keep = |server: &str| {
-        if !loopback(server) && !kept.iter().any(|seen| seen == server) {
-            kept.push(server.to_owned());
+        if let Some(v4) = reachable(server).filter(|v4| !kept.contains(v4)) {
+            kept.push(v4);
         }
     };
     servers.iter().for_each(|server| keep(server));
@@ -75,21 +93,21 @@ pub fn resolver_file(launcher: &str, systemd: Option<&str>) -> Resolver {
         }
     }
     if kept.is_empty() {
-        let named = local.join(", ");
+        let named = servers.join(", ");
         let upstream = match local.contains(&SYSTEMD_STUB) {
-            true => format!(" and {SYSTEMD_UPSTREAM} lists no other server"),
+            true => format!(" and {SYSTEMD_UPSTREAM} lists no IPv4 server"),
             false => String::new(),
         };
         return Resolver::Refuse(format!(
-            "this machine's {LAUNCHER} names only the loopback nameserver {named}{upstream}; a \
-             Sandbox has a loopback of its own, where no resolver answers, and LayerFS runs no \
-             DNS forwarder: make the resolver listen on an address this machine routes and name \
-             it in {LAUNCHER}, or use systemd-resolved"
+            "this machine's {LAUNCHER} names no IPv4 nameserver a Sandbox reaches (it names \
+             {named}){upstream}; a Sandbox has a loopback of its own, where no resolver answers, \
+             and no IPv6, and LayerFS runs no DNS forwarder: make the resolver listen on an IPv4 \
+             address this machine routes and name it in {LAUNCHER}, or use systemd-resolved"
         ));
     }
     let mut text = format!(
         "# written by LayerFS for this Sandbox's own network, from {LAUNCHER} with its \
-         loopback nameservers replaced\n"
+         loopback and IPv6 nameservers replaced\n"
     );
     for server in &kept {
         text.push_str(&format!("nameserver {server}\n"));
@@ -166,5 +184,78 @@ mod tests {
             resolver_file("nameserver ::ffff:127.0.0.1\n", None),
             Resolver::Refuse(_)
         ));
+    }
+
+    #[test]
+    fn a_dual_stack_upstream_listing_ipv6_first_keeps_only_its_ipv4_servers() {
+        // systemd's order on a dual-stack host: glibc reads only the first
+        // three servers, all IPv6 here, which a Sandbox cannot reach
+        let stub = "nameserver 127.0.0.53\noptions edns0 trust-ad\nsearch lan\n";
+        let upstream = "nameserver fe80::1%wlp2s0\nnameserver 2001:db8::53\n\
+                        nameserver 2001:db8::54\nnameserver 192.168.1.1\n";
+        let Resolver::Write(text) = resolver_file(stub, Some(upstream)) else {
+            panic!("expected a written file");
+        };
+        let lines: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+        assert_eq!(
+            lines,
+            [
+                "nameserver 192.168.1.1",
+                "options edns0 trust-ad",
+                "search lan"
+            ]
+        );
+        // a launcher file that names IPv6 servers itself, first, with no
+        // loopback one, is written too, keeping its IPv4 server
+        let direct = "nameserver 2001:db8::53\nnameserver fe80::1%eth0\nnameserver 10.0.0.2\n";
+        let Resolver::Write(text) = resolver_file(direct, None) else {
+            panic!("expected a written file");
+        };
+        let servers: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with("nameserver"))
+            .collect();
+        assert_eq!(servers, ["nameserver 10.0.0.2"]);
+    }
+
+    #[test]
+    fn an_ipv6_only_resolver_is_refused_naming_the_file() {
+        let v6 = "nameserver 2001:db8::53\nnameserver fe80::1%eth0\nsearch lan\n";
+        let Resolver::Refuse(why) = resolver_file(v6, None) else {
+            panic!("expected a refusal");
+        };
+        assert!(why.contains(LAUNCHER), "{why}");
+        assert!(why.contains("2001:db8::53"), "{why}");
+        assert!(why.contains("IPv4"), "{why}");
+        // the stub whose upstream lists only IPv6 servers
+        let upstream = "nameserver 2001:db8::53\nnameserver fe80::1%wlp2s0\n";
+        let Resolver::Refuse(why) = resolver_file("nameserver 127.0.0.53\n", Some(upstream)) else {
+            panic!("expected a refusal");
+        };
+        assert!(
+            why.contains(SYSTEMD_UPSTREAM) && why.contains(LAUNCHER),
+            "{why}"
+        );
+    }
+
+    #[test]
+    fn a_loopback_and_ipv6_mix_keeps_only_routed_ipv4_servers() {
+        let mixed =
+            "nameserver 127.0.0.1\nnameserver 2001:db8::53\nnameserver 0.0.0.0\nnameserver 10.0.0.2\n";
+        let Resolver::Write(text) = resolver_file(mixed, None) else {
+            panic!("expected a written file");
+        };
+        let servers: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with("nameserver"))
+            .collect();
+        assert_eq!(servers, ["nameserver 10.0.0.2"]);
+        // with no IPv4 server left it is refused
+        let Resolver::Refuse(why) =
+            resolver_file("nameserver ::1\nnameserver 2001:db8::53\n", None)
+        else {
+            panic!("expected a refusal");
+        };
+        assert!(why.contains("::1") && why.contains("2001:db8::53"), "{why}");
     }
 }

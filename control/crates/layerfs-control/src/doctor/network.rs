@@ -3,11 +3,15 @@
 //! `sandbox.network` (a running Sandbox's init stage holds a network of its
 //! own and its host end is there with its recorded address). Report-only:
 //! each finding names its fix, and nothing is removed, because on a Linux
-//! host the network namespace is shared with the user's other homes and
-//! machines, whose links this home cannot tell from leftovers. Read on the
-//! side that runs the Sandboxes: a machine's worker (`network.inspect`), or
-//! the caller for `native` on Linux.
+//! host the network namespace is shared with the user's other homes, whose
+//! links this home cannot tell from leftovers. A link is this home's
+//! leftover only when no Sandbox recorded in the home owns it, whichever
+//! machine it is on: `native` and a Linux Engine `docker` share the host's
+//! namespace, so each sees the other's links. Read on the side that runs the
+//! Sandboxes: a machine's worker (`network.inspect`), or the caller for
+//! `native` on Linux.
 use super::target::Checks;
+#[cfg(any(target_os = "linux", feature = "machine"))]
 use layerfs_bridge::control::SdkValue;
 #[cfg(target_os = "linux")]
 use layerfs_home::outcome::refused;
@@ -24,16 +28,42 @@ const SANDBOX: &str = "sandbox.network";
 
 /// The worker's answer to [`OP`]: [`report`] of its own root.
 pub(crate) fn inspect_in_worker(root: &Path) -> Outcome {
-    report(root, None)
+    report(root)
+}
+
+/// The host ends of the Sandboxes `records` keep, with each one's name:
+/// the link its runtime id names and the one its recorded network names,
+/// whichever machine it is on.
+#[cfg(any(target_os = "linux", feature = "machine", test))]
+pub(super) fn owned_links(records: &[SandboxRecord]) -> Vec<(String, String)> {
+    use layerfs_sandbox_backend::network::plan::link_name;
+    let mut owned = Vec::new();
+    for record in records {
+        let daemon = record.daemon();
+        let named = (daemon.and_then(|d| d.container()).map(link_name))
+            .into_iter()
+            .chain(
+                [record.network(), daemon.and_then(|d| d.network())]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|line| line.split_whitespace().next().map(str::to_owned)),
+            );
+        for link in named {
+            if !owned.iter().any(|(seen, _)| *seen == link) {
+                owned.push((link, record.name().to_owned()));
+            }
+        }
+    }
+    owned
 }
 
 /// This kernel's Sandbox network as doctor reads it: `{ table, forwarding,
 /// links: [{ link, addresses, sandbox }] }`, where `sandbox` names the
-/// Sandbox recorded under `root` (on `machine` when given) whose runtime id
-/// the link is named for, or is null.
+/// Sandbox recorded under `root`, on any machine, whose host end the link
+/// is, or is null.
 #[cfg(target_os = "linux")]
-pub(crate) fn report(root: &Path, machine: Option<&str>) -> Outcome {
-    use layerfs_sandbox_backend::network::{inspect, plan::link_name};
+pub(crate) fn report(root: &Path) -> Outcome {
+    use layerfs_sandbox_backend::network::inspect;
     let seen = inspect().map_err(|error| {
         refused(
             "Failed",
@@ -41,13 +71,7 @@ pub(crate) fn report(root: &Path, machine: Option<&str>) -> Outcome {
         )
     })?;
     let records = layerfs_sandbox::record::sandboxes(root).unwrap_or_default();
-    let owners: Vec<(String, String)> = (records.iter())
-        .filter(|record| machine.is_none_or(|machine| record.machine() == machine))
-        .filter_map(|record| {
-            let id = record.daemon()?.container()?;
-            Some((link_name(id), record.name().to_owned()))
-        })
-        .collect();
+    let owners = owned_links(&records);
     let links = (seen.links.iter())
         .map(|(link, addresses)| {
             let owner = owners.iter().find(|(name, _)| name == link);
@@ -77,7 +101,7 @@ pub(crate) fn report(root: &Path, machine: Option<&str>) -> Outcome {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(crate) fn report(_root: &Path, _machine: Option<&str>) -> Outcome {
+pub(crate) fn report(_root: &Path) -> Outcome {
     Err(layerfs_home::outcome::refused(
         "Unsupported",
         "Sandbox networks are Linux only",
@@ -87,10 +111,14 @@ pub(crate) fn report(_root: &Path, _machine: Option<&str>) -> Outcome {
 /// `machine.network` from a [`report`] of machine `name`, on which
 /// `sandboxes` are recorded; `host` when its network is a Linux host's,
 /// shared with other homes and machines (`native`, a Linux Engine docker).
+/// A link the report names no owner for is still this home's when `owned`
+/// ([`owned_links`] of every Sandbox the home records, on any machine)
+/// holds it: a worker reads only its own machine's records.
 #[cfg(feature = "machine")]
 pub(super) fn machine(
     report: &SdkValue,
     (name, sandboxes, host): (&str, usize, bool),
+    owned: &[(String, String)],
     checks: &mut Checks,
 ) {
     use layerfs_home::outcome::shell_word;
@@ -138,13 +166,11 @@ pub(super) fn machine(
     let left: Vec<&str> = (links.iter())
         .filter(|link| matches!(link.get("sandbox"), None | Some(SdkValue::Null)))
         .filter_map(|link| link.get_text("link"))
+        .filter(|link| !owned.iter().any(|(name, _)| name == link))
         .collect();
     if !left.is_empty() {
         let whose = match host {
-            true => {
-                "; on a Linux host they may be another home's or machine's, which this home \
-                 cannot see"
-            }
+            true => "; on a Linux host they may be another home's, which this home cannot see",
             false => "",
         };
         checks.warning(
@@ -172,7 +198,7 @@ pub(super) fn machine(
         MACHINE,
         format!(
             "it forwards IPv4, {} its firewall table, and each of its {} Sandbox links belongs to a \
-             recorded Sandbox",
+             Sandbox recorded in this home",
             match report.get("table") == Some(&SdkValue::Bool(true)) {
                 true => "has",
                 false => "needs no",
@@ -271,3 +297,89 @@ pub(super) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
 
 #[cfg(not(target_os = "linux"))]
 pub(super) fn sandbox(_record: &SandboxRecord, _checks: &mut Checks) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layerfs_bridge::control::SdkValue;
+
+    /// A Sandbox record on `machine` whose recorded network is `link`'s.
+    fn record(name: &str, machine: &str, link: &str) -> SandboxRecord {
+        SandboxRecord::from_record(
+            name,
+            SdkValue::map([
+                ("name", SdkValue::text(name)),
+                ("machine", SdkValue::text(machine)),
+                ("network", SdkValue::text(format!("{link} 10.213.0.1/31"))),
+            ]),
+        )
+    }
+
+    #[test]
+    fn a_link_is_owned_by_a_sandbox_of_the_home_on_any_machine() {
+        // on one Linux host, `native` and a Linux Engine `docker` share the
+        // host's network namespace: each one's doctor sees the other's link
+        let records = [
+            record("on-native", "native", "lfs0123456789ab"),
+            record("on-docker", "docker", "lfsba9876543210"),
+        ];
+        let owned = owned_links(&records);
+        assert!(
+            owned.contains(&("lfs0123456789ab".to_owned(), "on-native".to_owned())),
+            "{owned:?}"
+        );
+        assert!(
+            owned.contains(&("lfsba9876543210".to_owned(), "on-docker".to_owned())),
+            "{owned:?}"
+        );
+    }
+
+    #[cfg(feature = "machine")]
+    #[test]
+    fn machine_network_names_only_links_no_sandbox_of_the_home_owns() {
+        let link = |name: &str| {
+            SdkValue::map([
+                ("link", SdkValue::text(name)),
+                ("addresses", SdkValue::List(Vec::new())),
+                ("sandbox", SdkValue::Null),
+            ])
+        };
+        // the native machine's report: docker's live link has no owner there
+        let report = SdkValue::map([
+            ("table", SdkValue::Bool(true)),
+            ("forwarding", SdkValue::Bool(true)),
+            (
+                "links",
+                SdkValue::List(vec![link("lfsba9876543210"), link("lfs00000000000f")]),
+            ),
+        ]);
+        let owned = owned_links(&[record("on-docker", "docker", "lfsba9876543210")]);
+        let mut checks = Checks::default();
+        machine(&report, ("native", 0, true), &owned, &mut checks);
+        let printed = layerfs_home::json::print(&checks.to_wire());
+        assert_eq!(
+            checks.outcome(MACHINE),
+            Some(("fail", Some("warning"))),
+            "{printed}"
+        );
+        assert!(printed.contains("lfs00000000000f"), "{printed}");
+        assert!(
+            !printed.contains("ip link delete lfsba9876543210"),
+            "{printed}"
+        );
+        // with both owned, it passes
+        let owned = [
+            owned,
+            owned_links(&[record("on-native", "native", "lfs00000000000f")]),
+        ]
+        .concat();
+        let mut checks = Checks::default();
+        machine(&report, ("native", 2, true), &owned, &mut checks);
+        let printed = layerfs_home::json::print(&checks.to_wire());
+        assert_eq!(
+            checks.outcome(MACHINE).map(|(o, _)| o),
+            Some("pass"),
+            "{printed}"
+        );
+    }
+}

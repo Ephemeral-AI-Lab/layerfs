@@ -42,7 +42,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `machine.worker.compatibility` | Worker build does not match calling `layerfs` build | — | `layerfs machine stop <m> && layerfs machine start <m>` (or `--force` if Sandboxes are running) | `disruptive` |
 | `machine.worker.ping` | Worker does not answer ping within budget | — | `layerfs machine stop <m> && layerfs machine start <m>` | `disruptive` |
 | `machine.capacity` | Machine data disk is low on free space | `reclaimable_image_bytes`, `free_bytes` | `layerfs machine prune <m> --unused` | `safe` |
-| `machine.network` | IPv4 forwarding off; `table inet layerfs` missing while Sandboxes are recorded; `lfs*` links named for no recorded Sandbox (a warning: on a Linux host they may be another home's) | `table`, `forwarding`, `links[{link, addresses, sandbox}]` | stop and start the machine (a Linux host: `sysctl -w net.ipv4.ip_forward=1`; a Sandbox start writes the table); for links, `ip link delete <link>` on the machine once nothing holds them | `disruptive` |
+| `machine.network` | IPv4 forwarding off; `table inet layerfs` missing while Sandboxes are recorded; `lfs*` links no Sandbox recorded in the home owns, on any machine (a warning: on a Linux host they may be another home's) | `table`, `forwarding`, `links[{link, addresses, sandbox}]` | stop and start the machine (a Linux host: `sysctl -w net.ipv4.ip_forward=1`; a Sandbox start writes the table); for links, `ip link delete <link>` on the machine once nothing holds them | `disruptive` |
 
 ## 3. `store.doctor` (`store.*`, 6 checks)
 

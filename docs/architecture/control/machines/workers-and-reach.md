@@ -108,7 +108,9 @@ bind address. `layerfs worker` reads its two settings, makes its root
 root of what interrupted Sandbox starts and removals left (once, before it
 accepts; [Checks: leftovers](../doctor/checks.md#leftovers)), and once it
 has bound prepares its Sandboxes' networks (`prepare_network`): a listen
-address that is not loopback is closed to every Sandbox's commands, and on
+address that is not loopback is closed to every Sandbox's commands at the
+machine's own addresses (its port published on the host is not: [Backends:
+host-side forwards](../sandboxes/backends.md#every-namespaces-sandboxs-own-network)), and on
 Linux `table inet layerfs` is written for the machine's pool, one log line
 either way (a table that cannot be written is logged, and each Sandbox
 start then refuses with its own reason;

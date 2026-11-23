@@ -41,7 +41,7 @@ const CLOSED: u16 = 7070;
 
 /// The programs the checks below run: each is copied into the image from this
 /// host, with the libraries `ldd` names for it.
-const PROGRAMS: [&str; 12] = [
+const PROGRAMS: [&str; 13] = [
     "/bin/sh",
     "/bin/ls",
     "/bin/cat",
@@ -52,6 +52,7 @@ const PROGRAMS: [&str; 12] = [
     "/bin/setsid",
     "/bin/mkdir",
     "/bin/mount",
+    "/bin/umount",
     "/bin/unshare",
     "/bin/id",
 ];
@@ -1309,10 +1310,13 @@ fn each_sandbox_s_commands_have_a_network_of_their_own() {
     );
 }
 
-/// The Sandbox's resolver file: where this machine's resolver is a loopback
-/// stub (systemd-resolved's `127.0.0.53`, a lima guest), the Sandbox gets
-/// the stub's upstream servers instead, with the search and options lines
-/// kept; otherwise this machine's own file.
+/// The Sandbox's resolver files: where this machine's resolver is one a
+/// Sandbox's network cannot reach (systemd-resolved's `127.0.0.53`, a lima
+/// guest), its commands get the stub's upstream servers instead, with the
+/// search and options lines kept, while its daemon, on the machine's
+/// network, keeps this machine's own file; otherwise both get this
+/// machine's file. A mount the daemon's side makes later, as a Workspace's,
+/// reaches commands, and its unmount does too.
 #[test]
 fn a_sandbox_resolves_through_a_server_its_network_reaches() {
     if let Some(reason) = unavailable() {
@@ -1324,6 +1328,13 @@ fn a_sandbox_resolves_through_a_server_its_network_reaches() {
     let mut sandbox = fixture.launch(&provider, "sandbox-1").unwrap();
     let (code, inside, _) = run(&sandbox, &["/bin/cat", "/etc/resolv.conf"], &[]);
     assert_eq!(code, 0);
+    // the daemon's side: the init's inner stage, in the daemon's mount
+    // namespace
+    let init = sandbox.process().unwrap().pid.to_string();
+    let children = fs::read_to_string(format!("/proc/{init}/task/{init}/children")).unwrap();
+    let inner = children.split_whitespace().next().unwrap().to_owned();
+    let daemon_side =
+        fs::read_to_string(format!("/proc/{inner}/root/etc/resolv.conf")).unwrap_or_default();
     let launcher = fs::read_to_string("/etc/resolv.conf").unwrap_or_default();
     let systemd = fs::read_to_string("/run/systemd/resolve/resolv.conf").ok();
     match layerfs_sandbox_backend::network::resolver::resolver_file(&launcher, systemd.as_deref()) {
@@ -1337,6 +1348,42 @@ fn a_sandbox_resolves_through_a_server_its_network_reaches() {
             panic!("this host's resolver is refused yet a Sandbox started: {why}")
         }
     }
+    assert_eq!(
+        daemon_side, launcher,
+        "the daemon does not resolve as this machine does"
+    );
+    // a mount made on the daemon's side after the start reaches commands,
+    // and so does its unmount
+    let point = fixture
+        .directory("sandbox-1")
+        .join("workspaces")
+        .join("probe");
+    fs::create_dir(&point).unwrap();
+    let on_daemon_side = |script: &str| {
+        std::process::Command::new("nsenter")
+            .args(["--target", &inner, "--mount", "/bin/sh", "-c", script])
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    let seen = point.join("seen");
+    assert!(on_daemon_side(&format!(
+        "/bin/mount -t tmpfs -o mode=0755 probe {p} && /bin/echo seen > {s}",
+        p = point.display(),
+        s = seen.display()
+    )));
+    assert!(!seen.exists(), "the probe mount reached the machine");
+    let probe = seen.display().to_string();
+    assert_eq!(
+        run(&sandbox, &["/bin/cat", &probe], &[]),
+        (0, "seen\n".to_owned(), String::new()),
+        "a mount made on the daemon's side did not reach commands"
+    );
+    assert!(on_daemon_side(&format!("/bin/umount {}", point.display())));
+    let (code, out, _) = run(&sandbox, &["/bin/cat", &probe], &[]);
+    assert!(
+        code != 0 && out.is_empty(),
+        "an unmount on the daemon's side did not reach commands"
+    );
     sandbox.stop(5).unwrap();
     sandbox.delete().unwrap();
 }
@@ -1384,7 +1431,12 @@ fn the_firewall_table_holds_the_design_s_rules() {
 /// A command whose Sandbox's network cannot be joined never runs: an init
 /// stage on the machine's network (here a process with its own mount, PID
 /// and IPC namespaces but the machine's network, as an earlier build's init
-/// stage was) makes the helper end with a signal before the command starts.
+/// stage was) makes the helper end with a signal before the command starts,
+/// saying the network is why. Every other join succeeds here, so the
+/// network is the only cause; and the command, had it run, would have
+/// written its marker: the holder's mount namespace is a copy of this
+/// host's, where `writable` is world-writable (checked as the command's own
+/// uid before the refusal is tried).
 #[test]
 fn a_command_never_runs_where_its_network_cannot_be_joined() {
     if let Some(reason) = unavailable() {
@@ -1411,25 +1463,106 @@ fn a_command_never_runs_where_its_network_cannot_be_joined() {
     let group =
         Path::new("/sys/fs/cgroup").join(format!("layerfs-join-test-{}", std::process::id()));
     fs::create_dir(&group).unwrap();
-    let marker = fixture.base.join("ran");
     let writable = fixture.base.join("w");
     fs::create_dir(&writable).unwrap();
     fs::set_permissions(&writable, fs::Permissions::from_mode(0o777)).unwrap();
-    let status = std::process::Command::new(helper())
+    let marker = writable.join("ran");
+    // the control: the command's uid can write the marker in the holder's
+    // mount namespace, so a command that ran would leave it
+    let probe = writable.join("probe");
+    let wrote = std::process::Command::new("nsenter")
+        .args([
+            "--target", &pid, "--mount", "--setuid", "501", "--setgid", "20",
+        ])
+        .args(["/bin/sh", "-c"])
+        .arg(format!("echo probe > {}", probe.display()))
+        .status();
+    let exec = std::process::Command::new(helper())
         .args(["exec", "--init", &pid, "--cgroup"])
         .arg(&group)
         .args([
             "--uid", "501", "--gid", "20", "--cwd", "/", "--", "/bin/sh", "-c",
         ])
         .arg(format!("echo ran > {}", marker.display()))
-        .status()
+        .output()
         .unwrap();
     let _ = holder.kill();
     let _ = holder.wait();
     let _ = fs::remove_dir(&group);
+    assert!(
+        wrote.as_ref().is_ok_and(|status| status.success()) && probe.is_file(),
+        "the command's uid cannot write {}: {wrote:?}",
+        writable.display()
+    );
     use std::os::unix::process::ExitStatusExt;
-    assert_eq!(status.signal(), Some(9), "{status:?}");
+    let said = String::from_utf8_lossy(&exec.stderr);
+    assert_eq!(exec.status.signal(), Some(9), "{:?} {said}", exec.status);
+    assert!(
+        said.contains("holds no network namespace of its own"),
+        "the stage ended for another reason than the network: {said}"
+    );
     assert!(!marker.exists(), "the command ran on the machine's network");
+}
+
+/// An init stage that finds the machine's pool is not the one the launcher
+/// checked (another start, or a route, changed it in between) ends before
+/// it wires anything, with the `UNAVAILABLE` line the launcher answers the
+/// start `Unavailable` from (spec §3.2), not as a stage that failed.
+#[test]
+fn an_init_stage_whose_pool_changed_says_unavailable() {
+    use layerfs_sandbox_backend::network::plan::{unavailable_in, Ipv4Net, CANDIDATES};
+    use layerfs_sandbox_backend::{HelperSpec, SpecNetwork};
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces init pool change: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("pool-changed");
+    let now = layerfs_sandbox_backend::network::pool().unwrap();
+    let other = (CANDIDATES.iter())
+        .filter_map(|(address, prefix)| Ipv4Net::new(*address, *prefix))
+        .find(|pool| *pool != now)
+        .unwrap();
+    let group =
+        Path::new("/sys/fs/cgroup").join(format!("layerfs-pool-test-{}", std::process::id()));
+    fs::create_dir(&group).unwrap();
+    let directory = fixture.directory("sandbox-1");
+    fs::create_dir(&directory).unwrap();
+    let spec = HelperSpec {
+        root: fixture.root.join("sandbox-1-root"),
+        sandbox: directory.clone(),
+        daemon: directory.join("bin/layerfs-daemon"),
+        config: directory.join("config/daemon.setup"),
+        cgroup: group.clone(),
+        lower: fixture.base.join("lower"),
+        upper: directory.join("overlay/upper"),
+        work: directory.join("overlay/work"),
+        binds: Vec::new(),
+        runtime: None,
+        network: Some(SpecNetwork {
+            pool: other,
+            link: "lfs0000poolchg".to_owned(),
+        }),
+        resolver: None,
+    };
+    let path = fixture.base.join("helper.spec");
+    fs::write(&path, spec.encode().unwrap()).unwrap();
+    let ran = std::process::Command::new(helper())
+        .arg("init")
+        .arg("--spec")
+        .arg(&path)
+        .output()
+        .unwrap();
+    let _ = fs::remove_dir(&group);
+    let said = String::from_utf8_lossy(&ran.stderr);
+    assert_eq!(ran.status.code(), Some(125), "{said}");
+    let why = unavailable_in(&said).unwrap_or_else(|| panic!("no UNAVAILABLE line: {said}"));
+    assert!(
+        why.contains(&now.to_string()) && why.contains(&other.to_string()),
+        "{why}"
+    );
+    assert!(!fs::exists(directory.join("network")).unwrap());
+    let links = layerfs_sandbox_backend::network::inspect().unwrap().links;
+    assert!(!links.iter().any(|(name, _)| name == "lfs0000poolchg"));
 }
 
 /// A machine that forwards no IPv4, or whose forward chain drops what it

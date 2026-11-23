@@ -28,8 +28,9 @@
 //! end's name (`network::plan::link_name`). The init stage refuses a spec
 //! without one, so no Sandbox's commands run on the machine's network. An
 //! optional `resolver=<file>` line names the resolver file the launcher
-//! wrote for the Sandbox (`network::resolver`), bound at `/etc/resolv.conf`
-//! instead of the launcher's.
+//! wrote for the Sandbox's commands (`network::resolver`), bound at
+//! `/etc/resolv.conf` in their own mount view; the daemon keeps the
+//! launcher's.
 use crate::network::plan::{Ipv4Net, LINK_PREFIX};
 use crate::{Bind, RuntimeError};
 use std::{
@@ -76,9 +77,10 @@ impl SpecNetwork {
 /// The launcher's name-resolution files, which the init stage binds
 /// read-only over the Sandbox root's own, so the Sandbox resolves names as
 /// the launcher does (Docker Desktop's `host.docker.internal`, a VM's hosts
-/// entries, any DNS name). A launcher's `resolv.conf` that names a loopback
-/// server, which the Sandbox's own network cannot reach, is replaced by the
-/// file the spec's `resolver=` names (`network::resolver`). Their place is the root's `/etc`, the image and the Sandbox's own
+/// entries, any DNS name). Where the launcher's `resolv.conf` names a
+/// server the Sandbox's own network cannot reach (a loopback or IPv6 one),
+/// the commands' view has the file the spec's `resolver=` names instead
+/// (`network::resolver`). Their place is the root's `/etc`, the image and the Sandbox's own
 /// writable layer, never a Workspace: Workspaces are mounted under the
 /// Sandbox directory, and a diff or a Commit reads nothing else.
 pub const RESOLVER_FILES: [&str; 2] = ["/etc/resolv.conf", "/etc/hosts"];
@@ -117,8 +119,9 @@ pub struct HelperSpec {
     pub runtime: Option<PathBuf>,
     /// The Sandbox's network; the init stage refuses a spec without one.
     pub network: Option<SpecNetwork>,
-    /// The resolver file the launcher wrote for the Sandbox, bound at
-    /// `/etc/resolv.conf`; `None` binds the launcher's own.
+    /// The resolver file the launcher wrote for the Sandbox's commands,
+    /// bound at `/etc/resolv.conf` in their own mount view (the daemon's
+    /// keeps the launcher's); `None`: both views have the launcher's own.
     pub resolver: Option<PathBuf>,
 }
 

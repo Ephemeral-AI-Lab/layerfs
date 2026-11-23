@@ -56,8 +56,8 @@ struct NetworkPlan {
     resolver: Resolver,
 }
 
-/// The Sandbox directory's resolver file, written when the launcher's
-/// names a loopback nameserver.
+/// The Sandbox directory's resolver file for its commands, written when
+/// the launcher's names a loopback or IPv6 nameserver.
 const RESOLVER_FILE: &str = "resolv.conf";
 /// The file the init stage writes the Sandbox's network to.
 const NETWORK_FILE: &str = "network";
@@ -169,8 +169,23 @@ pub(crate) fn create(
             }
             Ok(sandbox)
         }
-        Err(cause) => Err(fail(LocalPhase::Listener, Some(sandbox), cause)),
+        Err(cause) => {
+            // an init stage that found the machine changed since
+            // `network_plan` said so in its log: `Unavailable`, as there
+            let cause = unavailable(&paths.local.log).map_or(cause, RuntimeError::Unavailable);
+            Err(fail(LocalPhase::Listener, Some(sandbox), cause))
+        }
     }
+}
+
+/// The reason the init stage's log gives on its `UNAVAILABLE` line, read
+/// once, bounded: a stage that failed before its daemon wrote little.
+fn unavailable(log: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    let file = File::open(log).ok()?;
+    file.take(64 * 1024).read_to_end(&mut bytes).ok()?;
+    network::plan::unavailable_in(&String::from_utf8_lossy(&bytes))
 }
 
 /// Everything a start refuses before it makes anything: the request's own
