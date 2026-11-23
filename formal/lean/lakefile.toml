@@ -1,0 +1,5 @@
+name = "layerfs-lean"
+defaultTargets = ["LayerfsGc"]
+
+[[lean_lib]]
+name = "LayerfsGc"
