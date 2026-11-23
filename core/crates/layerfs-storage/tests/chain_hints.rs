@@ -716,6 +716,304 @@ fn a_fresh_handle_save_rebuilds_its_program_page_bases_without_a_locate_per_leve
     }
 }
 
+/// Saves `objects` on a fresh handle over `port`, with or without strict
+/// hints: the outcome, the handle's counts and the handle.
+fn fresh_save(
+    port: Arc<dyn layerfs_storage::port::PackPersistence>,
+    objects: &[FinalizedObject],
+    strict: bool,
+) -> (
+    layerfs_storage::StorageResult<()>,
+    layerfs_storage::Diagnostics,
+    Storage,
+) {
+    let storage = Storage::new(port).unwrap();
+    storage.set_strict_hints(strict);
+    let done = (|| {
+        let save = storage.begin_save()?;
+        for object in objects {
+            save.accept(object.clone())?;
+        }
+        save.finish().map(drop)
+    })();
+    let work = storage.diagnostics();
+    (done, work, storage)
+}
+
+fn is_program(role: ObjectRole) -> bool {
+    matches!(
+        role,
+        ObjectRole::DirectoryLeaf
+            | ObjectRole::DirectoryBranch
+            | ObjectRole::InodeBranch
+            | ObjectRole::ExtentLeaf
+            | ObjectRole::ExtentBranch
+    )
+}
+
+/// The first program page of `objects` whose first predecessor is stored
+/// with its role as a program itself: the page's index and that base.
+fn program_base(
+    memory: &metadata::MemoryMetadata,
+    objects: &[FinalizedObject],
+) -> (usize, ObjectId) {
+    let state = memory.state.lock().unwrap();
+    objects
+        .iter()
+        .enumerate()
+        .find_map(|(at, object)| {
+            let base = object.predecessors().ids().next()?;
+            let row = state.objects.get(&base)?;
+            (is_program(object.role()) && row.role == object.role() && row.base.is_some())
+                .then_some((at, base))
+        })
+        .expect("a page whose predecessor is a program")
+}
+
+fn same_store(a: &metadata::MemoryMetadata, b: &metadata::MemoryMetadata) {
+    let (a, b) = (a.state.lock().unwrap(), b.state.lock().unwrap());
+    assert_eq!(a.objects, b.objects, "the same records");
+    assert_eq!(a.packs, b.packs, "byte-identical packs");
+}
+
+#[test]
+fn a_misplaced_member_of_a_program_base_fails_its_hash_and_the_save_walks_it_from_locates() {
+    // The member under a program base, moved onto another page of its role:
+    // the Save's check of that base fails at the moved element, drops every
+    // hint and selection walks the chain from authoritative locates.
+    let (memory, objects) = directory_change(6);
+    let (_, base) = program_base(&memory, &objects);
+    let (below, member) = {
+        let state = memory.state.lock().unwrap();
+        let row = state.objects[&base];
+        let below = state.objects[&row.base.unwrap()];
+        let other = state
+            .objects
+            .values()
+            .find(|other| {
+                other.role == row.role
+                    && other.object_id != below.object_id
+                    && other.object_id != base
+                    && (other.pack_id, other.group_number, other.record_number)
+                        != (below.pack_id, below.group_number, below.record_number)
+            })
+            .expect("another page of the role");
+        let member = ChainMember {
+            object_id: None,
+            pack: state.packs[&other.pack_id].info,
+            group_number: other.group_number,
+            record_number: other.record_number,
+            canonical_length: other.canonical_length,
+        };
+        (below.object_id, member)
+    };
+    let plain = copy(&memory);
+    fresh_save(plain.clone(), &objects, true).0.unwrap();
+    let (expected, _) = read(copy(&memory), &[below], true);
+    for strict in [false, true] {
+        let provider = editing(chain_port(&memory), move |chains| {
+            for chain in chains.chains.iter_mut().filter(|c| c.root == base) {
+                chain.members[0] = member;
+            }
+        });
+        let (done, work, storage) = fresh_save(provider.clone(), &objects, strict);
+        assert!(work.chain_hint_stale >= 1, "{work:?}");
+        if strict {
+            assert!(
+                matches!(done, Err(StorageError::Integrity("delta chain hint"))),
+                "{done:?}"
+            );
+            continue;
+        }
+        done.unwrap();
+        same_store(&plain, &provider.inner);
+        // No locator at the moved position was kept: the element below the
+        // base reads back through this handle.
+        let got = storage.reader().unwrap().read_objects(&[below]);
+        assert_eq!(got.unwrap(), *expected.as_ref().unwrap());
+    }
+}
+
+/// An object of `role` whose bytes are 2,000 fixed noise bytes with one
+/// byte changed by `change`, so versions differ by one byte, and that
+/// declare no page role; its predecessor is `base`.
+fn noise_page(role: ObjectRole, change: u8, base: Option<ObjectId>) -> FinalizedObject {
+    let mut state = 0x9e37_79b9_u32;
+    let mut bytes: Vec<u8> = (0..2_000)
+        .map(|_| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (state >> 24) as u8
+        })
+        .collect();
+    bytes[1_000] ^= change;
+    let canonical = layerfs_content::object::encode_bytes_object(&bytes).unwrap();
+    let object = FinalizedObject::new(role, canonical).unwrap();
+    match base {
+        Some(base) => object.with_predecessors(AdvisoryPredecessors::explicit(base).unwrap()),
+        None => object,
+    }
+}
+
+/// Two noise pages of `role`, one Save each, the second stored as a program
+/// against the first: the Store and the second page's id.
+fn noise_history(role: ObjectRole) -> (Arc<metadata::MemoryMetadata>, ObjectId) {
+    let memory = Arc::new(metadata::MemoryMetadata::default());
+    let storage = Storage::new(memory.clone()).unwrap();
+    let mut base = None;
+    for change in 1..=2 {
+        let object = noise_page(role, change, base);
+        base = Some(object.id());
+        let save = storage.begin_save().unwrap();
+        save.accept(object).unwrap();
+        save.finish().unwrap();
+    }
+    let base = base.unwrap();
+    assert_eq!(depth(&memory, base), 1, "the second page is a program");
+    (memory, base)
+}
+
+#[test]
+fn a_hinted_element_whose_page_header_names_another_role_is_not_kept() {
+    // Pages stored under the directory-leaf role whose bytes declare no
+    // page role: the catalog says directory leaf, a member carries no role,
+    // so only the hinted element's authenticated bytes can say otherwise.
+    let (memory, base) = noise_history(ObjectRole::DirectoryLeaf);
+    let objects = vec![noise_page(ObjectRole::DirectoryLeaf, 3, Some(base))];
+    let plain = copy(&memory);
+    fresh_save(plain.clone(), &objects, true).0.unwrap();
+    assert_eq!(depth(&plain, objects[0].id()), 2);
+    for strict in [false, true] {
+        let provider = Arc::new(chain_port(&memory));
+        let (done, work, _) = fresh_save(provider.clone(), &objects, strict);
+        assert_eq!(work.chain_hint_stale, 1, "{work:?}");
+        assert_eq!(work.chain_verified_bases, 0, "{work:?}");
+        if strict {
+            assert!(
+                matches!(done, Err(StorageError::Integrity("delta chain hint"))),
+                "{done:?}"
+            );
+            continue;
+        }
+        done.unwrap();
+        same_store(&plain, &provider.inner);
+    }
+}
+
+#[test]
+fn a_program_base_whose_own_row_is_wrong_fails_with_its_own_error_not_as_a_stale_hint() {
+    // The base's catalog length disagrees with its record: a failure at the
+    // authoritative root, which no hint below it caused.
+    let (memory, objects) = directory_change(6);
+    let (_, base) = program_base(&memory, &objects);
+    let corrupt = || {
+        let port = copy(&memory);
+        port.state
+            .lock()
+            .unwrap()
+            .objects
+            .get_mut(&base)
+            .unwrap()
+            .canonical_length += 1;
+        port
+    };
+    let (done, _, _) = fresh_save(corrupt(), &objects, true);
+    let Err(StorageError::Integrity(reason)) = done else {
+        panic!("{done:?}");
+    };
+    assert_eq!(reason, "branch delta length");
+    for strict in [false, true] {
+        let provider = Arc::new(ChainProvider::new(corrupt()));
+        let (done, work, _) = fresh_save(provider, &objects, strict);
+        assert!(
+            matches!(done, Err(StorageError::Integrity(found)) if found == reason),
+            "{done:?}"
+        );
+        assert_eq!(work.chain_hint_stale, 0, "{work:?}");
+    }
+}
+
+#[test]
+fn a_save_checks_only_the_chain_selection_walks() {
+    // A directory leaf whose only predecessor is a stored directory branch:
+    // selection takes no base of another role, so the Save walks none of
+    // that branch's chain, even one whose root row is wrong.
+    let (memory, branch) = noise_history(ObjectRole::DirectoryBranch);
+    let objects = vec![noise_page(ObjectRole::DirectoryLeaf, 3, Some(branch))];
+    let corrupt = || {
+        let port = copy(&memory);
+        port.state
+            .lock()
+            .unwrap()
+            .objects
+            .get_mut(&branch)
+            .unwrap()
+            .canonical_length += 1;
+        port
+    };
+    let plain = corrupt();
+    fresh_save(plain.clone(), &objects, true).0.unwrap();
+    assert_eq!(depth(&plain, objects[0].id()), 0, "no base of another role");
+    for strict in [false, true] {
+        let provider = Arc::new(ChainProvider::new(corrupt()));
+        let (done, work, _) = fresh_save(provider.clone(), &objects, strict);
+        done.unwrap();
+        assert_eq!(work.chain_hint_stale, 0, "{work:?}");
+        same_store(&plain, &provider.inner);
+    }
+}
+
+#[test]
+fn a_pack_descriptor_only_a_stale_member_gave_is_forgotten_with_the_hints() {
+    // The bottom member names its pack under another digest and a group the
+    // pack lacks, with a matching directory, so no group read reaches it: the
+    // walk binds it and fails there. The rebuild then locates that base and
+    // meets the pack's real descriptor, which must not contradict the
+    // member's: that descriptor went with the hints.
+    let (memory, roots, _) = history(EDITS, |m| m);
+    let root = roots[0];
+    let bottom = depth(&memory, root) - 1;
+    let pack = {
+        let state = memory.state.lock().unwrap();
+        let mut packs = vec![state.objects[&root].pack_id];
+        let mut id = root;
+        while let Some(base) = state.objects[&id].base {
+            packs.push(state.objects[&base].pack_id);
+            id = base;
+        }
+        let pack = packs.pop().unwrap();
+        assert!(
+            !packs.contains(&pack),
+            "the bottom member's pack is its own"
+        );
+        state.packs[&pack].info
+    };
+    let named = layerfs_storage::location::PackInfo {
+        key: ObjectKey::for_bytes(b"another digest"),
+        ..pack
+    };
+    let (expected, _) = read(copy(&memory), &[root], true);
+    for strict in [false, true] {
+        let provider = editing(chain_port(&memory), move |chains| {
+            for chain in chains.chains.iter_mut().filter(|c| c.root == root) {
+                chain.members[bottom].pack = named;
+                chain.members[bottom].group_number = GROUP_COUNT_LIMIT - 1;
+            }
+            for directory in &mut chains.directories {
+                if directory.pack == pack {
+                    directory.pack = named;
+                }
+            }
+        });
+        let (got, after) = read(provider.clone(), &[root], strict);
+        assert_eq!(after.chain_hint_stale, 1);
+        if strict {
+            refused(&got, "delta chain hint");
+            continue;
+        }
+        assert_eq!(got.unwrap(), *expected.as_ref().unwrap());
+    }
+}
+
 #[test]
 fn a_member_pack_that_does_not_answer_as_named_is_stale_and_the_read_goes_on() {
     let (memory, roots, _) = history(EDITS, |m| m);

@@ -17,7 +17,8 @@
 //! the caller's caches, bounded by the metadata depth cap and charged record
 //! bytes against the metadata chain budgets, then decoded base first, every
 //! element authenticated against its own locator. Every element has the root's
-//! role.
+//! role: an authoritative locator's, or, for an element a chain hint located
+//! (#758), the role its authenticated page header declares.
 
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -121,7 +122,37 @@ pub struct BranchChain {
     pub encoded: u64,
 }
 
+/// The program role a canonical page's own header declares: the role of a
+/// chain element whose locator came from a chain hint, which carries no role
+/// (#758), checked once its bytes are authenticated.
+fn declared_role(canonical: &[u8]) -> Option<ObjectRole> {
+    use layerfs_content::filesystem::sorted::format as sorted;
+    let value = layerfs_content::object::decode_bytes_object(canonical).ok()?;
+    let (magic, role) = (value.get(..8)?, *value.get(10)?);
+    if magic == sorted::DIRECTORY_MAGIC {
+        return match role {
+            sorted::DIRECTORY_LEAF_ROLE => Some(ObjectRole::DirectoryLeaf),
+            sorted::DIRECTORY_BRANCH_ROLE => Some(ObjectRole::DirectoryBranch),
+            _ => None,
+        };
+    }
+    if magic == sorted::INODE_MAGIC {
+        return (role == sorted::INODE_BRANCH_ROLE).then_some(ObjectRole::InodeBranch);
+    }
+    match layerfs_content::file::mapping::decode_node(canonical).ok()? {
+        layerfs_content::file::mapping::ExtentNode::Leaf { .. } => Some(ObjectRole::ExtentLeaf),
+        layerfs_content::file::mapping::ExtentNode::Branch { .. } => Some(ObjectRole::ExtentBranch),
+    }
+}
+
 impl PoolReader {
+    /// Whether the last program-page reconstruction failed at an element
+    /// whose locator came from a chain hint, or in a walk such an element
+    /// may have redirected (#758): only such a failure may be a stale hint's.
+    pub(crate) fn hint_blamed(&self) -> bool {
+        self.hint_blamed
+    }
+
     /// The authenticated canonical page of one stored program page.
     pub(crate) fn branch_canonical_with_caches(
         &mut self,
@@ -132,8 +163,17 @@ impl PoolReader {
         root: ObjectLocation,
         caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<(Vec<u8>, BranchChain)> {
-        let result =
-            self.reconstruct_branch(connection, capacities, ceiling, workspace, root, caches);
+        let mut suspect = false;
+        let result = self.reconstruct_branch(
+            connection,
+            capacities,
+            ceiling,
+            workspace,
+            root,
+            caches,
+            &mut suspect,
+        );
+        self.hint_blamed = result.is_err() && suspect;
         let counters = &mut self.counters;
         let inode = root.role == ObjectRole::InodeBranch;
         let (requests, edges) = match inode {
@@ -156,6 +196,10 @@ impl PoolReader {
         result
     }
 
+    /// `suspect` is left true when a failure is attributable to an element
+    /// a chain hint located: the element being read or decoded, or any
+    /// element of a walk that ran past the depth cap.
+    #[allow(clippy::too_many_arguments)]
     fn reconstruct_branch(
         &mut self,
         connection: &dyn Source,
@@ -164,17 +208,23 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
         mut caches: Option<PooledCaches<'_>>,
+        suspect: &mut bool,
     ) -> StorageResult<(Vec<u8>, BranchChain)> {
         if !is_program_role(root.role) {
             return Err(StorageError::Integrity("branch record role"));
         }
         let cap = usize::from(capacities.metadata_delta_max_depth);
         let mut chain: Vec<(ObjectLocation, Vec<u8>)> = Vec::with_capacity(cap + 1);
+        // Whether each element of `chain` was located from a chain hint
+        // (#758); the root never is.
+        let mut hinted: Vec<bool> = Vec::with_capacity(cap + 1);
+        let mut current_hinted = false;
         let mut current = root;
         // The element the walk stopped at because this reader already rebuilt
         // and authenticated it: the chain below it is not read again.
         let mut known: Option<(ObjectId, Known)> = None;
         loop {
+            *suspect = current_hinted;
             if current.pack_id > ceiling {
                 return Err(StorageError::VisibilityCeiling {
                     pack_id: current.pack_id,
@@ -194,6 +244,7 @@ impl PoolReader {
             if let Some(held) = held {
                 // The depth a full walk would have reached, under the same cap.
                 if chain.len() + usize::from(held.depth) > cap {
+                    *suspect = hinted.contains(&true);
                     return Err(StorageError::Integrity("branch chain depth"));
                 }
                 known = Some((current.object_id, held));
@@ -206,10 +257,13 @@ impl PoolReader {
             // hashed to the id its child's record names.
             connection.bind_base(&current, base)?;
             chain.push((current, record));
+            hinted.push(current_hinted);
             let Some(base) = base else {
                 break;
             };
             if chain.len() > cap {
+                // Any hinted element's record may have named a wrong base.
+                *suspect = hinted.contains(&true);
                 return Err(StorageError::Integrity("branch chain depth"));
             }
             // A base a stored record names is re-located, never answered by a
@@ -230,6 +284,9 @@ impl PoolReader {
             {
                 return Err(StorageError::Integrity("branch chain chronology"));
             }
+            // A hinted locator carries the root's role, not a checked one:
+            // its element's role is checked from its bytes below.
+            current_hinted = connection.hinted(location.object_id);
             current = location;
         }
         // A known element brings the work its own chain charged, so the
@@ -246,7 +303,12 @@ impl PoolReader {
         let mut highest_pack = known.as_ref().map_or(0, |(_, held)| held.highest_pack);
         let mut page: Option<(ObjectId, Vec<u8>)> = known.map(|(id, held)| (id, held.bytes));
         let mut applies = 0_u64;
-        for (position, (location, record)) in chain.iter().rev().enumerate() {
+        for (position, ((location, record), from_hint)) in
+            chain.iter().zip(&hinted).rev().enumerate()
+        {
+            // Elements below this one are authenticated: a failure from here
+            // to the next element is this one's.
+            *suspect = *from_hint;
             work.canonical = work
                 .canonical
                 .saturating_add(location.canonical_length as u64);
@@ -282,6 +344,9 @@ impl PoolReader {
             }
             if ObjectId::for_bytes(&decoded) != location.object_id {
                 return Err(StorageError::Integrity("branch canonical identity"));
+            }
+            if *from_hint && declared_role(&decoded) != Some(root.role) {
+                return Err(StorageError::Integrity("branch chain role"));
             }
             highest_pack = highest_pack.max(location.pack_id);
             if let Some(memo) = self.memo.as_mut() {

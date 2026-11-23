@@ -72,6 +72,11 @@ pub trait Source {
     fn bind_base(&self, _child: &ObjectLocation, _base: Option<ObjectId>) -> StorageResult<()> {
         Ok(())
     }
+    /// Whether `id`'s locator came from a chain hint (#758) and is not
+    /// authoritative. Default: never.
+    fn hinted(&self, _id: ObjectId) -> bool {
+        false
+    }
     /// After a failure a stale hint may have caused on the walk of `chain`
     /// (empty: any walk): drops every hint; true when a hinted locator was on
     /// it, so the caller rebuilds once.

@@ -35,6 +35,9 @@ pub(super) struct Hints {
     directories: BTreeMap<i64, (PackInfo, Vec<u8>)>,
     directory_bytes: usize,
     generation: u64,
+    /// Packs whose descriptor only a bound member gave: forgotten with the
+    /// hints and at the next demand, unless confirmed first.
+    packs: BTreeSet<i64>,
 }
 impl Hints {
     /// Keeps one checked pack directory within the bound.
@@ -227,7 +230,7 @@ impl Fetch {
         if self.locators.borrow().contains_key(&base) {
             return Ok(());
         }
-        self.remember_pack(member.pack)?;
+        self.remember_member_pack(member.pack);
         let location = ObjectLocation {
             object_id: base,
             role: child.role,
@@ -253,7 +256,42 @@ impl Fetch {
             .get(&member.pack.pack_id)
             .is_none_or(|old| *old == member.pack)
     }
-    fn stale(&self) -> StorageResult<()> {
+    /// Keeps the descriptor of a bound member's pack for the walk that
+    /// bound it. One no other source gave is a hint: forgotten with the hints
+    /// and at the next demand, unless an authoritative descriptor confirms it
+    /// first ([`Self::remember_pack`]).
+    fn remember_member_pack(&self, info: PackInfo) {
+        let mut cache = self.descriptors.borrow_mut();
+        // `known` refused a member that contradicts a kept descriptor.
+        if cache.contains_key(&info.pack_id) {
+            return;
+        }
+        if cache.len() >= READ_OBJECT_LIMIT {
+            cache.clear();
+            self.forget_member_marks();
+        }
+        cache.insert(info.pack_id, info);
+        self.hints.borrow_mut().packs.insert(info.pack_id);
+    }
+    /// Whether `pack`'s kept descriptor came from a member alone; it no
+    /// longer counts as one.
+    pub(super) fn confirm_member_pack(&self, pack: i64) -> bool {
+        self.hints.borrow_mut().packs.remove(&pack)
+    }
+    /// Forgets which descriptors came from members (their descriptors were
+    /// cleared with the rest).
+    pub(super) fn forget_member_marks(&self) {
+        self.hints.borrow_mut().packs.clear();
+    }
+    /// Forgets every descriptor that only a bound member gave.
+    pub(super) fn forget_member_packs(&self) {
+        let packs = std::mem::take(&mut self.hints.borrow_mut().packs);
+        let mut cache = self.descriptors.borrow_mut();
+        for pack in packs {
+            cache.remove(&pack);
+        }
+    }
+    pub(super) fn stale(&self) -> StorageResult<()> {
         self.note(|c| c.chain_hint_stale += 1);
         if self.strict_hints.get() {
             return Err(StorageError::Integrity("delta chain hint"));
@@ -274,17 +312,28 @@ impl Fetch {
         }
         self.stale().map(|()| true)
     }
+    /// A failure a stale hint may have caused, at an element a hint located,
+    /// in a walk that has no rebuild of its own (a Save's check of a
+    /// program-page base, `save/wave.rs`): uses no hint until the next
+    /// demand and counts the stale hint (strict refuses).
+    pub(crate) fn hint_stale(&self) -> StorageResult<()> {
+        self.forget_hints();
+        self.stale()
+    }
     /// Uses no hint until the next demand; returns how many hinted locators
-    /// were evicted.
-    fn forget_hints(&self) -> usize {
+    /// were evicted. The descriptors only their members gave go with them.
+    pub(super) fn forget_hints(&self) -> usize {
         self.trust_hints.set(false);
+        self.forget_member_packs();
         *self.hints.borrow_mut() = Hints::default();
         self.locators.borrow_mut().remove_hinted()
     }
-    /// Keeps every hinted locator as authoritative. Called only after a
-    /// reconstruction hashed every element of the chain that bound them
-    /// (a Save's check of its bases, `save/wave.rs`).
+    /// Keeps every hinted locator, and the descriptor of its pack, as
+    /// authoritative. Called only after a reconstruction hashed every element
+    /// of the chain that bound them (a Save's check of its bases,
+    /// `save/wave.rs`).
     pub(crate) fn promote_hints(&self) {
+        self.forget_member_marks();
         let promoted = self.locators.borrow_mut().promote_hinted() as u64;
         self.note(|c| c.chain_verified_bases += promoted);
     }
@@ -595,6 +644,7 @@ impl Fetch {
                 let AcquiredPackRead::Units(units) = acquired? else {
                     return Err(bad);
                 };
+                drop(hints);
                 self.remember_pack(read.pack)?;
                 let returned: usize = bodies.iter().map(Vec::len).sum();
                 self.note(|c| c.group_read_bytes += returned as u64);

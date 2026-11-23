@@ -228,6 +228,7 @@ impl Fetch {
         self.trust_hints.set(true);
         self.bind_hints.set(bind && !self.saving.get());
         self.locators.borrow_mut().remove_hinted();
+        self.forget_member_packs();
     }
     /// Keeps one checked locator within the cache bound.
     pub(super) fn keep_locator(&self, row: crate::location::LocatedObject, hinted: bool) {
@@ -356,13 +357,25 @@ impl Fetch {
         }
         count
     }
+    /// Keeps a descriptor an authoritative source gave. It confirms one only
+    /// a chain member named (#758, `remember_member_pack`); one that
+    /// contradicts such a descriptor makes the hint stale (counted, strict
+    /// refuses) instead of failing as an inconsistent descriptor.
     pub(super) fn remember_pack(&self, info: PackInfo) -> StorageResult<()> {
-        let mut cache = self.descriptors.borrow_mut();
-        if cache.get(&info.pack_id).is_some_and(|old| *old != info) {
-            return Err(StorageError::Integrity("inconsistent pack descriptor"));
+        let from_member = self.confirm_member_pack(info.pack_id);
+        let old = self.descriptors.borrow().get(&info.pack_id).copied();
+        if old.is_some_and(|old| old != info) {
+            if !from_member {
+                return Err(StorageError::Integrity("inconsistent pack descriptor"));
+            }
+            self.descriptors.borrow_mut().remove(&info.pack_id);
+            self.forget_hints();
+            self.stale()?;
         }
+        let mut cache = self.descriptors.borrow_mut();
         if cache.len() >= READ_OBJECT_LIMIT && !cache.contains_key(&info.pack_id) {
             cache.clear();
+            self.forget_member_marks();
         }
         cache.insert(info.pack_id, info);
         Ok(())
@@ -706,6 +719,9 @@ impl Source for Fetch {
     }
     fn bind_base(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
         self.bind(child, base)
+    }
+    fn hinted(&self, id: ObjectId) -> bool {
+        self.locators.borrow().is_hinted(&id)
     }
     fn drop_hints(&self, chain: &[ObjectId]) -> StorageResult<bool> {
         Fetch::drop_hints(self, chain)

@@ -133,6 +133,9 @@ impl Source for WaveSource<'_> {
     fn bind_base(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
         self.fetch.bind_base(child, base)
     }
+    fn hinted(&self, id: ObjectId) -> bool {
+        self.packer.location(id).is_none() && self.fetch.hinted(id)
+    }
     fn drop_hints(&self, chain: &[ObjectId]) -> StorageResult<bool> {
         self.fetch.drop_hints(chain)
     }
