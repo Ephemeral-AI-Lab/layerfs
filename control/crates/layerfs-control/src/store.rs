@@ -247,10 +247,10 @@ fn runs_postgresql_sandboxes(home: &Path, store: &str, machine: &str) -> Result<
 }
 
 /// `refusal` of the check from machine `machine`, naming it, the Store and
-/// the host it dialled (never the URL), with the platform's `hint` when
-/// the server was not reached (a server that answered with another Store
-/// was reached). A worker from a bundle without the check says how to
-/// update it.
+/// the host it dialled (never the URL), with the platform's `hint` only
+/// when no connection was made (a server that answered, with a refused
+/// login or another Store, was reached). A worker from a bundle without
+/// the check says how to update it.
 fn from_machine(
     refusal: SdkRefusal,
     (store, machine, host): (&str, &str, &str),
@@ -265,7 +265,10 @@ fn from_machine(
             ),
         ),
         "Unavailable" if !message.starts_with(check::ANOTHER_STORE) => {
-            let hint = hint.map(|hint| format!("; {hint}")).unwrap_or_default();
+            let hint = hint
+                .filter(|_| layerfs_store::postgresql::open::not_connected(&message))
+                .map(|hint| format!("; {hint}"))
+                .unwrap_or_default();
             refused(
                 "Unavailable",
                 format!(

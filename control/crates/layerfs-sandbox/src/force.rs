@@ -29,6 +29,7 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
         postgresql: None,
         message: Message::Absent,
         started: None,
+        reach_hint: None,
     })
 }
 

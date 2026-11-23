@@ -472,12 +472,20 @@ shown in [the calls](calls.md#store-13).)
   another machine whose platform runs PostgreSQL Sandboxes (`native` on
   macOS and Linux, `docker`, `lima`, `apple-container`); `sandbox create`
   checks from the machine that the server answers and holds this Store.
-  The caller rewrites a loopback host for the machine (`docker`:
-  `host.docker.internal`; `lima`: `192.168.5.2`; `apple-container`: the
-  container network's gateway, read from `container inspect`, which needs
-  the server listening on that bridge); the login travels only in that one
-  request. The server always runs off the machine; nothing installs
-  PostgreSQL in a machine (D12).
+  The URL is dialled exactly as configured, never rewritten. On a machine
+  that does not share this computer's loopback (`docker` on Docker
+  Desktop, `lima`, `apple-container`) a URL naming it (`localhost`,
+  127.0.0.0/8, `0.0.0.0`, `::1`, in any spelling) or a Unix socket is
+  refused `Unsupported`, naming what the machine calls this computer
+  (`host.docker.internal`; `host.lima.internal`; `apple-container`: its
+  network's gateway, on which the server must listen) and the per-machine
+  URL call `layerfs store connect <store> <url> --machine <machine>`;
+  `native` and `docker` on a Linux Engine share the loopback and dial it
+  as given. A Sandbox resolves names as its machine does. Only the calls
+  that dial the URL (`sandbox create`, Commit, a Workspace status) are
+  refused for it: a Sandbox can always be read and removed. The login
+  travels only in the one request. The server always runs off the
+  machine; nothing installs PostgreSQL in a machine (D12).
 - `store doctor <store>` checks the Store from this computer and from each
   machine that has an address of its own or a Sandbox of it (`--machine M`
   adds one), each as one `store.connection` row with `from`, and records

@@ -2,10 +2,12 @@
 //! Sandbox daemon on each platform dials, which is the URL as configured,
 //! never rewritten. A machine that does not share the caller's loopback
 //! (docker on Docker Desktop, lima, apple-container) refuses a loopback host,
-//! naming its own name for this host and `store connect --machine`; every
-//! other URL is dialled as given, `sslmode=verify-full` included. No message
-//! holds the URL's password, and no provider tool runs: every stand-in here
-//! logs its call and fails.
+//! naming its own name for this host and `store connect <store> --machine`;
+//! every other URL is dialled as given, `sslmode=verify-full` included. Hosts
+//! are read as the client (tokio-postgres) reads them: percent-decoded, a
+//! host list split at `,` first, every IPv4 form `inet_aton` reads. No
+//! message holds the URL's password, and no provider tool runs: every
+//! stand-in here logs its call and fails.
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
@@ -13,6 +15,17 @@ use layerfs_platform::{self as machine, Code, MachineError, Platform, Spec};
 use standin::Scratch;
 
 const SECRET: &str = "s3cr3t-pw";
+
+/// The Store every URL here belongs to, which the refusal's advice names.
+const STORE: &str = "pg";
+
+/// [`machine::reach`] of Store [`STORE`].
+fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
+    machine::reach(spec, STORE, url)
+}
+
+/// The per-machine URL call every refusal on machine `dev` advises.
+const CONNECT: &str = "`layerfs store connect pg <url> --machine dev`";
 
 /// `getent ahostsv4 host.docker.internal` in a Docker Desktop worker
 /// container (D-8 live receipt), which the former lookup ran per call.
@@ -79,16 +92,48 @@ fn loopback_forms() -> Vec<(String, &'static str)> {
         (format!("{}?host=127.0.0.1", at("db1")), "127.0.0.1"),
         (format!("{}?hostaddr=127.0.0.1", at("db1")), "127.0.0.1"),
         (format!("{}?host=db2,localhost", at("db1")), "localhost"),
-        // libpq's key=value words
+        // a list splits at `,` before a host's port or brackets are read,
+        // as the client splits it: a bracketed host need not be last
+        (at("[::1]:5432,h2"), "::1"),
+        (at("h1,[::1]"), "::1"),
+        (at("h1:5432,127.0.0.1"), "127.0.0.1"),
+        // the userinfo ends at the first `@`, so a password's unescaped
+        // `/` does not hide the host after it
         (
-            format!("host=localhost user=lfs password={SECRET}"),
+            format!("postgres://lfs:{SECRET}/x@localhost/db"),
             "localhost",
         ),
+        // percent-encoded hosts, `host`/`hostaddr` values and keys are
+        // decoded, as the client decodes them before it dials
+        (at("%6Cocalhost"), "localhost"),
+        (at("%31%32%37.0.0.1:5432"), "127.0.0.1"),
+        (format!("{}?host=%6Cocalhost", at("db1")), "localhost"),
+        (format!("{}?h%6Fst=localhost", at("db1")), "localhost"),
         (
-            format!("host = 'db1,127.0.0.9' password='a \\' b{SECRET}'"),
-            "127.0.0.9",
+            format!("{}?hostaddr=%31%32%37.0.0.1", at("db1")),
+            "127.0.0.1",
         ),
-        (format!("host=db1 hostaddr=::1 password={SECRET}"), "::1"),
+        (format!("{}?%68ostaddr=::1", at("db1")), "::1"),
+        // the unspecified address reaches this host
+        (at("0.0.0.0"), "0.0.0.0"),
+        (at("[::]:5432"), "::"),
+        (at("[::ffff:0.0.0.0]"), "::ffff:0.0.0.0"),
+        (format!("{}?hostaddr=0.0.0.0", at("db1")), "0.0.0.0"),
+        // the IPv4 forms `inet_aton` reads, which `getaddrinfo` dials
+        (at("127.1"), "127.1"),
+        (at("127.0.1"), "127.0.1"),
+        (at("2130706433"), "2130706433"),
+        (at("127.000.000.001"), "127.000.000.001"),
+        (at("0x7f.1"), "0x7f.1"),
+        (at("0X7F000001"), "0X7F000001"),
+        (at("017700000001"), "017700000001"),
+        (at("0177.0.0.1"), "0177.0.0.1"),
+        (at("0"), "0"),
+        (format!("{}?host=127.1", at("db1")), "127.1"),
+        // an IPv6 zone id
+        (at("[::1%25lo]:5432"), "::1%lo"),
+        (format!("{}?host=::1%25lo", at("db1")), "::1%lo"),
+        (format!("{}?host=fe80::1,::1%lo0", at("db1")), "::1%lo0"),
     ]
 }
 
@@ -98,7 +143,7 @@ fn a_loopback_host_is_refused_where_the_loopback_is_not_shared() {
     for kind in Platform::ALL {
         let spec = spec(&scratch, kind);
         for (url, host) in loopback_forms() {
-            let outcome = machine::reach(&spec, &url);
+            let outcome = reach(&spec, &url);
             let Some(name) = this_host(kind) else {
                 assert_eq!(outcome.as_deref(), Ok(url.as_str()), "{kind:?}");
                 continue;
@@ -110,10 +155,7 @@ fn a_loopback_host_is_refused_where_the_loopback_is_not_shared() {
                 "{message}"
             );
             assert!(message.contains(name), "{message}");
-            assert!(
-                message.contains("`layerfs store connect <store> <url> --machine dev`"),
-                "{message}"
-            );
+            assert!(message.contains(CONNECT), "{message}");
         }
     }
     assert_eq!(scratch.log(), "", "no provider tool runs");
@@ -129,13 +171,14 @@ fn a_unix_socket_is_refused_where_the_loopback_is_not_shared() {
         format!("postgres://lfs:{SECRET}@/layerfs"),
         format!("postgres:///layerfs?host=/var/run/postgresql&password={SECRET}"),
         "postgresql://%2Fvar%2Frun%2Fpostgresql/layerfs".to_owned(),
-        format!("dbname=layerfs password={SECRET}"),
-        "host=/tmp dbname=layerfs".to_owned(),
+        // a socket directory named by a host parameter, encoded or not
+        "postgres://db1/layerfs?host=%2Ftmp".to_owned(),
+        "postgres://db1/layerfs?h%6Fst=/tmp".to_owned(),
     ];
     for kind in Platform::ALL {
         let spec = spec(&scratch, kind);
         for url in &urls {
-            let outcome = machine::reach(&spec, url);
+            let outcome = reach(&spec, url);
             let Some(name) = this_host(kind) else {
                 assert_eq!(outcome.as_ref(), Ok(url), "{kind:?}");
                 continue;
@@ -144,7 +187,7 @@ fn a_unix_socket_is_refused_where_the_loopback_is_not_shared() {
             assert_eq!(code, Code::Unsupported, "{url}: {message}");
             assert!(message.contains("a Unix socket of the caller"), "{message}");
             assert!(message.contains(name), "{message}");
-            assert!(message.contains("--machine dev`"), "{message}");
+            assert!(message.contains(CONNECT), "{message}");
         }
     }
 }
@@ -152,26 +195,37 @@ fn a_unix_socket_is_refused_where_the_loopback_is_not_shared() {
 /// A name that resolves to a loopback address on the machine (a hosts
 /// entry) is not resolved to be refused up front: its one dial fails, and
 /// the failure carries this hint, the refusal's own advice. A shared
-/// loopback has none.
+/// loopback has none, and neither has a URL naming no host by name: an
+/// address is read, never resolved, so only a name can turn out to be
+/// this host's loopback.
 #[test]
 fn a_failed_dial_carries_the_loopback_hint_where_it_is_not_shared() {
     let scratch = Scratch::new("reach-hint");
+    let named = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
     for kind in Platform::ALL {
         let spec = spec(&scratch, kind);
-        let hint = machine::loopback_hint(&spec);
+        let hint = machine::loopback_hint(&spec, STORE, &named);
+        for addressed in [
+            format!("postgres://lfs:{SECRET}@10.0.0.5:5432/layerfs"),
+            format!("postgres://lfs:{SECRET}@[2001:db8::1],10.1/layerfs"),
+            format!("postgres://lfs:{SECRET}@10.0.0.5/layerfs?hostaddr=10.0.0.6"),
+        ] {
+            assert_eq!(machine::loopback_hint(&spec, STORE, &addressed), None);
+        }
+        // one name among addresses can still be a loopback one
+        let mixed = format!("postgres://lfs:{SECRET}@10.0.0.5,db.example.com/layerfs");
+        assert_eq!(machine::loopback_hint(&spec, STORE, &mixed), hint);
         let Some(name) = this_host(kind) else {
             assert_eq!(hint, None, "{kind:?}");
             continue;
         };
         let hint = hint.unwrap();
+        assert!(!hint.contains(SECRET), "{hint}");
         assert!(hint.contains("loopback address"), "{hint}");
         assert!(hint.contains(name), "{hint}");
-        assert!(
-            hint.contains("`layerfs store connect <store> <url> --machine dev`"),
-            "{hint}"
-        );
+        assert!(hint.contains(CONNECT), "{hint}");
         // the same advice as the up-front refusal
-        let (_, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+        let (_, message) = refused(reach(&spec, &loopback_urls()[0]));
         let advice = &hint[hint.find("give the Store").unwrap()..];
         assert!(message.ends_with(advice), "{message} / {hint}");
     }
@@ -190,8 +244,8 @@ fn a_docker_sandbox_call_runs_no_docker_command() {
     scratch.tool("docker", RESOLVED);
     let named = format!("postgres://lfs:{SECRET}@host.docker.internal:5432/layerfs");
     for _call in 0..3 {
-        assert_eq!(machine::reach(&spec, &named), Ok(named.clone()));
-        let outcome = machine::reach(&spec, &loopback_urls()[0]);
+        assert_eq!(reach(&spec, &named), Ok(named.clone()));
+        let outcome = reach(&spec, &loopback_urls()[0]);
         match cfg!(target_os = "linux") {
             true => assert_eq!(outcome, Ok(loopback_urls()[0].clone())),
             false => assert_eq!(refused(outcome).0, Code::Unsupported),
@@ -208,13 +262,13 @@ fn apple_container_names_its_recorded_gateway() {
     let scratch = Scratch::new("reach-apple-recorded");
     let mut spec = spec(&scratch, Platform::AppleContainer);
     spec.state.gateway = Some("192.168.65.1".parse().unwrap());
-    let (_, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+    let (_, message) = refused(reach(&spec, &loopback_urls()[0]));
     assert!(
         message.contains("192.168.65.1, on which the server must listen"),
         "{message}"
     );
     spec.state.gateway = None;
-    let (_, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+    let (_, message) = refused(reach(&spec, &loopback_urls()[0]));
     assert!(message.contains("192.168.64.1"), "{message}");
     assert_eq!(scratch.log(), "", "no container inspect");
 }
@@ -230,9 +284,19 @@ fn every_other_host_is_dialled_as_given_everywhere() {
         "postgresql://lfs@10.0.0.5/layerfs".to_owned(),
         "postgres://[2001:db8::1]:5432/layerfs".to_owned(),
         format!("postgres://lfs:{SECRET}@h1:5432,h2:5433/db"),
+        // valid host lists: a port on some hosts only, a bracketed host
+        // anywhere in the list
+        format!("postgres://lfs:{SECRET}@h1:5432,h2/db"),
+        format!("postgres://lfs:{SECRET}@h1,[2001:db8::1]/db"),
+        format!("postgres://lfs:{SECRET}@[2001:db8::1]:5432,h2/db"),
         // the host parameters are dialled as given once checked
         format!("postgres://lfs:{SECRET}@db/layerfs?hostaddr=10.0.0.5&host=db2"),
-        format!("host=db.example.com port=5433 password='p w{SECRET}' sslmode=verify-full"),
+        // a URL with no host of its own, naming one by parameter
+        format!("postgres:///layerfs?host=db2&password={SECRET}"),
+        // addresses `inet_aton` reads that are not this host's loopback
+        "postgres://u@10.1/db".to_owned(),
+        "postgres://u@0x80.1/db".to_owned(),
+        "postgres://u@[fe80::1%25eth0]/db".to_owned(),
         // ports are never read: a host's port is the server's
         "postgres://u@10.0.0.5:5432/db".to_owned(),
         // a name is never resolved, even one only this host could
@@ -242,7 +306,7 @@ fn every_other_host_is_dialled_as_given_everywhere() {
     for kind in Platform::ALL {
         let spec = spec(&scratch, kind);
         for url in &urls {
-            assert_eq!(machine::reach(&spec, url).as_ref(), Ok(url), "{kind:?}");
+            assert_eq!(reach(&spec, url).as_ref(), Ok(url), "{kind:?}");
         }
     }
     assert_eq!(scratch.log(), "", "no provider tool runs");
@@ -255,18 +319,25 @@ fn a_url_reach_cannot_read_is_refused_off_a_shared_loopback() {
     let lima = spec(&scratch, Platform::Lima);
     let native = spec(&scratch, Platform::Native);
     for url in [
-        // a password with an unescaped `/` cuts the authority: not read
-        format!("postgres://lfs:{SECRET}/x@localhost/db"),
-        // a list whose bracketed IPv6 host is not last
-        format!("postgres://lfs:{SECRET}@[::1]:5432,h2/db"),
-        // words that are not key=value, or an unclosed quote
+        // not a postgres:// URL: libpq's key=value words are never a
+        // Store's URL (`secrets::parts` refuses them), nor are other words
+        format!("host=localhost user=lfs password={SECRET}"),
+        format!("dbname=layerfs password={SECRET}"),
+        format!("host=db.example.com port=5433 password='p w{SECRET}'"),
         format!("localhost {SECRET}"),
         format!("host='localhost password={SECRET}"),
+        format!("mysql://lfs:{SECRET}@db/x"),
+        // what the client itself refuses to read
+        format!("postgres://lfs:{SECRET}@[::1/db"),
+        format!("postgres://lfs:{SECRET}@[::1]x/db"),
+        format!("postgres://lfs:{SECRET}@db/x?sslmode"),
+        format!("postgres://lfs:{SECRET}@%FF/x"),
+        format!("postgres://lfs:{SECRET}@db/x?%FF=localhost"),
     ] {
-        let (got, message) = refused(machine::reach(&lima, &url));
+        let (got, message) = refused(reach(&lima, &url));
         assert_eq!(got, Code::InvalidInput, "{message}");
         assert!(message.contains("cannot check"), "{message}");
-        assert_eq!(machine::reach(&native, &url).as_ref(), Ok(&url));
+        assert_eq!(reach(&native, &url).as_ref(), Ok(&url));
     }
 }
 
@@ -275,7 +346,7 @@ fn an_invalid_spec_is_refused_before_the_url_is_read() {
     let scratch = Scratch::new("reach-spec");
     let mut spec = spec(&scratch, Platform::Docker);
     spec.name = "not plain".into();
-    let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+    let (code, message) = refused(reach(&spec, &loopback_urls()[0]));
     assert_eq!(code, Code::InvalidInput);
     assert!(message.contains("not a plain name"), "{message}");
 }

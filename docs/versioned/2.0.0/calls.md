@@ -1510,6 +1510,17 @@ $ layerfs store disconnect shop-pg --detail
 {"ok":true,"outcome":"disconnected","store":"shop-pg","machine":null}
 ```
 
+The URL above names `127.0.0.1`, which works only where the Sandbox's
+machine shares this computer's loopback: `native` and `docker` on a Linux
+Engine. On `docker` with Docker Desktop, `lima` or `apple-container` a
+`sandbox create --machine` refuses it `Unsupported`, naming what that
+machine calls this computer; give the Store a host the machine reaches, or
+that machine its own URL with `layerfs store connect shop-pg '<url>'
+--machine <machine>`. That check, like the first connect, needs no
+privilege beyond what a Sandbox's reads and writes need: what only
+`store compact` needs (`pg_read_all_stats`, `CREATE` on the database) is
+checked when a compaction starts.
+
 See [Stores](machines-and-stores.md#stores).
 
 ### `backup` (6)

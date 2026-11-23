@@ -266,24 +266,24 @@ it in the worker server's files alone and refuses a manifest that enables it.
 
 A PostgreSQL Store's URL is the user's configuration: LayerFS dials it
 exactly as configured from every machine, rewrites no part of it and reads
-no port (owner, 2026-11-24, replacing the D-8 rewrite).
-`reach(spec, url)` answers that URL or refuses it; it starts nothing, runs
-no provider command and resolves no name, and no message holds any part
-of the URL but a loopback host. Each adapter declares its `Loopback`.
+no port (owner, 2026-11-24).
+`reach(spec, store, url)` answers that URL or refuses it; it starts nothing,
+runs no provider command and resolves no name, and no message holds any
+part of the URL but a loopback host. Each adapter declares its `Loopback`.
 
 ```text
- dial(spec, url, adapter.loopback(spec))
+ dial(spec, (store, url), adapter.loopback(spec))
    Shared ---------------------------------------------> url as given, unread
    Apart(this host):
-     hosts = conninfo_hosts(url): the URL's host list and host= / hostaddr=
-             parameters, or libpq's key=value words (no host: the socket)
-     not readable -------------------------------------> InvalidInput
+     hosts = url_hosts(url): the host list and host= / hostaddr= parameters,
+             read as the client reads them (none: the socket)
+     not a URL the client reads -----------------------> InvalidInput
      a host empty, or a path (a Unix socket) ----------> Unsupported + advice
      a host is this host's loopback -------------------> Unsupported + advice
      else ---------------------------------------------> url as given
    advice: "give the Store a host the machine reaches (<this host>), or give
             the machine its own URL with `layerfs store connect <store>
-            <url> --machine <m>`"
+            <url> --machine <m>`", the Store and machine named
 ```
 
 | Platform | `Loopback` | The refusal names |
@@ -295,14 +295,16 @@ of the URL but a loopback host. Each adapter declares its `Loopback`.
 
 | Rule | Detail | Source |
 | --- | --- | --- |
-| Loopback | `localhost` (any case, with or without its final dot), every address of 127.0.0.0/8, `::1` (bracketed or not, any spelling) and IPv4-mapped `::ffff:127.x.x.x`, in any host the URL names | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) `loopback` |
-| Host parameters | `host=` and `hostaddr=` (and libpq's words) are checked like the URL's host, then dialled as given: they were refused only because a rewrite could not reach them | same, `conninfo_hosts` |
+| Hosts, as the client reads them | The daemon's client is tokio-postgres (`Config::from_str`), and `url_hosts` reads a URL as it does: the userinfo ends at the first `@` anywhere; the host list ends at the first `/` or `?` and splits at each `,` before a host's `[...]` or first `:` is read (`h1:5432,h2`, `h1,[2001:db8::1]` and `[::1]:5432,h2` are valid lists); hosts, query keys and `hostaddr` values are percent-decoded (`%6Cocalhost` is `localhost`, `h%6Fst=` is `host=`); a host decoding to a path is a socket directory. A `host=` value the client takes as one host is split at `,` too, so no part of it goes unchecked. Only `postgres://` and `postgresql://` URLs reach here: a Store's address and a machine's own are refused otherwise when the login is put in (`secrets::parts`); what is not such a URL, or what the client refuses to read (an unclosed `[`, a parameter with no `=`, a host that does not decode to UTF-8), is `InvalidInput` | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) `url_hosts`; [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `parts` |
+| Loopback | `localhost` (any case, with or without its final dot); every address of 127.0.0.0/8 and the unspecified `0.0.0.0`, in every form the machine's `getaddrinfo` reads through `inet_aton` (`127.1`, `2130706433`, `127.000.000.001`, `0x7f.1`, `017700000001`); `::1` and `::` in any spelling, with or without brackets or a zone id (`::1%lo`), and their IPv4-mapped forms; in any host the URL names | same, `loopback`, `ip` |
+| Host parameters | `host=` and `hostaddr=` are checked like the URL's hosts, then dialled as given | same, `url_hosts` |
 | TLS | `sslmode=verify-full` and `verify-ca` are dialled as given: no host is rewritten, so the certificate's name still matches | `reach.rs` |
-| A name resolving to loopback | Not resolved to be refused: a hosts entry that maps a name to 127.0.0.1 on the machine fails at its one dial (the create's reach check, `store.reach`), and that failure carries the refusal's advice (`loopback_hint`, sent to the worker as `reach_hint`, appended to every `Unavailable` reach failure of an `Apart` machine) | [`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) `loopback_hint`, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reach_check`, [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `from_machine` |
+| A name resolving to loopback | Not resolved to be refused: a hosts entry that maps a name to 127.0.0.1 on the machine fails at its one dial (the create's reach check, `store.reach`, the create's daemon), and that failure carries the refusal's advice (`loopback_hint`, sent to the worker as `reach_hint`). The hint is added only on an `Apart` machine, only when the URL names at least one host by name (an address is read, never resolved, and every loopback one was refused), and only when no connection was made (`not_connected`: the client's `error connecting to server` or `timeout waiting for server`, a silent dial, the session's `no connection to the server was made`, or the daemon's `cannot reach PostgreSQL Store`), never when the server answered (a refused login, a missing database, any error it sent). One attempt: nothing redials | [`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) `loopback_hint`, [`open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) `not_connected`, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reach_check`, [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `from_machine`, [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `unreached` |
 | Names in the Sandbox | A `namespaces` Sandbox resolves names with its machine's resolver files, bound into its root at start ([Backends](../sandboxes/backends.md)); a remote host is reached through the machine's own NAT and DNS | [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) `resolver` |
-| Per call | A Sandbox call on a PostgreSQL Store still builds its URL in the caller on every call (the worker process reads the Store per call, and the password travels only in that one request), but that is a record read and this check: no `docker exec` or other provider command | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reached` |
+| Per call | Only the operations that dial the Store's URL on their side build it in the caller (`Op::store_url`): `sandbox.create` (its daemon and reach check), Commit (its Branch's head and `expected`) and a Workspace status (its head). The worker process reads the Store per call, and the password travels only in that one request; building it is a record read and this check, no provider command. A close resolves it only to end the mount intents a forced unmount left, and runs without it when the machine cannot dial it, naming each intent it could not end in `left`. Every other operation (`sandbox.get`'s reads, mount, exec, cancel, unmount) asks only the Sandbox's daemon, which dials the URL its create gave it, and never reads the URL: a Sandbox can always be read and removed | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_op`, `in_worker`; [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs) `store_url`; [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `close` |
 
-`PostgresUrl` keeps no userinfo, has no `Debug` and is never put in a message
+`url_hosts` keeps no userinfo and nothing here puts any part of the URL in a
+message but a host
 ([`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs)).
 
 ## Forwards

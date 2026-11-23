@@ -2148,6 +2148,33 @@ fn a_role_without_pg_read_all_stats_is_refused_as_unsupported() {
     assert_eq!(db_generation(&schema), before, "nothing was marked");
 }
 
+/// The check of a machine's connection (`postgresql_access`, which
+/// `store connect --machine` and `store doctor` run on the side that dials)
+/// asks only for what a Sandbox's reads and writes need: a role lacking
+/// what only a compaction needs (`pg_read_all_stats`, the database's
+/// `CREATE`) passes it, as it passes the first `store connect`, and its
+/// compaction still refuses it (the test above). A privilege writes need
+/// (`TEMP`) is still named.
+#[test]
+fn a_machine_s_connection_check_asks_only_what_a_sandbox_needs() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "privilege_connection_check");
+    let _handles = schema.create();
+    let role = Role::new(&schema, "connection_check");
+    role.grant_schema_create(&schema);
+    let check = |role: &Role| {
+        layerfs_persistence::postgresql_access(&role.url, &schema.selection.schema)
+            .expect("the check reaches the server")
+    };
+    let access = check(&role);
+    assert!(access.schema);
+    assert_eq!(access.missing, vec!["TEMP on the database".to_owned()]);
+    role.grant_database(false, true);
+    let access = check(&role);
+    assert_eq!(access.missing, Vec::<String>::new(), "{access:?}");
+    assert_eq!(access.role, role.name);
+}
+
 #[test]
 fn a_fully_privileged_role_compacts() {
     let Some(url) = url() else { return };

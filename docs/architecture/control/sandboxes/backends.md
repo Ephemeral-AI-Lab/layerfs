@@ -68,12 +68,12 @@ its commands use the network of the kernel that runs it:
 
 A `namespaces` Sandbox also resolves names as the kernel that runs it does:
 the init stage binds that machine's `/etc/resolv.conf` and `/etc/hosts`
-read-only over the image's (owner, 2026-11-24), so Docker Desktop's
-`host.docker.internal`, a lima guest's `host.lima.internal`, a Linux
-Engine's `--add-host` entry and any DNS name the machine resolves resolve
-in the Sandbox too. The image copy leaves both files out, so without the
-binds a Sandbox resolved no name. What a PostgreSQL Store's URL may name
-on each machine is [Reach](../machines/workers-and-reach.md#reach-reachrs).
+read-only over the image's, so Docker Desktop's `host.docker.internal`, a
+lima guest's `host.lima.internal`, a Linux Engine's `--add-host` entry and
+any DNS name the machine resolves resolve in the Sandbox too. The image
+copy leaves both files out: the binds are the Sandbox's only resolver
+files. What a PostgreSQL Store's URL may name on each machine is
+[Reach](../machines/workers-and-reach.md#reach-reachrs).
 
 On a Linux host, then, a `namespaces` Sandbox on `native` or `docker` shares
 the host's kernel and network: its separation is its namespaces, cgroup,
@@ -325,7 +325,7 @@ here times a command out
 | --- | --- | --- |
 | `types/` | `LaunchRequest`, `ProviderLaunchOptions`, `LocalRecord`, `NamespaceRecord`, `SandboxRecord`, `ExecRequest`, `ExecExit`, `SandboxInspection`, `CommandIdentity`, `Bind`, `Image`, `ContainerId` (a random 64-hex id per Sandbox), `RuntimeError` (`Io`, `Protocol`, `Unsupported`), `WireFailure` (whether attempted). They compile on Windows too. | [`types/`](../../../../control/crates/layerfs-sandbox-backend/src/types) |
 | `steps.rs` | Step times of a traced command (`exec.*`, and the helper's `helper.*` via `--trace <file>`). | [`steps.rs`](../../../../control/crates/layerfs-sandbox-backend/src/steps.rs) |
-| `postgres_url.rs` | Reads every server host a PostgreSQL connection string names (a URL's host list and `host`/`hostaddr` parameters, or libpq's `key=value` words) and says which name this host's loopback (`loopback`), so a machine that does not share it can refuse it; the URL is never rewritten; no `Debug`, never in a message. | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
+| `postgres_url.rs` | Reads every server host a `postgres://` URL names, as its client (tokio-postgres) reads them (`url_hosts`: the host list and `host`/`hostaddr` parameters, percent-decoded), and says which name this host's loopback (`loopback`, with `ip` reading every IPv4 form `inet_aton` reads and IPv6 zone ids), so a machine that does not share it can refuse it; the URL is never rewritten and never in a message. | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
 | `platform_policy.rs` | Platforms removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): a record naming one is refused, never run. | [`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs) |
 | `json.rs` | A small streaming JSON reader (image manifests) and the quoting `SUPPORT.json` is written with. | [`json.rs`](../../../../control/crates/layerfs-sandbox-backend/src/json.rs) |
 

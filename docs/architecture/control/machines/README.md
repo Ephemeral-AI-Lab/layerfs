@@ -104,7 +104,7 @@ The per-platform values are in [Platforms](platforms.md).
 | `create`, `start` | `validate`, `check_bundle`; `start` answers `None` when the route is `InProcess` | the adapter; `create` forwards `spec.state.port` when the caller recorded one (`worker_port`), `start` refuses `InvalidInput` without it on `lima` and `apple-container` |
 | `stop`, `remove`, `status` | `validate` (`InUse` is the caller's check) | the adapter |
 | `status_within`, `provider_within` | as `status` | every command killed with its process group at the deadline, answered `Unknown` |
-| `reach`, `loopback_hint` | `validate` | `reach::dial` with the adapter's `loopback`: the URL as given or a refusal; the hint a failed dial adds on an `Apart` machine; nothing runs and no message holds the URL ([Reach](workers-and-reach.md#reach-reachrs)) |
+| `reach`, `loopback_hint` | `validate` | `reach::dial` with the adapter's `loopback`: the URL as given or a refusal; the hint a dial that made no connection adds on an `Apart` machine when the URL names a host by name; nothing runs and no message holds the URL ([Reach](workers-and-reach.md#reach-reachrs)) |
 | `forward`, `forward_close` | `validate`; port 0 is `InvalidInput` | the adapter; close ends only a pid whose command line still names the port |
 | `load_image`, `cached_image` | `validate`; `docker` only | `docker load -i`, answers `sha256:<64 hex>` |
 | `copy_in`, `copy_out` | `validate`; the platform's `guest` | one `tar` stream in, `cat` out to a new 0600 file |

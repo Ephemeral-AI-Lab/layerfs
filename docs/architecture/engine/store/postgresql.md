@@ -70,7 +70,7 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 | `Light` check | A Sandbox daemon's writer, Workspace and control readers, and `attach_read_only`; a hand-changed column fails the statement that uses it instead | [`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs), [`owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
 | `binding(selection)` | The binding key a schema records, read in one read-only session, so a home that did not create it can open it | [`store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs) |
 | `attach_read_only(selection)` | One read-only session under the recorded binding, returned for the caller to compare with its own | same |
-| `postgresql_access(url, schema)` | Server version, one round trip's latency, `current_user`, whether the schema exists, and each privilege the role lacks: the schema's `USAGE` and `CREATE`, the database's `CREATE` (compaction creates the scratch schema) and `TEMP` (merges stage in temporary tables; compaction reads its visited set from them), `pg_read_all_stats` (compaction reads the recorded owner's `pg_stat_activity` row and calls `pg_terminate_backend`), each table's `SELECT`/`INSERT`/`UPDATE`/`DELETE` and each sequence's `USAGE` | [`access.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/access.rs) |
+| `postgresql_access(url, schema)` | Server version, one round trip's latency, `current_user`, whether the schema exists, and each privilege a Sandbox's reads and writes need that the role lacks: the schema's `USAGE` and `CREATE`, the database's `TEMP` (merges stage in temporary tables), each table's `SELECT`/`INSERT`/`UPDATE`/`DELETE` and each sequence's `USAGE`. What only a compaction needs (the database's `CREATE`, `pg_read_all_stats`) is not asked: `compaction_missing` checks it when a compaction starts | [`access.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/access.rs) |
 | `postgresql_status(url, schemas)` | Server version, one round trip's latency and each named schema's size | [`status.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/status.rs) |
 
 `access` and `status` open one connection for the call and close it, run
@@ -87,9 +87,13 @@ deadline. `Connector::new` pairs a single `localhost` host (with no
 either IPv4 or IPv6 loopback without DNS. The
 session keeps the frozen policy and server version the open check read, so
 `PackPersistence::policy` costs no round trip afterwards.
-`compaction_missing(session)` applies the same five Store-wide checks to the
-compaction session in one read-only round trip, before the intent, the mark
-and the `lfs_gc_<hex>` scratch schema; the first privilege the role lacks is
+`compaction_missing(session)` checks what a compaction needs Store-wide on
+the compaction session in one read-only round trip: the schema's `USAGE` and
+`CREATE`, the database's `CREATE` (the scratch schema) and `TEMP` (its
+visited set), `pg_read_all_stats` (the recorded owner's `pg_stat_activity`
+row and its `pg_terminate_backend`) and ownership of the Store's tables,
+before the intent, the mark and the `lfs_gc_<hex>` scratch schema; the first
+privilege the role lacks is
 `Unsupported`, naming it (AC-44). It is reachable from a session because a
 compaction holds one already and never retains the URL.
 `PostgresSelection`'s `Debug` redacts the URL.

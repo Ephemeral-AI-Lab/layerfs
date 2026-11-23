@@ -115,8 +115,11 @@ it stopped `<where>`: `<cause>`", then "Its daemon's last error: …" from
 its log, except when a PostgreSQL Sandbox daemon could not reach its
 Store's server at startup (`Unavailable`: "Sandbox `<name>` did not start:
 its daemon cannot reach PostgreSQL Store `<store>`'s server at `<host>`",
-noting on `namespaces` when `<host>` is a hostname that the Sandbox root
-has no `/etc/hosts` or `/etc/resolv.conf`). Its `detail` holds `daemon`
+`<host>` being every host its URL names; on a machine that does not share
+this computer's loopback, when that URL names a host by name, it adds the
+same advice as the loopback refusal: the platform's name for this computer
+or `layerfs store connect <store> <url> --machine <machine>`). The
+Sandbox resolves names as its machine does. Its `detail` holds `daemon`
 (the program that was started), `log` (its last lines), `container` and
 `removed`
 ([`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon`).

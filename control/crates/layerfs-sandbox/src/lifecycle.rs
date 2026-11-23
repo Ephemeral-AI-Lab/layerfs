@@ -385,7 +385,16 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         .map_err(values::wire)?;
     owner.stop(STOP_S).map_err(values::wire)?;
     owner.delete().map_err(values::wire)?;
-    let left = crate::mount_intents::end(Ok(&host.open_args()), &bound);
+    // a PostgreSQL Store's URL that was not resolved for the close (one
+    // the machine cannot dial, `route`): what it left is reported
+    let pg = (host.store_record.as_ref())
+        .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
+    let open = host.open_args();
+    let open = match (pg, &host.postgresql) {
+        (true, None) => Err("no URL of the PostgreSQL Store this machine can dial was resolved"),
+        _ => Ok(&open),
+    };
+    let left = crate::mount_intents::end(open, &bound);
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);

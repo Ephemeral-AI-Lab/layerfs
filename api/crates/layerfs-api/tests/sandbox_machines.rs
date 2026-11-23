@@ -82,6 +82,26 @@ fn pg_record(home: &Path) {
     .unwrap();
 }
 
+/// Sandbox `s1` of project `pg/app`, started on machine `machine`, as its
+/// record keeps it (nothing runs).
+fn sandbox_on(home: &Path, machine: &str) {
+    home::write_record(
+        &paths::sandbox_record(home, "s1"),
+        &SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", t("s1")),
+            ("project", t("pg/app")),
+            ("machine", t(machine)),
+            ("created", SdkValue::Int(1)),
+            ("id", t("s1")),
+            ("platform", t("lima")),
+            ("runtime", t("namespaces")),
+            ("backend", t("namespaces")),
+        ]),
+    )
+    .unwrap();
+}
+
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
@@ -209,7 +229,20 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
             // does not share this host's loopback, and nothing rewrites it
             assert_eq!(code, "Unsupported", "{message}");
             assert!(message.contains("host.lima.internal"), "{message}");
-            assert!(message.contains("--machine dev`"), "{message}");
+            assert!(
+                message.contains("`layerfs store connect pg <url> --machine dev`"),
+                "{message}"
+            );
+            // a Sandbox already on the machine is still read and removed:
+            // the calls that never dial the Store's URL are not refused for
+            // it, and reach the machine (here stopped) instead
+            sandbox_on(&home, "dev");
+            ok(&home, "sandbox.get", &[("sandbox", t("s1"))]);
+            let (code, message) =
+                call(&home, "sandbox.remove", &[("sandbox", t("s1"))]).unwrap_err();
+            assert!(!message.contains("loopback"), "{code}: {message}");
+            assert!(message.contains("layerfs machine start dev"), "{message}");
+            std::fs::remove_dir_all(paths::sandbox_dir(&home, "s1")).unwrap();
             // any other host: the stopped machine is refused naming its start
             let record = paths::store_record(&home, "pg");
             let mut fields = home::read_record(&record).unwrap().unwrap();
@@ -638,7 +671,12 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
     };
     let home = PathBuf::from(home);
     for machine in machines.split(',') {
-        let status = ok(&home, "machine.status", &[("name", t(machine))]);
+        let live = SdkValue::List(vec![t("live")]);
+        let status = ok(
+            &home,
+            "machine.get",
+            &[("machine", t(machine)), ("with", live)],
+        );
         assert_eq!(
             status.get_text("state"),
             Some("running"),

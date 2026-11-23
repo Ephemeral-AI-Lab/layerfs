@@ -431,7 +431,7 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
             "?sslmode=verify-full",
         ] {
             for url in loopback_urls(query) {
-                let outcome = machine::reach(&spec, &url);
+                let outcome = machine::reach(&spec, "pg", &url);
                 match loopback(&spec) {
                     Loopback::Shared => assert_eq!(outcome, Ok(url)),
                     Loopback::Apart(name) => {
@@ -441,7 +441,7 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
                         assert!(message.contains("loopback"), "{message}");
                         assert!(message.contains(name), "{message}");
                         assert!(
-                            message.contains("layerfs store connect <store> <url> --machine dev"),
+                            message.contains("layerfs store connect pg <url> --machine dev"),
                             "{message}"
                         );
                     }
@@ -464,12 +464,16 @@ fn every_other_server_is_dialled_as_given_on_every_platform() {
         "postgres://[2001:db8::1]:5432/layerfs".to_owned(),
         format!("postgres://lfs:{SECRET}@h1:5432,h2:5433/db"),
         format!("postgres://lfs:{SECRET}@db/layerfs?hostaddr=10.0.0.5"),
-        format!("host=db.example.com password={SECRET}"),
+        format!("postgres://lfs:{SECRET}@h1:5432,h2/db"),
     ];
     for platform in Platform::ALL {
         let spec = reach_spec(&scratch, platform);
         for url in &urls {
-            assert_eq!(machine::reach(&spec, url).as_ref(), Ok(url), "{platform:?}");
+            assert_eq!(
+                machine::reach(&spec, "pg", url).as_ref(),
+                Ok(url),
+                "{platform:?}"
+            );
         }
     }
     assert_eq!(scratch.log(), "", "reach runs no provider tool");
@@ -479,9 +483,11 @@ fn every_other_server_is_dialled_as_given_on_every_platform() {
 fn a_url_reach_cannot_check_is_refused_unless_the_loopback_is_shared() {
     let scratch = Scratch::new("kit-reach-unread");
     let cases = [
+        // libpq's key=value words are no Store URL (`secrets::parts`
+        // refuses them before reach): not read
         (
             format!("host=localhost user=lfs password={SECRET}"),
-            Code::Unsupported,
+            Code::InvalidInput,
         ),
         (format!("localhost {SECRET}"), Code::InvalidInput),
         (
@@ -490,7 +496,7 @@ fn a_url_reach_cannot_check_is_refused_unless_the_loopback_is_shared() {
         ),
         (
             format!("dbname=layerfs password={SECRET}"),
-            Code::Unsupported,
+            Code::InvalidInput,
         ),
         (
             format!("postgres:///layerfs?host=/var/run/postgresql&password={SECRET}"),
@@ -505,11 +511,24 @@ fn a_url_reach_cannot_check_is_refused_unless_the_loopback_is_shared() {
             format!("postgres://lfs:{SECRET}@h1:5432,localhost:5433/db"),
             Code::Unsupported,
         ),
+        // read as the client reads it: percent-decoded, the list split first
+        (
+            format!("postgres://lfs:{SECRET}@%6Cocalhost/db"),
+            Code::Unsupported,
+        ),
+        (
+            format!("postgres://lfs:{SECRET}@[::1]:5432,h2/db"),
+            Code::Unsupported,
+        ),
+        (
+            format!("postgres://lfs:{SECRET}@db/x?h%6Fst=127.1"),
+            Code::Unsupported,
+        ),
     ];
     for platform in Platform::ALL {
         let spec = reach_spec(&scratch, platform);
         for (url, code) in &cases {
-            let outcome = machine::reach(&spec, url);
+            let outcome = machine::reach(&spec, "pg", url);
             if matches!(loopback(&spec), Loopback::Shared) {
                 assert_eq!(outcome.as_ref(), Ok(url), "{platform:?}");
             } else {

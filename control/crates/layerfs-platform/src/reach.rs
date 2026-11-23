@@ -20,23 +20,32 @@ pub(crate) enum Loopback {
     Apart(String),
 }
 
-/// The URL `spec`'s daemon dials for `url`, given how its machine reaches
-/// the caller's loopback: `url` itself, or a refusal. Every host the URL
-/// names is checked: a host list, `host` and `hostaddr` (URL parameters or
-/// `key=value` words). Nothing is resolved: a name is dialled as given.
-pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback) -> Result<String, MachineError> {
+/// The URL `spec`'s daemon dials for `url`, a URL of PostgreSQL Store
+/// `store`, given how its machine reaches the caller's loopback: `url`
+/// itself, or a refusal. Every host the URL names is checked, read as its
+/// client reads them ([`layerfs_sandbox_backend::url_hosts`]): its host
+/// list and its `host` and `hostaddr` parameters. Nothing is resolved: a
+/// name is dialled as given.
+pub(crate) fn dial(
+    spec: &Spec,
+    (store, url): (&str, &str),
+    loopback: Loopback,
+) -> Result<String, MachineError> {
     let Loopback::Apart(this_host) = loopback else {
         return Ok(url.to_owned());
     };
-    let hosts = layerfs_sandbox_backend::conninfo_hosts(url).ok_or_else(|| {
+    let hosts = layerfs_sandbox_backend::url_hosts(url).ok_or_else(|| {
         refuse(
             spec,
             Code::InvalidInput,
-            "its URL is neither one postgres://[user@]host[:port]/... URL nor key=value words, so the machine cannot check that it does not name this host's loopback",
+            "its URL is not one postgres://[user@]host[:port][,host[:port]...]/... URL its client reads, so the machine cannot check that it does not name this host's loopback",
         )
     })?;
-    let advice = advice(spec, &this_host);
-    if hosts.iter().any(|host| socket(host)) {
+    let advice = advice(spec, store, &this_host);
+    if hosts
+        .iter()
+        .any(|host| layerfs_sandbox_backend::socket(host))
+    {
         return Err(refuse(
             spec,
             Code::Unsupported,
@@ -56,30 +65,33 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback) -> Result<String,
 }
 
 /// [`crate::loopback_hint`]: the refusal's advice, for a failed dial of a
-/// name that resolves to a loopback address on the machine.
-pub(crate) fn hint(spec: &Spec, loopback: Loopback) -> Option<String> {
+/// name that resolves to a loopback address on the machine. Only a URL
+/// naming at least one host by name can fail so: an address is read, never
+/// resolved, and [`dial`] refused every loopback one.
+pub(crate) fn hint(spec: &Spec, (store, url): (&str, &str), loopback: Loopback) -> Option<String> {
     let Loopback::Apart(this_host) = loopback else {
         return None;
     };
+    let named = |host: &String| {
+        !layerfs_sandbox_backend::socket(host) && layerfs_sandbox_backend::ip(host).is_none()
+    };
+    if !layerfs_sandbox_backend::url_hosts(url)?.iter().any(named) {
+        return None;
+    }
     Some(format!(
         "if its host is a loopback address on the {} machine {} (a hosts entry can make a name one), the machine does not share this host's loopback; {}",
         spec.kind.name(),
         spec.name,
-        advice(spec, &this_host)
+        advice(spec, store, &this_host)
     ))
 }
 
 /// What to give a machine that does not share the caller's loopback.
-fn advice(spec: &Spec, this_host: &str) -> String {
+fn advice(spec: &Spec, store: &str, this_host: &str) -> String {
     format!(
-        "give the Store a host the machine reaches ({this_host}), or give the machine its own URL with `layerfs store connect <store> <url> --machine {}`",
+        "give the Store a host the machine reaches ({this_host}), or give the machine its own URL with `layerfs store connect {store} <url> --machine {}`",
         spec.name
     )
-}
-
-/// Whether `host` names a Unix socket: none (libpq's default), or a path.
-fn socket(host: &str) -> bool {
-    host.is_empty() || host.starts_with('/') || host.starts_with('@')
 }
 
 fn refuse(spec: &Spec, code: Code, why: &str) -> MachineError {

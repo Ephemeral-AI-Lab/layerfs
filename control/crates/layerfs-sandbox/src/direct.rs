@@ -305,6 +305,7 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
         postgresql: None,
         message,
         started: None,
+        reach_hint: None,
     }
 }
 
