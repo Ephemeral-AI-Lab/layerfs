@@ -121,8 +121,8 @@ pub(crate) struct Table {
     pub aliases: HashMap<u64, Vec<Named>>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
-    /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
-    pub refreshing: HashMap<u64, std::time::Instant>,
+    /// Serials marked for a cache refresh: the mode asked, and when.
+    pub refreshing: HashMap<u64, (u32, std::time::Instant)>,
     /// Directory serial -> the facts last published or observed for it. A
     /// change of an AppleDouble companion names a directory but changes
     /// nothing in it, so its `wcc_data` answers from here (see
@@ -475,15 +475,10 @@ impl Kernel {
             _ if name.len() > 255 => return Err(Refused::plain(Status::NameTooLong)),
             _ => {}
         }
-        // A companion lives in the export alone: no job read the directory.
-        if let Some(stat) = self.companion_named(parent, name) {
-            return Ok((stat, None));
-        }
+        // A `._` name the view holds is the Workspace's; only one it does not
+        // hold may be a companion (see `crate::apple_double`).
         if self.refuses_apple_double() && crate::names::apple_double(name) {
-            if parent != self.root() && !self.table().parents.contains_key(&parent) {
-                return Err(Refused::plain(Status::NotDir));
-            }
-            return Err(Refused::plain(Status::NoEnt));
+            return self.lookup_apple_double(parent, name);
         }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
@@ -492,6 +487,14 @@ impl Kernel {
                 .map(|stat| (stat, None))
                 .map_err(Refused::plain);
         }
+        self.lookup_view(parent, name)
+    }
+    /// LOOKUP of `name` in the Workspace view alone, asking the engine.
+    pub(crate) fn lookup_view(
+        &self,
+        parent: u64,
+        name: &[u8],
+    ) -> Result<(ViewStat, Option<ViewStat>), Refused> {
         let path = PathName::from_bytes(name).map_err(|_| Refused::plain(Status::Inval))?;
         let lookup = KernelReadOperation::Lookup { parent, name: path };
         let answer = self.observe(parent, None, lookup).inspect_err(|refused| {
