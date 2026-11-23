@@ -45,11 +45,14 @@ impl Checkpointer {
     /// session does: under NORMAL a pass at 0 would mark frames copied that
     /// never reached the disk, and the writer would restart the log over them.
     ///
-    /// The connection also sets `checkpoint_fullfsync=1`, as the session's
-    /// own connection does (`profile.rs`): with `wal_autocheckpoint=0` nearly
-    /// every checkpoint runs here, and on macOS without it each pass would
-    /// sync the Store file with plain `fsync` before the writer restarts the
-    /// log over the copied frames (finding #11). Returns the read-back value.
+    /// The connection sets `checkpoint_fullfsync=0` and reads it back: a
+    /// routine pass syncs the Store file with plain `fsync`, which on macOS
+    /// does not flush the drive's cache (owner, 2026-11-23: F_FULLFSYNC on
+    /// every pass pushed write-heavy suites past the 120 s test ceiling). The
+    /// idle TRUNCATE and the last close run on the session's own connection,
+    /// which sets `checkpoint_fullfsync=1` (`profile.rs`, finding #11); the
+    /// window this leaves is in `docs/architecture/engine/store/sqlite.md`.
+    /// Returns the read-back value.
     pub(crate) fn start(path: &Path, synchronous: i64) -> Result<(Self, i64), BackendError> {
         let connection = Connection::open_with_flags(
             path,
@@ -66,7 +69,7 @@ impl Checkpointer {
         for pragma in [
             format!("PRAGMA synchronous={synchronous}"),
             "PRAGMA fullfsync=0".to_owned(),
-            "PRAGMA checkpoint_fullfsync=1".to_owned(),
+            "PRAGMA checkpoint_fullfsync=0".to_owned(),
             "PRAGMA wal_autocheckpoint=0".to_owned(),
         ] {
             query::run(&connection, &pragma, vec![], &work)?;
@@ -83,7 +86,7 @@ impl Checkpointer {
                 .first()
                 .ok_or(BackendError::Integrity)?
                 .get::<i64>(0)?;
-        if checkpoint_fullfsync != 1 {
+        if checkpoint_fullfsync != 0 {
             return Err(BackendError::Integrity);
         }
         let mode = query::run(&connection, "PRAGMA journal_mode", vec![], &work)?

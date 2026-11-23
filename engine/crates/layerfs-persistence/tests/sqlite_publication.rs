@@ -528,9 +528,10 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         assert_eq!(profile.synchronous, if selected == Durable { 2 } else { 1 });
         assert_eq!(profile.fullfsync, i64::from(selected == Durable));
         assert_eq!((profile.checkpoint_fullfsync, profile.temp_store), (1, 2));
-        // The checkpoint thread copies nearly every frame of a Normal session,
-        // so it syncs with F_FULLFSYNC on macOS too (finding #11).
-        assert_eq!(profile.checkpoint_thread_checkpoint_fullfsync, Some(1));
+        // Routine checkpoint-thread passes sync with plain fsync; the idle
+        // and last-close checkpoints run on the session's connection above
+        // (finding #11, narrowed by the owner 2026-11-23).
+        assert_eq!(profile.checkpoint_thread_checkpoint_fullfsync, Some(0));
         assert_eq!(
             (profile.page_size, profile.cache_size, profile.mmap_size),
             (4096, -2048, 0)
