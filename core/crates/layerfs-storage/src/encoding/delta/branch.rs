@@ -48,8 +48,9 @@ pub struct BranchCounters {
     pub work_exceeded: u64,
     /// Predecessors replaced by the whole branch at the root of their chain (#89).
     pub rebased: u64,
-    /// Programs against a re-based root longer than half the whole record,
-    /// stored whole instead (#758).
+    /// Programs against a re-based root that `worth` keeps but that are longer
+    /// than half the whole record, stored whole instead (#758): only the
+    /// decisions the rule changed, as `DeltaCounters::rebased_full`.
     pub rebased_full: u64,
     /// Branches stored, by chain depth (whole is 0).
     pub depths: super::select::DepthHistogram,

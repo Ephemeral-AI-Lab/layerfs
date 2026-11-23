@@ -593,7 +593,8 @@ fn record_base(
 /// The record is not authenticated and `location` may be wrong. A group
 /// neither `groups` nor the caller's own `decoded` cache holds is
 /// decompressed, counted in `decodes` and kept in `decoded` (when it fits
-/// that cache's byte bound), so the caller decodes it once.
+/// that cache's byte bound), so the caller decodes it again only after
+/// `decoded` evicted it or when it was too large to keep.
 pub(crate) fn cached_base(
     packs: &crate::encoding::PackCache,
     groups: &GroupCache,

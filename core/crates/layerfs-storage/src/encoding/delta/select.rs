@@ -77,8 +77,12 @@ pub struct DeltaCounters {
     /// reached the depth cap or would exceed a work budget with the new object on
     /// it (#89). The one trial runs against the root.
     pub rebased: u64,
-    /// Re-based trials whose PREFIX record exceeded half the FULL record and
-    /// stored FULL ([`rebased_delta_kept`]); each also counts in `full_losses`.
+    /// Re-based trials the half-FULL rule turned into FULL ([`rebased_delta_kept`]):
+    /// the PREFIX record was shorter than the FULL record, so it would have been
+    /// stored, but longer than half of it. A re-based PREFIX that is not shorter
+    /// loses the comparison anyway and is not counted here. Each firing also
+    /// counts in `full_losses`. `BranchCounters::rebased_full` counts the same
+    /// for program pages.
     pub rebased_full: u64,
     /// Chunk candidates not tried because this Save's trials against the same
     /// base kept losing ([`LosingBases`]); each stored FULL without a trial.
@@ -674,11 +678,14 @@ pub fn select(
     let prefix = prefix?;
     // A re-based PREFIX over half the FULL record stores FULL (#758): it would
     // anchor the chain, and every read of it, to a delta that grows with drift.
-    let over_root_fraction = rebased && !rebased_delta_kept(prefix.record.len(), full.record.len());
+    // Only a PREFIX that would otherwise win counts as the rule's firing.
+    let shorter = prefix.record.len() < full.record.len();
+    let over_root_fraction =
+        shorter && rebased && !rebased_delta_kept(prefix.record.len(), full.record.len());
     if over_root_fraction {
         input.counters.rebased_full = input.counters.rebased_full.saturating_add(1);
     }
-    let won = prefix.record.len() < full.record.len() && !over_root_fraction;
+    let won = shorter && !over_root_fraction;
     if let Some(offered) = offered {
         // A win that saves less than 1/LOSING_BASE_MIN_SAVING of the FULL
         // record is still stored, but counts as a loss for the memo; so does a

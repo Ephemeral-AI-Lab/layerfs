@@ -431,9 +431,11 @@ including this Save's registered packs), exactly as the cost walk does. A root
 grows older as the file drifts from it, so since #758 fix 4 a PREFIX record
 against a re-based root is kept only while it is at most half the independent
 record; past that the independent record is stored and becomes the next chain's
-root, so the root plus its delta never reads more than 1.5 independent records
-(the same limit applies to a program page's re-based program; firings count in
-`rebased_full`). `DeltaCounters.rebased` counts re-based
+root, so the root plus its delta never reads more than the root's independent
+record plus half the target's (1.5 independent records when both are the same
+size; the same limit applies to a program page's re-based program).
+`rebased_full` counts only the decisions the limit changed: a re-based PREFIX
+(or program) that would have been kept but was over half. `DeltaCounters.rebased` counts re-based
 selections; `depth_capped` counts candidates found at the cap (all re-based), and
 `work_exceeded` counts only the budget refusals that stored an independent record.
 

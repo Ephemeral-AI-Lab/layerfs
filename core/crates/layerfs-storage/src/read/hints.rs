@@ -367,10 +367,13 @@ impl Fetch {
     /// locator-cache pressure, and a guessed row's authoritative descriptor
     /// that contradicts a marked member descriptor makes the hints stale
     /// ([`Fetch::remember_pack`]). A group a guess needs decoded is
-    /// decompressed at most once per call, into a decoded-group cache of
-    /// this call's own (bounded by [`crate::policy::DECODED_GROUP_CACHE_BYTES`]
-    /// and dropped on return), and every such decompression is counted in
-    /// `prefetch_group_decodes`.
+    /// decompressed into a decoded-group cache of this call's own (least
+    /// recently used eviction, bounded by
+    /// [`crate::policy::DECODED_GROUP_CACHE_BYTES`], dropped on return) and
+    /// reused while it is held there: a call whose groups fit that bound
+    /// decodes each once, but a body over the bound is never kept and a call
+    /// that interleaves more distinct groups than fit decodes an evicted one
+    /// again. Every decompression is counted in `prefetch_group_decodes`.
     pub(crate) fn chain_ahead(
         &self,
         level: &[ObjectId],

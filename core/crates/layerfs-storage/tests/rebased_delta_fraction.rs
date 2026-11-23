@@ -121,6 +121,50 @@ fn a_drifting_file_stores_full_when_its_re_based_delta_passes_half_the_full() {
     }
 }
 
+#[test]
+fn a_re_based_prefix_that_loses_anyway_is_not_counted_as_the_rule_firing() {
+    // Whole-file depth cap 2: versions 1 and 2 drift one eighth each, so
+    // version 3's candidate (version 2) is capped and the trial is re-based
+    // onto version 0. Version 3 is fresh noise: its PREFIX against the root is
+    // no shorter than its FULL record and loses the comparison on its own, so
+    // the half-FULL rule changed nothing and `rebased_full` stays 0 (fix 4b;
+    // fix 4 counted every re-based PREFIX over half the FULL, here 1).
+    let metadata = Arc::new(metadata::MemoryMetadata::default());
+    metadata.state.lock().unwrap().policy = StoragePolicy::new(1, 131_072, 2, 4);
+    let storage = Storage::new(metadata.clone()).unwrap();
+    let mut bytes = noise(16 * 1024, 0);
+    let mut previous: Option<ObjectId> = None;
+    let mut outcomes = Vec::new();
+    for version in 0..4 {
+        if version == 3 {
+            bytes = noise(16 * 1024, 1_000);
+        } else {
+            drift(&mut bytes, version, 8);
+        }
+        let mut object = FinalizedObject::new(
+            ObjectRole::WholeFile,
+            support::assembled_small_object(&bytes),
+        )
+        .unwrap();
+        if let Some(base) = previous {
+            object = object.with_predecessors(AdvisoryPredecessors::explicit(base).unwrap());
+        }
+        previous = Some(object.id());
+        let save = storage.begin_save().unwrap();
+        save.accept(object).unwrap();
+        outcomes.push(save.finish().unwrap());
+    }
+    let depths: Vec<usize> = outcomes.iter().map(depth).collect();
+    assert_eq!(depths, [0, 1, 2, 0]);
+    let last = &outcomes[3];
+    assert_eq!(last.delta.rebased, 1, "{last:?}");
+    assert_eq!(last.delta.trials, 1, "{last:?}");
+    assert_eq!(last.delta.full_losses, 1, "{last:?}");
+    assert_eq!(last.delta.rebased_full, 0, "{last:?}");
+    let fired: u64 = outcomes.iter().map(|o| o.delta.rebased_full).sum();
+    assert_eq!(fired, 0, "{outcomes:?}");
+}
+
 #[derive(Default)]
 struct Emitted(Vec<FinalizedObject>);
 impl FinalizedConsumer for Emitted {
