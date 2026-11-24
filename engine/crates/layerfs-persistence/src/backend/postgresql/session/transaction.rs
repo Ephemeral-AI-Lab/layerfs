@@ -41,6 +41,17 @@ pub(crate) enum Mode {
     /// and the roots it resolves to) coherently without `BEGIN`/`COMMIT`.
     /// A second statement is refused before it is sent.
     Statement,
+    /// A GC admission write that never waits for the lane row (#768): a
+    /// mount's registration. `READ COMMITTED` with `synchronous_commit` and
+    /// `lock_timeout`, fenced in its `BEGIN` batch like every transaction.
+    /// It writes only `gc_intent`, which no publication reads, and its
+    /// conflicts are excluded by the advisory keys taken before it.
+    Admit,
+    /// Exactly one statement on its own (autocommit) that may write, sent as
+    /// written: no generation column is joined around it, because its text
+    /// carries the check it needs (the GC session keys, an owner's release).
+    /// A second statement is refused before it is sent.
+    Bare,
 }
 
 pub(crate) struct Transaction<'a> {
@@ -297,6 +308,23 @@ impl Session {
         self.run_as(Mode::Statement, body)
     }
 
+    /// One GC admission write outside the publication lane ([`Mode::Admit`]).
+    pub(crate) fn run_admit<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.run_as(Mode::Admit, body)
+    }
+
+    /// One autocommit statement sent as written ([`Mode::Bare`]); refused on
+    /// a read-only session.
+    pub(crate) fn run_bare<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.run_as(Mode::Bare, body)
+    }
+
     pub(crate) fn run_as<T, E: From<BackendError> + OutcomeError>(
         &self,
         mode: Mode,
@@ -342,7 +370,7 @@ impl Session {
             .filter(|generation| *generation != 0);
         let transactional = matches!(
             mode,
-            Mode::Read | Mode::Write | Mode::Snapshot | Mode::Stage | Mode::Publish
+            Mode::Read | Mode::Write | Mode::Snapshot | Mode::Stage | Mode::Publish | Mode::Admit
         );
         let expected = generation.filter(|_| transactional);
         let autocommit = generation.filter(|_| matches!(mode, Mode::Immutable | Mode::Statement));
@@ -358,8 +386,10 @@ impl Session {
             Mode::Stage => self.settings.write_begin(false),
             Mode::Publish if in_lane => self.settings.publish_begin() + &self.settings.in_lane(),
             Mode::Publish => self.settings.publish_begin(),
-            Mode::Immutable | Mode::Statement => {
-                let single = (mode == Mode::Statement).then(|| Cell::new(false));
+            // A write without the lane row, under the lane's lock_timeout.
+            Mode::Admit => self.settings.publish_begin(),
+            Mode::Immutable | Mode::Statement | Mode::Bare => {
+                let single = matches!(mode, Mode::Statement | Mode::Bare).then(|| Cell::new(false));
                 let result = immutable(state, &self.settings.schema, single, autocommit, body);
                 state.work.transaction_ns += start.elapsed().as_nanos() as u64;
                 return result;

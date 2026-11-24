@@ -37,18 +37,6 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "gc_lock_xact_exclusive" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_lock_xact_exclusive.sql"
         )),
-        "gc_lock_session_shared" => Ok(include_str!(
-            "../../../../sql/postgresql/queries/history/gc_lock_session_shared.sql"
-        )),
-        "gc_lock_session_exclusive" => Ok(include_str!(
-            "../../../../sql/postgresql/queries/history/gc_lock_session_exclusive.sql"
-        )),
-        "gc_unlock_session_shared" => Ok(include_str!(
-            "../../../../sql/postgresql/queries/history/gc_unlock_session_shared.sql"
-        )),
-        "gc_unlock_session_exclusive" => Ok(include_str!(
-            "../../../../sql/postgresql/queries/history/gc_unlock_session_exclusive.sql"
-        )),
         "gc_advisory_holder" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_advisory_holder.sql"
         )),
@@ -85,6 +73,25 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         )),
         "position_node_serial" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/position_node_serial.sql"
+        )),
+        _ => None,
+    }
+}
+
+/// The GC admission statements `Mode::Bare` sends as written (#768): the
+/// session keys of one intent, taken and given back in one statement each,
+/// and the owner's release. Each carries any generation check it needs in its
+/// own text; `{s}` names the schema.
+pub(crate) fn bare(key: &str) -> Option<&'static str> {
+    match key {
+        "gc_lock_session" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_lock_session.sql"
+        )),
+        "gc_unlock_session" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_unlock_session.sql"
+        )),
+        "gc_intent_release_owner" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_intent_release_owner.sql"
         )),
         _ => None,
     }

@@ -10,29 +10,28 @@ use super::*;
 
 /// Deletes one intent, and on PostgreSQL releases the session keys it held.
 ///
-/// On PostgreSQL the keys are read from the row whatever its state: an
-/// operator's release (`release_done`) runs in the operator's own session,
-/// so it retains the row as `done` but cannot unlock the keys the owner's
-/// session took at registration. The owner's own release then still unlocks
-/// them, and leaves the `done` row as it is (`release_in` never deletes one).
+/// On PostgreSQL the keys are the ones this session took when it registered
+/// the op, kept with it, whatever the row's state or whether it still
+/// exists: an operator's release (`release_done`) runs in the operator's own
+/// session, so it retains the row as `done` but cannot unlock the keys the
+/// owner's session took at registration, and a reconcile or another session
+/// may have deleted the row. The owner's own release then still unlocks
+/// them, and leaves a `done` row as it is (the delete never touches one).
 /// Only an op this session registered and still holds is unlocked, once: a
 /// repeated release, or one of a row another session registered, unlocks
 /// nothing, so no key level a live mount of this session holds is dropped.
+///
+/// The delete is one fenced autocommit statement outside the publication
+/// lane (#768), and runs strictly before the unlock: until the row is gone
+/// the keys still exclude a removal or compaction. A failed delete unlocks
+/// nothing and keeps the op held, so a later release still can.
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
         Engine::Postgres(session) => {
-            let found = provider.write(|tx| {
-                let Some(intent) = get_any_in(tx, op_id)? else {
-                    return Ok(None);
-                };
-                release_in(tx, op_id)?;
-                Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
-            })?;
-            if let Some(ReleaseKeys { keys }) = found {
-                if session.take_op(op_id) {
-                    let _ = session_unlock(session, provider.catalog_id, &keys);
-                }
+            release_owned(session, op_id)?;
+            if let Some(keys) = session.take_op(op_id) {
+                let _ = session_unlock(session, &keys);
             }
             Ok(())
         }
@@ -56,17 +55,19 @@ pub const DONE_RETAINED: i64 = 100;
 /// the cap in the same transaction keeps it (the cap also never deletes the
 /// op it was given) and the keyset audit returns it after every older row.
 ///
-/// The stamps of one scope follow commit order because releases are
-/// serialized: SQLite's `BEGIN IMMEDIATE` writer, and on PostgreSQL the Store
-/// lane row every write transaction locks at its `BEGIN` (READ COMMITTED), so
-/// the newest-time read runs after any earlier release has committed and no
-/// other release commits before this one does. The floor is per scope, that
-/// is per Branch identity: a Branch removed and created again under the same
-/// project and Branch names starts from its own rows, not from the earlier
-/// identity's, which the name-scoped audit also reads (see
-/// `gc_intent_done_branch.sql` for the guarantee that leaves). Finding the
-/// earlier identity's rows would need a scan of every retained row, as no
-/// index covers the names, so the floor does not.
+/// The stamps of one scope follow commit order because retaining releases
+/// are serialized: SQLite's `BEGIN IMMEDIATE` writer, and on PostgreSQL the
+/// Store lane row every lane write transaction locks at its `BEGIN` (READ
+/// COMMITTED), so the newest-time read runs after any earlier release has
+/// committed and no other release commits before this one does. The owner's
+/// deleting release runs outside the lane on PostgreSQL (#768); it never
+/// writes or deletes a `done` row, so it cannot reorder the stamps. The
+/// floor is per scope, that is per Branch identity: a Branch removed and
+/// created again under the same project and Branch names starts from its own
+/// rows, not from the earlier identity's, which the name-scoped audit also
+/// reads (see `gc_intent_done_branch.sql` for the guarantee that leaves).
+/// Finding the earlier identity's rows would need a scan of every retained
+/// row, as no index covers the names, so the floor does not.
 fn retain_done_in(tx: &Transaction<'_>, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
     let newest = one(tx, DONE_NEWEST, [op_id.as_slice()], |row| {
         cell::<Option<i64>>(row, 0)
@@ -100,18 +101,12 @@ pub(crate) fn release_done(
         Engine::Postgres(session) => {
             // a second release finds no live intent and answers `false`
             // (`NotFound` to the caller), as SQLite does; only a row this
-            // release retained has its session keys released
-            let found = provider.write(|tx| {
-                let Some(intent) = get_in(tx, op_id)? else {
-                    return Ok(None);
-                };
-                let keys = keys_for_release(tx, provider.catalog_id, &intent)?;
-                Ok(retain_done_in(tx, op_id, evidence)?.then_some(keys))
-            })?;
-            let retained = found.is_some();
-            if let Some(ReleaseKeys { keys }) = found {
-                if session.take_op(op_id) {
-                    let _ = session_unlock(session, provider.catalog_id, &keys);
+            // release retained has its session keys released. It stays on
+            // the lane: its done stamp relies on releases being serialized.
+            let retained = provider.write(|tx| retain_done_in(tx, op_id, evidence))?;
+            if retained {
+                if let Some(keys) = session.take_op(op_id) {
+                    let _ = session_unlock(session, &keys);
                 }
             }
             Ok(retained)

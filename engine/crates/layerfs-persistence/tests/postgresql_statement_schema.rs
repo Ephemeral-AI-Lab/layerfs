@@ -100,19 +100,10 @@ const READS: &[Read] = &[
         keys: &[],
         pg_only: false,
     },
-    // Spec 5.1/§8 admission: a session advisory lock takes and releases
-    // PostgreSQL-only locks. The statement reads no table, so nothing is
-    // qualified and nothing may have an unqualified SQLite body.
-    Read {
-        called: "Transaction::new",
-        keys: &[
-            "gc_lock_session_shared",
-            "gc_lock_session_exclusive",
-            "gc_unlock_session_shared",
-            "gc_unlock_session_exclusive",
-        ],
-        pg_only: true,
-    },
+    // The GC session keys and the owner's release are no `read_statement`
+    // bodies since #768: `Mode::Bare` sends them as written
+    // (`statements::bare`), and `postgresql_gc_sessions` runs each one on a
+    // real server.
 ];
 
 /// Every `.rs` file under `root`, as `(path, source)`.

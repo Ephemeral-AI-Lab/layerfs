@@ -94,15 +94,6 @@ const ALLOWED: &[Allow] = &[
                  its state so branch.fork answers NameTaken with the holder",
     },
     Allow {
-        file: "gc_branch_stack_any.sql",
-        markers: &[],
-        returns_state: false,
-        reason: "§5.1/§8 compaction admission: maps a Branch-scoped intent to its Stack \
-                 for the PostgreSQL advisory release keys, including a Branch retired \
-                 while the intent was open; the id is already recorded and nothing is \
-                 rendered from this read",
-    },
-    Allow {
         file: "gc_intent_all_project.sql",
         markers: &[],
         returns_state: false,

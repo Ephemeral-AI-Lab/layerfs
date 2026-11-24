@@ -56,11 +56,9 @@ pub(crate) use authority::{liveness, reconcile_machine, release, release_done};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
-use session::{session_lock, session_unlock};
+use session::{release_owned, session_lock, session_unlock};
 
 const INSERT: &str = "gc_intent_insert";
-const GET: &str = "gc_intent_get";
-const GET_ANY: &str = "gc_intent_get_any";
 const RELEASE: &str = "gc_intent_release";
 const RELEASE_DONE: &str = "gc_intent_release_done";
 const UNCERTAIN: &str = "gc_intent_uncertain";
@@ -77,7 +75,6 @@ const DONE_BRANCH: &str = "gc_intent_done_branch";
 const DONE_CAP: &str = "gc_intent_done_cap";
 const DONE_NEWEST: &str = "gc_intent_done_newest";
 
-const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
 const LOCK_XACT_EXCLUSIVE: &str = "gc_lock_xact_exclusive";
@@ -739,35 +736,6 @@ fn uncertain_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<bool> {
 pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<bool> {
     provider.write(|tx| uncertain_in(tx, op_id))
 }
-fn get_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcIntent>> {
-    one(tx, GET, [op_id.as_slice()], intent_row)
-}
-/// [`get_in`] whatever the row's state, a retained `done` row included.
-fn get_any_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcIntent>> {
-    one(tx, GET_ANY, [op_id.as_slice()], intent_row)
-}
-
-/// The PostgreSQL advisory keys one release unlocks, each with the mode it
-/// was taken in.
-struct ReleaseKeys {
-    keys: Vec<(u8, Vec<u8>, bool)>,
-}
-fn keys_for_release(
-    tx: &Transaction<'_>,
-    catalog: CatalogId,
-    intent: &GcIntent,
-) -> HistoryResult<ReleaseKeys> {
-    let mut intent = intent.clone();
-    if intent.scope_kind == GcScopeKind::Branch && intent.project_id.is_none() {
-        intent.project_id = one(tx, BRANCH_STACK, [intent.scope_id.as_slice()], |row| {
-            cell::<Vec<u8>>(row, 0)
-        })?;
-    }
-    Ok(ReleaseKeys {
-        keys: advisory_keys(catalog, &intent),
-    })
-}
-
 /// The exclusive Store key a compaction takes before it settles a leftover
 /// op, so two compactions can never settle the same `gc_op` at once. The
 /// registration that follows takes its own key level; dropping the claim
@@ -775,23 +743,23 @@ fn keys_for_release(
 /// and the single write transaction are the exclusion.
 pub(crate) struct StoreClaim<'a> {
     provider: &'a HistoryProvider,
-    held: bool,
+    /// The key level the claim holds, until it is unlocked.
+    held: Vec<crate::backend::postgresql::session::connection::SessionKey>,
 }
 impl HistoryProvider {
     /// Takes this Store's exclusive advisory key without registering an intent
     /// row, so a compaction can settle a leftover op under the key.
     pub(crate) fn claim_store_exclusive(&self) -> HistoryResult<StoreClaim<'_>> {
-        if let Engine::Postgres(session) = &self.engine {
-            let keys = [(1u8, self.catalog_id.as_slice().to_vec(), false)];
-            session_lock(session, self.catalog_id, &keys)?;
-            return Ok(StoreClaim {
-                provider: self,
-                held: true,
-            });
-        }
+        let held = match &self.engine {
+            Engine::Postgres(session) => {
+                let keys = [(1u8, self.catalog_id.as_slice().to_vec(), false)];
+                session_lock(session, self.catalog_id, &keys)?
+            }
+            Engine::Sqlite(_) => Vec::new(),
+        };
         Ok(StoreClaim {
             provider: self,
-            held: false,
+            held,
         })
     }
 }
@@ -799,13 +767,10 @@ impl StoreClaim<'_> {
     /// Releases the claim's one key level, leaving the level a registration
     /// took in the meantime held.
     fn unlock(&mut self) {
-        if self.held {
-            if let Engine::Postgres(session) = &self.provider.engine {
-                let keys = [(1u8, self.provider.catalog_id.as_slice().to_vec(), false)];
-                let _ = session_unlock(session, self.provider.catalog_id, &keys);
-            }
+        let held = std::mem::take(&mut self.held);
+        if let Engine::Postgres(session) = &self.provider.engine {
+            let _ = session_unlock(session, &held);
         }
-        self.held = false;
     }
 }
 impl Drop for StoreClaim<'_> {
@@ -911,19 +876,45 @@ pub(crate) fn done_intents_branch(
 
 /// Registers one shared (`mount`, `init`, `merge`) or exclusive
 /// (`compaction`) intent.
+///
+/// On PostgreSQL the intent's advisory keys are taken first, in one
+/// statement, and kept with the op so its release needs no read. A mount's
+/// registration then writes outside the publication lane (#768,
+/// `Mode::Admit`): it writes only its `gc_intent` row, which no publication
+/// reads, and every registration it must see (a removal, a compaction, a
+/// path-removal marker) takes a key that conflicts with the mount's before
+/// it scans, so under READ COMMITTED the mount's scan, which follows its own
+/// key grant, sees every such row that committed; mounts never refuse each
+/// other. Init and merge take only shared keys and refuse each other by their
+/// rows alone, so off the lane two of them could both register: they stay on
+/// the lane, and so do the rare compaction and removal registrations.
 pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| register_in(tx, intent, false)),
         Engine::Postgres(session) => {
-            let keys = advisory_keys(provider.catalog_id, intent);
-            session_lock(session, provider.catalog_id, &keys)?;
-            let result = session.run(true, |statements| {
-                register_in(&Transaction::new(statements), intent, true)
-            });
+            let keys = session_lock(
+                session,
+                provider.catalog_id,
+                &advisory_keys(provider.catalog_id, intent),
+            )?;
+            let result = if intent.kind == GcIntentKind::Mount {
+                session.run_admit(|statements| {
+                    register_in(&Transaction::new(statements), intent, true)
+                })
+            } else {
+                session.run(true, |statements| {
+                    register_in(&Transaction::new(statements), intent, true)
+                })
+            };
             match &result {
-                Ok(()) => session.hold_op(intent.op_id),
+                // A second registration of a held op keeps one level per key.
+                Ok(()) => {
+                    if let Some(earlier) = session.hold_op(intent.op_id, keys) {
+                        let _ = session_unlock(session, &earlier);
+                    }
+                }
                 Err(_) => {
-                    let _ = session_unlock(session, provider.catalog_id, &keys);
+                    let _ = session_unlock(session, &keys);
                 }
             }
             result
