@@ -11,7 +11,7 @@ through one adapter per platform.
 | Layer | [Control](../README.md) |
 | Crates | `layerfs-machine` (records, calls, worker client), `layerfs-platform` (driver: profiles, adapters, setup, support table) |
 | Source | [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-platform/src`](../../../../control/crates/layerfs-platform/src) |
-| Uses | [Home](../home/README.md), [Sandboxes: backends](../sandboxes/backends.md) (`Backend`, `platform_policy`) |
+| Uses | [Home](../home/README.md), [Sandboxes: backends](../sandboxes/backends.md) (`Backend`, `removed_platforms`) |
 | Used by | [Stores and projects](../stores-and-projects/README.md), [Sandboxes](../sandboxes/README.md), [Doctor](../doctor/README.md), [API: machine](../../api/sdk/machine.md) |
 | Flows | [Call](../../flows/call.md), [Workspace](../../flows/workspace.md) |
 
@@ -144,8 +144,8 @@ through `with_worker`, where running with no worker hello is `broken`
 | The home lock is never held while a VM boots; `start.lock` serialises start, stop, create and remove of one machine | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | One attempt; a readiness wait is not a retry | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) `ready`, [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |
 | No guest mounts the host home: Lima `mounts: []`; docker mounts its data volume and the bundle only, never the Engine socket; apple-container mounts only its volume | [`lima/template.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/template.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs), [`apple_container/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/create.rs) |
-| No Sandbox command can create a user namespace: VM guests set `user.max_user_namespaces=0` and read it back; every namespaces command runs under a seccomp filter (the docker worker relies on the filter alone) | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs) |
-| A removed platform's record (`firecracker`, `microsandbox`, `ssh`) is shown, refused `Unsupported`, and `machine.remove` removes only its record | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) `removed`, [`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs) |
+| No Sandbox command can create a user namespace: VM guests set `user.max_user_namespaces=0` and read it back; every namespaces command runs under a seccomp filter (the docker worker relies on the filter alone) | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/seccomp.rs) |
+| A removed platform's record (`firecracker`, `microsandbox`, `ssh`) is shown, refused `Unsupported`, and `machine.remove` removes only its record | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) `removed`, [`removed_platforms.rs`](../../../../control/crates/layerfs-sandbox-backend/src/support/removed_platforms.rs) |
 
 ## Limits and failures
 

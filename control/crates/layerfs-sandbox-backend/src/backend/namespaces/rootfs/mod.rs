@@ -90,18 +90,18 @@
 //! or the header's (a pax record's) rather than refusing the image.
 //!
 //! The pieces are the cache ([`cache`]), one archive's own reading
-//! ([`archive`]), the tar format ([`tar`]), what one layer does to the tree
+//! ([`docker_archive`]), the tar format ([`tar`]), what one layer does to the tree
 //! ([`layers`]) and the types they share ([`types`]).
-mod archive;
 mod cache;
+mod docker_archive;
 mod layers;
 mod tar;
 mod types;
 
-pub use archive::{holds, image_of, images, validate_import, ImageEntry};
 pub use cache::{
     cache, ensure, ensure_flat, ensure_held, lookup, remove, remove_temporary, temporary_digest,
     ImageHold, Temporary,
 };
+pub use docker_archive::{holds, image_of, images, validate_import, ImageEntry};
 pub use types::ImageRoot;
 pub(crate) use types::{refuse, PATH_MAX};

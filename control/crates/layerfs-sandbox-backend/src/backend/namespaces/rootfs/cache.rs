@@ -5,7 +5,7 @@
 //! build started on one may still run on it as its lower root, and no lock
 //! or record says which (RV3 NOTE 10).
 use super::{
-    archive::{unpack, unpack_flat},
+    docker_archive::{unpack, unpack_flat},
     refuse, ImageRoot,
 };
 use crate::{Image, RuntimeError};

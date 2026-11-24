@@ -83,7 +83,7 @@ pub fn grace(grace_ms: Option<i64>) -> Result<Duration> {
 
 /// Ends the command `stop` names here, once.
 pub fn stop(stop: &Stop, grace: Duration) -> Result<Outcome> {
-    match layerfs_sandbox_backend::stop::cancel(stop, grace).map_err(failed)? {
+    match layerfs_sandbox_backend::cancel::cancel(stop, grace).map_err(failed)? {
         Cancelled::Ended => Ok(Outcome::Ended),
         Cancelled::Signalled(signal) => Ok(Outcome::Cancelled(signal.as_str())),
     }

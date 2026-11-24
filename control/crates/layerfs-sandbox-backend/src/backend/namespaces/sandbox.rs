@@ -2,7 +2,7 @@
 //! namespaces, its cgroup and its exact attempts. Nothing is retried and no
 //! Drop cleans up; a Drop only reaps an init process this process started
 //! that has already exited, so it never stays a zombie of this process.
-use super::{cgroup, host, paths::Paths, rootfs::ImageRoot};
+use super::{cgroup, host_checks, paths::Paths, rootfs::ImageRoot};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{LocalRecord, NamespaceRecord, SandboxRecord};
 use layerfs_bridge::process::LocalProcess;
@@ -122,10 +122,10 @@ impl Sandbox {
         if !owner.paths.local.directory.is_absolute() || port == 0 {
             return Err(owner.invalid("saved namespaces Sandbox"));
         }
-        let grouped = host::in_cgroup(init.pid, &cgroup::leaf(&owner.cgroup));
+        let grouped = host_checks::in_cgroup(init.pid, &cgroup::leaf(&owner.cgroup));
         let private = crate::network::private(init.pid).unwrap_or(false);
         if !init.alive() || !grouped || !private {
-            let mut failure = owner.invalid(crate::types::STOPPED);
+            let mut failure = owner.invalid(crate::runtime::types::STOPPED);
             failure.observed_container = Some(owner.id);
             return Err(failure);
         }
@@ -227,7 +227,7 @@ impl Sandbox {
         }
         self.reap();
         if !init.alive() {
-            let mut failure = self.invalid(crate::types::STOPPED);
+            let mut failure = self.invalid(crate::runtime::types::STOPPED);
             failure.observed_container = Some(self.id);
             return Err(failure);
         }

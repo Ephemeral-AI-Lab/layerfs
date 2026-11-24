@@ -34,8 +34,13 @@ behalf of the engine:
   `apple_container`, `lima`). Host builds only.
 - `crates/layerfs-sandbox-backend` (was `layerfs-isolation`, D-9; before
   #101 `layerfs-sandbox`): *how* a Sandbox runs on that machine's kernel.
-  One folder per backend under `src/backend/` (`host_process`,
-  `namespaces`), over the shared local-process plumbing in `src/local/`.
+  `src/runtime/` is the backend-neutral surface (`Runtime`, `Sandbox`,
+  cancel, trace, shared types); `src/shared/` the process lifecycle both
+  backends use; one folder per backend under `src/backend/` (`native`,
+  `namespaces`) holds everything only that backend uses, its OS facts
+  included (macOS runs only `native`, Linux only `namespaces`); and
+  `src/support/` small formats (`json/`, `postgres_url.rs`,
+  `removed_platforms.rs`).
   The docker backend and its Engine client were retired by D-8
   (layerfs-project#111): the `docker` platform runs `namespaces` in its
   worker container.
@@ -82,7 +87,7 @@ folder under `platforms/`, one `Platform` variant and one `adapter()` arm;
 adding a backend is one folder under `backend/`, one `Backend` variant and one
 arm. Every refusal of a platform, host or Store combination comes from the one
 support table (`layerfs-platform` `support.rs`), which consumes the shared permanent restrictions in
-`layerfs-sandbox-backend/src/platform_policy.rs` (also available without machine
+`layerfs-sandbox-backend/src/support/removed_platforms.rs` (also available without machine
 adapters); `SUPPORT.json` is generated
 from it and a test compares them.
 
@@ -94,13 +99,13 @@ from it and a test compares them.
 - A PostgreSQL password is never written into a record, log, trace or
   `Debug` output.
 - Stored and displayed values do not follow internal renames: the
-  `host_process` backend is stored and shown as `"native"` (#535 G6).
+  `Native` backend is stored and shown as `"native"` (#535 G6).
 
 Control follows the engine guide's
 [production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks](../engine/AGENTS.md#checks-and-completion), and the root guide's
 [rules you must not break](../AGENTS.md#rules-you-must-not-break). The unsafe
 allowance in control stays the one file
-the guard names: the Linux `local/os/linux/seccomp.rs` of
+the guard names: the Linux `backend/namespaces/seccomp.rs` of
 `layerfs-sandbox-backend`. The macOS process facts (`proc_pidinfo`) moved
 with `LocalProcess` to the bridge's audited `process/darwin.rs` (#112).

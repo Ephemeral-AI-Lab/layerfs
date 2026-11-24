@@ -38,7 +38,7 @@ pub enum Policy {
 }
 
 fn platform(name: &str) -> Result {
-    match layerfs_sandbox_backend::platform_policy::removed_reason(name) {
+    match layerfs_sandbox_backend::removed_platforms::removed_reason(name) {
         Some(reason) => Err(refused("Unsupported", reason)),
         None => Ok(()),
     }

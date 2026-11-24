@@ -30,13 +30,14 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # backend, layerfs-project#112, so the home and the drivers share it); the
 # Sandbox backend installs the namespaces command filter (two prctl calls,
 # D-8, after emptying the command's signal mask) and forks the helper and its
-# command into their cgroups (one clone3, #113) in local/os/linux/seccomp.rs. Their siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
+# command into their cgroups (one clone3, #113) in backend/namespaces/seccomp.rs.
+# Their siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
 # the bare word, so attr lines never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": ("src/encoding/codec.rs",),
     "layerfs-persistence": ("src/backend/sqlite/lifecycle/file_control.rs",),
     "layerfs-bridge": ("src/process/darwin.rs",),
-    "layerfs-sandbox-backend": ("src/local/os/linux/seccomp.rs",),
+    "layerfs-sandbox-backend": ("src/backend/namespaces/seccomp.rs",),
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",

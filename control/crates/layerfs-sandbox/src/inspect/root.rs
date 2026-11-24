@@ -28,7 +28,7 @@ use super::{process, roots};
 use crate::record::DaemonRecord;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_sandbox_backend::local::confined::{self, Refused, View};
+use layerfs_sandbox_backend::shared::confined::{self, Refused, View};
 use std::path::Path;
 
 /// The entries of a Sandbox's root that are the kernel's own.

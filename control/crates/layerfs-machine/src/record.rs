@@ -314,7 +314,7 @@ impl MachineRecord {
     /// (`firecracker`, `microsandbox`, `ssh`).
     pub fn removed(&self) -> Option<&'static str> {
         self.platform_name()
-            .and_then(layerfs_platform::platform_policy::removed_reason)
+            .and_then(layerfs_platform::removed_platforms::removed_reason)
     }
 
     /// The machine's state as its record says it ([`Self::status`]), the

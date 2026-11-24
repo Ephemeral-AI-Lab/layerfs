@@ -69,7 +69,7 @@ pub fn save_sandbox(
     let runtime = state.runtime()?;
     let daemon = match runtime {
         #[cfg(target_os = "macos")]
-        Sandbox::HostProcess(runtime) => {
+        Sandbox::Native(runtime) => {
             let record = runtime
                 .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
@@ -155,7 +155,7 @@ pub fn write_started(
 pub fn route(runtime: &Sandbox) -> &'static str {
     match runtime {
         #[cfg(target_os = "macos")]
-        Sandbox::HostProcess(_) => "nfs",
+        Sandbox::Native(_) => "nfs",
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(_) => "fuse",
     }

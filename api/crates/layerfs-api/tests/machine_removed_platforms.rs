@@ -6,7 +6,7 @@
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, write_record};
 use layerfs_bridge::control::SdkValue;
-use layerfs_sandbox_backend::platform_policy::removed_reason;
+use layerfs_sandbox_backend::removed_platforms::removed_reason;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {

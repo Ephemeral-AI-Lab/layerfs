@@ -22,7 +22,7 @@ pub(crate) const PROFILE: Profile = Profile {
 /// records (§13 O5).
 fn backend(host: HostOs) -> Option<Backend> {
     match host {
-        HostOs::Macos => Some(Backend::HostProcess),
+        HostOs::Macos => Some(Backend::Native),
         HostOs::Linux => Some(Backend::Namespaces),
         HostOs::Windows | HostOs::Other => None,
     }

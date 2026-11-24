@@ -7,7 +7,7 @@
 //! stays the Sandbox's scratch directory. A small shell script stands in for
 //! the daemon.
 #![cfg(target_os = "macos")]
-use layerfs_sandbox_backend::{host_process::Sandbox, local::Local, CommandIdentity, ExecRequest};
+use layerfs_sandbox_backend::{native::Sandbox, shared::Local, CommandIdentity, ExecRequest};
 use std::{
     ffi::OsString,
     fs,

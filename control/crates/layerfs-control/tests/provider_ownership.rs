@@ -63,7 +63,7 @@ use layerfs_bridge::{
 use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_sandbox::{ProviderCreate, SandboxApi, SandboxPhase};
 use layerfs_sandbox_backend::{
-    host_process::HostProcessProvider, local::LocalPaths, CommandIdentity, LaunchRequest,
+    native::NativeProvider, shared::LocalPaths, CommandIdentity, LaunchRequest,
     ProviderLaunchOptions, Runtime,
 };
 use std::{
@@ -81,7 +81,7 @@ fn native_create(
     let root = fixture.directory.join("runtime");
     fs::create_dir_all(&root).unwrap();
     fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
-    let provider = HostProcessProvider::new(&root).unwrap();
+    let provider = NativeProvider::new(&root).unwrap();
     let paths = provider.paths("one").unwrap();
     let metadata = fs::metadata(&root).unwrap();
     let identity = CommandIdentity {
@@ -132,7 +132,7 @@ fn native_create(
             },
         },
     };
-    let api = SandboxApi::with_runtime(Arc::new(Runtime::HostProcess(provider)));
+    let api = SandboxApi::with_runtime(Arc::new(Runtime::Native(provider)));
     (api, paths, request)
 }
 

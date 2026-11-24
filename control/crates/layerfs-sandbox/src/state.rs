@@ -131,7 +131,7 @@ pub fn machine_state(home: &Path, name: &str) -> Result<State, SdkRefusal> {
         Err(_) => return Ok(layerfs_machine::state::unreadable(name)),
     };
     let platform = record.platform_name().unwrap_or("");
-    let removed = layerfs_sandbox_backend::platform_policy::removed_reason(platform).is_some();
+    let removed = layerfs_sandbox_backend::removed_platforms::removed_reason(platform).is_some();
     Ok(record.status(removed, 0))
 }
 

@@ -3,7 +3,7 @@
 //! `exec` runs `bash -c <command>` as the Sandbox's command identity in the
 //! Workspace directory and returns the exit code and output when it ends; the
 //! daemon is not involved. A local Sandbox
-//! (`layerfs_sandbox_backend::Sandbox::HostProcess`) runs the same commands as
+//! (`layerfs_sandbox_backend::Sandbox::Native`) runs the same commands as
 //! processes of this kernel. Each command has an exec id, a stop handle and,
 //! on the side that keeps its Workspace's record, a record while it runs
 //! (`super::record`), through which another process cancels it.
@@ -47,7 +47,7 @@ pub struct Exec<'a> {
 /// `place`. Its home is the Sandbox's scratch directory, since the command
 /// identity has no account there; the caller's variables come after it,
 /// so a `HOME` of theirs wins. While this thread's steps are timed, so are
-/// the runtime's (`layerfs_sandbox_backend::steps`), and `command` is the
+/// the runtime's (`layerfs_sandbox_backend::trace`), and `command` is the
 /// whole run.
 fn run(
     state: &SandboxState,
@@ -58,7 +58,7 @@ fn run(
     let runtime = state.runtime()?;
     let stepped = layerfs_home::trace::stepping();
     if stepped {
-        layerfs_sandbox_backend::steps::begin();
+        layerfs_sandbox_backend::trace::begin();
     }
     let mut environment = vec![format!("HOME={}", crate::runtime::scratch(runtime))];
     environment.extend(env.iter().cloned());
@@ -70,7 +70,7 @@ fn run(
         slot,
     );
     if stepped {
-        for (name, took) in layerfs_sandbox_backend::steps::take() {
+        for (name, took) in layerfs_sandbox_backend::trace::take() {
             layerfs_home::trace::step_of(name, took);
         }
     }

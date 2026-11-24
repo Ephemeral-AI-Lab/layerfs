@@ -49,7 +49,7 @@ enum Binds {
 
 fn binds(backend: Backend) -> Binds {
     match backend {
-        Backend::HostProcess => Binds::Refused,
+        Backend::Native => Binds::Refused,
         Backend::Namespaces => Binds::Accepted,
     }
 }
@@ -61,7 +61,7 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
         gid: nix::unistd::Gid::effective().as_raw(),
     };
     match backend {
-        Backend::HostProcess => ProviderLaunchOptions::Local {
+        Backend::Native => ProviderLaunchOptions::Local {
             command_identity,
             environment: Vec::new(),
         },
@@ -86,7 +86,7 @@ fn record(backend: Backend) -> SandboxRecord {
         labels: Vec::new(),
     };
     match backend {
-        Backend::HostProcess => SandboxRecord::Local(local),
+        Backend::Native => SandboxRecord::Local(local),
         Backend::Namespaces => SandboxRecord::Namespaces(NamespaceRecord {
             local,
             image: image(),
@@ -98,7 +98,7 @@ fn record(backend: Backend) -> SandboxRecord {
 /// The backend a record names.
 fn record_backend(record: &SandboxRecord) -> Backend {
     match record {
-        SandboxRecord::Local(_) => Backend::HostProcess,
+        SandboxRecord::Local(_) => Backend::Native,
         SandboxRecord::Namespaces(_) => Backend::Namespaces,
     }
 }
@@ -109,8 +109,8 @@ fn record_backend(record: &SandboxRecord) -> Backend {
 fn runtime(backend: Backend, root: &Path) -> Option<Result<Runtime, RuntimeError>> {
     match backend {
         #[cfg(target_os = "macos")]
-        Backend::HostProcess => {
-            Some(layerfs_sandbox_backend::HostProcessProvider::new(root).map(Runtime::HostProcess))
+        Backend::Native => {
+            Some(layerfs_sandbox_backend::NativeProvider::new(root).map(Runtime::Native))
         }
         #[cfg(target_os = "linux")]
         Backend::Namespaces => {
@@ -132,7 +132,7 @@ enum Lifecycle {
 
 fn lifecycle(backend: Backend) -> Lifecycle {
     match backend {
-        Backend::HostProcess => Lifecycle::Runs,
+        Backend::Native => Lifecycle::Runs,
         Backend::Namespaces => Lifecycle::NeedsRoot,
     }
 }

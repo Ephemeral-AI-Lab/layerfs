@@ -12,7 +12,7 @@ host is touched, so remove a microsandbox VM yourself with
 `msb remove --force <vm>` and `msb volume remove <vm>-data`, and a
 firecracker microVM's files from its Lima host. See
 [machines](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh)
-and [removed platforms](../../architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
+and [removed platforms](../../architecture/control/machines/platforms.md#removed-platforms-removed_platformsrs).
 
 Part of the [2.0.0 manual](README.md). This page lists what is not built,
 what the code refuses as `Unsupported`, and what was not verified on branch

@@ -927,7 +927,7 @@ fn from_the_root_only_what_every_user_may_read_is_opened() {
     // this host has one at the top of `/`: listed with its type, never
     // entered, by its path or through a link
     let crossed = ["ext4", "xfs", "btrfs", "zfs", "f2fs", "overlay", "tmpfs"];
-    let table = layerfs_sandbox_backend::local::confined::mounts().unwrap();
+    let table = layerfs_sandbox_backend::shared::confined::mounts().unwrap();
     let mut tops = std::collections::BTreeMap::new();
     for mount in &table {
         tops.insert(mount.point.clone(), mount.fs.clone());

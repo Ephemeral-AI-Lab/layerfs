@@ -26,7 +26,7 @@ use std::path::PathBuf;
 /// the retired docker backend has no `runtime`).
 pub const LOCAL: &str = "local";
 /// A host-process Sandbox record's `runtime` (LAYERFS_SANDBOX=native; the
-/// `host_process` backend stores this word, G6): a local daemon serving
+/// `native` backend stores this word, G6): a local daemon serving
 /// loopback NFS on macOS. A runtime's name, not the machine `native`.
 pub const NATIVE: &str = "native";
 /// Why a native Sandbox does not start on Linux: its host-process pairing is
@@ -113,7 +113,7 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
     let Some(named) = named else {
         return Ok(implied.to_owned());
     };
-    if let Some(reason) = layerfs_sandbox_backend::platform_policy::removed_reason(named) {
+    if let Some(reason) = layerfs_sandbox_backend::removed_platforms::removed_reason(named) {
         return Err(refused("Unsupported", reason));
     }
     if !PLATFORMS.contains(&named) {
@@ -146,7 +146,7 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
 pub fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
         #[cfg(target_os = "macos")]
-        Sandbox::HostProcess(_) => NATIVE,
+        Sandbox::Native(_) => NATIVE,
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(_) => NAMESPACES,
     }

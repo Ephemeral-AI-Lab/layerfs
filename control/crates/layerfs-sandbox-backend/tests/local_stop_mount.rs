@@ -3,7 +3,7 @@
 //! disposable: this test stops its daemon and force-detaches its mounts.
 #![cfg(target_os = "macos")]
 use layerfs_bridge::process::LocalProcess;
-use layerfs_sandbox_backend::{host_process::Sandbox, ContainerId};
+use layerfs_sandbox_backend::{native::Sandbox, ContainerId};
 use std::{path::PathBuf, process::Command};
 
 #[test]

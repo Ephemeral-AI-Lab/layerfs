@@ -279,7 +279,7 @@ fn native_runtime(
     root: &str,
     _: crate::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox_backend::RuntimeError> {
-    layerfs_sandbox_backend::host_process::HostProcessProvider::new(root).map(Runtime::HostProcess)
+    layerfs_sandbox_backend::native::NativeProvider::new(root).map(Runtime::Native)
 }
 
 #[cfg(target_os = "linux")]

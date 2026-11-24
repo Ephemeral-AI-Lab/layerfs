@@ -24,7 +24,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::with_field;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_sandbox_backend::local::confined::View;
+use layerfs_sandbox_backend::shared::confined::View;
 use std::path::{Path, PathBuf};
 
 /// The call this view serves.
