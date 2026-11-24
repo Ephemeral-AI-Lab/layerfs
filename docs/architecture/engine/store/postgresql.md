@@ -319,14 +319,29 @@ paths that can observe a compaction swap (spec §5.2, §10):
   `AccessShareLock` the transaction takes on `history_meta` holds until
   `COMMIT`: a swap that starts after this point meets `LOCK TABLE ...
   ACCESS EXCLUSIVE NOWAIT` and abandons, and one that already installed
-  `G + 1` makes the transaction `StaleStore`.
+  `G + 1` makes the transaction `StaleStore`. The REPEATABLE READ ones
+  (`Read`, `Snapshot`) first take `LOCK TABLE <schema>.history_meta IN
+  ACCESS SHARE MODE` in the same batch. PostgreSQL fixes a REPEATABLE READ
+  snapshot when the first statement that needs one is analysed, before that
+  statement waits for its `AccessShareLock`; a read that queued behind a
+  swap's ACCESS EXCLUSIVE lock would otherwise pass the fence at `G` from a
+  snapshot older than the swap's `G + 1` update and then resolve the
+  installed tables, so a compacted-away object would read as absent instead
+  of `StaleStore`. `LOCK TABLE` takes no snapshot and is allowed in a READ
+  ONLY transaction, so the fence read's snapshot follows the swap (#776).
+  The READ COMMITTED ones (`Write`, `Stage`, `Publish`) take a new snapshot
+  per statement and need no lock first.
 - **Autocommit reads** (`Statement`, `Immutable`) join
   `catalog_incarnation` as the trailing column of the read's one statement,
   under a schema-qualified `history_meta` one-row subquery; the trailing
   column is checked and removed before the row reaches the decoder. A read
   that finds no row needs no generation to answer: the swap retains exactly
   the live set (`live_heads_digest` is unchanged), so an absence at `G` is an
-  absence at `G + 1`.
+  absence at `G + 1`. Its snapshot is taken for its one statement; this
+  relies on the server's default isolation being READ COMMITTED, as it is
+  unless the database or role sets `default_transaction_isolation` higher
+  (an autocommit statement under REPEATABLE READ would have the same
+  snapshot-before-lock window).
 - A session whose open has not set a generation yet (the open check's own
   `Statement` reads) is unfenced, and the Store diagnostic reads through
   `run_observed`: it must be able to read a Store whose authority changed and
