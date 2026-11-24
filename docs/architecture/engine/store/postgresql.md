@@ -334,7 +334,11 @@ paths that can observe a compaction swap (spec §5.2, §10):
   `StaleStore`.
 
 A mismatch is `StaleStore`: nothing was written and the caller reopens the
-Store.
+Store. A transaction whose check reads no generation (no `history_meta` row,
+or a value that does not parse) is `Integrity`, and it is rolled back first
+like a mismatch: a `Write` holds the lane row from its `BEGIN`, so leaving it
+open on a pooled connection would hold every later writer (#776 P7). A
+rollback that fails quarantines the connection and answers `Unknown`.
 
 ```text
  PostgresStorage::publish(batch)                 one Publish transaction

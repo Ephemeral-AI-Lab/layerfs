@@ -117,7 +117,7 @@ Unmount { token, discard }
      stalled at Join -> one abort write, drain again
      still stopped ---> Retained(Join | Abort | ...)
   job: kernel_revoke(mount) --- fails ------------> Retained(Revoke)
-  BoundWorkspace::close(): overlay, Store reader
+  BoundWorkspace::close(): overlay, Store reader, mount intent
      fails after detach --------------------------> Retained(Close)
   depart: entry removed; retire_namespace:
      checked overlay close, file unlinked --------> reply Unmounted
@@ -129,6 +129,7 @@ Unmount { token, discard }
 | Only a known detach is terminal; after it every stop keeps the exact owner | same |
 | A connection that outlived its mount (another mount namespace holds a copy) is ended by the same one abort write a forced unmount makes | same |
 | An Unattached Workspace's Unmount is the logical Close alone | [`unmount.rs`](../../../../engine/crates/layerfs-daemon/src/control/unmount.rs) |
+| Once the overlay owner has closed, the mount intent is released (or marked uncertain) even when the Store reader's close then fails, and the reader's failure is the answer: no later unmount passes the closed owner again, so nothing else would release the row (#776 G5) | [`store/operation.rs`](../../../../engine/crates/layerfs-store-service/src/store/operation.rs) |
 
 ### Dirty check
 

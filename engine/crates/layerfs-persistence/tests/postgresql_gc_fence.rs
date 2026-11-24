@@ -1224,3 +1224,49 @@ fn a_release_behind_a_concurrent_writer_is_stamped_after_its_row() {
     assert!(second.next.is_none());
     assert!(waited, "the release waited for the writer's lane row");
 }
+
+/// #776 P7: a write whose generation fence cannot be read (here the
+/// `history_meta` row is gone) is refused, and the transaction its `BEGIN`
+/// opened ends with it: a write that left it open on a live pooled
+/// connection kept the lane row locked and every later writer waiting.
+#[test]
+fn an_unreadable_generation_fence_ends_its_transaction() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_unreadable");
+    let binding = binding("fence_unreadable");
+    let handles = schema.create(&binding, CURSOR);
+    let (_shop, work, _genesis) = project(&handles.history, 1);
+    let first = commit(&handles.history, work, 5);
+    let request = commit_request(&handles.history, work, root(6));
+    let mut admin = schema.admin();
+    admin
+        .batch_execute(
+            "CREATE TABLE lfs_saved_meta AS SELECT * FROM history_meta; \
+             DELETE FROM history_meta",
+        )
+        .unwrap();
+    let refused = handles.history.commit_branch(&request).unwrap_err();
+    admin
+        .batch_execute(
+            "INSERT INTO history_meta SELECT * FROM lfs_saved_meta; DROP TABLE lfs_saved_meta",
+        )
+        .unwrap();
+    assert!(matches!(refused, HistoryError::Integrity(_)), "{refused:?}");
+    let fence_read = format!("%{}.history_meta%", schema.selection().schema);
+    let idle: i64 = admin
+        .query_one(
+            "SELECT count(*) FROM pg_stat_activity \
+              WHERE datname=current_database() AND state LIKE 'idle in transaction%' \
+                AND query LIKE $1",
+            &[&fence_read],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(idle, 0, "the refused write left its transaction open");
+    admin
+        .batch_execute("BEGIN; SELECT 1 FROM store_lane WHERE id=1 FOR UPDATE NOWAIT; ROLLBACK")
+        .expect("the lane row is free for the next writer");
+    let snapshot = handles.history.branch_snapshot(work).unwrap().unwrap();
+    assert_eq!(snapshot.branch.head_commit, Some(first.id));
+    let _next = commit(&handles.history, work, 7);
+}

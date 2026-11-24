@@ -479,7 +479,12 @@ malformed one decodes as no token: missing evidence is no proof, never death
   provably dead, certain op is adopted or ignored per its `kind`.
 - **Place authority.** The owner evidence applies first, exactly as without
   place evidence: an owner this process proves gone (another boot of a local
-  Store, a vanished or reused pid in this namespace) is dead. An intent that
+  Store, a vanished or reused pid in this namespace) is dead. Evidence the
+  writer could not read is recorded as such (a start of `0`, a boot of
+  `unknown`; earlier builds wrote a zero boot) and proves nothing: a zero
+  boot is neither this boot nor an earlier one, and a running pid with a
+  zero start is not proof of reuse, while an absent or ended pid in this
+  namespace still is (#776 G2). An intent that
   also records a machine incarnation or a Sandbox generation is then compared
   with the control-built bounded `PlaceView` of the caller's home (the current
   `MachineRecord.incarnation`, `SandboxRecord.generation`, and the
@@ -566,7 +571,12 @@ malformed one decodes as no token: missing evidence is no proof, never death
   state) on every route, with the `liveness` admission would give each holder
   now (owner check, then the calling home's place view, sent to a worker with
   the call) and `safe` (not `live`); `settle` refuses a holder still `live`
-  unless forced. The doctor's read-only `store.diagnose` forwards only the
+  unless forced. Besides the Branch's mount rows it lists the Init, merge
+  and removal rows at the Branch or its project, each with its `kind`: they
+  record no place, so one whose owner ran in another PID namespace or on
+  another host is cleared only here, by a forced settle and a release
+  (#776 G1); `settle_legacy` marks mount rows only. The doctor's read-only
+  `store.diagnose` forwards only the
   typed holder view from a worker (owner, place, generation and state), not
   `liveness` or `safe`. The Store-wide compact barrier is retained: a live or
   uncertain holder still refuses `store.compact`; an owner the owner evidence
@@ -1014,7 +1024,13 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
     `(slot, stamp)` with `stamp <= mark_stamp`; reduce
     `store_totals` by those totals in the **same transaction that settles the
     op**, or gate on `totals_applied`; never re-sum. Assert the new tables'
-    sums equal old totals minus dead totals. The op phase is `cleanup`; a crash resumes the
+    sums equal old totals minus dead totals. The settle transaction reads
+    `store_totals` and the four Store-wide sums in one statement (one
+    snapshot, so a publication is in both or neither) without locking the
+    row, asserts them, and takes the row lock last with a relative
+    `UPDATE`, so publications are not held behind the scans (#776 P3); the
+    retained-set check reads `count(*)` and `count(DISTINCT object_id)` in one
+    statement too (#776 P4). The op phase is `cleanup`; a crash resumes the
     persisted set — there is no "re-derive from the current Store" path. The
     Store is usable at `G + 1` throughout; the full doctor runs after cleanup.
 
@@ -1033,7 +1049,12 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
   a.datname = current_database() AND a.pid <> pg_backend_pid()`, checking the
   boolean and polling until the pair is gone, then reading the incarnation.
   Terminating another role's backend needs `pg_signal_backend` or membership;
-  the precheck reports `Unsupported` when neither is available.
+  the precheck reports `Unsupported` when neither is available. A round that
+  fails **definitely** in Phase A or B (a refusal, or a swap that rolled back)
+  clears `pid`, `backend_start` and `usename` from `gc_op` before it releases
+  the exclusive key, keeping the op and its scratch for the next attempt's
+  cleanup: a live, healthy backend left named there would be judged a lost
+  `COMMIT` and terminated (#776 P1). An uncertain outcome keeps the owner.
 - **Lock time:** `ACCESS EXCLUSIVE` is held for the swap only, seconds rather
   than the length of the copy or the cleanup. No long transaction holds back
   vacuum for other Stores in the same database.
