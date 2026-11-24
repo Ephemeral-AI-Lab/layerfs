@@ -176,7 +176,6 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     let result = std::process::Command::new(&cli)
         .args(["sandbox", "create", "b6-store/demo", "b6-gone", "native"])
         .env("LAYERFS_HOME", &source)
-        .env("LAYERFS_CONSTRUCTION_WORKERS", "1")
         .output()
         .unwrap();
     assert!(
@@ -187,7 +186,6 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     let closed = std::process::Command::new(&cli)
         .args(["sandbox", "remove", "b6-gone"])
         .env("LAYERFS_HOME", &source)
-        .env("LAYERFS_CONSTRUCTION_WORKERS", "1")
         .output()
         .unwrap();
     assert!(

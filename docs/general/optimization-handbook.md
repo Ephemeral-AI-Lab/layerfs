@@ -326,7 +326,6 @@ The largest known cost.
   owner.
 - **Do not.** Walk the base; add a second construction producer; change the
   canonical format to carry a parent pointer without a ruling.
-  `LAYERFS_CONSTRUCTION_WORKERS=1`.
 - **Proofs.** `captured_namespace`, `captured_commit`, `product_commit`,
   `mounted_commit`, `mounted_install`, `mounted_commit_failures`,
   `product_commit_cost`, and the Init proofs when shared Content code changes.

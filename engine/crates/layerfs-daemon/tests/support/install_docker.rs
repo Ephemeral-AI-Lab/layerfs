@@ -64,8 +64,6 @@ impl Daemon {
                 "--name",
                 &name,
                 "-e",
-                "LAYERFS_CONSTRUCTION_WORKERS=1",
-                "-e",
                 "LAYERFS_INSTALL_CHILD=1",
                 "-v",
                 &repository,

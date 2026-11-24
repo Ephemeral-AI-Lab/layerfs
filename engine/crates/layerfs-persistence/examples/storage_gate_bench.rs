@@ -7,7 +7,6 @@
 //! cargo +1.85.1 build --locked -j 6 --release -p layerfs-persistence --example storage_gate_bench
 //! BIN=target/release/examples/storage_gate_bench
 //! U="host=127.0.0.1 port=55758 user=postgres dbname=postgres sslmode=disable"
-//! export LAYERFS_CONSTRUCTION_WORKERS=1
 //! ```
 //!
 //! Server: the dedicated bench container `lfs-bench-758-pg` (published port
