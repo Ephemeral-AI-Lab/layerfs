@@ -238,23 +238,29 @@ fn a_forget_whose_worker_keeps_its_record_writes_no_tombstone() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
-/// A machine whose VM a live read found missing took the Sandbox's runtime
-/// with it: its tombstone is written. A machine record with no 2.0 name
-/// says nothing of what runs there: none is.
+/// A machine whose VM a live read found missing does not prove the
+/// Sandbox's runtime gone: a provider listing can miss a VM that comes back,
+/// its daemon still running. Its records go with no tombstone, and `left`
+/// names the repair that ends its mount intents. A machine record with no
+/// 2.0 name says nothing of what runs there: none is written either.
+/// (Before the #787 review a missing VM wrote the tombstone.)
 #[test]
-fn a_gone_vm_writes_the_tombstone_and_a_nameless_machine_does_not() {
+fn a_missing_vm_and_a_nameless_machine_write_no_tombstone() {
     let home = new_home("vm");
     on_dev(&home, &[("reason", t("missing"))]);
     sandbox(&home, "s1", "dev", docker_daemon(), &[]);
     let left = gone_left(removed(&home, "s1", false));
     assert!(
-        left.iter().any(|said| said.contains("VM is gone")),
+        left.iter().any(|said| said.contains("VM was found missing")
+            && said.contains("no retired tombstone was written")
+            && said.contains("layerfs store repair-mount-holders shop/api <branch> list")),
         "{left:?}"
     );
-    let tombstone = read_record(&paths::sandbox_tombstone(&home, "dev", "s1"))
-        .unwrap()
-        .expect("the gone VM's tombstone");
-    assert_eq!(tombstone.get_text("generation"), Some(GENERATION));
+    assert!(!paths::sandbox_dir(&home, "s1").exists());
+    assert!(
+        !tombstoned(&home, "dev", "s1"),
+        "a VM recorded missing may still run the daemon: no tombstone"
+    );
 
     on_dev(&home, &[("vm_name", SdkValue::Null)]);
     sandbox(&home, "s2", "dev", docker_daemon(), &[]);
@@ -265,6 +271,40 @@ fn a_gone_vm_writes_the_tombstone_and_a_nameless_machine_does_not() {
     );
     assert!(!paths::sandbox_dir(&home, "s2").exists());
     assert!(!tombstoned(&home, "dev", "s2"));
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A machine recorded stopped, whose forced `machine.stop` ended the
+/// Sandbox's runtime (`machine_stopped`): its daemon ended with the VM, so
+/// the remove writes the tombstone of the generation it recorded.
+#[test]
+fn a_machine_recorded_stopped_writes_the_tombstone() {
+    let home = new_home("stopped");
+    on_dev(&home, &[("state", t("stopped"))]);
+    let record = map(vec![
+        ("name", t("s1")),
+        ("id", t("s1")),
+        ("project", t("shop/api")),
+        ("machine", t("dev")),
+        ("generation", t(GENERATION)),
+        ("platform", t("lima")),
+        ("runtime", t("namespaces")),
+        ("backend", t("namespaces")),
+        ("machine_stopped", SdkValue::Bool(true)),
+        ("machine_stop_unknown", SdkValue::Bool(false)),
+    ]);
+    write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
+    let left = gone_left(removed(&home, "s1", false));
+    assert!(
+        left.iter()
+            .any(|said| said.contains("machine dev is stopped")),
+        "{left:?}"
+    );
+    assert!(!paths::sandbox_dir(&home, "s1").exists());
+    let tombstone = read_record(&paths::sandbox_tombstone(&home, "dev", "s1"))
+        .unwrap()
+        .expect("the stopped machine's tombstone");
+    assert_eq!(tombstone.get_text("generation"), Some(GENERATION));
     std::fs::remove_dir_all(home).unwrap();
 }
 

@@ -329,7 +329,11 @@ read (a field a 2.0 record always has missing or of another shape, or a
 native record on Linux; every other call refuses it with the fix
 `layerfs sandbox remove <sandbox>`; RV3 FAIL 2, 3), and a Sandbox on a
 machine whose record has no 2.0 name, whose worker is not asked either
-(RV3 FAIL 1). A lost answer keeps the record with the `op` uncertain
+(RV3 FAIL 1). So does a Sandbox on a machine whose VM a live read found
+`missing`, its worker not asked: no retired tombstone is written, since a VM
+a provider did not list may come back with its daemon running, and `left`
+names `layerfs store repair-mount-holders <project> <branch> list` for the
+mount intents it held (#787 review). A lost answer keeps the record with the `op` uncertain
 (`broken` `unresolved`) until another `remove`; any other refusal leaves the
 Sandbox as it was ([`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs)).
 It was `sandbox.close`, removed with no alias.
