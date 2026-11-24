@@ -3,13 +3,14 @@
 //! those reads from [`crate::inventory`]. The other machine calls are
 //! `layerfs-machine`'s own.
 use crate::inventory;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_machine::worker::Endpoint;
 use layerfs_machine::{MachineCreate, MachineUpdate, Related};
 use std::path::Path;
+use std::time::Duration;
 
 /// What a machine holds, read from the Store and Sandbox records.
 pub const RELATED: Related = Related {
@@ -51,9 +52,98 @@ pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
     layerfs_machine::get(home, name, live, RELATED)
 }
 
-/// `machine.start`, with its phases on `events`.
+/// `machine.start`, with its phases on `events`. The start stops a previous
+/// worker and confirms it gone (the machine crate does), persists the ordered
+/// incarnation in the home `MachineRecord` before the worker serves, and then
+/// settles the intents a previous incarnation left in each Store on that
+/// machine (spec §3.1). A start that cannot confirm the old worker or record
+/// the token fails before any settle; a Store the reconcile cannot reach is
+/// left for the next start.
 pub fn start(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
-    layerfs_machine::start(home, name, RELATED, events)
+    let started = layerfs_machine::start(home, name, RELATED, events)?;
+    let incarnation = record_start(home, name)?;
+    let _ = reconcile_stores(home, name, incarnation.as_deref());
+    Ok(started)
+}
+
+/// The ordered incarnation of the start that just happened: the kernel boot
+/// on `native` (stable across starts on one boot, changed by a reboot), or the
+/// value the machine start persisted in the home `MachineRecord` before it
+/// launched the worker. Native records it here; a worker's start records it
+/// before serving and fails if it cannot, so this only reads it back. No
+/// record means no token and no reconcile: an older worker's intents stay
+/// conservative live rather than being settled by a guessed value.
+fn record_start(home: &Path, machine: &MachineName) -> Result<Option<String>, SdkRefusal> {
+    if layerfs_machine::runs_here(home, machine.as_str())? {
+        let Some(incarnation) =
+            layerfs_home::process::me().map(|(_, boot)| format!("boot:{boot:032x}"))
+        else {
+            return Ok(None);
+        };
+        let _lock = layerfs_home::home::lock::take(home)?;
+        let record = layerfs_machine::record::MachineRecord::of(home, machine.as_str())?;
+        record.with_incarnation(&incarnation).write(home)?;
+        return Ok(Some(incarnation));
+    }
+    let record = layerfs_machine::record::MachineRecord::of(home, machine.as_str())?;
+    let Some(recorded) = record.incarnation().map(str::to_owned) else {
+        return Ok(None);
+    };
+    // Reconcile only with the token the worker is actually serving: a home
+    // restore can bring back an older record than the running worker, and a
+    // reconcile over that older value must not settle a live owner's intents.
+    match worker_incarnation(home, machine.as_str())? {
+        Some(reported) if reported == recorded => Ok(Some(recorded)),
+        _ => Ok(None),
+    }
+}
+
+/// The incarnation the machine's running worker reports, or `None` when its
+/// calls run in this process (a `native` machine has no worker). Reads the
+/// endpoint the start recorded and asks it once; it never starts a machine, so
+/// a failed read cannot restart one.
+fn worker_incarnation(home: &Path, machine: &str) -> Result<Option<String>, SdkRefusal> {
+    if layerfs_machine::runs_here(home, machine)? {
+        return Ok(None);
+    }
+    let Some(endpoint) = layerfs_machine::worker_endpoint(home, machine)? else {
+        return Ok(None);
+    };
+    // A bounded read, not a retry: the machine is already up, so a worker
+    // that does not answer now leaves the reconcile for the next start.
+    let budget = layerfs_machine::worker::Budget {
+        connect: Duration::from_millis(500),
+        hello: Duration::from_millis(500),
+        answer: Duration::from_secs(1),
+    };
+    let request = layerfs_machine::worker::request("worker.ping", SdkValue::Null)?;
+    let answer =
+        match layerfs_machine::worker::send_within(&endpoint, "worker.ping", &request, budget) {
+            Ok(Ok(answer)) => answer,
+            _ => return Ok(None),
+        };
+    Ok(answer.get_text("incarnation").map(str::to_owned))
+}
+
+/// Settles the mount intents a previous worker incarnation left in each Store
+/// on `machine`, with the incarnation this start recorded. Never a live or
+/// uncertain owner: the Store-side reconcile applies the same rule admission
+/// does. A start that could not read or verify the incarnation skips the
+/// reconcile.
+fn reconcile_stores(
+    home: &Path,
+    machine: &MachineName,
+    incarnation: Option<&str>,
+) -> Result<(), SdkRefusal> {
+    let Some(incarnation) = incarnation else {
+        return Ok(());
+    };
+    let stores = inventory::stores_on(home, machine.as_str())?;
+    for store in stores {
+        let _ =
+            layerfs_store::service::reconcile_machine(home, &store, machine.as_str(), incarnation);
+    }
+    Ok(())
 }
 
 /// The worker of machine `name`, started if it does not answer; `None`

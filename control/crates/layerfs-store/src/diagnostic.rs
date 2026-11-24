@@ -1,6 +1,7 @@
 //! Observational Store engine entry points, without leases or writable opens.
 use crate::{identity::Identity, record::StoreRecord};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 /// The project id a project audit takes.
 pub use layerfs_history::LayerStackId;
 use layerfs_home::outcome::refused;
@@ -241,4 +242,126 @@ pub fn postgresql_project(
     open_admitted(&selection, identity, options, &mut |_| {})?
         .diagnose_project(stack, options, observer, progress)
         .map_err(|_| refused("Unavailable", "the project's data was not read to the end; credentials and driver error text omitted"))
+}
+
+/// A bounded diagnostic result suitable for forwarding from a worker.
+fn mount_rows(rows: Vec<layerfs_persistence::diagnostic::MountHolder>) -> SdkValue {
+    let text = |s: Option<String>| s.map_or(SdkValue::Null, SdkValue::text);
+    SdkValue::List(
+        rows.into_iter()
+            .map(|r| {
+                SdkValue::map([
+                    ("operation", SdkValue::text(hex(&r.operation))),
+                    ("scope_id", SdkValue::text(hex(&r.scope))),
+                    ("workspace", text(r.workspace)),
+                    ("sandbox", text(r.sandbox)),
+                    ("machine", text(r.machine)),
+                    ("project", text(r.project)),
+                    ("branch", text(r.branch)),
+                    ("owner_runtime", text(r.owner_runtime)),
+                    ("owner_boot", text(r.owner_boot)),
+                    ("machine_incarnation", text(r.machine_incarnation)),
+                    ("sandbox_generation", text(r.sandbox_generation)),
+                    (
+                        "lease_expires_ms",
+                        r.lease_expires_ms.map_or(SdkValue::Null, SdkValue::Int),
+                    ),
+                    (
+                        "state",
+                        SdkValue::text(if r.uncertain { "uncertain" } else { "live" }),
+                    ),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// One bounded page of retained `done` operator-audit rows of the SQLite
+/// Store at `path`, read on a diagnostic open. It changes no row and never
+/// releases an admission; the live holder view filters these rows out.
+pub fn done_audit(
+    path: &Path,
+    identity: &Identity,
+    page: u32,
+    limit: u32,
+) -> Result<SdkValue, SdkRefusal> {
+    layerfs_store_service::kernel_guard::check(path)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
+    let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
+        path,
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map_err(|error| {
+        refused(
+            "Unavailable",
+            format!("diagnostic read-only Store open failed: {error}"),
+        )
+    })?;
+    let audit = handles
+        .diagnostic_done_audit(page, limit)
+        .map_err(|error| {
+            refused(
+                "Unavailable",
+                format!("the retained done audit could not be read: {error}"),
+            )
+        })?;
+    let text = |s: Option<String>| s.map_or(SdkValue::Null, SdkValue::text);
+    Ok(SdkValue::map([
+        (
+            "items",
+            SdkValue::List(
+                audit
+                    .items
+                    .into_iter()
+                    .map(|row| {
+                        SdkValue::map([
+                            ("op", SdkValue::text(hex(&row.operation))),
+                            ("kind", SdkValue::text(&row.kind)),
+                            ("scope_kind", SdkValue::text(&row.scope_kind)),
+                            ("scope_id", SdkValue::text(hex(&row.scope))),
+                            ("project", text(row.project)),
+                            ("branch", text(row.branch)),
+                            ("machine", text(row.machine)),
+                            ("sandbox", text(row.sandbox)),
+                            ("phase", text(row.phase)),
+                            ("evidence", text(row.evidence)),
+                            ("updated_ms", SdkValue::Int(row.updated_ms)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        ("page", SdkValue::Int(i64::from(audit.page))),
+        ("limit", SdkValue::Int(i64::from(audit.limit))),
+        ("has_more", SdkValue::Bool(audit.has_more)),
+    ]))
+}
+
+/// Lists the durable mount admissions of the SQLite Store at `path`, read on
+/// a diagnostic open. Missing local records are reported by the doctor; this
+/// function never releases an admission.
+pub fn mount_holders(path: &Path, identity: &Identity) -> Result<SdkValue, SdkRefusal> {
+    layerfs_store_service::kernel_guard::check(path)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
+    let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
+        path,
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map_err(|error| {
+        refused(
+            "Unavailable",
+            format!("diagnostic read-only Store open failed: {error}"),
+        )
+    })?;
+    handles
+        .diagnostic_mounts(None)
+        .map(mount_rows)
+        .map_err(|error| {
+            refused(
+                "Unavailable",
+                format!("mount admissions could not be read: {error}"),
+            )
+        })
 }

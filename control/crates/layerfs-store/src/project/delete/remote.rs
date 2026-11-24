@@ -8,6 +8,24 @@ pub(super) struct Remote {
     pub(super) store: String,
     pub(super) project: String,
     pub(super) store_record: SdkValue,
+    /// The bounded places the caller's home can speak for, read once for the
+    /// remove. The worker installs it around each admission; a worker whose
+    /// home is not the caller's stays conservative live.
+    pub(super) place: Option<SdkValue>,
+}
+
+/// Adds the bounded place view to a worker frame. A frame that is not a map
+/// is returned unchanged: the worker then reads no place.
+fn with_place(frame: SdkValue, place: Option<&SdkValue>) -> SdkValue {
+    match frame {
+        SdkValue::Map(mut fields) => {
+            if let Some(place) = place {
+                fields.push(("place_view".to_owned(), place.clone()));
+            }
+            SdkValue::Map(fields)
+        }
+        other => other,
+    }
 }
 
 impl Effects for Remote {
@@ -21,10 +39,11 @@ impl Effects for Remote {
             project: Some(project.to_owned()),
             store_record: Some(self.store_record.clone()),
         };
-        let answer = match self
-            .worker
-            .call("project.delete.admit", frame.encode(), &mut |_| {})
-        {
+        let answer = match self.worker.call(
+            "project.delete.admit",
+            with_place(frame.encode(), self.place.as_ref()),
+            &mut |_| {},
+        ) {
             Ok(answer) => answer,
             Err(refusal) => {
                 // The request went out, so the worker may have registered the
@@ -84,7 +103,11 @@ impl Effects for Remote {
         };
         let answer = self
             .worker
-            .call("project.delete", frame.encode(), &mut |_| {})
+            .call(
+                "project.delete",
+                with_place(frame.encode(), self.place.as_ref()),
+                &mut |_| {},
+            )
             .map_err(|refusal| {
                 crate::unknown::named_unknown(
                     refusal,

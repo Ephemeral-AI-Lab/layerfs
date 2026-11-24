@@ -10,7 +10,7 @@ pub(crate) mod worker;
 pub(crate) use calls::with_worker;
 pub use calls::{
     cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
-    loopback_hint, name_limit, provider_within, reach, remove, start, status, status_within, stop,
-    stop_force, worker_port, State, Status,
+    loopback_hint, name_limit, provider_state, provider_within, reach, remove, start, status,
+    status_within, stop, stop_force, worker_port, State, Status,
 };
 pub use tool::find_tool;

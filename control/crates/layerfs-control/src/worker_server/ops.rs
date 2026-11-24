@@ -91,6 +91,9 @@ pub(super) fn run(
                 ("kind", SdkValue::text("worker")),
                 ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
                 ("pid", SdkValue::Int(i64::from(std::process::id()))),
+                // the incarnation the host's start reconcile records, so a
+                // mount this worker places is not mistaken for an old one
+                ("incarnation", SdkValue::text(&server.incarnation)),
             ];
             if args.get("capacity") == Some(&SdkValue::Bool(true)) {
                 let available = layerfs_home::home::filesystem_available(root)
@@ -135,7 +138,156 @@ pub(super) fn run(
                 store_path: Some(file.display().to_string()),
                 ..call.open()
             };
-            layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                call.fields.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
+            })
+        }
+        // settles the intents a previous worker incarnation left in a Store
+        // under this worker's root (2.1, worker start): `{ store,
+        // store_record, machine, incarnation }`. The host recorded the
+        // ordered incarnation in the home MachineRecord before sending this;
+        // an uncertain owner is never settled.
+        "store.reconcile" => {
+            let store = args
+                .get_text("store")
+                .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its Store"))?
+                .to_owned();
+            layerfs_home::names::StoreName::parse(&store)?;
+            let machine = args
+                .get_text("machine")
+                .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its machine"))?
+                .to_owned();
+            let incarnation = args
+                .get_text("incarnation")
+                .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its incarnation"))?
+                .to_owned();
+            let file = layerfs_home::home::paths::store_file(root, &store);
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store),
+                project: None,
+                store_path: Some(file.display().to_string()),
+                store_record: args.get("store_record").cloned(),
+                postgresql: None,
+            };
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                layerfs_store::service::with_service(&open, |service| {
+                    layerfs_store_service::history::admission::reconcile_machine(
+                        service.store.history(),
+                        &machine,
+                        &incarnation,
+                    )
+                    .map(|reconcile| {
+                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                    })
+                    .map_err(layerfs_store_service::history::lookup::history)
+                })
+            })
+        }
+        // the operator's repair of one Branch's mount holders on the Store
+        // under this worker's root: `{ store, store_record, project, branch,
+        // action, op?, legacy, operator? }`. Preview changes no intent: it
+        // lists the typed holders and the call log records the read.
+        // settle/release/settle_legacy act on one explicit op or the legacy
+        // rows; release retains the row as the durable done audit, and the
+        // call log records every action.
+        "store.repair" => {
+            let store = args
+                .get_text("store")
+                .ok_or_else(|| refused("InvalidInput", "a Store repair names its Store"))?
+                .to_owned();
+            layerfs_home::names::StoreName::parse(&store)?;
+            let project = args
+                .get_text("project")
+                .ok_or_else(|| refused("InvalidInput", "a Store repair names its project"))?;
+            let branch = args
+                .get_text("branch")
+                .ok_or_else(|| refused("InvalidInput", "a Store repair names its Branch"))?;
+            let action = args
+                .get_text("action")
+                .ok_or_else(|| refused("InvalidInput", "a Store repair names its action"))?;
+            let op = match args.get_text("op") {
+                None | Some("") => None,
+                Some(text) => Some(
+                    layerfs_bridge::sdk_values::unhex(text)
+                        .and_then(|bytes| bytes.try_into().ok())
+                        .ok_or_else(|| refused("InvalidInput", "op must be 16 bytes of hex"))?,
+                ),
+            };
+            let legacy = matches!(args.get("legacy"), Some(SdkValue::Bool(true)));
+            let operator = args.get_text("operator").unwrap_or("");
+            let page = args
+                .get_int("page")
+                .and_then(|page| u32::try_from(page).ok())
+                .unwrap_or(0);
+            let limit = args
+                .get_int("limit")
+                .and_then(|limit| u32::try_from(limit).ok())
+                .unwrap_or(100);
+            let file = layerfs_home::home::paths::store_file(root, &store);
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store),
+                project: None,
+                store_path: Some(file.display().to_string()),
+                store_record: args.get("store_record").cloned(),
+                postgresql: None,
+            };
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                layerfs_store::service::repair_mount_holders_at(
+                    &open, project, branch, action, op, legacy, operator, page, limit,
+                )
+            })
+        }
+        // deletes exactly the retained `done` rows the caller exported from
+        // this Store's audit: `{ store, store_record, ops }`, each op 16 bytes
+        // of hex. A row must still be in state `done`, so a live intent is
+        // never removed. Answers `{ pruned }`.
+        "store.prune" => {
+            let store = args
+                .get_text("store")
+                .ok_or_else(|| refused("InvalidInput", "a Store prune names its Store"))?
+                .to_owned();
+            layerfs_home::names::StoreName::parse(&store)?;
+            let ops = match args.get("ops") {
+                Some(SdkValue::List(items)) => items
+                    .iter()
+                    .map(|item| {
+                        let SdkValue::Text(text) = item else {
+                            return Err(refused(
+                                "InvalidInput",
+                                "an exported audit op is not text",
+                            ));
+                        };
+                        layerfs_bridge::sdk_values::unhex(text)
+                            .and_then(|bytes| bytes.try_into().ok())
+                            .ok_or_else(|| {
+                                refused("InvalidInput", "an audit op must be 16 bytes of hex")
+                            })
+                    })
+                    .collect::<Result<Vec<[u8; 16]>, layerfs_bridge::control::SdkRefusal>>()?,
+                _ => return Err(refused("InvalidInput", "a Store prune names its ops")),
+            };
+            let file = layerfs_home::home::paths::store_file(root, &store);
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store),
+                project: None,
+                store_path: Some(file.display().to_string()),
+                store_record: args.get("store_record").cloned(),
+                postgresql: None,
+            };
+            layerfs_store::service::prune_done(&open, &ops)
+                .map(|pruned| SdkValue::map([("pruned", SdkValue::Int(pruned as i64))]))
         }
         // one step of a Store move, remove or create, or a live read's, on
         // this machine
@@ -180,19 +332,34 @@ pub(super) fn run(
         // deleted_ms?, project?, op_id?, pending_retry?, store_record? }`
         "project.delete" => {
             let root = home_of(Some(root))?;
-            delete_project(&root, &DeleteFrame::decode(&args)?)
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                delete_project(&root, &DeleteFrame::decode(&args)?)
+            })
         }
         // registers the caller's project-scope admission before its sidecar
         // and marker (2.0, T4.6): `{ store, stack_id, op_id, store_record? }`
         "project.delete.admit" => {
             let root = home_of(Some(root))?;
-            admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+            })
         }
         // releases the caller's project-scope admission after the marker
         // (2.0, T4.6): `{ store, op_id, store_record? }`
         "project.delete.release" => {
             let root = home_of(Some(root))?;
-            release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+            })
         }
         // removes only the worker's own entry for a `marked` sidecar whose
         // marker is already durable (2.0, T4.5b): `{ store, stack_id,

@@ -56,6 +56,17 @@ impl Placed {
 /// worker's root. `serve` starts the worker on the listener and root it is
 /// given. This thread works for the home afterwards (its id is sent).
 pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
+    placed_seeded(tag, |_| {}, serve)
+}
+
+/// [`placed`] with `seed`, which runs on the home after its Store `shop`
+/// exists and before its file moves under the worker's root: the place a
+/// test records the rows it wants the worker to find.
+pub fn placed_seeded(
+    tag: &str,
+    seed: impl FnOnce(&Path),
+    serve: impl FnOnce(TcpListener, PathBuf),
+) -> Placed {
     let scratch = scratch(tag);
     let (home, root) = (scratch.join("home"), scratch.join("data"));
     std::fs::create_dir_all(&home).unwrap();
@@ -80,6 +91,7 @@ pub fn placed(tag: &str, serve: impl FnOnce(TcpListener, PathBuf)) -> Placed {
     // made on native, then its file placed under the worker's root
     let shop = StoreName::parse("shop").unwrap();
     layerfs_store::sqlite::create::create(&home, &shop, None).unwrap();
+    seed(&home);
     let (from, to) = (
         paths::store_dir(&home, "shop"),
         paths::store_dir(&root, "shop"),

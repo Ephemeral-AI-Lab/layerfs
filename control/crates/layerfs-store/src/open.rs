@@ -48,7 +48,16 @@ static SETTLED: Condvar = Condvar::new();
 /// The Store stays open while it runs.
 pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> Outcome {
     let running = Running(enter(open, lease, 1)?);
-    let outcome = direct::call(op, open, args);
+    // The bounded places this home can speak for, read once for the call. The
+    // engine never opens a home record; a worker call installs its own view
+    // before this, and that view is kept.
+    let place = match layerfs_store_service::history::admission::has_place_view() {
+        true => None,
+        false => crate::place_view::from_open(open),
+    };
+    let outcome = layerfs_store_service::history::admission::with_place_view(place, || {
+        direct::call(op, open, args)
+    });
     drop(running);
     outcome
 }

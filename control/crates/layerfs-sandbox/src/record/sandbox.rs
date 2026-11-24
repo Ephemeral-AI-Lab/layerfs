@@ -42,6 +42,15 @@ pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
     entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
 
+/// One fresh, ordered Sandbox generation: a newer create compares greater
+/// than every earlier generation of the same name, so admission can tell a
+/// retired generation from the current one. A tombstone names this value, so
+/// retiring an old generation never retires a Sandbox recreated under the
+/// same name.
+fn generation() -> String {
+    layerfs_home::helpers::ordered_token("sandbox")
+}
+
 /// The fields a Sandbox record knows.
 #[derive(Clone, Debug, PartialEq)]
 enum Field {
@@ -50,6 +59,7 @@ enum Field {
     Project(String),
     Machine(String),
     Created(i64),
+    Generation(String),
     Op(Op),
     Id(String),
     Platform(String),
@@ -76,6 +86,7 @@ impl fields::Field for Field {
             "project" => Self::Project(text()?),
             "machine" => Self::Machine(text()?),
             "created" => Self::Created(fields::int(value)?),
+            "generation" => Self::Generation(text()?),
             op::FIELD => Self::Op(Op::decode(value)?),
             "id" => Self::Id(text()?),
             "platform" => Self::Platform(text()?),
@@ -107,6 +118,7 @@ impl fields::Field for Field {
             Self::Project(_) => "project",
             Self::Machine(_) => "machine",
             Self::Created(_) => "created",
+            Self::Generation(_) => "generation",
             Self::Op(_) => op::FIELD,
             Self::Id(_) => "id",
             Self::Platform(_) => "platform",
@@ -133,6 +145,7 @@ impl fields::Field for Field {
             Self::Name(text)
             | Self::Project(text)
             | Self::Machine(text)
+            | Self::Generation(text)
             | Self::Id(text)
             | Self::Platform(text)
             | Self::Runtime(text)
@@ -176,13 +189,14 @@ impl SandboxRecord {
     }
 
     /// The record a create claims the name with: the project, the machine,
-    /// now and the create's intent `op`.
+    /// now, this create's generation and its intent `op`.
     pub fn creating(name: &str, project: &str, machine: &str, op: &Op) -> Self {
         let fields = Fields::of([
             Field::Name(name.to_owned()),
             Field::Project(project.to_owned()),
             Field::Machine(machine.to_owned()),
             Field::Created(home::now_ms()),
+            Field::Generation(generation()),
             Field::Op(op.clone()),
         ]);
         Self {
@@ -316,6 +330,16 @@ impl SandboxRecord {
             _ => None,
         })
         .unwrap_or("")
+    }
+
+    /// The generation its create assigned: a Sandbox tombstone names this
+    /// value, so a Sandbox recreated under the same name is not retired by
+    /// the old generation's tombstone.
+    pub fn generation(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Generation(text) => Some(text),
+            _ => None,
+        })
     }
 
     /// Its project, `<store>/<project>`, as recorded.

@@ -37,8 +37,8 @@ pub use probe::{native_missing, probe, Probe};
 pub use setup::find_tool;
 pub use setup::{
     cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
-    loopback_hint, name_limit, provider_within, reach, remove, start, status, status_within, stop,
-    stop_force, worker_port, State, Status,
+    loopback_hint, name_limit, provider_state, provider_within, reach, remove, start, status,
+    status_within, stop, stop_force, worker_port, State, Status,
 };
 pub use spec::{
     parse_size, search_path, tool_fallbacks, Bundle, Endpoint, Forward, Lasting, NameLimit,

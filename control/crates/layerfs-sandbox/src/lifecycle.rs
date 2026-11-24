@@ -396,6 +396,11 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // the machine cannot dial, `route`): the intents bound by id go back
     // to the caller, which runs PostgreSQL Store calls and ends them
     // (`mount_intents::end_handed`); what records less is reported here
+    // The runtime is confirmed stopped: write the durable home tombstone
+    // before the record (the folder) goes; a failed write keeps the record.
+    if let Some(record) = crate::record::SandboxRecord::read(&host.home, &id)? {
+        crate::record::retire(&host.home, &record)?;
+    }
     let pg = (host.store_record.as_ref())
         .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
     let (left, handed) = match (pg, &host.postgresql) {

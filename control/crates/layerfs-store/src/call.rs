@@ -49,7 +49,13 @@ pub fn store_call(
         Executor::Worker(mut worker) => {
             // the host process holds the lease while it sends the call
             let _lease = lease;
-            let request = frame(method, with_project(args, target), target, &record);
+            let request = frame(
+                method,
+                with_project(args, target),
+                target,
+                &record,
+                crate::place_view::encoded_from_store(&home, &record),
+            );
             worker.call("store.call", request, &mut |event| events.event(event))
         }
     }
@@ -62,11 +68,15 @@ fn frame(
     mut fields: Vec<(String, SdkValue)>,
     target: &Target,
     record: &StoreRecord,
+    place: Option<SdkValue>,
 ) -> SdkValue {
     fields.extend([
         ("store".to_owned(), SdkValue::text(&target.store)),
         ("store_record".to_owned(), record.to_record().clone()),
     ]);
+    if let Some(place) = place {
+        fields.push(("place_view".to_owned(), place));
+    }
     SdkValue::map([
         ("op", SdkValue::text(method)),
         ("args", SdkValue::Map(fields)),
