@@ -166,6 +166,13 @@ impl BoundWorkspace {
                 if current.branch.head_commit == snapshot.branch.head_commit
                     && current.branch.base_layer == snapshot.branch.base_layer
                 {
+                    // `expected` holds here too: a clean Workspace answers
+                    // UpToDate only over the head the caller named (#776 R2).
+                    if let Some(expected) = options.expected {
+                        if answered(&current) != expected {
+                            return Err(expected_moved(expected, &current));
+                        }
+                    }
                     retained.published = Some(CommitOutcome::UpToDate {
                         head: current.branch.head_commit,
                         root: current.effective_root,

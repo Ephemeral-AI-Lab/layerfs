@@ -91,6 +91,28 @@ impl Session {
 }
 
 impl Session {
+    /// Waits until every publication that held the lane when it began has
+    /// ended (#776 C2). On a connection of its own it takes the lane as a
+    /// holder does: the lane row `FOR UPDATE`, which a non-nested publication
+    /// keeps until its transaction ends, then the barrier key exclusively,
+    /// which a nested write keeps shared until its own `COMMIT` or abort, both
+    /// under `lock_timeout`. Then it rolls back and closes the connection: it
+    /// writes and keeps nothing, needs no turn and works on a session an
+    /// unknown outcome quarantined. A wait that reaches the timeout is `Busy`.
+    pub(crate) fn pass_lane(&self) -> Result<(), BackendError> {
+        let mut client = self.connector.connect()?;
+        self.lane_work.add(1, 1);
+        let passed = client
+            .simple_query(&self.settings.lane_begin())
+            .map(|_| ())
+            .map_err(|error| rows::error(&error));
+        // Closing the connection ends the transaction even if this fails.
+        let _ = client.batch_execute("ROLLBACK");
+        passed
+    }
+}
+
+impl Session {
     /// One round trip on the lane connection, before a nested write's
     /// COMMIT: `Ok` only when the lane transaction recorded at `hold_lane` is
     /// still the open transaction of a live connection, so the lane row is

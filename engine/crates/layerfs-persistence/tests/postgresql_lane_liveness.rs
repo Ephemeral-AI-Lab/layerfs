@@ -182,3 +182,76 @@ fn a_nested_write_after_the_lane_connection_died_fails_and_writes_nothing() {
     let reserved = second.storage.reserve(reserve()).unwrap();
     assert_eq!(reserved.first_pack_id, before);
 }
+
+/// The lane barrier key of `schema`, as `session/profile.rs` derives it.
+fn barrier_key(schema: &str) -> (i32, i32) {
+    let hash = schema.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    });
+    (0x4c46_4c4e, hash as i32)
+}
+
+/// Holds `lock` (SQL run after `BEGIN`) on an administrator connection for
+/// `hold`, then commits. Returns once the lock is held.
+fn hold_for(schema: &Schema, lock: String, hold: Duration) -> std::thread::JoinHandle<()> {
+    let (held, wait) = std::sync::mpsc::channel();
+    let mut admin = schema.admin();
+    let holder = std::thread::spawn(move || {
+        admin.batch_execute(&format!("BEGIN; {lock}")).unwrap();
+        held.send(()).unwrap();
+        std::thread::sleep(hold);
+        admin.batch_execute("COMMIT").unwrap();
+    });
+    wait.recv_timeout(Duration::from_secs(10))
+        .expect("the holder took its lock");
+    holder
+}
+
+/// #776 C2: before a lost COMMIT's outcome is judged, passing the lane waits
+/// for a publication still holding the lane row (a non-nested one) or the
+/// barrier key shared (a nested one), and refuses `Busy` at the lock timeout.
+#[test]
+fn passing_the_lane_waits_for_a_publication_still_running() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "pass_lane");
+    let (first, _second) = handles(&schema);
+    let hold = Duration::from_millis(400);
+
+    let holder = hold_for(
+        &schema,
+        "SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE".into(),
+        hold,
+    );
+    let started = Instant::now();
+    first.history.pass_publication_lane().unwrap();
+    assert!(started.elapsed() >= hold / 2, "{:?}", started.elapsed());
+    holder.join().unwrap();
+
+    let (class, key) = barrier_key(&schema.name);
+    let holder = hold_for(
+        &schema,
+        format!("SELECT pg_advisory_xact_lock_shared({class}, {key})"),
+        hold,
+    );
+    let started = Instant::now();
+    first.history.pass_publication_lane().unwrap();
+    assert!(started.elapsed() >= hold / 2, "{:?}", started.elapsed());
+    holder.join().unwrap();
+
+    let mut selection = schema.selection();
+    selection.lock_timeout_ms = 200;
+    let short = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
+    let holder = hold_for(
+        &schema,
+        "SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE".into(),
+        Duration::from_millis(1_500),
+    );
+    let refused = short.history.pass_publication_lane().unwrap_err();
+    assert!(
+        matches!(refused, layerfs_history::HistoryError::Busy),
+        "{refused:?}"
+    );
+    holder.join().unwrap();
+    // Nothing is left held: the lane is free at once.
+    first.history.pass_publication_lane().unwrap();
+}

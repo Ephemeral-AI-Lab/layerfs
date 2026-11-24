@@ -9,7 +9,7 @@ mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
-use layerfs_history::{PlaceAuthority, PlaceView, WorkspaceId};
+use layerfs_history::{HistoryError, PlaceAuthority, PlaceView, WorkspaceId};
 use layerfs_store_service::history::{admission, deletion, lookup, removal};
 use layerfs_store_service::store::{BindError, BindPhase, BindRequest};
 use std::fs;
@@ -503,6 +503,8 @@ mod fault {
         pub inner: &'a dyn HistoryCatalog,
         pub fail_register: bool,
         pub fail_release: bool,
+        /// A definite refusal the registration answers instead.
+        pub refuse_register: Option<HistoryError>,
     }
 
     macro_rules! forward {
@@ -539,6 +541,9 @@ mod fault {
             if self.fail_register {
                 return Err(HistoryError::UnknownOutcome);
             }
+            if let Some(refusal) = &self.refuse_register {
+                return Err(refusal.clone());
+            }
             self.inner.gc_register(intent)
         }
 
@@ -550,12 +555,13 @@ mod fault {
         }
     }
 
-    /// A writer catalog whose registration is refused `Unsupported`, as the
-    /// PostgreSQL provider refuses it on a transaction-pooled connection
-    /// (§5.2). `admission` says whether it keeps admission intents.
+    /// A writer catalog whose registration is refused `Unsupported(reason)`:
+    /// the PostgreSQL provider's own reason on a transaction-pooled
+    /// connection (§5.2), or the trait default's `NO_ADMISSION` of a catalog
+    /// without admission.
     pub struct Pooled {
         pub inner: std::sync::Arc<dyn HistoryCatalog>,
-        pub admission: bool,
+        pub reason: &'static str,
     }
 
     impl HistoryCatalog for Pooled {
@@ -582,14 +588,8 @@ mod fault {
             reserve_inodes(request: &ReserveRequest) -> HistoryResult<Reservation>;
         }
 
-        fn gc_admission(&self) -> bool {
-            self.admission
-        }
-
         fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
-            Err(HistoryError::Unsupported(
-                "transaction-pooled PostgreSQL connection",
-            ))
+            Err(HistoryError::Unsupported(self.reason))
         }
     }
 }
@@ -597,7 +597,7 @@ mod fault {
 /// A Store over `host`'s SQLite file whose writer catalog is [`fault::Pooled`].
 fn pooled_store(
     host: &installed::Fixture,
-    admission: bool,
+    reason: &'static str,
 ) -> std::sync::Arc<layerfs_store_service::store::Store> {
     use layerfs_persistence::SqliteHandles;
     use layerfs_store_service::store::{ReaderFactory, Store, StoreReader};
@@ -617,7 +617,7 @@ fn pooled_store(
     let control = factory(0).unwrap();
     let history = Arc::new(fault::Pooled {
         inner: Arc::new(writer.history),
-        admission,
+        reason,
     });
     Arc::new(
         Store::new(
@@ -633,12 +633,13 @@ fn pooled_store(
     )
 }
 
-/// #768: a provider that keeps admission and refuses a mount's registration
+/// #768, #776 C1: a provider whose registration is refused with its own
 /// `Unsupported` (PostgreSQL on a transaction pooler, §5.2) refuses the
-/// mount; only a provider without admission mounts with no intent.
+/// mount; only a catalog without admission (`NO_ADMISSION`) mounts with no
+/// intent. The bind path's twin of `a_pooled_connection_refuses_a_shared_intent`.
 #[test]
 fn a_pooled_registration_refuses_the_mount() {
-    let host = installed::Fixture::built("admission-pooled", |source| {
+    let host = installed::Fixture::built("admission-pooled-mount", |source| {
         fs::write(source.join("a.txt"), b"a\n").unwrap();
         1
     });
@@ -653,7 +654,7 @@ fn a_pooled_registration_refuses_the_mount() {
         workspace: WorkspaceId::from_authority([n; 32]).unwrap(),
     };
 
-    let store = pooled_store(&host, true);
+    let store = pooled_store(&host, "transaction-pooled PostgreSQL connection");
     let refused = store
         .bind(owner.client(), request(31))
         .err()
@@ -671,7 +672,7 @@ fn a_pooled_registration_refuses_the_mount() {
     assert_eq!(refused.phase, BindPhase::Snapshot);
     drop(store);
 
-    let store = pooled_store(&host, false);
+    let store = pooled_store(&host, layerfs_history::error::NO_ADMISSION);
     let bound = store
         .bind(owner.client(), request(32))
         .expect("a provider without admission mounts")
@@ -711,6 +712,7 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
         inner: catalog,
         fail_register: true,
         fail_release: false,
+        refuse_register: None,
     };
     let refused = admission::SharedIntent::begin(&lost, GcIntentKind::Merge, &stack, Some("work"))
         .err()
@@ -721,6 +723,7 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
         inner: catalog,
         fail_register: false,
         fail_release: true,
+        refuse_register: None,
     };
     let intent = admission::SharedIntent::begin(&lost, GcIntentKind::Init, &stack, None)
         .expect("a registration that answers");
@@ -734,6 +737,52 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
     {
         catalog.gc_release(&intent.op_id).expect("settle the row");
     }
+    fixture.cleanup();
+}
+
+/// #776 C1: only a catalog with no GC admission at all lets a merge proceed
+/// unadmitted. A real provider's own `Unsupported`, the transaction-pooled
+/// PostgreSQL connection that cannot keep a session key, refuses the merge
+/// instead of running it with no intent row.
+#[test]
+fn a_pooled_connection_refuses_a_shared_intent() {
+    let fixture = Fixture::new("admission-pooled", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let catalog = fixture.service.store.history();
+
+    let pooled = fault::Faulty {
+        inner: catalog,
+        fail_register: false,
+        fail_release: false,
+        refuse_register: Some(HistoryError::Unsupported(
+            "transaction-pooled PostgreSQL connection",
+        )),
+    };
+    let refused =
+        admission::SharedIntent::begin(&pooled, GcIntentKind::Merge, &stack, Some("work"))
+            .err()
+            .expect("a pooled connection refuses the merge");
+    assert_eq!(refused.code, "Unsupported", "{refused:?}");
+
+    let unadmitted = fault::Faulty {
+        inner: catalog,
+        fail_register: false,
+        fail_release: false,
+        refuse_register: Some(HistoryError::Unsupported(
+            layerfs_history::error::NO_ADMISSION,
+        )),
+    };
+    let intent =
+        admission::SharedIntent::begin(&unadmitted, GcIntentKind::Merge, &stack, Some("work"))
+            .expect("a catalog without admission proceeds");
+    intent.release().expect("nothing to release");
+    assert!(catalog
+        .gc_intents(GcScopeKind::Project, stack.id.as_slice())
+        .expect("intents")
+        .is_empty());
     fixture.cleanup();
 }
 

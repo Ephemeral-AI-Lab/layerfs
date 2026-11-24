@@ -25,6 +25,7 @@ pub use backend::sqlite::compact::{
     CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason, OwnerLiveness,
     DELTA_BASE_REFERENCES_CAP,
 };
+pub use backend::sqlite::convert_v1::{convert_schema_version_1, ConvertedStore};
 pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;

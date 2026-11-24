@@ -160,6 +160,27 @@ live by its recorded process, not by this connection. A diagnostic driver
 keeps its read-only connection, whose deadline and cancellation outcome are
 still read ([`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs)).
 
+A mount, a compaction claim and their registrations keep session advisory
+keys (Store, project and Branch) across statements
+([`admission/session.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/session.rs)).
+The lock and the unlock are each one autocommit `Bare` statement for all of
+an intent's keys, outside the generation fence (#776 P2): a fenced
+statement would take or drop a key and then answer `Stale`, leaving it held
+with no intent row behind it. The lock statement checks the generation
+itself and tries no key when it moved. No key outlives a failed lock: a
+refused or pooled lock gives back exactly the keys it was granted, and a
+lock statement that fails, or whose reply cannot be read, quarantines the
+session, whose closed connection gives back every key. An unlock attempts
+every key it is given in its one statement; one that fails is handled the
+same way ([GC admission](#gc-admission)). A key granted on a
+backend other than the session's own is a transaction-pooling proxy:
+the call is `Unsupported("transaction-pooled PostgreSQL connection")`, and
+mount, merge, Init and the removals refuse it rather than run unadmitted.
+Only a catalog with no GC admission at all (`HistoryError::no_admission`)
+lets them proceed. A refused shared key reports its exclusive holder (a
+compaction or removal row, or else the key's backend as `BusyOp`), never
+peer mount rows.
+
 ## Transactions
 
 | `Mode` | `BEGIN` | Lane row | Used by |
@@ -552,18 +573,18 @@ by the marker read, and one after it is refused `MountsActive`. A marker read
 before the registration would miss a removal that commits in between. Both
 reads are fenced autocommit statements (`read_statement`).
 
-A provider with admission (`HistoryCatalog::gc_admission`) refuses the mount
-when `gc_register` refuses, `Unsupported` included: on a transaction-pooled
-connection the session key cannot mean presence, so the mount is
-`Unsupported` (GC spec §5.2). Only a provider without admission (a test
-double) mounts without an intent. Init, merge and Branch removal still
-proceed without an intent there: they are one-shot calls the spec lets run
-through a pooler.
+The mount refuses when `gc_register` refuses, `Unsupported` included: on a
+transaction-pooled connection the session key cannot mean presence, so the
+mount is `Unsupported("transaction-pooled PostgreSQL connection")` (GC spec
+§5.2, #776 C1). Only a catalog with no GC admission at all, whose refusal is
+the trait default's (`HistoryError::no_admission`), mounts without an
+intent; merge, Init and the removals follow the same rule
+([Session](#session)).
 
 | Test | Command | Checks |
 | --- | --- | --- |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched |
-| [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller; a provider without admission still mounts |
+| [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller of a mount; a catalog without admission still mounts. `a_pooled_connection_refuses_a_shared_intent`: the same for a merge |
 
 ## Delta chains
 

@@ -1,7 +1,7 @@
 //! Sole-owner host seal; never available through the daemon's Store ports.
 use crate::backend::sqlite::lane::writer_admission::Writer;
 use crate::backend::sqlite::lifecycle::identity::FileIdentity;
-use crate::backend::sqlite::session::connection::Session;
+use crate::backend::sqlite::session::connection::{Session, State};
 use crate::backend::sqlite::session::query;
 use crate::backend::sqlite::session::rows;
 use crate::{backend::records::BackendError, SealedStore};
@@ -39,6 +39,31 @@ impl SealedFacts {
             sqlite_version: self.sqlite_version,
             bytes: self.bytes,
         }
+    }
+}
+
+/// A failed seal and the writer lane it was given, when the seal still owned
+/// it: a compaction's cleanup after a definite failure is a write to the live
+/// Store and runs under that lane (#776 S2). `None` only when the seal found
+/// no lane to give back.
+pub(crate) struct SealFailure {
+    pub(crate) error: PersistenceError,
+    pub(crate) writer: Option<Writer>,
+}
+
+impl From<SealFailure> for PersistenceError {
+    fn from(failure: SealFailure) -> Self {
+        failure.error
+    }
+}
+
+/// Ends a failed seal's connection under the lane it owns, as `State::drop`
+/// would close it, and hands the lane back instead of releasing it.
+fn hand_back(state: &mut State, error: PersistenceError) -> SealFailure {
+    drop(state.connection.take());
+    SealFailure {
+        error,
+        writer: state.writer_hold.take(),
     }
 }
 
@@ -84,6 +109,7 @@ impl Session {
             Some(writer) => writer,
             None => Writer::acquire(&self.path)?,
         };
+        // A failure drops the lane it hands back, which releases it.
         let (facts, writer) = self.seal_under(writer, Extents::Release)?;
         writer.release().map_err(|_| PersistenceError::Uncertain)?;
         Ok(facts.into_store())
@@ -100,10 +126,10 @@ impl Session {
     /// file is sized and cut on its own. On macOS it still refuses a Store
     /// path that is a symbolic link or has a second hard link, before the
     /// checkpoint, as `seal` does.
-    pub(crate) fn seal_holding(
-        self,
-        writer: Writer,
-    ) -> Result<(SealedFacts, Writer), PersistenceError> {
+    ///
+    /// A failure hands the lane back with its error, so the compaction's
+    /// cleanup runs under it before letting it go.
+    pub(crate) fn seal_holding(self, writer: Writer) -> Result<(SealedFacts, Writer), SealFailure> {
         self.seal_under(writer, Extents::Keep)
     }
 
@@ -113,9 +139,13 @@ impl Session {
         mut self,
         writer: Writer,
         extents: Extents,
-    ) -> Result<(SealedFacts, Writer), PersistenceError> {
+    ) -> Result<(SealedFacts, Writer), SealFailure> {
         if !self.writable {
-            return Err(BackendError::ReadOnly.into());
+            // A read-only session's close takes no lane.
+            return Err(SealFailure {
+                error: BackendError::ReadOnly.into(),
+                writer: Some(writer),
+            });
         }
         // The checkpoint thread ends and closes its connection first.
         drop(self.background.take());
@@ -124,81 +154,94 @@ impl Session {
             Err(error) => (error.into_inner(), true),
         };
         // The caller's lane becomes this connection's owner while it is open.
-        // An error exit below drops `state`, and a writable close waits for
-        // the lane like any write: left with the caller, the lane would be
-        // waited for by the very call that holds it, and the seal would never
-        // return. Owned here, that close runs under it and then lets it go.
+        // An error exit below closes the connection under it (`hand_back`) and
+        // returns it with the error: left with the caller while `state` still
+        // held an open connection, the lane would be waited for by the very
+        // call that holds it, and the seal would never return.
         state.writer_hold = Some(writer);
         if poisoned || state.quarantined || !state.connection.is_autocommit() {
-            return Err(PersistenceError::Uncertain);
+            return Err(hand_back(&mut state, PersistenceError::Uncertain));
         }
         #[cfg(target_os = "macos")]
-        let identity = super::seal_allocation::Identity::capture(&self.path)?;
+        let identity = match super::seal_allocation::Identity::capture(&self.path) {
+            Ok(identity) => identity,
+            Err(error) => return Err(hand_back(&mut state, error)),
+        };
         #[cfg(target_os = "macos")]
-        super::file_control::disable_persistent_wal(&state.connection)?;
-        let result = query::run(
+        if let Err(error) = super::file_control::disable_persistent_wal(&state.connection) {
+            return Err(hand_back(&mut state, error.into()));
+        }
+        let checkpointed = query::run(
             &state.connection,
             "PRAGMA wal_checkpoint(TRUNCATE)",
             vec![],
             &state.work,
-        )?;
-        let row = result.first().ok_or(PersistenceError::Malformed)?;
-        if row.get::<i64>(0)? != 0 {
-            return Err(PersistenceError::Busy);
+        )
+        .map_err(PersistenceError::from)
+        .and_then(|result| {
+            let row = result.first().ok_or(PersistenceError::Malformed)?;
+            match row.get::<i64>(0)? {
+                0 => Ok(()),
+                _ => Err(PersistenceError::Busy),
+            }
+        });
+        if let Err(error) = checkpointed {
+            return Err(hand_back(&mut state, error));
         }
-        let connection = state.connection.take().ok_or(PersistenceError::Malformed)?;
+        let Some(connection) = state.connection.take() else {
+            return Err(hand_back(&mut state, PersistenceError::Malformed));
+        };
         if let Err((connection, error)) = connection.close() {
             state.connection.restore(connection);
-            return Err(rows::error(error).into());
+            return Err(hand_back(&mut state, rows::error(error).into()));
         }
         // The connection is closed; the lane goes back to the caller.
-        let writer = state
-            .writer_hold
-            .take()
-            .ok_or(PersistenceError::Uncertain)?;
+        let Some(writer) = state.writer_hold.take() else {
+            return Err(SealFailure {
+                error: PersistenceError::Uncertain,
+                writer: None,
+            });
+        };
+        let refused = |error: PersistenceError, writer: Writer| SealFailure {
+            error,
+            writer: Some(writer),
+        };
         // SQLite has checked-closed before advisory ownership is released.
-        // Earlier error exits drop State.connection before its retained owner.
-        // The sidecar check below runs while the lane is still held: an opener
-        // waiting on it takes the same lane before it may create `-wal`, so
-        // releasing first would let one land between the close and this check
-        // and turn a sealed Store into a refused one.
+        // Earlier error exits close State.connection before handing back its
+        // retained owner. The sidecar check below runs while the lane is still
+        // held: an opener waiting on it takes the same lane before it may
+        // create `-wal`, so releasing first would let one land between the
+        // close and this check and turn a sealed Store into a refused one.
         for suffix in ["-wal", "-shm", "-journal"] {
             let mut sidecar = self.path.as_os_str().to_os_string();
             sidecar.push(suffix);
             match std::fs::symlink_metadata(sidecar) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
                 Ok(_) => {
-                    return Err(PersistenceError::Refused {
-                        status: "Store sidecar remains after seal".into(),
-                    })
+                    let status = "Store sidecar remains after seal".into();
+                    return Err(refused(PersistenceError::Refused { status }, writer));
                 }
                 Err(error) => {
-                    return Err(PersistenceError::Refused {
-                        status: error.to_string(),
-                    })
+                    let status = error.to_string();
+                    return Err(refused(PersistenceError::Refused { status }, writer));
                 }
             }
         }
         #[cfg(target_os = "macos")]
         if matches!(extents, Extents::Release) {
-            super::seal_allocation::release(&self.path, identity)?;
+            if let Err(error) = super::seal_allocation::release(&self.path, identity) {
+                return Err(refused(error, writer));
+            }
         }
-        let metadata =
-            std::fs::metadata(&self.path).map_err(|error| PersistenceError::Refused {
+        let facts = (|| {
+            let refused = |error: std::io::Error| PersistenceError::Refused {
                 status: error.to_string(),
-            })?;
-        let modified = metadata
-            .modified()
-            .map_err(|error| PersistenceError::Refused {
-                status: error.to_string(),
-            })?;
-        let change_counter = read_change_counter(&self.path)?;
-        let identity =
-            FileIdentity::capture(&self.path).map_err(|error| PersistenceError::Refused {
-                status: error.to_string(),
-            })?;
-        Ok((
-            SealedFacts {
+            };
+            let metadata = std::fs::metadata(&self.path).map_err(refused)?;
+            let modified = metadata.modified().map_err(refused)?;
+            let change_counter = read_change_counter(&self.path)?;
+            let identity = FileIdentity::capture(&self.path).map_err(refused)?;
+            Ok(SealedFacts {
                 path: self.path.clone(),
                 profile: self.profile.persistence,
                 sqlite_version: self.profile.sqlite_version.clone(),
@@ -206,8 +249,11 @@ impl Session {
                 modified,
                 change_counter,
                 identity,
-            },
-            writer,
-        ))
+            })
+        })();
+        match facts {
+            Ok(facts) => Ok((facts, writer)),
+            Err(error) => Err(refused(error, writer)),
+        }
     }
 }

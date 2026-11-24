@@ -240,6 +240,15 @@ impl HistoryCatalog for HistoryProvider {
         }
     }
 
+    fn pass_publication_lane(&self) -> HistoryResult<()> {
+        match &self.engine {
+            // A SQLite publication runs in this process: once its COMMIT has
+            // answered, even with an error, nothing applies it later.
+            crate::backend::Engine::Sqlite(_) => Ok(()),
+            crate::backend::Engine::Postgres(session) => Ok(session.pass_lane()?),
+        }
+    }
+
     fn commit_branch(&self, request: &CommitRequest) -> HistoryResult<CommitOutcome> {
         self.write(|tx| commit::commit_branch(tx, request))
     }
@@ -315,10 +324,6 @@ impl HistoryCatalog for HistoryProvider {
         // The mark and the prune share one write transaction and one lane:
         // reachability can never be older than the rows it is about to delete.
         self.write(|tx| super::kept::remove_unreachable(tx, stack, dry_run))
-    }
-
-    fn gc_admission(&self) -> bool {
-        true
     }
 
     fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {

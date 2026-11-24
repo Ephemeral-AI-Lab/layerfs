@@ -1,6 +1,7 @@
 //! The one resolution of a Workspace's retained Commit custody, run when its
 //! next Commit is requested (store-service `store/resolve.rs`). It is not a
-//! retry: nothing is resent, and the record is used once.
+//! retry: nothing is resent. A record whose publication outcome the attempt
+//! could not determine stays for the next request, which only reads again.
 use super::{registry::bound_mut, Failure, Service};
 use crate::store::Resolution;
 use layerfs_bridge::control::{Activity, ControlCode, ControlRefusal, WorkspaceToken};

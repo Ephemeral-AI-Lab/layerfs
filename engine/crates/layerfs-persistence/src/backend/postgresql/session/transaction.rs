@@ -317,7 +317,10 @@ impl Session {
     }
 
     /// One autocommit statement sent as written ([`Mode::Bare`]); refused on
-    /// a read-only session.
+    /// a read-only session. The GC session advisory keys use it unfenced: a
+    /// fenced form would take or drop a key and then answer `Stale`, leaving
+    /// the caller unaware of the change (#776 P2); their statements carry
+    /// their own generation check where they need one.
     pub(crate) fn run_bare<T, E: From<BackendError> + OutcomeError>(
         &self,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,

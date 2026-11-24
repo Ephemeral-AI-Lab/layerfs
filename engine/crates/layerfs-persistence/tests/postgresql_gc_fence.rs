@@ -506,6 +506,65 @@ fn a_live_operation_is_busy_and_an_uncertain_owner_is_unresolved() {
         .unwrap();
 }
 
+/// The Store-scope advisory key `layerfs-persistence` derives, as
+/// `history/admission.rs` `advisory_key` does.
+fn store_key(catalog: CatalogId) -> i64 {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/advisory/v1\0");
+    hasher.update(catalog.as_slice());
+    hasher.update(&[1]);
+    hasher.update(catalog.as_slice());
+    let mut head = [0u8; 8];
+    head.copy_from_slice(&hasher.finalize().as_bytes()[..8]);
+    i64::from_be_bytes(head)
+}
+
+/// #776 G4: a mount refused by an exclusive Store key that no intent row
+/// names yet (a compaction's claim before its registration) is `BusyOp`
+/// naming that key's backend, never `MountsActive` naming peer mount rows:
+/// mounts never exclude mounts.
+#[test]
+fn a_refused_mount_names_the_exclusive_holder_not_peer_mounts() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "admission_claim");
+    let binding = binding("admission_claim");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&handles.history, 1);
+    // A peer mount whose process ended: its row stays, while its session keys
+    // went with its connection.
+    {
+        let peer = schema.open(&binding, CURSOR).expect("open a second handle");
+        peer.history
+            .gc_register(&mount(project_id, branch, 1))
+            .unwrap();
+    }
+    let catalog = CatalogId::derive(&binding).unwrap();
+    let mut holder = schema.admin();
+    let taken: bool = holder
+        .query_one(
+            "SELECT pg_try_advisory_lock($1::bigint)",
+            &[&store_key(catalog)],
+        )
+        .unwrap()
+        .get(0);
+    assert!(taken, "the claim's exclusive Store key");
+    let holder_pid: i32 = holder
+        .query_one("SELECT pg_backend_pid()", &[])
+        .unwrap()
+        .get(0);
+
+    let refusal = handles
+        .history
+        .gc_register(&mount(project_id, branch, 2))
+        .unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Compaction);
+    assert_eq!(state.entity, "store");
+    assert_eq!(state.pid, Some(i64::from(holder_pid)));
+}
+
 #[test]
 fn a_removal_first_refuses_the_later_commit_and_writes_nothing() {
     let Some(url) = url() else { return };

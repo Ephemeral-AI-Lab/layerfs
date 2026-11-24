@@ -150,13 +150,17 @@ A Store's URL is read only as its client reads it
 `layerfs-persistence` re-exports as `PostgresConfig`); LayerFS keeps no
 parser of its own and no rewriting. A URL holds a login
 (`address::holds_login`) when it has any `@` after its scheme, when its
-client reads a user or a password in it, when its client does not read it
-(what it does not read cannot be told apart), or when its percent-decoded
-text holds, in any case, a login key followed by `=` anywhere: `user`,
-`password` (the client's), `passfile`, `sslkey`, `sslcert`,
-`sslpassword` and `oauth_client_secret` (libpq 18's keys of a password, a
-password file, a client key or certificate and its password, and an OAuth
-client secret). The key list is fixed, with no grammar guessed:
+client reads a user or a password in it, or a host holding an `@` (a login
+written percent-encoded, `postgres://alice%3Ap%40db/app`, which the client
+reads as the host `alice:p@db`; no real host holds an `@`), when its client
+does not read it (what it does not read cannot be told apart), or when its
+percent-decoded text holds, in any case, a login key followed by `=`
+anywhere: `user`, `password` (the client's), `passfile`, `sslkey`,
+`sslcert`, `sslpassword`, `oauth_client_secret`, `scram_client_key` and
+`scram_server_key` (libpq 18's keys of a password, a password file, a
+client key or certificate and its password, an OAuth client secret, and a
+SCRAM client or server key; a ClientKey alone authenticates as the role).
+The key list is fixed, with no grammar guessed:
 `postgres://h/db?application_name=me?password=p` and
 `postgres://h:5432/db/password=p@ss` hold one. Such a URL is shown as
 `postgresql://<hidden: not an address alone>` with no `server`, never

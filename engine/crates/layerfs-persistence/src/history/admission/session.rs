@@ -97,15 +97,19 @@ pub(super) fn session_lock(
         .iter()
         .any(|row| expected != 0 && row.generation != expected)
     {
-        if !granted.is_empty() {
-            return Err(BackendError::Unknown.into());
-        }
+        // The statement tries no key on a moved Store, so none was taken
+        // and then answered `Stale` (#776 P2); any reported granted anyway
+        // is given back.
+        let _ = session_unlock(session, &granted);
         return Err(HistoryError::StaleStore);
     }
     // Spec §5.2 item 34: a session advisory lock only means presence if the
     // same backend keeps it. The lock statement returns the backend that
     // took it; a transaction-pooling proxy hands the next statement to a
-    // different one, so mounts and compaction are `Unsupported` there.
+    // different one, so mounts and compaction are `Unsupported` there and
+    // every caller refuses (#776 C1). The unlock is best effort: behind such
+    // a proxy it may reach another backend, which then keeps the key until
+    // the proxy recycles it.
     if rows.iter().any(|row| !session.note_backend(row.pid)) {
         let _ = session_unlock(session, &granted);
         return Err(HistoryError::Unsupported(POOLED));
@@ -157,16 +161,17 @@ fn session_lock_refusal(
 ) -> HistoryResult<HistoryError> {
     // A read transaction, not `Mode::Statement`: the intent queries are the
     // search-path ones the write path uses.
-    let found = session.run(false, |statements| {
+    let mut found = session.run(false, |statements| {
         scope_intents(&Transaction::new(statements), kind, id)
     })?;
+    if shared {
+        // A shared key is refused only by an exclusive holder (a compaction
+        // or a removal); mounts never exclude mounts, so peer mount rows are
+        // not the holder and are not reported as one (#776 G4).
+        found.retain(|intent| intent.kind != GcIntentKind::Mount);
+    }
     if !found.is_empty() {
         return Ok(classify(&found));
-    }
-    if shared {
-        return Ok(HistoryError::MountsActive(Box::new(MountHolders::new(
-            Vec::new(),
-        ))));
     }
     let scope = match kind {
         2 => GcScopeKind::Project,
@@ -196,8 +201,12 @@ fn session_lock_refusal(
     }
     Ok(HistoryError::BusyOp(Box::new(conflict)))
 }
-/// Gives back one level of each of `keys` in one statement. It runs whatever
-/// the Store's generation: keys are only given back.
+/// Gives back one level of each of `keys` in one statement, which attempts
+/// every key: one not held does not stop the ones after it. It runs whatever
+/// the Store's generation: keys are only given back. A failed statement may
+/// have given back some keys and not others: it is `Unknown`, which
+/// quarantines the session and closes its connection, so the server gives
+/// back every key it holds.
 pub(super) fn session_unlock(session: &Arc<Session>, keys: &[SessionKey]) -> HistoryResult<()> {
     if keys.is_empty() {
         return Ok(());
@@ -206,7 +215,8 @@ pub(super) fn session_unlock(session: &Arc<Session>, keys: &[SessionKey]) -> His
     let pids = session.run_bare(|tx| -> Result<Vec<i64>, BackendError> {
         let sql = bare(tx, UNLOCK_SESSION)?;
         let bytes = 9 * ids.len() as u64;
-        (tx.typed(&sql, &[&ids, &modes], bytes)?.iter())
+        let found = (tx.typed(&sql, &[&ids, &modes], bytes)).map_err(|_| BackendError::Unknown)?;
+        (found.iter())
             .map(|row| row.try_get(1).map_err(|_| BackendError::Integrity))
             .collect()
     })?;

@@ -894,16 +894,19 @@ fn a_lost_request_is_resolved_by_folding_the_capture_back() {
     f.cleanup();
 }
 
-/// Another Commit moved the head after the lost request: the head is
-/// neither this Commit nor the head it expected, so the attempt does not
-/// resolve, the custody stays and the Workspace still refuses a Commit.
+/// Another Commit moved the head after the lost request. Its first-parent
+/// chain reaches the head this Commit was published against through no Commit
+/// of ours, so nothing was published (#776 R1): the capture folds back, the
+/// custody is released and the next Commit merges over the landed one. Until
+/// #776 the attempt left the custody with no record, refusing every Commit.
 #[test]
-fn an_unknown_outcome_under_a_moved_head_stays_retained() {
+fn a_lost_request_under_a_moved_head_folds_back() {
     let (f, store, owner, workspace, failed) = unknown_publication(
         "resolve-moved",
         history_boundary::Boundary::LostRequest,
         &bytes(b'U'),
     );
+    let original = failed.binding.clone().unwrap();
     let other = bind(&store, &owner, &f, 2);
     write(&other, &bytes(b'V'));
     let landed = other
@@ -911,16 +914,132 @@ fn an_unknown_outcome_under_a_moved_head_stays_retained() {
             construct(save, snapshot, &bytes(b'V'), store.policy().construction())
         })
         .unwrap();
-    assert!(matches!(
-        landed.history,
-        Some(CommitOutcome::Committed { .. })
-    ));
-    let unresolved = workspace.resolve_retained().unwrap_err();
-    assert!(unresolved.published.is_none(), "{unresolved:?}");
-    assert!(
-        unresolved.reason.contains("neither this Commit"),
-        "{unresolved:?}"
+    let Some(CommitOutcome::Committed { record: theirs, .. }) = &landed.history else {
+        panic!("{:?}", landed.history);
+    };
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(resolved.outcome.is_none(), "{resolved:?}");
+    assert!(!workspace.has_retained());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert_eq!(read(&workspace), bytes(b'U'));
+    // The next Commit is admitted again: it no longer meets `InFlight` and
+    // constructs from the binding the capture folded back to.
+    let reached = Cell::new(None);
+    let later = workspace.commit(|_, _, snapshot| {
+        reached.set(Some(snapshot.branch.head_commit));
+        Ok(FilesystemRootId(snapshot.effective_root))
+    });
+    if let Err(failure) = &later {
+        assert!(
+            !matches!(failure.error, CommitError::InFlight),
+            "{failure:?}"
+        );
+    }
+    assert_eq!(
+        reached.get(),
+        Some(original.branch.head_commit),
+        "{later:?}"
     );
+    assert_ne!(original.branch.head_commit, Some(theirs.id));
+    drop((later, landed, failed));
+    close(&owner, &other);
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// The acknowledgement was lost and another Workspace then committed over our
+/// Commit: the head is theirs, and our Commit is its first parent, so the
+/// publication is proven and installed (#776 R1).
+#[test]
+fn a_lost_acknowledgement_under_a_later_commit_is_installed() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-under",
+        history_boundary::Boundary::LostAcknowledgement,
+        &bytes(b'W'),
+    );
+    let candidate = failed.intent.as_ref().unwrap().candidate_root;
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'X'));
+    let landed = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'X'), store.policy().construction())
+        })
+        .unwrap();
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    let Some(CommitOutcome::Committed { record, .. }) = resolved.outcome else {
+        panic!("{resolved:?}");
+    };
+    assert_eq!(record.root, candidate);
+    let Some(CommitOutcome::Committed { record: theirs, .. }) = &landed.history else {
+        panic!("{:?}", landed.history);
+    };
+    assert_eq!(theirs.parent, Some(record.id), "theirs landed over ours");
+    assert_eq!(
+        workspace.snapshot().unwrap().branch.head_commit,
+        Some(record.id)
+    );
+    assert!(!workspace.has_retained());
+    drop((landed, failed));
+    close(&owner, &other);
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// A forced Commit displaced a head that was not ours: the walk cannot follow
+/// it, so the outcome stays undetermined. The custody stays and so does its
+/// record, so a later attempt reads again instead of the Workspace refusing
+/// every Commit with nothing left to resolve (#776 R1).
+#[test]
+fn an_undetermined_outcome_keeps_its_record() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-undetermined",
+        history_boundary::Boundary::LostRequest,
+        &bytes(b'Y'),
+    );
+    let original = failed.binding.clone().unwrap();
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'Z'));
+    other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'Z'), store.policy().construction())
+        })
+        .unwrap();
+    // Forced over the head we published against, displacing theirs.
+    let forced = store
+        .history()
+        .commit_branch(&layerfs_history::CommitRequest {
+            branch: original.branch.id,
+            expected_head: original.branch.head_commit,
+            expected_base: original.branch.base_layer,
+            expected_root: original.effective_root,
+            candidate_root: original.effective_root,
+            profile: original.profile,
+            scope: original.scope,
+            second_parent: None,
+            meta: layerfs_history::records::CommitMeta::new(
+                layerfs_history::records::CommitVia::Files,
+            ),
+            force: true,
+            required_head: None,
+        })
+        .unwrap();
+    let CommitOutcome::Committed { displaced, .. } = forced else {
+        panic!("{forced:?}");
+    };
+    assert!(displaced.is_some(), "the forced Commit displaced theirs");
+    for _ in 0..2 {
+        let unresolved = workspace.resolve_retained().unwrap_err();
+        assert!(unresolved.published.is_none(), "{unresolved:?}");
+        assert!(unresolved.reason.contains("forced"), "{unresolved:?}");
+        assert!(
+            workspace.has_retained(),
+            "the record stays for a later read"
+        );
+    }
     assert!(matches!(
         workspace
             .commit(|_, _, _| unreachable!())
@@ -928,10 +1047,8 @@ fn an_unknown_outcome_under_a_moved_head_stays_retained() {
             .error,
         CommitError::InFlight
     ));
-    // One attempt: the record is spent.
-    assert!(!workspace.has_retained());
-    assert_eq!(read(&workspace), bytes(b'U'));
-    drop((landed, failed));
+    assert_eq!(read(&workspace), bytes(b'Y'));
+    drop(failed);
     close(&owner, &other);
     owner.stop().unwrap();
     drop((workspace, store));

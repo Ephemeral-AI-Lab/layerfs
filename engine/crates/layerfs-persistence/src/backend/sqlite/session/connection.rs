@@ -222,8 +222,9 @@ impl Session {
         // A writable open runs PRAGMA and schema statements that write, so it
         // takes the same local-volume lane a transaction takes: another
         // opener waits for it instead of meeting SQLite's Busy (#534, #647).
-        // A read-only open takes no lane, and the lane is released below
-        // before this session serves its first call.
+        // A read-only open takes no lane, and the lane is released below,
+        // after the last step that can fail, before this session serves its
+        // first call.
         let writer = if writable {
             Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?)
         } else {
@@ -335,9 +336,6 @@ impl Session {
         if !diagnostic {
             profile::check(&profile)?;
         }
-        if let Some(writer) = writer {
-            writer.release().map_err(|_| BackendError::Unknown)?;
-        }
         super::thread_work::add(&work.borrow());
         let background = match (writable && selected.background_checkpoint())
             .then(|| super::background::Checkpointer::start(path, selected.synchronous()))
@@ -351,6 +349,13 @@ impl Session {
         };
         // §10: the record every later transaction is fenced against.
         let identity = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
+        // The lane goes only once nothing above can fail: an error exit drops
+        // the raw connection, whose close may be SQLite's last (a checkpoint
+        // and the removal of `-wal`/`-shm`), and it must close under the lane
+        // as `State::drop` does (#776 S5).
+        if let Some(writer) = writer {
+            writer.release().map_err(|_| BackendError::Unknown)?;
+        }
         Ok(Self {
             diagnostic,
             background,
