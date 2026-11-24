@@ -9,20 +9,20 @@
 //! `Busy`; a dead, uncertain owner is `Unresolved`, while a dead, certain one
 //! is adopted.
 //!
-//! The place is the first authority: an intent that records a machine
+//! The place adds a second authority: an intent that records a machine
 //! incarnation or a Sandbox generation is classified from the bounded
 //! `PlaceView` the control layer supplies (and, for a name the view does not
 //! carry, from the current records the admitted call itself carries). The
 //! control layer reads its home once for the call; this engine opens no home
 //! file. A recorded value older than the current one is dead even with a live
 //! lease; a recorded value newer than the current one (a home restore) is
-//! uncertain, never dead; an expired lease is uncertain. The caller's
-//! namespace/boot evidence is the fallback when the caller cannot see the
-//! place, never a second opinion about a place it can see. Admission also
-//! settles the rows at the admitted call's own machine that an ordered value
-//! proves older, so a restarted worker does not leave its predecessor's mount
-//! behind when its successor registers; a live or uncertain row stays for its
-//! owner or the worker-start reconcile.
+//! uncertain, never dead; a value another home minted is uncertain. The
+//! owner's namespace/boot evidence always applies as it did before place
+//! evidence existed: an owner it proves gone is dead, and place evidence only
+//! adds proofs of death. A mount registration settles only the conflicting
+//! intents its own scope scan finds, as before; the rows a restarted worker's
+//! predecessor left are settled by the worker-start reconcile or by a later
+//! removal's or compaction's admission.
 //!
 //! PostgreSQL adds transaction-scoped advisory keys to a removal's marker
 //! transaction and session-scoped shared keys to a mount, so a removal on one
@@ -407,41 +407,6 @@ fn settle_dead(
     Ok(live)
 }
 
-/// Settles the intents at the admitted call's own machine that its current
-/// place proves dead, before the registration writes the new place.
-///
-/// A newer ordered `machine_incarnation` or `sandbox_generation` at a machine
-/// means every older placement there belongs to a worker generation that no
-/// longer serves it: admitting the newer mount settles the older row instead
-/// of leaving two rows for one place (and the schema's
-/// `UNIQUE(scope_kind, scope_id, owner_boot)` cannot then refuse the insert).
-/// Only a dead, certain row is released; a live row, an uncertain one (an
-/// expired lease or a restored newer record) and every other machine's rows
-/// stay for their owner or the worker-start reconcile.
-fn settle_place(
-    tx: &Transaction<'_>,
-    intent: &GcIntent,
-    shared_store: bool,
-    owners: &OwnerView,
-    place: &mut PlaceView,
-) -> HistoryResult<()> {
-    if intent.machine_incarnation.is_none() && intent.sandbox_generation.is_none() {
-        return Ok(());
-    }
-    let Some(machine) = intent.machine.as_deref() else {
-        return Ok(());
-    };
-    for existing in query(tx, MACHINE_INTENTS, params![machine])? {
-        if existing.op_id == intent.op_id {
-            continue;
-        }
-        if place.settleable(tx, &existing, shared_store, owners)? {
-            release_in(tx, &existing.op_id)?;
-        }
-    }
-    Ok(())
-}
-
 /// The refusal a non-empty conflict set reports: an uncertain owner is
 /// `Unresolved`, a live mount is `MountsActive`, any other live operation is
 /// `Busy`.
@@ -538,7 +503,6 @@ pub(super) fn register_in(
     // The admitted call carries the current records it read, so admission
     // compares a conflicting intent's recorded place with those values.
     let mut place = PlaceView::for_intent(intent);
-    settle_place(tx, intent, postgres, &owners, &mut place)?;
     let found = settle_dead(
         tx,
         conflicts_for(tx, intent)?,

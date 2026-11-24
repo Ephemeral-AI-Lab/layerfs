@@ -12,9 +12,7 @@ mod support;
 
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::records::GcScopeKind;
-use layerfs_history::{
-    BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId,
-};
+use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::internal::Control;
 use layerfs_sandbox::record::{mount_place, retire_in, SandboxRecord};
@@ -30,13 +28,13 @@ fn a_daemon_mount_records_the_home_place_and_its_tombstone_settles_it() {
     let home = f.host.directory.join("home");
     std::fs::create_dir_all(&home).unwrap();
     let machine = "docker";
-    let incarnation = "p1:worker:10:aa";
+    let incarnation = "p1:aa11.worker:10:aa";
     MachineRecord::built_in(machine, "home-id")
         .with_incarnation(incarnation)
         .write(&home)
         .unwrap();
     let sandbox = "place-sbx";
-    let generation = "p1:sandbox:10:bb";
+    let generation = "p1:aa11.sandbox:10:bb";
     let directory = layerfs_home::home::paths::sandbox_dir(&home, sandbox);
     std::fs::create_dir_all(&directory).unwrap();
     SandboxRecord::from_record(
@@ -77,7 +75,11 @@ fn a_daemon_mount_records_the_home_place_and_its_tombstone_settles_it() {
     let service = f.service.clone();
     let (channel, worker) = support::pair(move |connection| {
         for _ in 0..2 {
-            drop(service.serve_one(connection, |_, _, _| unreachable!()).unwrap());
+            drop(
+                service
+                    .serve_one(connection, |_, _, _| unreachable!())
+                    .unwrap(),
+            );
         }
     });
     let mut client = Control::new(channel);

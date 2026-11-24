@@ -390,8 +390,8 @@ fn seed_reconcile(home: &Path) {
     // admission consults its caller's home, so the mounts must exist before
     // the new incarnation does for the worker start to be the first caller
     // that can settle the older placement.
-    let current = "p1:worker:0000000000000020:aa";
-    let retired = "p1:sandbox:0000000000000010:aa";
+    let current = "p1:aa11.worker:0000000000000020:aa";
+    let retired = "p1:aa11.sandbox:0000000000000010:aa";
     let record = StoreRecord::read(home, "shop").unwrap().unwrap();
     let open = OpenArgs::of_record(home, "shop", &record).unwrap();
     with_service(&open, |service| {
@@ -433,8 +433,8 @@ fn seed_reconcile(home: &Path) {
             .gc_register(&mount(
                 0x82,
                 "live",
-                "p1:worker:0000000000000030:aa",
-                "p1:sandbox:0000000000000020:aa",
+                "p1:aa11.worker:0000000000000030:aa",
+                "p1:aa11.sandbox:0000000000000020:aa",
                 "boot:82",
             ))
             .unwrap();
@@ -445,8 +445,8 @@ fn seed_reconcile(home: &Path) {
             .gc_register(&mount(
                 0x81,
                 "live",
-                "p1:worker:0000000000000010:aa",
-                "p1:sandbox:0000000000000020:aa",
+                "p1:aa11.worker:0000000000000010:aa",
+                "p1:aa11.sandbox:0000000000000020:aa",
                 "boot:81",
             ))
             .unwrap();
@@ -482,13 +482,13 @@ fn a_worker_start_reconciles_the_incarnations_its_home_records() {
         &placed.home,
         "shop",
         "box",
-        "p1:worker:0000000000000020:aa",
+        "p1:aa11.worker:0000000000000020:aa",
     )
     .expect("the start reconciles the worker's Store");
     assert_eq!(outcome.get_text("machine"), Some("box"), "{outcome:?}");
     assert_eq!(
         outcome.get_text("incarnation"),
-        Some("p1:worker:0000000000000020:aa"),
+        Some("p1:aa11.worker:0000000000000020:aa"),
         "{outcome:?}"
     );
     let mut settled = Vec::new();

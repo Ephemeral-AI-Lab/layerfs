@@ -100,11 +100,12 @@ struct Server {
     faults: Arc<fault::Faults>,
 }
 
-/// One fresh, ordered incarnation for a worker starting now: a newer start
-/// compares greater than every younger one across restarts and pid reuse, so
-/// admission can tell an old placement from the current one.
+/// One fresh incarnation for a worker no host supplied one to (an older
+/// host, or a test). The worker knows no home, so the value carries no home
+/// id and orders against nothing: it is only reported, and a host whose
+/// record names another value skips its reconcile.
 fn incarnation() -> String {
-    layerfs_home::helpers::ordered_token("worker")
+    layerfs_home::helpers::ordered_token("", "worker", &[])
 }
 
 /// Serves `listener` until it fails or the process is ended (`machine.stop`;
@@ -128,10 +129,6 @@ pub fn serve_with_incarnation(
     supplied: Option<String>,
 ) -> std::io::Result<Served> {
     let server = Server::new(secret, root, supplied);
-    // Recorded before any request is served: every mount intent this worker
-    // places carries this incarnation, and the host's start reconcile writes
-    // the same value into each Store and settles what the previous one left.
-    layerfs_store_service::history::admission::set_machine_incarnation(server.incarnation.clone());
     server.run(&listener)
 }
 

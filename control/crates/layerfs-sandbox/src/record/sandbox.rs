@@ -19,12 +19,12 @@
 use super::daemon::DaemonRecord;
 use crate::host::Started;
 use layerfs_bridge::control::{MountPlace, SdkRefusal, SdkValue};
-use layerfs_machine::record::MachineRecord;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, with_fix, with_next};
+use layerfs_machine::record::MachineRecord;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -43,13 +43,26 @@ pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
     entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
 
-/// One fresh, ordered Sandbox generation: a newer create compares greater
-/// than every earlier generation of the same name, so admission can tell a
-/// retired generation from the current one. A tombstone names this value, so
-/// retiring an old generation never retires a Sandbox recreated under the
-/// same name.
-fn generation() -> String {
-    layerfs_home::helpers::ordered_token("sandbox")
+/// One fresh, ordered Sandbox generation of `home`'s Sandbox `name` on
+/// `machine`: it is minted past the generation of a record still under the
+/// name and the generation the name's tombstone retired, so a recreated
+/// Sandbox compares greater than every earlier one even after the wall clock
+/// stepped backwards, and admission can tell a retired generation from the
+/// current one. A tombstone names this value, so retiring an old generation
+/// never retires a Sandbox recreated under the same name.
+fn generation(home: &Path, name: &str, machine: &str) -> Result<String> {
+    let id = home::opened(home)?.id;
+    let previous = SandboxRecord::read(home, name)?
+        .and_then(|record| record.generation().map(str::to_owned))
+        .unwrap_or_default();
+    let retired = super::tombstone::SandboxTombstone::read(home, machine, name)?
+        .map(|tombstone| tombstone.generation)
+        .unwrap_or_default();
+    Ok(layerfs_home::helpers::ordered_token(
+        &id,
+        "sandbox",
+        &[&previous, &retired],
+    ))
 }
 
 /// The fields a Sandbox record knows.
@@ -189,21 +202,27 @@ impl SandboxRecord {
         Ok(read_record(&path)?.map(|value| Self::from_record(name, value)))
     }
 
-    /// The record a create claims the name with: the project, the machine,
-    /// now, this create's generation and its intent `op`.
-    pub fn creating(name: &str, project: &str, machine: &str, op: &Op) -> Self {
+    /// The record a create claims the name with in `home`: the project, the
+    /// machine, now, this create's generation and its intent `op`.
+    pub fn creating(
+        home: &Path,
+        name: &str,
+        project: &str,
+        machine: &str,
+        op: &Op,
+    ) -> Result<Self> {
         let fields = Fields::of([
             Field::Name(name.to_owned()),
             Field::Project(project.to_owned()),
             Field::Machine(machine.to_owned()),
             Field::Created(home::now_ms()),
-            Field::Generation(generation()),
+            Field::Generation(generation(home, name, machine)?),
             Field::Op(op.clone()),
         ]);
-        Self {
+        Ok(Self {
             name: name.to_owned(),
             fields,
-        }
+        })
     }
 
     /// The record of a started Sandbox: what its create answered
