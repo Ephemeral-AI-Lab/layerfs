@@ -167,13 +167,16 @@ pub(crate) struct Checked {
 
 /// The `history_meta` columns both checks read, then the policy row and the
 /// server's version; `{s}.` names the schema for a statement outside the
-/// search path.
+/// search path. `trace_salt` is read through the row's JSON form, so a Store
+/// written before the column existed yields NULL instead of failing the
+/// statement, and [`refuse_pre_2_0`] still names its version (#776).
 fn meta_columns(s: &str) -> String {
     format!(
         "encode(h.catalog_id,'hex'),h.catalog_incarnation,encode(h.binding_key,'hex'),\
          h.identity_format,h.schema_version,p.format_profile,p.small_file_threshold_bytes,\
          p.whole_file_delta_max_depth,p.chunk_delta_max_depth,p.metadata_delta_max_depth,\
-         p.schema_version,current_setting('server_version'),encode(p.trace_salt,'hex') \
+         p.schema_version,current_setting('server_version'),\
+         substr(to_jsonb(p)->>'trace_salt',3) \
          FROM {s}history_meta h, {s}store_policy p WHERE h.id=1 AND p.id=1"
     )
 }

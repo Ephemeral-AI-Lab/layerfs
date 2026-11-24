@@ -572,3 +572,35 @@ fn a_pre_2_0_store_missing_later_tables_is_refused_by_name() {
         );
     }
 }
+
+/// A version 2 Store written before T1.2a has no `store_policy.trace_salt`.
+/// The open check selected that column by name, so the statement itself
+/// failed and the Store was refused `Integrity`/`Malformed` instead of by its
+/// version (#776). Both checks and both opens now name it.
+#[test]
+fn a_pre_2_0_store_without_the_trace_salt_is_refused_by_name() {
+    let Some(url) = url() else { return };
+    let store = Store::new(&url, "pre20salt");
+    store
+        .admin()
+        .batch_execute(
+            "ALTER TABLE store_policy DROP COLUMN trace_salt; \
+             ALTER TABLE history_meta DROP CONSTRAINT history_meta_schema_version_check; \
+             ALTER TABLE store_policy DROP CONSTRAINT store_policy_schema_version_check; \
+             UPDATE history_meta SET schema_version=2; UPDATE store_policy SET schema_version=2",
+        )
+        .unwrap();
+    for check in [PostgresCheck::Full, PostgresCheck::Light] {
+        let selection = store.selection.clone().with_check(check);
+        for opened in [
+            PostgresHandles::open_read_only(&selection, BINDING, CURSOR).err(),
+            PostgresHandles::open_writable(&selection, BINDING, CURSOR).err(),
+        ] {
+            assert!(
+                matches!(&opened, Some(PersistenceError::Refused { status })
+                    if status.starts_with("PostgreSQL Store schema version 2")),
+                "{check:?}: {opened:?}"
+            );
+        }
+    }
+}
