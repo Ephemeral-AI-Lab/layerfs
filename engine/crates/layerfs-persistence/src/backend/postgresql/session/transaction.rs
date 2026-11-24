@@ -361,6 +361,12 @@ impl Session {
         // connection's row lock: it holds the lane barrier shared and checks
         // that lane transaction before its COMMIT (finding #10).
         let in_lane = turn.nested && matches!(mode, Mode::Write | Mode::Publish);
+        // A write or publication outside a held lane takes the lane row and
+        // passes the barrier itself; its rollback also releases a barrier a
+        // cancelled statement left held (#776 P6).
+        let leftover = (!turn.nested && matches!(mode, Mode::Write | Mode::Publish))
+            .then(|| super::profile::barrier_leftover(&self.settings.schema))
+            .unwrap_or_default();
         let begin = match mode {
             Mode::Read => self.settings.read_begin(),
             Mode::Snapshot => self.settings.snapshot_begin(),
@@ -397,7 +403,7 @@ impl Session {
                         // every other writer waiting (#776 P7).
                         let Some(generation) = actual.and_then(|text| text.parse::<u64>().ok())
                         else {
-                            if rollback(state).is_err() {
+                            if rollback(state, &leftover).is_err() {
                                 state.quarantine();
                                 return Err(BackendError::Unknown.into());
                             }
@@ -405,7 +411,7 @@ impl Session {
                             return Err(BackendError::Integrity.into());
                         };
                         if generation != expected {
-                            if rollback(state).is_err() {
+                            if rollback(state, &leftover).is_err() {
                                 state.quarantine();
                                 return Err(BackendError::Unknown.into());
                             }
@@ -415,7 +421,7 @@ impl Session {
                     }
                     Err(e) => {
                         let error = e.backend();
-                        if error == BackendError::Unknown || rollback(state).is_err() {
+                        if error == BackendError::Unknown || rollback(state, &leftover).is_err() {
                             state.quarantine();
                             return Err(BackendError::Unknown.into());
                         }
@@ -425,7 +431,7 @@ impl Session {
                 }
             } else if let Err(e) = state.client.batch_execute(&begin) {
                 let error = e.backend();
-                if error == BackendError::Unknown || rollback(state).is_err() {
+                if error == BackendError::Unknown || rollback(state, &leftover).is_err() {
                     state.quarantine();
                     return Err(BackendError::Unknown.into());
                 }
@@ -461,7 +467,7 @@ impl Session {
             match result {
                 Ok(_) if in_lane && self.lane_still_held().is_err() => {
                     // The lane was lost: nothing of this write is kept.
-                    if rollback(state).is_err() {
+                    if rollback(state, &leftover).is_err() {
                         state.quarantine();
                         return Err(BackendError::Unknown.into());
                     }
@@ -495,7 +501,7 @@ impl Session {
                     }
                 }
                 Err(e) => {
-                    if rollback(state).is_err() {
+                    if rollback(state, &leftover).is_err() {
                         state.quarantine();
                         return Err(BackendError::Unknown.into());
                     }
@@ -605,7 +611,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
     result
 }
 
-fn rollback(state: &mut State) -> Result<(), super::driver::Error> {
+fn rollback(state: &mut State, leftover: &str) -> Result<(), super::driver::Error> {
     state.work.round_trips += 1;
-    state.client.batch_execute("ROLLBACK")
+    state.client.batch_execute(&format!("ROLLBACK{leftover}"))
 }
