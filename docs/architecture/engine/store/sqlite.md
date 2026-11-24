@@ -56,7 +56,7 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back into `ConnectionProfile`; a mismatch is `Integrity`; an existing Store not in `wal` mode is refused | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 | Checkpoint thread | writable Normal session only: a second connection on its own thread, opened with the session's `synchronous` value and `checkpoint_fullfsync=0`, both read back (the second as `ConnectionProfile::checkpoint_thread_checkpoint_fullfsync`); failure to start it refuses the open. It runs only the routine PASSIVE passes; the idle TRUNCATE and the last close run on the session's own connection, which has `checkpoint_fullfsync=1` (finding #11, narrowed by the owner 2026-11-23; see [Checkpoints](#checkpoints)) | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
-| Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files and takes no lane. The checkpoint thread's connection closes first and never takes it; after a quarantine closed the session's connection (see [Quarantine](#quarantine)) it may be SQLite's last, so it then closes with `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` and leaves `-wal`/`-shm` in place (kept until process exit if that setting fails). A writable open keeps its own lane until its last step that can fail (the checkpoint thread's start and the file identity capture), so a failed open's connection also closes under it | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
+| Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files, so its close takes no lane. Its open takes the lane only when the Store has no `-shm`: that open creates the sidecars by path and runs SQLite's WAL recovery, which must not meet an admitted writer's transaction or a compaction's install (#776 C3, S6); with `-shm` there, another connection holds the Store and the open maps it without the lane. Every open captures the file identity before and after opening and refuses `StaleStore` if they differ, so a session never fences on a file other than the one it opened. The checkpoint thread's connection closes first and never takes it; after a quarantine closed the session's connection (see [Quarantine](#quarantine)) it may be SQLite's last, so it then closes with `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` and leaves `-wal`/`-shm` in place (kept until process exit if that setting fails). A writable open keeps its own lane until its last step that can fail (the checkpoint thread's start and the file identity capture), so a failed open's connection also closes under it | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
 
 | Setting | Normal | Source |
 | --- | --- | --- |
@@ -94,6 +94,7 @@ SQL work to the calling thread's counters
 
  Session::hold_lane() -> LaneHold (!Send)
    writable? else ReadOnly; admission turn (nested -> Integrity);
+   quarantined, or a writer still held? -> Unknown (before the wait);
    Writer::acquire; turn.hold(): holder = this thread
    inside: run(true, ..) is nested: no flock, BEGIN IMMEDIATE only
 ```
@@ -142,6 +143,21 @@ transaction still open, the lane would stay with the connection until the
 session drops, as before
 ([`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs)).
 A read that quarantines holds no lane and closes nothing.
+
+A panic is a quarantine too (#776 S3). A body that panics inside a write
+transaction is caught there: the session is quarantined, its connection is
+closed under the job's own writer and that writer released (nested, the
+held `LaneHold` closes it before the lane goes), and then the panic
+resumes. A thread that panics anywhere else while holding the state mutex
+poisons it; every later lock recovers that state as quarantined, so a held
+lane still closes the connection before it lets go, and a later write
+releases a writer the state kept. Before, a caller that catches panics
+(the daemon does) kept a poisoned session whose writer held the lane, or
+whose nested write transaction stayed open after the lane was released, so
+other processes' writers waited forever or failed `Busy`. `hold_lane`
+refuses a quarantined session, or one that still holds its writer, with
+`Unknown` before the blocking wait: that writer is the very lock it would
+wait for (#776 S4).
 
 ## Checkpoints
 
@@ -427,8 +443,11 @@ set in memory peaked at 1.73 GB.
 | `heads_digest(path)` | sha256 of those lines, each ending in `\n` | same |
 
 `read_heads` opens its own read-write but `query_only` connection, because
-SQLite cannot open a WAL file read-only without a `-shm`. A busy Store is
-reported, never waited on. The heads change exactly when history changes, so
+SQLite cannot open a WAL file read-only without a `-shm`. Its close may be
+SQLite's last, which checkpoints and removes `-wal`/`-shm`, so it holds the
+writer lane from before the open to after the close, as a writable session
+does (#776 C3, C4). It waits for the lane like any writer; a Store busy once
+the lane is held is reported, never retried. The heads change exactly when history changes, so
 the digest identifies a backup copy
 ([Control: Backups](../../control/backups/README.md)). Both reads are filtered
 by the same §4.2 markers the catalog uses: a row named by `branch_retired`

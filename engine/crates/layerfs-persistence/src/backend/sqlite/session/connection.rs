@@ -9,7 +9,7 @@ use rusqlite::{limits::Limit, Connection, OpenFlags};
 use std::{
     cell::RefCell,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Mutex, MutexGuard},
 };
 /// The selected SQLite settings and actual runtime capabilities.
 #[derive(Clone, Debug)]
@@ -177,6 +177,13 @@ pub(crate) struct Session {
     pub(crate) identity: Option<FileIdentity>,
     pub(crate) path: PathBuf,
 }
+/// The path of the Store's SQLite sidecar `suffix` (`-wal`, `-shm`).
+fn sidecar(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
 impl Session {
     pub(crate) fn connect(
         path: &Path,
@@ -222,14 +229,24 @@ impl Session {
         // A writable open runs PRAGMA and schema statements that write, so it
         // takes the same local-volume lane a transaction takes: another
         // opener waits for it instead of meeting SQLite's Busy (#534, #647).
-        // A read-only open takes no lane, and the lane is released below,
-        // after the last step that can fail, before this session serves its
-        // first call.
-        let writer = if writable {
+        // A read-only or diagnostic open takes it only when the Store has no
+        // `-shm`: that open creates the sidecars by path and runs SQLite's
+        // WAL recovery, so unadmitted it could leave sidecars beside the file
+        // a compaction is installing, or recover under an admitted writer's
+        // transaction (#776 C3, S6). With `-shm` there, another connection
+        // holds the Store and the open maps it without the lane. The lane is
+        // released below, after the last step that can fail, before this
+        // session serves its first call.
+        let writer = if writable || !sidecar(path, "-shm").exists() {
             Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?)
         } else {
             None
         };
+        // The file the path names before the open; it must still name it
+        // after the open, or the open may have reached a file a compaction
+        // replaced meanwhile and this session would fence on the wrong one
+        // (#776 C3).
+        let before = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -349,6 +366,9 @@ impl Session {
         };
         // §10: the record every later transaction is fenced against.
         let identity = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
+        if identity != before {
+            return Err(BackendError::Stale);
+        }
         // The lane goes only once nothing above can fail: an error exit drops
         // the raw connection, whose close may be SQLite's last (a checkpoint
         // and the removal of `-wal`/`-shm`), and it must close under the lane
@@ -373,6 +393,20 @@ impl Session {
             layout,
             acquisition,
             identity,
+        })
+    }
+    /// The session state. A thread that panicked while holding it left the
+    /// connection in an unknown state (a transaction may still be open), so
+    /// a poisoned lock is recovered as a quarantined state: the next caller
+    /// refuses `Unknown` and closes that connection under any writer it
+    /// still holds, instead of every later call failing on the poisoned lock
+    /// while the lane or a write transaction stays held (#776 S3).
+    pub(crate) fn state(&self) -> MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(|poisoned| {
+            self.state.clear_poison();
+            let mut state = poisoned.into_inner();
+            state.quarantined = true;
+            state
         })
     }
     /// Stored schema version: the pack layout's, offset by the acquisition tables.
