@@ -529,6 +529,17 @@ operation is refused first. A Store created without the tables refuses every
 unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition)).
 The import algorithm is in [Project Init](../project-init/README.md).
 
+The session's epoch (the identity of its first operation, which later
+operations reuse) is read without a lock, so a live owner's unit never waits
+on, or is refused by, a `begin` that waits for another process's lane. Only
+while the epoch is still zero does a `begin` hold a mutex across its
+transaction, so two first `begin`s cannot both claim one: the second waits
+and reuses the first's. `abandoned` and `discard_abandoned` wait for such a
+first `begin` too, so its new operation is never taken for an abandoned one
+([`epoch.rs`](../../../../engine/crates/layerfs-persistence/src/backend/epoch.rs),
+shared with PostgreSQL). Only Project Init begins operations in production,
+from one thread.
+
 ## Merge records
 
 | Rule | Value | Source |

@@ -461,7 +461,9 @@ encodings, charges, refusal order and failures. Each unit is one transaction;
 reads are index range scans in one `REPEATABLE READ` snapshot after the owner
 check; writes are lane-ordered. A released or foreign operation is `Stale`
 before any row is read. A schema without the acquisition tables refuses every
-unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)).
+unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
+same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
+`begin` waiting for the lane blocks no live owner's unit.
 
 ```text
  release of the last operation                    one Write transaction
