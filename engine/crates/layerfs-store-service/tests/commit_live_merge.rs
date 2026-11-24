@@ -187,6 +187,50 @@ fn write_in_the_window_to_a_merged_file_is_refused() {
     fixture.cleanup();
 }
 
+/// An overlap already written when the merge is built is refused before the
+/// Commit takes the publication lane: the check probes only what the merge
+/// changed and runs unheld first, so no other writer of the Store waits on
+/// it (#776 R3). Before, every row written since the capture was read with
+/// the lane held.
+#[test]
+fn an_overlap_before_the_lane_is_refused_without_the_lane() {
+    tmp();
+    let fixture = support::Fixture::new("live-early", base);
+    fixture.fork("lane");
+    let workspace = live::bind(&fixture, 92, "lane");
+    live::change(&workspace, &[Change::Write("/a.txt", b"ALPHA\n")]);
+    fixture.workspace_commit("lane", &[Change::Write("/b.txt", b"BRAVO\n")], 93, || {});
+    let window = handle(&workspace);
+    let started = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let seen = started.clone();
+    let recording = Recording::start();
+    mark_phases(Some(Box::new(move |name, end| {
+        if !end {
+            if name == "merge" {
+                live::change(window, &[Change::Write("/b.txt", b"bravo, mine\n")]);
+            }
+            seen.borrow_mut().push(name.to_owned());
+        }
+    })));
+    let result = workspace.commit_captured(&options());
+    mark_phases(None);
+    drop(recording);
+    let refused = result.expect_err("live conflict");
+    assert_eq!(live_conflict(&refused), ["/b.txt".to_owned()]);
+    assert!(refused.locally_settled, "{refused:?}");
+    assert!(refused.published.is_none(), "{refused:?}");
+    let started = started.borrow();
+    assert!(!started.iter().any(|name| name == "lane"), "{started:?}");
+    assert!(
+        started.iter().any(|name| name == "live.early"),
+        "{started:?}"
+    );
+    assert_eq!(text(&workspace, "/b.txt"), "bravo, mine\n");
+    assert_eq!(text(&workspace, "/a.txt"), "ALPHA\n");
+    workspace.close().unwrap();
+    fixture.cleanup();
+}
+
 /// Both sides create directory `n`: the merge keeps the other side's `n`,
 /// so this side's directory serial is gone from the merged root. A file
 /// created under this side's `n` after the capture is refused, and the next
