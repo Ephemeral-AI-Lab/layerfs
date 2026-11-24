@@ -1,6 +1,8 @@
 //! A Linux `native` or `docker` Sandbox dials the Store URL exactly as the
 //! caller and `store doctor` dial it: `localhost`, IP literals, `hostaddr`,
-//! `verify-full`, host lists and Unix sockets all pass through unchanged.
+//! `verify-full`, host lists and Unix sockets all pass through unchanged
+//! (`verify-full` as a reach input only: the Store's client reads `sslmode`
+//! disable, prefer or require, and `store connect` refuses `verify-full`).
 #![cfg(target_os = "linux")]
 #[path = "support/standin.rs"]
 mod standin;

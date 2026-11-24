@@ -260,7 +260,7 @@
   {
    "call": "sandbox.get",
    "badge": "reshaped",
-   "note": "asks the Sandbox's own side, as today: its daemon lists the Workspaces. No paging: a Sandbox holds at most 16 Workspaces (<code>workspace_capacity</code>). Each Workspace answers its handle, its Branch and the exec ids of the commands <code>running</code> in it; a Workspace leaves <code>state</code> out when <code>ready</code> (<code>busy</code> while it mounts, commits or unmounts; <code>broken</code> after a failure). On a machine that is not ready the Sandbox answers <code>blocked</code> and no Workspaces (long form: <code>workspaces</code> is null); when its machine does not answer the Sandbox is <code>unknown</code> with <code>observed_at</code> (when its state was last known) and no Workspaces, never <code>blocked</code>; a Sandbox whose machine says it does not run is <code>broken</code> with <code>reason: lost</code>, and one whose daemon admits no connection is <code>broken</code> with <code>reason: not_answering</code>. <code>--with stats</code> adds the daemon's process, the Sandbox's CPU and memory and each Workspace's overlay size",
+   "note": "asks the Sandbox's own side, as today: its daemon lists the Workspaces. No paging: a Sandbox holds at most 16 Workspaces (<code>workspace_capacity</code>). Each Workspace answers its handle, its Branch and the exec ids of the commands <code>running</code> in it; a Workspace leaves <code>state</code> out when <code>ready</code> (<code>busy</code> while it mounts, commits or unmounts; <code>broken</code> after a failure). On a machine that is not ready the Sandbox answers <code>blocked</code> and no Workspaces (long form: <code>workspaces</code> is null); when its machine does not answer the Sandbox is <code>unknown</code> with <code>observed_at</code> (when its state was last known) and no Workspaces, never <code>blocked</code>; a Sandbox whose machine says it does not run is <code>broken</code> with <code>reason: lost</code>, and one whose daemon admits no connection is <code>broken</code> with <code>reason: not_answering</code>. <code>--with stats</code> adds the daemon's process, the Sandbox's CPU and memory and each Workspace's overlay size. The long form's <code>network</code> is a namespaces Sandbox's own network as recorded at create: its host end on the machine and its commands' address, <code>lfs&lt;id12&gt; &lt;address&gt;/31</code>; null for a native Sandbox and for one created before Sandboxes had their own network",
    "today": [
     "sandbox.get"
    ],
@@ -344,7 +344,8 @@
     "backend",
     "route",
     "created_at",
-    "workspace_capacity"
+    "workspace_capacity",
+    "network"
    ],
    "item": null,
    "examples": {
@@ -358,7 +359,7 @@
      "a Workspace mid-Commit: {\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"state\":\"busy\",\"op\":{\"name\":\"commit\",\"phase\":\"publish\",\"started_at\":\"2026-11-18T09:16:59Z\"}}]}",
      "--with stats: {\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\"}],\"stats\":{\"daemon\":{\"pid\":4121,\"started_at\":\"2026-11-18T09:02:11Z\"},\"usage\":{\"cpu_ms\":8120,\"memory_bytes\":48234496,\"memory_peak_bytes\":61865984,\"memory_file_bytes\":12582912,\"pid_count\":3,\"oom_kill_count\":0},\"workspaces\":[{\"workspace\":\"tests:agent\",\"overlay_bytes\":8675328}]}}"
     ],
-    "long": "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"],\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"path\":\"/workspaces/1\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"mounted_at\":\"2026-11-18T09:02:11Z\",\"branch_moved\":false,\"pending_merge\":false,\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"started_at\":\"2026-11-18T09:16:59Z\",\"program\":\"npm\",\"tag\":null}],\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\"}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"message\":null,\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"created_at\":\"2026-11-18T09:02:11Z\",\"workspace_capacity\":16}"
+    "long": "{\"state\":\"ready\",\"workspaces\":[{\"workspace\":\"tests:agent\",\"branch\":\"agent\",\"running\":[\"exec-9c0f2a7b41d6e803\"],\"state\":\"ready\",\"op\":null,\"reason\":null,\"fix\":null,\"path\":\"/workspaces/1\",\"commit\":\"5c77a1d0\",\"base_layer\":\"a1e4c7d2\",\"mounted_at\":\"2026-11-18T09:02:11Z\",\"branch_moved\":false,\"pending_merge\":false,\"commands\":[{\"exec\":\"exec-9c0f2a7b41d6e803\",\"started_at\":\"2026-11-18T09:16:59Z\",\"program\":\"npm\",\"tag\":null}],\"id\":\"5f0c7a1e9b3d4826a7c0e15d92b46f38c1a7e05b3d9f24687a0c1e5b9d3f7a26\"}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":null,\"message\":null,\"sandbox\":\"tests\",\"project\":\"shop/api\",\"machine\":\"dev\",\"platform\":\"lima\",\"image\":\"node:22\",\"backend\":\"namespaces\",\"route\":\"fuse\",\"created_at\":\"2026-11-18T09:02:11Z\",\"workspace_capacity\":16,\"network\":\"lfs9c0f2a7b41d6 10.213.0.1/31\"}"
    },
    "dropped": [
     {
@@ -851,6 +852,11 @@
      {
       "check": "sandbox.runtime",
       "what": "its recorded runtime process runs, by id, start time and boot",
+      "full_only": false
+     },
+     {
+      "check": "sandbox.network",
+      "what": "its commands' network namespace is its own, not the machine's",
       "full_only": false
      },
      {

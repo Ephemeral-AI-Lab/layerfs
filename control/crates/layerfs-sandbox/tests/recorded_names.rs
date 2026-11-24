@@ -63,6 +63,7 @@ fn record(home: &Path, id: &str, name: &str, folder: &Path, pid: u32) -> DaemonR
         port: 9,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     std::fs::create_dir_all(folder).unwrap();
     write_record(

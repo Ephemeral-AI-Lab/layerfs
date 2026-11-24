@@ -3,8 +3,9 @@
 //! `store.doctor` record each side's reach, `store.get` lists every side
 //! that connects with its word (`reached`) in both forms and the Store's
 //! `binding`, `store.disconnect --machine` forgets a machine seen only by a
-//! reach, a record with old fields reads `broken` `outdated` until `store
-//! update --auth` writes it clean, a login that is not saved reads
+//! reach, a record with old fields reads `broken` `outdated` until its fix
+//! runs (a URL naming a user is never rewritten: the Store is disconnected
+//! and connected again with the address alone), a login that is not saved reads
 //! `missing`, and `store.update --auth` racing `store.remove_auth` never
 //! leaves a Store naming a removed login. Needs LAYERFS_TEST_PG_URL (a
 //! server URL with its user and no password, to a database with no
@@ -206,7 +207,7 @@ fn every_side_that_connects_is_listed_with_what_was_seen() {
 }
 
 #[test]
-fn an_old_record_reads_outdated_until_its_update_writes_it_clean() {
+fn an_old_record_reads_outdated_until_its_fix_connects_it_again() {
     let Some(server) = server() else { return };
     let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempdir("old");
@@ -232,10 +233,12 @@ fn an_old_record_reads_outdated_until_its_update_writes_it_clean() {
     let got = ok(&home, "store.get", &[("store", t("pg"))]);
     assert_eq!(got.get_text("state"), Some("broken"), "{got:?}");
     assert_eq!(got.get_text("reason"), Some("outdated"));
-    assert_eq!(
-        got.get_text("fix"),
-        Some("layerfs store update pg --auth pg")
-    );
+    // the URL names a user: it is never rewritten, so the fix connects the
+    // Store again with the address alone, its `synchronous_commit` kept (it
+    // was `layerfs store update pg --auth pg`, whose write cleaned the URL,
+    // before the e0aa26e149 Decision)
+    let fix = "layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> --synchronous-commit local";
+    assert_eq!(got.get_text("fix"), Some(fix));
     // the doctor reports the record outdated, with the same fix (area 15)
     let report = ok(&home, "store.doctor", &[("store", t("pg"))]);
     assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
@@ -246,14 +249,29 @@ fn an_old_record_reads_outdated_until_its_update_writes_it_clean() {
     let record = (found.iter())
         .find(|f| f.get_text("check") == Some("store.record"))
         .unwrap_or_else(|| panic!("{report:?}"));
+    assert_eq!(record.get_text("fix"), Some(fix));
+    // `store update --auth` refuses it and writes nothing
+    let before = std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    let args = SdkValue::map([("store", t("pg")), ("auth", t("pg"))]);
+    let refused = layerfs_api::call(Some(&home), "store.update", args, &mut |_| {}).unwrap_err();
+    assert_eq!(refused.code, "InvalidInput", "{}", refused.message);
     assert_eq!(
-        record.get_text("fix"),
-        Some("layerfs store update pg --auth pg")
+        refused.detail.get_text("fix"),
+        Some("layerfs store disconnect pg && layerfs store connect pg <url> --auth pg --synchronous-commit local")
     );
+    let after = std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    assert_eq!(before, after, "a refused update wrote the record");
+    // the fix, each step as the call guide takes it
+    ok(&home, "store.disconnect", &[("store", t("pg"))]);
     ok(
         &home,
-        "store.update",
-        &[("store", t("pg")), ("auth", t("pg"))],
+        "store.connect",
+        &[
+            ("store", t("pg")),
+            ("url", t(&server.url)),
+            ("auth", t("pg")),
+            ("synchronous_commit", t("local")),
+        ],
     );
     let got = ok(&home, "store.get", &[("store", t("pg"))]);
     assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");

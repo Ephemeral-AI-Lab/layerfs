@@ -8,6 +8,7 @@ pub mod create;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[doc(hidden)]
 pub mod local;
+pub mod network;
 #[cfg(unix)]
 mod provider;
 #[cfg(unix)]

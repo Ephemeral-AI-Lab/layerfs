@@ -58,6 +58,8 @@ enum Field {
     Backend(String),
     Route(String),
     RuntimeId(String),
+    /// A namespaces Sandbox's own network: `lfs<id12> <address>/31`.
+    Network(String),
     Daemon(DaemonRecord),
     MachineStopped(bool),
     MachineStopUnknown(bool),
@@ -82,6 +84,7 @@ impl fields::Field for Field {
             "backend" => Self::Backend(text()?),
             "route" => Self::Route(text()?),
             "runtime_id" => Self::RuntimeId(text()?),
+            "network" => Self::Network(text()?),
             "daemon" => Self::Daemon(DaemonRecord::decode(value)?),
             "machine_stopped" => Self::MachineStopped(match value {
                 SdkValue::Bool(v) => *v,
@@ -112,6 +115,7 @@ impl fields::Field for Field {
             Self::Backend(_) => "backend",
             Self::Route(_) => "route",
             Self::RuntimeId(_) => "runtime_id",
+            Self::Network(_) => "network",
             Self::Daemon(_) => "daemon",
             Self::MachineStopped(_) => "machine_stopped",
             Self::MachineStopUnknown(_) => "machine_stop_unknown",
@@ -136,6 +140,7 @@ impl fields::Field for Field {
             | Self::Backend(text)
             | Self::Route(text)
             | Self::RuntimeId(text)
+            | Self::Network(text)
             | Self::Reason(text)
             | Self::Error(text) => SdkValue::text(text),
         }
@@ -200,6 +205,9 @@ impl SandboxRecord {
             ("runtime_id", &started.runtime_id),
         ] {
             self.fields.put(field, SdkValue::opt_text(value.clone()));
+        }
+        if let Some(network) = &started.network {
+            self.fields.put("network", SdkValue::text(network));
         }
         self
     }
@@ -362,6 +370,15 @@ impl SandboxRecord {
     pub fn route(&self) -> Option<&str> {
         self.text(|f| match f {
             Field::Route(text) => Some(text),
+            _ => None,
+        })
+    }
+
+    /// A namespaces Sandbox's own network, as recorded: its host end and
+    /// its commands' address, `lfs<id12> <address>/31`.
+    pub fn network(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Network(text) => Some(text),
             _ => None,
         })
     }

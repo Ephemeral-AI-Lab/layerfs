@@ -43,6 +43,25 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   create` takes; the same rows as `control/SUPPORT.json`. See
   [`machine`](calls.md#machine-14) for every key.
 - `native` and `docker` are never created or removed.
+- Every namespaces Sandbox's commands have a network of their own: two
+  Sandboxes can both listen on `127.0.0.1:3000`, a Sandbox reaches the
+  internet, this computer and the machine's services as before, and it
+  cannot reach another Sandbox or the machine's own `127.0.0.1`, nor the
+  daemon's or the worker's port at the machine's addresses. LayerFS's
+  forwards on this Mac (lima's, Docker Desktop's published worker port)
+  stay reachable through `host.lima.internal` or `host.docker.internal`,
+  guarded by their secrets, which no command can read (owner to confirm).
+  The daemon stays on the machine's network and resolves names with the
+  machine's own resolver file, so a PostgreSQL Store URL is dialled as
+  before. On a Linux host (`native`,
+  `docker` on a Linux Engine) LayerFS adds the firewall table
+  `inet layerfs` and one `lfs<id>` link per Sandbox to this host's network,
+  never changes `net.ipv4.ip_forward`, and refuses `sandbox.create`
+  (`Unavailable`, with the fix) when forwarding is off, when another
+  table's forward chain would drop the Sandboxes' traffic (a Docker host's
+  `FORWARD` policy, ufw), or when the resolver names no IPv4 server a
+  Sandbox reaches (only loopback or IPv6 ones, with no IPv4 upstream). macOS `native` Sandboxes keep this computer's network
+  ([Backends](../../architecture/control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 ### Removed platforms: Firecracker, Microsandbox and SSH
 
@@ -428,10 +447,32 @@ shown in [the calls](calls.md#store-13).)
   auths` lists the logins and the Stores using each; `store remove-auth`
   deletes one no Store uses. There is no login per machine.
 - **`store connect <store> <url> --auth A`.** The URL starts `postgresql://`
-  or `postgres://` and holds host, port, database and TLS settings; one that
-  names a user or carries a login (`user`, a password, `passfile`) is
-  refused `InvalidInput`, before any effect, with a fix that gives the address
-  alone (after `store save-auth`, named with `--auth` on a first connect). `--auth` is required on a Store's first connect. An empty database
+  or `postgres://` and holds host, port, database and TLS settings, read
+  only as the PostgreSQL client reads it, and is recorded and shown exactly
+  as given: LayerFS never cleans or rewrites a URL. One that may hold a
+  login is refused `InvalidInput`, before any effect: it holds an `@`, the
+  client reads a user or a password in it, the client does not read it (a
+  key it does not know, such as `sslpassword`, `sslrootcert`, `sslkey` or
+  `sslcert`, or an `sslmode` other than `disable`, `prefer` or `require`),
+  or its percent-decoded text holds a login key and `=` anywhere, in any
+  case (`user`, `password`, `passfile`, `sslkey`, `sslcert`,
+  `sslpassword`, `oauth_client_secret`: so
+  `postgres://h/db?application_name=me?password=p` and
+  `postgres://h/db&password=p` are refused too). One holding a `#` is
+  refused as well (write a `#` or `@` that is part of the address `%23` or
+  `%40`). The fix names the address `<url>` and the user `<user>`: `store
+  save-auth`, then the address alone named with `--auth` on a first
+  connect, with no `save-auth` when only a `#` is refused. Other text the
+  client reads as part of a host, database or value is the client's
+  (`postgres://h/db&sslmode=require` names the database
+  `db&sslmode=require`). The refusal names the TLS key or `sslmode` value
+  it met (`sslmode=verify-full`), or the `#` that ends a value it would
+  otherwise read (`sslmode=require#f`); `sslmode=require` verifies the
+  server's certificate chain and host name. A private CA is trusted where
+  the Store is dialled: on Linux (OpenSSL) in the system's trusted roots
+  (`SSL_CERT_FILE` reaches only calls in the process that reads it: a
+  Sandbox's daemon starts with a cleared environment), on macOS in the
+  login or system keychain. `--auth` is required on a Store's first connect. An empty database
   gets the `layerfs` schema with a new identity; a database that already
   holds it keeps its identity, and its projects become this home's project
   records. A Store name already in the home is `Exists`, and so is the same
@@ -456,10 +497,31 @@ shown in [the calls](calls.md#store-13).)
   `server_version`, `error`). Nothing about a database is stored on a
   machine; reaches are kept beside the Store's record.
 - **Old records.** A PostgreSQL record that still holds a `password`, a URL
-  with a user, or an old `machines.<m>.checked` reads `broken` `outdated`;
-  `store update <store> --auth <its auth>` writes it clean. A record naming
-  a login the home does not hold reads `broken` `missing`, fixed by saving
-  that login and running the same update.
+  that is not an address alone, or an old `machines.<m>.checked` reads
+  `broken` `outdated` with a fix you run; nothing is migrated for you. A URL
+  that may hold a login is never dialled, shown (it reads
+  `postgresql://<hidden: not an address alone>`) or rewritten: the record
+  keeps it, and any password in it, on disk as it was until a connect of
+  the address alone replaces it. Every fix dials only with the login it
+  names, never with the one the record names, so it works when that login
+  no longer authenticates; it names the address `<url>` and the user
+  `<user>`. With only old fields, `store update <store> --auth <auth>`
+  drops them. A machine's own URL that may hold a login is replaced with
+  `store disconnect <store> --machine <m> && store update <store> --auth
+  <auth> && store connect <store> <url> --machine <m>` (the machine must be
+  running for the last step). The Store's own URL is replaced with `store
+  disconnect <store> && store connect <store> <url> --auth <auth>
+  --synchronous-commit <its value>`, then `store connect <store> <url>
+  --machine <m>` for each machine's own address: the Store is forgotten
+  (refused while a Sandbox of it exists; its data stays) and connected
+  again, its projects found again, its backup links and reach
+  observations not kept. The `outdated` fix names `<auth>` when it replaces
+  a URL (the Store's own login, which `store get` names, or another). `store
+  update <store> --auth <new>` (or `--synchronous-commit` alone) refuses
+  such a record, writing nothing, with the same steps naming `<new>` and
+  carrying the `--synchronous-commit` given. A record naming a login the
+  home does not hold reads `broken` `missing`, fixed by saving that login
+  first.
 - **`store update <store>`** changes the login (`--auth`, checked against the
   same Store) or `--synchronous-commit`. A new address is `store connect`
   again, checked against the same Store's id.
@@ -483,7 +545,25 @@ shown in [the calls](calls.md#store-13).)
   `native` and `docker` on a Linux Engine share the loopback and dial it
   as given. A Sandbox resolves names as its machine does. Only the calls
   that dial the URL (`sandbox create`, Commit, a Workspace status) are
-  refused for it: a Sandbox can always be read and removed. The login
+  refused for it: a Sandbox whose URL its machine cannot dial can still be
+  read and removed. A forced `sandbox remove` there still ends the mount
+  intent each of its Workspaces held: the machine closes the Sandbox
+  without the URL and hands those intents back in its answer, and this
+  computer ends each once with the Store's own address (PostgreSQL Store
+  calls run in the caller), so `branch remove` and `store compact` are not
+  refused for them afterwards; one it could not end is a sentence of
+  `left`. The intents travel only in that answer and nothing records
+  them, so they stay if the remove ends between the machine stopping the
+  Sandbox and this computer ending them: the answer is lost (the remove
+  reports `Unknown`), the machine cannot delete the Sandbox's folder after
+  stopping and deleting its runtime (the remove is refused `Failed`), or
+  this computer's process ends first. A retried `sandbox remove` then
+  answers `already_gone` with an empty `left`, and `branch remove` of the
+  Branch and `store compact` stay refused (`InUse`, `mounts active`), since
+  nothing can prove a PostgreSQL mount intent's owner gone. Any other
+  reason the URL cannot be made (the saved login is gone, or the Store
+  names none) refuses the remove, forced or not, with that reason and its
+  fix: save the login and the remove goes through. The login
   travels only in the one request. The server always runs off the
   machine; nothing installs PostgreSQL in a machine (D12).
 - `store doctor <store>` checks the Store from this computer and from each

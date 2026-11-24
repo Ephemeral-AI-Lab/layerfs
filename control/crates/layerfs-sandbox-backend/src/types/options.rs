@@ -39,12 +39,15 @@ pub enum ProviderLaunchOptions {
     /// takes the launch's binds (a sqlite Store's [`crate::Bind::store`],
     /// none for a PostgreSQL Store). `image` is the digest its root is an
     /// overlay of, and `archive` the docker-archive in the bundle that
-    /// digest names, which is unpacked once per digest.
+    /// digest names, which is unpacked once per digest. `closed_ports` are
+    /// the launcher's own listening ports that are not on loopback (a
+    /// worker on `0.0.0.0`), which the Sandbox's commands cannot connect to.
     Namespaces {
         command_identity: CommandIdentity,
         environment: Vec<(String, String)>,
         image: crate::Image,
         archive: PathBuf,
+        closed_ports: Vec<u16>,
     },
 }
 /// Persisted physical facts supplied by the record owner; no filesystem discovery here.
@@ -58,12 +61,15 @@ pub struct LocalRecord {
     pub labels: Vec<(String, String)>,
 }
 /// A namespaced Linux Sandbox's record: the local facts (its directory name,
-/// init process identity and listener port) and the image digest its root is
-/// an overlay of, so a reopen finds the same unpacked image.
+/// init process identity and listener port), the image digest its root is
+/// an overlay of, so a reopen finds the same unpacked image, and its network
+/// (`<host end> <guest address>/31`), a copy of what the kernel holds while
+/// its init stage lives.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamespaceRecord {
     pub local: LocalRecord,
     pub image: crate::Image,
+    pub network: Option<String>,
 }
 impl NamespaceRecord {
     /// The physical local facts every record of this backend keeps.
@@ -73,6 +79,10 @@ impl NamespaceRecord {
     /// The image digest the Sandbox's root is an overlay of.
     pub fn image(&self) -> &crate::Image {
         &self.image
+    }
+    /// Its network, `<host end> <guest address>/31`, when recorded.
+    pub fn network(&self) -> Option<&str> {
+        self.network.as_deref()
     }
 }
 /// Recorded runtime identity and deployment facts for reopen.

@@ -4,8 +4,10 @@
 //! `LAYERFS_WORKER_SECRET` (a 0600 file holding the secret). It serves its
 //! root, the machine's data disk `/layerfs/data` (internal
 //! `LAYERFS_WORKER_ROOT` names another, for tests), until `machine.stop`
-//! ends it. It never stops by itself (#535 D11: lifecycle is manual).
-use layerfs_api::worker::serve;
+//! ends it. As it starts it prepares the machine for its Sandboxes' own
+//! networks (`prepare_network`): its port closed to their commands when it
+//! listens on a non-loopback address, and the firewall table written. It never stops by itself (#535 D11: lifecycle is manual).
+use layerfs_api::worker::{prepare_network, serve};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -36,6 +38,11 @@ fn run() -> Result<(), String> {
     crate::output::diagnostic(&format!(
         "layerfs worker: listening on {listen}, root {root}"
     ));
+    // a listener on a non-loopback address is closed to Sandboxes' commands
+    let address = listener
+        .local_addr()
+        .map_err(|why| format!("cannot read the address of {listen}: {why}"))?;
+    crate::output::diagnostic(&format!("layerfs worker: {}", prepare_network(address)));
     serve(listener, secret, PathBuf::from(root))
         .map_err(|why| format!("the worker stopped: {why}"))?;
     Ok(())

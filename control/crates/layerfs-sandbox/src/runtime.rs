@@ -168,6 +168,16 @@ pub fn image(runtime: &Sandbox) -> String {
     }
 }
 
+/// A namespaces Sandbox's own network, `<host end> <guest address>/31`;
+/// none for a native one.
+pub fn network(runtime: &Sandbox) -> Option<String> {
+    match runtime.record() {
+        #[cfg(target_os = "linux")]
+        Some(SandboxRecord::Namespaces(record)) => record.network().map(str::to_owned),
+        _ => None,
+    }
+}
+
 /// The image a namespaces deployment's Sandbox root is an overlay of, and
 /// the docker-archive that holds it (`deploy.imageArchive`,
 /// LAYERFS_IMAGE_ARCHIVE). The image is `deploy.image` when the caller gave

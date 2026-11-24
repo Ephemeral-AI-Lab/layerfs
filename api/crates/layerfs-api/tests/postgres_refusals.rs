@@ -450,29 +450,36 @@ fn a_login_in_the_url_is_refused_with_the_address_alone_as_the_fix() {
             t("postgresql://alice:secret@127.0.0.1:1/app?sslmode=disable&passfile=/p"),
         ),
     ]);
+    // the client does not read `passfile`: no form of the URL is shown, and
+    // no user (`<url>` and `<user>` to fill in)
     assert_eq!(
         first,
-        "layerfs store save-auth <auth> --user alice --password-stdin && layerfs store connect pg 'postgresql://127.0.0.1:1/app?sslmode=disable' --auth <auth>"
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>"
     );
     let no_user = refusal(&[
         ("store", t("pg")),
         ("url", t("postgresql://127.0.0.1:1/app?password=secret")),
     ]);
+    // a login is never cut out of a URL: the address is `<url>` too (it
+    // was the URL without its `password` before the e0aa26e149 Decision)
     assert_eq!(
         no_user,
-        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg postgresql://127.0.0.1:1/app --auth <auth>"
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>"
     );
     connected(&home, "pg", "postgresql://127.0.0.1:1/app", Some("pg-app"));
     let readdress = refusal(&[
         ("store", t("pg")),
         ("url", t("postgresql://127.0.0.1:2/app?sslpassword=secret")),
     ]);
+    // nor `sslpassword`
     assert_eq!(
         readdress,
-        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth> && layerfs store connect pg postgresql://127.0.0.1:2/app"
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth> && layerfs store connect pg <url>"
     );
     // a URL that is not a PostgreSQL one is refused with no fix (a fix would
-    // repeat its login); a login hidden after a fragment is dropped with it
+    // repeat its login); a login after a `#` is never cut out (the fix named
+    // the client's database `app#x` with its `#` written `%23` before the
+    // e0aa26e149 Decision)
     let args = SdkValue::map([
         ("store", t("pg2")),
         ("url", t("postgresq://alice:secret@127.0.0.1:1/app")),
@@ -484,10 +491,7 @@ fn a_login_in_the_url_is_refused_with_the_address_alone_as_the_fix() {
         ("store", t("pg")),
         ("url", t("postgresql://127.0.0.1:2/app#x?password=secret")),
     ]);
-    assert!(
-        fragment.ends_with("store connect pg postgresql://127.0.0.1:2/app"),
-        "{fragment}"
-    );
+    assert!(fragment.ends_with("store connect pg <url>"), "{fragment}");
     // every shape names the login path (V23-13) and never the password
     for fix in [&first, &no_user, &readdress, &fragment] {
         assert!(fix.contains("save-auth") && fix.contains("--auth"), "{fix}");
@@ -510,15 +514,54 @@ fn an_old_url_login_is_never_shown_and_a_broken_login_file_is_saved_again() {
         "postgresql://alice:hunter2@127.0.0.1:1/app?sslmode=disable&sslpassword=sekrit",
         Some("pg-app"),
     );
+    // the client does not read `sslpassword`: the URL is hidden whole
     let got = ok(
         &home,
         "store.get",
         &[("store", t("old")), ("detail", SdkValue::Bool(true))],
     );
     let shown = layerfs_api::json::print(&got);
-    assert!(shown.contains("127.0.0.1"), "{shown}");
-    // the user may be named (the no-login fix names it); a password never
-    for secret in ["hunter2", "sekrit"] {
+    assert!(
+        shown.contains("postgresql://<hidden: not an address alone>"),
+        "{shown}"
+    );
+    for secret in ["hunter2", "sekrit", "127.0.0.1"] {
+        assert!(!shown.contains(secret), "{secret} in {shown}");
+    }
+    // and `store.list` shows it hidden too
+    let listed = layerfs_api::json::print(&ok(
+        &home,
+        "store.list",
+        &[("detail", SdkValue::Bool(true))],
+    ));
+    assert!(
+        listed.contains("postgresql://<hidden: not an address alone>"),
+        "{listed}"
+    );
+    for secret in ["hunter2", "sekrit", "127.0.0.1"] {
+        assert!(!listed.contains(secret), "{secret} in {listed}");
+    }
+    // one the client reads is hidden whole too: no login is cut out of a
+    // URL (it showed its address without its login before the e0aa26e149
+    // Decision)
+    connected(
+        &home,
+        "old",
+        "postgresql://alice:hunter2@127.0.0.1:1/app?sslmode=disable&password=sekrit",
+        Some("pg-app"),
+    );
+    let got = ok(
+        &home,
+        "store.get",
+        &[("store", t("old")), ("detail", SdkValue::Bool(true))],
+    );
+    let shown = layerfs_api::json::print(&got);
+    assert!(
+        shown.contains("postgresql://<hidden: not an address alone>"),
+        "{shown}"
+    );
+    // no user, host or password of it is named
+    for secret in ["hunter2", "sekrit", "alice", "127.0.0.1"] {
         assert!(!shown.contains(secret), "{secret} in {shown}");
     }
     let listed = layerfs_api::json::print(&ok(
@@ -526,7 +569,7 @@ fn an_old_url_login_is_never_shown_and_a_broken_login_file_is_saved_again() {
         "store.list",
         &[("detail", SdkValue::Bool(true))],
     ));
-    for secret in ["hunter2", "sekrit"] {
+    for secret in ["hunter2", "sekrit", "alice", "127.0.0.1"] {
         assert!(!listed.contains(secret), "{secret} in {listed}");
     }
     let bad = layerfs_api::home::secrets::dir(&home).join("auth");

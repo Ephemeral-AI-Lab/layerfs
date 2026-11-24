@@ -8,8 +8,13 @@
 //! The Sandbox's copy of the bundle's runtime layer, when its spec names one,
 //! is bound read-only, nosuid and nodev at `/.layerfs/runtime` (R5). This
 //! host's `/etc/resolv.conf` and `/etc/hosts` are bound read-only over the
-//! image's, so the Sandbox, which shares this host's network, resolves names
-//! as this host does.
+//! image's, so the daemon, on this host's network, resolves names exactly as
+//! this host does. Where this host's resolver is one the Sandbox's own
+//! network cannot reach (a loopback or IPv6 one), its commands get a mount
+//! view of their own (`commands_view`): a slave copy of the daemon's, so
+//! every mount the daemon makes or removes later (a Workspace) reaches them,
+//! with the file the launcher wrote (the spec's `resolver`) bound at
+//! `/etc/resolv.conf` in it alone.
 //! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
 //! this mount namespace private first.
 use layerfs_sandbox_backend::HelperSpec;
@@ -74,7 +79,8 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
 }
 
 /// This host's [`RESOLVER_FILES`], each bound read-only at its own path in
-/// the root, over the image's file. A mount point the image lacks (its copy
+/// the root, over the image's file: the daemon's view, as this host
+/// resolves. A mount point the image lacks (its copy
 /// leaves both files out) is made empty, 0644, in the Sandbox's own
 /// writable layer, and one that is a link or another non-file is replaced
 /// there. An image whose `/etc` is not a plain directory keeps its own
@@ -91,11 +97,12 @@ fn resolver(spec: &HelperSpec) -> Result<(), String> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => directory(&etc, 0o755)?,
         Err(error) => return Err(format!("{}: {error}", etc.display())),
     }
-    for source in targets {
+    for guest in targets {
+        let source = guest.clone();
         if !fs::metadata(&source).is_ok_and(|metadata| metadata.is_file()) {
             continue;
         }
-        let target = inside_file(&spec.root, &source);
+        let target = inside_file(&spec.root, &guest);
         match fs::symlink_metadata(&target) {
             Ok(metadata) if metadata.is_file() => {}
             Ok(metadata) if metadata.is_dir() => continue,
@@ -108,6 +115,50 @@ fn resolver(spec: &HelperSpec) -> Result<(), String> {
             Err(error) => return Err(format!("{}: {error}", target.display())),
         }
         bind(&source, &target, true)?;
+    }
+    Ok(())
+}
+
+/// The resolver file's place, which a written one replaces in the
+/// commands' view.
+const RESOLV_CONF: &str = "/etc/resolv.conf";
+
+/// Makes the pivoted root's mounts shared within the Sandbox's mount
+/// namespace, which is private to the VM's: the commands' view
+/// (`commands_view`), a slave copy, then receives every mount and unmount
+/// the daemon makes here, and nothing made there comes back.
+pub(super) fn share() -> Result<(), String> {
+    mount(
+        None::<&Path>,
+        Path::new("/"),
+        None::<&str>,
+        MsFlags::MS_REC | MsFlags::MS_SHARED,
+        None::<&str>,
+    )
+    .map_err(|error| format!("sharing the Sandbox's mounts with its commands' view: {error}"))
+}
+
+/// In a new mount namespace made from the daemon's pivoted one (shared by
+/// `share`): every mount made a slave of the daemon's, then `written`, the
+/// resolver file the launcher wrote for the Sandbox's own network, bound
+/// read-only at `/etc/resolv.conf` where the daemon's view has a file there
+/// (an image whose `/etc` or `/etc/resolv.conf` is not one keeps its own,
+/// as `resolver` left it). The caller is the process commands join.
+pub(super) fn commands_view(written: &Path) -> Result<(), String> {
+    nix::sched::unshare(nix::sched::CloneFlags::CLONE_NEWNS)
+        .map_err(|error| format!("creating the commands' mount view: {error}"))?;
+    mount(
+        None::<&Path>,
+        Path::new("/"),
+        None::<&str>,
+        MsFlags::MS_REC | MsFlags::MS_SLAVE,
+        None::<&str>,
+    )
+    .map_err(|error| format!("making the commands' mount view a slave: {error}"))?;
+    let etc = fs::symlink_metadata("/etc").is_ok_and(|metadata| metadata.is_dir());
+    let file = fs::symlink_metadata(RESOLV_CONF).is_ok_and(|metadata| metadata.is_file());
+    if etc && file {
+        bind(written, Path::new(RESOLV_CONF), true)?;
     }
     Ok(())
 }

@@ -179,6 +179,7 @@ fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
         port: 9,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(home, name),

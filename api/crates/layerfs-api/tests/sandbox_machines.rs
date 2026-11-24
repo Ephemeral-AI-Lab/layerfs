@@ -292,6 +292,82 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     std::fs::remove_dir_all(&home).unwrap();
 }
 
+/// A close runs without a PostgreSQL Store URL its machine cannot dial (a
+/// loopback lima does not share), so a Sandbox can always be removed; any
+/// other reason the URL cannot be made refuses the remove, forced or not,
+/// with that reason's own words and fix: the saved login the Store names
+/// is gone, or it names none. Nothing is removed then.
+#[test]
+fn a_forced_remove_says_why_its_store_s_url_cannot_be_made() {
+    let home = tempdir("lost-login");
+    home::open(&home).unwrap();
+    ok(&home, "machine.list", &[]);
+    home::write_record(
+        &paths::project_record(&home, "pg", "app"),
+        &SdkValue::map([("name", t("app"))]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::machine_record(&home, "dev"),
+        &SdkValue::map([
+            ("name", t("dev")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-dev")),
+        ]),
+    )
+    .unwrap();
+    sandbox_on(&home, "dev");
+    let store = |auth: Option<&str>| {
+        let mut fields = vec![
+            ("name".to_owned(), t("pg")),
+            ("kind".to_owned(), t("postgresql")),
+            ("url".to_owned(), t("postgres://127.0.0.1:1/db")),
+        ];
+        fields.extend(auth.map(|auth| ("auth".to_owned(), t(auth))));
+        home::write_record(&paths::store_record(&home, "pg"), &SdkValue::Map(fields)).unwrap();
+    };
+    let remove = || {
+        let args = SdkValue::map([("sandbox", t("s1")), ("force", SdkValue::Bool(true))]);
+        layerfs_api::call(Some(&home), "sandbox.remove", args, &mut |_| {}).unwrap_err()
+    };
+    // the saved login the Store names is gone
+    store(Some("gone"));
+    let refusal = remove();
+    assert_eq!(refusal.code, "NotFound", "{}", refusal.message);
+    assert!(
+        refusal.message.contains("no saved login named gone")
+            && refusal
+                .message
+                .contains("`layerfs store save-auth gone --user <user> --password-stdin`"),
+        "{}",
+        refusal.message
+    );
+    // the Store names none: the fix saves one and names it
+    store(None);
+    let refusal = remove();
+    assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some(
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth>"
+        ),
+        "{}",
+        refusal.message
+    );
+    assert!(paths::sandbox_record(&home, "s1").exists());
+    // with its login saved, the loopback URL lima does not share refuses
+    // nothing: the remove reaches the machine (here stopped)
+    pg_record(&home);
+    let refusal = remove();
+    assert!(!refusal.message.contains("loopback"), "{}", refusal.message);
+    assert!(
+        refusal.message.contains("layerfs machine start dev"),
+        "{}",
+        refusal.message
+    );
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
 /// Every refusal `sandbox.create` gives for a platform and Store kind is
 /// the support table's reason (#535 §7.3, D10): one machine record per
 /// platform, a sqlite Store on each and one PostgreSQL Store, all records.

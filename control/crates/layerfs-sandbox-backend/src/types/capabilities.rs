@@ -19,9 +19,9 @@ pub enum IsolationModel {
     HostProcess,
     MicroVm,
     /// Linux mount, PID and IPC namespaces and a cgroup on the kernel that
-    /// runs the Sandbox, which may be the host's: no network namespace (its
-    /// commands use that kernel's network, the host's on a Linux host's
-    /// `native` or `docker` machine) and no kernel of its own.
+    /// runs the Sandbox, which may be the host's, and a network namespace
+    /// for its commands (its daemon stays on that kernel's network); no
+    /// kernel of its own.
     Namespaces,
     RemoteCloud,
 }

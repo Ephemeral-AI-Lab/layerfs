@@ -207,8 +207,10 @@ The PostgreSQL test fixtures and the doctor's admin client connect with
 `postgres::Client::connect(…, NoTls)`, not through the Store's TLS policy. The
 connection string must therefore carry its own password and must not require a
 TLS handshake: use `sslmode=disable` on loopback or a private route, and
-`password=…` unless the server uses trust authentication. `sslmode=require` or
-`verify-full` is fine for the Store sessions, but the test fixtures reject it.
+`password=…` unless the server uses trust authentication. `sslmode=require`
+(which verifies the certificate chain and host name) is fine for the Store
+sessions, but the test fixtures reject it; the Store's client reads no
+`verify-ca` or `verify-full`.
 Do not put a password in a job log; pass the whole connection string through
 the environment, as the workflow does with a scratch trust-authenticated
 service.

@@ -232,9 +232,29 @@ pub(crate) fn create_exec(directory: &Path) -> io::Result<()> {
     }
 }
 
-/// Removes command group `directory` once its command ended and nothing it
-/// started runs, then its Workspace's group when that is empty too. A group
-/// something still runs in stays, and ends with its Sandbox.
+/// Removes command group `directory` if nothing of it runs, then its
+/// Workspace's group when that is empty too; one look, no wait. A group's
+/// `populated` drops when its last process has exited, not when it is
+/// reaped, but not in order with its parent being told: since Linux 6.19
+/// (d245698d727a) an exiting task leaves its cgroup after `exit_notify`, at
+/// its final context switch (later still on PREEMPT_RT), so the run that
+/// waited for the command can find its group still counted (before 6.19 it
+/// left before `exit_notify`, as 650828a686 assumed). A child signalled with
+/// the command may also exit after the command did. The cancel removes the
+/// group once it reports it empty (`crate::stop`), which needs no ordering.
+/// A group something still runs in (nothing cancelled it) stays, and ends
+/// with its Sandbox.
+///
+/// KNOWN GAP (owner decision): on Linux 6.19 or later an uncancelled
+/// command's one look here can leave its group, empty, until the Sandbox
+/// ends; a bounded wait on `cgroup.events` in the exec return path would
+/// close it at a cost in exec latency. KNOWN GAP (owner decision): removing
+/// the Workspace's group can race another command of the same Workspace
+/// between the two `mkdir`s of [`create_exec`] (its `ws-<id>` found, then
+/// removed here, then its `exec-<id>` refused `ENOENT`): that command fails,
+/// reported, never retried. Fixes: stop removing `ws-<id>` per command (the
+/// Sandbox's end removes it), or a cross-process lock around a Workspace
+/// group's create and remove.
 pub(crate) fn remove_exec(directory: &Path) {
     if populated(directory).ok() != Some(0) || fs::remove_dir(directory).is_err() {
         return;
@@ -276,5 +296,9 @@ impl crate::stop::Stoppable for ExecGroup<'_> {
 
     fn kill(&self) -> io::Result<()> {
         kill(self.0)
+    }
+
+    fn release(&self) {
+        remove_exec(self.0)
     }
 }

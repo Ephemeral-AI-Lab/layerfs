@@ -2,15 +2,19 @@
 //! and no `auth`) is not dialled with that reference (CUT, owner
 //! 2026-11-19): every call is refused `InvalidInput` and its state is
 //! `broken` `outdated`, each with the fix that saves a login and names it,
-//! its `--user` the one the record's URL names when it names one (UI pass
-//! 2, F6). The record is only read, never converted.
+//! its `--user` `<user>` to fill in: no user is read from a URL, and a URL
+//! holding one is never rewritten, so the Store is connected again with the
+//! address alone (the e0aa26e149 Decision; UI pass 2, F6 named the URL's
+//! user before). The record is only read, never converted.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::state::{Reason, State};
 use layerfs_store::record::{url, url_on, StoreRecord};
 use std::path::Path;
 
-/// The fix names the user the older record's URL names.
-const FIX: &str = "layerfs store save-auth <auth> --user owner --password-stdin && layerfs store update pg --auth <auth>";
+/// The fix of the older record, whose URL names a user: `<user>` to fill
+/// in, and the Store connected again with the address alone (the user was
+/// named and the URL cleaned by the update before the e0aa26e149 Decision).
+const FIX: &str = "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth>";
 
 fn older(home: &Path) -> StoreRecord {
     let fields = [
@@ -54,25 +58,25 @@ fn its_state_is_broken_outdated_with_the_same_fix() {
     let home = std::env::temp_dir().join(format!("layerfs-pg-no-auth-s-{}", std::process::id()));
     let state = layerfs_store::state::recorded_under(&older(&home), None).unwrap();
     assert_eq!(state, State::broken(Reason::Outdated, Some(FIX)));
-    // a URL naming no user leaves `<user>` to fill in; one naming it in a
-    // parameter, or with characters a shell reads, gives it quoted
-    for (url, user) in [
-        ("postgresql://db.example:5432/layerfs_db", "<user>"),
-        ("postgresql://db.example/layerfs_db?user=o%27k", "'o'\\''k'"),
-        ("postgres://a%20b:pw@db.example/layerfs_db", "'a b'"),
+    // a URL naming no user is named by `store update`; one naming a user,
+    // in a parameter or a user part, is replaced (its user was named,
+    // shell-quoted, before the e0aa26e149 Decision); `<user>` either way
+    let update = "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth>";
+    for (url, fix) in [
+        ("postgresql://db.example:5432/layerfs_db", update),
+        ("postgresql://db.example/layerfs_db?user=o%27k", FIX),
+        ("postgres://a%20b:pw@db.example/layerfs_db", FIX),
     ] {
         let record = older(&home).with("url", SdkValue::text(url));
-        let fix = format!(
-            "layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store update pg --auth <auth>"
-        );
         let state = layerfs_store::state::recorded_under(&record, None).unwrap();
-        assert_eq!(state, State::broken(Reason::Outdated, Some(&fix)), "{url}");
+        assert_eq!(state, State::broken(Reason::Outdated, Some(fix)), "{url}");
     }
     // a record naming a login the home does not hold reads `missing`, its
-    // fix saving that login and updating the Store to it (spec v23)
+    // fix saving that login and connecting the Store again with it (spec
+    // v23; it updated the Store to it before the e0aa26e149 Decision)
     let named = older(&home).with("auth", SdkValue::text("pg-app"));
     let state = layerfs_store::state::recorded_under(&named, None).unwrap();
-    let fix = "layerfs store save-auth pg-app --user owner --password-stdin && layerfs store update pg --auth pg-app";
+    let fix = "layerfs store save-auth pg-app --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth pg-app";
     assert_eq!(state, State::broken(Reason::Missing, Some(fix)));
 }
 
@@ -131,6 +135,87 @@ fn a_key_value_address_is_refused_before_anything_dials_it() {
                 "{}",
                 refusal.message
             );
+        }
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The user part a URL holds is the one the daemon's client
+/// (tokio-postgres 0.7, `UrlParser::parse_credentials`) reads: everything
+/// before the first `@` anywhere in the URL, not only before its first
+/// `/`. A URL holding an `@` names a user that way and is refused at
+/// connect, and is never dialled: the login goes only into an address
+/// alone, which keeps its host, path and parameters (the client reads them
+/// back as given before it is dialled).
+#[test]
+fn the_login_replaces_the_user_part_its_client_reads() {
+    // (url, the user the client reads, the hosts it reads after it)
+    for (given, user, hosts) in [
+        // the review's case: both rules read `b`
+        (
+            "postgres://localhost?x=a@b",
+            Some("localhost?x=a"),
+            vec!["b"],
+        ),
+        // an `@` only after the path: the client's user part runs to it
+        (
+            "postgres://localhost/db?x=a@b",
+            Some("localhost/db?x=a"),
+            vec!["b"],
+        ),
+        // two `@` before the path: the first ends the user part
+        ("postgres://a@b@c/db", Some("a"), vec!["b@c"]),
+        (
+            "postgresql://u:p@db.example/db?x=1",
+            Some("u"),
+            vec!["db.example"],
+        ),
+        ("postgres://db.example:5432/db", None, vec!["db.example"]),
+    ] {
+        // the client reads the whole URL only where it knows each key
+        let known = given.replace("?x=1", "?application_name=1");
+        let read: postgres::Config = known.parse().unwrap();
+        assert_eq!(read.get_user(), user, "{given}");
+        let read_hosts: Vec<String> = (read.get_hosts().iter())
+            .map(|host| format!("{host:?}"))
+            .collect();
+        let hosts: Vec<String> = hosts.iter().map(|h| format!("Tcp({h:?})")).collect();
+        assert_eq!(read_hosts, hosts, "{given}");
+        // a user part the client reads is a user the URL names: refused
+        let refused = layerfs_store::postgresql::connect::refuse_login(given);
+        assert_eq!(refused.is_err(), user.is_some(), "{given}");
+    }
+    let home = std::env::temp_dir().join(format!("layerfs-pg-at-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    layerfs_home::home::ensure(&home).unwrap();
+    layerfs_store::postgresql::login::save(&home, "pg-app", "alice", "s3 cret").unwrap();
+    // (recorded, dialled): a recorded URL holding an `@` is not dialled
+    for (recorded, dialled) in [
+        ("postgres://localhost/db?x=a@b", None),
+        ("postgres://a@b@c/db", None),
+        (
+            "postgres://db.example/layerfs_db?application_name=x",
+            Some("postgres://alice:s3%20cret@db.example/layerfs_db?application_name=x"),
+        ),
+    ] {
+        let record = StoreRecord::connected("pg", recorded, "layerfs", "local", Some("pg-app"))
+            .in_home(&home);
+        match url(&record) {
+            Ok(url) => assert_eq!(Some(url.as_str()), dialled, "{recorded}"),
+            Err(refusal) => {
+                assert_eq!(dialled, None, "{recorded}: {}", refusal.message);
+                assert_eq!(refusal.code, "InvalidInput", "{recorded}");
+                assert!(!refusal.message.contains("s3"), "{}", refusal.message);
+                // connected again with the address alone, the Store's
+                // login or another (`<auth>`), its `synchronous_commit` kept
+                // (it was `layerfs store connect pg <url>`, which dials with
+                // the record's login, before the e0aa26e149 Decision)
+                assert_eq!(
+                    refusal.detail.get_text("fix"),
+                    Some("layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> --synchronous-commit local"),
+                    "{recorded}"
+                );
+            }
         }
     }
     std::fs::remove_dir_all(home).unwrap();

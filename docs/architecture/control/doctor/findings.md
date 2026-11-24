@@ -28,7 +28,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `home.artifacts` | Configured per-machine daemon path missing or not executable | `path` | `layerfs machine update <m> --daemon <path>` | `safe` |
 | `home.capacity` | Free disk space on home filesystem cannot be measured or is critically low | `free_bytes`, `total_bytes` | Free disk space or run `layerfs store compact <s>` | `safe` |
 
-## 2. `machine.doctor` (`machine.*`, 10 checks; `native` runs 3)
+## 2. `machine.doctor` (`machine.*`, 11 checks; `native` runs 3, 4 on Linux as root)
 
 | Check ID | Failure / Warning Cause | `evidence` Keys (`--detail`) | Remedy (`fix` / Next Step) | Safety |
 | --- | --- | --- | --- | --- |
@@ -42,12 +42,13 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `machine.worker.compatibility` | Worker build does not match calling `layerfs` build | — | `layerfs machine stop <m> && layerfs machine start <m>` (or `--force` if Sandboxes are running) | `disruptive` |
 | `machine.worker.ping` | Worker does not answer ping within budget | — | `layerfs machine stop <m> && layerfs machine start <m>` | `disruptive` |
 | `machine.capacity` | Machine data disk is low on free space | `reclaimable_image_bytes`, `free_bytes` | `layerfs machine prune <m> --unused` | `safe` |
+| `machine.network` | IPv4 forwarding off; `table inet layerfs` missing while Sandboxes are recorded; `lfs*` links no Sandbox recorded in the home owns, on any machine (a warning: on a Linux host they may be another home's; never when a Sandbox record cannot be read, which leaves the check `not_checked`) | `table`, `forwarding`, `links[{link, addresses, sandbox}]` | stop and start the machine (a Linux host: `sysctl -w net.ipv4.ip_forward=1`; a Sandbox start writes the table); for links, `ip link delete <link>` on the machine once nothing holds them | `disruptive` |
 
 ## 3. `store.doctor` (`store.*`, 6 checks)
 
 | Check ID | Failure / Warning Cause | `evidence` Keys (`--detail`) | Remedy (`fix` / Next Step) | Safety |
 | --- | --- | --- | --- | --- |
-| `store.record` | Unreadable record, unsupported engine, or broken PG record (missing/outdated login) | — | `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update <s> --auth <auth>` or `layerfs store remove <s>` | `safe` |
+| `store.record` | Unreadable record, unsupported engine, or broken PG record (missing/outdated login) | — | `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update <s> --auth <auth>`; for a URL that is not an address alone (never rewritten), the steps that replace it, dialling only the login they name (`layerfs store disconnect <s> && layerfs store connect <s> <url> --auth <auth> --synchronous-commit <its value>`, or `layerfs store disconnect <s> --machine <m> && layerfs store update <s> --auth <auth> && layerfs store connect <s> <url> --machine <m>`); or `layerfs store remove <s>` | `safe` |
 | `store.operation` | Unresolved `op` in home record, stale `<store>.compact-op`, or stale lease | — | `layerfs store compact <s>`, `layerfs store move <s> <to>`, `layerfs store remove <s>`, or `layerfs store get <s> --with live` | `safe` |
 | `store.connection` | SQLite file missing/unreadable; or PG auth (`28P01`), transport/TLS, or 5 s silent handshake failure (per-machine probes carry `from`) | `step` (`login`, `transport`, `handshake`, `authentication`) | Rotate login (`layerfs store save-auth`), fix URL (`layerfs store connect <s> <url>`), or restore PostgreSQL server/TLS trust | `safe` |
 | `store.identity` | Database/file binding ID does not match saved record `binding` | — | Reconnect to the intended Store or restore the authoritative Store copy; never delete | `read` |
@@ -62,7 +63,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `project.listed` | Project record exists in home, but Store catalog does not list it (`notice`) | — | `layerfs project delete <store>/<project>` | `destructive` |
 | `project.data` (`--full`) | Missing or corrupted object/pack reachable from `main` or any Branch head | — | Restore Store from backup (`layerfs backup restore`) or authoritative copy; never delete the Store blindly | `disruptive` |
 
-## 5. `sandbox.doctor` (`sandbox.*`, 17 checks; `native` runs 15) & `workspace.*` (2 checks)
+## 5. `sandbox.doctor` (`sandbox.*`, 18 checks; `native` runs 15) & `workspace.*` (2 checks)
 
 | Check ID | Failure / Warning Cause | `evidence` Keys (`--detail`) | Remedy (`fix` / Next Step) | Safety |
 | --- | --- | --- | --- | --- |
@@ -73,6 +74,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `sandbox.store_placement` | SQLite Store and Sandbox are recorded on different machines | — | `layerfs store move <s> <machine>` or recreate Sandbox on the Store's machine | `disruptive` |
 | `sandbox.operation` | Unresolved `op` from ended owner on Sandbox record | — | `layerfs sandbox remove <x>` | `destructive` |
 | `sandbox.runtime` | Recorded daemon runtime process ended or PID/start/boot changed | — | `layerfs sandbox remove <x> --force` (warns uncommitted Workspace data will be discarded) | `destructive` |
+| `sandbox.network` | A running namespaces Sandbox's init holds no network namespace of its own, or its host end `lfs<id12>` is missing or lacks its recorded address (omitted for a native Sandbox, and when the route is forwarded) | `link`, `network` | `layerfs sandbox remove <x>` | `destructive` |
 | `sandbox.route` | Saved daemon route (worker or forward) unusable | — | Start/restart machine or `layerfs sandbox remove <x> --force` | `disruptive` |
 | `sandbox.forward_process` | Forward process exited (omitted on `native`) | — | Restart machine or `layerfs sandbox remove <x> --force` | `disruptive` |
 | `sandbox.worker_compatibility` | Machine worker build mismatch (omitted on `native`) | — | `layerfs machine stop <m> && layerfs machine start <m>` | `disruptive` |
@@ -111,6 +113,6 @@ Executed on disposable homes (`LAYERFS_TEST_TMPDIR` on `ext4`, PostgreSQL `18.6`
 | 4 | PG Store record missing `auth` | `store doctor pgs --detail` | `store.record` (`error`), `fix: layerfs store save-auth ... && layerfs store update pgs --auth <auth>` | `layerfs store update pgs --auth pg` | `ok: true` |
 | 5 | PG Store wrong password | `store doctor pgs --detail` | `store.connection` (`error`), `evidence: {"step":"authentication"}` | `layerfs store save-auth pg --user layerfs_pg --password-stdin` | `ok: true` |
 | 6 | PG Store silent TCP listener | `store doctor pgs --detail` | `store.connection` (`error`, bounded <= 5 s), `evidence: {"step":"handshake"}` / `transport` | Restore valid PG URL | `ok: true` |
-| 7 | PG `sslmode=require` untrusted cert | `store connect ... --json` | Refusal `Unavailable` (`no connection to the server was made...`, not `Malformed`) | Provide trusted `SSL_CERT_FILE` | Connected `ok: true` |
+| 7 | PG `sslmode=require` untrusted cert | `store connect ... --json` | Refusal `Unavailable` (`no connection to the server was made...`, not `Malformed`) | Trust the CA where the Store is dialled: on Linux (OpenSSL) in the system's trusted roots, or name it in `SSL_CERT_FILE` for calls in that process only (a Sandbox's daemon starts with a cleared environment); on macOS (Security framework, which ignores `SSL_CERT_FILE`) trust it in the login or system keychain | Connected `ok: true` |
 | 8 | Deleted row in `layerfs.object_location` | `project doctor pgs/app --full --detail` | `project.data` (`error`, `coverage: "full"`), names missing 64-hex object ID | Restore from backup / authoritative copy | Verified detection |
 | 9 | Unreachable/invalid bucket record | `backup doctor b1 --detail` | `bucket.configuration` (`error`) | Reconnect bucket with valid config | Verified detection |

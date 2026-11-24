@@ -87,6 +87,7 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
         port: 9,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(root, id),

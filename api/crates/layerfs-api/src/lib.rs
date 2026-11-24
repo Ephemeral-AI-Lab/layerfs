@@ -56,7 +56,7 @@ pub use layerfs_control::machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
 /// for the front ends and their tests.
 pub mod worker {
-    pub use layerfs_control::worker_server::serve;
+    pub use layerfs_control::worker_server::{prepare_network, serve};
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;

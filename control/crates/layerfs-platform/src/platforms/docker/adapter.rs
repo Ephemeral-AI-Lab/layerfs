@@ -84,9 +84,9 @@ impl Adapter for Docker {
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }
-    /// On a Linux Engine the worker shares the host's network, and its
-    /// `namespaces` Sandboxes share the worker's (D-8), so loopback is
-    /// shared. Docker Desktop's worker has a network of its own, which
+    /// On a Linux Engine the worker shares the host's network, and so do
+    /// its `namespaces` Sandboxes' daemons, which dial the Store (their
+    /// commands have a network of their own), so loopback is shared. Docker Desktop's worker has a network of its own, which
     /// calls this host `host.docker.internal` (Docker Desktop's DNS, which
     /// the worker's Sandboxes use too).
     fn loopback(&self, _spec: &Spec) -> Loopback {

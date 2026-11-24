@@ -57,6 +57,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     let foreign = SandboxRecord::Namespaces(layerfs_sandbox_backend::NamespaceRecord {
         local: local_record.clone(),
         image: Image::parse(&format!("sha256:{}", "a".repeat(64))).unwrap(),
+        network: None,
     });
     assert!(!provider.reopen(id, &foreign).err().unwrap().attempted);
     drop(reopened);
@@ -87,6 +88,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
         environment: vec![],
         image: Image::parse(&format!("sha256:{}", "b".repeat(64))).unwrap(),
         archive: "/does-not-exist/image.tar".into(),
+        closed_ports: Vec::new(),
     };
     assert_eq!(
         provider.launch(wrong_options).err().unwrap().phase,

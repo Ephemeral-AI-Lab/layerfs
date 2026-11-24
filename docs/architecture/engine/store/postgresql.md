@@ -128,8 +128,20 @@ Each statement waits for its reply before the next is sent; nothing is
 pipelined. `sslmode` is used exactly as given: the driver's default `prefer`
 costs one extra round trip per connection on a server without TLS, so a
 loopback or private route can give `sslmode=disable`; other routes give
-`require` or `verify-full`. The TLS connector loads the system trust roots
+`require`, which verifies the server's certificate chain and host name (the
+`native-tls` connector built with its defaults). The client reads no
+`verify-ca` or `verify-full` and no certificate or key file: a connection
+string naming one is refused (`Malformed` here, `InvalidInput` at `store
+connect`). The TLS connector loads the system trust roots
 once per process, at the first connection whose `sslmode` may negotiate TLS.
+A private CA is trusted the platform's way: on Linux `native-tls` is
+OpenSSL, which trusts the system's roots and those `openssl-probe` reads
+from `SSL_CERT_FILE` (and `SSL_CERT_DIR`) in the environment of the
+process that dials, so the variable reaches only that process's calls: a
+Sandbox's daemon is started with a cleared environment (`PATH` only) and
+reads none, so a CA its Store needs is added to the machine's system
+trust store; on macOS it is the Security framework, which reads no such
+variable, so the CA must be trusted in the login or system keychain.
 Every setting is `SET LOCAL` in the same round trip as `BEGIN`, so a
 transaction-pooling proxy never carries one session's settings to another.
 

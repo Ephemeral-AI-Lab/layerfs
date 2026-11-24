@@ -72,7 +72,7 @@ pub fn save_sandbox(
             let record = runtime
                 .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
-            local_fields(host, state, platform, &record, NATIVE, LOCAL)?
+            local_fields(host, state, platform, (&record, None), NATIVE, LOCAL)?
         }
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(runtime) => {
@@ -80,7 +80,15 @@ pub fn save_sandbox(
                 return Err(refused("Failed", "namespace Sandbox has no init process"));
             };
             let image = record.image().as_str().to_owned();
-            local_fields(host, state, platform, record.local(), NAMESPACES, &image)?
+            let network = record.network().map(str::to_owned);
+            local_fields(
+                host,
+                state,
+                platform,
+                (record.local(), network),
+                NAMESPACES,
+                &image,
+            )?
         }
     };
     // the keys first: a record with `daemon` is a started Sandbox
@@ -129,7 +137,7 @@ fn local_fields(
     host: &Host,
     state: &SandboxState,
     platform: String,
-    record: &LocalRecord,
+    (record, network): (&LocalRecord, Option<String>),
     runtime: &'static str,
     image: &str,
 ) -> Result<DaemonRecord> {
@@ -150,6 +158,7 @@ fn local_fields(
         port: record.port,
         image: image.to_owned(),
         labels: record.labels.clone(),
+        network,
     }))
 }
 

@@ -165,10 +165,19 @@ machine `{ at, ok: true }` after its reply. A writer takes the Store's lock
 after its Store I/O and writes nothing once the record is gone; a live
 read's `at` merges without a lock, as a read takes none. None of it moves
 the home's `generation`. A PostgreSQL Store naming a login the home does not
-hold is `broken` `missing`; one whose record holds a `password`, a URL with
-a login or a `machines.<m>` entry with anything but `url` is `broken`
-`outdated`, fixed by `store update <store> --auth <auth>`
-([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs)). `projects` shows at
+hold is `broken` `missing`; one whose record holds a `password`, a URL that
+is not an address alone or a `machines.<m>` entry with anything but `url`
+is `broken` `outdated`, fixed by `store update <store> --auth <auth>`. No
+URL is ever cleaned or rewritten: a URL that is not an address alone (one
+that may hold a login, or a raw `#`) is replaced by the user's fix, which
+dials only with the login it names: `store disconnect <store> --machine M
+&& store update <store> --auth <auth> && store connect <store> <url>
+--machine M` for a machine's own, `store disconnect <store> && store
+connect <store> <url> --auth <auth> --synchronous-commit <its value>` and
+each machine's own connected again for the Store's; until then the record
+keeps that URL, and any password in it, as it was written
+([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs),
+[`login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)). `projects` shows at
 most 20 names, `projects_count` only when there are more. A `backups` row's
 long form is `bucket, file, sha256, heads_sha256, last, attempt`: `last` the
 last transfer that worked (`{ call, ended_at, size }`), `attempt` the last
@@ -287,9 +296,27 @@ Python  layerfs.store.connect(store, url, *, auth=None, machine=None, synchronou
 
 Connects a PostgreSQL database as a Store, or sets an address of a
 connected one ([`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)).
-The record keeps the URL with no user and no password and names its saved
-login (`auth`), put into the URL only when the Store is dialled; a URL that
-names a user or holds a password is `InvalidInput`.
+The record keeps the URL exactly as given, with no user and no password,
+and names its saved login (`auth`), put into the URL only when the Store is
+dialled; a URL that may hold a login is `InvalidInput`: one holding an `@`,
+one the PostgreSQL client reads a user or a password in, one it does not
+read, or one whose percent-decoded text holds a login key (`user`,
+`password`, `passfile`, `sslkey`, `sslcert`, `sslpassword`,
+`oauth_client_secret`) and `=` anywhere, in any case
+(`postgres://h/db&password=p`, `postgres://h/db?application_name=me?password=p`);
+so is one holding a `#` (written `%40` or `%23` when part of the address).
+A URL is read only as that client reads it and shown exactly as written,
+or as `postgresql://<hidden: not an address alone>` when it may hold a
+login; none is ever rewritten. The client takes `sslmode`
+`disable`, `prefer` or `require` and no certificate or key file:
+`sslmode=require` verifies the server's certificate chain and host name, and
+`sslmode=verify-full`, `verify-ca`, `sslrootcert`, `sslcert` and `sslkey` are
+refused, the refusal naming the one it met. A private CA is trusted where
+the Store is dialled: on Linux, where `native-tls` is OpenSSL, in the
+system's trusted roots (`SSL_CERT_FILE` reaches only calls in the process
+that reads it: a Sandbox's daemon starts with a cleared environment); on
+macOS, where it is the Security framework, in the login or system
+keychain.
 
 On a Store's first connect `--auth` is required and must be saved;
 `--synchronous-commit` defaults to `local`. It creates the `layerfs` schema
@@ -305,7 +332,7 @@ recorded: `sandbox create --machine M` chooses where a Sandbox of it runs.
 
 | Refusal | When |
 | --- | --- |
-| `InvalidInput` | a URL that is not PostgreSQL, or names a user or holds a password; a bad `--synchronous-commit`; `--auth` missing on a first connect; `--auth` or `--synchronous-commit` on a connected Store |
+| `InvalidInput` | a URL that is not PostgreSQL, names a user or holds a password, holds an `@` or `#`, or that the PostgreSQL client does not read; a bad `--synchronous-commit`; `--auth` missing on a first connect; `--auth` or `--synchronous-commit` on a connected Store |
 | `NotFound` | the named login is not saved (the message names `store save-auth`) |
 | `Exists` | another Store of this home has that name or that database's id |
 | `Unavailable` | no session (no database, a refused login, no server); the machine is stopped |
@@ -315,7 +342,7 @@ Run on macOS native against a local `postgres:17`, with a debug build:
 
 ```console
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
-{"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
+{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one); an `@` or `#` that is part of the address is written %40 or %23"}
 ```
 
 ### store.disconnect
@@ -460,7 +487,10 @@ it is saved: the server must be reached with it and hold this Store. The
 record is written under the home lock and the Store's; this process's open
 sessions on it are closed. The login is checked again under the home lock,
 which `store remove-auth` takes, and the write drops every field 2.0 no
-longer writes (`StoreRecord::cleaned`). A running Sandbox keeps the
+longer writes (`StoreRecord::without_old_fields`) and never rewrites a URL:
+a record keeping a URL that is not an address alone is refused, nothing
+written, with the fix that replaces it naming the login given and carrying
+a given `--synchronous-commit` (`login::update_fix`). A running Sandbox keeps the
 connection it started with. An address change is a `store connect`; a machine's own address is
 removed with `store disconnect --machine`. The long form is `ok, outcome
 ("updated"), store, auth, synchronous_commit`.

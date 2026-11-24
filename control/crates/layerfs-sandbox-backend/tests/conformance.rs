@@ -70,6 +70,7 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
             environment: Vec::new(),
             image: image(),
             archive: PathBuf::from("/layerfs/bundle/images/a.tar"),
+            closed_ports: Vec::new(),
         },
     }
 }
@@ -89,6 +90,7 @@ fn record(backend: Backend) -> SandboxRecord {
         Backend::Namespaces => SandboxRecord::Namespaces(NamespaceRecord {
             local,
             image: image(),
+            network: None,
         }),
     }
 }
@@ -291,6 +293,8 @@ fn a_backend_that_binds_carries_its_binds_through_the_helper_spec() {
                 work: "/layerfs/local/kit-1/overlay/work".into(),
                 binds: list,
                 runtime: None,
+                network: None,
+                resolver: None,
             };
             let encoded = spec.encode().unwrap();
             assert_eq!(HelperSpec::parse(&encoded).unwrap(), spec, "{backend:?}");

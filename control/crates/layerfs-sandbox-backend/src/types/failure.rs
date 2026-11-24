@@ -7,6 +7,10 @@ pub enum RuntimeError {
     Protocol(&'static str),
     /// Explicit unsupported runtime capability, refused before effects.
     Unsupported(&'static str),
+    /// The machine cannot give a Sandbox what it needs now (its network:
+    /// a pool clash, forwarding off, a dropping forward policy, a resolver
+    /// no Sandbox reaches); refused before effects, naming the fix.
+    Unavailable(String),
 }
 impl From<io::Error> for RuntimeError {
     fn from(e: io::Error) -> Self {
@@ -19,6 +23,7 @@ impl fmt::Display for RuntimeError {
             Self::Io(e) => write!(f, "runtime I/O: {e}"),
             Self::Protocol(e) => write!(f, "runtime protocol: {e}"),
             Self::Unsupported(c) => write!(f, "unsupported runtime capability: {c}"),
+            Self::Unavailable(why) => f.write_str(why),
         }
     }
 }

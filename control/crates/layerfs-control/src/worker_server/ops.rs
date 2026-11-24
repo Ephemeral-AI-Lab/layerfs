@@ -21,8 +21,9 @@ use std::path::Path;
 /// any other operation's panic closes the connection, so its caller
 /// reports `Unknown` (layerfs-project#179 D7). A new read-only operation
 /// is added here.
-const READ_ONLY: [&str; 8] = [
+const READ_ONLY: [&str; 9] = [
     "worker.ping",
+    crate::doctor::NETWORK_OP,
     layerfs_sandbox::inspect::OP,
     "machine.images",
     "store.reach",
@@ -113,6 +114,8 @@ pub(super) fn run(
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
+        // this machine's Sandbox network, for `machine.network`
+        crate::doctor::NETWORK_OP => crate::doctor::inspect_network_in_worker(root),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // the check of this machine's connection to a PostgreSQL Store
         // (`store.update`): the caller sends the record and

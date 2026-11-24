@@ -106,6 +106,19 @@ pub fn reached(
     machine: &str,
     record: &StoreRecord,
 ) -> Result<(PgSelection, Option<String>)> {
+    dialled(home, machine, record)?
+}
+
+/// [`reached`], with the refusal of a URL the machine cannot dial
+/// (`layerfs_machine::platform::reach`: a loopback or socket of this host
+/// it does not share, or a URL it cannot read to check) kept apart, as
+/// `Ok(Err(refusal))`, from every other failure (a missing saved login,
+/// a record with no URL, an unreadable machine record), which is `Err`.
+fn dialled(
+    home: &Path,
+    machine: &str,
+    record: &StoreRecord,
+) -> Result<Result<(PgSelection, Option<String>)>> {
     let url = layerfs_store::record::url_on(record, machine)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
@@ -115,19 +128,20 @@ pub fn reached(
             layerfs_machine::machine_spec(home, &layerfs_machine::machine_of(home, machine)?)?;
         let store = record.name();
         let hint = layerfs_machine::platform::loopback_hint(&spec, store, &url);
-        let url = layerfs_machine::platform::reach(&spec, store, &url)
-            .map_err(layerfs_machine::machine_refusal)?;
-        (url, hint)
+        match layerfs_machine::platform::reach(&spec, store, &url) {
+            Ok(url) => (url, hint),
+            Err(error) => return Ok(Err(layerfs_machine::machine_refusal(error))),
+        }
     };
     #[cfg(not(feature = "machine"))]
     let hint = {
         let _ = (home, machine);
         None
     };
-    Ok((
+    Ok(Ok((
         layerfs_store::postgresql::connect::selection_at(record, url),
         hint,
-    ))
+    )))
 }
 
 /// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
@@ -258,8 +272,18 @@ pub fn reach(
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
     let asked = asked.into();
-    let create = asked.call.op() == Op::SandboxCreate;
+    let op = asked.call.op();
+    let create = op == Op::SandboxCreate;
     let outcome = host_op(home, events, record, asked, local, &mut unreached);
+    // the mount intents a close's side could not end for want of a
+    // PostgreSQL Store URL it can dial are ended here, where PostgreSQL
+    // Store calls run, with this process's own URL
+    let outcome = match (op, outcome) {
+        (Op::SandboxClose, Ok(answer)) => {
+            Ok(crate::mount_intents::end_handed(home, record, answer))
+        }
+        (_, outcome) => outcome,
+    };
     // a PostgreSQL Sandbox made on a machine proves the machine reached its
     // Store (spec v23 V23-2): recorded here, after the reply, best effort;
     // a sqlite Store's record is left alone
@@ -315,18 +339,21 @@ fn host_op(
     };
     let kind = target.store_ref.kind();
     // a PostgreSQL Store's URL is resolved (and a URL the machine cannot
-    // dial refused) only for an operation that dials it; a close runs
-    // without one, reporting the mount intents it then cannot end, so a
-    // Sandbox can always be read and removed
+    // dial refused) only for an operation that dials it. A close runs
+    // without a URL the machine cannot dial, so such a Sandbox can still
+    // be read and removed: its side hands back the mount intents it then
+    // cannot end, and `reach` ends them here. Any other reason the URL
+    // cannot be made (a missing saved login, say) refuses the close, a
+    // forced one too
     let (postgresql, hint) = match (kind, op.store_url()) {
         (StoreKind::Postgresql, StoreUrl::Dialled) => {
             let (value, hint) = reached(&home, machine, &target.record)?;
             (Some(value), hint)
         }
         (StoreKind::Postgresql, StoreUrl::Cleanup) => {
-            match reached(&home, machine, &target.record) {
+            match dialled(&home, machine, &target.record)? {
                 Ok((value, hint)) => (Some(value), hint),
-                Err(_) => (None, None),
+                Err(_cannot_dial) => (None, None),
             }
         }
         _ => (None, None),
@@ -416,9 +443,9 @@ fn host_op(
             // the host code reads the project's Branches through its open
             // Store, which this process leases. A PostgreSQL Store opens no
             // Store service (#65): the lease covers this call, and a read
-            // (a create's reach check, a mount's Branch, a status's head)
-            // runs on the process's one held read session, opened when one
-            // is needed; exec, Commit, unmount and close open nothing.
+            // (a create's reach check, a status's head) runs on the
+            // process's one held read session, opened when one is needed;
+            // mount, exec, Commit, unmount and close open nothing.
             let lease = layerfs_store::lease::hold(&home, &target.store)?;
             let (_lease, opened) = match held {
                 true => (Some(lease), None),

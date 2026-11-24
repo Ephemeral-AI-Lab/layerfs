@@ -16,16 +16,19 @@ use std::time::{Duration, Instant};
 /// Hashing the bundle comes first in the worker, so its readiness takes a while.
 pub(crate) const READY: Duration = Duration::from_secs(60);
 
-/// The guest's folders on the data disk and, VM-wide, no user namespaces but
-/// LayerFS's own: `user.max_user_namespaces=0`, read back. `/proc/sys` is
-/// remounted read-write first where a guest mounts it read-only (Apple
-/// Container).
+/// The guest's folders on the data disk, IPv4 forwarding on (every
+/// Sandbox's commands reach the network through the guest's namespace,
+/// which LayerFS owns here, unlike a Linux host's) and, VM-wide, no user
+/// namespaces but LayerFS's own: `user.max_user_namespaces=0`, read back.
+/// `/proc/sys` is remounted read-write first where a guest mounts it
+/// read-only (Apple Container).
 const PREPARE: &str = r#"set -e
 umask 022
 mkdir -p "$1/store" "$1/sandbox" /layerfs/state
 chmod 755 "$1" "$1/store" "$1/sandbox"
 chmod 700 /layerfs/state
 mount -o remount,rw /proc/sys 2>/dev/null || true
+echo 1 > /proc/sys/net/ipv4/ip_forward
 echo 0 > /proc/sys/user/max_user_namespaces
 cat /proc/sys/user/max_user_namespaces"#;
 

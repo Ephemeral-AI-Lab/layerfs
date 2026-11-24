@@ -401,6 +401,9 @@ fn local(
     if !forwarded && !runtime::local(record, checks) {
         return;
     }
+    if !forwarded {
+        super::network::sandbox(record, checks);
+    }
     let directory = record.dir(home);
     let modified = || {
         std::fs::metadata(directory.join("control.json"))

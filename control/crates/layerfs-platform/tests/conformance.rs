@@ -456,7 +456,9 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
 fn every_other_server_is_dialled_as_given_on_every_platform() {
     let scratch = Scratch::new("kit-reach-remote");
     let urls = [
-        // nothing is rewritten, so a certificate's name is never lost
+        // nothing is rewritten, so a certificate's name is never lost;
+        // `verify-full` is a reach input only: the Store's client reads
+        // `sslmode` disable, prefer or require, and `store connect` refuses it
         format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs?sslmode=verify-full"),
         format!("postgres://lfs:{SECRET}@host.docker.internal:5432/layerfs?sslmode=verify-full"),
         format!("postgresql://lfs:{SECRET}@host.lima.internal/layerfs"),
@@ -483,8 +485,9 @@ fn every_other_server_is_dialled_as_given_on_every_platform() {
 fn a_url_reach_cannot_check_is_refused_unless_the_loopback_is_shared() {
     let scratch = Scratch::new("kit-reach-unread");
     let cases = [
-        // libpq's key=value words are no Store URL (`secrets::parts`
-        // refuses them before reach): not read
+        // libpq's key=value words are no Store URL (layerfs-store's
+        // `postgresql::address::refuse_login` refuses them before reach):
+        // not read
         (
             format!("host=localhost user=lfs password={SECRET}"),
             Code::InvalidInput,

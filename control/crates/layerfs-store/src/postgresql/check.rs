@@ -104,10 +104,11 @@ pub fn same_store(record: &StoreRecord, postgresql: &PgSelection) -> Result<()> 
 }
 
 /// Saves `machine`'s own address of Store `name` (an empty one removes
-/// it, and forgets its reach observations), written clean (spec v23
-/// V23-6), under the home lock and the Store's: `Conflict` when the Store was
-/// disconnected, or connected again to another database (`binding`
-/// differs), since it was read.
+/// it, and forgets its reach observations), under the home lock and the
+/// Store's: `Conflict` when the Store was disconnected, or connected again
+/// to another database (`binding` differs), since it was read. Nothing else
+/// of the record changes: no URL is rewritten (a Store address that may
+/// hold a login stays byte for byte), and no old field is dropped.
 pub fn save_own(
     home_dir: &Path,
     name: &StoreName,
@@ -124,10 +125,7 @@ pub fn save_own(
             format!("Store {name} changed while machine {machine} was checked; connect it again"),
         ));
     };
-    record
-        .with_own_connection(machine, own)
-        .cleaned()
-        .write(home_dir)?;
+    record.with_own_connection(machine, own).write(home_dir)?;
     if own.is_empty() {
         crate::observed::forget_locked(home_dir, name, machine)?;
     }
@@ -135,9 +133,10 @@ pub fn save_own(
 }
 
 /// Forgets machine `machine` in every PostgreSQL Store of the home (its
-/// `machine.remove`): its own connection, written clean, and its reach
-/// observations; a later machine of the same name dials each Store's
-/// connection and was never seen. Under the home lock and each Store's.
+/// `machine.remove`): its own connection and its reach observations, the
+/// rest of each record as it was (no URL rewritten); a later machine of the
+/// same name dials each Store's connection and was never seen. Under the
+/// home lock and each Store's.
 pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
     let _lock = home::lock::take(home_dir)?;
     for record in crate::record::stores(home_dir)? {
@@ -147,7 +146,7 @@ pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
         let _store = crate::record::lock(home_dir, record.name())?;
         if record.own_connection(machine).is_some() {
             let record = record.clone().without_own_connection(machine);
-            record.cleaned().write(home_dir)?;
+            record.write(home_dir)?;
         }
         crate::observed::forget_locked(home_dir, record.name(), machine)?;
     }

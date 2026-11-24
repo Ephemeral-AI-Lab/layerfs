@@ -443,6 +443,7 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         port: 9,
         image: "local".to_owned(),
         labels: Vec::new(),
+        network: None,
     });
     write_record(
         &paths::sandbox_record(home, "sb1"),
@@ -517,6 +518,194 @@ fn a_mount_intent_a_forced_remove_cannot_end_is_left() {
     );
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
+}
+
+/// The Branch id [`handed_back`] names, set by its test before the close.
+#[cfg(all(target_os = "macos", feature = "machine"))]
+static HANDED_BRANCH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// A Sandbox's own side closing it on a machine that could not dial its
+/// PostgreSQL Store's URL: its runtime is stopped and the one Workspace
+/// mount intent it could not end goes back to the caller (`ending`: the
+/// Workspace's kernel path and its bound Workspace and Branch ids).
+#[cfg(all(target_os = "macos", feature = "machine"))]
+fn handed_back(
+    _host: layerfs_sandbox::host::Host,
+    _call: layerfs_sandbox::host::Call,
+) -> layerfs_home::outcome::Outcome {
+    let branch = HANDED_BRANCH.get().expect("the Branch id").clone();
+    Ok(map(&[
+        ("kind", t("Closed")),
+        ("sandbox", t("sb1")),
+        ("unknown", SdkValue::List(vec![t("/w/sb1")])),
+        ("left", SdkValue::List(Vec::new())),
+        (
+            "ending",
+            SdkValue::List(vec![map(&[
+                ("path", t("/w/sb1")),
+                ("workspace", t(&"07".repeat(32))),
+                ("branch", t(&branch)),
+            ])]),
+        ),
+    ]))
+}
+
+/// A close whose side ran without a PostgreSQL Store URL (its machine
+/// cannot dial it, `route`) leaves the mount intents of the Workspaces it
+/// drained to its caller, which runs PostgreSQL Store calls in its own
+/// process: the caller ends each once with its own URL, so `branch remove`
+/// and `store compact` are admitted after it and nothing is `left`.
+/// `LAYERFS_TEST_POSTGRES_URL` names a server where a database of the
+/// test's own is made and dropped.
+#[cfg(all(target_os = "macos", feature = "machine"))]
+#[test]
+fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
+    let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");
+        return;
+    };
+    let database = format!("gccalls_close_{}", std::process::id());
+    let admin = |sql: &str| {
+        let mut client = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+        client.batch_execute(sql).unwrap();
+    };
+    admin(&format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)"));
+    admin(&format!("CREATE DATABASE {database}"));
+    let _dropped = DroppedDatabase(url.clone(), database.clone());
+    let config: postgres::Config = url.parse().unwrap();
+    let user = config.get_user().unwrap_or("postgres").to_owned();
+    let address = match config.get_hosts().first() {
+        Some(postgres::config::Host::Tcp(host)) => host.clone(),
+        other => panic!("a TCP test server: {other:?}"),
+    };
+    let port = config.get_ports().first().copied().unwrap_or(5432);
+    let home = tempdir("pg-close");
+    layerfs_api::home::open(&home).unwrap();
+    let folder = tempdir("pg-close-folder");
+    std::fs::write(folder.join("base.txt"), "hello\n").unwrap();
+    // the URL's user becomes a saved login (a trust-auth server takes any
+    // password); the address is connected without it
+    ok(
+        &home,
+        "store.save_auth",
+        &[
+            ("auth", t("pg")),
+            ("user", t(&user)),
+            ("password", t("unused")),
+        ],
+    );
+    let clean = format!("postgresql://{address}:{port}/{database}?sslmode=disable");
+    ok(
+        &home,
+        "store.connect",
+        &[("store", t("pg")), ("url", t(&clean)), ("auth", t("pg"))],
+    );
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("pg/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    let pg = ("project", t("pg/api"));
+    ok(&home, "branch.fork", &[pg.clone(), ("name", t("sb1"))]);
+    let got = ok(
+        &home,
+        "branch.get",
+        &[
+            pg.clone(),
+            ("branch", t("sb1")),
+            ("detail", SdkValue::Bool(true)),
+        ],
+    );
+    let branch = got.get_text("id").expect("the Branch's id").to_owned();
+    HANDED_BRANCH.set(branch.clone()).unwrap();
+    // the mount intent Workspace [7; 32]'s daemon registered on Branch sb1
+    {
+        use layerfs_history::{GcIntent, GcIntentKind, GcScopeKind};
+        use layerfs_store_service::history::admission;
+        let record = layerfs_store::record::StoreRecord::read(&home, "pg")
+            .unwrap()
+            .unwrap();
+        let args = layerfs_store::open_args::OpenArgs::of_record(&home, "pg", &record)
+            .unwrap()
+            .with_project("api");
+        let (runtime, boot) = admission::owner_tokens("ws:sb1");
+        let intent = GcIntent::shared(
+            admission::op_id(),
+            GcIntentKind::Mount,
+            GcScopeKind::Branch,
+            layerfs_bridge::sdk_values::unhex(&branch).unwrap(),
+        )
+        .named(Some("api"), Some("sb1"))
+        .placed(Some([7; 32]), Some("sb1"), Some("native"))
+        .owned(Some(&runtime), Some(&boot));
+        layerfs_store::service::with_service(&args, |service| {
+            (service.store.history().gc_register(&intent))
+                .map_err(|error| layerfs_home::outcome::failed(error.to_string()))
+        })
+        .unwrap();
+    }
+    let (code, message) = refused(&home, "branch.remove", &[pg.clone(), ("branch", t("sb1"))]);
+    assert_eq!(code, "InUse", "{message}");
+    // Sandbox sb1 on native, its daemon recorded where the close runs
+    let daemon = folder.join("layerfs-daemon");
+    std::fs::write(&daemon, "").unwrap();
+    ok(
+        &home,
+        "machine.update",
+        &[
+            ("machine", t("native")),
+            ("daemon", t(&daemon.display().to_string())),
+        ],
+    );
+    layerfs_home::home::write_record(
+        &layerfs_home::home::paths::sandbox_record(&home, "sb1"),
+        &map(&[
+            ("v", SdkValue::Int(1)),
+            ("name", t("sb1")),
+            ("project", t("pg/api")),
+            ("machine", t("native")),
+            ("created", SdkValue::Int(1)),
+            ("id", t("sb1")),
+        ]),
+    )
+    .unwrap();
+    let record = layerfs_sandbox::record::SandboxRecord::read(&home, "sb1")
+        .unwrap()
+        .unwrap();
+    let mut sink = |_| {};
+    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let close = layerfs_sandbox::host::Call::Close {
+        force: true,
+        held: None,
+    };
+    let answer =
+        layerfs_sandbox::route::on_machine(&home, &mut events, &record, close, handed_back)
+            .unwrap();
+    ok(&home, "branch.remove", &[pg.clone(), ("branch", t("sb1"))]);
+    ok(&home, "store.compact", &[("store", t("pg"))]);
+    // the caller's answer: nothing left, and the handed-back field consumed
+    assert_eq!(answer.get("ending"), None, "{answer:?}");
+    assert_eq!(answer.get("left"), Some(&SdkValue::List(Vec::new())));
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// Drops database `.1` of the server `.0` names when the test ends, passed
+/// or not.
+#[cfg(all(target_os = "macos", feature = "machine"))]
+struct DroppedDatabase(String, String);
+
+#[cfg(all(target_os = "macos", feature = "machine"))]
+impl Drop for DroppedDatabase {
+    fn drop(&mut self) {
+        if let Ok(mut client) = postgres::Client::connect(&self.0, postgres::NoTls) {
+            let _ =
+                client.batch_execute(&format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", self.1));
+        }
+    }
 }
 
 #[test]

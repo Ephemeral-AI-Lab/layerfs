@@ -211,7 +211,7 @@ Python  layerfs.sandbox.get(sandbox, *, with_=None)
 | Answer | Keys |
 | --- | --- |
 | short | `state`; when set: `workspaces`, `op`, `blocked_by`, `reason`, `fix`, `observed_at` |
-| long | `state, workspaces, op, blocked_by, reason, fix, observed_at, message, sandbox, project, machine, platform, image, backend, route, created_at, workspace_capacity` |
+| long | `state, workspaces, op, blocked_by, reason, fix, observed_at, message, sandbox, project, machine, platform, image, backend, route, created_at, workspace_capacity, network` |
 | `workspaces[]` short | `workspace`, `branch`; when set: `running`, `state`, `op`, `reason`, `fix` |
 | `workspaces[]` long | `workspace, branch, running, state, op, reason, fix, path, commit, base_layer, mounted_at, branch_moved, pending_merge, commands, id` |
 | `workspaces[].running[]` short | each a `exec` |
@@ -239,10 +239,14 @@ row adds `path`, `commit`, `base_layer`, `mounted_at`, `branch_moved`,
 `pending_merge`, `commands` (`[{exec, started_at, program, tag}]`; no
 argument or environment value is shown) and `id`. The Sandbox's long form
 adds `sandbox, project, machine, platform, image, backend, route,
-created_at` and `workspace_capacity` (16). `platform` is `docker`, `mac` or
+created_at`, `workspace_capacity` (16) and `network`. `platform` is `docker`, `mac` or
 `linux`; `backend` `native` (a macOS host process) or `namespaces`; `route`
 `nfs` for a macOS host process, else `fuse`
 ([`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs)).
+`network` is a `namespaces` Sandbox's own network as its record keeps it
+from the create: its host end on the machine and its commands' address,
+`lfs<id12> <address>/31` (null for a native Sandbox;
+[Backends: own network](../../control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 `--with stats` adds `stats`, null unless the Sandbox is ready: `daemon`
 (`{pid, started_at}`), `usage` (`{cpu_ms, memory_bytes, memory_peak_bytes,
@@ -295,7 +299,8 @@ identity and ends its mounts and processes
 Once the runtime is confirmed stopped, either forced path ends the mount
 intent each of its Workspaces held in the Store, once each (by the Branch
 name and Workspace id their records keep on `native`; by the bound ids its
-worker holds on a machine), and each one it could not end is a `left`
+worker holds on a machine, which hands them back to the caller to end with
+the Store's own URL when it could not dial a PostgreSQL Store's), and each one it could not end is a `left`
 sentence naming why and what ends it there
 ([`mount_intents.rs`](../../../../control/crates/layerfs-sandbox/src/mount_intents.rs)).
 Nothing else ends a mount intent: `store compact` and the other GC calls

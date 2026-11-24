@@ -45,6 +45,10 @@ pub use history::{
     HistoryProvider, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste, MarkResult,
     Sequence, Spans,
 };
+/// The PostgreSQL client's own reading of a connection URL (its `FromStr`
+/// is tokio-postgres's `UrlParser`), the one every Store session dials
+/// with: control reads a Store's URL with it, never with a parser of its own.
+pub use postgres::config::{Config as PostgresConfig, Host as PostgresHost};
 pub use report::{CompactStatus, POSTGRES_COMPACT_PHASES, SQLITE_COMPACT_PHASES};
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;

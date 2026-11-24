@@ -5,6 +5,7 @@
 //! here, with [`dial`], which puts a Store's login into the address it
 //! dials, and [`auth_of`], the login a Store names. A password is never
 //! answered, logged or written into a record.
+use super::address::{refuse_login, with_login};
 use crate::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::{map_of, shown_names};
@@ -91,19 +92,155 @@ pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
             ),
         )
     })?;
+    // a URL that is not an address alone (an older record's) is never
+    // dialled: its fix writes or connects one
+    refuse_login(url).map_err(|refusal| {
+        let message = format!(
+            "PostgreSQL Store {}'s URL: {}",
+            record.name(),
+            refusal.message
+        );
+        with_fix(refused(&refusal.code, message), fix_of(record))
+    })?;
     let login = read(home, auth)?;
-    layerfs_home::secrets::with_login(url, &login.user, login.password())
+    with_login(url, &login.user, login.password())
+}
+
+/// The first step of a fix that saves a login: its name and user to fill
+/// in (no user is ever read from a URL).
+pub const SAVE: &str = "layerfs store save-auth <auth> --user <user> --password-stdin";
+
+/// The fix of PostgreSQL Store `record` whose record alone makes it
+/// `broken` ([`crate::state::postgresql`]): [`no_auth_fix`] when it names
+/// no saved login, [`missing_fix`] when the home does not hold the one it
+/// names, else [`outdated_fix`].
+pub fn fix_of(record: &StoreRecord) -> String {
+    fix_with(record, None)
+}
+
+/// [`fix_of`] with the `synchronous_commit` a refused `store update` was
+/// given, if any.
+fn fix_with(record: &StoreRecord, sync: Option<&str>) -> String {
+    let steps = match record.text("auth") {
+        None => steps(record, true, "<auth>", sync),
+        Some(auth) if record.home().is_some_and(|home| is_missing(home, auth)) => {
+            steps(record, true, &shell_word(auth), sync)
+        }
+        Some(auth) => steps(record, false, &outdated_auth(record, auth), sync),
+    };
+    steps.join(" && ")
+}
+
+/// The steps that leave PostgreSQL Store `record` naming login `auth` (a
+/// name, or `<auth>`) with every URL an address alone, the login saved
+/// first when `save` (`<user>` to fill in). Every step dials only with
+/// `auth`, never with the login the record names, so the steps work when
+/// that one no longer authenticates; a URL that is not an address alone
+/// (`refuse_login`) is never rewritten, only replaced by a connect of the
+/// address alone (`<url>`). When the Store's own address is one, the Store
+/// is disconnected (refused `InUse` while a Sandbox of it exists; its
+/// data stays) and connected again with `--auth`, keeping its
+/// `synchronous_commit` (`sync` when given, else the recorded one), then
+/// every machine's own address is connected again. Otherwise each such
+/// machine's own address is disconnected first (`store disconnect
+/// --machine` dials nothing), the login is named with `store update
+/// --auth` (with `sync` when given), and the machine's address alone is
+/// connected last: `store connect --machine` checks it from that machine,
+/// which must be running and run PostgreSQL Sandboxes (review 57d0aea5ad
+/// N2).
+fn steps(record: &StoreRecord, save: bool, auth: &str, sync: Option<&str>) -> Vec<String> {
+    let store = shell_word(record.name());
+    let refused = |url: &str| refuse_login(url).is_err();
+    let flag = |sync: Option<&str>| {
+        sync.map_or(String::new(), |sync| {
+            format!(" --synchronous-commit {}", shell_word(sync))
+        })
+    };
+    let connect_on = |machine: &str| {
+        let on = shell_word(machine);
+        format!("layerfs store connect {store} <url> --machine {on}")
+    };
+    let mut steps = Vec::new();
+    if save {
+        steps.push(format!(
+            "layerfs store save-auth {auth} --user <user> --password-stdin"
+        ));
+    }
+    let own = record.own_connections();
+    if record.text("url").is_some_and(refused) {
+        let sync = flag(sync.or(record.text("synchronous_commit")));
+        steps.push(format!("layerfs store disconnect {store}"));
+        steps.push(format!(
+            "layerfs store connect {store} <url> --auth {auth}{sync}"
+        ));
+        steps.extend(own.iter().map(|(machine, _)| connect_on(machine)));
+        return steps;
+    }
+    let held: Vec<&String> = (own.iter())
+        .filter(|(_, own)| own.url.as_deref().is_some_and(refused))
+        .map(|(machine, _)| machine)
+        .collect();
+    steps.extend(held.iter().map(|machine| {
+        let on = shell_word(machine);
+        format!("layerfs store disconnect {store} --machine {on}")
+    }));
+    steps.push(format!(
+        "layerfs store update {store} --auth {auth}{}",
+        flag(sync)
+    ));
+    steps.extend(held.iter().map(|machine| connect_on(machine)));
+    steps
+}
+
+/// The login an `outdated` fix names: the record's own, `auth`, unless an
+/// address is replaced, whose connect then takes `<auth>` (the record's
+/// own login or another that authenticates; `store get` names the
+/// record's).
+fn outdated_auth(record: &StoreRecord, auth: &str) -> String {
+    match record.refused_urls() {
+        true => "<auth>".to_owned(),
+        false => shell_word(auth),
+    }
+}
+
+/// The fix of `store update <store> --auth <auth>` (or `--synchronous-commit
+/// <sync>` alone) refused because PostgreSQL Store `record` (as it is,
+/// not as the update would leave it) keeps a URL that is not an address
+/// alone: the [`steps`] that name `auth` (the record's own fix when none
+/// is given), each dialling only with `auth`, the given `sync` carried
+/// (review 57d0aea5ad S1, e0aa26e149 S3 and N1).
+pub fn update_fix(record: &StoreRecord, auth: Option<&str>, sync: Option<&str>) -> String {
+    match auth {
+        Some(auth) => steps(record, false, &shell_word(auth), sync).join(" && "),
+        None => fix_with(record, sync),
+    }
+}
+
+/// The fix of a refused `store connect` (`connect`, its address `<url>`)
+/// of URL holding a login on connected PostgreSQL Store `record`: the
+/// login saved, the [`steps`] that name it, then `connect` unless a step
+/// already connects that address.
+pub fn login_fix(record: &StoreRecord, connect: &str) -> String {
+    let mut steps = steps(record, true, "<auth>", None);
+    let with_auth = format!("{connect} --auth ");
+    if !(steps.iter()).any(|step| step == connect || step.starts_with(&with_auth)) {
+        steps.push(connect.to_owned());
+    }
+    steps.join(" && ")
 }
 
 /// The fix of PostgreSQL Store `record` naming no saved login: save one,
-/// then name it. `--user` is the user its URL names when it names one (a
-/// record from before saved logins), shell-quoted, else `<user>`.
+/// then name it ([`steps`]). `--user` is `<user>`.
 pub fn no_auth_fix(record: &StoreRecord) -> String {
-    format!(
-        "layerfs store save-auth <auth> --user {} --password-stdin && layerfs store update {} --auth <auth>",
-        fix_user(record),
-        shell_word(record.name())
-    )
+    steps(record, true, "<auth>", None).join(" && ")
+}
+
+/// The fix of PostgreSQL Store `record` naming login `auth` whose record
+/// holds what 2.0 no longer writes (spec v23 V23-6): name it again, which
+/// drops the old fields, after replacing any URL that is not an address
+/// alone, whose connect names `<auth>` ([`steps`]).
+pub fn outdated_fix(record: &StoreRecord, auth: &str) -> String {
+    steps(record, false, &outdated_auth(record, auth), None).join(" && ")
 }
 
 /// Whether `home` holds no saved login `auth` (its file is absent; one
@@ -113,23 +250,10 @@ pub fn is_missing(home: &Path, auth: &str) -> bool {
 }
 
 /// The fix of PostgreSQL Store `record` naming login `auth` that is not
-/// saved (spec v23 V23-7): save it under that name, then update the Store
-/// to it, which also rewrites any old field. `--user` as [`no_auth_fix`]
-/// chooses it.
+/// saved (spec v23 V23-7): save it under that name, then name it
+/// ([`steps`]). `--user` is `<user>`.
 pub fn missing_fix(record: &StoreRecord, auth: &str) -> String {
-    format!(
-        "layerfs store save-auth {auth} --user {} --password-stdin && layerfs store update {} --auth {auth}",
-        fix_user(record),
-        shell_word(record.name()),
-        auth = shell_word(auth)
-    )
-}
-
-/// The `--user` a fix names: the user the record's URL names (one written
-/// before saved logins), shell-quoted, else `<user>`.
-fn fix_user(record: &StoreRecord) -> String {
-    let user = record.text("url").and_then(super::connect::url_user);
-    user.map_or_else(|| "<user>".to_owned(), |user| shell_word(&user))
+    steps(record, true, &shell_word(auth), None).join(" && ")
 }
 
 /// The PostgreSQL Stores whose record names login `auth`, by name.

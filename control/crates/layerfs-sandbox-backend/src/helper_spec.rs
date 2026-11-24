@@ -22,6 +22,16 @@
 //! binds read-only at `/.layerfs/runtime` and starts the daemon through. A
 //! spec without it (one written before the runtime layer, or from a bundle
 //! that has none) still parses, and that Sandbox reopens unchanged.
+//!
+//! A `network=<pool>\t<link>` line names the Sandbox's network: the /16
+//! pool the launcher checked and wrote the firewall table for, and the host
+//! end's name (`network::plan::link_name`). The init stage refuses a spec
+//! without one, so no Sandbox's commands run on the machine's network. An
+//! optional `resolver=<file>` line names the resolver file the launcher
+//! wrote for the Sandbox's commands (`network::resolver`), bound at
+//! `/etc/resolv.conf` in their own mount view; the daemon keeps the
+//! launcher's.
+use crate::network::plan::{Ipv4Net, LINK_PREFIX};
 use crate::{Bind, RuntimeError};
 use std::{
     os::unix::ffi::OsStrExt,
@@ -37,12 +47,40 @@ const FIELDS: [&str; 8] = [
 const BIND: &str = "bind";
 /// The key of the optional runtime line, written once after the fields.
 const RUNTIME: &str = "runtime";
+/// The key of the network line.
+const NETWORK: &str = "network";
+/// The key of the optional resolver line.
+const RESOLVER: &str = "resolver";
+
+/// A Sandbox's network as its spec names it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpecNetwork {
+    /// The machine's Sandbox pool, a /16.
+    pub pool: Ipv4Net,
+    /// The host end's name, `lfs<id12>`.
+    pub link: String,
+}
+
+impl SpecNetwork {
+    fn check(&self) -> Result<(), RuntimeError> {
+        let name = &self.link;
+        let plain = name.len() <= 15
+            && name.starts_with(LINK_PREFIX)
+            && name.bytes().all(|b| b.is_ascii_alphanumeric());
+        if !plain || self.pool.prefix > 30 {
+            return Err(RuntimeError::Protocol(FIELD));
+        }
+        Ok(())
+    }
+}
 
 /// The launcher's name-resolution files, which the init stage binds
-/// read-only over the Sandbox root's own: the Sandbox shares the launcher's
-/// network namespace, so it then resolves names as the launcher does
-/// (Docker Desktop's `host.docker.internal`, a VM's hosts entries, any DNS
-/// name). Their place is the root's `/etc`, the image and the Sandbox's own
+/// read-only over the Sandbox root's own, so the Sandbox resolves names as
+/// the launcher does (Docker Desktop's `host.docker.internal`, a VM's hosts
+/// entries, any DNS name). Where the launcher's `resolv.conf` names a
+/// server the Sandbox's own network cannot reach (a loopback or IPv6 one),
+/// the commands' view has the file the spec's `resolver=` names instead
+/// (`network::resolver`). Their place is the root's `/etc`, the image and the Sandbox's own
 /// writable layer, never a Workspace: Workspaces are mounted under the
 /// Sandbox directory, and a diff or a Commit reads nothing else.
 pub const RESOLVER_FILES: [&str; 2] = ["/etc/resolv.conf", "/etc/hosts"];
@@ -79,6 +117,12 @@ pub struct HelperSpec {
     /// through its loader. `None` for a bundle without one, and for a spec
     /// written before it.
     pub runtime: Option<PathBuf>,
+    /// The Sandbox's network; the init stage refuses a spec without one.
+    pub network: Option<SpecNetwork>,
+    /// The resolver file the launcher wrote for the Sandbox's commands,
+    /// bound at `/etc/resolv.conf` in their own mount view (the daemon's
+    /// keeps the launcher's); `None`: both views have the launcher's own.
+    pub resolver: Option<PathBuf>,
 }
 
 impl HelperSpec {
@@ -122,6 +166,15 @@ impl HelperSpec {
             check(runtime)?;
             out.extend_from_slice(format!("{RUNTIME}={}\n", text(runtime)?).as_bytes());
         }
+        if let Some(network) = &self.network {
+            network.check()?;
+            let line = format!("{NETWORK}={}\t{}\n", network.pool, network.link);
+            out.extend_from_slice(line.as_bytes());
+        }
+        if let Some(resolver) = &self.resolver {
+            check(resolver)?;
+            out.extend_from_slice(format!("{RESOLVER}={}\n", text(resolver)?).as_bytes());
+        }
         for bind in &self.binds {
             check(&bind.host)?;
             check(&bind.guest)?;
@@ -147,6 +200,8 @@ impl HelperSpec {
         let mut values: [Option<PathBuf>; 8] = Default::default();
         let mut binds = Vec::new();
         let mut runtime = None;
+        let mut network = None;
+        let mut resolver = None;
         for line in text.lines() {
             let (key, value) = line.split_once('=').ok_or(RuntimeError::Protocol(FIELD))?;
             if key == BIND {
@@ -157,6 +212,29 @@ impl HelperSpec {
                 let path = PathBuf::from(value);
                 check(&path)?;
                 if runtime.replace(path).is_some() {
+                    return Err(RuntimeError::Protocol(FIELD));
+                }
+                continue;
+            }
+            if key == NETWORK {
+                let (pool, link) = value
+                    .split_once('\t')
+                    .ok_or(RuntimeError::Protocol(FIELD))?;
+                let pool = Ipv4Net::parse(pool).ok_or(RuntimeError::Protocol(FIELD))?;
+                let named = SpecNetwork {
+                    pool,
+                    link: link.to_owned(),
+                };
+                named.check()?;
+                if network.replace(named).is_some() {
+                    return Err(RuntimeError::Protocol(FIELD));
+                }
+                continue;
+            }
+            if key == RESOLVER {
+                let path = PathBuf::from(value);
+                check(&path)?;
+                if resolver.replace(path).is_some() {
                     return Err(RuntimeError::Protocol(FIELD));
                 }
                 continue;
@@ -184,6 +262,8 @@ impl HelperSpec {
             work: take(7)?,
             binds,
             runtime,
+            network,
+            resolver,
         };
         for path in [&spec.lower, &spec.upper, &spec.work] {
             check_overlay(path)?;

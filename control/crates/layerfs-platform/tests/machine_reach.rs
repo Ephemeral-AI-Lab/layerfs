@@ -3,7 +3,9 @@
 //! never rewritten. A machine that does not share the caller's loopback
 //! (docker on Docker Desktop, lima, apple-container) refuses a loopback host,
 //! naming its own name for this host and `store connect <store> --machine`;
-//! every other URL is dialled as given, `sslmode=verify-full` included. Hosts
+//! every other URL is passed on as given, `sslmode=verify-full` included
+//! (a reach input only: the Store's client reads `sslmode` disable, prefer
+//! or require, and `store connect` refuses `verify-full`). Hosts
 //! are read as the client (tokio-postgres) reads them: percent-decoded, a
 //! host list split at `,` first, every IPv4 form `inet_aton` reads. No
 //! message holds the URL's password, and no provider tool runs: every
@@ -209,6 +211,8 @@ fn a_failed_dial_carries_the_loopback_hint_where_it_is_not_shared() {
             format!("postgres://lfs:{SECRET}@10.0.0.5:5432/layerfs"),
             format!("postgres://lfs:{SECRET}@[2001:db8::1],10.1/layerfs"),
             format!("postgres://lfs:{SECRET}@10.0.0.5/layerfs?hostaddr=10.0.0.6"),
+            // with a hostaddr its client dials that address alone
+            format!("postgres://lfs:{SECRET}@db.example.com/layerfs?hostaddr=10.0.0.6"),
         ] {
             assert_eq!(machine::loopback_hint(&spec, STORE, &addressed), None);
         }
@@ -320,7 +324,8 @@ fn a_url_reach_cannot_read_is_refused_off_a_shared_loopback() {
     let native = spec(&scratch, Platform::Native);
     for url in [
         // not a postgres:// URL: libpq's key=value words are never a
-        // Store's URL (`secrets::parts` refuses them), nor are other words
+        // Store's URL (layerfs-store's `postgresql::address::refuse_login`
+        // refuses them), nor are other words
         format!("host=localhost user=lfs password={SECRET}"),
         format!("dbname=layerfs password={SECRET}"),
         format!("host=db.example.com port=5433 password='p w{SECRET}'"),

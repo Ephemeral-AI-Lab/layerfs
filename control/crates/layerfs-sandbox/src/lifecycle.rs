@@ -217,7 +217,8 @@ pub fn start(
 /// `sandbox.create(sandbox, { image, platform })`: under its folder's guard,
 /// starts the Sandbox the call names on the call's image (`deploy.image`)
 /// and waits for its daemon: `{ sandbox, name, image, platform, runtime,
-/// route, runtime_id }`. A folder that already records a started Sandbox
+/// route, runtime_id, network }` (`network` for a namespaces Sandbox: its
+/// host end and its commands' address). A folder that already records a started Sandbox
 /// is `Exists`; one the retired docker backend recorded is forgotten first,
 /// as `sandbox remove` forgets it (D-8). `deploy.sandbox` names its backend, `native` or
 /// `namespaces`; a native one's `image` is `local`. `platform` (#529) is
@@ -282,6 +283,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
         runtime: Some(crate::runtime::kind(runtime).to_owned()),
         route: Some(crate::files::route(runtime).to_owned()),
         runtime_id: Some(runtime.identity().to_string()),
+        network: crate::runtime::network(runtime),
         control: None,
     };
     Ok(started.encode())
@@ -301,6 +303,11 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
 /// answered `NoSuchSandbox`, as gone. A local record this build does not
 /// read is forgotten ([`forget_unread`]), no signal sent: a worker's own
 /// record, when the caller's home keeps only the forward to it.
+/// Once the runtime is gone, each drained Workspace's mount intent is
+/// ended once (`left` names each one not ended); on a PostgreSQL Store
+/// whose URL this machine cannot dial, those bound by id go back to the
+/// caller in `ending` instead, which ends them
+/// (`crate::mount_intents::end_handed`).
 pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::files::sandbox_dir(host)?;
@@ -386,19 +393,34 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     owner.stop(STOP_S).map_err(values::wire)?;
     owner.delete().map_err(values::wire)?;
     // a PostgreSQL Store's URL that was not resolved for the close (one
-    // the machine cannot dial, `route`): what it left is reported
+    // the machine cannot dial, `route`): the intents bound by id go back
+    // to the caller, which runs PostgreSQL Store calls and ends them
+    // (`mount_intents::end_handed`); what records less is reported here
     let pg = (host.store_record.as_ref())
         .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
-    let open = host.open_args();
-    let open = match (pg, &host.postgresql) {
-        (true, None) => Err("no URL of the PostgreSQL Store this machine can dial was resolved"),
-        _ => Ok(&open),
+    let (left, handed) = match (pg, &host.postgresql) {
+        (true, None) => {
+            let handed = crate::mount_intents::handed(&bound);
+            let unbound = (bound.into_iter())
+                .filter(|workspace| {
+                    !matches!(
+                        workspace.bound,
+                        Some((_, crate::mount_intents::Branch::Id(_)))
+                    )
+                })
+                .collect::<Vec<_>>();
+            let why = "no URL of the PostgreSQL Store this machine can dial was resolved";
+            (crate::mount_intents::end(Err(why), &unbound), Some(handed))
+        }
+        _ => (
+            crate::mount_intents::end(Ok(&host.open_args()), &bound),
+            None,
+        ),
     };
-    let left = crate::mount_intents::end(open, &bound);
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);
-    Ok(SdkValue::map([
+    let mut answer = vec![
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(&id)),
         (
@@ -406,7 +428,13 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
             SdkValue::List(mounted.into_iter().map(SdkValue::Text).collect()),
         ),
         ("left", SdkValue::List(left)),
-    ]))
+    ];
+    answer.extend(handed.map(|handed| (crate::mount_intents::HANDED, handed)));
+    Ok(SdkValue::Map(
+        (answer.into_iter())
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect(),
+    ))
 }
 
 /// The Branch and Workspace identity of each of `mounted` this process
