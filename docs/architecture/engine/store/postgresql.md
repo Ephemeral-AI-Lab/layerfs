@@ -78,8 +78,11 @@ read-only queries only and never retry. An authentication or unknown
 database error is `Denied`; any other connection failure `Unreachable`,
 including a server silent past the 5 s connect-and-login limit
 (`POSTGRESQL_HANDSHAKE`). The driver bounds only the socket, so every new
-connection is dialled on its own thread and waited for within that limit; a
-dial left waiting ends when the server answers or the socket closes. The
+connection is waited for within that limit: a session's ordinary connection
+is dialled on its own runtime under a timer, which drops the dial at the
+limit; a synchronous client (the lane, `access`, `status`, compaction
+recovery) is dialled on its own thread, and a dial left waiting ends when the
+server answers or the socket closes. The
 diagnostic driver gives its connect and login the same limit under a longer
 deadline. `Connector::new` pairs a single `localhost` host (with no
 `hostaddr`) with `127.0.0.1` and `::1` via `hostaddr` while keeping
@@ -103,11 +106,15 @@ compaction holds one already and never retains the URL.
 ```text
  postgresql::Session
    admission: Admission          FIFO turn, as on SQLite
-   state: Mutex<State>           client (statement cache 256),
+   state: Mutex<State>           client: the ordinary driver
+                                 (tokio-postgres on the session's own
+                                 current-thread runtime) or the
+                                 diagnostic one; statement cache 256,
                                  quarantined, work counters
    lane: Mutex<Option<LaneConnection>>
                                  second connection, opened on first
-                                 hold_lane, with the id of its open
+                                 hold_lane (the synchronous postgres
+                                 client), with the id of its open
                                  lane transaction
    settings: schema, synchronous_commit, lock_timeout_ms
    connector: Config + the process's one TLS connector, or none
@@ -124,8 +131,27 @@ compaction holds one already and never retains the URL.
 | `round_trips` | each exchange that waits for the server; the handshake is not one | same |
 | `prepares`, `connects` | statement-cache misses and COPY statements; new connections (session and lane) | same |
 
-Each statement waits for its reply before the next is sent; nothing is
-pipelined. `sslmode` is used exactly as given: the driver's default `prefer`
+The ordinary driver is a tokio-postgres client on a current-thread runtime
+the session owns, with its connection as a task on it
+([`driver.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/driver.rs));
+each call blocks on that runtime, so the socket is served only while a call
+waits, as the synchronous `postgres` client (the same client polled inline)
+did before. Every call except a pipeline waits for its reply before the
+next is sent. `Session::pipeline`
+([`pipeline.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/pipeline.rs))
+sends several requests (prepared statements with binary parameters, and
+simple-protocol text) before awaiting any reply and collects every reply in
+order, never stopping at the first error: each request ends in its own
+`Sync`, so inside a transaction the requests after a failed one answer
+`25P02` and a `COMMIT` rolls it back. It counts one round trip for the
+flight, plus one for preparing every statement not yet cached, all in one
+flight of their own (`prepares` counts each). A request that cannot be
+encoded stops the flight before it, and when earlier requests went out, one
+`ROLLBACK` follows. A lost reply quarantines the session; a reply the server
+gave is the caller's to classify. No Store call uses it yet (#768 stage 2);
+`postgresql_pipeline.rs` proves that a flight is one network wait by
+holding every server byte at a proxy until the server shows the whole
+flight ran. `sslmode` is used exactly as given: the driver's default `prefer`
 costs one extra round trip per connection on a server without TLS, so a
 loopback or private route can give `sslmode=disable`; other routes give
 `require`, which verifies the server's certificate chain and host name (the
@@ -146,7 +172,9 @@ Every setting is `SET LOCAL` in the same round trip as `BEGIN`, so a
 transaction-pooling proxy never carries one session's settings to another.
 
 A quarantine closes the session's ordinary connection (finding #3), and
-the server ends its backend. Kept open, that backend stayed until the
+the server ends its backend: the client is dropped, its connection task
+sends `Terminate` when no reply is outstanding, and the task is aborted
+after at most 1 s, which closes the socket. Kept open, that backend stayed until the
 process exited: a transaction the server aborted with an error has already
 released its row locks, but the session's advisory keys (mount and
 compaction presence) survive any abort, and an uncertain outcome that left

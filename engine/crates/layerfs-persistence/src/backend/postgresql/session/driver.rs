@@ -1,20 +1,37 @@
-//! Ordinary synchronous driver and deadline-owned observational async driver.
-use super::rows;
+//! The ordinary driver and the deadline-owned observational driver, both
+//! tokio-postgres on a current-thread runtime of their own.
+use super::{
+    connection::Dial,
+    pipeline::{self, Bound, Flight},
+    rows,
+};
 use crate::backend::records::BackendError;
 use crate::PostgresSelection;
-use postgres::{types::ToSql, Client, CopyInWriter, Row, SimpleQueryMessage, Statement};
+use postgres::{types::ToSql, Row, SimpleQueryMessage, Statement};
 use postgres_native_tls::MakeTlsConnector;
 use std::{
     future::Future,
+    pin::Pin,
     str::FromStr,
     time::{Duration, Instant},
 };
 
+/// How long closing an ordinary connection waits for its connection task to
+/// send `Terminate` and shut the socket before the task is aborted, which
+/// closes the socket at once. A connection with no reply outstanding ends
+/// within one local write; the limit matters only for a silent server.
+const CLOSE: Duration = Duration::from_secs(1);
+
 pub(crate) enum Error {
     Unsupported(&'static str),
     Database(postgres::Error),
-    Deadline { released: bool },
+    Deadline {
+        released: bool,
+    },
     Refused(BackendError),
+    /// A pipelined request never sent: it, or a request before it, could
+    /// not be encoded (`pipeline`). Nothing of it reached the server.
+    Unsent,
 }
 impl From<BackendError> for Error {
     fn from(error: BackendError) -> Self {
@@ -34,6 +51,7 @@ impl Error {
             Self::Deadline { released: true } => BackendError::Cancelled,
             Self::Deadline { released: false } => BackendError::Unknown,
             Self::Refused(error) => *error,
+            Self::Unsent => BackendError::Integrity,
         }
     }
     pub(crate) fn code(&self) -> Option<&postgres::error::SqlState> {
@@ -45,12 +63,25 @@ impl Error {
 }
 
 pub(crate) enum Driver {
-    Sync(Client),
+    Ordinary(Ordinary),
     Diagnostic(Diagnostic),
     /// An ordinary connection closed by quarantine (`State::quarantine`);
     /// every call is refused as an unknown outcome without reaching a server.
     Closed,
 }
+/// One ordinary connection: a tokio-postgres client, the current-thread
+/// runtime it runs on and the task that drives its socket. Each call blocks
+/// on the runtime, so the socket is served only while a call waits for it,
+/// exactly as the synchronous `postgres` client did (it is the same client
+/// with its connection polled inline). Unlike that client, several requests
+/// can be sent before any reply is awaited ([`Driver::pipeline`]). There is
+/// no deadline: a call waits for its reply or for the connection to fail.
+pub(crate) struct Ordinary {
+    pub(super) client: tokio_postgres::Client,
+    connection: tokio::task::JoinHandle<()>,
+    pub(super) runtime: tokio::runtime::Runtime,
+}
+
 pub(crate) struct Diagnostic {
     client: tokio_postgres::Client,
     connection: tokio::task::JoinHandle<()>,
@@ -242,7 +273,7 @@ impl Driver {
     }
     pub(crate) fn prepare(&mut self, sql: &str) -> Result<Statement, Error> {
         match self {
-            Self::Sync(client) => client.prepare(sql).map_err(Into::into),
+            Self::Ordinary(client) => client.run(client.client.prepare(sql)),
             Self::Diagnostic(client) => client.run(client.client.prepare(sql)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
@@ -253,7 +284,7 @@ impl Driver {
         params: &[&(dyn ToSql + Sync)],
     ) -> Result<Vec<Row>, Error> {
         match self {
-            Self::Sync(client) => client.query(statement, params).map_err(Into::into),
+            Self::Ordinary(client) => client.run(client.client.query(statement, params)),
             Self::Diagnostic(client) => client.run(client.client.query(statement, params)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
@@ -272,55 +303,207 @@ impl Driver {
     }
     pub(crate) fn simple_query(&mut self, sql: &str) -> Result<Vec<SimpleQueryMessage>, Error> {
         match self {
-            Self::Sync(client) => client.simple_query(sql).map_err(Into::into),
+            Self::Ordinary(client) => client.run(client.client.simple_query(sql)),
             Self::Diagnostic(client) => client.run(client.client.simple_query(sql)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
     }
     pub(crate) fn batch_execute(&mut self, sql: &str) -> Result<(), Error> {
         match self {
-            Self::Sync(client) => client.batch_execute(sql).map_err(Into::into),
+            Self::Ordinary(client) => client.run(client.client.batch_execute(sql)),
             Self::Diagnostic(client) => client.run(client.client.batch_execute(sql)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
     }
-    pub(crate) fn copy_in(&mut self, statement: &Statement) -> Result<CopyInWriter<'_>, Error> {
+    /// One `COPY … FROM STDIN (FORMAT binary)` started (its CopyInResponse
+    /// awaited); the rows are written and finished through [`CopyRows`].
+    pub(crate) fn copy_in(
+        &mut self,
+        statement: &Statement,
+        types: &[postgres::types::Type],
+    ) -> Result<CopyRows<'_>, Error> {
         match self {
-            Self::Sync(client) => client.copy_in(statement).map_err(Into::into),
+            Self::Ordinary(client) => {
+                let sink = client.run(client.client.copy_in(statement))?;
+                Ok(CopyRows {
+                    runtime: &client.runtime,
+                    writer: Box::pin(tokio_postgres::binary_copy::BinaryCopyInWriter::new(
+                        sink, types,
+                    )),
+                })
+            }
+            Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
+            Self::Closed => Err(Error::Refused(BackendError::Unknown)),
+        }
+    }
+    /// Prepares every statement of `sqls` in one flight: each Parse/Describe
+    /// is sent before any reply is awaited, and every reply is collected.
+    pub(crate) fn prepare_all(
+        &mut self,
+        sqls: &[&str],
+    ) -> Result<Vec<Result<Statement, Error>>, Error> {
+        match self {
+            Self::Ordinary(client) => {
+                let pending = sqls
+                    .iter()
+                    .map(|sql| Box::pin(client.client.prepare(sql)) as Pin<Box<_>>)
+                    .collect();
+                Ok(client.runtime.block_on(pipeline::in_order(pending)).1)
+            }
+            Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
+            Self::Closed => Err(Error::Refused(BackendError::Unknown)),
+        }
+    }
+    /// Sends every request before awaiting any reply and collects every
+    /// reply in order ([`pipeline::flight`]). `Err` only when nothing was
+    /// sent: the connection is closed, or this is the read-only diagnostic
+    /// driver.
+    pub(crate) fn pipeline(&mut self, requests: &[Bound<'_>]) -> Result<Flight, Error> {
+        match self {
+            Self::Ordinary(client) => Ok(client
+                .runtime
+                .block_on(pipeline::flight(&client.client, requests))),
             Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
     }
     pub(crate) fn is_valid(&mut self, timeout: Duration) -> Result<(), Error> {
         match self {
-            Self::Sync(client) => client.is_valid(timeout).map_err(Into::into),
+            Self::Ordinary(client) => {
+                let check = client.client.simple_query("");
+                let check = async { tokio::time::timeout(timeout, check).await };
+                match client.runtime.block_on(check) {
+                    Ok(answer) => answer.map(drop).map_err(Into::into),
+                    // No answer in time: whether the connection still works
+                    // is unknown.
+                    Err(_) => Err(Error::Refused(BackendError::Unknown)),
+                }
+            }
             Self::Diagnostic(client) => client.run(client.client.batch_execute("")),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
     }
     pub(crate) fn cancellation(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
         match self {
-            Self::Sync(_) => None,
+            Self::Ordinary(_) => None,
             Self::Diagnostic(client) => Some(client.cancelled.clone()),
             Self::Closed => None,
         }
     }
     pub(crate) fn released(&self) -> Option<bool> {
         match self {
-            Self::Sync(_) => None,
+            Self::Ordinary(_) => None,
             Self::Diagnostic(client) => client.released.get(),
             Self::Closed => None,
         }
     }
+    /// Closes the connection; the server ends its backend, rolling back any
+    /// transaction still open and releasing every lock it held.
+    /// Nothing is awaited from the server, so there is no outcome to
+    /// report: it is always `Ok`.
     pub(crate) fn close(self) -> Result<(), Error> {
         match self {
-            Self::Sync(client) => client.close().map_err(Into::into),
-            Self::Diagnostic(client) => {
-                drop(client);
-                Ok(())
-            }
-            Self::Closed => Ok(()),
+            Self::Ordinary(client) => client.close(),
+            Self::Diagnostic(client) => drop(client),
+            Self::Closed => {}
         }
+        Ok(())
+    }
+}
+
+impl Ordinary {
+    /// One new connection made and logged in within `limit`, or
+    /// [`Dial::Silent`]: the driver bounds only the socket, so a server that
+    /// accepts it and then says nothing (paused or stopped behind a live
+    /// port) would hold the call forever. One attempt, no retry.
+    pub(crate) fn connect(
+        config: &tokio_postgres::Config,
+        tls: Option<&MakeTlsConnector>,
+        limit: Duration,
+    ) -> Result<Self, Dial> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| Dial::Silent(Duration::ZERO))?;
+        // Each arm spawns its own connection: the TLS and plain connections
+        // are different types.
+        let made = runtime.block_on(async {
+            match tls {
+                Some(tls) => tokio::time::timeout(limit, config.connect(tls.clone()))
+                    .await
+                    .map(|made| {
+                        made.map(|(client, connection)| {
+                            let task = tokio::spawn(async move {
+                                let _ = connection.await;
+                            });
+                            (client, task)
+                        })
+                    }),
+                None => tokio::time::timeout(limit, config.connect(tokio_postgres::NoTls))
+                    .await
+                    .map(|made| {
+                        made.map(|(client, connection)| {
+                            let task = tokio::spawn(async move {
+                                let _ = connection.await;
+                            });
+                            (client, task)
+                        })
+                    }),
+            }
+        });
+        match made {
+            Ok(Ok((client, connection))) => Ok(Self {
+                client,
+                connection,
+                runtime,
+            }),
+            Ok(Err(error)) => Err(Dial::Driver(error)),
+            Err(_) => {
+                // A name lookup may still be running on the blocking pool;
+                // the runtime does not wait for it.
+                runtime.shutdown_background();
+                Err(Dial::Silent(limit))
+            }
+        }
+    }
+    fn run<T>(&self, future: impl Future<Output = Result<T, postgres::Error>>) -> Result<T, Error> {
+        self.runtime.block_on(future).map_err(Into::into)
+    }
+    /// Drops the client, which lets the connection task send `Terminate`
+    /// when no reply is outstanding and shut the socket, then aborts the
+    /// task and drops the runtime, which closes the socket if it is still
+    /// open. Either way the server sees the connection end.
+    fn close(self) {
+        let Self {
+            client,
+            mut connection,
+            runtime,
+        } = self;
+        drop(client);
+        // The timer is made inside the runtime, which owns the clock.
+        let _ = runtime.block_on(async { tokio::time::timeout(CLOSE, &mut connection).await });
+        connection.abort();
+        drop(runtime);
+    }
+}
+
+/// The rows of one started binary `COPY`, written on the connection's
+/// runtime (the synchronous client's `BinaryCopyInWriter`, which wraps the
+/// same tokio-postgres writer). A copy dropped without [`Self::finish`] is
+/// aborted: its `CopyFail` goes out with the next request.
+pub(crate) struct CopyRows<'a> {
+    runtime: &'a tokio::runtime::Runtime,
+    writer: Pin<Box<tokio_postgres::binary_copy::BinaryCopyInWriter>>,
+}
+
+impl CopyRows<'_> {
+    /// Writes one row; the writer sends its buffer once past 4 KiB.
+    pub(crate) fn write(&mut self, values: &[&(dyn ToSql + Sync)]) -> Result<(), postgres::Error> {
+        self.runtime.block_on(self.writer.as_mut().write(values))
+    }
+    /// Sends the rest and `CopyDone`, and awaits the server's count.
+    pub(crate) fn finish(mut self) -> Result<u64, postgres::Error> {
+        self.runtime.block_on(self.writer.as_mut().finish())
     }
 }
 

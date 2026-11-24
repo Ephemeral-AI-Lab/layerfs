@@ -4,13 +4,10 @@ use crate::backend::postgresql::status::PostgresStatusError;
 use crate::backend::{admission::Admission, records::BackendError};
 use crate::{PostgresSelection, SqlWork};
 use layerfs_storage::StoragePolicy;
-use postgres::{
-    config::{Host, SslMode},
-    Client, Config, NoTls, SimpleQueryMessage, SimpleQueryRow, Statement,
-};
+use postgres::{Client, NoTls, SimpleQueryMessage, SimpleQueryRow, Statement};
 use postgres_native_tls::MakeTlsConnector;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str::FromStr,
     sync::{
@@ -18,6 +15,10 @@ use std::{
         Mutex, OnceLock,
     },
     time::{Duration, Instant},
+};
+use tokio_postgres::{
+    config::{Host, SslMode},
+    Config,
 };
 
 /// Prepared statements kept per connection before the cache is cleared.
@@ -48,12 +49,9 @@ impl State {
     /// are still read.
     pub(crate) fn quarantine(&mut self) {
         self.quarantined = true;
-        if matches!(self.client, super::driver::Driver::Sync(_)) {
+        if matches!(self.client, super::driver::Driver::Ordinary(_)) {
             self.statements.clear();
-            drop(std::mem::replace(
-                &mut self.client,
-                super::driver::Driver::Closed,
-            ));
+            let _ = std::mem::replace(&mut self.client, super::driver::Driver::Closed).close();
         }
     }
 
@@ -70,6 +68,71 @@ impl State {
         }
         self.statements.insert(sql.to_owned(), statement.clone());
         Ok(statement)
+    }
+
+    /// One prepared statement for each of `sqls`, in order. Those not yet
+    /// prepared on this connection are prepared in one flight (one round
+    /// trip, however many), each counted in `prepares`; every reply is
+    /// collected, and the first failure is returned once the others are
+    /// cached.
+    pub(crate) fn statements(
+        &mut self,
+        sqls: &[&str],
+    ) -> Result<Vec<Statement>, super::driver::Error> {
+        // Resolve cached statements first: inserting may clear the cache.
+        let mut found: Vec<Option<Statement>> = sqls
+            .iter()
+            .map(|sql| self.statements.get(*sql).cloned())
+            .collect();
+        let mut seen = HashSet::new();
+        let missing: Vec<&str> = sqls
+            .iter()
+            .zip(&found)
+            .filter(|(sql, cached)| cached.is_none() && seen.insert(**sql))
+            .map(|(sql, _)| *sql)
+            .collect();
+        if missing.is_empty() {
+            return Ok(found.into_iter().flatten().collect());
+        }
+        self.work.prepares += missing.len() as u64;
+        self.work.round_trips += 1;
+        let replies = self.client.prepare_all(&missing)?;
+        let mut prepared = HashMap::with_capacity(missing.len());
+        let mut failed = None;
+        for (sql, reply) in missing.into_iter().zip(replies) {
+            match reply {
+                Ok(statement) => {
+                    if self.statements.len() >= STATEMENT_CACHE {
+                        self.statements.clear();
+                    }
+                    self.statements.insert(sql.to_owned(), statement.clone());
+                    prepared.insert(sql, statement);
+                }
+                Err(e) => {
+                    failed.get_or_insert(e);
+                }
+            }
+        }
+        if let Some(e) = failed {
+            return Err(e);
+        }
+        for (sql, slot) in sqls.iter().zip(&mut found) {
+            if slot.is_none() {
+                *slot = prepared.get(sql).cloned();
+            }
+        }
+        found
+            .into_iter()
+            .map(|statement| statement.ok_or(super::driver::Error::Unsent))
+            .collect()
+    }
+}
+
+impl Drop for State {
+    /// Closes an ordinary connection in order (`Terminate`), as the
+    /// synchronous client did when it was dropped.
+    fn drop(&mut self) {
+        let _ = std::mem::replace(&mut self.client, super::driver::Driver::Closed).close();
     }
 }
 
@@ -128,9 +191,9 @@ impl Connector {
     /// [`Dial::Silent`] and the thread, left with no one to answer, ends
     /// when the server answers or the socket closes. One attempt, no retry.
     pub(crate) fn connect_raw(&self) -> Result<Client, Dial> {
-        let limit = self.config.get_connect_timeout().copied();
-        let limit = limit.unwrap_or(HANDSHAKE);
-        let (config, tls) = (self.config.clone(), self.tls.clone());
+        let limit = self.limit();
+        let config = postgres::Config::from(self.config.clone());
+        let tls = self.tls.clone();
         let (answer, answered) = std::sync::mpsc::sync_channel(1);
         let dial = move || {
             let _ = answer.send(match tls {
@@ -147,17 +210,22 @@ impl Connector {
             Err(_) => Err(Dial::Silent(limit)),
         }
     }
+    /// The dial limit: the URL's `connect_timeout`, else [`HANDSHAKE`].
+    fn limit(&self) -> Duration {
+        self.config
+            .get_connect_timeout()
+            .copied()
+            .unwrap_or(HANDSHAKE)
+    }
+    /// One new synchronous client (the lane, recovery and status reads).
     pub(crate) fn connect(&self) -> Result<Client, BackendError> {
-        self.connect_raw().map_err(|dial| match dial {
-            // No session exists, so no work can have started: the
-            // server refused it with an error, or no connection was made.
-            Dial::Driver(e) => match e.code().map(|c| rows::sqlstate(c.code())) {
-                Some(BackendError::Unknown) => BackendError::Rejected,
-                Some(other) => other,
-                None => BackendError::Closed,
-            },
-            Dial::Silent(_) => BackendError::Closed,
-        })
+        self.connect_raw().map_err(Dial::refused)
+    }
+    /// One new ordinary session connection, within the same limit, dialed
+    /// on its own runtime instead of a thread.
+    pub(crate) fn connect_ordinary(&self) -> Result<super::driver::Ordinary, BackendError> {
+        super::driver::Ordinary::connect(&self.config, self.tls.as_ref(), self.limit())
+            .map_err(Dial::refused)
     }
     /// One new client for a status read: a refused login or a database that
     /// does not exist is `Denied`, anything else `Unreachable`, each with
@@ -200,6 +268,22 @@ pub(crate) enum Dial {
     Driver(postgres::Error),
     /// No answer within the limit (zero: the dial could not be started).
     Silent(Duration),
+}
+
+impl Dial {
+    /// The refusal of a dial: no session exists, so no work can have
+    /// started: the server refused it with an error, or no connection was
+    /// made.
+    fn refused(self) -> BackendError {
+        match self {
+            Self::Driver(e) => match e.code().map(|c| rows::sqlstate(c.code())) {
+                Some(BackendError::Unknown) => BackendError::Rejected,
+                Some(other) => other,
+                None => BackendError::Closed,
+            },
+            Self::Silent(_) => BackendError::Closed,
+        }
+    }
 }
 
 impl std::fmt::Display for Dial {
@@ -316,11 +400,11 @@ impl Session {
     ) -> Result<Self, BackendError> {
         let settings = Settings::new(selection)?;
         let connector = Connector::new(selection)?;
-        let client = connector.connect()?;
+        let client = connector.connect_ordinary()?;
         Ok(Self {
             admission: Admission::default(),
             state: Mutex::new(State {
-                client: super::driver::Driver::Sync(client),
+                client: super::driver::Driver::Ordinary(client),
                 statements: HashMap::new(),
                 quarantined: false,
                 // The connection; the open's check reads the server version.

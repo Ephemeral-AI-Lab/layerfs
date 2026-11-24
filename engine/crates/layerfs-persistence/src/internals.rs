@@ -10,6 +10,9 @@ pub use crate::backend::postgresql::compact::{
 pub use crate::backend::postgresql::probe::{
     reads as postgresql_reads, Outcome as PostgresReadOutcome, Read as PostgresRead,
 };
+pub use crate::backend::postgresql::session::pipeline::{
+    Refusal as PipelineRefusal, Reply as PipelineReply, Request as PipelineRequest,
+};
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{
@@ -38,4 +41,15 @@ pub fn decode_hint_block(
     body: &[u8],
 ) -> Result<Vec<layerfs_history::records::BindingHint>, BackendError> {
     crate::blocks::hints::decode(group, body)
+}
+
+/// One pipelined flight on the session of `handles`
+/// (`postgresql::session::pipeline`): every request sent before any reply is
+/// awaited, every reply returned in order. Stage 2 of #768 sends a Commit
+/// this way; until then only the pipeline's own test calls it.
+pub fn postgresql_pipeline(
+    handles: &crate::PostgresHandles,
+    requests: &[PipelineRequest<'_>],
+) -> Result<Vec<Result<PipelineReply, PipelineRefusal>>, BackendError> {
+    handles.storage.session.pipeline(requests)
 }

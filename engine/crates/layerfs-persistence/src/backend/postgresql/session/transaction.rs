@@ -6,9 +6,7 @@ use super::{
 };
 use crate::backend::records::{BackendError, OutcomeError, Param, Record};
 use layerfs_telemetry::timer::waits::Wait;
-use postgres::{
-    binary_copy::BinaryCopyInWriter, types::ToSql, types::Type, Row, SimpleQueryMessage,
-};
+use postgres::{types::ToSql, types::Type, Row, SimpleQueryMessage};
 use std::{
     cell::{Cell, RefCell},
     sync::atomic::Ordering,
@@ -216,7 +214,7 @@ impl Transaction<'_> {
         &self,
         sql: &str,
         types: &[Type],
-        rows: impl FnOnce(&mut BinaryCopyInWriter<'_>) -> Result<(), postgres::Error>,
+        rows: impl FnOnce(&mut super::driver::CopyRows<'_>) -> Result<(), postgres::Error>,
     ) -> Result<u64, BackendError> {
         self.admit()?;
         let start = Instant::now();
@@ -226,8 +224,7 @@ impl Transaction<'_> {
             // (CopyInResponse) and the finish; the rows stream between them.
             let statement = state.statement(sql)?;
             state.work.round_trips += 2;
-            let writer = state.client.copy_in(&statement)?;
-            let mut writer = BinaryCopyInWriter::new(writer, types);
+            let mut writer = state.client.copy_in(&statement, types)?;
             rows(&mut writer).map_err(super::driver::Error::from)?;
             writer.finish().map_err(super::driver::Error::from)
         })();
