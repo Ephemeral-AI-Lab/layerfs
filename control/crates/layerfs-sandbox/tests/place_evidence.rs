@@ -45,15 +45,17 @@ fn a_worker_record_keeps_the_callers_place_and_its_mounts_read_it() {
     // a worker's root keeps no machine record: no incarnation is guessed
     assert_eq!(placed.machine_incarnation, None);
 
-    // a record naming a generation already (native's home record) is left
-    let other = (
-        "other".to_owned(),
+    // a record an interrupted removal left with an older generation takes
+    // the caller's newer one: a mount recording the old one would look
+    // retired beside the home's newer record
+    let newer = (
+        "box".to_owned(),
         "p1:aa11.sandbox:0000000000000020:bb".to_owned(),
     );
-    layerfs_sandbox::files::save_place(&directory, "t1", &other);
-    let kept = SandboxRecord::read_in(&directory, "t1").unwrap().unwrap();
-    assert_eq!(kept.generation(), Some(generation.as_str()));
-    assert_eq!(kept.machine(), "box");
+    layerfs_sandbox::files::save_place(&directory, "t1", &newer);
+    let replaced = SandboxRecord::read_in(&directory, "t1").unwrap().unwrap();
+    assert_eq!(replaced.generation(), Some(newer.1.as_str()));
+    assert_eq!(replaced.machine(), "box");
     let _ = std::fs::remove_dir_all(&root);
 }
 
