@@ -327,6 +327,18 @@ pub trait HistoryCatalog: Send + Sync {
         Ok(PublishLane(None))
     }
 
+    /// Returns once every publication that held this Store's lane when the
+    /// call began has ended, committed or rolled back, on a connection of its
+    /// own: a lost `COMMIT` reply may leave the server still applying it, and
+    /// nothing may judge that publication's outcome before then (#776 C2). It
+    /// takes and releases the lane, writes nothing and keeps nothing; a wait
+    /// that reaches the provider's lock timeout is `Busy`. The default returns
+    /// at once: a provider whose publications cannot complete after their
+    /// caller gave up (an in-process SQLite file, a test double) has none.
+    fn pass_publication_lane(&self) -> HistoryResult<()> {
+        Ok(())
+    }
+
     /// Publishes one saved candidate as a Commit against the expected Branch
     /// head in one write transaction. A moved head is `HeadMoved` unless the
     /// request forces an overwrite. UpToDate compares the current root.

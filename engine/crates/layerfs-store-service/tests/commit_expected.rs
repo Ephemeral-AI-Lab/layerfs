@@ -229,3 +229,47 @@ fn force_with_expected_displaces_that_head() {
     workspace.close().unwrap();
     fixture.cleanup();
 }
+
+/// #776 R2: a clean Workspace whose head is where it was bound still checks
+/// `expected`. Its UpToDate fast path answered success over any named head;
+/// it now refuses another head with `HeadMoved`, as the publication does.
+#[test]
+fn a_clean_workspace_refuses_another_expected_head() {
+    tmp();
+    let fixture = support::Fixture::new("expected-clean", base);
+    fixture.fork("lane");
+    let landed = land(&fixture, 66, b"landed before the bind\n");
+    let base_layer = fixture
+        .service
+        .store
+        .history()
+        .branch_snapshot(live::branch("lane"))
+        .unwrap()
+        .unwrap()
+        .branch
+        .base_layer;
+    let workspace = live::bind(&fixture, 67, "lane");
+    let refused = workspace
+        .commit_captured(&CommitOptions {
+            expected: Some(NodeId::Layer(base_layer)),
+            ..options(false, None)
+        })
+        .expect_err("another head than the Branch's");
+    assert!(
+        matches!(
+            &refused.error,
+            CommitError::History(HistoryError::HeadMoved(_))
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(head(&fixture), Some(landed), "nothing published");
+    let answered = workspace
+        .commit_captured(&options(false, Some(landed)))
+        .unwrap_or_else(|failure| panic!("{failure:?}"));
+    assert!(
+        matches!(answered.history, Some(CommitOutcome::UpToDate { .. })),
+        "{answered:?}"
+    );
+    workspace.close().unwrap();
+    fixture.cleanup();
+}

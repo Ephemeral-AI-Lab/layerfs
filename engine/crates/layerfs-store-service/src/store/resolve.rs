@@ -6,19 +6,29 @@
 //! Commits. Its record stays here. The Workspace's next Commit request runs
 //! [`BoundWorkspace::resolve_retained`] once before its own admission:
 //!
-//! - publication known, or the head now our Commit (our candidate root, over
-//!   the head we published against): install that root as the new base;
-//! - the head still the one we published against, with another root: nothing
-//!   was published, so the capture folds back;
-//! - any other head: unresolved, and the custody stays.
+//! - publication known, or our Commit (our candidate root, over the head we
+//!   published against) found from the current head: install that root as
+//!   the new base;
+//! - the head still the one we published against, with another root, or a
+//!   first-parent chain from the current head back to it that holds no Commit
+//!   of ours: nothing was published, so the capture folds back;
+//! - anything else (a chain this walk cannot judge, a failed read, a lane
+//!   that does not pass): unresolved, and the custody and its record stay.
 //!
-//! Nothing is resent: the head is read once, through the control reader (a
+//! Before the head is judged the attempt passes the Store's publication lane
+//! (`pass_publication_lane`): a lost PostgreSQL `COMMIT` may still be applying
+//! on the server, and its row lock or barrier key holds until it ends (#776
+//! C2). Nothing is resent: the history is read through the control reader (a
 //! connection of its own, unaffected by a writer session the unknown outcome
-//! quarantined), and the install or fold-back runs once. The record is taken
-//! by the attempt whatever it finds.
+//! quarantined), and the install or fold-back runs once. A record whose
+//! publication outcome this attempt could not determine is put back for the
+//! next request, whose attempt only reads again (#776 R1); one whose outcome
+//! was determined is taken by the attempt whatever the local step finds.
 use super::{BoundWorkspace, CapturedConstruction, CommitFailure, CommitPhase};
 use layerfs_content::{filesystem::FilesystemRootId, ObjectId};
-use layerfs_history::{BranchSnapshot, CommitOutcome, CommitRecord, CommitRequest};
+use layerfs_history::{
+    BranchSnapshot, CommitOutcome, CommitRecord, CommitRequest, HistoryCatalog, HistoryError,
+};
 use layerfs_overlay::{Capture, CapturedReader, OperationOwner};
 use layerfs_workspace::WorkspaceError;
 use std::sync::{atomic::Ordering, Arc};
@@ -115,7 +125,17 @@ impl BoundWorkspace {
         let Some(kept) = kept else { return Ok(None) };
         let outcome = match kept.published.clone() {
             Some(outcome) => Some(outcome),
-            None => self.read_outcome(&kept.intent)?,
+            None => match self.read_outcome(&kept.intent) {
+                Ok(outcome) => outcome,
+                Err(unresolved) => {
+                    // Undetermined: the custody stays, and so does the record,
+                    // so the next request can read again; it never resends.
+                    if let Ok(mut slot) = self.retained.lock() {
+                        *slot = Some(kept);
+                    }
+                    return Err(unresolved);
+                }
+            },
         };
         let replaced = match outcome {
             Some(ref published) => self.install_retained(&kept, published)?,
@@ -150,48 +170,26 @@ impl BoundWorkspace {
         self.committing.store(false, Ordering::Release);
         Ok(Some(Resolution { outcome, replaced }))
     }
-    /// One read of the head through the control reader. `Some`: the head is
-    /// our Commit (or, unmoved, already has our root); `None`: the head is
-    /// unmoved with another root, so nothing was published.
+    /// The outcome of the retained publication, read through the control
+    /// reader once the publication lane has passed. `Some`: our Commit (or,
+    /// with the head unmoved, a head that already has our root); `None`:
+    /// proven unpublished.
     fn read_outcome(
         &self,
         intent: &CommitRequest,
     ) -> Result<Option<CommitOutcome>, Box<Unresolved>> {
-        let (head, record) = self
-            .store
-            .published(|history| {
-                let head = history.branch_snapshot(intent.branch)?;
-                let record = match head.as_ref().and_then(|head| head.branch.head_commit) {
-                    Some(id) => history.commit(id)?,
-                    None => None,
-                };
-                Ok((head, record))
-            })
-            .map_err(|error| unresolved(None, format!("head read failed: {error:?}")))?;
-        let head = head.ok_or_else(|| unresolved(None, "the Branch is absent".into()))?;
-        let unmoved = head.branch.head_commit == intent.expected_head
-            && head.branch.base_layer == intent.expected_base;
-        if unmoved {
-            return Ok((head.effective_root == intent.candidate_root).then_some(
-                CommitOutcome::UpToDate {
-                    head: head.branch.head_commit,
-                    root: head.effective_root,
-                },
-            ));
-        }
-        match record {
-            Some(record) if ours(&record, intent) => Ok(Some(CommitOutcome::Committed {
-                displaced: record.meta.displaced,
-                record: Box::new(record),
-            })),
-            _ => Err(unresolved(
-                None,
-                format!(
-                    "the head is {:?}: neither this Commit nor the head it was published against",
-                    head.branch.head_commit
-                ),
-            )),
-        }
+        self.store
+            .history
+            .pass_publication_lane()
+            .map_err(|error| {
+                unresolved(
+                    None,
+                    format!("the original publication may still be running: {error:?}"),
+                )
+            })?;
+        self.store
+            .published(|history| Ok(judge(history, intent)))
+            .map_err(|error| unresolved(None, format!("history read failed: {error:?}")))?
     }
     /// Installs a known publication's root, under the same live check and
     /// mutation hold as a Commit's own merged install.
@@ -250,6 +248,84 @@ impl BoundWorkspace {
             .merged_over
             .as_ref()
             .map(|(ours, _)| (ours.0, candidate.0)))
+    }
+}
+
+/// The most Commits [`judge`] reads back from the current head before it
+/// leaves the outcome undetermined (the custody stays; nothing is guessed).
+const OUTCOME_WALK: usize = 1_024;
+
+/// Judges the retained publication from published history.
+///
+/// Unmoved head and base: our root means published (UpToDate), any other
+/// root means nothing was published. Otherwise the first-parent chain back to
+/// the expected head is read. Every head move keeps the previous head on the new
+/// head's first-parent chain, except a forced Commit (which names the head it
+/// displaced) and a merge fast-forward (which brings in a Commit made on
+/// another Branch). So our Commit, or one that displaced it, found on the
+/// chain proves publication; reaching the expected head with neither, through
+/// Commits all made on this Branch and displacing nothing, over the expected
+/// base, proves there was none. Anything else is left undetermined.
+fn judge(
+    history: &dyn HistoryCatalog,
+    intent: &CommitRequest,
+) -> Result<Option<CommitOutcome>, Box<Unresolved>> {
+    let read = |error: HistoryError| unresolved(None, format!("history read failed: {error:?}"));
+    let head = history
+        .branch_snapshot(intent.branch)
+        .map_err(read)?
+        .ok_or_else(|| unresolved(None, "the Branch is absent".into()))?;
+    let base_kept = head.branch.base_layer == intent.expected_base;
+    if base_kept && head.branch.head_commit == intent.expected_head {
+        return Ok((head.effective_root == intent.candidate_root).then_some(
+            CommitOutcome::UpToDate {
+                head: head.branch.head_commit,
+                root: head.effective_root,
+            },
+        ));
+    }
+    let undetermined = |why: &str| {
+        Err(unresolved(
+            None,
+            format!("the head is {:?}; {why}", head.branch.head_commit),
+        ))
+    };
+    let mut next = head.branch.head_commit;
+    for _ in 0..OUTCOME_WALK {
+        if next == intent.expected_head {
+            return match base_kept {
+                true => Ok(None),
+                false => undetermined("the Branch base moved"),
+            };
+        }
+        let Some(id) = next else {
+            return undetermined("its history does not reach the head we published against");
+        };
+        let record = history
+            .commit(id)
+            .map_err(read)?
+            .ok_or_else(|| unresolved(None, "a Commit on the Branch is absent".into()))?;
+        if ours(&record, intent) {
+            return Ok(Some(committed(record)));
+        }
+        if let Some(displaced) = record.meta.displaced {
+            return match history.commit(displaced).map_err(read)? {
+                Some(record) if ours(&record, intent) => Ok(Some(committed(record))),
+                _ => undetermined("a forced Commit displaced a head this walk does not follow"),
+            };
+        }
+        if record.meta.branch != Some(intent.branch) {
+            return undetermined("a merge fast-forward brought in another Branch's Commits");
+        }
+        next = record.parent;
+    }
+    undetermined("too many Commits since the head we published against")
+}
+
+fn committed(record: CommitRecord) -> CommitOutcome {
+    CommitOutcome::Committed {
+        displaced: record.meta.displaced,
+        record: Box::new(record),
     }
 }
 
