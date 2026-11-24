@@ -533,3 +533,31 @@ fn a_pre_2_0_store_is_refused_at_open() {
         }
     }
 }
+
+/// A version 2 Store written before T7.1 has no `kept_node` table. A
+/// writable open migrates nothing (#776): it is refused by name like any
+/// version 2 Store, not `Integrity` from an in-place migration that could
+/// never match a version 2 schema source.
+#[test]
+fn a_pre_2_0_store_missing_later_tables_is_refused_by_name() {
+    let Some(url) = url() else { return };
+    let store = Store::new(&url, "pre20kept");
+    store
+        .admin()
+        .batch_execute(
+            "DROP TABLE kept_node; \
+             ALTER TABLE history_meta DROP CONSTRAINT history_meta_schema_version_check; \
+             ALTER TABLE store_policy DROP CONSTRAINT store_policy_schema_version_check; \
+             UPDATE history_meta SET schema_version=2; UPDATE store_policy SET schema_version=2",
+        )
+        .unwrap();
+    for check in [PostgresCheck::Full, PostgresCheck::Light] {
+        let selection = store.selection.clone().with_check(check);
+        let opened = PostgresHandles::open_writable(&selection, BINDING, CURSOR).err();
+        assert!(
+            matches!(&opened, Some(PersistenceError::Refused { status })
+                if status.starts_with("PostgreSQL Store schema version 2")),
+            "{check:?}: {opened:?}"
+        );
+    }
+}

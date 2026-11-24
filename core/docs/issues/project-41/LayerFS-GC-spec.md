@@ -180,7 +180,9 @@ step, as `add_file_digests` was; the existing steps, the table list and
 `backend/postgresql/schema.rs:158-252`), so new Stores get the tables in
 `schema.sql` and an additive step at open creates them and rewrites the
 recorded definition for older Stores (#42 item 31). 1.0 Stores are converted
-offline. The same step adds the position state: `history_meta.next_history_serial`
+offline. As built for 2.0 (#776), PostgreSQL runs no additive step: every
+`SCHEMA_VERSION` 3 Store is created with these tables and columns, and a
+version 2 Store is refused by name at open, never migrated. The same step adds the position state: `history_meta.next_history_serial`
 (the next serial to assign; never lowered), a `history_serial` column on
 `commit` and `layer` (a Layer that republishes a Commit carries that
 Commit's serial; every other Commit and Layer takes the next value in its

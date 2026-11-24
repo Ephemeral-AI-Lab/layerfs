@@ -180,12 +180,6 @@ impl PostgresHandles {
         }
         CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
         let session = Arc::new(Session::connect(selection, writable)?);
-        if writable {
-            schema::add_gc(&session)?;
-            schema::add_kept_node(&session)?;
-            schema::add_position_state(&session)?;
-            schema::add_position_columns(&session)?;
-        }
         Self::validated(session, selection.check, Some(binding), cursor_key)
             .map(|(_, handles)| handles)
     }
