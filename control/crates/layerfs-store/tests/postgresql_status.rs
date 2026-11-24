@@ -292,18 +292,17 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
         String::from_utf8(password.to_vec()).expect("a UTF-8 password")
     });
     layerfs_store::postgresql::login::save(&home, "pg", user, &password).unwrap();
-    // the record keeps the address alone: the URL's shown form, or, when
-    // that is hidden (a user equal to its password leaves a piece of the
-    // password in the user), the URL after the user part the client reads
-    // (its first `@`), which must then be an address alone
-    let shown = layerfs_store::postgresql::connect::without_login(&url);
-    let hidden = shown == layerfs_store::postgresql::connect::HIDDEN;
+    // the record keeps the address alone: the URL as given when it holds no
+    // login, else (the test server's URL names its user) the URL after the
+    // user part the client reads (its first `@`), which must then be an
+    // address alone; LayerFS never cuts a login out of a URL
+    let held = layerfs_store::postgresql::connect::holds_login(&url);
     let user_is_password = read.get_password() == Some(user.as_bytes());
-    assert!(!user_is_password || hidden, "{shown}");
+    assert!(!user_is_password || held, "{url} shown");
     let (scheme, after) =
         (url.split_once("://")).expect("LAYERFS_TEST_POSTGRES_URL is a postgres:// URL");
-    let address = match hidden {
-        false => shown,
+    let address = match held {
+        false => url.clone(),
         true => format!(
             "{scheme}://{}",
             after.split_once('@').map_or(after, |(_, at)| at)

@@ -402,7 +402,11 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
             .cloned()
             .unwrap_or_else(|| panic!("{name}: {listed:?}"))
     };
-    let pg_fix = "layerfs store save-auth <auth> --user owner --password-stdin && layerfs store update pg --auth <auth>";
+    // a URL naming a user is never rewritten: the Store is connected again
+    // with the address alone, `<user>` and `<auth>` to fill in (the fix named
+    // `--user owner` and updated the Store, cleaning its URL, before the
+    // e0aa26e149 Decision)
+    let pg_fix = "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> --synchronous-commit local";
     assert_eq!(item("pg").get_text("reason"), Some("outdated"));
     assert_eq!(item("pg").get_text("fix"), Some(pg_fix));
     assert_eq!(
@@ -411,7 +415,7 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
     );
 
     assert_eq!(item("old").get_text("reason"), Some("outdated"));
-    let old_fix = "layerfs store update old --auth a";
+    let old_fix = "layerfs store disconnect old && layerfs store connect old <url> --auth <auth> --synchronous-commit local";
     assert_eq!(item("old").get_text("fix"), Some(old_fix));
     assert_eq!(item("gone").get_text("reason"), Some("missing"));
     let gone_fix = item("gone").get_text("fix").unwrap().to_owned();

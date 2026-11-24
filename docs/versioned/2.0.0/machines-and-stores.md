@@ -448,23 +448,31 @@ shown in [the calls](calls.md#store-13).)
   deletes one no Store uses. There is no login per machine.
 - **`store connect <store> <url> --auth A`.** The URL starts `postgresql://`
   or `postgres://` and holds host, port, database and TLS settings, read
-  only as the PostgreSQL client reads it. One that names a user or carries
-  a login (`user`, a password, `passfile`), holds an `@` or a `#` (write one
-  that is part of the address `%40` or `%23`), or that the client does not
-  read (a key it does not know, such as `sslpassword`, `sslrootcert`,
-  `sslkey` or `sslcert`, or an `sslmode` other than `disable`, `prefer` or
-  `require`), or whose host, database or a value the client reads holds
-  `&` or `#` right before one of its keys and an `=` (a `?` mistyped:
-  `postgres://h/db&password=p` is the database `db&password=p` to the
-  client) is refused `InvalidInput`, before any effect, with a fix that
-  gives the address alone (after `store save-auth`, named with `--auth` on a
-  first connect; `<url>` when no form of the URL can be shown; no
-  `save-auth` when only a `#` or a TLS setting is refused). The refusal
-  names the TLS key or `sslmode` value it met (`sslmode=verify-full`), or
-  the `#` that ends a value it would otherwise read (`sslmode=require#f`);
-  `sslmode=require` verifies the server's certificate chain and host name.
-  A private CA is trusted where the Store is dialled: on Linux (OpenSSL)
-  through `SSL_CERT_FILE`, on macOS in the system keychain. `--auth` is required on a Store's first connect. An empty database
+  only as the PostgreSQL client reads it, and is recorded and shown exactly
+  as given: LayerFS never cleans or rewrites a URL. One that may hold a
+  login is refused `InvalidInput`, before any effect: it holds an `@`, the
+  client reads a user or a password in it, the client does not read it (a
+  key it does not know, such as `sslpassword`, `sslrootcert`, `sslkey` or
+  `sslcert`, or an `sslmode` other than `disable`, `prefer` or `require`),
+  or its percent-decoded text holds a login key and `=` anywhere, in any
+  case (`user`, `password`, `passfile`, `sslkey`, `sslcert`,
+  `sslpassword`, `oauth_client_secret`: so
+  `postgres://h/db?application_name=me?password=p` and
+  `postgres://h/db&password=p` are refused too). One holding a `#` is
+  refused as well (write a `#` or `@` that is part of the address `%23` or
+  `%40`). The fix names the address `<url>` and the user `<user>`: `store
+  save-auth`, then the address alone named with `--auth` on a first
+  connect, with no `save-auth` when only a `#` is refused. Other text the
+  client reads as part of a host, database or value is the client's
+  (`postgres://h/db&sslmode=require` names the database
+  `db&sslmode=require`). The refusal names the TLS key or `sslmode` value
+  it met (`sslmode=verify-full`), or the `#` that ends a value it would
+  otherwise read (`sslmode=require#f`); `sslmode=require` verifies the
+  server's certificate chain and host name. A private CA is trusted where
+  the Store is dialled: on Linux (OpenSSL) in the system's trusted roots
+  (`SSL_CERT_FILE` reaches only calls in the process that reads it: a
+  Sandbox's daemon starts with a cleared environment), on macOS in the
+  login or system keychain. `--auth` is required on a Store's first connect. An empty database
   gets the `layerfs` schema with a new identity; a database that already
   holds it keeps its identity, and its projects become this home's project
   records. A Store name already in the home is `Exists`, and so is the same
@@ -490,30 +498,30 @@ shown in [the calls](calls.md#store-13).)
   machine; reaches are kept beside the Store's record.
 - **Old records.** A PostgreSQL record that still holds a `password`, a URL
   that is not an address alone, or an old `machines.<m>.checked` reads
-  `broken` `outdated`, and a URL that is not an address alone is never
-  dialled; `store update <store> --auth <its auth>` writes it clean. A URL is
-  shown and written only in a form its client reads as the same servers and
-  database with no login and no part of the password; one with no such form
-  (an `@` left in a value, a user part holding one of `? & # ; ,` or
-  running over an address, a host, database or value holding `&` or `#`
-  before a key, a URL the client does not read) is shown as
-  `postgresql://<hidden: not an address alone>` and never rewritten: the
-  record keeps it, and any password in it, on disk as it was until its fix
-  replaces it (`store connect <store> <url>`, or `store connect <store>
-  <url> --machine <m>` for a machine's own, which the machine must be
-  running for, after `store disconnect <store> --machine <m>` when the
-  record names no login). `store update <store> --auth <new>` refuses such
-  a record, writing nothing, with a fix each step of which dials with a
-  login that exists: the record's own when it is saved (those connects,
-  then `store update <store> --auth <new>`), else none (`store disconnect
-  <store> --machine <m> && store update <store> --auth <new> && store
-  connect <store> <url> --machine <m>`, or `store disconnect <store> &&
-  store connect <store> <url> --auth <new>` and the machines' connects when
-  the Store's address has no clean form). A 2.0 record whose URL holds a raw `#`
-  (`postgres://h/d#x`) reads `outdated` and is refused at dial until `store
-  update <store> --auth <its auth>` rewrites it as `%23`. A
-  record naming a login the home does not hold reads `broken` `missing`,
-  fixed by saving that login and running the same update.
+  `broken` `outdated` with a fix you run; nothing is migrated for you. A URL
+  that may hold a login is never dialled, shown (it reads
+  `postgresql://<hidden: not an address alone>`) or rewritten: the record
+  keeps it, and any password in it, on disk as it was until a connect of
+  the address alone replaces it. Every fix dials only with the login it
+  names, never with the one the record names, so it works when that login
+  no longer authenticates; it names the address `<url>` and the user
+  `<user>`. With only old fields, `store update <store> --auth <auth>`
+  drops them. A machine's own URL that may hold a login is replaced with
+  `store disconnect <store> --machine <m> && store update <store> --auth
+  <auth> && store connect <store> <url> --machine <m>` (the machine must be
+  running for the last step). The Store's own URL is replaced with `store
+  disconnect <store> && store connect <store> <url> --auth <auth>
+  --synchronous-commit <its value>`, then `store connect <store> <url>
+  --machine <m>` for each machine's own address: the Store is forgotten
+  (refused while a Sandbox of it exists; its data stays) and connected
+  again, its projects found again, its backup links and reach
+  observations not kept. The `outdated` fix names `<auth>` when it replaces
+  a URL (the Store's own login, which `store get` names, or another). `store
+  update <store> --auth <new>` (or `--synchronous-commit` alone) refuses
+  such a record, writing nothing, with the same steps naming `<new>` and
+  carrying the `--synchronous-commit` given. A record naming a login the
+  home does not hold reads `broken` `missing`, fixed by saving that login
+  first.
 - **`store update <store>`** changes the login (`--auth`, checked against the
   same Store) or `--synchronous-commit`. A new address is `store connect`
   again, checked against the same Store's id.

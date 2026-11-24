@@ -2,15 +2,19 @@
 //! and no `auth`) is not dialled with that reference (CUT, owner
 //! 2026-11-19): every call is refused `InvalidInput` and its state is
 //! `broken` `outdated`, each with the fix that saves a login and names it,
-//! its `--user` the one the record's URL names when it names one (UI pass
-//! 2, F6). The record is only read, never converted.
+//! its `--user` `<user>` to fill in: no user is read from a URL, and a URL
+//! holding one is never rewritten, so the Store is connected again with the
+//! address alone (the e0aa26e149 Decision; UI pass 2, F6 named the URL's
+//! user before). The record is only read, never converted.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::state::{Reason, State};
 use layerfs_store::record::{url, url_on, StoreRecord};
 use std::path::Path;
 
-/// The fix names the user the older record's URL names.
-const FIX: &str = "layerfs store save-auth <auth> --user owner --password-stdin && layerfs store update pg --auth <auth>";
+/// The fix of the older record, whose URL names a user: `<user>` to fill
+/// in, and the Store connected again with the address alone (the user was
+/// named and the URL cleaned by the update before the e0aa26e149 Decision).
+const FIX: &str = "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth>";
 
 fn older(home: &Path) -> StoreRecord {
     let fields = [
@@ -54,25 +58,25 @@ fn its_state_is_broken_outdated_with_the_same_fix() {
     let home = std::env::temp_dir().join(format!("layerfs-pg-no-auth-s-{}", std::process::id()));
     let state = layerfs_store::state::recorded_under(&older(&home), None).unwrap();
     assert_eq!(state, State::broken(Reason::Outdated, Some(FIX)));
-    // a URL naming no user leaves `<user>` to fill in; one naming it in a
-    // parameter, or with characters a shell reads, gives it quoted
-    for (url, user) in [
-        ("postgresql://db.example:5432/layerfs_db", "<user>"),
-        ("postgresql://db.example/layerfs_db?user=o%27k", "'o'\\''k'"),
-        ("postgres://a%20b:pw@db.example/layerfs_db", "'a b'"),
+    // a URL naming no user is named by `store update`; one naming a user,
+    // in a parameter or a user part, is replaced (its user was named,
+    // shell-quoted, before the e0aa26e149 Decision); `<user>` either way
+    let update = "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth>";
+    for (url, fix) in [
+        ("postgresql://db.example:5432/layerfs_db", update),
+        ("postgresql://db.example/layerfs_db?user=o%27k", FIX),
+        ("postgres://a%20b:pw@db.example/layerfs_db", FIX),
     ] {
         let record = older(&home).with("url", SdkValue::text(url));
-        let fix = format!(
-            "layerfs store save-auth <auth> --user {user} --password-stdin && layerfs store update pg --auth <auth>"
-        );
         let state = layerfs_store::state::recorded_under(&record, None).unwrap();
-        assert_eq!(state, State::broken(Reason::Outdated, Some(&fix)), "{url}");
+        assert_eq!(state, State::broken(Reason::Outdated, Some(fix)), "{url}");
     }
     // a record naming a login the home does not hold reads `missing`, its
-    // fix saving that login and updating the Store to it (spec v23)
+    // fix saving that login and connecting the Store again with it (spec
+    // v23; it updated the Store to it before the e0aa26e149 Decision)
     let named = older(&home).with("auth", SdkValue::text("pg-app"));
     let state = layerfs_store::state::recorded_under(&named, None).unwrap();
-    let fix = "layerfs store save-auth pg-app --user owner --password-stdin && layerfs store update pg --auth pg-app";
+    let fix = "layerfs store save-auth pg-app --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth pg-app";
     assert_eq!(state, State::broken(Reason::Missing, Some(fix)));
 }
 
@@ -202,9 +206,13 @@ fn the_login_replaces_the_user_part_its_client_reads() {
                 assert_eq!(dialled, None, "{recorded}: {}", refusal.message);
                 assert_eq!(refusal.code, "InvalidInput", "{recorded}");
                 assert!(!refusal.message.contains("s3"), "{}", refusal.message);
+                // connected again with the address alone, the Store's
+                // login or another (`<auth>`), its `synchronous_commit` kept
+                // (it was `layerfs store connect pg <url>`, which dials with
+                // the record's login, before the e0aa26e149 Decision)
                 assert_eq!(
                     refusal.detail.get_text("fix"),
-                    Some("layerfs store connect pg <url>"),
+                    Some("layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> --synchronous-commit local"),
                     "{recorded}"
                 );
             }

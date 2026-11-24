@@ -167,13 +167,17 @@ read's `at` merges without a lock, as a read takes none. None of it moves
 the home's `generation`. A PostgreSQL Store naming a login the home does not
 hold is `broken` `missing`; one whose record holds a `password`, a URL that
 is not an address alone or a `machines.<m>` entry with anything but `url`
-is `broken` `outdated`, fixed by `store update <store> --auth <auth>` (a URL
-with no clean form is replaced instead, `store connect <store> <url>`, with
-`--machine M` for a machine's own; until then the record keeps that URL, and
-any password in it, as it was written). A 2.0 record whose URL holds a raw
-`#` reads `outdated` and is refused at dial until `store update <store>
---auth <auth>` rewrites it with `%23`
-([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs)). `projects` shows at
+is `broken` `outdated`, fixed by `store update <store> --auth <auth>`. No
+URL is ever cleaned or rewritten: a URL that is not an address alone (one
+that may hold a login, or a raw `#`) is replaced by the user's fix, which
+dials only with the login it names: `store disconnect <store> --machine M
+&& store update <store> --auth <auth> && store connect <store> <url>
+--machine M` for a machine's own, `store disconnect <store> && store
+connect <store> <url> --auth <auth> --synchronous-commit <its value>` and
+each machine's own connected again for the Store's; until then the record
+keeps that URL, and any password in it, as it was written
+([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs),
+[`login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)). `projects` shows at
 most 20 names, `projects_count` only when there are more. A `backups` row's
 long form is `bucket, file, sha256, heads_sha256, last, attempt`: `last` the
 last transfer that worked (`{ call, ended_at, size }`), `attempt` the last
@@ -292,22 +296,27 @@ Python  layerfs.store.connect(store, url, *, auth=None, machine=None, synchronou
 
 Connects a PostgreSQL database as a Store, or sets an address of a
 connected one ([`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)).
-The record keeps the URL with no user and no password and names its saved
-login (`auth`), put into the URL only when the Store is dialled; a URL that
-names a user or holds a password, holds an `@` or `#` (written `%40` or
-`%23` when part of the address), is not read by the PostgreSQL client, or
-whose host, database or a value that client reads holds `&` or `#` right
-before one of its keys and an `=` (`postgres://h/db&password=p`) is
-`InvalidInput`. A URL is read only as that client reads it, and shown only
-in a form it reads as the same servers and database with no login, else as
-`postgresql://<hidden: not an address alone>`. The client takes `sslmode`
+The record keeps the URL exactly as given, with no user and no password,
+and names its saved login (`auth`), put into the URL only when the Store is
+dialled; a URL that may hold a login is `InvalidInput`: one holding an `@`,
+one the PostgreSQL client reads a user or a password in, one it does not
+read, or one whose percent-decoded text holds a login key (`user`,
+`password`, `passfile`, `sslkey`, `sslcert`, `sslpassword`,
+`oauth_client_secret`) and `=` anywhere, in any case
+(`postgres://h/db&password=p`, `postgres://h/db?application_name=me?password=p`);
+so is one holding a `#` (written `%40` or `%23` when part of the address).
+A URL is read only as that client reads it and shown exactly as written,
+or as `postgresql://<hidden: not an address alone>` when it may hold a
+login; none is ever rewritten. The client takes `sslmode`
 `disable`, `prefer` or `require` and no certificate or key file:
 `sslmode=require` verifies the server's certificate chain and host name, and
 `sslmode=verify-full`, `verify-ca`, `sslrootcert`, `sslcert` and `sslkey` are
 refused, the refusal naming the one it met. A private CA is trusted where
-the Store is dialled: on Linux, where `native-tls` is OpenSSL, through
-`SSL_CERT_FILE`; on macOS, where it is the Security framework, in the
-system keychain.
+the Store is dialled: on Linux, where `native-tls` is OpenSSL, in the
+system's trusted roots (`SSL_CERT_FILE` reaches only calls in the process
+that reads it: a Sandbox's daemon starts with a cleared environment); on
+macOS, where it is the Security framework, in the login or system
+keychain.
 
 On a Store's first connect `--auth` is required and must be saved;
 `--synchronous-commit` defaults to `local`. It creates the `layerfs` schema
@@ -478,7 +487,10 @@ it is saved: the server must be reached with it and hold this Store. The
 record is written under the home lock and the Store's; this process's open
 sessions on it are closed. The login is checked again under the home lock,
 which `store remove-auth` takes, and the write drops every field 2.0 no
-longer writes (`StoreRecord::cleaned`). A running Sandbox keeps the
+longer writes (`StoreRecord::without_old_fields`) and never rewrites a URL:
+a record keeping a URL that is not an address alone is refused, nothing
+written, with the fix that replaces it naming the login given and carrying
+a given `--synchronous-commit` (`login::update_fix`). A running Sandbox keeps the
 connection it started with. An address change is a `store connect`; a machine's own address is
 removed with `store disconnect --machine`. The long form is `ok, outcome
 ("updated"), store, auth, synchronous_commit`.

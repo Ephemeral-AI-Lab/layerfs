@@ -42,17 +42,16 @@ fn changed(record: StoreRecord, request: &StoreUpdate) -> StoreRecord {
 /// `store.update`: changes the Store's saved login and `synchronous_commit`.
 /// Every refusal of its input comes before any connection; a new login is
 /// dialled once from here on the Store's address and must read this
-/// Store's id (`Unavailable` otherwise). The record is written under the
-/// home lock and the Store's, `Conflict` when it was disconnected or
-/// connected to another database meanwhile; this process's open sessions
-/// on it are closed (`InUse` while one of its calls runs). The login is
-/// checked again under the lock, and the write leaves no old field (spec
-/// v23 V23-6): an update to the Store's own login is its `outdated` fix.
-/// A new login is dialled on the clean record, and a record whose URL has
-/// no clean form is refused with its fix, nothing written.
-/// A running
-/// Sandbox keeps the connection it started with. Answers `{ ok, outcome:
-/// updated, store, auth, synchronous_commit }`.
+/// Store's id (`Unavailable` otherwise). A record keeping a URL that is not
+/// an address alone (`refuse_login`: one that may hold a login, or a `#`)
+/// is refused with its fix, nothing written: no update rewrites a URL. The
+/// record is written under the home lock and the Store's, `Conflict` when
+/// it was disconnected or connected to another database meanwhile; this
+/// process's open sessions on it are closed (`InUse` while one of its calls
+/// runs). The login is checked again under the lock, and the write leaves
+/// no old field (spec v23 V23-6): an update to the Store's own login is its
+/// `outdated` fix. A running Sandbox keeps the connection it started with.
+/// Answers `{ ok, outcome: updated, store, auth, synchronous_commit }`.
 pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
     let name = &request.store;
     let record = postgresql_record(home_dir, name)?;
@@ -68,21 +67,25 @@ pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
     }
     if let Some(auth) = &request.auth {
         login::saved(home_dir, auth)?;
-        // the clean record is what is dialled and written; one whose URL has
-        // no clean form is never rewritten (it would read another server or
-        // keep part of a password), and its fix replaces that URL
-        let trial = changed(record.clone(), request).cleaned();
-        if trial.outdated_fields() {
-            let message = format!(
-                "Store {name}'s recorded URL has no form without its login that its client reads as the same server; nothing was written"
-            );
-            // the fix is built from the record as it is, whose login each
-            // step dials with, and names the login given here
-            return Err(with_fix(
-                refused("InvalidInput", message),
-                login::update_fix(&record, auth),
-            ));
-        }
+    }
+    // a URL that is not an address alone is never rewritten (it may hold a
+    // login): the fix, built from the record as it is, replaces it with
+    // steps that dial only with the login given here
+    if record.refused_urls() {
+        let message = format!(
+            "Store {name}'s record keeps a URL that is not an address alone (it may hold a login); nothing was written"
+        );
+        let (auth, sync) = (
+            request.auth.as_deref(),
+            request.synchronous_commit.as_deref(),
+        );
+        return Err(with_fix(
+            refused("InvalidInput", message),
+            login::update_fix(&record, auth, sync),
+        ));
+    }
+    if request.auth.is_some() {
+        let trial = changed(record.clone(), request).without_old_fields();
         same_store(&trial, &selection(&trial)?).map_err(|refusal| named(refusal, name))?;
     }
     let home_lock = home::lock::take(home_dir)?;
@@ -100,8 +103,16 @@ pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
     if let Some(auth) = &request.auth {
         login::saved(home_dir, auth)?;
     }
+    // a URL replaced meanwhile by one that is not an address alone is
+    // never rewritten either
+    if current.refused_urls() {
+        return Err(refused(
+            "Conflict",
+            format!("Store {name} changed while its login was checked; update it again"),
+        ));
+    }
     crate::open::close(&current.postgresql_key(home_dir, name))?;
-    let current = changed(current, request).cleaned();
+    let current = changed(current, request).without_old_fields();
     current.write(home_dir)?;
     drop((store_lock, home_lock));
     let text = |key: &str| current.text(key).map_or(SdkValue::Null, SdkValue::text);

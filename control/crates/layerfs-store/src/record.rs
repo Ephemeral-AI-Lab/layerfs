@@ -365,14 +365,27 @@ impl StoreRecord {
     }
 
     /// The record with `machine`'s own connection set to `own`; an empty
-    /// one removes it.
+    /// one removes it. Every other machine's entry is kept byte for byte: a
+    /// URL is never rewritten, and only `store update` drops old fields
+    /// ([`Self::without_old_fields`]).
     pub fn with_own_connection(self, machine: &str, own: &OwnConnection) -> Self {
-        let mut machines = self.own_connections();
-        machines.retain(|(m, _)| m != machine);
-        if !own.is_empty() {
-            machines.push((machine.to_owned(), own.clone()));
+        let mut machines = match self.fields.get("machines") {
+            Some(SdkValue::Map(machines)) => machines.clone(),
+            _ => Vec::new(),
+        };
+        let at = machines.iter().position(|(m, _)| m == machine);
+        match (at, own.is_empty()) {
+            (None, true) => return self,
+            (None, false) => machines.push((machine.to_owned(), own.to_record())),
+            (Some(at), true) => {
+                machines.remove(at);
+            }
+            (Some(at), false) => machines[at].1 = own.to_record(),
         }
-        self.with_machines(machines)
+        match machines.is_empty() {
+            true => self.without("machines"),
+            false => self.with("machines", SdkValue::Map(machines)),
+        }
     }
 
     /// The record without an own connection for `machine`.
@@ -393,49 +406,44 @@ impl StoreRecord {
     /// Whether a PostgreSQL Store's record holds what 2.0 no longer writes
     /// (spec v23 V23-6): a `password`, a URL that is not an address alone
     /// (`refuse_login`), or a `machines.<machine>` entry with anything but a `url`
-    /// (an old `checked`). Such a record reads `broken` `outdated` until a
-    /// write cleans it ([`Self::cleaned`]).
+    /// (an old `checked`). Such a record reads `broken` `outdated` with the
+    /// fix the user runs (`postgresql::login`); no write cleans a URL.
     pub fn outdated_fields(&self) -> bool {
-        let names_login = |url: Option<&str>| {
-            url.is_some_and(|url| crate::postgresql::connect::refuse_login(url).is_err())
-        };
         let machines = match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines.as_slice(),
             _ => &[],
         };
         self.fields.get("password").is_some()
-            || names_login(self.text("url"))
+            || self.refused_urls()
             || machines.iter().any(|(_, entry)| match entry {
-                SdkValue::Map(fields) => {
-                    fields.iter().any(|(key, _)| key != "url") || names_login(entry.get_text("url"))
-                }
+                SdkValue::Map(fields) => fields.iter().any(|(key, _)| key != "url"),
                 _ => true,
             })
             || !matches!(self.fields.get("machines"), None | Some(SdkValue::Map(_)))
     }
 
-    /// The record as a PostgreSQL record write leaves it (V23-6): no
-    /// `password`, each URL in its clean form (no login, read by its client
-    /// as the URL was), and each machine entry its `url` alone (none without
-    /// one). A URL with no clean form is kept as it is, never rewritten, and
-    /// the record stays `outdated` (`postgresql::address::clean`). Every
-    /// write of `store connect`, `store update`, `store disconnect
-    /// --machine` and `machine remove` cleans.
-    pub fn cleaned(self) -> Self {
-        let clean = |url: &str| {
-            crate::postgresql::address::clean(url).map_or_else(|| url.to_owned(), |(url, _)| url)
+    /// Whether the Store's address or a machine's own is not an address
+    /// alone (`refuse_login`): it may hold a login, or a `#`. Such a URL is
+    /// never dialled and never rewritten; only a connect of an address
+    /// alone replaces it.
+    pub fn refused_urls(&self) -> bool {
+        let refused = |url: &str| crate::postgresql::connect::refuse_login(url).is_err();
+        let machines = match self.fields.get("machines") {
+            Some(SdkValue::Map(machines)) => machines.as_slice(),
+            _ => &[],
         };
+        self.text("url").is_some_and(refused)
+            || (machines.iter()).any(|(_, entry)| entry.get_text("url").is_some_and(refused))
+    }
+
+    /// The record as `store update` writes it (V23-6): no `password`, and
+    /// each machine entry its `url` alone (none without one). Its URLs are
+    /// kept as they are: `store update` refuses a record holding a URL that
+    /// is not an address alone ([`Self::refused_urls`]), and no write
+    /// rewrites one.
+    pub fn without_old_fields(self) -> Self {
         let record = self.without("password");
-        let record = match record.text("url").map(clean) {
-            Some(url) => record.with("url", SdkValue::text(url)),
-            None => record,
-        };
-        let machines = (record.own_connections().into_iter())
-            .map(|(machine, own)| {
-                let url = own.url.as_deref().map(clean);
-                (machine, OwnConnection { url })
-            })
-            .collect();
+        let machines = record.own_connections();
         record.with_machines(machines)
     }
 

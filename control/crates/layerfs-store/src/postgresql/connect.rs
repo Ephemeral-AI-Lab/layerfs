@@ -1,12 +1,13 @@
 //! PostgreSQL Stores (#533 step 10a, call surface 2.0 `pg.html`): `store
 //! connect` records a database as a Store in the fixed `layerfs` schema,
 //! or sets the address every machine dials; `store disconnect` forgets it
-//! (its data stays). The record keeps the URL with no user and no password
-//! and names its saved login (`auth`, [`super::login`]), put into the URL on
-//! each call; the full URL is never written down. A machine's own address
+//! (its data stays). The record keeps the URL as given, an address alone
+//! with no user and no password, and names its saved login (`auth`,
+//! [`super::login`]), put into the URL on each call; the full URL is never
+//! written down, and no recorded URL is ever rewritten. A machine's own address
 //! is `layerfs-control`'s part of the call, proven from that machine.
 use super::address;
-pub use super::address::{refuse_login, target, url_user, without_login, HIDDEN};
+pub use super::address::{holds_login, refuse_login, shown, target, HIDDEN};
 use super::login;
 use crate::open_args::{OpenArgs, PgSelection};
 use crate::project::listing;
@@ -61,35 +62,33 @@ pub struct StoreConnect {
 }
 
 /// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
-/// fix (spec v23 V23-13): the login saved by name, then the address alone.
-/// A first connect names the saved login with `--auth`; a connected Store
-/// takes no `--auth` on connect, so its fix names the login with `store
-/// update --auth` before the address alone (for `machine`'s own connection
-/// when given). A URL refused only for a `#` or a setting its client does
-/// not read holds no login ([`address::holds_login`]): its fix is the
-/// connect of the address alone, saving none. The address is the URL's
-/// clean form, `<url>` when it has none; `--user` the user its client
-/// reads there, else `<user>` ([`address`]).
+/// fix (spec v23 V23-13), which names the address `<url>` and the user
+/// `<user>`, never text of the URL. A URL that may hold a login
+/// ([`holds_login`]) is connected as the address alone with a saved login:
+/// on a first connect (`connected` none) the login saved and named with
+/// `--auth`; on a connected Store, which takes no `--auth` on connect, the
+/// steps that leave it naming the saved login ([`login::login_fix`]), then
+/// the address alone (for `machine`'s own connection when given). One
+/// refused only for a `#` holds no login: its fix is the connect of the
+/// address alone, saving none.
 pub fn refuse_login_with_fix(
     store: &str,
     url: &str,
-    first: bool,
+    connected: Option<&StoreRecord>,
     machine: Option<&str>,
 ) -> Result<()> {
     // a URL that is not a PostgreSQL one is refused without a fix: its login
     // cannot be told apart, so no line may repeat it
     address::scheme(url)?;
     refuse_login(url).map_err(|refusal| {
-        let shown = address::clean(url).map_or("<url>".to_owned(), |(shown, _)| shell_word(&shown));
-        let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
-        let store = shell_word(store);
-        let save = format!("layerfs store save-auth <auth> --user {user} --password-stdin");
+        let name = shell_word(store);
         let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
-        let fix = match (address::holds_login(url), first) {
-            (true, true) => format!("{save} && layerfs store connect {store} {shown} --auth <auth>"),
-            (true, false) => format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {shown}{on}"),
-            (false, true) => format!("layerfs store connect {store} {shown} --auth <auth>"),
-            (false, false) => format!("layerfs store connect {store} {shown}{on}"),
+        let connect = format!("layerfs store connect {name} <url>{on}");
+        let fix = match (holds_login(url), connected) {
+            (true, None) => format!("{} && {connect} --auth <auth>", login::SAVE),
+            (false, None) => format!("{connect} --auth <auth>"),
+            (true, Some(record)) => login::login_fix(record, &connect),
+            (false, Some(_)) => connect,
         };
         with_fix(refusal, fix)
     })
@@ -191,7 +190,7 @@ fn row(
     SdkValue::map([
         ("machine", SdkValue::opt_text(machine)),
         // an outdated record may still hold a login in its URL: a row never shows it (V23-3)
-        ("url", SdkValue::opt_text(url.as_deref().map(without_login))),
+        ("url", SdkValue::opt_text(url.as_deref().map(shown))),
         ("own", SdkValue::Bool(own)),
         ("server", server),
         ("reached", crate::observed::reached(reach.as_ref())),
@@ -236,7 +235,7 @@ pub fn answer(
 pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let given = request.url.as_str();
-    refuse_login_with_fix(name, given, true, None)?;
+    refuse_login_with_fix(name, given, None, None)?;
     target(given)?;
     let auth = request.auth.as_deref().ok_or_else(|| {
         refused(
@@ -305,7 +304,7 @@ pub fn readdress(home_dir: &Path, request: &StoreConnect, sandboxes: &[String]) 
     let name = request.store.as_str();
     let record = super::check::postgresql_record(home_dir, name)?;
     refuse_settings(name, request)?;
-    refuse_login_with_fix(name, &request.url, false, None)?;
+    refuse_login_with_fix(name, &request.url, Some(&record), None)?;
     target(&request.url)?;
     record.unblocked()?;
     let trial = record.clone().with("url", SdkValue::text(&request.url));
@@ -326,7 +325,8 @@ pub fn readdress(home_dir: &Path, request: &StoreConnect, sandboxes: &[String]) 
     };
     current.unblocked()?;
     crate::open::close(&current.postgresql_key(home_dir, name))?;
-    let current = current.with("url", SdkValue::text(&request.url)).cleaned();
+    // the address as given; nothing else of the record changes
+    let current = current.with("url", SdkValue::text(&request.url));
     current.write(home_dir)?;
     drop((store_lock, home_lock));
     Ok(answer(&current, "updated", None, sandboxes))
