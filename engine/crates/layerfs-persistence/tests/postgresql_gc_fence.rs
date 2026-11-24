@@ -975,3 +975,54 @@ fn another_boot_stays_conservatively_live_on_a_shared_store() {
         .unwrap();
     assert_eq!(epoch(&mut schema.admin(), project_id), 1);
 }
+
+/// #784 review: on PostgreSQL an operator's settle and release run in the
+/// operator's own session, so they retain the row as `done` but cannot
+/// unlock the shared keys the owner's session took when it registered. The
+/// owner's own later release finds the row `done`, still unlocks its keys
+/// and leaves the row as it is: a Branch removal is admitted afterwards, and
+/// the audit still reads the retained row.
+#[test]
+fn an_owner_release_after_an_operator_release_unlocks_its_session_keys() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "operator_release");
+    let binding = binding("operator_release");
+    let owner = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&owner.history, 1);
+    owner
+        .history
+        .gc_register(&mount(project_id, branch, 60))
+        .unwrap();
+
+    let operator = schema.open(&binding, CURSOR).expect("an operator session");
+    assert!(operator.history.gc_mark_uncertain(&op(60)).unwrap());
+    let evidence = "action=release;operator=alice;op=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c";
+    assert!(operator.history.gc_release_done(&op(60), evidence).unwrap());
+    // the owner's session still holds its shared Branch key: refused
+    let refusal = operator
+        .history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 61))
+        .unwrap_err();
+    assert!(
+        matches!(
+            refusal,
+            HistoryError::BusyOp(_) | HistoryError::MountsActive(_)
+        ),
+        "{refusal:?}"
+    );
+
+    owner.history.gc_release(&op(60)).unwrap();
+    operator
+        .history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 62))
+        .expect("the owner's release unlocked its session keys");
+    assert_eq!(epoch(&mut schema.admin(), project_id), 1);
+
+    let audit = operator
+        .history
+        .gc_done_intents_branch("proj", "work", None, 10)
+        .unwrap();
+    assert_eq!(audit.items.len(), 1, "{audit:?}");
+    assert_eq!(audit.items[0].op_id, op(60));
+    assert_eq!(audit.items[0].evidence.as_deref(), Some(evidence));
+}

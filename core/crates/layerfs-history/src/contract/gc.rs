@@ -264,6 +264,30 @@ pub struct GcAuditPage {
     pub has_more: bool,
 }
 
+/// Where one Branch's audit page ends: the last row's `(updated_ms, op_id)`.
+/// The next page reads the rows strictly after it, so a release that deletes
+/// an older row, or retains a newer one, between two reads neither skips nor
+/// repeats a row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GcAuditAfter {
+    /// The last row's retained time, in Unix milliseconds.
+    pub updated_ms: i64,
+    /// The last row's operation identity.
+    pub op_id: [u8; 16],
+}
+
+/// One bounded keyset page of one Branch's retained `done` rows, oldest
+/// first by `(updated_ms, op_id)`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GcBranchAuditPage {
+    /// The retained rows on this page.
+    pub items: Vec<GcIntentDone>,
+    /// The page size that was read (the caller's, clamped to the maximum).
+    pub limit: u32,
+    /// Where the next page starts, when a row follows this page.
+    pub next: Option<GcAuditAfter>,
+}
+
 /// The largest page one audit read returns, whatever the caller asks for.
 pub const MAXIMUM_AUDIT_PAGE: u32 = 1000;
 

@@ -42,8 +42,8 @@ use layerfs_history::identity::CatalogId;
 use layerfs_history::identity::{BranchId, LayerStackId};
 use layerfs_history::path::trace_key;
 use layerfs_history::records::{
-    GcAuditPage, GcDeletion, GcIntent, GcIntentDone, GcIntentKind, GcReconcile, GcScopeKind,
-    PathRemovalKind, PathRemovalOutcome, PathRemovalRequest,
+    GcAuditAfter, GcAuditPage, GcBranchAuditPage, GcDeletion, GcIntent, GcIntentDone, GcIntentKind,
+    GcReconcile, GcScopeKind, PathRemovalKind, PathRemovalOutcome, PathRemovalRequest,
 };
 use layerfs_history::{Liveness, MAXIMUM_AUDIT_PAGE};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -60,6 +60,7 @@ use session::{session_lock, session_unlock};
 
 const INSERT: &str = "gc_intent_insert";
 const GET: &str = "gc_intent_get";
+const GET_ANY: &str = "gc_intent_get_any";
 const RELEASE: &str = "gc_intent_release";
 const RELEASE_DONE: &str = "gc_intent_release_done";
 const UNCERTAIN: &str = "gc_intent_uncertain";
@@ -74,6 +75,7 @@ const MACHINE_INTENTS: &str = "gc_intent_list_machine";
 const DONE: &str = "gc_intent_done";
 const DONE_BRANCH: &str = "gc_intent_done_branch";
 const DONE_CAP: &str = "gc_intent_done_cap";
+const DONE_NEWEST: &str = "gc_intent_done_newest";
 
 const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
@@ -726,17 +728,23 @@ fn release_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<()> {
     Ok(())
 }
 
-fn uncertain_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<()> {
-    tx.execute(UNCERTAIN, params![now_ms(), op_id.as_slice()])?;
-    Ok(())
+/// Marks one live intent uncertain; `false` when no live or uncertain row
+/// has the op (none, or one already retained `done`, which stays as it is).
+fn uncertain_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<bool> {
+    Ok(tx.execute(UNCERTAIN, params![now_ms(), op_id.as_slice()])? > 0)
 }
 
-/// Marks one intent uncertain; its owner should settle it later.
-pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
+/// Marks one intent uncertain; its owner should settle it later. `false`
+/// when the op has no live or uncertain row.
+pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<bool> {
     provider.write(|tx| uncertain_in(tx, op_id))
 }
 fn get_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcIntent>> {
     one(tx, GET, [op_id.as_slice()], intent_row)
+}
+/// [`get_in`] whatever the row's state, a retained `done` row included.
+fn get_any_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcIntent>> {
+    one(tx, GET_ANY, [op_id.as_slice()], intent_row)
 }
 
 /// The PostgreSQL advisory keys one release unlocks, each with the mode it
@@ -861,33 +869,40 @@ pub(crate) fn done_intents(
     })
 }
 
-/// One bounded page of the retained `done` rows of one Branch, oldest
-/// first. The operator audit is scoped to the Branch it names.
+/// One bounded keyset page of the retained `done` rows of one Branch,
+/// oldest first by `(updated_ms, op_id)`: the rows strictly after `after`.
+/// It reads one row more than `limit` to know whether a page follows, so no
+/// second read can disagree with the first. The operator audit is scoped to
+/// the Branch it names.
 pub(crate) fn done_intents_branch(
     provider: &HistoryProvider,
     project: &str,
     branch: &str,
-    page: u32,
+    after: Option<GcAuditAfter>,
     limit: u32,
-) -> HistoryResult<GcAuditPage> {
+) -> HistoryResult<GcBranchAuditPage> {
     let limit = limit.clamp(1, MAXIMUM_AUDIT_PAGE);
-    let offset = i64::from(page) * i64::from(limit);
+    // the first page starts before every row: the smallest time, and an
+    // empty op that every 16-byte op follows
+    let (since, op) = after.map_or((i64::MIN, Vec::new()), |after| {
+        (after.updated_ms, after.op_id.to_vec())
+    });
     provider.read(|tx| {
         let rows = tx.query(
             DONE_BRANCH,
-            params![project, branch, i64::from(limit), offset],
+            params![project, branch, since, op, i64::from(limit) + 1],
         )?;
-        let items = rows
+        let mut items = rows
             .iter()
             .map(done_row)
             .collect::<HistoryResult<Vec<GcIntentDone>>>()?;
-        let has_more = items.len() as u64 == u64::from(limit);
-        Ok(GcAuditPage {
-            items,
-            page,
-            limit,
-            has_more,
-        })
+        let more = items.len() > limit as usize;
+        items.truncate(limit as usize);
+        let next = (items.last()).filter(|_| more).map(|last| GcAuditAfter {
+            updated_ms: last.updated_ms,
+            op_id: last.op_id,
+        });
+        Ok(GcBranchAuditPage { items, limit, next })
     })
 }
 

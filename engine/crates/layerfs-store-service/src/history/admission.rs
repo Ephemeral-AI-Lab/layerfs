@@ -3,7 +3,8 @@
 use crate::history::lookup;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{
-    GcAuditPage, GcIntent, GcIntentDone, GcIntentKind, GcReconcile, GcScopeKind,
+    GcAuditAfter, GcAuditPage, GcBranchAuditPage, GcIntent, GcIntentDone, GcIntentKind,
+    GcReconcile, GcScopeKind,
 };
 use layerfs_history::{
     BranchRecord, HistoryCatalog, HistoryResult, LayerStackId, LayerStackRecord, PlaceAuthority,
@@ -410,17 +411,17 @@ pub fn done_intents(
     catalog.gc_done_intents(page, limit)
 }
 
-/// One bounded page of one Branch's retained `done` rows, for the operator
-/// audit. It is the same page shape as [`done_intents`], scoped to the
-/// Branch the call names.
+/// One bounded keyset page of one Branch's retained `done` rows, for the
+/// operator audit: the rows strictly after `after`, oldest first by
+/// `(updated_ms, op_id)`, scoped to the Branch the call names.
 pub fn done_intents_branch(
     catalog: &dyn HistoryCatalog,
     project: &str,
     branch: &str,
-    page: u32,
+    after: Option<GcAuditAfter>,
     limit: u32,
-) -> HistoryResult<GcAuditPage> {
-    catalog.gc_done_intents_branch(project, branch, page, limit)
+) -> HistoryResult<GcBranchAuditPage> {
+    catalog.gc_done_intents_branch(project, branch, after, limit)
 }
 
 /// The wire answer of one retained `done` row of the operator audit.
