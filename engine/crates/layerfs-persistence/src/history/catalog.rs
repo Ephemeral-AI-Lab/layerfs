@@ -314,7 +314,7 @@ impl HistoryCatalog for HistoryProvider {
         super::admission::release_done(self, op_id, evidence)
     }
 
-    fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
+    fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<bool> {
         super::admission::mark_uncertain(self, op_id)
     }
 
@@ -360,10 +360,10 @@ impl HistoryCatalog for HistoryProvider {
         &self,
         project: &str,
         branch: &str,
-        page: u32,
+        after: Option<GcAuditAfter>,
         limit: u32,
-    ) -> HistoryResult<GcAuditPage> {
-        super::admission::done_intents_branch(self, project, branch, page, limit)
+    ) -> HistoryResult<GcBranchAuditPage> {
+        super::admission::done_intents_branch(self, project, branch, after, limit)
     }
 
     fn gc_reconcile_machine(&self, machine: &str, incarnation: &str) -> HistoryResult<GcReconcile> {

@@ -538,8 +538,9 @@ malformed one decodes as no token: missing evidence is no proof, never death
   state) on every route, with the `liveness` admission would give each holder
   now (owner check, then the calling home's place view, sent to a worker with
   the call) and `safe` (not `live`); `settle` refuses a holder still `live`
-  unless forced. The doctor's read-only `store.diagnose` forwards those fields
-  from a worker. The Store-wide compact barrier is retained: a live or
+  unless forced. The doctor's read-only `store.diagnose` forwards only the
+  typed holder view from a worker (owner, place, generation and state), not
+  `liveness` or `safe`. The Store-wide compact barrier is retained: a live or
   uncertain holder still refuses `store.compact`; an owner the owner evidence
   proves dead is adopted and the rebuild proceeds. A jsonl audit archive is
   deferred (#775).

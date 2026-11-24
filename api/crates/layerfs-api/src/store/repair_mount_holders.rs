@@ -4,7 +4,9 @@
 //! one page of holders, each with its row `state` and the `liveness`
 //! admission would give it now; `settle` refuses a holder still `live`
 //! unless forced; `release` retains a settled row as the durable done audit
-//! and records the operator label; `audit` pages the Branch's retained rows.
+//! and records the operator label; `settle_legacy` settles only rows without
+//! owner or place evidence; `audit` pages the Branch's retained rows by
+//! `(updated_ms, op)`.
 //! Every call is also in the home's `trace/calls.jsonl` call log.
 use crate::calls::table::{
     a, call, opt, Call,
@@ -27,7 +29,7 @@ pub(crate) const CALL: Call = call(
         opt("limit", Int),
         opt("cursor", Text).redact(),
     ],
-    "list, preview, settle, release or audit mount holders (operator)",
+    "list, preview, settle, release, settle_legacy or audit mount holders (operator)",
     run,
 )
 .paged(Paging::Cursor);

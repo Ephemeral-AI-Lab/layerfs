@@ -81,6 +81,13 @@ impl PlaceView {
         }
     }
 
+    /// The supplied view (or the one scoped on this thread) alone, with no
+    /// call's own place: what a removal or compaction, whose intent records
+    /// no place, admits with.
+    pub(crate) fn supplied() -> Self {
+        Self::current(None)
+    }
+
     /// The place `intent` itself carries, for a caller with no supplied view.
     pub(crate) fn for_intent(intent: &GcIntent) -> Self {
         Self::for_intent_with(intent, None)

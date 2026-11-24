@@ -231,6 +231,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_intent_get" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_get.sql"
         )),
+        "gc_intent_get_any" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_get_any.sql"
+        )),
         "gc_intent_release" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_release.sql"
         )),
@@ -272,6 +275,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "gc_intent_done_cap" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_done_cap.sql"
+        )),
+        "gc_intent_done_newest" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_done_newest.sql"
         )),
 
         "gc_branch_stack_any" => Ok(include_str!(
