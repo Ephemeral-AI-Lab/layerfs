@@ -67,8 +67,6 @@ gc_intent evidence text YES
 gc_intent updated_ms bigint NO
 gc_intent machine_incarnation text YES
 gc_intent sandbox_generation text YES
-gc_intent lease_expires_ms bigint YES
-gc_intent fence_token text YES
 gc_op id bigint NO
 gc_op generation bigint NO
 gc_op phase text NO

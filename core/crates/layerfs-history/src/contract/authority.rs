@@ -1,10 +1,8 @@
-//! Place/incarnation authority, lease and fencing values.
+//! Place/incarnation authority values.
 //!
 //! These are the pure decisions phase 3 admission needs before it touches a
 //! Store: a changed machine incarnation or a retired Sandbox generation is
-//! dead; an expired lease is **uncertain**, never dead; and a stale fencing
-//! token may not renew or release. The adapter owns the records and the
-//! clocks; this crate only names the rule.
+//! dead. The adapter owns the records; this crate only names the rule.
 //!
 //! Place values are ordered. A value minted by this release is
 //! `p1:<label>:<zero-padded Unix milliseconds>:<nonce>`, so a newer start
@@ -22,10 +20,6 @@ pub struct PlaceAuthority {
     pub machine_incarnation: Option<String>,
     /// The Sandbox generation that placed it.
     pub sandbox_generation: Option<String>,
-    /// Lease deadline in Unix milliseconds; absent means no lease.
-    pub lease_expires_ms: Option<i64>,
-    /// Fencing token; a newer owner replaces it.
-    pub fence_token: Option<String>,
 }
 
 /// The current place values admission compares one recorded intent against.
@@ -145,7 +139,7 @@ impl PlaceView {
 /// What the authority proves about a mount owner.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Liveness {
-    /// The place is current and the lease has not expired.
+    /// The place is current.
     Live,
     /// The place may be dead but the evidence is not conclusive.
     Uncertain,
@@ -162,8 +156,9 @@ pub enum PlaceOrder {
     RecordedOlder,
     /// The recorded value is newer than the current one (a restore).
     RecordedNewer,
-    /// At least one value is unordered (written before the ordering), and
-    /// the two differ.
+    /// At least one value is unordered (written before the ordering), or the
+    /// two name the same millisecond with different nonces, and the two
+    /// differ.
     Unordered,
 }
 
@@ -196,10 +191,13 @@ pub fn compare_place(recorded: &str, current: &str) -> PlaceOrder {
         return PlaceOrder::Equal;
     }
     match (ordered_token_parts(recorded), ordered_token_parts(current)) {
-        (Some(recorded), Some(current)) => match recorded.cmp(&current) {
+        // Only the millisecond orders two tokens. Two values minted in the
+        // same millisecond have different nonces and no order between them:
+        // calling one newer would settle a live owner on a coin flip.
+        (Some((recorded_ms, _)), Some((current_ms, _))) => match recorded_ms.cmp(&current_ms) {
             std::cmp::Ordering::Less => PlaceOrder::RecordedOlder,
             std::cmp::Ordering::Greater => PlaceOrder::RecordedNewer,
-            std::cmp::Ordering::Equal => PlaceOrder::Equal,
+            std::cmp::Ordering::Equal => PlaceOrder::Unordered,
         },
         _ => PlaceOrder::Unordered,
     }
@@ -215,7 +213,7 @@ impl PlaceAuthority {
     /// without place death is [`Liveness::Uncertain`], never
     /// [`Liveness::Dead`], because a slow owner is not a dead owner. Missing
     /// place evidence is no proof: only the lease decides.
-    pub fn liveness(&self, now_ms: i64, place: Option<&PlaceRecord>) -> Liveness {
+    pub fn liveness(&self, _now_ms: i64, place: Option<&PlaceRecord>) -> Liveness {
         if let Some(place) = place {
             if let (Some(recorded), Some(current)) = (
                 self.machine_incarnation.as_deref(),
@@ -273,20 +271,7 @@ impl PlaceAuthority {
                 }
             }
         }
-        if self
-            .lease_expires_ms
-            .is_some_and(|expires| expires <= now_ms)
-        {
-            return Liveness::Uncertain;
-        }
         Liveness::Live
-    }
-
-    /// True when `current` still names this authority's fence. An absent
-    /// token never matches a present one; a resurrected old owner therefore
-    /// cannot renew or release the newer generation.
-    pub fn fence_matches(&self, current: Option<&str>) -> bool {
-        self.fence_token.as_deref() == current
     }
 }
 

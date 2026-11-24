@@ -719,7 +719,7 @@ pub fn delete(
                         store: store.to_owned(),
                         project: name.to_owned(),
                         store_record: record.to_record().clone(),
-                        place: crate::place_view::encoded_from_store(&home, &record),
+                        place: crate::place_view::encoded_from_home(&home),
                     };
                     delete_with(&home, store, name, stack, &mut effects)
                 }

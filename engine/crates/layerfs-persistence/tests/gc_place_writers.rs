@@ -188,24 +188,6 @@ fn an_uncertain_owner_is_never_settled() {
     assert_eq!((reconcile.held, reconcile.uncertain), (1, 1));
 }
 
-#[test]
-fn an_expired_lease_is_kept_as_uncertain() {
-    let temp = Temp::new("gc-place-writers-lease");
-    let history = catalog(&temp);
-    let (_, branch) = project(&history);
-    let mut lease = authority(&incarnation(40, "a"));
-    lease.lease_expires_ms = Some(1);
-    history
-        .gc_register(&mount(branch, 4, "sandbox-4", "machine-4", lease))
-        .unwrap();
-
-    // the place is current, so only the lease speaks: it is uncertain
-    let reconcile = history
-        .gc_reconcile_machine("machine-4", &incarnation(40, "a"))
-        .unwrap();
-    assert!(reconcile.settled.is_empty());
-    assert_eq!((reconcile.held, reconcile.uncertain), (1, 1));
-}
 
 #[test]
 fn an_older_current_incarnation_is_never_dead() {

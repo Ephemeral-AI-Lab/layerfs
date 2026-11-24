@@ -98,7 +98,6 @@ impl Store {
         let mut phase = BindPhase::Snapshot;
         let mut snapshot = None;
         let mut gc_op: Option<[u8; 16]> = None;
-        let mut gc_fence: Option<String> = None;
         let workspace = request.workspace();
         crate::telemetry::timed("bind.reader", |_| self.readers.mount(workspace, pooled)).map_err(
             |error| BindRefusal {
@@ -137,7 +136,6 @@ impl Store {
             match self.history().gc_register(&intent) {
                 Ok(()) => {
                     gc_op = Some(intent.op_id);
-                    gc_fence = intent.fence_token.clone();
                 }
                 // A provider without admission cannot exclude a removal; it
                 // is a test double or a legacy wrapper, never this service's
@@ -172,7 +170,6 @@ impl Store {
                 identity: workspace,
                 workspace: Arc::new(Workspace::bind(route, base)),
                 gc_op,
-                gc_fence,
                 committing: std::sync::atomic::AtomicBool::new(false),
                 producer: Default::default(),
                 pending: std::sync::Mutex::new(None),

@@ -1,8 +1,7 @@
-//! Phase 3: the four `gc_intent` place/lease columns. A new Store ships them
-//! and records them in its schema source. The 2.0 schema has no additive
+//! Phase 3: the two `gc_intent` place columns. A new Store ships them and
+//! records them in its schema source. The 2.0 schema has no additive
 //! migration: a Store written before them is refused `Malformed` at open and
-//! needs the explicit 2.0 conversion. The PostgreSQL round trip is covered by
-//! the gated `postgresql_gc_fence` suite.
+//! needs the explicit 2.0 conversion.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 mod support;
 
@@ -11,17 +10,12 @@ use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistencePro
 use layerfs_storage::StoragePolicy;
 use support::{Temp, BINDING};
 
-/// The four `gc_intent` place/lease columns as `sql/sqlite/gc.sql` writes
-/// them after `phase`.
-const INTENT_COLUMNS: &str = "    machine_incarnation TEXT,\n    sandbox_generation TEXT,\n    lease_expires_ms INTEGER,\n    fence_token TEXT,\n";
+/// The two `gc_intent` place columns as `sql/sqlite/gc.sql` writes them
+/// after `phase`.
+const INTENT_COLUMNS: &str = "    machine_incarnation TEXT,\n    sandbox_generation TEXT,\n";
 
-/// The four columns, in the order the schema declares them.
-const INTENT_COLUMN_NAMES: [&str; 4] = [
-    "machine_incarnation",
-    "sandbox_generation",
-    "lease_expires_ms",
-    "fence_token",
-];
+/// The two columns, in the order the schema declares them.
+const INTENT_COLUMN_NAMES: [&str; 2] = ["machine_incarnation", "sandbox_generation"];
 
 fn config(path: &std::path::Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)

@@ -263,10 +263,6 @@ fn mount_rows(rows: Vec<layerfs_persistence::diagnostic::MountHolder>) -> SdkVal
                     ("machine_incarnation", text(r.machine_incarnation)),
                     ("sandbox_generation", text(r.sandbox_generation)),
                     (
-                        "lease_expires_ms",
-                        r.lease_expires_ms.map_or(SdkValue::Null, SdkValue::Int),
-                    ),
-                    (
                         "state",
                         SdkValue::text(if r.uncertain { "uncertain" } else { "live" }),
                     ),

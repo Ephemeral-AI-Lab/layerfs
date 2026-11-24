@@ -49,12 +49,10 @@ use layerfs_history::{Liveness, MAXIMUM_AUDIT_PAGE};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod authority;
-mod lease;
 mod place;
 mod removal;
 mod session;
-pub(crate) use authority::{reconcile_machine, release, release_done, release_fenced};
-pub(crate) use lease::renew_lease;
+pub(crate) use authority::{reconcile_machine, release, release_done};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
@@ -74,6 +72,7 @@ const ALL_PROJECT: &str = "gc_intent_all_project";
 const ALL_STORE: &str = "gc_intent_all_store";
 const MACHINE_INTENTS: &str = "gc_intent_list_machine";
 const DONE: &str = "gc_intent_done";
+const DONE_BRANCH: &str = "gc_intent_done_branch";
 const DONE_INSERT: &str = "gc_intent_done_insert";
 const DONE_DELETE: &str = "gc_intent_done_delete";
 
@@ -150,10 +149,10 @@ fn workspace_of(text: Option<String>) -> HistoryResult<Option<[u8; 32]>> {
     Ok(Some(body))
 }
 
-/// Decodes the eighteen columns every intent query returns, in order:
+/// Decodes the sixteen columns every intent query returns, in order:
 /// op_id, kind, scope_kind, scope_id, workspace, sandbox, machine, project,
 /// branch, owner_runtime, owner_boot, state, uncertain, phase,
-/// machine_incarnation, sandbox_generation, lease_expires_ms, fence_token.
+/// machine_incarnation, sandbox_generation.
 fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> {
     let op_id: Vec<u8> = cell(row, 0)?;
     let op_id: [u8; 16] = op_id
@@ -178,8 +177,6 @@ fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> 
         phase: cell(row, 13)?,
         machine_incarnation: cell(row, 14)?,
         sandbox_generation: cell(row, 15)?,
-        lease_expires_ms: cell(row, 16)?,
-        fence_token: cell(row, 17)?,
         uncertain: state == "uncertain" || uncertain_flag != 0,
     })
 }
@@ -577,8 +574,6 @@ pub(super) fn register_in(
             intent.phase.clone(),
             intent.machine_incarnation.clone(),
             intent.sandbox_generation.clone(),
-            intent.lease_expires_ms,
-            intent.fence_token.clone(),
             now_ms(),
         ],
     )?;
@@ -939,6 +934,36 @@ pub(crate) fn done_intents(
     let offset = i64::from(page) * i64::from(limit);
     provider.read(|tx| {
         let rows = tx.query(DONE, params![i64::from(limit), offset])?;
+        let items = rows
+            .iter()
+            .map(done_row)
+            .collect::<HistoryResult<Vec<GcIntentDone>>>()?;
+        let has_more = items.len() as u64 == u64::from(limit);
+        Ok(GcAuditPage {
+            items,
+            page,
+            limit,
+            has_more,
+        })
+    })
+}
+
+/// One bounded page of the retained `done` rows of one Branch, oldest
+/// first. The operator audit is scoped to the Branch it names.
+pub(crate) fn done_intents_branch(
+    provider: &HistoryProvider,
+    project: &str,
+    branch: &str,
+    page: u32,
+    limit: u32,
+) -> HistoryResult<GcAuditPage> {
+    let limit = limit.clamp(1, MAXIMUM_AUDIT_PAGE);
+    let offset = i64::from(page) * i64::from(limit);
+    provider.read(|tx| {
+        let rows = tx.query(
+            DONE_BRANCH,
+            params![project, branch, i64::from(limit), offset],
+        )?;
         let items = rows
             .iter()
             .map(done_row)

@@ -56,8 +56,6 @@ CREATE TABLE gc_intent (
     updated_ms INTEGER NOT NULL,
     machine_incarnation TEXT,
     sandbox_generation TEXT,
-    lease_expires_ms INTEGER,
-    fence_token TEXT,
     UNIQUE (scope_kind, scope_id, owner_boot)
 ) STRICT;
 

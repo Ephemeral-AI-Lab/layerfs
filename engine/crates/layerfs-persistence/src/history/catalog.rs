@@ -310,22 +310,10 @@ impl HistoryCatalog for HistoryProvider {
         super::admission::release(self, op_id)
     }
 
-    fn gc_release_fenced(&self, op_id: &[u8; 16], fence_token: Option<&str>) -> HistoryResult<()> {
-        super::admission::release_fenced(self, op_id, fence_token)
-    }
-
     fn gc_release_done(&self, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
         super::admission::release_done(self, op_id, evidence)
     }
 
-    fn gc_renew_lease(
-        &self,
-        op_id: &[u8; 16],
-        fence_token: Option<&str>,
-        lease_expires_ms: i64,
-    ) -> HistoryResult<bool> {
-        super::admission::renew_lease(self, op_id, fence_token, lease_expires_ms)
-    }
 
     fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
         super::admission::mark_uncertain(self, op_id)
@@ -363,6 +351,16 @@ impl HistoryCatalog for HistoryProvider {
 
     fn gc_done_intents(&self, page: u32, limit: u32) -> HistoryResult<GcAuditPage> {
         super::admission::done_intents(self, page, limit)
+    }
+
+    fn gc_done_intents_branch(
+        &self,
+        project: &str,
+        branch: &str,
+        page: u32,
+        limit: u32,
+    ) -> HistoryResult<GcAuditPage> {
+        super::admission::done_intents_branch(self, project, branch, page, limit)
     }
 
     fn gc_record_done(&self, intent: &GcIntent, evidence: &str) -> HistoryResult<bool> {

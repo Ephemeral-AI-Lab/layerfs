@@ -240,9 +240,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_intent_uncertain" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_uncertain.sql"
         )),
-        "gc_intent_renew" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/gc_intent_renew.sql"
-        )),
         "gc_intent_list" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_list.sql"
         )),
@@ -269,6 +266,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "gc_intent_done" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_done.sql"
+        )),
+        "gc_intent_done_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_done_branch.sql"
         )),
         "gc_intent_done_insert" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_done_insert.sql"

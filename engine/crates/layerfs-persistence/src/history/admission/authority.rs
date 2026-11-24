@@ -1,4 +1,4 @@
-//! Owner release, fencing, and the ordered worker-start reconcile.
+//! Owner release and the ordered worker-start reconcile.
 //!
 //! The Store keeps no machine-authority row: a worker start records its
 //! ordered incarnation in the home `MachineRecord`, and the reconcile here
@@ -8,54 +8,15 @@
 //! newer can only come from a restore, so it stays uncertain, never dead.
 use super::*;
 
-/// Refuses a presented stale fencing token. A caller that presents none is
-/// the unfenced owner release the call has always been: production owners do
-/// not carry a token yet, and only a caller that asserts one is checked.
-pub(super) fn fence_check(intent: &GcIntent, fence_token: Option<&str>) -> HistoryResult<()> {
-    match fence_token {
-        Some(fence) if !intent.authority().fence_matches(Some(fence)) => {
-            Err(HistoryError::Conflict("gc intent fence"))
-        }
-        _ => Ok(()),
-    }
-}
-
-/// Deletes one intent if it is absent or still fenced to the caller. A caller
-/// with no token is the plain owner release and skips the read.
-fn release_checked_in(
-    tx: &Transaction<'_>,
-    op_id: &[u8; 16],
-    fence_token: Option<&str>,
-) -> HistoryResult<()> {
-    if let Some(fence) = fence_token {
-        let Some(intent) = get_in(tx, op_id)? else {
-            return Ok(());
-        };
-        fence_check(&intent, Some(fence))?;
-    }
-    release_in(tx, op_id)
-}
-
 /// Deletes one intent, and on PostgreSQL releases the session keys it held.
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
-    release_fenced(provider, op_id, None)
-}
-
-/// [`release`] for an owner that presents its fencing token: a stale token is
-/// refused and leaves the row for the newer owner.
-pub(crate) fn release_fenced(
-    provider: &HistoryProvider,
-    op_id: &[u8; 16],
-    fence_token: Option<&str>,
-) -> HistoryResult<()> {
     match &provider.engine {
-        Engine::Sqlite(_) => provider.write(|tx| release_checked_in(tx, op_id, fence_token)),
+        Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
         Engine::Postgres(session) => {
             let found = provider.write(|tx| {
                 let Some(intent) = get_in(tx, op_id)? else {
                     return Ok(None);
                 };
-                fence_check(&intent, fence_token)?;
                 release_in(tx, op_id)?;
                 Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
             })?;

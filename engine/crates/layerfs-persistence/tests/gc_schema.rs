@@ -16,13 +16,8 @@ const POSTGRESQL_GC: &str = include_str!("../sql/postgresql/gc.sql");
 /// The removed tables, in name order.
 const REMOVED_TABLES: [&str; 3] = ["gc_audit", "gc_machine_authority", "gc_sandbox_tombstone"];
 
-/// The four authority columns the lean schema keeps.
-const AUTHORITY_COLUMNS: [&str; 4] = [
-    "machine_incarnation",
-    "sandbox_generation",
-    "lease_expires_ms",
-    "fence_token",
-];
+/// The two authority columns the lean schema keeps.
+const AUTHORITY_COLUMNS: [&str; 2] = ["machine_incarnation", "sandbox_generation"];
 
 fn config(path: &std::path::Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal)

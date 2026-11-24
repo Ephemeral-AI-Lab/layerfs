@@ -99,10 +99,6 @@ pub struct GcIntent {
     pub machine_incarnation: Option<String>,
     /// The Sandbox generation that placed it, when known.
     pub sandbox_generation: Option<String>,
-    /// Lease deadline in Unix milliseconds; absent means no lease.
-    pub lease_expires_ms: Option<i64>,
-    /// Fencing token a newer owner replaces.
-    pub fence_token: Option<String>,
     /// True when the owner is uncertain and only `Unresolved` may report it.
     pub uncertain: bool,
 }
@@ -152,8 +148,6 @@ impl GcIntent {
             phase: None,
             machine_incarnation: None,
             sandbox_generation: None,
-            lease_expires_ms: None,
-            fence_token: None,
             uncertain: false,
         }
     }
@@ -202,35 +196,22 @@ impl GcIntent {
         self
     }
 
-    /// Records the place and lease authority the intent carries.
+    /// Records the place authority the intent carries.
     #[must_use]
     pub fn authorized(mut self, authority: PlaceAuthority) -> Self {
         self.machine_incarnation = authority.machine_incarnation;
         self.sandbox_generation = authority.sandbox_generation;
-        self.lease_expires_ms = authority.lease_expires_ms;
-        self.fence_token = authority.fence_token;
         self
     }
 
-    /// The place and lease authority this intent carries, for the Store-side
-    /// admission that classifies it.
+    /// The place authority this intent carries, for the Store-side admission
+    /// that classifies it.
     #[must_use]
     pub fn authority(&self) -> PlaceAuthority {
         PlaceAuthority {
             machine_incarnation: self.machine_incarnation.clone(),
             sandbox_generation: self.sandbox_generation.clone(),
-            lease_expires_ms: self.lease_expires_ms,
-            fence_token: self.fence_token.clone(),
         }
-    }
-
-    /// Records a renewed lease deadline and its fencing token; `None` clears
-    /// the value it names.
-    #[must_use]
-    pub fn renewed(mut self, lease_expires_ms: Option<i64>, fence_token: Option<&str>) -> Self {
-        self.lease_expires_ms = lease_expires_ms;
-        self.fence_token = fence_token.map(str::to_owned);
-        self
     }
 
     /// Marks the owner uncertain: only `Unresolved` may report it.

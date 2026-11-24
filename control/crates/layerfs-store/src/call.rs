@@ -54,7 +54,7 @@ pub fn store_call(
                 with_project(args, target),
                 target,
                 &record,
-                crate::place_view::encoded_from_store(&home, &record),
+                crate::place_view::encoded_from_home(&home),
             );
             worker.call("store.call", request, &mut |event| events.event(event))
         }

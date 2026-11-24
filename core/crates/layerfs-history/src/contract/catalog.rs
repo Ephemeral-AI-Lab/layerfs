@@ -515,39 +515,6 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported("GC done audit"))
     }
 
-    /// Releases one admission intent only while `fence_token` still names its
-    /// owner.
-    ///
-    /// A caller that presents no token is the unfenced owner release
-    /// [`Self::gc_release`] has always been. A stale token is refused and
-    /// leaves the row for the newer owner. The default releases an unfenced
-    /// call and refuses a presented one: a provider without fencing cannot
-    /// honour the check.
-    fn gc_release_fenced(&self, op_id: &[u8; 16], fence_token: Option<&str>) -> HistoryResult<()> {
-        match fence_token {
-            None => self.gc_release(op_id),
-            Some(_) => Err(crate::error::HistoryError::Unsupported("fenced GC release")),
-        }
-    }
-
-    /// Extends one admission intent's lease to `lease_expires_ms`, but only
-    /// while `fence_token` still names its owner.
-    ///
-    /// The Store keeps the later of the recorded and requested deadline, so a
-    /// delayed heartbeat never shortens a lease it renewed later. An absent row
-    /// (an intent already released or adopted) reports `false`; a presented
-    /// stale token is a conflict and leaves the row for the newer owner. A
-    /// caller that presents no token is the unfenced owner the release path
-    /// has always had. The default refuses: a provider without leases cannot
-    /// promise that expiry is bounded.
-    fn gc_renew_lease(
-        &self,
-        _op_id: &[u8; 16],
-        _fence_token: Option<&str>,
-        _lease_expires_ms: i64,
-    ) -> HistoryResult<bool> {
-        Err(crate::error::HistoryError::Unsupported("GC lease renewal"))
-    }
 
     /// Records `incarnation` as the current place of `machine` and settles
     /// the intents that value proves dead.
@@ -626,6 +593,20 @@ pub trait HistoryCatalog: Send + Sync {
     /// filter `state <> 'done'`; this read is the only one that sees them.
     fn gc_done_intents(&self, _page: u32, _limit: u32) -> HistoryResult<GcAuditPage> {
         Err(crate::error::HistoryError::Unsupported("GC audit"))
+    }
+
+    /// One bounded page of the retained `done` rows of one Branch, oldest
+    /// first. The operator `audit` action is scoped to the Branch it names.
+    ///
+    /// The default refuses: a provider that keeps no `done` rows has none.
+    fn gc_done_intents_branch(
+        &self,
+        _project: &str,
+        _branch: &str,
+        _page: u32,
+        _limit: u32,
+    ) -> HistoryResult<GcAuditPage> {
+        Err(crate::error::HistoryError::Unsupported("GC done audit"))
     }
 
     /// Writes one retained `done` admission row directly, the release/done

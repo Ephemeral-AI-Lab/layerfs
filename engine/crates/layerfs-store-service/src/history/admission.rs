@@ -301,36 +301,7 @@ pub fn mount_intent(
     .authorized(authority)
 }
 
-/// The heartbeat deadline `ttl_ms` from this process's clock, saturating at
-/// `i64::MAX`. A non-positive lifetime asks for a deadline that has already
-/// expired, which admission reports `Unresolved`, never adopts.
-#[must_use]
-pub fn lease_deadline(ttl_ms: i64) -> i64 {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
-        });
-    now.saturating_add(ttl_ms.max(0))
-}
 
-/// Extends one mount intent's lease by `ttl_ms`, but only while
-/// `fence_token` still names its owner.
-///
-/// A bound Workspace calls this while it holds the mount: a slow owner is not
-/// a dead owner, so an expired lease is `Unresolved` rather than adopted, and
-/// the heartbeat is how a long-lived mount stays live. A stale token is a
-/// conflict, and `false` reports that the Store no longer records the intent
-/// (already released or adopted), so the caller stops instead of resurrecting
-/// it.
-pub fn renew_lease(
-    catalog: &dyn HistoryCatalog,
-    op_id: &[u8; 16],
-    fence_token: Option<&str>,
-    ttl_ms: i64,
-) -> Result<bool, layerfs_history::HistoryError> {
-    catalog.gc_renew_lease(op_id, fence_token, lease_deadline(ttl_ms))
-}
 
 /// Releases one intent. When the Store refuses the delete, the owner has gone
 /// (a failed unmount or a lost bind): the row is marked uncertain instead of
@@ -450,6 +421,19 @@ pub fn done_intents(
     limit: u32,
 ) -> HistoryResult<GcAuditPage> {
     catalog.gc_done_intents(page, limit)
+}
+
+/// One bounded page of one Branch's retained `done` rows, for the operator
+/// audit. It is the same page shape as [`done_intents`], scoped to the
+/// Branch the call names.
+pub fn done_intents_branch(
+    catalog: &dyn HistoryCatalog,
+    project: &str,
+    branch: &str,
+    page: u32,
+    limit: u32,
+) -> HistoryResult<GcAuditPage> {
+    catalog.gc_done_intents_branch(project, branch, page, limit)
 }
 
 /// Writes one retained `done` row directly, for the operator preview audit:

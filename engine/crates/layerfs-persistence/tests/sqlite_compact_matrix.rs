@@ -2391,8 +2391,6 @@ fn a_live_or_uncertain_authority_keeps_the_compact_barrier() {
     .authorized(PlaceAuthority {
         machine_incarnation: Some("worker:1".to_owned()),
         sandbox_generation: Some("generation:1".to_owned()),
-        lease_expires_ms: Some(future_ms()),
-        fence_token: Some("fence:91".to_owned()),
     });
     handles.history.gc_register(&live).unwrap();
     let refused = handles.compact(&request(0x92)).unwrap_err();
@@ -2431,8 +2429,6 @@ fn a_live_or_uncertain_authority_keeps_the_compact_barrier() {
     .authorized(PlaceAuthority {
         machine_incarnation: Some("worker:1".to_owned()),
         sandbox_generation: None,
-        lease_expires_ms: Some(0),
-        fence_token: None,
     });
     reopened.history.gc_register(&expired).unwrap();
     assert!(matches!(

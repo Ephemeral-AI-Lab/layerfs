@@ -6,7 +6,7 @@
 //! view once, built from a [`GcIntent`]; it never changes an intent.
 use super::records::GcIntent;
 
-/// One mount admission as an operator reads it, including the place and lease
+/// One mount admission as an operator reads it, including the place
 /// authority the Store recorded. The view is read-only: building or reading
 /// it changes no intent and releases nothing.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,8 +31,6 @@ pub struct MountHolderView {
     pub machine_incarnation: Option<String>,
     /// The Sandbox generation that placed the intent, when known.
     pub sandbox_generation: Option<String>,
-    /// The lease deadline in Unix milliseconds, when it has one.
-    pub lease_expires_ms: Option<i64>,
     /// True when the owner is uncertain and only `Unresolved` may report it.
     pub uncertain: bool,
 }
@@ -52,7 +50,6 @@ impl MountHolderView {
             owner_boot: intent.owner_boot.clone(),
             machine_incarnation: intent.machine_incarnation.clone(),
             sandbox_generation: intent.sandbox_generation.clone(),
-            lease_expires_ms: intent.lease_expires_ms,
             uncertain: intent.uncertain,
         }
     }

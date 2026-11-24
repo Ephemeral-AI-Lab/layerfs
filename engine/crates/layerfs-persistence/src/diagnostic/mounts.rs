@@ -27,8 +27,6 @@ pub struct MountHolder {
     pub machine_incarnation: Option<String>,
     /// The Sandbox generation that placed the admission.
     pub sandbox_generation: Option<String>,
-    /// The lease deadline in Unix milliseconds, when it has one.
-    pub lease_expires_ms: Option<i64>,
     /// True when the owner is uncertain: the row may not be released by
     /// observation alone.
     pub uncertain: bool,
@@ -111,7 +109,7 @@ pub(super) fn read(
     view: &dyn View,
     stack: Option<LayerStackId>,
 ) -> Result<Vec<MountHolder>, BackendError> {
-    let mut sql = String::from("SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine,p.name,b.name,g.owner_runtime,g.owner_boot,g.machine_incarnation,g.sandbox_generation,g.lease_expires_ms,g.uncertain FROM gc_intent g LEFT JOIN branch b ON g.scope_kind='branch' AND b.branch_id=g.scope_id LEFT JOIN layer_stack p ON p.layer_stack_id=CASE WHEN g.scope_kind='project' THEN g.scope_id ELSE b.layer_stack_id END WHERE g.kind='mount' AND g.state<>'done'");
+    let mut sql = String::from("SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine,p.name,b.name,g.owner_runtime,g.owner_boot,g.machine_incarnation,g.sandbox_generation,g.uncertain FROM gc_intent g LEFT JOIN branch b ON g.scope_kind='branch' AND b.branch_id=g.scope_id LEFT JOIN layer_stack p ON p.layer_stack_id=CASE WHEN g.scope_kind='project' THEN g.scope_id ELSE b.layer_stack_id END WHERE g.kind='mount' AND g.state<>'done'");
     let mut params = Vec::new();
     if let Some(stack) = stack {
         sql.push_str(" AND (g.scope_kind='store' OR p.layer_stack_id=?1)");
@@ -133,8 +131,7 @@ pub(super) fn read(
                 owner_boot: r.get(8)?,
                 machine_incarnation: r.get(9)?,
                 sandbox_generation: r.get(10)?,
-                lease_expires_ms: r.get(11)?,
-                uncertain: r.get::<i64>(12)? != 0,
+                uncertain: r.get::<i64>(11)? != 0,
             })
         })
         .collect()

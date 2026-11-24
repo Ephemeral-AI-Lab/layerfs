@@ -40,48 +40,31 @@ pub struct PgServer {
 /// A machine's own address of a PostgreSQL Store, its record's
 /// `machines.<machine>`: the URL (no user, no password) that machine dials
 /// in place of the Store's (`store.connect --machine`), with the Store's
-/// saved login, and, optionally, that machine's own LayerFS home. A machine
-/// without one dials the Store's address. The home is the caller-side
-/// discovery source for the cross-home place view (the design supplement
-/// G1): a recorded and readable home contributes its machine incarnations,
-/// Sandbox generations and tombstones, and an unrecorded or unreachable one
-/// contributes no proof.
+/// saved login. A machine without one dials the Store's address.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct OwnConnection {
     /// The URL the machine dials, when not the Store's.
     pub url: Option<String>,
-    /// The machine's own LayerFS home, when the operator recorded one.
-    pub home: Option<String>,
 }
 
 impl OwnConnection {
     fn from_record(value: &SdkValue) -> Self {
         Self {
             url: value.get_text("url").map(str::to_owned),
-            home: value.get_text("home").map(str::to_owned),
         }
     }
 
     /// Whether it names no URL: the Store's connection, which no record
-    /// entry is kept for. A home alone is not a connection; it is
-    /// place-view discovery, and keeps its entry.
+    /// entry is kept for.
     pub fn is_empty(&self) -> bool {
         self.url.is_none()
     }
 
-    /// Whether it names nothing at all (no URL or home).
-    pub fn is_unrecorded(&self) -> bool {
-        self.is_empty() && self.home.is_none()
-    }
-
-    /// The entry as its record holds it: only the fields it has.
+    /// The connection as its record holds it: only the fields it has.
     pub fn to_record(&self) -> SdkValue {
         let mut fields = Vec::new();
         if let Some(url) = &self.url {
             fields.push(("url".to_owned(), SdkValue::text(url)));
-        }
-        if let Some(home) = &self.home {
-            fields.push(("home".to_owned(), SdkValue::text(home)));
         }
         SdkValue::Map(fields)
     }
@@ -362,35 +345,17 @@ impl StoreRecord {
             })
     }
 
-    /// The machines recorded on a PostgreSQL Store, in record order: those
-    /// with their own address and those that only name their home. An entry
-    /// that names nothing (a record written while machines were attached one
-    /// by one) is none.
+    /// The machines with their own address of a PostgreSQL Store, in
+    /// record order. An entry that names none is none.
     pub fn own_connections(&self) -> Vec<(String, OwnConnection)> {
         match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines
                 .iter()
                 .map(|(machine, value)| (machine.clone(), OwnConnection::from_record(value)))
-                .filter(|(_, own)| !own.is_unrecorded())
+                .filter(|(_, own)| !own.is_empty())
                 .collect(),
             _ => Vec::new(),
         }
-    }
-
-    /// The LayerFS homes the Store's `machines.<machine>` entries record,
-    /// absolute and in record order, without repeats. These are the extra
-    /// places the cross-home view reads beside the caller's own home; a
-    /// relative or unreadable path contributes nothing.
-    pub fn machine_homes(&self) -> Vec<std::path::PathBuf> {
-        let mut homes: Vec<std::path::PathBuf> = Vec::new();
-        for (_, own) in self.own_connections() {
-            let Some(home) = own.home else { continue };
-            let path = std::path::PathBuf::from(home);
-            if path.is_absolute() && !homes.contains(&path) {
-                homes.push(path);
-            }
-        }
-        homes
     }
 
     /// `machine`'s own connection, if it has one.
@@ -402,32 +367,20 @@ impl StoreRecord {
     /// The record with `machine`'s own connection set to `own`; an empty
     /// one removes it. Every other machine's entry is kept byte for byte: a
     /// URL is never rewritten, and only `store update` drops old fields
-    /// ([`Self::without_old_fields`]). A home the entry already recorded is
-    /// kept: a connection update does not erase the place-view discovery
-    /// source.
+    /// ([`Self::without_old_fields`]).
     pub fn with_own_connection(self, machine: &str, own: &OwnConnection) -> Self {
         let mut machines = match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines.clone(),
             _ => Vec::new(),
         };
         let at = machines.iter().position(|(m, _)| m == machine);
-        match (at, own.is_unrecorded()) {
+        match (at, own.is_empty()) {
             (None, true) => return self,
             (None, false) => machines.push((machine.to_owned(), own.to_record())),
             (Some(at), true) => {
                 machines.remove(at);
             }
-            (Some(at), false) => {
-                let mut own = own.clone();
-                if own.home.is_none() {
-                    own.home = machines[at].1.get_text("home").map(str::to_owned);
-                }
-                if own.is_unrecorded() {
-                    machines.remove(at);
-                } else {
-                    machines[at].1 = own.to_record();
-                }
-            }
+            (Some(at), false) => machines[at].1 = own.to_record(),
         }
         match machines.is_empty() {
             true => self.without("machines"),
@@ -435,13 +388,9 @@ impl StoreRecord {
         }
     }
 
-    /// The record without any entry for `machine`: its own address and the
-    /// home it recorded. `machine.remove` forgets the machine entirely, so a
-    /// later machine of the same name does not inherit either.
+    /// The record without an own connection for `machine`.
     pub fn without_own_connection(self, machine: &str) -> Self {
-        let mut machines = self.own_connections();
-        machines.retain(|(m, _)| m != machine);
-        self.with_machines(machines)
+        self.with_own_connection(machine, &OwnConnection::default())
     }
 
     /// The record with `machines` holding exactly these own connections,
@@ -457,9 +406,8 @@ impl StoreRecord {
     /// Whether a PostgreSQL Store's record holds what 2.0 no longer writes
     /// (spec v23 V23-6): a `password`, a URL that is not an address alone
     /// (`refuse_login`), or a `machines.<machine>` entry with anything but a `url`
-    /// or the recorded `home` (an old `checked`). Such a record reads `broken`
-    /// `outdated` with the fix the user runs (`postgresql::login`); no write
-    /// cleans a URL.
+    /// (an old `checked`). Such a record reads `broken` `outdated` with the
+    /// fix the user runs (`postgresql::login`); no write cleans a URL.
     pub fn outdated_fields(&self) -> bool {
         let machines = match self.fields.get("machines") {
             Some(SdkValue::Map(machines)) => machines.as_slice(),
@@ -468,9 +416,7 @@ impl StoreRecord {
         self.fields.get("password").is_some()
             || self.refused_urls()
             || machines.iter().any(|(_, entry)| match entry {
-                SdkValue::Map(fields) => {
-                    fields.iter().any(|(key, _)| key != "url" && key != "home")
-                }
+                SdkValue::Map(fields) => fields.iter().any(|(key, _)| key != "url"),
                 _ => true,
             })
             || !matches!(self.fields.get("machines"), None | Some(SdkValue::Map(_)))
@@ -486,12 +432,18 @@ impl StoreRecord {
             Some(SdkValue::Map(machines)) => machines.as_slice(),
             _ => &[],
         };
-        let machines = (record.own_connections().into_iter())
-            .map(|(machine, own)| {
-                let url = own.url.as_deref().map(clean);
-                (machine, OwnConnection { url, home: own.home })
-            })
-            .collect();
+        self.text("url").is_some_and(refused)
+            || (machines.iter()).any(|(_, entry)| entry.get_text("url").is_some_and(refused))
+    }
+
+    /// The record as `store update` writes it (V23-6): no `password`, and
+    /// each machine entry its `url` alone (none without one). Its URLs are
+    /// kept as they are: `store update` refuses a record holding a URL that
+    /// is not an address alone ([`Self::refused_urls`]), and no write
+    /// rewrites one.
+    pub fn without_old_fields(self) -> Self {
+        let record = self.without("password");
+        let machines = record.own_connections();
         record.with_machines(machines)
     }
 

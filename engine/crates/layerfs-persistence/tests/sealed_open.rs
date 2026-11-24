@@ -77,7 +77,7 @@ fn a_sealed_store_opens_read_only() {
 }
 
 /// The phase-3 branch sealed Stores with `gc.sql` ending in two extra
-/// newlines and without the four `gc_intent` place/lease columns. Opening one
+/// newlines and without the two `gc_intent` place columns. Opening one
 /// cannot add them: the lean 2.0 schema is direct, so the recorded source is
 /// refused `Malformed` and the explicit 2.0 conversion is required.
 #[test]
@@ -88,12 +88,7 @@ fn a_sealed_store_recorded_before_the_intent_authority_columns_is_malformed() {
     std::fs::create_dir_all(&directory).unwrap();
     let path = sealed_store(&directory);
 
-    let columns = [
-        "machine_incarnation",
-        "sandbox_generation",
-        "lease_expires_ms",
-        "fence_token",
-    ];
+    let columns = ["machine_incarnation", "sandbox_generation"];
     let (current_source, old_source) = {
         let connection = rusqlite::Connection::open(&path).unwrap();
         let source: String = connection
@@ -104,8 +99,7 @@ fn a_sealed_store_recorded_before_the_intent_authority_columns_is_malformed() {
             )
             .unwrap();
         let mut old = source.replacen(
-            "    machine_incarnation TEXT,\n    sandbox_generation TEXT,\n    \
-             lease_expires_ms INTEGER,\n    fence_token TEXT,\n",
+            "    machine_incarnation TEXT,\n    sandbox_generation TEXT,\n",
             "",
             1,
         );
