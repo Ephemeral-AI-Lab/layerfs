@@ -1,0 +1,6 @@
+name = "gc_admission"
+version = "0.1.0"
+defaultTargets = ["GcAdmission"]
+
+[[lean_lib]]
+name = "GcAdmission"

@@ -1,0 +1,44 @@
+# Report-only Lean job for the GC-admission proof (plan §12).
+# It is never a required check and does not block a push or merge.  The
+# `lake build` evaluates the `#guard`s in Examples.lean, so a false example
+# fails the job; the axiom receipt is checked against the three standard
+# axioms only, and the product-LOC guard proves `formal/` contributes 0.
+name: lean
+
+on:
+  push:
+    branches: [main]
+    paths: ["formal/lean/**", ".github/workflows/lean.yml", "tools/check_lean_axioms.py", "tools/test_production_loc.py", "tools/production_loc.py"]
+  pull_request:
+    branches: [main]
+    paths: ["formal/lean/**", ".github/workflows/lean.yml", "tools/check_lean_axioms.py", "tools/test_production_loc.py", "tools/production_loc.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: lake build (reports only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: formal/lean/gc-admission
+      - name: no sorry or axiom
+        working-directory: formal/lean/gc-admission
+        run: |
+          ! grep -RIn --include='*.lean' -E '\b(sorry|admit|native_decide)\b|^[[:space:]]*(axiom|constant)\b' GcAdmission.lean GcAdmission
+      - name: no non-standard axioms
+        working-directory: formal/lean/gc-admission
+        run: |
+          lake env lean GcAdmission/Axioms.lean 2>&1 | tee /tmp/lean-axioms.txt
+          python3 "$GITHUB_WORKSPACE/tools/check_lean_axioms.py" /tmp/lean-axioms.txt
+      - name: product LOC guard
+        run: python3 -B -m unittest discover -s tools -p 'test_production_loc.py'

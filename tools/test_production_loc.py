@@ -379,6 +379,24 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(result["scopes"]["core"]["lines"], 2)
         self.assertEqual(result["combined"], 3)
 
+    def test_formal_lean_tree_is_outside_product_loc(self):
+        write(self.root, "core/crates/layerfs-content/src/lib.rs", "pub fn value() {}\n")
+        write(
+            self.root,
+            "formal/lean/gc-admission/GcAdmission/State.lean",
+            "def value := 1\n",
+        )
+        write(
+            self.root,
+            "formal/lean/gc-admission/lakefile.toml",
+            'name = "gc_admission"\n',
+        )
+        result = production_loc.scan(self.root)
+        self.assertEqual(result["scopes"]["core"]["crates"], {"layerfs-content": 1})
+        self.assertEqual(result["combined"], 1)
+        paths = {entry["path"] for entry in production_loc.per_file(self.root)["files"]}
+        self.assertFalse(any(path.startswith("formal/") for path in paths))
+
     def test_per_file_reporting_separates_production_and_physical_lines(self):
         write(
             self.root,
