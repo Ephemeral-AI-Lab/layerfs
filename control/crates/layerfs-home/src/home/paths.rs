@@ -15,7 +15,8 @@ pub fn store_record(home: &Path, store: &str) -> PathBuf {
     store_dir(home, store).join("record.json")
 }
 
-/// `store/<name>/store.sqlite`: a sqlite Store's file while it is on `native`.
+/// `store/<name>/store.sqlite`: a sqlite Store's file while it is on the machine whose
+/// calls run in this process.
 pub fn store_file(home: &Path, store: &str) -> PathBuf {
     store_dir(home, store).join("store.sqlite")
 }
