@@ -53,8 +53,9 @@ impl Published {
         self.bodies.iter().find(|(info, _)| info.pack_id == id)
     }
     fn insert(&mut self, info: PackInfo, body: Arc<Vec<u8>>) {
-        // A held tail's bodies are kept before its publication and again
-        // when it is acknowledged (#768): one copy.
+        // A body is kept once: a held tail's bodies live only in `Held`
+        // until its publication is acknowledged (#768), and a later
+        // acknowledgement of the same pack adds no second copy.
         if body.len() > DEPENDENCY_PACK_CACHE_BYTES || self.get(info.pack_id).is_some() {
             return;
         }
