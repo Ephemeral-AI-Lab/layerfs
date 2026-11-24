@@ -232,6 +232,12 @@ pub(crate) struct Session {
     pub(crate) incarnation: AtomicU64,
     /// Pack rows chain locates returned (#758, `metadata::chains`).
     pub(crate) chain_packs: Mutex<super::super::metadata::chains::ChainPacks>,
+    /// The intents this session registered and still holds advisory keys
+    /// for. A release unlocks an op's keys only when it takes the op from
+    /// here, so a repeated release, or a release of a row another session
+    /// registered, never drops a key level a live mount of this session holds
+    /// (PostgreSQL counts advisory locks per session).
+    pub(crate) held_ops: Mutex<std::collections::HashSet<[u8; 16]>>,
 }
 
 /// Connections opened and round trips made on the lane connection.
@@ -283,6 +289,7 @@ impl Session {
             backend_pid: AtomicI64::new(0),
             incarnation: AtomicU64::new(0),
             chain_packs: Mutex::default(),
+            held_ops: Mutex::default(),
         })
     }
     pub(crate) fn connect(
@@ -314,6 +321,7 @@ impl Session {
             backend_pid: AtomicI64::new(0),
             incarnation: AtomicU64::new(0),
             chain_packs: Mutex::default(),
+            held_ops: Mutex::default(),
         })
     }
 
@@ -362,6 +370,19 @@ impl Session {
     /// statement sets it; every later statement must run on the same backend.
     /// `false` means the connection is transaction-pooled and cannot hold the
     /// lock across transactions (spec §5.2 item 34).
+    /// Notes that this session holds the advisory keys of registered op `op`.
+    pub(crate) fn hold_op(&self, op: [u8; 16]) {
+        if let Ok(mut held) = self.held_ops.lock() {
+            held.insert(op);
+        }
+    }
+
+    /// Takes `op` from the ops this session holds keys for: `true` only the
+    /// first time, and only when this session registered it.
+    pub(crate) fn take_op(&self, op: &[u8; 16]) -> bool {
+        self.held_ops.lock().is_ok_and(|mut held| held.remove(op))
+    }
+
     pub(crate) fn note_backend(&self, pid: i64) -> bool {
         if pid <= 0 {
             return false;

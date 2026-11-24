@@ -37,7 +37,7 @@ const CALLS: &[(&[&str], &str, &str)] = &[
     (
         &["store", "repair-mount-holders"],
         "layerfs store repair-mount-holders <project> <branch> <action>",
-        "list, preview, settle, release or audit mount holders (operator)",
+        "list, preview, settle, release, settle_legacy or audit mount holders (operator)",
     ),
 ];
 

@@ -498,12 +498,28 @@ malformed one decodes as no token: missing evidence is no proof, never death
   then records the new ordered `incarnation` in the home `MachineRecord`
   before the worker serves; the worker-start reconcile settles only the rows
   of that machine that are dead and not uncertain. Mount registration settles
-  nothing. Every removal of a Sandbox's home record (a close or force close,
-  a reclaim of a runtime that ended by itself, a forget, and `sandbox.remove`
-  on every route, which writes the home's tombstone for a worker's Sandbox)
-  writes the generation's tombstone under `machine/<machine>/sandbox-retired/`
-  before that record goes; a failed tombstone write does not stop the removal
-  (a missing tombstone is only no proof) and is reported in `left`. A worker's
+  nothing. A removal writes the generation's tombstone under
+  `machine/<machine>/sandbox-retired/` before the home record goes only when
+  the runtime is confirmed stopped (a close or force close, a reclaim of a
+  runtime that ended by itself), confirmed gone (its side found its daemon
+  gone or stopped, `NoSuchSandbox` with `containerGone`, or its machine is
+  recorded stopped by a confirmed stop or a provider that reported the VM
+  stopped) or never started. A forget that sent no signal (a record this
+  build does not read, a retired docker record, a foreign record, a worker
+  that refused or could not be reached and keeps its record, a machine whose
+  record has no 2.0 name, or one whose VM a live read found `missing`)
+  writes none, and so does a `NoSuchSandbox` that inspected no runtime (no
+  started record, no daemon keys): a tombstone for a daemon that may still
+  run would prove its live mounts dead. A recorded `missing` is absence of
+  evidence, not death: a provider listing can miss a VM that comes back with
+  its daemon running, and a live read mends the record then. Its removal's
+  `left` names `store.repair_mount_holders`, which settles such an intent
+  once the operator knows the VM gone. Open gap (#787 review): a docker live
+  read also records a `paused` worker container stopped, whose frozen daemon
+  resumes on `docker unpause`, so a forced remove there writes a tombstone
+  that proves nothing. A failed
+  tombstone write does not stop the removal (a missing tombstone is only no
+  proof) and is reported in `left`. A worker's
   root is no home and gets no tombstone. Once a recreated Sandbox's started
   record names a newer generation of the same home, the name's older
   tombstone is deleted (the newer record proves the old generation's mounts
@@ -525,7 +541,19 @@ malformed one decodes as no token: missing evidence is no proof, never death
   ordered by `updated_ms, op_id`, paged) exposes them. A release that retains
   a row deletes the oldest done rows of the same Branch beyond the newest 100
   in its transaction, with no schema change (the existing unique index finds
-  the Branch's rows). A second release of one op answers `NotFound` on both
+  the Branch's rows). The row is stamped `max(now, the Branch's newest done
+  time + 1)`, and releases are serialized (SQLite's single writer;
+  PostgreSQL's Store lane row, locked at every write's `BEGIN` under READ
+  COMMITTED), so one Branch's stamps follow commit order. The keyset pages
+  therefore never repeat a row and never skip a row of the Branch identity it
+  was retained under; a row the cap deletes before the reader reaches it is
+  not returned. The pages select by name, the stamp floor by Branch identity:
+  after a Branch (or its project) is removed and created again under the same
+  names, the new Branch's release is stamped below the earlier Branch's rows
+  when those were stamped at or after the releasing host's clock, sorts among
+  them, and is missed by a cursor already past them; a read from the first
+  page returns it. Flooring by the names would scan every retained row inside
+  the write transaction (no index covers them), so it is not done. A second release of one op answers `NotFound` on both
   Store kinds, and PostgreSQL compaction never reads or deletes a done row.
   `list`, `preview` and `audit` write nothing.
 - **Operator repair reachability and the typed holder view.**
@@ -538,8 +566,9 @@ malformed one decodes as no token: missing evidence is no proof, never death
   state) on every route, with the `liveness` admission would give each holder
   now (owner check, then the calling home's place view, sent to a worker with
   the call) and `safe` (not `live`); `settle` refuses a holder still `live`
-  unless forced. The doctor's read-only `store.diagnose` forwards those fields
-  from a worker. The Store-wide compact barrier is retained: a live or
+  unless forced. The doctor's read-only `store.diagnose` forwards only the
+  typed holder view from a worker (owner, place, generation and state), not
+  `liveness` or `safe`. The Store-wide compact barrier is retained: a live or
   uncertain holder still refuses `store.compact`; an owner the owner evidence
   proves dead is adopted and the rebuild proceeds. A jsonl audit archive is
   deferred (#775).

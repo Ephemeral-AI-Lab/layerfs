@@ -273,3 +273,100 @@ fn repair_previews_settles_and_releases_through_the_worker() {
     assert_eq!(rows.len(), 2, "no worker preview wrote a row: {audit:?}");
     placed.remove();
 }
+
+/// The worker judges with the view this home sends, not its own: once the
+/// host home records the tombstone of the live holder's Sandbox generation
+/// (and no Sandbox record of that name), the worker's preview calls the
+/// holder `dead` and a `settle` without `--force` succeeds, where it was
+/// `live` and refused `InUse` before. The audit cursor crosses to the worker
+/// and back as the last row's `(updated_ms, op)`; one the call cannot read
+/// is `InvalidInput`.
+#[test]
+fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
+    let placed = worker_store::placed_seeded("repair-view", seed, serve);
+    let liveness = |placed: &worker_store::Placed| {
+        let preview = repair(placed, "preview", None, false);
+        let row = holders(&preview)
+            .iter()
+            .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
+            .expect("the placed holder")
+            .clone();
+        (
+            row.get_text("liveness").map(str::to_owned),
+            row.get("safe").cloned(),
+        )
+    };
+    assert_eq!(
+        liveness(&placed),
+        (Some("live".to_owned()), Some(SdkValue::Bool(false)))
+    );
+    let refused =
+        layerfs_control::store::repair(&placed.home, &request("settle", Some(0x21), false))
+            .unwrap_err();
+    assert_eq!(refused.code, "InUse", "{refused:?}");
+
+    // The host home now holds the tombstone of generation `generation:1` of
+    // Sandbox `box` on machine `box`, and no Sandbox record: dead.
+    let retired = layerfs_home::home::paths::sandbox_retired_dir(&placed.home, "box");
+    std::fs::create_dir_all(&retired).unwrap();
+    layerfs_home::home::write_record(
+        &retired.join("box.json"),
+        &SdkValue::map([("generation", SdkValue::text("generation:1"))]),
+    )
+    .unwrap();
+    assert_eq!(
+        liveness(&placed),
+        (Some("dead".to_owned()), Some(SdkValue::Bool(true)))
+    );
+    let settled = repair(&placed, "settle", Some(0x21), false);
+    assert_eq!(settled.get_text("state"), Some("uncertain"), "{settled:?}");
+    repair(&placed, "release", Some(0x21), false);
+    repair(&placed, "settle_legacy", None, false);
+    repair(&placed, "release", Some(0x31), false);
+
+    // Two retained rows, one a page: the cursor names the first row's
+    // place, the second page holds the other row and ends.
+    let page = |cursor: Option<String>| {
+        let request = RepairRequest {
+            limit: Some(1),
+            cursor,
+            ..request("audit", None, false)
+        };
+        layerfs_control::store::repair(&placed.home, &request)
+    };
+    let first = page(None).expect("the first audit page");
+    let cursor = first
+        .get_text("next_cursor")
+        .map(str::to_owned)
+        .unwrap_or_else(|| panic!("a next page: {first:?}"));
+    let second = page(Some(cursor)).expect("the second audit page");
+    let op = |page: &SdkValue| match page.get("items") {
+        Some(SdkValue::List(rows)) if rows.len() == 1 => rows[0].get_text("op").map(str::to_owned),
+        other => panic!("one row: {other:?}"),
+    };
+    let mut ops = vec![op(&first), op(&second)];
+    ops.sort();
+    assert_eq!(
+        ops,
+        vec![Some("21".repeat(16)), Some("31".repeat(16))],
+        "each row once"
+    );
+    assert_eq!(second.get("next_cursor"), Some(&SdkValue::Null));
+
+    // A cursor this call made, around a place it cannot read.
+    let filters = [
+        ("project", SdkValue::text("shop/app")),
+        ("branch", SdkValue::text("main")),
+        ("action", SdkValue::text("audit")),
+    ];
+    for place in [
+        SdkValue::text("nope"),
+        SdkValue::text("12:abcd"),
+        SdkValue::Int(1),
+    ] {
+        let made = layerfs_home::cursor::make("store.repair_mount_holders", place, &filters);
+        let refused = page(Some(made)).unwrap_err();
+        assert_eq!(refused.code, "InvalidInput", "{refused:?}");
+    }
+    placed.remove();
+}

@@ -236,12 +236,12 @@ fn a_branch_audit_reads_only_its_own_done_rows() {
     }
 
     let page = history
-        .gc_done_intents_branch("proj", "work", 0, 10)
+        .gc_done_intents_branch("proj", "work", None, 10)
         .unwrap();
     assert_eq!(page.items.len(), 1, "only the named Branch's row");
     assert_eq!(page.items[0].op_id, op(0x01));
     let other = history
-        .gc_done_intents_branch("proj", "other", 0, 10)
+        .gc_done_intents_branch("proj", "other", None, 10)
         .unwrap();
     assert_eq!(other.items.len(), 1);
     assert_eq!(other.items[0].op_id, op(0x02));
@@ -367,7 +367,7 @@ fn place_tokens_round_trip_through_evidence_and_live_statements_keep_a_done_row(
 /// #783 gap 3: one Branch's retained `done` audit is bounded with no schema
 /// change. A release that retains a row deletes that Branch's oldest done
 /// rows beyond the newest 100 (`DONE_RETAINED`); another Branch's rows and
-/// live intents are untouched.
+/// the Branch's own live and uncertain intents are untouched.
 #[test]
 fn a_release_keeps_at_most_the_newest_done_rows_of_its_branch() {
     const RETAINED: usize = 100;
@@ -402,7 +402,12 @@ fn a_release_keeps_at_most_the_newest_done_rows_of_its_branch() {
     .placed(Some([200; 32]), Some("box"), Some("box"))
     .owned(Some("pid:1@0"), Some("boot:1"));
     history.gc_register(&mounted).unwrap();
-    history.gc_mark_uncertain(&op(200)).unwrap();
+    assert!(history.gc_mark_uncertain(&op(200)).unwrap());
+    // a live and an uncertain holder of the same Branch, which the cap's
+    // `state = 'done'` never matches
+    history.gc_register(&holder(branch, 201)).unwrap();
+    history.gc_register(&holder(branch, 202)).unwrap();
+    assert!(history.gc_mark_uncertain(&op(202)).unwrap());
     assert!(history.gc_release_done(&op(200), "release").unwrap());
 
     // the test rows all record the names proj/work: count by Branch scope
@@ -421,4 +426,168 @@ fn a_release_keeps_at_most_the_newest_done_rows_of_its_branch() {
     assert!(!work.contains(&op(1).to_vec()), "the oldest went");
     assert!(work.contains(&op(2).to_vec()) && work.contains(&op(200).to_vec()));
     assert_eq!(kept(other).len(), 1, "another Branch's row stays");
+    assert_eq!(stored(&path, 201).0, "live", "the live holder stays");
+    assert_eq!(stored(&path, 202).0, "uncertain", "the uncertain one too");
+    let live = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap();
+    assert_eq!(live.len(), 2, "{live:?}");
+}
+
+/// A live mount of `proj/work` with its own owner boot, so several can be
+/// held at one Branch at once.
+fn holder(branch: BranchId, body: u8) -> GcIntent {
+    GcIntent::shared(
+        op(body),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack(1).as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([body; 32]), Some("box"), Some("box"))
+    .owned(Some("pid:1@0"), Some(&format!("boot:{body}")))
+}
+
+/// Registers, settles and releases one holder, retaining its `done` row.
+fn release_one(history: &HistoryProvider, branch: BranchId, body: u8) {
+    history.gc_register(&holder(branch, body)).unwrap();
+    assert!(history.gc_mark_uncertain(&op(body)).unwrap());
+    assert!(history.gc_release_done(&op(body), "release").unwrap());
+}
+
+/// Every audit page of `proj/work` of `limit` rows, read from `after`.
+fn audit_page(
+    history: &HistoryProvider,
+    after: Option<layerfs_history::GcAuditAfter>,
+    limit: u32,
+) -> layerfs_history::GcBranchAuditPage {
+    history
+        .gc_done_intents_branch("proj", "work", after, limit)
+        .unwrap()
+}
+
+/// #784 review: the audit pages by `(updated_ms, op_id)`, not by offset. A
+/// release between two page reads deletes the Branch's oldest row (the cap)
+/// and retains a newer one; the next page still starts right after the last
+/// row read, so no row is skipped or repeated, and the new rows come last.
+#[test]
+fn a_release_between_audit_pages_neither_skips_nor_repeats_a_row() {
+    let temp = Temp::new("gc-done-audit-keyset");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let path = temp.join("store.sqlite");
+    // two rows share a time: the op orders them
+    for body in 1..=100u8 {
+        let ms = i64::from(body.min(99));
+        done_row(&path, branch, body, "release", ms);
+    }
+    let mut seen: Vec<[u8; 16]> = Vec::new();
+    let mut after = None;
+    let mut pages = 0;
+    loop {
+        let page = audit_page(&history, after, 10);
+        assert_eq!(page.limit, 10);
+        seen.extend(page.items.iter().map(|row| row.op_id));
+        pages += 1;
+        // the first two reads are each followed by a release: the cap
+        // deletes the oldest row (already read) and the new row comes last
+        if pages <= 2 {
+            release_one(&history, branch, 200 + pages);
+        }
+        match page.next {
+            Some(next) => {
+                let last = page.items.last().unwrap();
+                assert_eq!((next.updated_ms, next.op_id), (last.updated_ms, last.op_id));
+                after = Some(next);
+            }
+            None => break,
+        }
+        assert!(pages < 20, "the pages end");
+    }
+    let mut expected: Vec<[u8; 16]> = (1..=100u8).map(op).collect();
+    expected.extend([op(201), op(202)]);
+    assert_eq!(seen, expected, "every row once, oldest first");
+    let clamped = audit_page(&history, None, u32::MAX);
+    assert_eq!(clamped.limit, layerfs_history::MAXIMUM_AUDIT_PAGE);
+    assert!(clamped.next.is_none());
+}
+
+/// #784 review: the cap orders by the releasing host's clock only through
+/// the stamp. A release on a host whose clock is behind the Branch's newest
+/// done row (here a full audit stamped an hour ahead) is stamped after that
+/// row: the cap in the same transaction keeps it, and the audit returns it
+/// last.
+#[test]
+fn a_release_stamped_behind_the_newest_row_is_kept_and_listed_last() {
+    let temp = Temp::new("gc-done-audit-clock");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let path = temp.join("store.sqlite");
+    let ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + 3_600_000;
+    for body in 1..=100u8 {
+        done_row(&path, branch, body, "release", ahead + i64::from(body));
+    }
+    release_one(&history, branch, 200);
+
+    let page = audit_page(&history, None, 1000);
+    assert_eq!(page.items.len(), 100, "the cap keeps the newest 100");
+    let last = page.items.last().unwrap();
+    assert_eq!(last.op_id, op(200), "the new release is retained and last");
+    assert_eq!(last.updated_ms, ahead + 101, "stamped after the newest row");
+    assert!(
+        page.items.iter().all(|row| row.op_id != op(1)),
+        "the oldest row went instead"
+    );
+}
+
+/// #787 review: the audit reads by the recorded project and Branch names,
+/// while a release is floored only by its own Branch identity's rows. A
+/// Branch removed and created again under the same names keeps the earlier
+/// identity's rows readable; here they are stamped an hour ahead of the
+/// releasing host's clock, so the new identity's first release ranks before
+/// them by its own stamp. A read from the first page returns every row once,
+/// in stamp order. A cursor already past the earlier rows does not return
+/// the new row: the documented limit of the audit's guarantee.
+#[test]
+fn a_recreated_branch_is_paged_by_its_own_stamps() {
+    let temp = Temp::new("gc-done-audit-recreated");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let path = temp.join("store.sqlite");
+    // the removed identity's rows: same names, another Branch id
+    let earlier = branch_id(9);
+    let ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + 3_600_000;
+    for body in 1..=3u8 {
+        done_row(&path, earlier, body, "release", ahead + i64::from(body));
+    }
+    let read = audit_page(&history, None, 10);
+    assert_eq!(read.items.len(), 3);
+    assert!(read.next.is_none());
+    let last = read.items.last().unwrap();
+    let cursor = layerfs_history::GcAuditAfter {
+        updated_ms: last.updated_ms,
+        op_id: last.op_id,
+    };
+
+    release_one(&history, branch, 200);
+    let all = audit_page(&history, None, 10);
+    let order: Vec<[u8; 16]> = all.items.iter().map(|row| row.op_id).collect();
+    assert_eq!(order, vec![op(200), op(1), op(2), op(3)], "stamp order");
+    assert!(
+        all.items[0].updated_ms < ahead,
+        "floored by its own identity"
+    );
+    assert!(
+        audit_page(&history, Some(cursor), 10).items.is_empty(),
+        "a cursor past the earlier identity's rows does not return it"
+    );
 }

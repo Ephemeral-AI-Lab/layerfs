@@ -10,6 +10,16 @@
 //! `Busy`; a gone owner's uncertain intent does not: `sandbox.remove` is the
 //! call that clears it. Its progress is its op's phases: `cancel` (forced,
 //! one event per command this home records), `stop` and `delete`.
+//!
+//! The home's retired tombstone of the Sandbox is written before its record
+//! goes only when its runtime is confirmed stopped (a close answered
+//! `Closed`), confirmed gone (its side answered `NoSuchSandbox` with
+//! `containerGone`, or its machine is recorded stopped) or never started (a
+//! create that ended claiming the name). A removal that leaves a runtime it
+//! did not stop (a record this build does not read or reopen, a worker that
+//! keeps its record, a machine whose record has no 2.0 name or whose VM a
+//! live read found missing, which may come back) writes none: no evidence
+//! is the safe outcome, a tombstone would prove a live mount dead.
 use super::create::remove_folder;
 use super::direct;
 use super::family::named;
@@ -96,8 +106,9 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
         );
         return forget(&home, events, name, container, Worker::Ask);
     }
-    // a Sandbox on a machine whose record has no 2.0 name (RV3 FAIL 1):
-    // nothing on that machine is reached, its worker included
+    // a Sandbox on a machine whose record has no 2.0 name (RV3 FAIL 1), or
+    // whose VM a live read found missing: nothing on that machine is
+    // reached, its worker included, and neither proves its runtime gone
     let machine = found.machine();
     let on = layerfs_machine::record::MachineRecord::read(&home, machine)?;
     if let Some(on) = on.filter(|record| record.gone()) {
@@ -107,10 +118,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                  Sandbox's daemon and run folder there, if any, stay in the VM or container an \
                  earlier build made, which no call reaches"
             ),
-            false => format!(
-                "machine {machine}'s VM is gone, so only the Sandbox's records were removed: \
-                 its daemon and run folder were in that VM, which its provider no longer holds"
-            ),
+            false => missing_vm(machine, found.project()),
         };
         return forget(&home, events, name, first, Worker::Skip);
     }
@@ -132,7 +140,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     // with `force`, goes by its records alone; without either, the remove
     // says how it can go
     if let Some(first) = stopped_on(&home, &found, request.force)? {
-        return forget(&home, events, name, first, Worker::Skip);
+        return forget(&home, events, name, first, Worker::Gone);
     }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
@@ -225,24 +233,28 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
     };
     match stopped {
         // a record its side does not read went by its records alone, no
-        // signal sent (RV3 FAIL 2, 3): as gone, `left` saying what may remain
+        // signal sent (RV3 FAIL 2, 3): as gone, `left` saying what may
+        // remain. Its daemon may still run, so no tombstone is written
         Ok(value) if value.get_text("kind") == Some("Forgotten") && value.get("left").is_some() => {
             phase(events, "delete", None);
             direct::release(&home, &record);
-            let unretired = retire_home(&home, &record, &dir);
             remove_folder(&dir)?;
             done(events);
             let left = match value.get("left") {
                 Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
                 _ => Vec::new(),
             };
-            let left = left.into_iter().chain(unretired).collect();
             Ok(Removed::AlreadyGone { left })
         }
         Ok(value) => {
             phase(events, "delete", None);
             direct::release(&home, &record);
-            let unretired = retire_home(&home, &record, &dir);
+            // only a close that stopped the runtime proves its mounts dead;
+            // a retired docker record its side forgot left its container
+            let unretired = match value.get_text("kind") {
+                Some("Closed") => retire_home(&home, &record, &dir),
+                _ => None,
+            };
             remove_folder(&dir)?;
             let unmounted = match value.get("unknown") {
                 Some(SdkValue::List(paths)) => texts(paths).map(&handle_of).collect(),
@@ -263,11 +275,23 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             done(events);
             Ok(Removed::Stopped { unmounted, left })
         }
-        // a Sandbox already gone loses its record too
+        // a Sandbox already gone loses its record too; its side's reclaim
+        // names a tombstone it could not write in its `left` detail. Only a
+        // daemon its side found gone or stopped (`containerGone`) proves its
+        // mounts dead: any other `NoSuchSandbox` (no started record, no
+        // daemon keys) inspected no runtime, so no tombstone is written
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
             phase(events, "delete", None);
             direct::release(&home, &record);
-            let left = retire_home(&home, &record, &dir).into_iter().collect();
+            let reclaimed: Vec<String> = match refusal.detail.get("left") {
+                Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
+                _ => Vec::new(),
+            };
+            let unretired = match refusal.detail.get_bool("containerGone") {
+                true => retire_home(&home, &record, &dir),
+                false => None,
+            };
+            let left = reclaimed.into_iter().chain(unretired).collect();
             remove_folder(&dir)?;
             done(events);
             Ok(Removed::AlreadyGone { left })
@@ -375,11 +399,15 @@ fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
 /// Removes the record of Sandbox `name` that this build does not reopen:
 /// one recorded under the retired docker backend (D-8,
 /// layerfs-project#111), one whose daemon's name this home does not give
-/// ([`foreign`]), or one on a machine whose record has no 2.0 name. Its
+/// ([`foreign`]), one on a machine whose record has no 2.0 name or whose VM
+/// a live read found missing, or one on a machine recorded stopped. Its
 /// machine's worker is asked once to drop its own record of it (a worker
 /// that cannot be reached or refuses leaves that record, and `left` says
 /// so), unless `worker` skips it, then the home's record goes. Nothing it
-/// ran is touched; `first`, the first of `left`, says what was left.
+/// ran is touched; `first`, the first of `left`, says what was left. The
+/// home's retired tombstone is written only for [`Worker::Gone`], whose
+/// runtime is confirmed gone: a worker that keeps its record, or one that
+/// forgot it without stopping it, proves nothing.
 fn forget(
     home: &Path,
     events: &mut Events<'_>,
@@ -400,7 +428,7 @@ fn forget(
     let left = match (here, worker) {
         // the record of a Sandbox on a machine whose calls run in this
         // process is the folder removed below
-        (true, _) | (_, Worker::Skip) => None,
+        (true, _) | (_, Worker::Skip | Worker::Gone) => None,
         _ => on_machine(
             home,
             events,
@@ -422,7 +450,10 @@ fn forget(
         let _sandbox = record::lock(home, name)?;
         direct::release(home, &record);
     }
-    let unretired = retire_home(home, &record, &dir);
+    let unretired = match worker {
+        Worker::Gone => retire_home(home, &record, &dir),
+        Worker::Ask | Worker::Skip => None,
+    };
     remove_folder(&dir)?;
     done(events);
     let kept = left.map(|left| {
@@ -481,14 +512,37 @@ fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option
     )))
 }
 
+/// What a remove of a Sandbox of project `project` on machine `machine`,
+/// whose VM a live read found missing, leaves: its records went and nothing
+/// on the machine was reached. The VM may come back (a provider listing can
+/// miss it, and a live read mends the record then), so its daemon is not
+/// proved stopped: no tombstone is written, and a mount intent it held stays
+/// until the operator's repair settles it.
+fn missing_vm(machine: &str, project: Option<&str>) -> String {
+    let project = project.map_or_else(|| "<project>".to_owned(), shell_word);
+    format!(
+        "machine {machine}'s VM was found missing, so only the Sandbox's records were removed \
+         and nothing on the machine was reached: its daemon and run folder were in that VM. A \
+         provider that lists no such VM does not prove it gone, so no retired tombstone was \
+         written and a mount intent the Sandbox held is not proven dead: `layerfs store \
+         repair-mount-holders {project} <branch> list` shows it, and `settle --op <op> --force` \
+         ends it once the VM is known gone"
+    )
+}
+
 /// Whether [`forget`] asks the Sandbox's machine's worker to drop its own
-/// record of it.
+/// record of it, and whether its runtime is confirmed gone.
 #[derive(Clone, Copy)]
 enum Worker {
-    /// Asked once; a refusal is a sentence of `left`.
+    /// Asked once; a refusal is a sentence of `left`. Nothing was stopped.
     Ask,
-    /// Not reached at all: the machine's record has no 2.0 name.
+    /// Not reached at all: the machine's record has no 2.0 name, so what
+    /// runs on it is not known, or a live read found its VM missing, which
+    /// does not prove its runtime gone (the VM may come back).
     Skip,
+    /// Not reached: its runtime ended with its machine, recorded stopped
+    /// ([`stopped_on`]), so the home's retired tombstone is written.
+    Gone,
 }
 
 /// Refuses a remove while another operation's intent holds Sandbox

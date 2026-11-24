@@ -975,3 +975,193 @@ fn another_boot_stays_conservatively_live_on_a_shared_store() {
         .unwrap();
     assert_eq!(epoch(&mut schema.admin(), project_id), 1);
 }
+
+/// #784 review: on PostgreSQL an operator's settle and release run in the
+/// operator's own session, so they retain the row as `done` but cannot
+/// unlock the shared keys the owner's session took when it registered. The
+/// owner's own later release finds the row `done`, still unlocks its keys
+/// and leaves the row as it is: a Branch removal is admitted afterwards, and
+/// the audit still reads the retained row.
+#[test]
+fn an_owner_release_after_an_operator_release_unlocks_its_session_keys() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "operator_release");
+    let binding = binding("operator_release");
+    let owner = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&owner.history, 1);
+    owner
+        .history
+        .gc_register(&mount(project_id, branch, 60))
+        .unwrap();
+
+    let operator = schema.open(&binding, CURSOR).expect("an operator session");
+    assert!(operator.history.gc_mark_uncertain(&op(60)).unwrap());
+    let evidence = "action=release;operator=alice;op=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c";
+    assert!(operator.history.gc_release_done(&op(60), evidence).unwrap());
+    // the owner's session still holds its shared Branch key: refused
+    let refusal = operator
+        .history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 61))
+        .unwrap_err();
+    assert!(
+        matches!(
+            refusal,
+            HistoryError::BusyOp(_) | HistoryError::MountsActive(_)
+        ),
+        "{refusal:?}"
+    );
+
+    owner.history.gc_release(&op(60)).unwrap();
+    operator
+        .history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 62))
+        .expect("the owner's release unlocked its session keys");
+    assert_eq!(epoch(&mut schema.admin(), project_id), 1);
+
+    let audit = operator
+        .history
+        .gc_done_intents_branch("proj", "work", None, 10)
+        .unwrap();
+    assert_eq!(audit.items.len(), 1, "{audit:?}");
+    assert_eq!(audit.items[0].op_id, op(60));
+    assert_eq!(audit.items[0].evidence.as_deref(), Some(evidence));
+}
+
+/// The session advisory key of `kind` and `id` in the catalog `binding`
+/// derives (spec 5.2).
+fn advisory_key(binding: &[u8], kind: u8, id: &[u8]) -> i64 {
+    let catalog = CatalogId::derive(binding).unwrap();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/advisory/v1\0");
+    hasher.update(catalog.as_slice());
+    hasher.update(&[kind]);
+    hasher.update(id);
+    let mut head = [0u8; 8];
+    head.copy_from_slice(&hasher.finalize().as_bytes()[..8]);
+    i64::from_be_bytes(head)
+}
+
+/// Whether another session could take `key` exclusively now (taken and
+/// given back at once).
+fn key_free(admin: &mut postgres::Client, key: i64) -> bool {
+    let free: bool = admin
+        .query_one("SELECT pg_try_advisory_lock($1::bigint)", &[&key])
+        .unwrap()
+        .get(0);
+    if free {
+        admin
+            .query_one("SELECT pg_advisory_unlock($1::bigint)", &[&key])
+            .unwrap();
+    }
+    free
+}
+
+/// A session's shared keys are reference-counted, one level per mount it
+/// registered. Releasing one op twice in the owner's own session (an
+/// operator release, then the owner's release, then a repeat) unlocks one
+/// level only, so the Branch key of the session's other live mount stays
+/// held; its own release then frees the key.
+#[test]
+fn a_repeated_release_unlocks_its_op_once() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "repeat_release");
+    let binding = binding("repeat_release");
+    let owner = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&owner.history, 1);
+    owner
+        .history
+        .gc_register(&mount(project_id, branch, 70))
+        .unwrap();
+    owner
+        .history
+        .gc_register(&mount(project_id, branch, 71))
+        .unwrap();
+    let key = advisory_key(&binding, 3, branch.as_slice());
+    let mut admin = schema.admin();
+    assert!(!key_free(&mut admin, key));
+
+    let evidence = "action=release;operator=alice;op=46464646464646464646464646464646";
+    assert!(owner.history.gc_release_done(&op(70), evidence).unwrap());
+    owner.history.gc_release(&op(70)).unwrap();
+    owner.history.gc_release(&op(70)).unwrap();
+    assert!(
+        !key_free(&mut admin, key),
+        "op 71 still holds its level of the Branch key"
+    );
+
+    owner.history.gc_release(&op(71)).unwrap();
+    assert!(key_free(&mut admin, key));
+}
+
+/// #787 review: two operator releases in one Branch never stamp out of
+/// commit order on PostgreSQL. Every write transaction locks the Store's
+/// lane row at its `BEGIN` (READ COMMITTED), so a release that meets a
+/// concurrent writer waits for its commit and only then reads the Branch's
+/// newest done time. Here the concurrent writer retains a row stamped an
+/// hour ahead (a host whose clock is ahead) and commits after the release
+/// started: the release is stamped after that row, so a reader whose cursor
+/// is already at that row still gets the release on its next page.
+#[test]
+fn a_release_behind_a_concurrent_writer_is_stamped_after_its_row() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "done_order");
+    let binding = binding("done_order");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&handles.history, 1);
+    for tag in [80, 81] {
+        handles
+            .history
+            .gc_register(&mount(project_id, branch, tag))
+            .unwrap();
+    }
+    let ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + 3_600_000;
+    let mut admin = schema.admin();
+    let mut writer = admin.transaction().unwrap();
+    writer
+        .batch_execute("SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE")
+        .unwrap();
+    writer
+        .execute(
+            "UPDATE gc_intent SET state = 'done', uncertain = FALSE, owner_runtime = NULL, \
+             owner_boot = NULL, evidence = 'writer', updated_ms = $1 WHERE op_id = $2",
+            &[&ahead, &op(80).as_slice()],
+        )
+        .unwrap();
+
+    let (sent, finished) = std::sync::mpsc::channel();
+    let (waited, released) = std::thread::scope(|scope| {
+        let release = scope.spawn(|| {
+            let released = handles.history.gc_release_done(&op(81), "operator");
+            let _ = sent.send(());
+            released
+        });
+        let waited = finished
+            .recv_timeout(std::time::Duration::from_millis(500))
+            .is_err();
+        writer.commit().unwrap();
+        (waited, release.join().unwrap())
+    });
+    assert!(released.unwrap(), "the release retains its row");
+
+    let first = handles
+        .history
+        .gc_done_intents_branch("proj", "work", None, 1)
+        .unwrap();
+    assert_eq!(first.items.len(), 1);
+    assert_eq!(first.items[0].op_id, op(80), "the writer's row ranks first");
+    let next = first.next.expect("a page follows the writer's row");
+    assert_eq!(next.updated_ms, ahead);
+    let second = handles
+        .history
+        .gc_done_intents_branch("proj", "work", Some(next), 10)
+        .unwrap();
+    assert_eq!(second.items.len(), 1, "{second:?}");
+    assert_eq!(second.items[0].op_id, op(81), "the release follows it");
+    assert_eq!(second.items[0].updated_ms, ahead + 1);
+    assert!(second.next.is_none());
+    assert!(waited, "the release waited for the writer's lane row");
+}

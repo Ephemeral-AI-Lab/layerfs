@@ -97,6 +97,18 @@ pub fn create(
     events: &mut Events<'_>,
     request: &CreateRequest,
 ) -> Result<Created, SdkRefusal> {
+    create_on(home, events, request, crate::dispatch::call)
+}
+
+/// [`create`], whose start runs through `local` on a machine whose calls
+/// run in this process (`crate::dispatch::call` in [`create`]; a test may
+/// stand in for the Sandbox's own side there).
+pub fn create_on(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &CreateRequest,
+    local: crate::route::Local,
+) -> Result<Created, SdkRefusal> {
     let home = home.to_path_buf();
     let project = request.project.as_str();
     let name = request.name.as_str();
@@ -217,8 +229,8 @@ pub fn create(
         image: request.image.clone(),
         start: Some((0, total(request.mount))),
     };
-    let started = on_machine(&home, events, &record, asked, crate::dispatch::call)
-        .map(|value| Started::read(&value));
+    let started =
+        on_machine(&home, events, &record, asked, local).map(|value| Started::read(&value));
     // a worker's Sandbox whose daemon this host reaches directly (#535 G4):
     // its forward opens before the locks are taken
     let opened = (started.as_ref().ok()).map(|started| direct::open(&home, &record, started));

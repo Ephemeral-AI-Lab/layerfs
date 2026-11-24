@@ -9,19 +9,30 @@
 use super::*;
 
 /// Deletes one intent, and on PostgreSQL releases the session keys it held.
+///
+/// On PostgreSQL the keys are read from the row whatever its state: an
+/// operator's release (`release_done`) runs in the operator's own session,
+/// so it retains the row as `done` but cannot unlock the keys the owner's
+/// session took at registration. The owner's own release then still unlocks
+/// them, and leaves the `done` row as it is (`release_in` never deletes one).
+/// Only an op this session registered and still holds is unlocked, once: a
+/// repeated release, or one of a row another session registered, unlocks
+/// nothing, so no key level a live mount of this session holds is dropped.
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
         Engine::Postgres(session) => {
             let found = provider.write(|tx| {
-                let Some(intent) = get_in(tx, op_id)? else {
+                let Some(intent) = get_any_in(tx, op_id)? else {
                     return Ok(None);
                 };
                 release_in(tx, op_id)?;
                 Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
             })?;
             if let Some(ReleaseKeys { keys }) = found {
-                let _ = session_unlock(session, provider.catalog_id, &keys);
+                if session.take_op(op_id) {
+                    let _ = session_unlock(session, provider.catalog_id, &keys);
+                }
             }
             Ok(())
         }
@@ -39,14 +50,40 @@ pub const DONE_RETAINED: i64 = 100;
 /// only read that sees the row. The scope's oldest done rows beyond
 /// [`DONE_RETAINED`] go. Returns `false` when the op has no live intent (none,
 /// or one already retained), so a concurrent or repeated repair invents none.
+///
+/// The row is stamped `max(now, the scope's newest done time + 1)`: a host
+/// whose clock is behind another's still ranks the row it retains newest, so
+/// the cap in the same transaction keeps it (the cap also never deletes the
+/// op it was given) and the keyset audit returns it after every older row.
+///
+/// The stamps of one scope follow commit order because releases are
+/// serialized: SQLite's `BEGIN IMMEDIATE` writer, and on PostgreSQL the Store
+/// lane row every write transaction locks at its `BEGIN` (READ COMMITTED), so
+/// the newest-time read runs after any earlier release has committed and no
+/// other release commits before this one does. The floor is per scope, that
+/// is per Branch identity: a Branch removed and created again under the same
+/// project and Branch names starts from its own rows, not from the earlier
+/// identity's, which the name-scoped audit also reads (see
+/// `gc_intent_done_branch.sql` for the guarantee that leaves). Finding the
+/// earlier identity's rows would need a scan of every retained row, as no
+/// index covers the names, so the floor does not.
 fn retain_done_in(tx: &Transaction<'_>, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
-    let rows = tx.query(RELEASE_DONE, params![evidence, now_ms(), op_id.as_slice()])?;
+    let newest = one(tx, DONE_NEWEST, [op_id.as_slice()], |row| {
+        cell::<Option<i64>>(row, 0)
+    })?
+    .flatten();
+    let now = now_ms();
+    let stamp = newest.map_or(now, |newest| now.max(newest.saturating_add(1)));
+    let rows = tx.query(RELEASE_DONE, params![evidence, stamp, op_id.as_slice()])?;
     let Some(row) = rows.first() else {
         return Ok(false);
     };
     let scope_kind: String = cell(row, 0)?;
     let scope_id: Option<Vec<u8>> = cell(row, 1)?;
-    tx.query(DONE_CAP, params![scope_kind, scope_id, DONE_RETAINED])?;
+    tx.query(
+        DONE_CAP,
+        params![scope_kind, scope_id, op_id.as_slice(), DONE_RETAINED],
+    )?;
     Ok(true)
 }
 
@@ -73,7 +110,9 @@ pub(crate) fn release_done(
             })?;
             let retained = found.is_some();
             if let Some(ReleaseKeys { keys }) = found {
-                let _ = session_unlock(session, provider.catalog_id, &keys);
+                if session.take_op(op_id) {
+                    let _ = session_unlock(session, provider.catalog_id, &keys);
+                }
             }
             Ok(retained)
         }
@@ -81,9 +120,11 @@ pub(crate) fn release_done(
 }
 
 /// What admission would say of each of `intents` now: the owner evidence,
-/// then the place view scoped on this thread merged with each intent's own
-/// place, as [`PlaceView::liveness`] judges a conflict. One read transaction;
-/// nothing is written.
+/// then the place view scoped on this thread, as [`PlaceView::liveness`]
+/// judges a conflict. The view is the one a removal or compaction on the
+/// scope admits with: the supplied view alone, never a held intent's own
+/// recorded place as the current one, so the verdict is the very one that
+/// admission gives. One read transaction; nothing is written.
 pub(crate) fn liveness(
     provider: &HistoryProvider,
     intents: &[GcIntent],
@@ -91,8 +132,9 @@ pub(crate) fn liveness(
     let postgres = postgres(provider);
     provider.read(|tx| {
         let owners = OwnerView::now();
+        let mut place = PlaceView::supplied();
         (intents.iter())
-            .map(|intent| PlaceView::for_intent(intent).liveness(tx, intent, postgres, &owners))
+            .map(|intent| place.liveness(tx, intent, postgres, &owners))
             .collect()
     })
 }

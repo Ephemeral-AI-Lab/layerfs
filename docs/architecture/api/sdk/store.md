@@ -577,16 +577,16 @@ CLI     layerfs store repair-mount-holders <project> <branch> <action> [--op HEX
 | `force` option | bool | `settle` a holder that still looks `live` |
 | `operator` option | text | the label a release records: at most 128 characters, no control characters; empty is `local`; not an authenticated principal |
 | `limit` option | int | rows of one page (`list`, `preview`, `audit`): 1 to 1000, default 100 |
-| `cursor` option | text | the `next_cursor` of the page before; it carries the project, Branch and action |
+| `cursor` option | text | the `next_cursor` of the page before; it carries the project, Branch and action, and the place the page ended (the last holder op, or for `audit` the last row's `updated_ms` and op) |
 
 | Action | Effect |
 | --- | --- |
 | `list` | one page of holders by op, read-only |
 | `preview` | the same page (what `settle` and `release` would act on), read-only |
-| `settle` | marks exactly `--op` uncertain, answering `{ action, op, state: "uncertain" }`; a holder whose `liveness` is `live` is refused `InUse` unless `--force` (or `--legacy` for a row without evidence); a later call reports `Unresolved`, never `Busy` |
-| `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` (replacing the `place:v1;...` place tokens a live row keeps there) and clears the owner columns, so the unique owner key cannot block a remount, answering `{ action, op, state: "done" }`. A Branch keeps its newest 100 done rows: a release deletes the oldest beyond them |
+| `settle` | marks exactly `--op` uncertain, answering `{ action, op, state: "uncertain" }`; a holder whose `liveness` is `live` is refused `InUse` unless `--force` (or `--legacy` for a row without evidence); a row released since it was listed is `NotFound`; a later call reports `Unresolved`, never `Busy` |
+| `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` (replacing the `place:v1;...` place tokens a live row keeps there) and clears the owner columns, so the unique owner key cannot block a remount, answering `{ action, op, state: "done" }`. The row is stamped no earlier than one millisecond after the Branch's newest done row, so a host whose clock is behind still ranks it newest. A Branch keeps its newest 100 done rows: a release deletes the oldest beyond them, never the row it retains. On PostgreSQL the holder's own session keeps its advisory keys until the owner releases its op (that release unlocks them and leaves the done row) or the session closes |
 | `settle_legacy` | marks only rows with missing owner or place evidence: `{ action, settled }` |
-| `audit` | one page of the Branch's retained `done` rows, oldest first; changes nothing |
+| `audit` | one page of the Branch's retained `done` rows, oldest first by `(updated_ms, op)`; the next page starts strictly after the last row, so a release between two pages repeats no row and skips none of the Branch's own (releases are serialized and each is stamped after its Branch's newest done row). The audit selects by project and Branch name, while the stamp follows only the current Branch's rows: after a Branch (or its project) is removed and created again under the same names, a release of the new Branch whose host clock is not past the earlier Branch's newest stamp sorts among the earlier rows, and a cursor already past them misses it; a read without `cursor` returns every retained row. Changes nothing |
 
 A page answers `{ action, items, next_cursor }`. Each holder row carries the
 typed view (`op`, `project`, `branch`, `workspace`, `sandbox`, `machine`,
@@ -594,8 +594,11 @@ typed view (`op`, `project`, `branch`, `workspace`, `sandbox`, `machine`,
 `legacy`) and three state words: `state`, the row's own state (`live`, or
 `uncertain` once settled); `liveness`, what admission would say of it now
 from the owner check and this home's place view (`live`, `uncertain` or
-`dead`; a shared PostgreSQL Store proves no death from a place, so its rows
-are at most `uncertain` there); and `safe`, true unless it still looks
+`dead`; a shared PostgreSQL Store proves no death from a place, so there a
+row is never `dead` from its place evidence, which gives `uncertain` at most,
+and only this process's own owner check can call one `dead`; a holder on
+another host stays `live`, so most PostgreSQL settles need `--force`); and
+`safe`, true unless it still looks
 `live`. A worker's call is sent the place view of the calling home. Every
 call is in the home's `trace/calls.jsonl` call log. On a SQLite Store the call
 runs on the machine that holds the file through its worker; a PostgreSQL Store
@@ -603,8 +606,11 @@ runs in the calling process.
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | an unknown action; a missing or malformed `--op`; a bad operator label; a `limit` out of range; a cursor of another action, project or Branch |
-| `NotFound` | no mount holder with that op at the Branch (for a release: already released, on either Store kind) |
+| `InvalidInput` | an unknown action; a missing or malformed `--op`; a bad operator label; a `limit` out of range; a cursor of another action, project or Branch, or one whose place cannot be read |
+| `NoSuchStore` | no Store of that name in this home |
+| `NoSuchProject` | no project of that name in the Store |
+| `NoSuchBranch` | no Branch of that name (every action but `audit`, which reads the names the rows recorded) |
+| `NotFound` | no mount holder with that op at the Branch (for a settle or release: already released, on either Store kind) |
 | `InUse` | `settle` of a holder that still looks `live`; `fix: … settle --op HEX --force` |
 | `Conflict` | release before settle |
 | `Unavailable`, `Unknown` | the owning worker is not reachable or its answer was lost |

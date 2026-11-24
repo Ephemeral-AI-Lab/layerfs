@@ -18,7 +18,7 @@
 //! (`create`, `list`, `get`, `remove`), the state of a Sandbox in
 //! `state.rs`, the route of a host operation in `route.rs`, and the
 //! `workspace` calls in `workspace/calls.rs`.
-pub use super::create::{create, CreateRequest, Created};
+pub use super::create::{create, create_on, CreateRequest, Created};
 pub use super::get::{get, Down, GetRequest, Got, ListedWorkspace};
 pub use super::list::{list, ListRequest, Listed, ListedSandbox};
 use super::record::SandboxRecord;

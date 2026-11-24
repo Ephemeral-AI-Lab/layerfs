@@ -16,7 +16,9 @@ use crate::open_args::OpenArgs;
 use crate::service::{branch_named, with_service};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::{hex, unhex};
-use layerfs_history::{GcIntent, GcIntentKind, GcScopeKind, Liveness, MountHolderView};
+use layerfs_history::{
+    GcAuditAfter, GcIntent, GcIntentKind, GcScopeKind, Liveness, MountHolderView,
+};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_store_service::history::admission;
 
@@ -50,7 +52,8 @@ pub struct Repair {
     /// The operator label a release records (empty: `local`).
     pub operator: String,
     /// Where the page starts, from the caller's cursor: the last holder op
-    /// listed (`list`, `preview`) or the audit page (`audit`).
+    /// listed (`list`, `preview`) or the last audit row's
+    /// `<updated_ms>:<op>` (`audit`).
     pub after: Option<SdkValue>,
     /// The rows of one page.
     pub limit: u32,
@@ -133,47 +136,50 @@ pub fn repair_at(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
     })
 }
 
-/// One page of the Branch's retained `done` rows, oldest first; the page
-/// number travels in the cursor.
+/// One keyset page of the Branch's retained `done` rows, oldest first by
+/// `(updated_ms, op)`; the last row's place travels in the cursor, so a
+/// release between two pages repeats no row and skips none of the Branch's
+/// own; only a row of a Branch created again under the same names can sort
+/// below rows already paged (see `GcAuditAfter`).
 fn audit(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
-    let page = match &request.after {
-        Some(SdkValue::Int(page)) => u32::try_from(*page).unwrap_or(0),
-        _ => 0,
-    };
+    let after = audit_after(request.after.as_ref())?;
     with_service(open, |service| {
         let read = admission::done_intents_branch(
             service.store.history(),
             &request.project,
             &request.branch,
-            page,
+            after,
             request.limit,
         )
         .map_err(failed)?;
         let items = read.items.iter().map(admission::done_value).collect();
-        // a full page names a next one only when a row follows it: the read
-        // of one row at the next page's offset (with a limit of one, the
-        // page number is the offset)
-        let more = read.has_more
-            && !admission::done_intents_branch(
-                service.store.history(),
-                &request.project,
-                &request.branch,
-                (page + 1).saturating_mul(read.limit),
-                1,
-            )
-            .map_err(failed)?
-            .items
-            .is_empty();
-        let next = match more {
-            true => SdkValue::Int(i64::from(page) + 1),
-            false => SdkValue::Null,
-        };
+        let next = read.next.map_or(SdkValue::Null, |next| {
+            SdkValue::text(format!("{}:{}", next.updated_ms, hex(&next.op_id)))
+        });
         Ok(SdkValue::map([
             ("action", SdkValue::text("audit")),
             ("items", SdkValue::List(items)),
             ("next", next),
         ]))
     })
+}
+
+/// The audit page's start as the cursor carries it, `<updated_ms>:<op>`;
+/// anything else is `InvalidInput`, as a malformed holder op is.
+fn audit_after(after: Option<&SdkValue>) -> Result<Option<GcAuditAfter>> {
+    let Some(after) = after else {
+        return Ok(None);
+    };
+    let malformed = || refused("InvalidInput", "the audit cursor is malformed");
+    let SdkValue::Text(text) = after else {
+        return Err(malformed());
+    };
+    let (updated_ms, op) = text.split_once(':').ok_or_else(malformed)?;
+    let updated_ms = updated_ms.parse::<i64>().map_err(|_| malformed())?;
+    let op_id = unhex(op)
+        .and_then(|bytes| <[u8; 16]>::try_from(bytes).ok())
+        .ok_or_else(malformed)?;
+    Ok(Some(GcAuditAfter { updated_ms, op_id }))
 }
 
 /// The actions on the Branch's live mount intents.
@@ -196,8 +202,10 @@ fn holders(
     if action == "settle_legacy" {
         let mut settled = 0i64;
         for intent in mounts.iter().filter(|i| MountHolderView::of(i).legacy()) {
-            catalog.gc_mark_uncertain(&intent.op_id).map_err(failed)?;
-            settled += 1;
+            // a row released since the listing is not counted
+            if catalog.gc_mark_uncertain(&intent.op_id).map_err(failed)? {
+                settled += 1;
+            }
         }
         return Ok(SdkValue::map([
             ("action", SdkValue::text(action)),
@@ -246,7 +254,9 @@ fn holders(
 
 /// Marks `found` uncertain. A holder the owner check and place view still
 /// find `live` is refused `InUse` unless forced; `--legacy` settles only a
-/// row without owner or place evidence, which nothing can judge.
+/// row without owner or place evidence, which nothing can judge. A row its
+/// owner (or another operator) released since the listing is `NotFound`,
+/// as a second release is.
 fn settle(
     catalog: &dyn layerfs_history::HistoryCatalog,
     found: &GcIntent,
@@ -272,7 +282,13 @@ fn settle(
             ));
         }
     }
-    catalog.gc_mark_uncertain(&found.op_id).map_err(failed)
+    if !catalog.gc_mark_uncertain(&found.op_id).map_err(failed)? {
+        return Err(refused(
+            "NotFound",
+            format!("mount holder {} was already released", hex(&found.op_id)),
+        ));
+    }
+    Ok(())
 }
 
 /// One page of holders after the cursor's op, each judged now.

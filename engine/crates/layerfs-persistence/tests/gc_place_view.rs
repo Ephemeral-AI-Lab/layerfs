@@ -260,3 +260,42 @@ fn liveness_reads_the_scoped_view_and_changes_nothing() {
     assert_eq!(left.len(), 1);
     assert!(!left[0].uncertain);
 }
+
+/// #784 review: the operator's liveness read judges with the view a removal
+/// admits with, never the holder's own recorded generation standing in for a
+/// current Sandbox record. With only a tombstone in the view (the record is
+/// gone) a tombstone newer than the recorded generation proves the holder
+/// dead, so the read says `Dead` (a self-filled record would have made it
+/// `Uncertain`), and a Branch removal under the same view agrees: it settles
+/// the holder instead of refusing.
+#[test]
+fn liveness_with_a_tombstone_only_view_matches_admission() {
+    let temp = Temp::new("gc-place-liveness-tombstone");
+    let history = catalog(&temp);
+    let (stack_id, branch) = project(&history);
+    let generation = token("sandbox", 10, "a");
+    let holder = mount(branch, 0x42, &generation);
+    history.gc_register(&holder).unwrap();
+
+    let tombstone_only = || {
+        let mut view = PlaceView::new();
+        view.set_sandbox_retired("box", "box-1", token("sandbox", 30, "b"));
+        view
+    };
+    let judged = with_place_view(Some(tombstone_only()), || {
+        history.gc_liveness(std::slice::from_ref(&holder)).unwrap()
+    });
+    assert_eq!(judged, vec![layerfs_history::Liveness::Dead]);
+
+    let removal = GcIntent::operation(
+        op(0x43),
+        GcIntentKind::Removal,
+        GcScopeKind::Project,
+        stack_id.as_slice(),
+    )
+    .named(Some("proj"), None);
+    with_place_view(Some(tombstone_only()), || {
+        history.gc_remove_branch(branch, 1_000, &removal)
+    })
+    .expect("admission settles the holder the read called dead");
+}

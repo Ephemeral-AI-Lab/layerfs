@@ -280,6 +280,14 @@ impl SandboxRecord {
         self
     }
 
+    /// The record naming no machine or generation: a worker's own record
+    /// whose caller sent no place keeps none an earlier one left.
+    pub fn without_place(mut self) -> Self {
+        self.fields.remove("machine");
+        self.fields.remove("generation");
+        self
+    }
+
     /// The intent the record holds, if any.
     pub fn op(&self) -> Option<Op> {
         self.fields

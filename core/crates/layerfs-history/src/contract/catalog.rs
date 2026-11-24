@@ -20,10 +20,10 @@ use crate::error::HistoryResult;
 use crate::identity::{BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId};
 use crate::records::{
     AddLayerOutcome, AddLayerRequest, BranchMergeRequest, BranchRecord, BranchSnapshot,
-    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest, GcAuditPage,
-    GcDeletion, GcIntent, GcReconcile, GcScopeKind, LayerHistoryRequest, LayerRecord,
-    LayerStackRecord, Page, PageResult, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
-    Reservation, ReserveRequest, StackInitialization,
+    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest, GcAuditAfter,
+    GcAuditPage, GcBranchAuditPage, GcDeletion, GcIntent, GcReconcile, GcScopeKind,
+    LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult, PathRemovalOutcome,
+    PathRemovalRecord, PathRemovalRequest, Reservation, ReserveRequest, StackInitialization,
 };
 /// Checked inputs that establish one catalog binding.
 #[derive(Clone, Eq, PartialEq)]
@@ -494,8 +494,9 @@ pub trait HistoryCatalog: Send + Sync {
     }
 
     /// Marks one admission intent uncertain, so a later call reports
-    /// `Unresolved` until its owner settles it.
-    fn gc_mark_uncertain(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
+    /// `Unresolved` until its owner settles it. Returns `false` when no live
+    /// or uncertain row has the op (none, or one already retained `done`).
+    fn gc_mark_uncertain(&self, _op_id: &[u8; 16]) -> HistoryResult<bool> {
         Err(crate::error::HistoryError::Unsupported("GC admission"))
     }
 
@@ -604,17 +605,19 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported("GC audit"))
     }
 
-    /// One bounded page of the retained `done` rows of one Branch, oldest
-    /// first. The operator `audit` action is scoped to the Branch it names.
+    /// One bounded keyset page of the retained `done` rows of one Branch,
+    /// oldest first by `(updated_ms, op_id)`: the rows strictly after
+    /// `after`, or from the first. The operator `audit` action is scoped to
+    /// the Branch it names.
     ///
     /// The default refuses: a provider that keeps no `done` rows has none.
     fn gc_done_intents_branch(
         &self,
         _project: &str,
         _branch: &str,
-        _page: u32,
+        _after: Option<GcAuditAfter>,
         _limit: u32,
-    ) -> HistoryResult<GcAuditPage> {
+    ) -> HistoryResult<GcBranchAuditPage> {
         Err(crate::error::HistoryError::Unsupported("GC done audit"))
     }
 }

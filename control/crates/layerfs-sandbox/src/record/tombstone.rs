@@ -1,10 +1,16 @@
 //! Retired Sandbox tombstones: `machine/<machine>/sandbox-retired/<name>.json`.
 //!
-//! Every removal of a Sandbox's home record writes the tombstone **before** it
-//! deletes that record, best effort: a close or force close on `native`, a
-//! reclaim of a runtime that ended by itself, a forget, and `sandbox.remove`
-//! on every route (normal, forgotten, unstarted), which writes the home's
-//! tombstone for a worker's Sandbox. A crash leaves the record or both, never
+//! A removal of a Sandbox's home record writes the tombstone **before** it
+//! deletes that record, best effort, only when the Sandbox's runtime is
+//! confirmed stopped, confirmed gone or never started: a close or force
+//! close on `native`, a reclaim of a runtime that ended by itself, and
+//! `sandbox.remove` after its side answered `Closed` or `NoSuchSandbox`,
+//! on a gone VM or stopped machine, or of a create that ended claiming the
+//! name (it writes the home's tombstone for a worker's Sandbox). A removal
+//! that did not stop the runtime (a record this build does not read or
+//! reopen, a retired docker record, a worker that keeps its record) writes
+//! none: a tombstone proves the mounts of its generation dead, and no
+//! evidence is the safe outcome. A crash leaves the record or both, never
 //! neither; a write that fails is reported in `left` and the removal goes on,
 //! since a missing tombstone is only "no proof". The path is outside
 //! `sandbox/`, so a Sandbox listing never mistakes a tombstone for a Sandbox.
