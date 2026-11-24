@@ -21,6 +21,7 @@ Three cases, all on the store-shaped model:
     catch up the delta, verify, rename.  The probe measures the loss without a
     fence and the fence window with one.
 """
+
 from __future__ import annotations
 
 import os
@@ -49,8 +50,7 @@ def naive_vs_closure(directory: str, size_mib: int = 64) -> dict:
     # in a pack the mark skipped (and its seven chained refs).
     stop = threading.Event()
     dead_object = store.oid(info["dead_packs"][0], 0)
-    writer = store.Writer(source, stop, deadline=time.monotonic() + 30, dedupe_every=1,
-                          dead_pool=[dead_object])
+    writer = store.Writer(source, stop, deadline=time.monotonic() + 30, dedupe_every=1, dead_pool=[dead_object])
     writer.start()
     time.sleep(0.3)
     stop.set()
@@ -64,11 +64,11 @@ def naive_vs_closure(directory: str, size_mib: int = 64) -> dict:
     return {
         "fixture": {"size_mib": size_mib, "dead_packs": len(info["dead_packs"])},
         "post_mark": post_mark,
-        "naive_delta": {k: naive_delta[k] for k in
-                        ("delta_objects", "delta_packs", "delta_bytes", "delta_seconds")},
+        "naive_delta": {k: naive_delta[k] for k in ("delta_objects", "delta_packs", "delta_bytes", "delta_seconds")},
         "naive_verify": naive_verify,
-        "closure_delta": {k: closure_delta[k] for k in
-                          ("delta_objects", "delta_packs", "delta_bytes", "delta_seconds")},
+        "closure_delta": {
+            k: closure_delta[k] for k in ("delta_objects", "delta_packs", "delta_bytes", "delta_seconds")
+        },
         "closure_verify": closure_verify,
         "data_lost_without_remark": naive_verify["missing"] > 0,
         "recovered_by_closure_remark": closure_verify["ok"],
@@ -89,9 +89,9 @@ def adversarial_delta(directory: str, size_mib: int = 256) -> dict:
     conn = store.connect(source)
     conn.execute("BEGIN IMMEDIATE")
     hw = store.read_high_water(conn)
-    dead_objects = [store.oid(pack_id, index)
-                    for pack_id in info["dead_packs"]
-                    for index in range(store.OBJECTS_PER_PACK)]
+    dead_objects = [
+        store.oid(pack_id, index) for pack_id in info["dead_packs"] for index in range(store.OBJECTS_PER_PACK)
+    ]
     serial = hw[0]
     roots = []
     root_objects = []
@@ -112,8 +112,7 @@ def adversarial_delta(directory: str, size_mib: int = 256) -> dict:
     delta = store.remark_delta(source, target, marked, "closure")
     verified = store.verify(source, target)
     return {
-        "fixture": {"size_mib": size_mib, "dead_packs": len(info["dead_packs"]),
-                    "dead_bytes": info["dead_bytes"]},
+        "fixture": {"size_mib": size_mib, "dead_packs": len(info["dead_packs"]), "dead_bytes": info["dead_bytes"]},
         "post_mark_new_bytes": 0,
         "delta_bytes": delta["delta_bytes"],
         "delta_packs": delta["delta_packs"],
@@ -125,8 +124,7 @@ def adversarial_delta(directory: str, size_mib: int = 256) -> dict:
     }
 
 
-def concurrent_fence(directory: str, size_mib: int = 64, seconds: float = 3.0,
-                     writers: int = 1) -> dict:
+def concurrent_fence(directory: str, size_mib: int = 64, seconds: float = 3.0, writers: int = 1) -> dict:
     directory = _reset_dirs(directory)
     source = os.path.join(directory, "source.db")
     target = os.path.join(directory, "target.db")
@@ -137,8 +135,15 @@ def concurrent_fence(directory: str, size_mib: int = 64, seconds: float = 3.0,
     stop = threading.Event()
     pool = store.dead_object_pool(source, info["dead_packs"][:16])
     threads = [
-        store.Writer(source, stop, deadline=time.monotonic() + seconds + 60,
-                     dedupe_every=97, dead_pool=pool, salt=salt, max_commits=400)
+        store.Writer(
+            source,
+            stop,
+            deadline=time.monotonic() + seconds + 60,
+            dedupe_every=97,
+            dead_pool=pool,
+            salt=salt,
+            max_commits=400,
+        )
         for salt in range(writers)
     ]
     for thread in threads:

@@ -15,6 +15,7 @@ Usage:
 Each run is a fresh process so the SQLite page cache starts empty; the input
 file is evicted with ``posix_fadvise(DONTNEED)`` after ``sync`` (cold-ish).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -148,9 +149,7 @@ def build_source(path: str, total_bytes: int, dead_fraction: float) -> dict:
 
 def delete_dead(conn: sqlite3.Connection) -> None:
     conn.execute("BEGIN IMMEDIATE")
-    conn.execute(
-        "DELETE FROM object_location WHERE object_id NOT IN (SELECT object_id FROM visited)"
-    )
+    conn.execute("DELETE FROM object_location WHERE object_id NOT IN (SELECT object_id FROM visited)")
     conn.execute("DELETE FROM pack WHERE pack_id NOT IN (SELECT pack_id FROM object_location)")
     conn.execute(
         "UPDATE store_totals SET canonical=(SELECT COALESCE(SUM(canonical_length),0) FROM object_location),"
@@ -165,13 +164,9 @@ def verify(path: str, expect: dict) -> dict:
     try:
         objects = conn.execute("SELECT count(*) FROM object_location").fetchone()[0]
         packs = conn.execute("SELECT count(*) FROM pack").fetchone()[0]
-        canonical = conn.execute(
-            "SELECT COALESCE(SUM(canonical_length),0) FROM object_location"
-        ).fetchone()[0]
+        canonical = conn.execute("SELECT COALESCE(SUM(canonical_length),0) FROM object_location").fetchone()[0]
         stored = conn.execute("SELECT COALESCE(SUM(length),0) FROM pack").fetchone()[0]
-        totals = conn.execute(
-            "SELECT canonical,stored FROM store_totals WHERE id=1"
-        ).fetchone()
+        totals = conn.execute("SELECT canonical,stored FROM store_totals WHERE id=1").fetchone()
         digests = conn.execute("SELECT count(DISTINCT digest) FROM pack").fetchone()[0]
     finally:
         conn.close()
@@ -300,13 +295,9 @@ def run_one(args: argparse.Namespace) -> dict:
     if args.strategy == "current":
         return strategy_current(source, work, expect)
     if args.strategy == "prototype":
-        return strategy_clone_incremental(
-            source, work, expect, True, args.max_steps, args.batch_pages
-        )
+        return strategy_clone_incremental(source, work, expect, True, args.max_steps, args.batch_pages)
     if args.strategy == "prototype_no_vacuum":
-        return strategy_clone_incremental(
-            source, work, expect, False, args.max_steps, args.batch_pages
-        )
+        return strategy_clone_incremental(source, work, expect, False, args.max_steps, args.batch_pages)
     raise SystemExit("unknown strategy " + args.strategy)
 
 

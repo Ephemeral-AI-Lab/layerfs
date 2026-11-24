@@ -20,6 +20,7 @@ The fixture is synthetic: each pack is 1 MiB of ``zeroblob`` and owns eight
 objects are what a content-addressed Store can dedupe a later commit onto
 (the hazard that makes the delta unbounded).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -163,9 +164,7 @@ def make_fixture(path: str, size_mib: int, dead_ratio: float = 0.25, seed: int =
 
 
 def read_high_water(conn: sqlite3.Connection) -> tuple:
-    return conn.execute(
-        "SELECT serial, next_pack_id, next_ordinal, pack_bytes, logical FROM high_water"
-    ).fetchone()
+    return conn.execute("SELECT serial, next_pack_id, next_ordinal, pack_bytes, logical FROM high_water").fetchone()
 
 
 def _fetch_edges(conn: sqlite3.Connection) -> dict[bytes, tuple[bytes, ...]]:
@@ -202,17 +201,11 @@ def mark(path: str) -> dict:
     started = time.perf_counter()
     conn = connect(path)
     hw = read_high_water(conn)
-    roots = [
-        row[0]
-        for row in conn.execute(
-            "SELECT root_id FROM root WHERE serial <= ? ORDER BY serial", (hw[0],)
-        )
-    ]
+    roots = [row[0] for row in conn.execute("SELECT root_id FROM root WHERE serial <= ? ORDER BY serial", (hw[0],))]
     root_objects = [
         row[0]
         for row in conn.execute(
-            "SELECT o.object_id FROM root_object o JOIN root r USING(root_id) "
-            "WHERE r.serial <= ?",
+            "SELECT o.object_id FROM root_object o JOIN root r USING(root_id) WHERE r.serial <= ?",
             (hw[0],),
         )
     ]
@@ -299,8 +292,16 @@ def targets_visited(path: str) -> set[bytes]:
     return visited
 
 
-def _copy_rows(out: sqlite3.Connection, source: str, delta_objects: set[bytes], delta_packs: set[int],
-               roots: list[tuple], root_objects: list[tuple], kept: list[tuple], hw: tuple) -> None:
+def _copy_rows(
+    out: sqlite3.Connection,
+    source: str,
+    delta_objects: set[bytes],
+    delta_packs: set[int],
+    roots: list[tuple],
+    root_objects: list[tuple],
+    kept: list[tuple],
+    hw: tuple,
+) -> None:
     out.execute("ATTACH DATABASE ? AS src", (source,))
     if delta_packs:
         out.execute("CREATE TEMP TABLE dp(pack_id INTEGER PRIMARY KEY)")
@@ -329,8 +330,7 @@ def _copy_rows(out: sqlite3.Connection, source: str, delta_objects: set[bytes], 
         out.executemany("INSERT OR IGNORE INTO root_object VALUES(?, ?)", root_objects)
     if kept:
         out.executemany("INSERT OR IGNORE INTO kept_node VALUES(?, ?, ?)", kept)
-    out.execute("UPDATE high_water SET serial=?, next_pack_id=?, next_ordinal=?, pack_bytes=?, logical=?",
-                hw)
+    out.execute("UPDATE high_water SET serial=?, next_pack_id=?, next_ordinal=?, pack_bytes=?, logical=?", hw)
 
 
 def remark_delta(source: str, target: str, marked: dict, mode: str = "closure") -> dict:
@@ -348,22 +348,20 @@ def remark_delta(source: str, target: str, marked: dict, mode: str = "closure") 
     hw_now = read_high_water(src)
     roots = [
         (row[0], row[1], row[2])
-        for row in src.execute("SELECT root_id, kind, serial FROM root WHERE serial > ? ORDER BY serial",
-                               (marked["hw"][0],))
+        for row in src.execute(
+            "SELECT root_id, kind, serial FROM root WHERE serial > ? ORDER BY serial", (marked["hw"][0],)
+        )
     ]
     root_objects = [
         (row[0], row[1])
         for row in src.execute(
-            "SELECT ro.root_id, ro.object_id FROM root_object ro JOIN root r USING(root_id) "
-            "WHERE r.serial > ?",
+            "SELECT ro.root_id, ro.object_id FROM root_object ro JOIN root r USING(root_id) WHERE r.serial > ?",
             (marked["hw"][0],),
         )
     ]
     kept = [
         (row[0], row[1], row[2])
-        for row in src.execute(
-            "SELECT kind, node_id, serial FROM kept_node WHERE serial > ?", (marked["hw"][0],)
-        )
+        for row in src.execute("SELECT kind, node_id, serial FROM kept_node WHERE serial > ?", (marked["hw"][0],))
     ]
     edges = _fetch_edges(src)
     where = locations(src)
@@ -422,9 +420,7 @@ def verify(source: str, target: str, fence_serial: int | None = None) -> dict:
     out.close()
     missing = source_visited - target_visited
     extra = target_visited - source_visited
-    absent_pack = {
-        o for o in source_visited & target_visited if source_packs.get(o) not in target_packs
-    }
+    absent_pack = {o for o in source_visited & target_visited if source_packs.get(o) not in target_packs}
     return {
         "fence_serial": fence,
         "source_objects": len(source_visited),
@@ -440,9 +436,16 @@ class Writer(threading.Thread):
     """Commit loop: each commit writes one 1 MiB pack (8 objects), a root and
     metadata; optionally references a pre-mark dead object (content dedupe)."""
 
-    def __init__(self, path: str, stop: threading.Event, deadline: float = float("inf"),
-                 dedupe_every: int = 0, dead_pool: list[bytes] | None = None, salt: int = 0,
-                 max_commits: int = 0):
+    def __init__(
+        self,
+        path: str,
+        stop: threading.Event,
+        deadline: float = float("inf"),
+        dedupe_every: int = 0,
+        dead_pool: list[bytes] | None = None,
+        salt: int = 0,
+        max_commits: int = 0,
+    ):
         super().__init__(daemon=True)
         self.path = path
         self.stop = stop
@@ -462,8 +465,11 @@ class Writer(threading.Thread):
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA cache_size=-65536")
         seq = 0
-        while (not self.stop.is_set() and time.monotonic() < self.deadline
-               and (not self.max_commits or self.commits < self.max_commits)):
+        while (
+            not self.stop.is_set()
+            and time.monotonic() < self.deadline
+            and (not self.max_commits or self.commits < self.max_commits)
+        ):
             started = time.perf_counter()
             try:
                 conn.execute("BEGIN IMMEDIATE")
@@ -476,14 +482,16 @@ class Writer(threading.Thread):
                 serial, pack_id = row
                 ids = [oid(pack_id, index) for index in range(OBJECTS_PER_PACK)]
                 conn.execute("INSERT INTO pack VALUES(?, zeroblob(?))", (pack_id, MIB))
-                conn.executemany("INSERT INTO object_location VALUES(?, ?)",
-                                 [(object_id, pack_id) for object_id in ids])
-                conn.executemany("INSERT INTO object_ref VALUES(?, ?)",
-                                 [(ids[0], ids[index]) for index in range(1, OBJECTS_PER_PACK)])
+                conn.executemany(
+                    "INSERT INTO object_location VALUES(?, ?)", [(object_id, pack_id) for object_id in ids]
+                )
+                conn.executemany(
+                    "INSERT INTO object_ref VALUES(?, ?)",
+                    [(ids[0], ids[index]) for index in range(1, OBJECTS_PER_PACK)],
+                )
                 root_id = new_root_id(serial, self.salt)
                 conn.execute("INSERT INTO root VALUES(?, 'commit', ?)", (root_id, serial))
-                conn.executemany("INSERT INTO root_object VALUES(?, ?)",
-                                 [(root_id, object_id) for object_id in ids])
+                conn.executemany("INSERT INTO root_object VALUES(?, ?)", [(root_id, object_id) for object_id in ids])
                 conn.execute("INSERT INTO kept_node VALUES('commit', ?, ?)", (root_id, serial))
                 seq += 1
                 if self.dedupe_every and self.dead_pool and seq % self.dedupe_every == 0:

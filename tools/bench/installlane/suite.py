@@ -13,6 +13,7 @@ Two arms:
 
 Run: ``python3 suite.py --arm small`` or ``--arm ten_gib``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,20 +34,18 @@ def small(directory: str) -> dict:
     os.makedirs(directory, exist_ok=True)
     result: dict = {"arm": "small", "host": {"python": os.sys.version.split()[0]}}
     result["wal_hold"] = wal.probe(os.path.join(directory, "wal-hold.db"), 256, 10.0, writers=2)
-    result["wal_cap_hold"] = wal.probe(os.path.join(directory, "wal-cap.db"), 256, 10.0,
-                                       cap_mb=256, writers=2)
-    result["wal_cap_drain"] = wal.probe(os.path.join(directory, "wal-capdrain.db"), 64, 10.0,
-                                        cap_mb=128, drain=True, writers=2)
-    result["wal_catchup"] = wal.probe(os.path.join(directory, "wal-catchup.db"), 64, 15.0,
-                                      preset_mb=1024, writers=2)
+    result["wal_cap_hold"] = wal.probe(os.path.join(directory, "wal-cap.db"), 256, 10.0, cap_mb=256, writers=2)
+    result["wal_cap_drain"] = wal.probe(
+        os.path.join(directory, "wal-capdrain.db"), 64, 10.0, cap_mb=128, drain=True, writers=2
+    )
+    result["wal_catchup"] = wal.probe(os.path.join(directory, "wal-catchup.db"), 64, 15.0, preset_mb=1024, writers=2)
     result["naive_vs_closure"] = hazard.naive_vs_closure(os.path.join(directory, "naive"), 64)
     result["adversarial_delta"] = hazard.adversarial_delta(os.path.join(directory, "adversarial"), 256)
     result["concurrent_fence"] = hazard.concurrent_fence(os.path.join(directory, "fence"), 64)
     return result
 
 
-def ten_gib(directory: str, size_gib: float = 10.0, delta_gib: float = 6.2,
-            writers: int = 2) -> dict:
+def ten_gib(directory: str, size_gib: float = 10.0, delta_gib: float = 6.2, writers: int = 2) -> dict:
     os.makedirs(directory, exist_ok=True)
     source = os.path.join(directory, "source.db")
     target = os.path.join(directory, "target.db")
@@ -102,8 +101,9 @@ def ten_gib(directory: str, size_gib: float = 10.0, delta_gib: float = 6.2,
     stop = threading.Event()
     pool = store.dead_object_pool(source, info["dead_packs"][:64])
     threads = [
-        store.Writer(source, stop, deadline=deadline, dedupe_every=50, dead_pool=pool,
-                     salt=salt, max_commits=per_writer)
+        store.Writer(
+            source, stop, deadline=deadline, dedupe_every=50, dead_pool=pool, salt=salt, max_commits=per_writer
+        )
         for salt in range(writers)
     ]
     write_started = time.perf_counter()
@@ -126,8 +126,9 @@ def ten_gib(directory: str, size_gib: float = 10.0, delta_gib: float = 6.2,
         **store.summarise_latencies(latencies),
         "wal_peak_bytes": max((value for _, value in samples), default=0),
         "wal_growth_mib_s": ((samples[-1][1] - samples[0][1]) / MIB / (samples[-1][0] - samples[0][0]))
-        if len(samples) > 1 and samples[-1][0] > samples[0][0] else 0.0,
-        "wal_samples": [(round(t, 2), value) for t, value in samples[::int(max(1, len(samples) / 20))]],
+        if len(samples) > 1 and samples[-1][0] > samples[0][0]
+        else 0.0,
+        "wal_samples": [(round(t, 2), value) for t, value in samples[:: int(max(1, len(samples) / 20))]],
     }
     wal_before_checkpoint = store.wal_bytes(source)
 
@@ -146,13 +147,21 @@ def ten_gib(directory: str, size_gib: float = 10.0, delta_gib: float = 6.2,
     delta = store.remark_delta(source, target, marked, "closure")
     result["remark_delta"] = {
         key: delta[key]
-        for key in ("scan_seconds", "copy_seconds", "delta_seconds", "delta_objects",
-                    "delta_packs", "delta_bytes", "new_roots", "install_serial")
+        for key in (
+            "scan_seconds",
+            "copy_seconds",
+            "delta_seconds",
+            "delta_objects",
+            "delta_packs",
+            "delta_bytes",
+            "new_roots",
+            "install_serial",
+        )
     }
-    result["remark_delta"]["delta_packs_over_writer_commits"] = (
-        delta["delta_packs"] / commits if commits else None)
+    result["remark_delta"]["delta_packs_over_writer_commits"] = delta["delta_packs"] / commits if commits else None
     result["remark_delta"]["delta_over_wal_bytes"] = (
-        delta["delta_bytes"] / wal_before_checkpoint if wal_before_checkpoint else None)
+        delta["delta_bytes"] / wal_before_checkpoint if wal_before_checkpoint else None
+    )
 
     # Close the build snapshot, then checkpoint the backlog.  The keeper holds
     # the pager open so the close does not run its own checkpoint.
