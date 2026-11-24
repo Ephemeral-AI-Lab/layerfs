@@ -2,6 +2,7 @@
 //! entity each is about, in the order the checks made them. The home's
 //! doctor publishes them under its records check (`host_target`).
 use super::target::Checks;
+use layerfs_bridge::control::SdkValue;
 
 /// How bad a finding is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,6 +20,7 @@ struct Finding {
     name: String,
     message: String,
     fix: String,
+    evidence: Option<SdkValue>,
 }
 
 /// The findings so far, in the order the checks made them.
@@ -40,7 +42,16 @@ impl Findings {
             name: name.to_owned(),
             message,
             fix,
+            evidence: None,
         });
+    }
+
+    /// Attaches `evidence` (observed against expected, redacted) to the
+    /// finding added last.
+    pub(super) fn evidence(&mut self, evidence: SdkValue) {
+        if let Some(last) = self.0.last_mut() {
+            last.evidence = Some(evidence);
+        }
     }
 
     /// An error on entity `kind` `name`.
@@ -69,6 +80,14 @@ impl Findings {
             if !finding.fix.is_empty() {
                 checks.fix(id, finding.fix);
             }
+            // a finding without its own evidence names the thing it is about
+            let evidence = finding.evidence.unwrap_or_else(|| {
+                SdkValue::map([
+                    ("kind", SdkValue::text(&finding.kind)),
+                    ("name", SdkValue::text(&finding.name)),
+                ])
+            });
+            checks.evidence(id, evidence);
             checks.about(id, &finding.kind, &finding.name);
         }
     }
