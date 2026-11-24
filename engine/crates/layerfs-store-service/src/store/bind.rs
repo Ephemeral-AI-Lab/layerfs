@@ -108,7 +108,10 @@ impl Store {
             },
         )?;
         let result = (|| {
-            let captured = crate::telemetry::timed("bind.snapshot", |_| {
+            // The row names its project, so the operator audit finds the
+            // released row by project and Branch name: a named bind knows
+            // it, a bind by Branch id reads it with the snapshot.
+            let (captured, project) = crate::telemetry::timed("bind.snapshot", |_| {
                 let reader = self.reader(Some(workspace)).map_err(|error| {
                     BindError::Read(Arc::new(super::PortError::ReadAdmission(error)))
                 })?;
@@ -116,8 +119,11 @@ impl Store {
                     BindIntent::Id(request) => reader
                         .snapshot(request.branch)
                         .map_err(BindError::Read)?
+                        .map(|(snapshot, project)| (snapshot, project.as_str().to_owned()))
                         .ok_or(BindError::MissingBranch(request.branch)),
-                    BindIntent::Named(request) => named(&reader, request),
+                    BindIntent::Named(named_request) => {
+                        named(&reader, named_request).map(|s| (s, named_request.project.clone()))
+                    }
                 }
             })?;
             snapshot = Some(captured.clone());
@@ -139,35 +145,24 @@ impl Store {
             if place.machine.is_some() && place.sandbox.is_some() {
                 authority.sandbox_generation = place.generation.clone();
             }
-            // The row names its project, so the operator audit finds the
-            // released row by project and Branch name: a named bind knows
-            // it, a bind by Branch id reads the stack's name once. The name
-            // only serves the audit, so a failed read records none instead
-            // of failing the mount.
-            let project = match &request {
-                BindIntent::Named(request) => Some(request.project.clone()),
-                BindIntent::Id(_) => self
-                    .history()
-                    .layer_stack(captured.branch.stack)
-                    .ok()
-                    .flatten()
-                    .map(|stack| stack.name.as_str().to_owned()),
-            };
             let intent = crate::history::admission::mount_intent(
                 workspace,
                 &captured,
-                project.as_deref(),
+                Some(&project),
                 &place,
                 authority,
             );
-            match self.history().gc_register(&intent) {
+            let history = self.history();
+            match history.gc_register(&intent) {
                 Ok(()) => {
                     gc_op = Some(intent.op_id);
                 }
-                // A provider without admission cannot exclude a removal; it
-                // is a test double or a legacy wrapper, never this service's
-                // real Store provider.
-                Err(layerfs_history::HistoryError::Unsupported(_)) => {}
+                // A provider without admission (a test double or a legacy
+                // wrapper) cannot exclude a removal and registers nothing.
+                // A provider with admission refuses the mount: its
+                // `Unsupported` is a transaction-pooled PostgreSQL
+                // connection, which cannot hold the presence lock (§5.2).
+                Err(layerfs_history::HistoryError::Unsupported(_)) if !history.gc_admission() => {}
                 Err(error) => return Err(BindError::History(error)),
             }
             phase = BindPhase::Root;
@@ -204,7 +199,9 @@ impl Store {
             };
             // §4.3: a mount of a node at or below a marker frontier applies
             // the whiteout, so its view hides the path and its next Commit
-            // records a real deletion.
+            // records a real deletion. The markers are read after the intent
+            // committed: a removal that committed before it is seen here, and
+            // one after it meets the intent and is refused.
             if bound.materialize_removals().is_err() {
                 let _ = bound.owner.close(route);
                 if let Some(op) = bound.gc_op {

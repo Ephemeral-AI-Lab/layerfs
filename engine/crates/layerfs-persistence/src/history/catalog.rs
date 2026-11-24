@@ -88,6 +88,13 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| branch::branch_snapshot(tx, id))
     }
 
+    fn branch_snapshot_with_stack_name(
+        &self,
+        id: BranchId,
+    ) -> HistoryResult<Option<(BranchSnapshot, HistoryName)>> {
+        self.read_statement(|tx| branch::branch_snapshot_with_stack_name(tx, id))
+    }
+
     fn branch_snapshot_named(
         &self,
         stack: &HistoryName,
@@ -288,6 +295,14 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| super::position::node_serial(tx, node))
     }
 
+    fn node_path_removals(
+        &self,
+        stack: LayerStackId,
+        node: NodeId,
+    ) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
+        self.read_statement(|tx| super::paths::node_markers(tx, stack, node))
+    }
+
     fn retained_roots(&self, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
         self.read(|tx| super::kept::retained_roots(tx, stack))
     }
@@ -300,6 +315,10 @@ impl HistoryCatalog for HistoryProvider {
         // The mark and the prune share one write transaction and one lane:
         // reachability can never be older than the rows it is about to delete.
         self.write(|tx| super::kept::remove_unreachable(tx, stack, dry_run))
+    }
+
+    fn gc_admission(&self) -> bool {
+        true
     }
 
     fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {

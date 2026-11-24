@@ -71,6 +71,9 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "layerstack_stack_by_name" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/layerstack_stack_by_name.sql"
         )),
+        "paths_node_markers" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/paths_node_markers.sql"
+        )),
         "position_node_serial" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/position_node_serial.sql"
         )),

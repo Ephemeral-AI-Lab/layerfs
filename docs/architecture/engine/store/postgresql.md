@@ -488,6 +488,32 @@ Keys and their custody:
   `pg_backend_pid()`, compared with the session's recorded backend, and a
   transaction-pooled connection is `Unsupported`.
 
+**Not done, and why.** #768 proposed two more cuts that the source does
+not support:
+
+- *Skipping the fence on a session that holds the shared Store key.* The
+  fence costs no round trip: inside a transaction it is one more statement
+  in a `BEGIN` batch that is sent anyway, and an autocommit read carries it
+  as a joined column. The key cannot replace it either. A backend never
+  conflicts with its own advisory locks, so on the same backend the key
+  does not exclude a compaction (the intent-row scan does). Behind a
+  transaction pooler the client cannot know which backend holds the key,
+  and checking would cost what the fence costs. The fence's
+  `AccessShareLock` is also what makes a swap that starts during a write
+  fail its `LOCK … NOWAIT`. Exec reads run on Workspace readers, which hold
+  no keys, so the rule could never apply to them. The fence stays on every
+  call.
+- *Dropping a per-mount schema probe.* None runs per mount. `schema::check`
+  runs once when a connection opens; the 5-statement read in the measured
+  mount was the path-removal marker read on the control reader, which
+  [Mount reads](#mount-reads) now replaces. Skipping the open check would
+  leave a reader at generation 0, which is unfenced.
+
+The register body (Branch probe, conflict scan and insert) could become one
+PostgreSQL-only statement and save 2 more round trips, but it would duplicate
+the conflict scan for three scope kinds beside `register_in`, which SQLite's
+mount and compaction mark share; it is left as is.
+
 **Waits that remain.** Every Workspace a daemon mounts shares that daemon's
 one writer session, whose in-process FIFO admission
 ([`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs))
@@ -501,6 +527,43 @@ release still run as `BEGIN IMMEDIATE` writes and wait behind a held lane:
 the directory lock is a SQLite writer's only wait (`busy_timeout=0`), and
 the same writer lock is the compaction fence
 ([SQLite: Lane](sqlite.md#lane)).
+
+### Mount reads
+
+A Workspace mount reads only on its own Workspace reader and writes only
+its admission on the writer; it never opens or uses the control reader
+(#768, [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs)):
+
+```text
+ Workspace reader  branch_snapshot or branch_snapshot_named     1 autocommit statement
+                   (a bind by Branch id takes the project name for the
+                   intent from the same row)
+ writer            gc_register: the mount intent                 admission (history/admission.rs)
+ Workspace reader  paths_node_markers: the bound node's serial   1 autocommit statement
+                   and every path_removed marker of its project
+```
+
+The markers are read after the intent commits, never with the snapshot. A
+path removal takes the project key exclusively in its marker transaction and
+scans the project's live intents, while the mount holds that key shared from
+before its registration (on SQLite the single writer orders the two
+transactions instead): a removal that committed before the intent is seen
+by the marker read, and one after it is refused `MountsActive`. A marker read
+before the registration would miss a removal that commits in between. Both
+reads are fenced autocommit statements (`read_statement`).
+
+A provider with admission (`HistoryCatalog::gc_admission`) refuses the mount
+when `gc_register` refuses, `Unsupported` included: on a transaction-pooled
+connection the session key cannot mean presence, so the mount is
+`Unsupported` (GC spec §5.2). Only a provider without admission (a test
+double) mounts without an intent. Init, merge and Branch removal still
+proceed without an intent there: they are one-shot calls the spec lets run
+through a pooler.
+
+| Test | Command | Checks |
+| --- | --- | --- |
+| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched |
+| [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller; a provider without admission still mounts |
 
 ## Delta chains
 

@@ -219,6 +219,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "paths_markers" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/paths_markers.sql"
         )),
+        "paths_node_markers" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/paths_node_markers.sql"
+        )),
         "paths_upsert" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/paths_upsert.sql"
         )),
