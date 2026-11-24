@@ -375,17 +375,20 @@ fn an_intent_round_trips_its_place_authority() {
     assert_eq!(listed[0].machine_incarnation, authority.machine_incarnation);
     assert_eq!(listed[0].sandbox_generation, authority.sandbox_generation);
 
-    // The registration writes the two place columns, not just the memory value.
+    // The registration writes the tokens into the row's `evidence` column,
+    // not just the memory value: the base Store format has no place columns.
     let connection = rusqlite::Connection::open(&path).unwrap();
-    let row: (Option<String>, Option<String>) = connection
+    let evidence: Option<String> = connection
         .query_row(
-            "SELECT machine_incarnation, sandbox_generation FROM gc_intent WHERE op_id = ?1",
+            "SELECT evidence FROM gc_intent WHERE op_id = ?1",
             [op(30).as_slice()],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(row.0.as_deref(), Some("worker:7"));
-    assert_eq!(row.1.as_deref(), Some("sandbox:3"));
+    assert_eq!(
+        evidence.as_deref(),
+        Some("place:v1;inc=worker:7;gen=sandbox:3")
+    );
     history.gc_release(&op(30)).unwrap();
 }
 

@@ -54,8 +54,6 @@ CREATE TABLE gc_intent (
     high_water INTEGER,
     evidence TEXT,
     updated_ms INTEGER NOT NULL,
-    machine_incarnation TEXT,
-    sandbox_generation TEXT,
     UNIQUE (scope_kind, scope_id, owner_boot)
 ) STRICT;
 
@@ -101,4 +99,3 @@ CREATE TABLE kept_node (
         OR (kind = 'stack' AND length(node_id) = 17 AND substr(node_id, 1, 1) = X'31')
     )
 ) STRICT, WITHOUT ROWID;
-

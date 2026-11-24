@@ -458,15 +458,18 @@ Admission is one Store-DB table and two `BEGIN IMMEDIATE` transactions
 
 `gc_intent(op_id PRIMARY KEY, kind, scope_kind, scope_id, workspace, sandbox,
 machine, project, branch, owner_runtime, owner_boot, state, uncertain, phase,
-generation, artifact, high_water, evidence, updated_ms,
-machine_incarnation, sandbox_generation)`,
+generation, artifact, high_water, evidence, updated_ms)`,
 `STRICT`, with `UNIQUE(scope_kind, scope_id, owner_boot)`; `kind` is
 `mount`, `init`, `merge`, `removal` or `compaction`, `state` is `live`,
 `uncertain` or `done`, `scope_kind` is `store`/`project`/`branch`, and the ids
 are typed per kind (17-byte project/Branch, 33-byte commit/layer, 32-byte
 catalog id). The migration step that adds it is the same additive step as
-§4.1; the two place-authority columns were appended after `updated_ms` by a
-later additive step (lease and fence are deferred, #775).
+§4.1. The Store format adds no place-authority column: a live mount row
+keeps its `machine_incarnation`/`sandbox_generation` tokens in `evidence` as
+`place:v1;inc=<token>;gen=<token>` (an absent part omitted, NULL when both
+are absent). A value without that prefix (a `done` row's audit text) or a
+malformed one decodes as no token: missing evidence is no proof, never death
+(lease and fence are deferred, #775).
 
 - A **mount** transaction checks that no operation op is running at every
   scope it names (Store, project, Branch), inserts its intent and commits. A
