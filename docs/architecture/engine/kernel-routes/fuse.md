@@ -69,6 +69,7 @@ receive loop entered; a spawn or a probe of the mount is not that evidence.
 | `abort` | one `write(2)` of one byte on the bound control | detached, aborted, or no control (`ForceRefusal`) | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
 | `force_drain` | quiesce, then one plain detach | abort not `Written`, or a recorded failed detach | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
 | `Undrained::end_stalled` | `abort_detached`, then `force_drain` | stage is not `Join` | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
+| `Undrained::retry_detach` | for a later terminal call: clears the recorded failed detach, then `force_drain` (local drain, one plain detach); the abort is not written again | stage is not `Detach`, or no recorded failed detach | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
 | `Invalidator::inode(serial)` | one `inval_inode(inode, 0, 0)`: attributes and cached pages or listing | uncached target: `ENOENT`, reported as success | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
 | `Invalidator::entry(parent, name)` | one `inval_entry` | same | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
 

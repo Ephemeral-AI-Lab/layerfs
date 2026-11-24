@@ -2,14 +2,18 @@
 //! drain with its one plain detach, then Revoke and Close. Nothing is repeated.
 //! A normal unmount stalled at Join is forced the same way, its plain detach
 //! counting as the one detach; on the NFS route the one forced client unmount
-//! is the abort.
-#[cfg(target_os = "linux")]
-use super::serving::{stage, work, Attached, Evidence, Leaving};
+//! is the abort. A detach the kernel refused is asked again only by a later
+//! terminal call ([`super::retry`]).
 use super::{
     kernel::Kernel,
     registry::{bound_mut, Binding},
     types::KernelFailure,
     Failure, Service, Success,
+};
+#[cfg(target_os = "linux")]
+use super::{
+    retry::Retried,
+    serving::{stage, work, Attached, Evidence, Leaving},
 };
 #[cfg(target_os = "linux")]
 use crate::store::BoundWorkspace;
@@ -22,10 +26,10 @@ use layerfs_bridge::control::{Activity, CommitKnowledge, ControlCode, WorkspaceT
 #[cfg(target_os = "linux")]
 use layerfs_fuse::{
     mount::AbortWrite,
-    session::{DetachAttempt, SessionFacts},
+    session::{DetachAttempt, Drained, SessionFacts, SessionObserver, Undrained},
 };
 #[cfg(target_os = "linux")]
-use layerfs_overlay::CleanupState;
+use layerfs_overlay::{CleanupState, KernelMount};
 #[cfg(target_os = "linux")]
 use nix::errno::Errno;
 #[cfg(target_os = "linux")]
@@ -57,7 +61,9 @@ pub(super) fn guard(
     // (`ExportKept` at `Detach`, export still held, see
     // `ExportKept::forceable`), where the one forced client unmount is the
     // abort; and a normal unmount stalled at Join, admitted idle with no
-    // Commit custody, whose abort control is still unused.
+    // Commit custody, whose abort control is still unused. A forced detach
+    // the kernel refused is taken out before this guard and asked again
+    // (`Kept::retryable`, #538); its abort is never repeated.
     if let Kernel::ExportKept(kept) = &value.kernel {
         if kept.forceable() {
             return Ok(CommitKnowledge::Absent);
@@ -220,6 +226,11 @@ impl Service {
         if self.export.is_some() {
             return self.force_export(token, relinquish_unknown);
         }
+        // A forced detach the kernel refused `EBUSY`: its holder may be gone.
+        if let Some(retry) = self.take_retryable(token)? {
+            let retried = self.retry_detach(token, retry)?;
+            return self.force_completed(token, retried);
+        }
         let admitted = self.admit_force(token, relinquish_unknown)?;
         self.force_admitted(token, admitted)
     }
@@ -339,24 +350,85 @@ impl Service {
         let drained = match session.force_drain() {
             Ok(drained) => drained,
             Err(undrained) => {
-                let attempt = undrained
-                    .forced
-                    .map_or(DetachAttempt::NotAttempted, |forced| forced.detach);
-                facts.detach = detach(attempt);
-                facts.fenced = undrained.forced.map_or(0, |forced| forced.terminal_replies);
-                return Err(self.retain(
-                    token,
-                    stage(undrained.stage),
-                    format!(
-                        "forced drain stopped at {:?}: detach {attempt:?}, loops {:?}, work {:?}",
-                        undrained.stage, undrained.loops, undrained.work
-                    ),
-                    Some(observer),
-                    undrained,
-                    Some(facts),
-                ));
+                return Err(self.keep_forced(token, "forced drain", observer, undrained, facts))
             }
         };
+        self.force_completed(
+            token,
+            Retried {
+                workspace,
+                mount,
+                observer,
+                drained,
+                facts,
+            },
+        )
+    }
+    /// Keeps a forced connection whose drain stopped, typed so that a later
+    /// terminal call can ask again for the one detach the kernel refused.
+    pub(super) fn keep_forced(
+        &self,
+        token: WorkspaceToken,
+        what: &str,
+        observer: SessionObserver,
+        undrained: Box<Undrained>,
+        mut facts: ForcedFacts,
+    ) -> Failure {
+        let attempt = undrained
+            .forced
+            .map_or(DetachAttempt::NotAttempted, |forced| forced.detach);
+        facts.detach = detach(attempt);
+        facts.fenced = undrained.forced.map_or(0, |forced| forced.terminal_replies);
+        self.keep(
+            token,
+            stage(undrained.stage),
+            format!(
+                "{what} stopped at {:?}: detach {attempt:?}, loops {:?}, work {:?}",
+                undrained.stage, undrained.loops, undrained.work
+            ),
+            Some(observer),
+            Evidence::Forced(undrained),
+            Some(facts),
+        )
+    }
+    /// Revoke once a forced connection's one detach held. Read and dropped
+    /// at once: its Lifecycle slot returns before Close. A failed Revoke
+    /// keeps the drained receipt in the entry.
+    pub(super) fn revoke(
+        &self,
+        token: WorkspaceToken,
+        workspace: &BoundWorkspace,
+        mount: KernelMount,
+        observer: &SessionObserver,
+        drained: Box<Drained>,
+        facts: &ForcedFacts,
+    ) -> Result<Box<Drained>, Failure> {
+        self.leaving(token, MountPhase::Draining);
+        match self.job(
+            workspace.route(),
+            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
+        ) {
+            Ok(()) => Ok(drained),
+            Err(failure) => Err(self.retain(
+                token,
+                TeardownStage::Revoke,
+                failure.wire().detail,
+                Some(observer.clone()),
+                Box::new((failure, drained)),
+                Some(facts.clone()),
+            )),
+        }
+    }
+    /// The forced teardown after its one detach held: Revoke, Close, one
+    /// cleanup observation and routing removal.
+    fn force_completed(&self, token: WorkspaceToken, retried: Retried) -> Result<Success, Failure> {
+        let Retried {
+            workspace,
+            mount,
+            observer,
+            drained,
+            mut facts,
+        } = retried;
         facts.detach = DetachDisposition::Detached;
         facts.fenced = drained.forced.map_or(0, |forced| forced.terminal_replies);
         // The mount is released, so its last counters come from the receipt.
@@ -365,24 +437,7 @@ impl Service {
             opcodes: drained.opcodes,
             ..observer.facts()
         });
-        self.leaving(token, MountPhase::Draining);
-        // Read and dropped at once: its Lifecycle slot returns before Close.
-        match self.job(
-            workspace.route(),
-            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
-        ) {
-            Ok(()) => {}
-            Err(failure) => {
-                return Err(self.retain(
-                    token,
-                    TeardownStage::Revoke,
-                    failure.wire().detail,
-                    Some(observer),
-                    Box::new((failure, drained)),
-                    Some(facts),
-                ));
-            }
-        }
+        let drained = self.revoke(token, &workspace, mount, &observer, drained, &facts)?;
         let kernel = self.closed(token, &workspace, Some(drained), Some(facts.clone()))?;
         // One observation of the closed namespace; a failed one claims no
         // state. Its completion is read and dropped here.

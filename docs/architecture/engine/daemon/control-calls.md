@@ -107,6 +107,7 @@ differs. `Exported`, `ExportLeaving` and `ExportKept` mirror `Ready`,
 
 ```text
 Unmount { token, discard }
+  Retained(Detach) of a force refused EBUSY ------> detach retry (below)
   discard false and dirty? -----------------------> reply Dirty (no effect)
   admit: Idle; Ready -> Leaving(Probing)          activity Closing
   session.detach()
@@ -128,6 +129,7 @@ Unmount { token, discard }
 | No daemon-side request count refuses admission: the kernel's reversible `Busy` is the fence, because every caller, descriptor, working directory and mapping holds a mount reference | [`detach.rs`](../../../../engine/crates/layerfs-daemon/src/control/detach.rs) |
 | Only a known detach is terminal; after it every stop keeps the exact owner | same |
 | A connection that outlived its mount (another mount namespace holds a copy) is ended by the same one abort write a forced unmount makes | same |
+| A forced teardown kept at `Detach` with `abort: Written` and `detach: Busy` (`Kept::retryable`) is asked for its detach again, before the dirty check (that force already dropped the changes): a fresh local drain and one plain detach, never a second abort. Refused again, the same custody stays with this attempt's facts; detached, it goes through Revoke and Close and replies `Unmounted` (#538) | [`retry.rs`](../../../../engine/crates/layerfs-daemon/src/control/retry.rs), [`serving.rs`](../../../../engine/crates/layerfs-daemon/src/control/serving.rs) |
 | An Unattached Workspace's Unmount is the logical Close alone | [`unmount.rs`](../../../../engine/crates/layerfs-daemon/src/control/unmount.rs) |
 
 ### Dirty check
@@ -162,6 +164,10 @@ without waiting for the processes using its mount. It signals no process;
 each step is made once.
 
 ```text
+Retained(Detach) of a force refused EBUSY: taken out (Leaving(Stopping),
+  activity Closing); Undrained::retry_detach(): local drain, one plain
+  detach; refused -> the same Retained(Detach); detached -> Revoke, Close
+  and ForceUnmounted as below (#538)
 under the registry lock (a refusal changes nothing):
   1 ExportKept / Retained -> Retained   (a normal unmount stalled at
                                          Join, or a forceable export
