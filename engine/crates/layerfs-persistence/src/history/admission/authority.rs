@@ -80,12 +80,29 @@ pub(crate) fn release_done(
     }
 }
 
+/// What admission would say of each of `intents` now: the owner evidence,
+/// then the place view scoped on this thread merged with each intent's own
+/// place, as [`PlaceView::liveness`] judges a conflict. One read transaction;
+/// nothing is written.
+pub(crate) fn liveness(
+    provider: &HistoryProvider,
+    intents: &[GcIntent],
+) -> HistoryResult<Vec<Liveness>> {
+    let postgres = postgres(provider);
+    provider.read(|tx| {
+        let owners = OwnerView::now();
+        (intents.iter())
+            .map(|intent| PlaceView::for_intent(intent).liveness(tx, intent, postgres, &owners))
+            .collect()
+    })
+}
+
 /// Settles the intents at `machine` its new ordered incarnation proves dead.
 ///
 /// One write transaction: no other machine's rows are read, and only a dead
-/// intent that is not uncertain is released. An expired lease is uncertain,
-/// never dead, and a recorded incarnation newer than `incarnation` (a home
-/// restore) is kept uncertain like an unordered value that differs.
+/// intent that is not uncertain is released. A recorded incarnation newer
+/// than `incarnation` (a home restore) is kept uncertain like an unordered
+/// value that differs.
 pub(crate) fn reconcile_machine(
     provider: &HistoryProvider,
     machine: &str,

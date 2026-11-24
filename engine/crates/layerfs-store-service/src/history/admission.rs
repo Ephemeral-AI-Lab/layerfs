@@ -390,6 +390,15 @@ pub fn reconcile_machine(
     catalog.gc_reconcile_machine(machine, incarnation)
 }
 
+/// What admission would say of each of `intents` now (owner evidence, then
+/// the place view installed on this thread), in order. Changes nothing.
+pub fn liveness(
+    catalog: &dyn HistoryCatalog,
+    intents: &[GcIntent],
+) -> HistoryResult<Vec<layerfs_history::Liveness>> {
+    catalog.gc_liveness(intents)
+}
+
 /// One bounded page of retained `done` admission rows, for the operator
 /// audit. This is the only read that sees a done row; admission and preview
 /// keep filtering them out.
@@ -414,48 +423,20 @@ pub fn done_intents_branch(
     catalog.gc_done_intents_branch(project, branch, page, limit)
 }
 
-/// Writes one retained `done` row directly, for the operator preview audit:
-/// the release/done row path without a live intent. The owner and place
-/// columns stay NULL and admission keeps filtering `state <> 'done'`.
-pub fn record_done(
-    catalog: &dyn HistoryCatalog,
-    intent: &GcIntent,
-    evidence: &str,
-) -> HistoryResult<bool> {
-    catalog.gc_record_done(intent, evidence)
-}
-
-/// Deletes the retained `done` rows the operator exported. Only rows still
-/// in state `done` are removed; the answer counts them.
-pub fn prune_done(catalog: &dyn HistoryCatalog, op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
-    catalog.gc_prune_done(op_ids)
-}
-
-/// The wire answer of one audit page.
-pub fn audit_value(page: &GcAuditPage) -> SdkValue {
-    let item = |row: &GcIntentDone| {
-        SdkValue::map([
-            ("op", SdkValue::text(hex16(&row.op_id))),
-            ("kind", SdkValue::text(row.kind.as_str())),
-            ("scope_kind", SdkValue::text(row.scope_kind.as_str())),
-            ("scope_id", SdkValue::text(hex16(&row.scope_id))),
-            ("project", SdkValue::opt_text(row.project.as_deref())),
-            ("branch", SdkValue::opt_text(row.branch.as_deref())),
-            ("machine", SdkValue::opt_text(row.machine.as_deref())),
-            ("sandbox", SdkValue::opt_text(row.sandbox.as_deref())),
-            ("phase", SdkValue::opt_text(row.phase.as_deref())),
-            ("evidence", SdkValue::opt_text(row.evidence.as_deref())),
-            ("updated_ms", SdkValue::Int(row.updated_ms)),
-        ])
-    };
+/// The wire answer of one retained `done` row of the operator audit.
+pub fn done_value(row: &GcIntentDone) -> SdkValue {
     SdkValue::map([
-        (
-            "items",
-            SdkValue::List(page.items.iter().map(item).collect()),
-        ),
-        ("page", SdkValue::Int(i64::from(page.page))),
-        ("limit", SdkValue::Int(i64::from(page.limit))),
-        ("has_more", SdkValue::Bool(page.has_more)),
+        ("op", SdkValue::text(hex16(&row.op_id))),
+        ("kind", SdkValue::text(row.kind.as_str())),
+        ("scope_kind", SdkValue::text(row.scope_kind.as_str())),
+        ("scope_id", SdkValue::text(hex16(&row.scope_id))),
+        ("project", SdkValue::opt_text(row.project.as_deref())),
+        ("branch", SdkValue::opt_text(row.branch.as_deref())),
+        ("machine", SdkValue::opt_text(row.machine.as_deref())),
+        ("sandbox", SdkValue::opt_text(row.sandbox.as_deref())),
+        ("phase", SdkValue::opt_text(row.phase.as_deref())),
+        ("evidence", SdkValue::opt_text(row.evidence.as_deref())),
+        ("updated_ms", SdkValue::Int(row.updated_ms)),
     ])
 }
 

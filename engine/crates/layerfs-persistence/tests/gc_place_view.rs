@@ -226,3 +226,37 @@ fn another_homes_place_of_the_same_name_is_never_dead() {
         1
     );
 }
+
+/// #783 gap 4: the operator's liveness read judges a holder as admission
+/// would, from the owner check and the scoped view, and changes nothing:
+/// live with no view, dead once the view's tombstone retires its generation.
+#[test]
+fn liveness_reads_the_scoped_view_and_changes_nothing() {
+    let temp = Temp::new("gc-place-liveness");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let generation = token("sandbox", 10, "a");
+    let holder = mount(branch, 0x41, &generation);
+    history.gc_register(&holder).unwrap();
+
+    let judged = history.gc_liveness(std::slice::from_ref(&holder)).unwrap();
+    assert_eq!(
+        judged,
+        vec![layerfs_history::Liveness::Live],
+        "no view: no proof"
+    );
+
+    let mut view = PlaceView::new();
+    view.set_machine("box", token("worker", 20, "a"));
+    view.set_sandbox_retired("box", "box-1", generation);
+    let judged = with_place_view(Some(view), || {
+        history.gc_liveness(std::slice::from_ref(&holder)).unwrap()
+    });
+    assert_eq!(judged, vec![layerfs_history::Liveness::Dead]);
+    // a read: the holder is still registered, not uncertain
+    let left = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap();
+    assert_eq!(left.len(), 1);
+    assert!(!left[0].uncertain);
+}

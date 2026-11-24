@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-/// The durable place and lease evidence carried beside a mount intent.
+/// The durable place evidence carried beside a mount intent.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PlaceAuthority {
     /// The worker generation that placed the mount.
@@ -224,16 +224,15 @@ pub fn compare_place(recorded: &str, current: &str) -> PlaceOrder {
 }
 
 impl PlaceAuthority {
-    /// Classifies the owner for `now_ms` against the current place values
-    /// `place`, when the adapter can see any.
+    /// Classifies the owner against the current place values `place`, when
+    /// the adapter can see any.
     ///
-    /// Place death wins over lease state: a machine incarnation or Sandbox
-    /// generation the current record proves older than itself is
-    /// [`Liveness::Dead`] even if the lease is stale. An expired lease
-    /// without place death is [`Liveness::Uncertain`], never
-    /// [`Liveness::Dead`], because a slow owner is not a dead owner. Missing
-    /// place evidence is no proof: only the lease decides.
-    pub fn liveness(&self, _now_ms: i64, place: Option<&PlaceRecord>) -> Liveness {
+    /// A machine incarnation or Sandbox generation the current record proves
+    /// older than the recorded one is [`Liveness::Dead`]; a recorded value
+    /// newer than the current one (a restore) or unordered against it is
+    /// [`Liveness::Uncertain`]. Missing place evidence, or another home's
+    /// value, is no proof: [`Liveness::Live`].
+    pub fn liveness(&self, place: Option<&PlaceRecord>) -> Liveness {
         if let Some(place) = place {
             if let (Some(recorded), Some(current)) = (
                 self.machine_incarnation.as_deref(),

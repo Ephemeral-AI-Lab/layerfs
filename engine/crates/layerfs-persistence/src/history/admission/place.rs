@@ -63,7 +63,6 @@ fn scoped() -> Option<SuppliedPlaceView> {
 /// (control's home records) merged with the place the admitted call itself
 /// carries. Cached once, so every conflicting intent costs one comparison.
 pub(crate) struct PlaceView {
-    now_ms: i64,
     supplied: Option<SuppliedPlaceView>,
     fallback_machine: Option<String>,
     fallback_incarnation: Option<String>,
@@ -74,7 +73,6 @@ pub(crate) struct PlaceView {
 impl PlaceView {
     fn current(supplied: Option<&SuppliedPlaceView>) -> Self {
         Self {
-            now_ms: now_ms(),
             supplied: supplied.cloned().or_else(scoped),
             fallback_machine: None,
             fallback_incarnation: None,
@@ -178,7 +176,7 @@ impl PlaceView {
                 true => self.record(intent),
                 false => None,
             };
-        Ok(match authority.liveness(self.now_ms, place.as_ref()) {
+        Ok(match authority.liveness(place.as_ref()) {
             Liveness::Dead if shared_store => Liveness::Uncertain,
             verdict => verdict,
         })

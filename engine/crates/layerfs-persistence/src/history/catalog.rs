@@ -318,6 +318,10 @@ impl HistoryCatalog for HistoryProvider {
         super::admission::mark_uncertain(self, op_id)
     }
 
+    fn gc_liveness(&self, intents: &[GcIntent]) -> HistoryResult<Vec<layerfs_history::Liveness>> {
+        super::admission::liveness(self, intents)
+    }
+
     fn gc_remove_branch(
         &self,
         branch: BranchId,
@@ -360,14 +364,6 @@ impl HistoryCatalog for HistoryProvider {
         limit: u32,
     ) -> HistoryResult<GcAuditPage> {
         super::admission::done_intents_branch(self, project, branch, page, limit)
-    }
-
-    fn gc_record_done(&self, intent: &GcIntent, evidence: &str) -> HistoryResult<bool> {
-        super::admission::record_done(self, intent, evidence)
-    }
-
-    fn gc_prune_done(&self, op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
-        super::admission::prune_done(self, op_ids)
     }
 
     fn gc_reconcile_machine(&self, machine: &str, incarnation: &str) -> HistoryResult<GcReconcile> {

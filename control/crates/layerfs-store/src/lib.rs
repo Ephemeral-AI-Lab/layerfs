@@ -37,6 +37,7 @@ pub mod project;
 #[doc(hidden)]
 pub mod record;
 mod related;
+pub mod repair;
 pub mod report;
 #[doc(hidden)]
 pub mod resolve;

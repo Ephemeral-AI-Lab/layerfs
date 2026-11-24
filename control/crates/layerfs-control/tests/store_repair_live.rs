@@ -212,6 +212,9 @@ fn seed(home: &Path) {
     .unwrap();
 }
 
+/// One repair of `branch` on the worker. A settle here is forced: these
+/// holders name owners nothing on this host can judge, and the operator
+/// confirmed them gone (the guard itself is `store_repair_worker`'s).
 fn repair(
     placed: &worker_store::Placed,
     branch: &str,
@@ -219,24 +222,23 @@ fn repair(
     op: Option<u8>,
     legacy: bool,
 ) -> SdkValue {
-    let name = StoreName::parse("shop").unwrap();
-    layerfs_control::store::repair(
-        &placed.home,
-        &name,
-        "app",
-        branch,
-        action,
-        op.map(|op| [op; 16]),
+    let request = layerfs_control::store::RepairRequest {
+        project: "shop/app".to_owned(),
+        branch: branch.to_owned(),
+        action: action.to_owned(),
+        op: op.map(op_hex),
         legacy,
-        "alice",
-        0,
-        100,
-    )
-    .unwrap_or_else(|refusal| panic!("{action} {branch}: {refusal:?}"))
+        force: action == "settle",
+        operator: Some("alice".to_owned()),
+        limit: None,
+        cursor: None,
+    };
+    layerfs_control::store::repair(&placed.home, &request)
+        .unwrap_or_else(|refusal| panic!("{action} {branch}: {refusal:?}"))
 }
 
 fn holders(value: &SdkValue) -> &[SdkValue] {
-    match value.get("holders") {
+    match value.get("items") {
         Some(SdkValue::List(holders)) => holders,
         other => panic!("no holder list: {other:?}"),
     }

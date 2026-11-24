@@ -8,6 +8,8 @@
 mod worker_store;
 
 use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::sdk_values::hex;
+use layerfs_control::store::RepairRequest;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, NamedSnapshot, PlaceAuthority};
 use layerfs_home::names::StoreName;
@@ -113,25 +115,27 @@ fn serve(listener: std::net::TcpListener, root: PathBuf) {
     });
 }
 
-fn repair(placed: &worker_store::Placed, action: &str, op: Option<u8>, legacy: bool) -> SdkValue {
-    let name = StoreName::parse("shop").unwrap();
-    layerfs_control::store::repair(
-        &placed.home,
-        &name,
-        "app",
-        "main",
-        action,
-        op.map(|op| [op; 16]),
+fn request(action: &str, op: Option<u8>, legacy: bool) -> RepairRequest {
+    RepairRequest {
+        project: "shop/app".to_owned(),
+        branch: "main".to_owned(),
+        action: action.to_owned(),
+        op: op.map(|op| hex(&[op; 16])),
         legacy,
-        "alice",
-        0,
-        100,
-    )
-    .unwrap_or_else(|refusal| panic!("{action}: {refusal:?}"))
+        force: false,
+        operator: Some("alice".to_owned()),
+        limit: None,
+        cursor: None,
+    }
+}
+
+fn repair(placed: &worker_store::Placed, action: &str, op: Option<u8>, legacy: bool) -> SdkValue {
+    layerfs_control::store::repair(&placed.home, &request(action, op, legacy))
+        .unwrap_or_else(|refusal| panic!("{action}: {refusal:?}"))
 }
 
 fn holders(value: &SdkValue) -> &[SdkValue] {
-    match value.get("holders") {
+    match value.get("items") {
         Some(SdkValue::List(holders)) => holders,
         other => panic!("no holder list: {other:?}"),
     }
@@ -181,7 +185,7 @@ fn repair_previews_settles_and_releases_through_the_worker() {
 
     // Preview over the worker answers the typed view and writes nothing.
     let preview = repair(&placed, "preview", None, false);
-    assert_eq!(preview.get("audit"), Some(&SdkValue::Null), "{preview:?}");
+    assert_eq!(preview.get_text("action"), Some("preview"), "{preview:?}");
     let audit = repair(&placed, "audit", None, false);
     assert!(
         matches!(audit.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
@@ -194,6 +198,9 @@ fn repair_previews_settles_and_releases_through_the_worker() {
         .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
         .expect("the live holder");
     assert_eq!(live.get_text("state"), Some("live"));
+    // nothing proves its owner gone: it still looks live, so not safe
+    assert_eq!(live.get_text("liveness"), Some("live"));
+    assert_eq!(live.get("safe"), Some(&SdkValue::Bool(false)));
     assert_eq!(live.get_text("sandbox"), Some("box"));
     assert_eq!(live.get_text("machine_incarnation"), Some("worker:1"));
     assert_eq!(live.get_text("sandbox_generation"), Some("generation:1"));
@@ -204,23 +211,28 @@ fn repair_previews_settles_and_releases_through_the_worker() {
         .expect("the legacy holder");
     assert_eq!(legacy.get("legacy"), Some(&SdkValue::Bool(true)));
 
-    // Release without settle is refused; settle marks the one named op.
-    let name = StoreName::parse("shop").unwrap();
-    let refused = layerfs_control::store::repair(
-        &placed.home,
-        &name,
-        "app",
-        "main",
-        "release",
-        Some([0x21; 16]),
-        false,
-        "alice",
-        0,
-        100,
-    )
-    .unwrap_err();
+    // Release without settle is refused; a settle of a holder that still
+    // looks live is refused `InUse` unless forced, and marks the one op.
+    let refused =
+        layerfs_control::store::repair(&placed.home, &request("release", Some(0x21), false))
+            .unwrap_err();
     assert_eq!(refused.code, "Conflict", "{refused:?}");
-    repair(&placed, "settle", Some(0x21), false);
+    let refused =
+        layerfs_control::store::repair(&placed.home, &request("settle", Some(0x21), false))
+            .unwrap_err();
+    assert_eq!(refused.code, "InUse", "{refused:?}");
+    assert!(
+        refused
+            .detail
+            .get_text("fix")
+            .is_some_and(|fix| fix.ends_with("--force")),
+        "{refused:?}"
+    );
+    let forced = RepairRequest {
+        force: true,
+        ..request("settle", Some(0x21), false)
+    };
+    layerfs_control::store::repair(&placed.home, &forced).expect("a forced settle");
     let preview = repair(&placed, "preview", None, false);
     let settled = holders(&preview)
         .iter()

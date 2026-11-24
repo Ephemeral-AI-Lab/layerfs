@@ -6,7 +6,6 @@ pub(crate) enum Param {
     Bytes(Vec<u8>),
     OptionalBytes(Option<Vec<u8>>),
     OptionalText(Option<String>),
-    OptionalI64(Option<i64>),
 }
 #[derive(Clone, Debug)]
 pub(crate) enum Value {

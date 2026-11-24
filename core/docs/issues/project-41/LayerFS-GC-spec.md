@@ -498,12 +498,22 @@ malformed one decodes as no token: missing evidence is no proof, never death
   then records the new ordered `incarnation` in the home `MachineRecord`
   before the worker serves; the worker-start reconcile settles only the rows
   of that machine that are dead and not uncertain. Mount registration settles
-  nothing. A Sandbox remove (normal or forced) writes the generation's
-  tombstone under `machine/<machine>/sandbox-retired/` once the runtime is
-  stopped and before its home record goes; a failed tombstone write does not
-  stop the removal (a missing tombstone is only no proof). A placed mount
-  records the place values the daemon's caller read from the home records,
-  and its project and Branch names.
+  nothing. Every removal of a Sandbox's home record (a close or force close,
+  a reclaim of a runtime that ended by itself, a forget, and `sandbox.remove`
+  on every route, which writes the home's tombstone for a worker's Sandbox)
+  writes the generation's tombstone under `machine/<machine>/sandbox-retired/`
+  before that record goes; a failed tombstone write does not stop the removal
+  (a missing tombstone is only no proof) and is reported in `left`. A worker's
+  root is no home and gets no tombstone. Once a recreated Sandbox's started
+  record names a newer generation of the same home, the name's older
+  tombstone is deleted (the newer record proves the old generation's mounts
+  dead by itself), so a name keeps at most one. `machine.remove`, refused
+  while a Store or Sandbox uses the machine, deletes `machine/<machine>/` with
+  its tombstones. A placed mount records the place values the daemon's caller
+  read from the home records, and its project and Branch names. A worker's
+  Sandbox record carries the machine name and the generation its caller's
+  home minted, sent with the create, so its mounts record the generation; a
+  worker's root keeps no machine record, so they record no incarnation.
 - **Audit.** An operator release keeps the intent as a `gc_intent` `done` row
   instead of deleting it: the action, the operator label and the op are in
   `evidence` (replacing the live row's place tokens), the owner columns are
@@ -512,19 +522,27 @@ malformed one decodes as no token: missing evidence is no proof, never death
   (`Copy::Done`). The owner's own release, an uncertain mark and a retried
   registration never delete or revive a `done` row. A separate read
   (`WHERE state = 'done'`, scoped by the recorded project and Branch names,
-  ordered by `updated_ms, op_id`, paged) exposes them. `list`, `preview` and
-  `audit` write nothing.
+  ordered by `updated_ms, op_id`, paged) exposes them. A release that retains
+  a row deletes the oldest done rows of the same Branch beyond the newest 100
+  in its transaction, with no schema change (the existing unique index finds
+  the Branch's rows). A second release of one op answers `NotFound` on both
+  Store kinds, and PostgreSQL compaction never reads or deletes a done row.
+  `list`, `preview` and `audit` write nothing.
 - **Operator repair reachability and the typed holder view.**
   `store.repair_mount_holders` runs where the Store's calls run: a SQLite
   Store on another machine repairs through that machine's worker
   (`store.repair`), and a PostgreSQL Store repairs in the calling process.
-  `list` and `preview` answer the same typed holder view (`MountHolderView`:
-  owner, place, generation and state) on every route, and the doctor's
-  read-only `store.diagnose` forwards those fields from a worker. The
-  Store-wide compact barrier is retained: a live or uncertain holder still
-  refuses `store.compact`; an owner the owner evidence proves dead is adopted
-  and the rebuild proceeds. Lease renewal, fencing and a jsonl audit archive
-  are deferred (#775).
+  It takes `<store>/<project>`, the Branch and the action, and pages `list`,
+  `preview` and `audit` by `limit` and `cursor`. `list` and `preview` answer
+  the same typed holder view (`MountHolderView`: owner, place, generation and
+  state) on every route, with the `liveness` admission would give each holder
+  now (owner check, then the calling home's place view, sent to a worker with
+  the call) and `safe` (not `live`); `settle` refuses a holder still `live`
+  unless forced. The doctor's read-only `store.diagnose` forwards those fields
+  from a worker. The Store-wide compact barrier is retained: a live or
+  uncertain holder still refuses `store.compact`; an owner the owner evidence
+  proves dead is adopted and the rebuild proceeds. A jsonl audit archive is
+  deferred (#775).
 - Compaction writes its `gc_intent` operation row **before** its first
   checkpoint; the row lives in `<store>.compact` during build/verify, moves
   to the live Store after install, and is cleared at settle. `none` writes

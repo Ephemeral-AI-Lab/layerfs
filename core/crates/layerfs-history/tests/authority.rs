@@ -68,13 +68,13 @@ fn tokens_of_different_homes_are_foreign_and_never_dead() {
     };
     // Another home's values are no evidence: the holder stays live, as with
     // no place evidence at all.
-    assert_eq!(mount.liveness(0, Some(&other_home)), Liveness::Live);
+    assert_eq!(mount.liveness(Some(&other_home)), Liveness::Live);
     // The same home's newer start still proves the older placement dead.
     let same_home = PlaceRecord {
         machine_incarnation: Some(homed("aa11", "worker", 2, "bb")),
         ..PlaceRecord::default()
     };
-    assert_eq!(mount.liveness(0, Some(&same_home)), Liveness::Dead);
+    assert_eq!(mount.liveness(Some(&same_home)), Liveness::Dead);
 }
 
 #[test]
@@ -108,17 +108,17 @@ fn a_tombstone_newer_than_the_live_generation_is_uncertain() {
     };
     // Only the tombstone of this very generation retires the live record.
     assert_eq!(
-        mount.liveness(0, Some(&place(generation.clone()))),
+        mount.liveness(Some(&place(generation.clone()))),
         Liveness::Dead
     );
     // A newer tombstone beside an equal record (a clock step): uncertain.
     assert_eq!(
-        mount.liveness(0, Some(&place(homed("aa11", "sandbox", 9, "bb")))),
+        mount.liveness(Some(&place(homed("aa11", "sandbox", 9, "bb")))),
         Liveness::Uncertain
     );
     // An older tombstone names an earlier Sandbox of the same name.
     assert_eq!(
-        mount.liveness(0, Some(&place(homed("aa11", "sandbox", 1, "bb")))),
+        mount.liveness(Some(&place(homed("aa11", "sandbox", 1, "bb")))),
         Liveness::Live
     );
 }

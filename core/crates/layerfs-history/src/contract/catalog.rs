@@ -586,6 +586,16 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported("GC admission"))
     }
 
+    /// What admission would say of each of `intents` now, in order: the
+    /// owner evidence first, then the place view the caller installed for
+    /// this thread, exactly as an admitting removal judges a conflicting
+    /// intent. A read; it changes nothing. The operator repair's `list` and
+    /// `preview` report it and its `settle` refuses a holder still `Live`
+    /// unless forced. The default refuses.
+    fn gc_liveness(&self, _intents: &[GcIntent]) -> HistoryResult<Vec<crate::Liveness>> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
     /// One bounded page of retained `done` admission rows, oldest first, for
     /// the operator audit. `page` is zero-based and `limit` is clamped to
     /// [`crate::records::MAXIMUM_AUDIT_PAGE`]. The live admission queries
@@ -605,25 +615,6 @@ pub trait HistoryCatalog: Send + Sync {
         _page: u32,
         _limit: u32,
     ) -> HistoryResult<GcAuditPage> {
-        Err(crate::error::HistoryError::Unsupported("GC done audit"))
-    }
-
-    /// Writes one retained `done` admission row directly, the release/done
-    /// row path without a live intent to release: `state = 'done'`, no owner
-    /// columns, no place authority, and `evidence` naming the operator action
-    /// and label. `intent.op_id` is the row's operation identity. It is the
-    /// durable operator preview (`action=preview`, no operation) and never
-    /// enters admission, whose queries filter `state <> 'done'`. The default
-    /// refuses: a provider that keeps no `done` rows cannot promise the audit.
-    fn gc_record_done(&self, _intent: &GcIntent, _evidence: &str) -> HistoryResult<bool> {
-        Err(crate::error::HistoryError::Unsupported("GC done audit"))
-    }
-
-    /// Deletes the retained `done` rows the operator exported by `op_ids`,
-    /// and only those: each row must still be in state `done`, so a prune
-    /// never removes a live intent. Answers how many rows went. The default
-    /// refuses; a provider that keeps no `done` rows has nothing to prune.
-    fn gc_prune_done(&self, _op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
         Err(crate::error::HistoryError::Unsupported("GC done audit"))
     }
 }
