@@ -14,9 +14,9 @@ mod fault_proxy;
 mod fault_sweep;
 
 use fault_proxy::Fault;
-use fault_sweep::Positions;
+use fault_sweep::{Flight, Positions};
 
 #[test]
 fn a_connection_dropped_at_any_message_of_a_warm_commit() {
-    fault_sweep::sweep("drop_warm", Fault::Drop, true, Positions::All);
+    fault_sweep::sweep("drop_warm", Fault::Drop, Flight::Warm, Positions::All);
 }

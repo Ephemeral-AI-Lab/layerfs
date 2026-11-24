@@ -91,11 +91,15 @@ SLOW = {
     # #768 adversarial Commit tests against the private PostgreSQL test
     # server (each skips its PostgreSQL half without one), macOS host,
     # 2026-11-25: a fault at every server message of one Commit's flight.
-    ("layerfs-store-service", "commit_fault_drop"): 30.3,
-    ("layerfs-store-service", "commit_fault_kill"): 31.4,
-    ("layerfs-store-service", "commit_fault_first_drop"): 43.4,
-    ("layerfs-store-service", "commit_fault_first_kill"): 44.6,
-    ("layerfs-store-service", "commit_lane_kill"): 15.0,
+    # Re-measured on stage 2b (fused Commit), slowest of three runs; the
+    # raced sweeps run four shares of the flight in parallel.
+    ("layerfs-store-service", "commit_fault_drop"): 16.0,
+    ("layerfs-store-service", "commit_fault_kill"): 16.7,
+    ("layerfs-store-service", "commit_fault_first_drop"): 25.2,
+    ("layerfs-store-service", "commit_fault_first_kill"): 26.5,
+    ("layerfs-store-service", "commit_fault_race_drop"): 37.4,
+    ("layerfs-store-service", "commit_fault_race_kill"): 40.0,
+    ("layerfs-store-service", "commit_lane_kill"): 15.4,
     ("layerfs-store-service", "commit_random_model"): 8.4,
     ("layerfs-store-service", "commit_stress"): 6.7,
 }

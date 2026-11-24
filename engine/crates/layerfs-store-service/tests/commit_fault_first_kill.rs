@@ -17,9 +17,9 @@ mod fault_proxy;
 mod fault_sweep;
 
 use fault_proxy::Fault;
-use fault_sweep::Positions;
+use fault_sweep::{Flight, Positions};
 
 #[test]
 fn the_backend_killed_at_any_message_of_a_first_commit() {
-    fault_sweep::sweep("kill_first", Fault::HoldKill, false, Positions::All);
+    fault_sweep::sweep("kill_first", Fault::HoldKill, Flight::First, Positions::All);
 }

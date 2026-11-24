@@ -305,6 +305,35 @@ impl TestStore {
 
     /// Rows per object id in `object_location` that appear more than once,
     /// read straight from the private test database.
+    /// True once no backend of this Store (PostgreSQL) sits idle in a
+    /// transaction, waiting up to 10 s: one holding a lock on this Store's
+    /// schema or whose last statement named it. Other tests' Stores in the
+    /// same database are not counted.
+    pub fn no_open_transaction(&self) -> bool {
+        let schema = self
+            .postgres
+            .as_ref()
+            .expect("a PostgreSQL Store")
+            .1
+            .clone();
+        let mut admin = self.admin();
+        wait_until(Duration::from_secs(10), || {
+            admin
+                .query_one(
+                    "SELECT count(*) FROM pg_stat_activity a WHERE a.datname = current_database() \
+                     AND a.pid <> pg_backend_pid() AND a.state LIKE 'idle in transaction%' \
+                     AND (position($1 || '.' IN coalesce(a.query, '')) > 0 OR EXISTS ( \
+                     SELECT 1 FROM pg_locks l JOIN pg_class c ON c.oid = l.relation \
+                     JOIN pg_namespace n ON n.oid = c.relnamespace \
+                     WHERE l.pid = a.pid AND n.nspname = $1))",
+                    &[&schema],
+                )
+                .unwrap()
+                .get::<_, i64>(0)
+                == 0
+        })
+    }
+
     pub fn duplicate_locators(&self) -> i64 {
         const SQL: &str = "SELECT count(*) FROM (SELECT object_id FROM object_location \
                            GROUP BY object_id HAVING count(*) > 1) d";
@@ -612,6 +641,16 @@ pub fn commit(workspace: &BoundWorkspace) -> Result<CommitSuccess, Box<CommitFai
     workspace.commit_captured(&CommitOptions {
         force: false,
         message: Some("adversary".to_owned()),
+        expected: None,
+    })
+}
+
+/// One forced Workspace Commit (`--force`): never fused, it takes the lane
+/// on the separate path (the held-lane connection on PostgreSQL).
+pub fn commit_forced(workspace: &BoundWorkspace) -> Result<CommitSuccess, Box<CommitFailure>> {
+    workspace.commit_captured(&CommitOptions {
+        force: true,
+        message: Some("adversary forced".to_owned()),
         expected: None,
     })
 }

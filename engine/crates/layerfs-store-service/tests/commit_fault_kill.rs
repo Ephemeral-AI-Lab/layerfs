@@ -14,9 +14,9 @@ mod fault_proxy;
 mod fault_sweep;
 
 use fault_proxy::Fault;
-use fault_sweep::Positions;
+use fault_sweep::{Flight, Positions};
 
 #[test]
 fn the_backend_killed_at_any_message_of_a_warm_commit() {
-    fault_sweep::sweep("kill_warm", Fault::HoldKill, true, Positions::All);
+    fault_sweep::sweep("kill_warm", Fault::HoldKill, Flight::Warm, Positions::All);
 }

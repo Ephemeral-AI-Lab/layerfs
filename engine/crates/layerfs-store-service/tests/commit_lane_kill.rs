@@ -1,5 +1,9 @@
-//! #768: PostgreSQL backends killed while a Workspace Commit waits for, or
-//! works inside, the publication lane.
+//! #768: PostgreSQL backends killed while a Workspace Commit on the
+//! separate path waits for, or works inside, the publication lane: the path
+//! with the held-lane connection (finding #10). Since #768 stage 2 a Commit
+//! over its bound head is fused and takes the lane in its own transaction
+//! (`commit_fused_lane.rs` covers that); these Commits are forced, which
+//! never fuses, so they keep taking the lane on the lane connection.
 //!
 //! * The lane row is held by a separate transaction (`store_lane FOR
 //!   UPDATE`), so the Commit's writer waits for it in the Save's own
@@ -36,10 +40,11 @@ mod fault_proxy;
 mod fault_sweep;
 
 use adversary::{
-    check_attempt, commit, verdict, wait_until, write, Node, Service, TestStore, Tree, Verdict,
+    check_attempt, commit, commit_forced, verdict, wait_until, write, Node, Service, TestStore,
+    Tree, Verdict,
 };
 use fault_proxy::{Fault, FaultProxy};
-use fault_sweep::Positions;
+use fault_sweep::{Flight, Positions};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -78,21 +83,6 @@ fn waiting_on_lock(client: &mut postgres::Client, pid: i32) -> bool {
         == 1
 }
 
-fn idle_in_transaction(store: &TestStore) -> bool {
-    let mut admin = store.admin();
-    wait_until(Duration::from_secs(10), || {
-        admin
-            .query_one(
-                "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() \
-                 AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%'",
-                &[],
-            )
-            .unwrap()
-            .get::<_, i64>(0)
-            == 0
-    })
-}
-
 fn lane_wait_kill(tag: &str, victim: Victim) {
     let Some(store) = TestStore::postgres(tag, SEED) else {
         return;
@@ -107,7 +97,7 @@ fn lane_wait_kill(tag: &str, victim: Victim) {
     let workspace = service.bind(branch);
     write(&workspace, "/warm", b"warm\n");
     proxy.arm(None);
-    let old = match verdict(&commit(&workspace)) {
+    let old = match verdict(&commit_forced(&workspace)) {
         Verdict::Committed(id) => id,
         other => panic!("warm-up: {other:?}"),
     };
@@ -133,7 +123,7 @@ fn lane_wait_kill(tag: &str, victim: Victim) {
     let first = std::thread::scope(|scope| {
         let workspace = &workspace;
         scope.spawn(move || {
-            let _ = sent.send(verdict(&commit(workspace)));
+            let _ = sent.send(verdict(&commit_forced(workspace)));
         });
         let waits = wait_until(Duration::from_secs(10), || {
             waiting_on_lock(&mut observer, writer_pid)
@@ -179,7 +169,7 @@ fn lane_wait_kill(tag: &str, victim: Victim) {
         answer.recv_timeout(BOUND).expect("the Commit answers")
     });
     let elapsed = started.elapsed();
-    let follow = verdict(&commit(&workspace));
+    let follow = verdict(&commit_forced(&workspace));
     println!(
         "LANE_KILL {{\"victim\":\"{}\",\"first\":\"{first:?}\",\"follow\":\"{follow:?}\",\"ms\":{}}}",
         if victim == Victim::IdleLane {
@@ -200,7 +190,7 @@ fn lane_wait_kill(tag: &str, victim: Victim) {
         assert_eq!(state, "old", "a dead writer publishes nothing");
     }
     assert!(
-        idle_in_transaction(&store),
+        store.no_open_transaction(),
         "no backend left in a transaction"
     );
     // Nothing kept the lane: a new Commit publishes well inside the wait.
@@ -238,7 +228,7 @@ fn the_lane_backend_killed_while_the_commit_works_inside_the_lane() {
     fault_sweep::sweep(
         "lane_inside",
         Fault::HoldKillOther,
-        true,
+        Flight::Forced,
         Positions::InLaneWriter,
     );
 }
@@ -271,7 +261,7 @@ fn paused(
     );
     let workspace = service.bind(branch);
     write(&workspace, "/warm", b"warm\n");
-    let old = match verdict(&commit(&workspace)) {
+    let old = match verdict(&commit_forced(&workspace)) {
         Verdict::Committed(id) => Some(id),
         other => panic!("{name}: warm-up {other:?}"),
     };
@@ -279,7 +269,7 @@ fn paused(
     proxy.arm(target);
     let (first, during) = std::thread::scope(|scope| {
         let workspace = &workspace;
-        let committing = scope.spawn(move || verdict(&commit(workspace)));
+        let committing = scope.spawn(move || verdict(&commit_forced(workspace)));
         let during = if target.is_some() {
             let fired = proxy.wait_fired(Duration::from_secs(10));
             let answer = if fired { during() } else { "not fired".into() };
@@ -291,7 +281,7 @@ fn paused(
         (committing.join().unwrap(), during)
     });
     let window = proxy.disarm();
-    let follow = verdict(&commit(&workspace));
+    let follow = verdict(&commit_forced(&workspace));
     let _ = service.try_unmount(workspace);
     service.abandon();
     (old, first, follow, window, during)
@@ -379,7 +369,7 @@ fn a_branch_removal_while_the_commit_is_paused_inside_the_lane() {
     }
     remover.stop();
     assert!(
-        idle_in_transaction(&store),
+        store.no_open_transaction(),
         "no backend left in a transaction"
     );
     let failures = store.integrity_failures();

@@ -46,6 +46,10 @@ pub struct Fired {
     pub pid: Option<i32>,
     /// HoldKill: whether the backend was seen gone within the bound.
     pub killed: Option<bool>,
+    /// The faulted connection's messages delivered to the client from the
+    /// fault on (held, then passed through): the type byte, and for an
+    /// `ErrorResponse` its SQLSTATE (`E22012`). Empty after a `Drop`.
+    pub delivered: Vec<String>,
 }
 
 /// What one armed window saw.
@@ -201,12 +205,15 @@ fn back(
     let mut buffer = vec![0u8; 1 << 16];
     let mut pending: Vec<u8> = Vec::new();
     let mut passthrough = false;
+    // Bytes delivered from the fault on, not yet a whole message.
+    let mut tail: Vec<u8> = Vec::new();
     loop {
         let read = match server.read(&mut buffer) {
             Ok(0) | Err(_) => break,
             Ok(read) => read,
         };
         if passthrough {
+            delivered(&shared, &mut tail, &buffer[..read]);
             if client.write_all(&buffer[..read]).is_err() {
                 break;
             }
@@ -239,6 +246,7 @@ fn back(
                             kind: kind as char,
                             pid: state.pids[connection],
                             killed: None,
+                            delivered: Vec::new(),
                         });
                         fault = Some(chosen);
                         break;
@@ -264,6 +272,7 @@ fn back(
                 while !shared.lock().unwrap().released && Instant::now() < until {
                     std::thread::sleep(Duration::from_millis(1));
                 }
+                delivered(&shared, &mut tail, &pending);
                 if client.write_all(&pending).is_err() {
                     break;
                 }
@@ -319,6 +328,7 @@ fn back(
                 if let Some(fired) = &mut shared.lock().unwrap().window.fired {
                     fired.killed = killed;
                 }
+                delivered(&shared, &mut tail, &pending);
                 if client.write_all(&pending).is_err() {
                     break;
                 }
@@ -328,6 +338,42 @@ fn back(
         }
     }
     let _ = client.shutdown(Shutdown::Write);
+}
+
+/// Records the whole messages of `bytes` (after what `tail` kept of the
+/// last read) in the fired fault's `delivered`.
+fn delivered(shared: &Mutex<State>, tail: &mut Vec<u8>, bytes: &[u8]) {
+    tail.extend_from_slice(bytes);
+    let mut offset = 0;
+    let mut kinds = Vec::new();
+    while tail.len() - offset >= 5 {
+        let length = u32::from_be_bytes(tail[offset + 1..offset + 5].try_into().unwrap()) as usize;
+        if tail.len() - offset < 1 + length {
+            break;
+        }
+        let body = &tail[offset + 5..offset + 1 + length];
+        let mut kind = (tail[offset] as char).to_string();
+        if tail[offset] == b'E' {
+            // Fields: a code byte and a C string each, then a zero byte.
+            let mut field = 0;
+            while field < body.len() && body[field] != 0 {
+                let end = body[field + 1..]
+                    .iter()
+                    .position(|b| *b == 0)
+                    .map_or(body.len(), |n| field + 1 + n);
+                if body[field] == b'C' {
+                    kind.push_str(&String::from_utf8_lossy(&body[field + 1..end]));
+                }
+                field = end + 1;
+            }
+        }
+        kinds.push(kind);
+        offset += 1 + length;
+    }
+    tail.drain(..offset);
+    if let Some(fired) = &mut shared.lock().unwrap().window.fired {
+        fired.delivered.extend(kinds);
+    }
 }
 
 /// The pid in the first complete `BackendKeyData` of `bytes`, a run of
