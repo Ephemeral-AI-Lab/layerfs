@@ -172,6 +172,60 @@ fn release_retains_the_operator_audit_row_and_clears_the_owner() {
         .expect("the retained row's cleared owner key does not hold");
 }
 
+/// Inv7: a retained `done` row is only added to, never removed. An operator
+/// settles and releases a mount, then the original owner's close releases the
+/// same op; the late release matches no live row and reports the same
+/// nothing-to-release outcome as a missing op (the PostgreSQL path already
+/// does, because it reads through the done-filtering `gc_intent_get`). It must
+/// not delete the audit row or rewrite its evidence.
+#[test]
+fn a_late_release_cannot_delete_a_retained_done_row() {
+    let temp = Temp::new("gc-done-audit-late-release");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let path = temp.join("store.sqlite");
+    let mounted = GcIntent::shared(
+        op(40),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack(1).as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([40; 32]), Some("box"), Some("box"))
+    .owned(Some("pid:1@0"), Some("boot:1"))
+    .with_phase(Some("bind"));
+    history.gc_register(&mounted).unwrap();
+
+    // The operator settle+release retains the row as the durable audit.
+    let evidence = "action=release;operator=alice;op=28282828282828282828282828282828";
+    assert!(history.gc_release_done(&op(40), evidence).unwrap());
+    let retained = history.gc_done_intents(0, 10).unwrap();
+    assert_eq!(retained.items.len(), 1, "{retained:?}");
+
+    // The original owner's close releases the same op later. A done row is
+    // not live, so there is nothing to release: like a missing op, this is a
+    // no-op, not an error.
+    history
+        .gc_release(&op(40))
+        .expect("a late release of a retained done row is not an error");
+
+    let after = history.gc_done_intents(0, 10).unwrap();
+    assert_eq!(
+        after.items, retained.items,
+        "a late release leaves the retained audit row unchanged"
+    );
+    let state: String = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT state FROM gc_intent WHERE op_id = ?1",
+            [op(40).as_slice()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(state, "done", "the retained row is still done");
+}
+
 #[test]
 fn a_done_row_is_never_a_live_holder() {
     let temp = Temp::new("gc-done-audit-hidden");
