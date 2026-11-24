@@ -314,7 +314,6 @@ impl HistoryCatalog for HistoryProvider {
         super::admission::release_done(self, op_id, evidence)
     }
 
-
     fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
         super::admission::mark_uncertain(self, op_id)
     }

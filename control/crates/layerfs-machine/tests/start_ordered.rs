@@ -29,7 +29,6 @@ const RELATED: Related = Related {
     can_change: free,
 };
 
-
 fn scratch(tag: &str) -> PathBuf {
     let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "layerfs-start-ordered-{tag}-{}-{}",

@@ -515,7 +515,6 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported("GC done audit"))
     }
 
-
     /// Records `incarnation` as the current place of `machine` and settles
     /// the intents that value proves dead.
     ///

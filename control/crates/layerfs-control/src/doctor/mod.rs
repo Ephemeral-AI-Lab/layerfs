@@ -9,8 +9,8 @@
 //! `layerfs_sandbox::sweep` and the sweeps of image copies and backups).
 mod capacity;
 mod checks;
-mod records;
 mod mount_holders;
+mod records;
 mod scan;
 
 mod check_report;

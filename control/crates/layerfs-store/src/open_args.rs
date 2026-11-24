@@ -121,7 +121,6 @@ impl OpenArgs {
             )),
         }
     }
-
 }
 
 impl PgSelection {

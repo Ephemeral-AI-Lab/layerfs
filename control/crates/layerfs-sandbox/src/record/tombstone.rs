@@ -91,4 +91,3 @@ pub fn retire_in(home: &Path, directory: &Path, name: &str) -> Result<()> {
         None => Ok(()),
     }
 }
-
