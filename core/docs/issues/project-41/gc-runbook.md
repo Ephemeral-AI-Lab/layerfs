@@ -154,7 +154,7 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
    re-run `layerfs store compact <store>` to adopt. For a lost PG swap reply, use §2 on a second connection.
 3. Before manual steps, back up (`backup.create` on SQLite; server backup on PG) and record generation `G`, op id, artifact name.
 4. Compare artifact/schema with the op; leave anything a record names to the next compact (`G` removes, `G+1` records).
-5. Never hand-edit `gc_intent`, `gc_dead`, markers or `project_epoch`; never unlink `-wal`/`-shm`; never drop a schema `gc_op` names. To keep the retained `done` audit rows, `layerfs store repair-mount-holders <store> <project> <branch> archive` exports them to `<home>/log/gc-audit.jsonl`; review the file first, then rerun with `--prune` to delete exactly the exported rows (a prune never removes a live intent, and there is no automatic delete).
+5. Never hand-edit `gc_intent`, `gc_dead`, markers or `project_epoch`; never unlink `-wal`/`-shm`; never drop a schema `gc_op` names. The retained `done` audit rows are read with `layerfs store repair-mount-holders <store> <project> <branch> audit` (scoped to that Branch); the jsonl `archive`/`--prune` export is deferred (#775), and nothing deletes a done row automatically.
 6. To re-use a name after a removal, re-create after the frontier (or after a rebuild frees it); don't delete markers. Escalate if old content must be restored.
 
 ## 7. Branch retirement (`branch.remove`, live since 2026-11-15)

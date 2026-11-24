@@ -459,14 +459,14 @@ Admission is one Store-DB table and two `BEGIN IMMEDIATE` transactions
 `gc_intent(op_id PRIMARY KEY, kind, scope_kind, scope_id, workspace, sandbox,
 machine, project, branch, owner_runtime, owner_boot, state, uncertain, phase,
 generation, artifact, high_water, evidence, updated_ms,
-machine_incarnation, sandbox_generation, lease_expires_ms, fence_token)`,
+machine_incarnation, sandbox_generation)`,
 `STRICT`, with `UNIQUE(scope_kind, scope_id, owner_boot)`; `kind` is
 `mount`, `init`, `merge`, `removal` or `compaction`, `state` is `live`,
 `uncertain` or `done`, `scope_kind` is `store`/`project`/`branch`, and the ids
 are typed per kind (17-byte project/Branch, 33-byte commit/layer, 32-byte
 catalog id). The migration step that adds it is the same additive step as
-§4.1; the four authority columns were appended after `updated_ms` by a later
-additive step.
+§4.1; the two place-authority columns were appended after `updated_ms` by a
+later additive step (lease and fence are deferred, #775).
 
 - A **mount** transaction checks that no operation op is running at every
   scope it names (Store, project, Branch), inserts its intent and commits. A
@@ -493,7 +493,7 @@ additive step.
   generation's durable tombstone under `machine/<machine>/sandbox-retired/`
   once the runtime is stopped, before its home record goes, so a Sandbox
   recreated under the same name is not retired by the old generation.
-- **Lease renewal.** The owner of an intent renews its `lease_expires_ms`
+- **Lease renewal (deferred, #775).** The owner of an intent renews its `lease_expires_ms`
   with a fenced heartbeat: the Store keeps the later of the recorded and the
   requested deadline, so a delayed heartbeat never shortens a lease, and a
   presented stale token may not renew the row (`Conflict`). An absent row

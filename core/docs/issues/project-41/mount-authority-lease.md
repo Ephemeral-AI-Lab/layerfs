@@ -134,7 +134,12 @@ Code touchpoints:
   the graceful/forced path; the authority is the Store-side complement).
 - `engine/crates/layerfs-daemon/src/control/registry.rs:157` `close_bound` (normal end).
 
-### 3.2 Lease / expiry / fencing for ownerless / place-null / private / legacy
+### 3.2 Lease / expiry / fencing for ownerless / place-null / private / legacy — deferred (#775)
+
+> **Deferred (#775).** This trimmed PR ships the ordered place authority
+> (`machine_incarnation` + `sandbox_generation`) and the durable tombstone
+> only. Lease expiry, heartbeat renewal, fencing tokens and the cross-home
+> merge are deferred; the rationale below is kept for the follow-up.
 
 Add `lease_expires_ms` (and a fencing token, reuse `op_id`/generation) to `gc_intent` (or
 a `gc_lease` side table). The owner (daemon or private Store-call workspace) renews the
@@ -150,6 +155,10 @@ sweep. Migration: rows with no lease/place (including the live 6) are marked
 `uncertain`/`legacy` and require an explicit settle; they are never auto-released.
 
 ### 3.3 First-class recovery (not raw SQL)
+
+> The shipped subset of the recovery call is `list`, `preview`, `settle`,
+> `release`, `settle_legacy` and a Branch-scoped `audit`. The jsonl
+> `archive`/`--prune` export is deferred (#775).
 
 New Store-side call (proposed): `store repair mount-holders` (CLI/SDK), plus the
 `gc_release` primitives behind it:
