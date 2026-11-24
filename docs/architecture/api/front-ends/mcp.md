@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-83 calls: 17 in `work` (the table's `agent` profile), 66 in `admin` only (`full`); `--profile admin` lists 83.
+81 calls: 17 in `work` (the table's `agent` profile), 64 in `admin` only (`full`); `--profile admin` lists 81.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -184,19 +184,17 @@ built addon).
 | `machine.remove` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
 | `machine.update` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
 | `machine.doctor` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
-| `store.list` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.get` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.create` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.connect` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.disconnect` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.save_auth` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.auths` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.remove_auth` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.update` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.move` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
-| `store.remove` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.list` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.get` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.create` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.connect` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.disconnect` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.attach` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.detach` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.move` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.remove` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
 | `store.compact` | admin | admin | reclaim one Store's dead bytes; a folder scope refuses it; the `full` profile (administration) |
-| `store.doctor` | admin | admin | create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins; the `full` profile (administration) |
+| `store.doctor` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
 | `backup.connect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
 | `backup.disconnect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
 | `backup.list` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
@@ -248,7 +246,7 @@ the SDK's request schema (`-32603`). The call does not run.
 | `workspace.exec` | output is buffered (no `stdout`/`stderr` function): each stream's text is in the result up to its last 1 MiB; a longer stream answers its last 1 MiB and `stdout_file` or `stderr_file` names the file on the machine that holds all of it; `stdout_bytes` and `stderr_bytes` (long form) give its full size | [Errors and events](../calls/errors-and-events.md#workspaceexec-output) |
 | Cancel notification | acknowledged on stderr; the native call cannot be cancelled and runs to its end | [`server.js`](../../../../api/mcp/src/server.js) |
 | stdin close, `SIGTERM`, `SIGINT` | stop accepting calls, wait up to 2 s (`GRACE_MS`) for in-flight ones, run `layerfs.close()` (idle Stores only), exit 0. A Workspace stays mounted; a call still running is cut off and its outcome is unknown | [`server.js`](../../../../api/mcp/src/server.js) |
-| stdout, stderr | stdout carries one JSON-RPC message per line and nothing else while serving; one `layerfs-mcp: …` line per call, startup and shutdown on stderr. Argument values are never logged (a `store.save_auth` password, a `backup.connect` key) | [`server.js`](../../../../api/mcp/src/server.js) |
+| stdout, stderr | stdout carries one JSON-RPC message per line and nothing else while serving; one `layerfs-mcp: …` line per call, startup and shutdown on stderr. Argument values are never logged (a `store.connect` password, a `backup.connect` key) | [`server.js`](../../../../api/mcp/src/server.js) |
 
 ## Limits
 

@@ -81,7 +81,7 @@ Python  layerfs.machine.list(*, with_=None)
 | short | `items` |
 | long | `items` |
 | `items[]` short | `machine`, `platform`; when set: `state`, `op`, `reason`, `fix`, `observed_at` |
-| `items[]` long | `machine, platform, state, op, reason, fix, observed_at, backend, supports, cpus, memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message, stores, stores_count, sandboxes, sandboxes_count, created_at` |
+| `items[]` long | `machine, platform, state, op, reason, fix, observed_at, backend, supports, loopback, cpus, memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message, stores, stores_count, sandboxes, sandboxes_count, created_at` |
 | `items[].supports[]` short | each a `support` |
 | `items[].stores[]` short | each a `store` |
 | `items[].sandboxes[]` short | each a `sandbox` |
@@ -104,6 +104,11 @@ The long row: `backend` is the Sandbox backend on this host (`native`,
 is a list of words: `sqlite`, `postgresql_sandbox`, and `log` when the
 machine has a worker whose log can be read (clients read this and never test
 platform names; [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs));
+`loopback` is `shared` when the machine shares this computer's loopback (a
+PostgreSQL URL naming it is dialled there as given) and `apart` when it does
+not, as the platform's adapter declares it (`Loopback`,
+[`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs)), null
+for a removed platform or a record that describes no machine;
 `cpus`, `memory_bytes`, `disk_bytes` are the recorded size (null on a
 built-in machine); `stores` and `sandboxes` list the first 20 names, each
 count only past those

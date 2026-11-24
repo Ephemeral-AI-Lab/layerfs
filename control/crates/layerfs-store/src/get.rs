@@ -5,9 +5,11 @@
 //!
 //! The answer is one full map, the long form's keys: the dispatcher makes
 //! the short form from it. A sqlite Store answers `machine`, `profile` and
-//! `sqlite_version`; a PostgreSQL Store `auth`, `binding`, `connections`
-//! (every side that connects, spec v23) and `synchronous_commit`; the
-//! other engine's keys are null.
+//! `sqlite_version`; a PostgreSQL Store `url`, `user`, `password_saved`,
+//! `password_changed_at`, `binding`, `synchronous_commit`, `reach` (this
+//! computer's last) and `machines` (the attached machines: rows with
+//! their reach in `store.get`, names in a `store.list` item); the other
+//! engine's keys are null. The password is never answered.
 use crate::backup::record::StoreLink;
 use crate::intent;
 use crate::record::{StoreRecord, StoreRef};
@@ -29,17 +31,6 @@ pub struct With {
     pub live: bool,
     /// `--with stats`: its counters, opening it.
     pub stats: bool,
-}
-
-/// Every Sandbox's `(store, machine)`, read by the caller from the
-/// Sandbox records (which this crate sits below): who connects to a
-/// PostgreSQL Store from a machine with no address or reach of its own.
-pub type Sandboxes<'a> = &'a dyn Fn(&Path) -> Vec<(String, String)>;
-
-/// The machines with a Sandbox of Store `store` among `pairs`.
-pub fn sandbox_machines(pairs: &[(String, String)], store: &str) -> Vec<String> {
-    let on = pairs.iter().filter(|(of, _)| of == store);
-    on.map(|(_, machine)| machine.clone()).collect()
 }
 
 /// `ms` since 1970 as an answer's time, null when unknown.
@@ -137,15 +128,16 @@ pub fn project_names(home: &Path, store: &str) -> Result<Vec<String>> {
 /// Store `record` as `store.get` and a `store.list` item answer it, in
 /// `state`: every long-form key. `observed_at` is the state's own when it
 /// is `unknown`, else when the Store was last read live (`observed`).
-/// `sandboxes` are the machines with a Sandbox of it. A PostgreSQL Store's
-/// `binding` is the first 8 bytes of its id as 16 hex, the open-Store
-/// cache's key (spec v23 V23-5).
+/// `rows` answers a PostgreSQL Store's `machines` as rows (`store.get`),
+/// else as names (a `store.list` item). A PostgreSQL Store's `binding` is
+/// the first 8 bytes of its id as 16 hex, the open-Store cache's key (spec
+/// v23 V23-5).
 pub fn summary(
     home: &Path,
     record: &StoreRecord,
     state: &State,
     observed: Option<i64>,
-    sandboxes: &[String],
+    rows: bool,
 ) -> Result<SdkValue> {
     let store = record.name();
     let projects = project_names(home, store)?;
@@ -158,6 +150,13 @@ pub fn summary(
     };
     let only = |yes: bool, value: SdkValue| if yes { value } else { SdkValue::Null };
     let postgresql = engine == "postgresql";
+    let pg_text = |key: &str| only(postgresql, SdkValue::opt_text(record.text(key)));
+    // a URL that may hold a login is never shown
+    let url = record.text("url").map(crate::postgresql::connect::shown);
+    let (saved, changed) = match postgresql {
+        true => crate::postgresql::connect::password_changed(record),
+        false => (false, SdkValue::Null),
+    };
     let links = record.links();
     let backups = links.iter().map(|(bucket, link)| backup_row(bucket, link));
     let mut fields: Vec<(&str, SdkValue)> = vec![
@@ -171,10 +170,10 @@ pub fn summary(
     fields.extend([
         // a sqlite Store's machine; null for a PostgreSQL Store
         ("machine", SdkValue::opt_text(state::placed(record))),
-        (
-            "auth",
-            SdkValue::opt_text(crate::postgresql::login::auth_of(record)),
-        ),
+        ("url", only(postgresql, SdkValue::opt_text(url))),
+        ("user", pg_text("user")),
+        ("password_saved", only(postgresql, SdkValue::Bool(saved))),
+        ("password_changed_at", changed),
         (
             "binding",
             only(
@@ -185,10 +184,14 @@ pub fn summary(
             ),
         ),
         (
-            "connections",
+            "reach",
+            only(postgresql, crate::postgresql::connect::reach(record)),
+        ),
+        (
+            "machines",
             only(
                 postgresql,
-                crate::postgresql::connect::connections(record, sandboxes),
+                crate::postgresql::connect::machines(record, rows),
             ),
         ),
         ("projects", shown),
@@ -198,13 +201,7 @@ pub fn summary(
             "profile",
             only(sqlite, SdkValue::opt_text(crate::record::profile(record))),
         ),
-        (
-            "synchronous_commit",
-            only(
-                postgresql,
-                SdkValue::opt_text(record.text("synchronous_commit")),
-            ),
-        ),
+        ("synchronous_commit", pg_text("synchronous_commit")),
         (
             "sqlite_version",
             only(sqlite, SdkValue::opt_text(record.text("sqlite"))),
@@ -224,7 +221,7 @@ pub fn get(
     events: &mut Events<'_>,
     store: &str,
     with: With,
-    (machines, sandboxes): (state::Machines, Sandboxes),
+    machines: state::Machines,
 ) -> Outcome {
     let record = StoreRecord::of(home, store)?;
     let (record, state, observed, live) = match with.live {
@@ -242,8 +239,7 @@ pub fn get(
             )
         }
     };
-    let on = sandbox_machines(&sandboxes(home), store);
-    let mut answer = summary(home, &record, &state, observed, &on)?;
+    let mut answer = summary(home, &record, &state, observed, true)?;
     if let SdkValue::Map(fields) = &mut answer {
         if let Some(live) = live {
             fields.push(("live".to_owned(), live));

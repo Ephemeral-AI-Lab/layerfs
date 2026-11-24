@@ -48,7 +48,7 @@ give each call's own arguments, answer and errors.
 
 | Convention | Rule | Source |
 | --- | --- | --- |
-| Names | `family.call`, snake_case in every front end (`machine.load_image`, `store.save_auth`); the CLI writes `layerfs machine load-image` and options as `--synchronous-commit`. Python spells the options `with` and `from` as `with_` and `from_` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs), [`layerfs-cli/src/parse.rs`](../../../api/crates/layerfs-cli/src/parse.rs) |
+| Names | `family.call`, snake_case in every front end (`machine.load_image`, `project.hide_path`); the CLI writes `layerfs machine load-image` and options as `--synchronous-commit`. Python spells the options `with` and `from` as `with_` and `from_` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs), [`layerfs-cli/src/parse.rs`](../../../api/crates/layerfs-cli/src/parse.rs) |
 | Positionals | required, in table order, from the outside in: owner, Branch, path or new name, other inputs, an optional Commit last | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) |
 | Options | named and optional: a trailing object (JS), keywords (Python), `--flags` (CLI); an unknown or misspelled one is `InvalidInput` before any effect | [`calls/check.rs`](../../../api/crates/layerfs-api/src/calls/check.rs) |
 | Kinds | `Name`, `Project` (`<store>/<project>`), `Text`, `Int`, `Bool`, `Json`, `Content` (text or bytes), `Size` (bytes, or `64K`, `512M`, `8G` in powers of 1024), `Function` (stays in the front end) | [Calls](calls/README.md) |

@@ -22,7 +22,7 @@ const WHY = {
   sandbox: "start, read, remove, inspect and check a Sandbox",
   workspace: "mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit",
   machine: "machines hold Stores and workers: read, start, stop, create, change, inspect and check them",
-  store: "create, connect, move, compact, check and remove Stores, and keep PostgreSQL logins",
+  store: "create, connect, attach, move, compact, check and remove Stores",
   backup: "connect buckets, back up and restore a Store, and check a bucket",
 };
 

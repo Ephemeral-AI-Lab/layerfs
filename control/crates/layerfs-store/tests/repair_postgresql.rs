@@ -159,16 +159,16 @@ fn operator_repair_round_trips_on_postgresql() {
 
     let home = tempdir("home");
     home::ensure(&home).unwrap();
-    // `store.connect`'s record shape with its saved login, which
-    // `project.init` dials with: the address alone in the record (the URL
-    // after its user part), the user and password saved (a trust-auth server
+    // `store.connect`'s record shape, which `project.init` dials with: the
+    // address alone and the user in the record (the URL after its user
+    // part), the password saved under the Store's name (a trust-auth server
     // takes any password)
     let read: postgres::Config = url.parse().expect("LAYERFS_TEST_POSTGRES_URL is a URL");
     let user = read.get_user().unwrap_or("postgres");
     let password = read.get_password().map_or("unused".to_owned(), |password| {
         String::from_utf8(password.to_vec()).expect("a UTF-8 password")
     });
-    layerfs_store::postgresql::login::save(&home, "pg", user, &password).unwrap();
+    layerfs_store::postgresql::login::save(&home, "pgs", &password).unwrap();
     let address = match layerfs_store::postgresql::connect::holds_login(&url) {
         false => url.clone(),
         true => {
@@ -179,7 +179,7 @@ fn operator_repair_round_trips_on_postgresql() {
             )
         }
     };
-    let record = StoreRecord::connected("pgs", &address, "layerfs", "local", Some("pg"))
+    let record = StoreRecord::connected("pgs", &address, user, "layerfs", "local")
         .with("binding", SdkValue::Bytes(BINDING.to_vec()))
         .with("cursor", SdkValue::Bytes(vec![71; 32]));
     record.write(&home).unwrap();

@@ -1,15 +1,13 @@
-//! A PostgreSQL Store's connection, checked from the side that dials it.
-//! A Store's Sandboxes run on any machine whose platform runs PostgreSQL
-//! Sandboxes (supersedes the per-machine attachments of 2026-11-12; #536
-//! C4 again): each dials the Store's address, or its own where
-//! `store.connect --machine` gave it one, kept in the Store's record as
-//! `machines.<machine>`, always with the Store's saved login. This module is the Store's part: the check run on
-//! the side that dials, and the record writes. Which side dials, and the
-//! URL a machine dials, are the caller's (`layerfs-control`, through the
-//! Sandbox route).
+//! A PostgreSQL Store's connection, checked from the side that dials it
+//! (owner, 2026-11-24): the host saves a Store's URL and login, and a
+//! machine attached to the Store (`store.attach`, its record's
+//! `attached`) runs its Sandboxes, dialling that URL with that login; no
+//! machine has an address of its own. This module is the Store's part: the
+//! check run on the side that dials, and the attachment writes. Which side
+//! dials is the caller's (`layerfs-control`, through the Sandbox route).
 use crate::open_args::PgSelection;
 use crate::postgresql::connect::SCHEMA;
-use crate::record::{OwnConnection, StoreKind, StoreRecord};
+use crate::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::StoreName;
@@ -103,40 +101,73 @@ pub fn same_store(record: &StoreRecord, postgresql: &PgSelection) -> Result<()> 
     Ok(())
 }
 
-/// Saves `machine`'s own address of Store `name` (an empty one removes
-/// it, and forgets its reach observations), under the home lock and the
-/// Store's: `Conflict` when the Store was disconnected, or connected again
-/// to another database (`binding` differs), since it was read. Nothing else
-/// of the record changes: no URL is rewritten (a Store address that may
-/// hold a login stays byte for byte), and no old field is dropped.
-pub fn save_own(
+/// The record of Store `name` under the home lock and the Store's, read
+/// again: `Conflict` when the Store was disconnected, or connected again to
+/// another database (`binding` differs), since it was read.
+fn current(
+    home_dir: &Path,
+    name: &str,
+    binding: Option<&[u8]>,
+    doing: &str,
+) -> Result<StoreRecord> {
+    let record = StoreRecord::read(home_dir, name)?.filter(|r| r.binding() == binding);
+    record.ok_or_else(|| {
+        refused(
+            "Conflict",
+            format!("Store {name} changed while {doing}; run the call again"),
+        )
+    })
+}
+
+/// Attaches `machine` to Store `name`, checked meanwhile, under the home
+/// lock and the Store's: whether it was not attached before. Nothing else
+/// of the record changes.
+pub fn attach(
     home_dir: &Path,
     name: &StoreName,
     machine: &str,
-    own: &OwnConnection,
     binding: Option<&[u8]>,
+) -> Result<bool> {
+    let _lock = home::lock::take(home_dir)?;
+    let _store = crate::record::lock(home_dir, name)?;
+    let doing = format!("machine {machine} was checked");
+    let record = current(home_dir, name, binding, &doing)?;
+    if record.is_attached(machine) {
+        return Ok(false);
+    }
+    record.with_attached(machine, true).write(home_dir)?;
+    Ok(true)
+}
+
+/// Detaches `machine` from Store `name` and forgets its reach, under the
+/// home lock and the Store's, once `idle` (run under both: no Sandbox of
+/// the Store is on the machine) allows it. `NotFound` when it is not
+/// attached.
+pub fn detach(
+    home_dir: &Path,
+    name: &StoreName,
+    machine: &str,
+    idle: &dyn Fn(&Path) -> Result<()>,
 ) -> Result<()> {
     let _lock = home::lock::take(home_dir)?;
     let _store = crate::record::lock(home_dir, name)?;
-    let record = StoreRecord::read(home_dir, name)?.filter(|r| r.binding() == binding);
-    let Some(record) = record else {
+    let record = StoreRecord::of(home_dir, name)?;
+    if !record.is_attached(machine) {
         return Err(refused(
-            "Conflict",
-            format!("Store {name} changed while machine {machine} was checked; connect it again"),
+            "NotFound",
+            format!("machine {machine} is not attached to Store {name}"),
         ));
-    };
-    record.with_own_connection(machine, own).write(home_dir)?;
-    if own.is_empty() {
-        crate::observed::forget_locked(home_dir, name, machine)?;
     }
+    idle(home_dir)?;
+    record.with_attached(machine, false).write(home_dir)?;
+    crate::observed::forget_locked(home_dir, name, machine)?;
     Ok(())
 }
 
 /// Forgets machine `machine` in every PostgreSQL Store of the home (its
-/// `machine.remove`): its own connection and its reach observations, the
-/// rest of each record as it was (no URL rewritten); a later machine of the
-/// same name dials each Store's connection and was never seen. Under the
-/// home lock and each Store's.
+/// `machine.remove`): its attachment and its reach observations, the rest
+/// of each record as it was; a later machine of the same name is attached
+/// to none. Under the home lock and each Store's.
 pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
     let _lock = home::lock::take(home_dir)?;
     for record in crate::record::stores(home_dir)? {
@@ -144,8 +175,8 @@ pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
             continue;
         }
         let _store = crate::record::lock(home_dir, record.name())?;
-        if record.own_connection(machine).is_some() {
-            let record = record.clone().without_own_connection(machine);
+        if record.is_attached(machine) {
+            let record = record.clone().with_attached(machine, false);
             record.write(home_dir)?;
         }
         crate::observed::forget_locked(home_dir, record.name(), machine)?;

@@ -2,12 +2,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `store` calls: list and read Stores, create a sqlite Store, connect a PostgreSQL database as a Store with a saved login, move, remove, compact and check a Store, within the [SDK](README.md). `store.doctor` is one of [the doctors](../../control/doctor/README.md).
+The `store` calls: list and read Stores, create a sqlite Store, connect a PostgreSQL database as a Store with its login, attach machines to it, move, remove, compact and check a Store, within the [SDK](README.md). `store.doctor` is one of [the doctors](../../control/doctor/README.md).
 
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/store`](../../../../api/crates/layerfs-api/src/store) (one file per call), [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) (`sqlite/`, `postgresql/`, `list.rs`, `get.rs`, `state.rs`, `live.rs`, `stats.rs`, `intent.rs`, `compact.rs`), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
-| Runs by default | the caller's process (records, locks, leases, saved logins, PostgreSQL connections); a sqlite Store's file steps run in its machine's worker when it is not on a locally executing machine |
+| Runs by default | the caller's process (records, locks, leases, saved passwords, PostgreSQL connections); a sqlite Store's file steps run in its machine's worker when it is not on a locally executing machine |
 | Design | [Stores and projects](../../control/stores-and-projects/README.md) (records, placement, leases), [SQLite and PostgreSQL](../../control/stores-and-projects/sqlite-and-postgresql.md), [Engine: Store](../../engine/store/README.md) |
 
 ## Calls
@@ -17,12 +17,12 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
                          |
      sqlite              |                 PostgreSQL
      ------              |                 ----------
-     create [--machine]  |                 save-auth <auth> --user U --password-stdin
-        |                |                 auths, remove-auth
-        v                |                 connect <store> <url> --auth A
-     move <store> <machine>                connect ... --machine M (its own address)
-     move <store> native (back)            update [--auth A] [--synchronous-commit S]
-        |                                  disconnect [--machine M] (data stays)
+     create [--machine]  |                 connect <store> <url> --user U --password-stdin
+        |                |                 connect <store> <url> (change address, login, setting)
+        v                |                 attach <store> --machine M (checked from M)
+     move <store> <machine>                detach <store> --machine M
+     move <store> native (back)            disconnect (login and attachments go; data stays)
+        |                |
         v
      remove (file + projects)
      compact (both engines: reclaim dead bytes)
@@ -35,10 +35,8 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
 | [`store.create`](#storecreate) | sqlite | `{ ok }` | `admin` |
 | [`store.connect`](#storeconnect) | PostgreSQL | `{ projects }`, or `{ ok }` | `admin` |
 | [`store.disconnect`](#storedisconnect) | PostgreSQL | `{ ok }` | `admin` |
-| [`store.save_auth`](#storesave_auth) | PostgreSQL | `{ ok }` | `admin` |
-| [`store.auths`](#storeauths) | PostgreSQL | `{ items: [{ auth, user, state }] }` | `admin` |
-| [`store.remove_auth`](#storeremove_auth) | PostgreSQL | `{ ok }` | `admin` |
-| [`store.update`](#storeupdate) | PostgreSQL | `{ ok }` | `admin` |
+| [`store.attach`](#storeattach) | PostgreSQL | `{ ok, outcome }` | `admin` |
+| [`store.detach`](#storedetach) | PostgreSQL | `{ ok }` | `admin` |
 | [`store.move`](#storemove) | sqlite | `{ moved_bytes }` | `admin` |
 | [`store.remove`](#storeremove) | sqlite | `{ ok }`, or `{ left }` | `admin` |
 | [`store.repair_mount_holders`](#storerepair_mount_holders) | both | a page of holders or done rows (`items`, `next_cursor`), or one settled/released op | `admin` |
@@ -90,18 +88,19 @@ Python  layerfs.store.list(*, machine=None, with_=None)
 | --- | --- |
 | short | `items` |
 | long | `items` |
-| `items[]` short | `store`, `engine`; when set: `state`, `machine`, `auth`, `connections`, `projects`, `projects_count`, `backups`, `op`, `blocked_by`, `reason`, `fix`, `observed_at` |
-| `items[]` long | `store, engine, state, machine, auth, binding, connections, projects, projects_count, backups, op, blocked_by, reason, fix, observed_at, profile, synchronous_commit, sqlite_version, created_at, last_transfer` |
+| `items[]` short | `store`, `engine`; when set: `state`, `machine`, `user`, `machines`, `projects`, `projects_count`, `backups`, `op`, `blocked_by`, `reason`, `fix`, `observed_at` |
+| `items[]` long | `store, engine, state, machine, url, user, password_saved, password_changed_at, binding, reach, machines, projects, projects_count, backups, op, blocked_by, reason, fix, observed_at, profile, synchronous_commit, sqlite_version, created_at, last_transfer` |
 | `items[].projects[]` short | each a `project` |
-| `items[].connections[]` short | `url`; when set: `machine`, `reached` |
-| `items[].connections[]` long | `machine, url, own, server, reached, reach` |
+| `items[].machines[]` short | each a `machine` (the attached machines' names) |
 | `items[].backups[]` short | `bucket` |
 | `items[].backups[]` long | `bucket, file, sha256, heads_sha256, last, attempt` |
 | `--with stats` | adds `size` |
 | call | writes one call-log line; MCP `admin` |
 
 Reads every `store/*/record.json`; a machine's state is derived once for
-all its Stores. Each item is as `get` answers it, with `store` first.
+all its Stores. Each item is as `get` answers it, with `store` first,
+except that a PostgreSQL Store's `machines` are the attached machines'
+names, with no reach.
 `--machine M` keeps the sqlite Stores on `M`. `--with stats` adds each
 item's `size` (file plus write-ahead log) from one `stat` on its machine,
 starting nothing; null for a PostgreSQL Store and for a machine that does
@@ -129,11 +128,12 @@ Python  layerfs.store.get(store, *, with_=None)
 
 | Answer | Keys |
 | --- | --- |
-| short | `engine`, `state`; when set: `machine`, `auth`, `connections`, `projects`, `projects_count`, `backups`, `op`, `blocked_by`, `reason`, `fix`, `observed_at` |
-| long | `engine, state, machine, auth, binding, connections, projects, projects_count, backups, op, blocked_by, reason, fix, observed_at, store, profile, synchronous_commit, sqlite_version, created_at, last_transfer` |
+| short | `engine`, `state`; when set: `machine`, `url`, `user`, `machines`, `projects`, `projects_count`, `backups`, `op`, `blocked_by`, `reason`, `fix`, `observed_at` |
+| long | `engine, state, machine, url, user, password_saved, password_changed_at, binding, reach, machines, projects, projects_count, backups, op, blocked_by, reason, fix, observed_at, store, profile, synchronous_commit, sqlite_version, created_at, last_transfer` |
 | `projects[]` short | each a `project` |
-| `connections[]` short | `url`; when set: `machine`, `reached` |
-| `connections[]` long | `machine, url, own, server, reached, reach` |
+| `reach` | `at, ok, latency_ms, server_version, error` |
+| `machines[]` short | `machine`; when set: `reached` |
+| `machines[]` long | `machine, reached, reach` |
 | `backups[]` short | `bucket` |
 | `backups[]` long | `bucket, file, sha256, heads_sha256, last, attempt` |
 | `--with live` | adds `holders`, `phases`, `behind`, `server_version`, `latency_ms` |
@@ -143,42 +143,28 @@ Python  layerfs.store.get(store, *, with_=None)
 A Store's record and records-only state
 ([`get.rs`](../../../../control/crates/layerfs-store/src/get.rs)). A sqlite
 Store answers `machine`, `profile` and `sqlite_version`; a PostgreSQL Store
-`auth` (its saved login, by name), `binding` (long form: the first 8 bytes
-of the id in its schema as 16 hex, the open-Store cache's key),
-`connections` and `synchronous_commit`; the other engine's keys are null.
-`connections` (spec v23,
-[`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)
-`connections`) lists every side that connects to the database: this computer
-first (`machine` null, the Store's address), then by name each machine with
-an address of its own, a reach seen from it, or a Sandbox of the Store (the
-Sandbox records come from `layerfs-control` through
-`layerfs_store::get::Sandboxes`); `native` with no address of its own dials
-as this computer and is its row. A row is `{ machine, url, own, server,
-reached, reach }`: the URL it dials (never a login), whether it is the
-machine's own, the `{ host, port, database }` it names, and the last reach
-seen with its word (`ok`, `failed`, null). Reaches live in the Store's
-observation file, `store/<store>/observed.json` (`here` and
-`reach.<machine>`, each `{ at, ok, latency_ms, server_version, error }`;
+`url` (its address exactly as connected, never a login), `user`,
+`password_saved` (whether this home holds its password), `password_changed_at`
+(when it was last saved), `binding` (long form: the first 8 bytes of the id
+in its schema as 16 hex, the open-Store cache's key), `reach` (this
+computer's last reach), `machines` and `synchronous_commit`; the other
+engine's keys are null. `machines` lists each attached machine by name as
+`{ machine, reached, reach }`: the last reach seen from it and its word
+(`ok`, `failed`, null). Reaches live in the Store's observation file,
+`store/<store>/observed.json` (`here` and `reach.<machine>`, each `{ at, ok,
+latency_ms, server_version, error }`;
 [`observed.rs`](../../../../control/crates/layerfs-store/src/observed.rs)):
-`store connect --machine` records its check, `store doctor` each reach
-(this computer's measured with the same check), and a Sandbox create on a
-machine `{ at, ok: true }` after its reply. A writer takes the Store's lock
-after its Store I/O and writes nothing once the record is gone; a live
-read's `at` merges without a lock, as a read takes none. None of it moves
-the home's `generation`. A PostgreSQL Store naming a login the home does not
-hold is `broken` `missing`; one whose record holds a `password`, a URL that
-is not an address alone or a `machines.<m>` entry with anything but `url`
-is `broken` `outdated`, fixed by `store update <store> --auth <auth>`. No
-URL is ever cleaned or rewritten: a URL that is not an address alone (one
-that may hold a login, or a raw `#`) is replaced by the user's fix, which
-dials only with the login it names: `store disconnect <store> --machine M
-&& store update <store> --auth <auth> && store connect <store> <url>
---machine M` for a machine's own, `store disconnect <store> && store
-connect <store> <url> --auth <auth> --synchronous-commit <its value>` and
-each machine's own connected again for the Store's; until then the record
-keeps that URL, and any password in it, as it was written
-([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs),
-[`login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)). `projects` shows at
+`store connect` records its check as this computer's, `store attach` its
+check from the machine, `store doctor` each reach (this
+computer's measured with the same check), and a Sandbox create on a machine
+`{ at, ok: true }` after its reply. A writer takes the Store's lock after its
+Store I/O and writes nothing once the record is gone; a live read's `at`
+merges without a lock, as a read takes none. None of it moves the home's
+`generation`. A record without a `user`, or whose password this home does
+not hold, has no state of its own: a call that dials it is refused
+`InvalidInput` with `store connect <store> <url> --password-stdin` as its
+fix ([`login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)
+`dial`). `projects` shows at
 most 20 names, `projects_count` only when there are more. A `backups` row's
 long form is `bucket, file, sha256, heads_sha256, last, attempt`: `last` the
 last transfer that worked (`{ call, ended_at, size }`), `attempt` the last
@@ -273,42 +259,47 @@ $ layerfs store create shop
 
 ### store.connect
 
-Connect a PostgreSQL database as a Store, or set an address of a connected one.
+Connect a PostgreSQL database as a Store, or change a connected one's address, login or setting.
 
 ```text
-CLI     layerfs store connect <store> <url> [--auth A] [--machine M] [--synchronous-commit local]
-Node    await layerfs.store.connect(store, url, { auth, machine, synchronous_commit })
-Python  layerfs.store.connect(store, url, *, auth=None, machine=None, synchronous_commit=None)
+CLI     layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local]
+Node    await layerfs.store.connect(store, url, { user, password, synchronous_commit })
+Python  layerfs.store.connect(store, url, *, user=None, password=None, synchronous_commit=None)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `store` | name | the Store's name in this home |
 | `url` | text | a `postgresql://` address: host, port, database and TLS settings, with no user or password |
-| `auth` option | name | the saved login; required on a Store's first connect, refused afterwards |
-| `machine` option | name | on a connected Store: the address is this machine's own |
-| `synchronous_commit` option | text | off, local, remote_write, on or remote_apply; first connect only; default `local` |
+| `user` option | text | the PostgreSQL role; required on a Store's first connect, else the saved one is kept |
+| `password` option | content | its password; required on a Store's first connect, else the saved one is kept; the shell reads it from stdin with `--password-stdin` |
+| `synchronous_commit` option | text | off, local, remote_write, on or remote_apply; a new Store takes `local`, a connected one keeps its own when omitted |
 
 | Answer | Keys |
 | --- | --- |
 | short | each when set: `ok`, `projects`, `projects_count` |
-| long | `ok, projects, projects_count, outcome, store, engine, auth, connections, synchronous_commit` |
+| long | `ok, projects, projects_count, outcome, store, engine, url, user, synchronous_commit, machines` |
 | call | writes one call-log line; MCP `admin` |
 
-Connects a PostgreSQL database as a Store, or sets an address of a
-connected one ([`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)).
-The record keeps the URL exactly as given, with no user and no password,
-and names its saved login (`auth`), put into the URL only when the Store is
-dialled; a URL that may hold a login is `InvalidInput`: one holding an `@`,
+This computer is the one place a PostgreSQL Store's address and login are
+saved (owner, 2026-11-24); every attached machine dials with them
+([`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)).
+The record keeps the URL exactly as given, the `user` and
+`synchronous_commit`, and the Store's `binding`. The password is kept in the
+home's secret folder as secret kind `login` under the Store's name
+(`secret/login/<store>.json`, mode `0600` in a `0700` folder, `{ password,
+changed }`), never answered, logged or written into a record; user and
+password are put into the URL only when the Store is dialled
+([`login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)
+`dial`). A URL that may hold a login is `InvalidInput`: one holding an `@`,
 one the PostgreSQL client reads a user or a password in, one it does not
 read, or one whose percent-decoded text holds a login key (`user`,
 `password`, `passfile`, `sslkey`, `sslcert`, `sslpassword`,
 `oauth_client_secret`) and `=` anywhere, in any case
 (`postgres://h/db&password=p`, `postgres://h/db?application_name=me?password=p`);
 so is one holding a `#` (written `%40` or `%23` when part of the address).
-A URL is read only as that client reads it and shown exactly as written,
-or as `postgresql://<hidden: not an address alone>` when it may hold a
-login; none is ever rewritten. The client takes `sslmode`
+A URL is read only as that client reads it and shown exactly as written;
+none is ever rewritten. The client takes `sslmode`
 `disable`, `prefer` or `require` and no certificate or key file:
 `sslmode=require` verifies the server's certificate chain and host name, and
 `sslmode=verify-full`, `verify-ca`, `sslrootcert`, `sslcert` and `sslkey` are
@@ -319,47 +310,136 @@ that reads it: a Sandbox's daemon starts with a cleared environment); on
 macOS, where it is the Security framework, in the login or system
 keychain.
 
-On a Store's first connect `--auth` is required and must be saved;
-`--synchronous-commit` defaults to `local`. It creates the `layerfs` schema
-in an empty database or reads the Store's id from it; an existing
-database's projects become this home's project records. Short: `projects`
-(the first 20 names, `projects_count` only past those), or `{"ok":true}`
-for an empty database or when only an address changed. On a connected Store
-`connect` checks the new address against the same Store's id and takes no
-`--auth` or `--synchronous-commit` (`InvalidInput`, naming `store update`).
-With `--machine M` the address is `M`'s own, checked from `M` with the
-Store's login; a machine never has its own login. No default machine is
-recorded: `sandbox create --machine M` chooses where a Sandbox of it runs.
+On a Store's first connect `--user` and the password are required and are
+checked from this process before anything is saved; `--synchronous-commit`
+defaults to `local`. It creates the `layerfs` schema in an empty database or
+reads the Store's id from it; an existing database's projects become this
+home's project records. Short: `projects` (the first 20 names,
+`projects_count` only past those), or `{"ok":true}` for an empty database.
+The long `outcome` is `connected`.
+
+On a connected Store `connect` changes its address, user, password or
+`synchronous_commit`: an omitted user or password keeps the saved one, and
+the server must be reached with the result and hold the same Store (its
+`binding`) before anything is saved. The Store's open connections in this
+process are closed; a running Sandbox keeps the connection it started with.
+Short `{"ok":true}`, long `outcome` `updated`. A connect that is saved,
+first or not, records its check as this computer's reach (`store get`'s
+`reach`: `ok` and how long the check took), as `store doctor` does; a
+refused connect records nothing. Attachments are kept: each
+attached machine dials the new address and login from its next connection,
+and `store doctor` checks them. A sqlite Store of that name is `Exists`.
 
 | Refusal | When |
 | --- | --- |
-| `InvalidInput` | a URL that is not PostgreSQL, names a user or holds a password, holds an `@` or `#`, or that the PostgreSQL client does not read; a bad `--synchronous-commit`; `--auth` missing on a first connect; `--auth` or `--synchronous-commit` on a connected Store |
-| `NotFound` | the named login is not saved (the message names `store save-auth`) |
-| `Exists` | another Store of this home has that name or that database's id |
-| `Unavailable` | no session (no database, a refused login, no server); the machine is stopped |
-| `Unsupported` | the machine's platform runs no PostgreSQL Sandboxes here |
+| `InvalidInput` | a URL that is not PostgreSQL, names a user or holds a password, holds an `@` or `#`, or that the PostgreSQL client does not read; a bad `--synchronous-commit`; `--user` or the password missing on a first connect; a connected Store whose record names no user or whose password this home does not hold, when none is given |
+| `Exists` | a sqlite Store of that name, or another Store of this home with that database's id |
+| `Unavailable` | no session (no database, a refused login, no server); a connected Store's new address that holds another Store |
+| `Conflict` | the Store was disconnected or connected to another database meanwhile |
 
 Run on macOS native against a local `postgres:17`, with a debug build:
 
 ```console
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
-{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one); an `@` or `#` that is part of the address is written %40 or %23"}
+{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --user and --password-stdin; an `@` or `#` that is part of the address is written %40 or %23"}
+$ printf '%s' "$PGPASSWORD" | layerfs store connect shop-pg postgresql://127.0.0.1:55231/shop --user layerfs --password-stdin
+{"ok":true}
 ```
 
 ### store.disconnect
 
-Forget a PostgreSQL Store, or one machine's own address; its data stays.
+Forget a PostgreSQL Store, its saved login and its attachments; its data stays.
 
 ```text
-CLI     layerfs store disconnect <store> [--machine M]
-Node    await layerfs.store.disconnect(store, { machine })
-Python  layerfs.store.disconnect(store, *, machine=None)
+CLI     layerfs store disconnect <store>
+Node    await layerfs.store.disconnect(store)
+Python  layerfs.store.disconnect(store)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `store` | name | a Store name |
-| `machine` option | name | remove only this machine's own address |
+
+| Answer | Keys |
+| --- | --- |
+| short | `ok` |
+| long | `ok, outcome, store` |
+| call | writes one call-log line; MCP `admin` |
+
+Forgets a PostgreSQL Store in this home with its saved password and its
+attachments; the database keeps every byte and `store connect` can record it
+again. No server is contacted and no outcome is uncertain. The long form is
+`ok, outcome ("disconnected"), store`.
+
+Refusals: `InvalidInput` (a sqlite Store: `store remove` deletes one);
+`InUse` (a Sandbox or Workspace uses the Store, another process holds its
+lease, or a call in this process is running on it;
+[`open.rs`](../../../../control/crates/layerfs-store/src/open.rs)).
+
+### store.attach
+
+Let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first.
+
+```text
+CLI     layerfs store attach <store> --machine M
+Node    await layerfs.store.attach(store, { machine })
+Python  layerfs.store.attach(store, *, machine)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `store` | name | a PostgreSQL Store |
+| `machine` option | name | the machine; required |
+
+| Answer | Keys |
+| --- | --- |
+| short | `ok`, `outcome`; when set: `latency_ms` |
+| long | `ok, outcome, store, machine, latency_ms, server_version` |
+| call | writes one call-log line; MCP `admin` |
+
+A machine runs Sandboxes of a PostgreSQL Store only once it is attached
+([`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs)
+`attach`). The machine must exist and its platform run PostgreSQL Sandboxes
+on this host; the Store is then checked from the machine with the URL and
+login this computer saved, as its Sandboxes dial them
+([`layerfs-platform/src/reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs)).
+Only after the check succeeds is the machine added to the record's
+`attached` list
+([`postgresql/check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs)
+`attach`) and its reach written to `store/<store>/observed.json`
+(`reach.<machine>`). Attaching an attached machine checks it again: the
+outcome is `checked` instead of `attached`, and a failed check is recorded
+as its reach while the attachment stays. A machine that reaches the server
+only through this computer's loopback is refused with advice to connect the
+Store again with an address the machine reaches. Machine native is attached,
+checked and detached like any other machine, its platform deciding whether
+a loopback URL is allowed (it shares this computer's loopback on macOS and
+Linux); its reach is its own, apart from this computer's. `store connect`
+attaches nothing.
+
+| Refusal | When |
+| --- | --- |
+| `InvalidInput` | a sqlite Store (`store move` moves one to a machine) |
+| `NotFound` | no such Store or machine |
+| `Unsupported` | the machine's platform runs no PostgreSQL Sandboxes on this host |
+| `Unavailable` | the machine is stopped or does not answer; the server does not answer the machine, or holds another Store |
+| `Denied` | the server refuses the login from the machine, or the role lacks a privilege the Store needs |
+| `Conflict` | the Store was disconnected or connected again meanwhile |
+
+### store.detach
+
+Stop a machine running Sandboxes of a PostgreSQL Store; refused while one runs there.
+
+```text
+CLI     layerfs store detach <store> --machine M
+Node    await layerfs.store.detach(store, { machine })
+Python  layerfs.store.detach(store, *, machine)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `store` | name | a PostgreSQL Store |
+| `machine` option | name | the machine; required |
 
 | Answer | Keys |
 | --- | --- |
@@ -367,142 +447,14 @@ Python  layerfs.store.disconnect(store, *, machine=None)
 | long | `ok, outcome, store, machine` |
 | call | writes one call-log line; MCP `admin` |
 
-Forgets a PostgreSQL Store in this home; the database keeps every byte and
-`store connect` can record it again. With `--machine M` it removes only
-`M`'s own address and forgets what was seen of `M`'s reach (`NotFound` when
-it has neither). No server is contacted and no outcome is uncertain. The
-long form is `ok, outcome ("disconnected"), store, machine`.
-
-Refusals: `InvalidInput` (a sqlite Store: `store remove` deletes one);
-`InUse` (a Sandbox or Workspace uses the Store, another process holds its
-lease, or a call in this process is running on it;
-[`open.rs`](../../../../control/crates/layerfs-store/src/open.rs));
-`NotFound` (a machine with no address of its own).
-
-### store.save_auth
-
-Save a PostgreSQL login in the home; saving again rotates it.
-
-```text
-CLI     layerfs store save-auth <auth> --user U --password-stdin
-Node    await layerfs.store.save_auth(auth, { user, password })
-Python  layerfs.store.save_auth(auth, *, user, password)
-```
-
-| Argument | Kind | Rule |
-| --- | --- | --- |
-| `auth` | name | a saved login's name |
-| `user` option | text | the PostgreSQL role; required; required |
-| `password` option | content | the password; required; the shell reads it from stdin with --password-stdin; required; shell `--password-stdin` |
-
-| Answer | Keys |
-| --- | --- |
-| short | `ok` |
-| long | `ok, outcome, auth, user, stores, stores_count` |
-| call | writes one call-log line; MCP `admin` |
-
-Saves a PostgreSQL login in the home's secret folder,
-`secret/auth/<auth>.json` (mode `0600`, in a `0700` folder), and moves the
-home's `generation` ([`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs)).
-The shell reads the password from stdin with `--password-stdin` and no
-other way; Node and Python pass `password`. It is never answered, logged or
-traced. Saving again under the same name rotates it: every Store using it
-dials with the new one from its next connection. The long form is `ok,
-outcome (saved or rotated), auth, user, stores, stores_count`.
-
-### store.auths
-
-The saved PostgreSQL logins and the Stores that use each.
-
-```text
-CLI     layerfs store auths
-Node    await layerfs.store.auths()
-Python  layerfs.store.auths()
-```
-
-| Answer | Keys |
-| --- | --- |
-| short | `items` |
-| long | `items` |
-| `items[]` short | `auth`, `user`; when set: `state`, `reason`, `fix`, `stores`, `stores_count` |
-| `items[]` long | `auth, user, state, reason, fix, stores, stores_count, created_at, updated_at` |
-| call | writes one call-log line; MCP `admin` |
-
-The saved logins and the Stores that use each (`stores`, at most 20;
-`stores_count` only past 20); never a password. Not paged: a home holds a
-handful. The long row adds `created_at` and `updated_at`. A login file that
-cannot be read is its own row, `broken` `failed` with the save that writes
-it again (`user` null), and the other logins are listed as usual (spec v23).
-
-### store.remove_auth
-
-Remove a saved PostgreSQL login no Store uses.
-
-```text
-CLI     layerfs store remove-auth <auth>
-Node    await layerfs.store.remove_auth(auth)
-Python  layerfs.store.remove_auth(auth)
-```
-
-| Argument | Kind | Rule |
-| --- | --- | --- |
-| `auth` | name | a saved login's name |
-
-| Answer | Keys |
-| --- | --- |
-| short | `ok` |
-| long | `ok, outcome, auth` |
-| call | writes one call-log line; MCP `admin` |
-
-Removes a saved login no Store names. Refused `InUse` while a Store names
-it (`stores` lists them; the message names `store update --auth` and
-`store disconnect`), `NotFound` when there is none. The long form is `ok,
-outcome ("removed"), auth`.
-
-### store.update
-
-Change a PostgreSQL Store's saved login or its synchronous_commit.
-
-```text
-CLI     layerfs store update <store> [--auth A] [--synchronous-commit S]
-Node    await layerfs.store.update(store, { auth, synchronous_commit })
-Python  layerfs.store.update(store, *, auth=None, synchronous_commit=None)
-```
-
-| Argument | Kind | Rule |
-| --- | --- | --- |
-| `store` | name | a Store name |
-| `auth` option | name | another saved login |
-| `synchronous_commit` option | text | off, local, remote_write, on or remote_apply |
-
-| Answer | Keys |
-| --- | --- |
-| short | `ok` |
-| long | `ok, outcome, store, auth, synchronous_commit` |
-| call | writes one call-log line; MCP `admin` |
-
-Changes a PostgreSQL Store's saved login or its `synchronous_commit`; at
-least one is required ([`postgresql/update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs)).
-A new login is checked once from this process on the Store's address, before
-it is saved: the server must be reached with it and hold this Store. The
-record is written under the home lock and the Store's; this process's open
-sessions on it are closed. The login is checked again under the home lock,
-which `store remove-auth` takes, and the write drops every field 2.0 no
-longer writes (`StoreRecord::without_old_fields`) and never rewrites a URL:
-a record keeping a URL that is not an address alone is refused, nothing
-written, with the fix that replaces it naming the login given and carrying
-a given `--synchronous-commit` (`login::update_fix`). A running Sandbox keeps the
-connection it started with. An address change is a `store connect`; a machine's own address is
-removed with `store disconnect --machine`. The long form is `ok, outcome
-("updated"), store, auth, synchronous_commit`.
-
-| Refusal | When |
-| --- | --- |
-| `InvalidInput` | a sqlite Store; nothing to update; a bad `synchronous_commit` |
-| `NotFound` | no such Store, or the login is not saved |
-| `Unavailable` | the new login does not reach the server, or the database holds another Store |
-| `InUse` | a call of this process is running on the Store |
-| `Conflict` | the Store was disconnected or connected to another database meanwhile |
+Removes the machine from the record's `attached` list and forgets its reach;
+no server or machine is contacted. Refused `InUse` while a Sandbox of the
+Store's projects is on the machine (the message counts and names them, `next`
+lists them, and the `fix` removes them before the detach;
+[`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)
+`store_idle_on`), `NotFound` when the machine is not attached, and
+`InvalidInput` for a sqlite Store. The long form is `ok,
+outcome ("detached"), store, machine`.
 
 ### store.move
 
@@ -732,7 +684,7 @@ Python  layerfs.store.doctor(store, *, machine=None, on_progress=None)
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `store` | name | a Store name |
-| `machine` option | name | also probe a PostgreSQL Store's connection from this machine |
+| `machine` option | name | check a PostgreSQL Store from this computer and this attached machine only |
 | `on_progress` option | function |  |
 
 | Answer | Keys |
@@ -746,9 +698,7 @@ Python  layerfs.store.doctor(store, *, machine=None, on_progress=None)
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Checks a Store, then each of its projects shallowly. Its checks, in order:
-`store.record` (its record reads and names it; a PostgreSQL record that
-alone makes the Store `broken`, `outdated` or `missing`, fails with the `fix`
-`store list` gives), `store.operation` (an
+`store.record` (its record reads and names it), `store.operation` (an
 operation whose owner is gone with its outcome unknown is an error whose
 `fix` is the call that clears it; for a sqlite Store it also reads the
 compaction record beside the file through its machine), `store.connection`
@@ -758,9 +708,12 @@ PostgreSQL Store's server answers this computer with the saved login),
 schema is this build's) and, for a sqlite Store, `store.backups` (a notice
 per bucket whose backup heads differ, `fix: layerfs backup create <store>
 <bucket>`). No Store data is scanned: `project doctor --full` reads a
-project's data. A PostgreSQL Store is then probed from each machine that has
-a Sandbox of it and from `--machine`, each as one more `store.connection`
-row with `from`; a sqlite Store refuses `--machine`. A Store whose machine
+project's data. A PostgreSQL Store reached from this computer is then
+checked from every attached machine, or from `--machine` alone, each as one
+more `store.connection` row with `from`; when this computer cannot connect,
+no machine is checked (each would dial the same URL with the same login). A
+`--machine` that is not attached is refused `InvalidInput` with `store attach
+<store> --machine <machine>` as its fix; a sqlite Store refuses `--machine`. A Store whose machine
 is not ready shows `store.connection` as `not_checked` with `blocked_by`, and
 nothing after it is tried. It changes nothing and exits 0 once its report is
 made. It replaces the shell's `layerfs doctor store`, removed with no alias.

@@ -150,6 +150,37 @@ pub fn sandboxes_of_store(home: &Path, store: &str) -> Result<Vec<String>> {
     Ok(of.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
+/// `store.detach`: refused `InUse` while a Sandbox of Store `store`'s
+/// projects is on machine `machine`, naming how many and which (next field
+/// `sandboxes`), with the fix that removes them and detaches the machine.
+pub fn store_idle_on(home: &Path, store: &str, machine: &str) -> Result<()> {
+    let on: Vec<String> = sandboxes(home)?
+        .into_iter()
+        .filter(|sandbox| sandbox.machine() == machine)
+        .filter(|sandbox| {
+            let project = sandbox.project().unwrap_or("");
+            project.split_once('/').map(|(s, _)| s) == Some(store)
+        })
+        .map(|sandbox| sandbox.name().to_owned())
+        .collect();
+    if on.is_empty() {
+        return Ok(());
+    }
+    let message = format!(
+        "{} Sandbox(es) of Store {store}'s projects run on machine {machine}: {}",
+        on.len(),
+        on.join(", ")
+    );
+    let detach = format!(
+        "layerfs store detach {} --machine {}",
+        shell_word(store),
+        shell_word(machine)
+    );
+    let refusal = in_use(message, related("sandbox", &on));
+    let refusal = with_next(refusal, "sandboxes", listed(&on));
+    Err(with_fix(refusal, then(&on, &detach)))
+}
+
 /// The Sandboxes of project `project` (`<store>/<project>`).
 pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
     let of = sandboxes(home)?.into_iter();

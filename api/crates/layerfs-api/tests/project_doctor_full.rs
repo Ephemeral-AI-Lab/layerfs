@@ -211,20 +211,12 @@ fn postgresql_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each
     // password); the address is connected without it
     call(
         &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(&user)),
-            ("password", t("unused")),
-        ],
-    );
-    call(
-        &home,
         "store.connect",
         &[
             ("store", t("shop")),
             ("url", t(&clean_url)),
-            ("auth", t("pg")),
+            ("user", t(&user)),
+            ("password", t("unused")),
             ("synchronous_commit", t("off")),
         ],
     );

@@ -55,7 +55,7 @@
   {
    "call": "home.get",
    "badge": "merged",
-   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet, <code>fix: layerfs home init</code>) or <code>reason: outdated</code> (a folder that is not a LayerFS 2.0 home, which this build does not convert: <code>fix: mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>); a <code>layerfs.json</code> it cannot read is <code>reason: failed</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>connections</code>, <code>store get</code>'s rows, spec v23), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: LayerFS removes them itself where nothing owns them (v20). The long form's <code>bundle.source</code> says where the Linux bundle this build would deploy was found: <code>env:LAYERFS_BUNDLE</code>, <code>runtime</code> (an installed runtime's own, <code>&lt;runtime&gt;/bundle/linux-&lt;arch&gt;/</code> beside <code>&lt;runtime&gt;/bin/layerfs</code>, chosen after <code>LAYERFS_BUNDLE</code> and before the cache) or <code>cache</code>",
+   "note": "+ <code>machine.platforms</code> (<code>--with platforms</code>). Reads the home and changes nothing; it writes no call-log line. <code>state</code> is <code>ready</code>, or <code>broken</code> with <code>reason: missing</code> (no home yet, <code>fix: layerfs home init</code>) or <code>reason: outdated</code> (a folder that is not a LayerFS 2.0 home, which this build does not convert: <code>fix: mv &lt;home&gt; &lt;home&gt;.old &amp;&amp; layerfs home init</code>); a <code>layerfs.json</code> it cannot read is <code>reason: failed</code>. <code>generation</code> is a number that moves when any record in the home is written: a UI polls it and re-reads only when it moves. A live read (<code>--with live</code>, or <code>sandbox get</code>) writes a record only when the state word or its reason changes, and that write moves it; <code>observed_at</code> is kept beside the record in an observation file it does not cover. It does not move when the owner of a recorded <code>op</code> dies (a dead owner's op is ignored on read, with no write), nor for a Workspace the home does not record. <code>--with tree</code> is the whole home from records only, with no machine contacted: every machine with its sqlite Stores and its Sandboxes, then the PostgreSQL Stores and the buckets. A node holds what the records hold: a machine its <code>platform</code> (and <code>cpus</code>, <code>memory_bytes</code> where it has them), a Store its <code>engine</code> and <code>projects</code> (bare names, as <code>store get</code> answers them; a PostgreSQL Store also its <code>machines</code>, the names of the machines attached to it), a Sandbox its <code>project</code>, <code>image</code> and <code>workspaces</code> (each <code>{workspace, branch}</code>), a bucket its <code>provider</code>. A node leaves <code>state</code> out when <code>ready</code>; the state is the last one its record holds, so a <code>blocked_by</code> can name <code>engine_down</code>, <code>not_answering</code>, <code>missing</code> or <code>unreachable</code> after a live read saw it. A project and a Workspace take their Store's or Sandbox's state. Workspaces are listed only where the home keeps their records (a Sandbox on <code>native</code>, or one reached directly); elsewhere the node says <code>workspaces_not_listed:true</code> while that machine is ready. On a stopped machine a Store and a Sandbox answer <code>blocked</code> with <code>blocked_by</code> naming the machine, and no Workspaces are listed. Leftovers are not a section here: LayerFS removes them itself where nothing owns them (v20). The long form's <code>bundle.source</code> says where the Linux bundle this build would deploy was found: <code>env:LAYERFS_BUNDLE</code>, <code>runtime</code> (an installed runtime's own, <code>&lt;runtime&gt;/bundle/linux-&lt;arch&gt;/</code> beside <code>&lt;runtime&gt;/bin/layerfs</code>, chosen after <code>LAYERFS_BUNDLE</code> and before the cache) or <code>cache</code>",
    "today": [
     "home.get",
     "machine.platforms"
@@ -198,7 +198,7 @@
         ],
         "sometimes": [
          "projects",
-         "connections",
+         "machines",
          "state",
          "op",
          "blocked_by",
@@ -210,7 +210,7 @@
         "store",
         "engine",
         "projects",
-        "connections",
+        "machines",
         "state",
         "op",
         "blocked_by",
@@ -277,59 +277,8 @@
         "branch"
        ]
       },
-      "connections": {
-       "short": {
-        "always": [
-         "url"
-        ],
-        "sometimes": [
-         "machine",
-         "reached"
-        ]
-       },
-       "long": [
-        "machine",
-        "url",
-        "own",
-        "server",
-        "reached",
-        "reach"
-       ]
-      },
-      "server": {
-       "short": {
-        "always": [
-         "host",
-         "port",
-         "database"
-        ],
-        "sometimes": []
-       },
-       "long": [
-        "host",
-        "port",
-        "database"
-       ]
-      },
-      "reach": {
-       "short": {
-        "always": [
-         "at",
-         "ok"
-        ],
-        "sometimes": [
-         "latency_ms",
-         "server_version",
-         "error"
-        ]
-       },
-       "long": [
-        "at",
-        "ok",
-        "latency_ms",
-        "server_version",
-        "error"
-       ]
+      "machines": {
+       "scalar": "machine"
       }
      },
      "example": {

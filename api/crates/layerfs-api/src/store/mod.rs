@@ -1,24 +1,22 @@
 //! The `store` family: one file each (call surface 2.0). A sqlite Store
 //! is created, moved between this computer and a machine, and removed; a
-//! PostgreSQL database is connected and disconnected, with an address of
-//! its own per machine (`connect --machine`), and names a saved login
-//! (`save_auth`, `auths`, `remove_auth`). `store.get` answers from the
+//! PostgreSQL database is connected and disconnected with its URL and
+//! login, saved on this computer only, and machines attach to it to run
+//! its Sandboxes (`attach`, `detach`). `store.get` answers from the
 //! home's records (it absorbs `store.status` and `store.stats`), and
 //! `store.move` replaces `store.push` and `store.pull`.
-mod auths;
+mod attach;
 mod compact;
 mod connect;
 mod create;
+mod detach;
 mod disconnect;
 mod doctor;
 pub(crate) mod get;
 mod list;
 mod r#move;
 mod remove;
-mod remove_auth;
 mod repair_mount_holders;
-mod save_auth;
-mod update;
 
 use crate::calls::Calls;
 
@@ -30,10 +28,8 @@ pub(crate) fn calls() -> Calls {
         create::CALL,
         connect::CALL,
         disconnect::CALL,
-        save_auth::CALL,
-        auths::CALL,
-        remove_auth::CALL,
-        update::CALL,
+        attach::CALL,
+        detach::CALL,
         r#move::CALL,
         remove::CALL,
         compact::CALL,

@@ -190,39 +190,29 @@ fn postgresql_saved_queries_resume_in_new_processes() {
     };
     let home = tempdir("pg-continuation-home");
     let source = tempdir("pg-continuation-source");
-    // the URL's user becomes a saved login, its password on stdin (a
+    // the URL's user is the Store's login, its password on stdin (a
     // trust-auth server takes any); the address is connected without it
     let (scheme, rest) = url.split_once("://").unwrap();
     let (user, address) = rest.split_once('@').unwrap();
+    let address = format!("{scheme}://{address}");
     let out = common::run_with_stdin(
         &mut layerfs(
             &home,
             &[
                 "store",
-                "save-auth",
-                "pg",
+                "connect",
+                "q",
+                &address,
                 "--user",
                 user,
                 "--password-stdin",
+                "--synchronous-commit",
+                "off",
             ],
         ),
         b"unused\n",
     );
     assert!(out.status.success(), "{}", text(&out.stderr));
-    let address = format!("{scheme}://{address}");
-    call(
-        &home,
-        &[
-            "store",
-            "connect",
-            "q",
-            &address,
-            "--auth",
-            "pg",
-            "--synchronous-commit",
-            "off",
-        ],
-    );
     check(&home, &source);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();

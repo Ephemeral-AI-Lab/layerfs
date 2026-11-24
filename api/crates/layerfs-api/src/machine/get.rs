@@ -27,6 +27,7 @@ const FORM: Form = Form::of(
         "machine",
         "backend",
         "supports",
+        "loopback",
         "cpus",
         "memory_bytes",
         "disk_bytes",

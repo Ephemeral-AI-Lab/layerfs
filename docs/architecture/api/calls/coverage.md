@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-83 calls in 10 families, counted from the Node table. Calls present: Node 83, Python 83, Python `aio` 83, CLI 83, MCP 83 (17 in `work`, 66 admin only).
+81 calls in 10 families, counted from the Node table. Calls present: Node 81, Python 81, Python `aio` 81, CLI 81, MCP 81 (17 in `work`, 64 admin only).
 
 Argument names that are Python keywords: from.
 
@@ -117,12 +117,10 @@ Front-end problems: none.
 | `store.list` | - | machine | yes | yes | yes | yes | admin |
 | `store.get` | store | - | yes | yes | yes | yes | admin |
 | `store.create` | name | machine | yes | yes | yes | yes | admin |
-| `store.connect` | store, url | auth, machine, synchronous_commit | yes | yes | yes | yes | admin |
-| `store.disconnect` | store | machine | yes | yes | yes | yes | admin |
-| `store.save_auth` | auth | user, password | yes | yes | yes | yes | admin |
-| `store.auths` | - | - | yes | yes | yes | yes | admin |
-| `store.remove_auth` | auth | - | yes | yes | yes | yes | admin |
-| `store.update` | store | auth, synchronous_commit | yes | yes | yes | yes | admin |
+| `store.connect` | store, url | user, password, synchronous_commit | yes | yes | yes | yes | admin |
+| `store.disconnect` | store | - | yes | yes | yes | yes | admin |
+| `store.attach` | store | machine | yes | yes | yes | yes | admin |
+| `store.detach` | store | machine | yes | yes | yes | yes | admin |
 | `store.move` | store, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.remove` | store | - | yes | yes | yes | yes | admin |
 | `store.compact` | store | on_progress() | yes | yes | yes | yes (--progress) | admin |

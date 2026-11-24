@@ -320,31 +320,20 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
         &[
             ("store", t("pg")),
             ("url", t("postgres://db.internal/x")),
-            ("auth", t("pg-app")),
-        ],
-    );
-    let words = argv(&last(&home));
-    assert_eq!(
-        words,
-        [
-            "store".to_owned(),
-            "connect".into(),
-            "pg".into(),
-            bytes(24),
-            "--auth".into(),
-            "pg-app".into()
-        ]
-    );
-    let _ = call(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg-app")),
             ("user", t("app")),
             ("password", t("hunter2")),
         ],
     );
     let line = last(&home);
+    let words = argv(&line);
+    assert_eq!(
+        &words[..4],
+        ["store".to_owned(), "connect".into(), "pg".into(), bytes(24)]
+    );
+    assert!(
+        words.windows(2).any(|w| w == ["--user", "app"]),
+        "{words:?}"
+    );
     let printed = layerfs_api::json::print(&line);
     assert!(!printed.contains("hunter2"), "{printed}");
     assert!(argv(&line).contains(&bytes(7)), "{printed}");

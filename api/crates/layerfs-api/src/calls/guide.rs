@@ -67,7 +67,6 @@ const ARGS: &[(&str, &str, &str)] = &[
         "a Workspace, written <sandbox>:<name> as `workspace mount` answers",
     ),
     ("*", "bucket", "a connected bucket, by name"),
-    ("*", "auth", "a saved PostgreSQL login, by name"),
     (
         "*",
         "image",
@@ -296,7 +295,7 @@ const ARGS: &[(&str, &str, &str)] = &[
     (
         "sandbox.create",
         "machine",
-        "the machine it runs on; the Store's machine when left out",
+        "the machine it runs on; when left out, a sqlite Store's machine or the one machine attached to a PostgreSQL Store",
     ),
     (
         "sandbox.create",
@@ -480,26 +479,24 @@ const ARGS: &[(&str, &str, &str)] = &[
     ),
     (
         "store.connect",
-        "auth",
-        "the saved login; needed on a Store's first connect",
+        "user",
+        "the PostgreSQL role; needed on a Store's first connect",
     ),
     (
         "store.connect",
-        "machine",
-        "the address is this machine's own",
-    ),
-    (
-        "store.disconnect",
-        "machine",
-        "remove only this machine's own address",
-    ),
-    ("store.save_auth", "user", "the PostgreSQL role"),
-    (
-        "store.save_auth",
         "password",
-        "the password, read from stdin",
+        "the role's password, read from stdin; needed on a Store's first connect",
     ),
-    ("store.update", "auth", "another saved login"),
+    (
+        "store.attach",
+        "machine",
+        "the machine that may run the Store's Sandboxes",
+    ),
+    (
+        "store.detach",
+        "machine",
+        "the machine that no longer runs the Store's Sandboxes",
+    ),
     (
         "store.move",
         "machine",
@@ -508,7 +505,7 @@ const ARGS: &[(&str, &str, &str)] = &[
     (
         "store.doctor",
         "machine",
-        "also check a PostgreSQL Store's connection from this machine",
+        "check a PostgreSQL Store from this attached machine only",
     ),
     ("backup.connect", "name", "the bucket's name in this home"),
     (
@@ -678,19 +675,11 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("store.create", "layerfs store create shop"),
     (
         "store.connect",
-        "layerfs store connect team postgresql://db.local:5432/team --auth admin",
+        "layerfs store connect team postgresql://db.local:5432/team --user layerfs --password-stdin",
     ),
     ("store.disconnect", "layerfs store disconnect team"),
-    (
-        "store.save_auth",
-        "layerfs store save-auth admin --user layerfs --password-stdin",
-    ),
-    ("store.auths", "layerfs store auths"),
-    ("store.remove_auth", "layerfs store remove-auth admin"),
-    (
-        "store.update",
-        "layerfs store update team --synchronous-commit on",
-    ),
+    ("store.attach", "layerfs store attach team --machine dev"),
+    ("store.detach", "layerfs store detach team --machine dev"),
     ("store.move", "layerfs store move shop docker --progress"),
     ("store.remove", "layerfs store remove shop"),
     ("store.compact", "layerfs store compact shop --progress"),

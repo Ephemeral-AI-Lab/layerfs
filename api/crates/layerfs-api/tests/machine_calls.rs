@@ -70,6 +70,11 @@ fn machines_over_records() {
         // worker: `docker` here, never `native` (layerfs-project#178)
         let worker = machine.get_text("machine") == Some("docker");
         assert_eq!(supports(machine, "log"), worker, "{machine:?}");
+        // whether it shares this computer's loopback is its platform
+        // adapter's answer: native's always, docker's only on a Linux Engine
+        let shared = !worker || cfg!(target_os = "linux");
+        let loopback = if shared { "shared" } else { "apart" };
+        assert_eq!(machine.get_text("loopback"), Some(loopback), "{machine:?}");
     }
     // the support table for this host, each row with its live probe
     // (`home get --with platforms`, `machine.platforms` before 2.0)

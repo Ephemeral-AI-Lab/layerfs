@@ -825,63 +825,43 @@ class AsyncStoreFamily:
         store: str,
         url: str,
         *,
-        auth: str | None = None,
-        machine: str | None = None,
+        user: str | None = None,
+        password: Content | None = None,
         synchronous_commit: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """connect a PostgreSQL database as a Store, or set an address of a connected one"""
+        """connect a PostgreSQL database as a Store, or change a connected one's address, login or setting"""
     async def disconnect(
         self,
         store: str,
         *,
-        machine: str | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """forget a PostgreSQL Store, or one machine's own address and reach; its data stays"""
-    async def save_auth(
-        self,
-        auth: str,
-        *,
-        user: str,
-        password: Content,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """save a PostgreSQL login in the home; saving again rotates it"""
-    async def auths(
-        self,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """the saved PostgreSQL logins and the Stores that use each"""
-    async def remove_auth(
-        self,
-        auth: str,
-        *,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """remove a saved PostgreSQL login no Store uses"""
-    async def update(
+        """forget a PostgreSQL Store, its saved login and its attachments; its data stays"""
+    async def attach(
         self,
         store: str,
         *,
-        auth: str | None = None,
-        synchronous_commit: str | None = None,
+        machine: str,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """change a PostgreSQL Store's saved login or its synchronous_commit"""
+        """let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first"""
+    async def detach(
+        self,
+        store: str,
+        *,
+        machine: str,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """stop a machine running Sandboxes of a PostgreSQL Store; refused while one runs there"""
     async def move(
         self,
         store: str,

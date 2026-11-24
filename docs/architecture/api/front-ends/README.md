@@ -83,7 +83,7 @@ words against its entry:
 | `-m <text>` | the `message` option (nine calls); exit 2 when the call has none |
 | `--detail` | the long form (every call) |
 | `--with <a,b>` | the named sections (the ten calls that list some); a name the call does not list is exit 2 |
-| a secret option | read from stdin with its own flag only: `store save-auth --password-stdin`, `backup connect --key-stdin` |
+| a secret option | read from stdin with its own flag only: `store connect --password-stdin`, `backup connect --key-stdin` |
 | content or JSON positional (`file.write`, `file.apply`) | read from stdin, or `--from <file>`; text when UTF-8, else bytes (JSON must be UTF-8); not counted on the line |
 | any other `--x` | exit 2, listing the call's options |
 

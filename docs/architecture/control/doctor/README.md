@@ -166,16 +166,17 @@ Six checks, in the frozen order (`CHECKS` in `store_target.rs`); no Store
 data is scanned. A sqlite Store is reached where it lives: in this process
 for a machine whose calls run here, else through its machine's worker (the internal worker op
 `store.diagnose` with `cut: schema`, connect 5 s). A PostgreSQL Store is
-reached from this computer, then once more from each machine with a Sandbox
-of it and from `--machine`, one `store.connection` row each with `from`.
+reached from this computer, then, once that reached it, from every machine
+attached to it (or `--machine` alone, which must be attached), one
+`store.connection` row each with `from`.
 Under a machine that is not ready only `store.record` is made: the rest are
 `not_checked`, blocked by the machine.
 
 | Check | What is observed | Source |
 | --- | --- | --- |
-| `store.record` | Its record reads and names it, its engine and its id; a PostgreSQL record that alone makes the Store `broken` (no saved login, one the home does not hold, or old fields, V23-6) fails with the `fix` `store list` gives (LF12) | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
+| `store.record` | Its record reads and names it, its engine and its id (LF12) | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
 | `store.operation` | The record's `op`: running passes; one whose owner is gone with its outcome unknown is an error, `fix` the clearing call (`store move <s> <to>`, `store remove <s>`, `store compact <s>`, else `store get <s> --with live`); a stale lease is a notice. For a sqlite Store also the `<store>.compact-op` record beside its file, read through its machine: a live run passes, one left unresolved fails with `fix: layerfs store compact <store>` | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`intent.rs`](../../../../control/crates/layerfs-store/src/intent.rs) `clearing` |
-| `store.connection` | A sqlite Store's file is where its record says, read through its machine; a PostgreSQL Store's server answers with the saved login; connect and login get 5 s, and a server silent past that fails the check, recorded as this computer's reach without a second dial (LF13) | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
+| `store.connection` | A sqlite Store's file is where its record says, read through its machine; a PostgreSQL Store's server answers with the Store's user and saved password (a password this home does not hold fails with `layerfs store connect <s> <url> --password-stdin` as its fix); connect and login get 5 s, and a server silent past that fails the check, recorded as this computer's reach without a second dial (LF13) | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
 | `store.identity` | The id in its file is the one in its record; when it is not, `store.schema` is not made | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `store.schema` | Its schema is the one this build reads | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 | `store.backups` | sqlite only: each bucket link's backup heads against the Store's; one behind is a notice, `fix: layerfs backup create <store> <bucket>` | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |

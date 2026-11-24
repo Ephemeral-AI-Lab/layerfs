@@ -46,6 +46,11 @@ fn shows_removed(machine: &SdkValue, platform: &str, reason: &str) {
     assert_eq!(machine.get_text("fix"), Some(fix.as_str()));
     assert_eq!(machine.get_text("message"), Some(reason), "{machine:?}");
     assert_eq!(machine.get("supports"), Some(&SdkValue::List(Vec::new())));
+    assert_eq!(
+        machine.get("loopback"),
+        Some(&SdkValue::Null),
+        "{machine:?}"
+    );
 }
 
 #[test]
