@@ -12,7 +12,7 @@ use crate::calls::table::{
     a, call, opt, Call,
     Kind::{Bool, Int, Name, Project, Text},
 };
-use crate::calls::{Context, Paging};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::store::RepairRequest;
 use layerfs_home::outcome::Outcome;
@@ -31,8 +31,10 @@ pub(crate) const CALL: Call = call(
     ],
     "list, preview, settle, release, settle_legacy or audit mount holders (operator)",
     run,
-)
-.paged(Paging::Cursor);
+);
+// It pages by `limit`/`cursor`, but its answers are not on the 2.0 answer
+// form yet, so it declares no `Paging` (an entry without a form declares
+// none; calls_table checks this).
 
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);
