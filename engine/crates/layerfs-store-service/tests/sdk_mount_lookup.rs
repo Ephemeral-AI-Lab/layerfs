@@ -73,7 +73,7 @@ fn main_is_listed_with_the_branch_the_project_records_for_it() {
     let recorded = fixture.host.branch.to_string();
     let named_main = named(&fixture, "main");
     assert_eq!(items(&named_main).len(), 1, "{named_main:?}");
-    assert_eq!(items(&named_main)[0].get_text("name"), Some("main"));
+    assert_eq!(items(&named_main)[0].get_text("branch"), Some("main"));
     assert_eq!(
         items(&named_main)[0].get_text("id"),
         Some(recorded.as_str()),
@@ -85,7 +85,7 @@ fn main_is_listed_with_the_branch_the_project_records_for_it() {
     );
     let listed = items(&all)
         .iter()
-        .find(|item| item.get_text("name") == Some("main"))
+        .find(|item| item.get_text("branch") == Some("main"))
         .unwrap_or_else(|| panic!("no main item: {all:?}"));
     assert_eq!(listed.get_text("id"), Some(recorded.as_str()), "{all:?}");
     fixture.cleanup();

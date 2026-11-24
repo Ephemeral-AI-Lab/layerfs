@@ -80,10 +80,6 @@ const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
 const LOCK_XACT_EXCLUSIVE: &str = "gc_lock_xact_exclusive";
-const LOCK_SESSION_SHARED: &str = "gc_lock_session_shared";
-const LOCK_SESSION_EXCLUSIVE: &str = "gc_lock_session_exclusive";
-const UNLOCK_SESSION_SHARED: &str = "gc_unlock_session_shared";
-const UNLOCK_SESSION_EXCLUSIVE: &str = "gc_unlock_session_exclusive";
 
 /// True when this provider is backed by PostgreSQL.
 fn postgres(provider: &HistoryProvider) -> bool {
