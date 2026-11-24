@@ -273,6 +273,18 @@ fn bounded(seconds: u32, script: &str) -> String {
     )
 }
 
+/// The guest's elapsed time `busybox time -p` printed on its own line
+/// (`real <seconds>.<hundredths>`), exactly.
+fn guest_elapsed(text: &str) -> Option<Duration> {
+    let printed = text.lines().find_map(|line| line.strip_prefix("real "))?;
+    let (seconds, hundredths) = printed.trim_end().split_once('.')?;
+    if hundredths.len() != 2 {
+        return None;
+    }
+    let ms = seconds.parse::<u64>().ok()? * 1000 + hundredths.parse::<u64>().ok()? * 10;
+    Some(Duration::from_millis(ms))
+}
+
 /// `bash`'s TCP connect to `at` (`host/port`), ended after 3 s: `rc=0`
 /// connected, `rc=1` with bash's `connect:` error refused or unreachable,
 /// `rc=143` no answer (ended by its bound's TERM).
@@ -498,6 +510,16 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
     // 192.0.2.1 at once (an ICMP unreachable, no route, a REJECT rule)
     // never reaches the bound: that control is NOT_RUN there, not a pass
     // (review 650828a686 F2); so is an image with no git.
+    // "No sooner than the bound" is timed on the guest's clock, the one the
+    // bound runs on: `busybox sleep` sleeps on the guest's CLOCK_MONOTONIC,
+    // and `busybox time` reads that same clock before it starts the probe
+    // and after the probe ended (in milliseconds; `-p` prints `real s.cc`,
+    // truncated). A host stopwatch compares two clocks: a lima guest whose
+    // clock ran about 1% fast (systemd-timesyncd slewing it forward, lima's
+    // guest agent setting it back every 10 s) ended a correct 5 s bound in
+    // 4.963 s of host time (live run aaa5f8362f). The guest's wall clock
+    // (`date`) is no better: that agent steps it. The host's stopwatch stays
+    // only as the hang guard (the exec returned within 15 s).
     match has_git.1.contains("GIT") {
         false => eprintln!("NOT_RUN TEST-NET-1 bound control on {machine}: the image has no git"),
         true => {
@@ -507,20 +529,26 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
                 home,
                 &a.ws,
                 &format!(
-                    "{}; echo rc=$?",
+                    "busybox time -p {}; echo rc=$?",
                     bounded(5, "git ls-remote https://192.0.2.1/none HEAD")
                 ),
             );
             let took = asked.elapsed();
-            eprintln!("BOUNDED git ls-remote to 192.0.2.1 on {machine}: {silent:?} in {took:?}");
+            let guest = guest_elapsed(&silent.1)
+                .unwrap_or_else(|| panic!("no `real s.cc` from busybox time: {silent:?}"));
+            eprintln!(
+                "BOUNDED git ls-remote to 192.0.2.1 on {machine}: {silent:?} in {guest:?} guest, {took:?} host"
+            );
             assert!(!silent.1.contains("rc=0"), "{silent:?}");
             assert!(took < Duration::from_secs(15), "{took:?}: {silent:?}");
-            match (silent.1.contains("rc=143"), took >= bound) {
+            match (silent.1.contains("rc=143"), guest >= bound) {
                 (true, true) => eprintln!("RAN TEST-NET-1 bound control on {machine}"),
                 (false, false) => eprintln!(
-                    "NOT_RUN TEST-NET-1 bound control on {machine}: 192.0.2.1 was answered at once ({silent:?} in {took:?}), so the bound never fired"
+                    "NOT_RUN TEST-NET-1 bound control on {machine}: 192.0.2.1 was answered at once ({silent:?} in {guest:?} guest), so the bound never fired"
                 ),
-                _ => panic!("the bound did not end the probe at its bound: {silent:?} in {took:?}"),
+                _ => panic!(
+                    "the bound did not end the probe at its bound: {silent:?} in {guest:?} guest, {took:?} host"
+                ),
             }
         }
     }
