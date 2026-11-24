@@ -344,3 +344,95 @@ fn shutdown_racing_a_bind_closes_the_acquired_reader_without_reopening() {
     owner.stop().unwrap();
     f.cleanup();
 }
+
+struct UncertainPlan;
+impl layerfs_storage::port::PackReadPlan for UncertainPlan {
+    fn select(
+        &mut self,
+        _: layerfs_storage::location::PackInfo,
+        _: &[u8],
+    ) -> Result<layerfs_storage::port::PackReadChoice, layerfs_storage::port::PersistenceError>
+    {
+        Err(layerfs_storage::port::PersistenceError::Uncertain)
+    }
+}
+/// #776 G5: the Workspace reader is quarantined, so its close fails after the
+/// owner already closed. The mount intent is released anyway: no later
+/// unmount could pass the closed owner to release it.
+#[test]
+fn a_failed_reader_close_still_releases_the_mount_intent() {
+    use layerfs_storage::port::PackPersistence;
+    let f = support::Fixture::new(1, "reader-close-intent");
+    let writer =
+        SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap();
+    let config = f.config.clone();
+    let providers: Arc<Mutex<Vec<Arc<StorageProvider>>>> = Arc::new(Mutex::new(Vec::new()));
+    let seen = providers.clone();
+    let factory: ReaderFactory = Arc::new(move |_| {
+        let read =
+            SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
+        seen.lock().unwrap().push(read.storage.clone());
+        Ok(StoreReader::new(
+            Storage::new(read.storage)?,
+            Arc::new(read.history),
+        ))
+    });
+    let control = factory(0).unwrap();
+    let store = Arc::new(
+        Store::new(
+            writer.storage,
+            Arc::new(writer.history),
+            control,
+            factory,
+            0,
+            ReservationBlocks::default(),
+            1,
+        )
+        .unwrap(),
+    );
+    let owner = owner(&f);
+    let bound = store
+        .bind(owner.client(), request(&f, 86))
+        .unwrap()
+        .workspace;
+    let held = || {
+        SqliteHandles::open_read_only(f.config.clone(), support::BINDING, support::CURSOR)
+            .unwrap()
+            .history
+            .gc_intents(
+                layerfs_history::records::GcScopeKind::Branch,
+                f.branch.as_slice(),
+            )
+            .unwrap()
+            .len()
+    };
+    assert_eq!(held(), 1, "the mount holds its Branch");
+
+    // An uncertain pack read on the Workspace reader's own provider, which the
+    // provider keeps; the session's next read records it and quarantines.
+    let root = bound.snapshot().unwrap().effective_root;
+    let provider = providers.lock().unwrap().last().unwrap().clone();
+    let mut rows = Vec::new();
+    provider.locate(&[root], &mut rows).unwrap();
+    assert!(provider
+        .read_scoped_pack(rows[0].location.pack_id, &mut UncertainPlan)
+        .is_err());
+    // An id the session never read, so no cache answers it.
+    let absent = layerfs_content::ObjectId::for_bytes(b"an object this Store never saved");
+    let operation = bound.operation().unwrap();
+    assert!(operation
+        .ports()
+        .fresh()
+        .read_canonical_batch(&[absent])
+        .is_err());
+
+    let error = bound.close().unwrap_err();
+    assert!(
+        matches!(error, layerfs_daemon::store::CloseError::Reader(_)),
+        "{error:?}"
+    );
+    assert_eq!(held(), 0, "the closed mount no longer holds its Branch");
+    drop((operation, bound, provider, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}

@@ -479,7 +479,12 @@ malformed one decodes as no token: missing evidence is no proof, never death
   provably dead, certain op is adopted or ignored per its `kind`.
 - **Place authority.** The owner evidence applies first, exactly as without
   place evidence: an owner this process proves gone (another boot of a local
-  Store, a vanished or reused pid in this namespace) is dead. An intent that
+  Store, a vanished or reused pid in this namespace) is dead. Evidence the
+  writer could not read is recorded as such (a start of `0`, a boot of
+  `unknown`; earlier builds wrote a zero boot) and proves nothing: a zero
+  boot is neither this boot nor an earlier one, and a running pid with a
+  zero start is not proof of reuse, while an absent or ended pid in this
+  namespace still is (#776 G2). An intent that
   also records a machine incarnation or a Sandbox generation is then compared
   with the control-built bounded `PlaceView` of the caller's home (the current
   `MachineRecord.incarnation`, `SandboxRecord.generation`, and the

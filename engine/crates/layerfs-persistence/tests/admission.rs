@@ -611,6 +611,58 @@ fn an_earlier_boot_is_settled_on_a_local_store() {
         .is_empty());
 }
 
+/// #776 G2: a writer that could not read its start time recorded 0. A process
+/// running under the recorded pid is then no proof of death, so the live
+/// owner (this test process) keeps holding the Branch.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_zero_start_with_a_running_pid_is_not_proof_of_death() {
+    let temp = Temp::new("admission-zero-start");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    let runtime = format!("pid:{}@0@ns:{}", std::process::id(), this_namespace());
+    let boot = format!("boot:{:032x}:test:35", this_boot());
+    let mount = placed_mount(project_id, branch, 35, this_namespace(), this_boot())
+        .owned(Some(&runtime), Some(&boot));
+    history.gc_register(&mount).unwrap();
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 36))
+        .expect_err("a running owner with an unread start holds");
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+    history.gc_release(&op(35)).unwrap();
+}
+
+/// #776 G2: a zero (or `unknown`) recorded boot is missing evidence, not an
+/// earlier boot: a local SQLite Store does not adopt it.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_unread_boot_is_not_an_earlier_boot() {
+    let temp = Temp::new("admission-zero-boot");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&placed_mount(project_id, branch, 37, this_namespace(), 0))
+        .unwrap();
+    // pid 1 runs here under another start time, so either row would be
+    // adopted if its boot were taken as this one or an earlier one.
+    let runtime = format!("pid:1@1@ns:{}", this_namespace());
+    let unknown = placed_mount(project_id, branch, 38, this_namespace(), 1)
+        .owned(Some(&runtime), Some("boot:unknown:test:38"));
+    history.gc_register(&unknown).unwrap();
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 39))
+        .expect_err("owners with no boot evidence hold");
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.holders.len(), 2);
+    history.gc_release(&op(37)).unwrap();
+    history.gc_release(&op(38)).unwrap();
+}
+
 /// A provably dead owner does not let an observer delete an uncertain row: the
 /// row stays `Unresolved` until the owning call (or an operator) releases it.
 #[cfg(target_os = "linux")]
