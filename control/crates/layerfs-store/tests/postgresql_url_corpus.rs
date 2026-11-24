@@ -41,8 +41,9 @@ const LOGIN_PASSWORD: &str = "Lp4@Kv8 /?#:&=%x";
 
 /// The login keys a URL holding one names (the client's `user` and
 /// `password`, libpq 18's keys of a password file, a client key or
-/// certificate and its password, and an OAuth client secret).
-const LOGIN_KEYS: [&str; 7] = [
+/// certificate and its password, an OAuth client secret, and a SCRAM client
+/// or server key).
+const LOGIN_KEYS: [&str; 9] = [
     "user",
     "password",
     "passfile",
@@ -50,6 +51,8 @@ const LOGIN_KEYS: [&str; 7] = [
     "sslcert",
     "sslpassword",
     "oauth_client_secret",
+    "scram_client_key",
+    "scram_server_key",
 ];
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -549,6 +552,21 @@ const CORPUS: &[(&str, &str)] = &[
     ("postgres://h/db/sslmode=require", ""),
     ("postgresq://alice:Zq7Xw9q@h/db", "Zq7Xw9q"),
     ("host=h password=Zq7Xw9q", "Zq7Xw9q"),
+    // #771 S1: a login written fully percent-encoded, read as a host
+    ("postgres://alice%3ASecret9%40db.example/app", "Secret9"),
+    (
+        "postgres://h/app?host=alice%3ASecret9%40db.example",
+        "Secret9",
+    ),
+    // #771 S2: a SCRAM key as text inside a value the client reads
+    (
+        "postgres://h/db?application_name=x%26scram_client_key%3DQ2xpZW50S2V5",
+        "Q2xpZW50S2V5",
+    ),
+    (
+        "postgres://h/db?application_name=x%26scram_server_key%3DU2VydmVyS2V5",
+        "U2VydmVyS2V5",
+    ),
 ];
 
 /// Generated URLs: each user and password written raw into the user part
@@ -612,9 +630,12 @@ fn check(home: &Path, given: &str, meant: &str) {
     let keyed = LOGIN_KEYS
         .iter()
         .any(|k| decoded.contains(&format!("{k}=")));
-    let client_login = read
-        .as_ref()
-        .is_none_or(|r| r.get_user().is_some() || r.get_password().is_some());
+    // a host the client reads holding an `@` is a login written
+    // percent-encoded (#771 S1): no host name or socket directory holds one
+    let host_at = |host: &postgres::config::Host| format!("{host:?}").contains('@');
+    let client_login = read.as_ref().is_none_or(|r| {
+        r.get_user().is_some() || r.get_password().is_some() || r.get_hosts().iter().any(host_at)
+    });
     let expected = !scheme || after.contains('@') || client_login || keyed;
     assert_eq!(held, expected, "(b) {given}");
     let shown = shown(given);
@@ -1117,5 +1138,64 @@ fn the_e0aa26e149_review_rows_are_hidden_refused_and_kept() {
         "{}",
         refusal.message
     );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The rows of #771: a login written fully percent-encoded, which the client
+/// reads as part of a host (S1), and a SCRAM client or server key as text
+/// inside a value (S2). Each is hidden, refused as a login before any dial,
+/// and its record kept byte for byte.
+#[test]
+fn the_771_rows_are_hidden_refused_and_kept() {
+    let home = tempdir("771");
+    login::save(&home, "pg", LOGIN_PASSWORD).unwrap();
+    for (given, secret) in [
+        ("postgres://alice%3ASecret9%40db.example/app", "Secret9"),
+        (
+            "postgresql://alice%3ASecret9%40db.example:5432/app",
+            "Secret9",
+        ),
+        (
+            "postgres://h/app?host=alice%3ASecret9%40db.example",
+            "Secret9",
+        ),
+        ("postgres://h,alice%3ASecret9%40db.example/app", "Secret9"),
+        (
+            "postgres://h/db?application_name=x%26scram_client_key%3DQ2xpZW50S2V5",
+            "Q2xpZW50S2V5",
+        ),
+        (
+            "postgres://h/db?application_name=x%26scram_server_key%3DU2VydmVyS2V5",
+            "U2VydmVyS2V5",
+        ),
+        ("postgres://h/scram_client_key=Q2xpZW50S2V5", "Q2xpZW50S2V5"),
+    ] {
+        assert!(holds_login(given), "{given}");
+        assert_eq!(shown(given), HIDDEN, "{given}");
+        assert!(target(given).is_err(), "{given}");
+        let refusal = refuse_login(given).unwrap_err();
+        assert_eq!(refusal.message, MESSAGES[0], "{given}");
+        let record = store(&home, given);
+        let before = std::fs::read(paths::store_record(&home, "pg")).unwrap();
+        let dialled = layerfs_store::record::url(&record);
+        assert!(dialled.is_err(), "{given} dialled");
+        let refusal = dialled.unwrap_err();
+        assert_eq!(leak(&refusal.message, secret.as_bytes()), None, "{given}");
+        assert!(
+            row_texts(&record).iter().all(|text| text == HIDDEN),
+            "{given}"
+        );
+        let after = std::fs::read(paths::store_record(&home, "pg")).unwrap();
+        assert_eq!(before, after, "{given}: written");
+    }
+    // a `%40` in a database name or a value is no host's: still shown as written
+    for given in [
+        "postgres://h/team%40corp",
+        "postgres://h/db?application_name=me%40laptop",
+    ] {
+        assert!(!holds_login(given), "{given}");
+        assert_eq!(shown(given), given, "{given}");
+        assert!(refuse_login(given).is_ok(), "{given}");
+    }
     std::fs::remove_dir_all(home).unwrap();
 }

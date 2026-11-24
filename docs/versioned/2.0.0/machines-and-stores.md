@@ -457,16 +457,19 @@ $ layerfs store doctor shop-pg
   database and TLS settings, read only as the PostgreSQL client reads it,
   and is recorded and shown exactly as given: LayerFS never cleans or
   rewrites a URL. One that may hold a login is refused `InvalidInput`,
-  before any effect: it holds an `@`, the client reads a user or a password
-  in it, the client does not read it (a key it does not know, such as
+  before any effect: it holds an `@`, the client reads a user, a password
+  or a host holding an `@` in it (a login written percent-encoded,
+  `postgres://alice%3Ap%40db/app`), the client does not read it (a key it
+  does not know, such as
   `sslpassword`, `sslrootcert`, `sslkey` or `sslcert`, or an `sslmode`
   other than `disable`, `prefer` or `require`), or its percent-decoded text
   holds a login key and `=` anywhere, in any case (`user`, `password`,
-  `passfile`, `sslkey`, `sslcert`, `sslpassword`, `oauth_client_secret`:
+  `passfile`, `sslkey`, `sslcert`, `sslpassword`, `oauth_client_secret`,
+  `scram_client_key`, `scram_server_key`:
   so `postgres://h/db?application_name=me?password=p` and
   `postgres://h/db&password=p` are refused too). One holding a `#` is
-  refused as well (write a `#` or `@` that is part of the address `%23` or
-  `%40`). The fix names the address `<url>` and the user `<user>`: `store
+  refused as well (write a `#` or `@` that is part of a database name or a
+  value `%23` or `%40`; no host holds an `@`). The fix names the address `<url>` and the user `<user>`: `store
   connect <store> <url> --user <user> --password-stdin`. Other text the
   client reads as part of a host, database or value is the client's
   (`postgres://h/db&sslmode=require` names the database
