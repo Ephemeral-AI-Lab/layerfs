@@ -288,6 +288,19 @@ it, and the swap reads the live heads for its digest with the mark's own
 statements, 1,024 rows at a time
 ([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs),
 [`compact/swap.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/swap.rs)).
+The swap takes the publication lane (the `store_lane` row and the lane
+barrier, under `lock_timeout`) before any base-table lock, and reads the
+full mark tuple (with the history-row `COUNT` and `MAX(stamp)`), that
+digest and the history `SUM(logical)` while it holds the lane alone:
+readers are not blocked by these history- and Branch-sized reads, writers
+wait for the lane as they do for any holder, and a lane wait that reaches
+`lock_timeout` is `Busy` naming the lane holder. Only then does it lock
+every base table except `store_lane` (`ACCESS EXCLUSIVE NOWAIT`; the
+writers queued behind the lane row hold `RowShare` on it), re-read the
+one-row tables, and swap by renames: the old `pack` and `object_location`
+and their indexes become `gc_retired_*` and move into the scratch schema
+the new tables left, which Phase C drops first, so no payload file is
+unlinked under the lock (#776 P5).
 So nothing the client holds through a compaction grows with the Store's
 objects, packs, Commits or Branches. What it does hold per unit is small and
 not of those: one row for each batch of about 1 GiB of kept pack bodies, and

@@ -1996,12 +1996,14 @@ fn every_postgresql_failpoint_leaves_a_resumable_leftover() {
             Some("build"),
             true,
         ),
+        // After the swap the scratch schema holds the retired payload tables
+        // until Phase C drops it (#776 P5).
         (
             "cswap",
             CompactFailpoint::PostgresAfterSwap,
             0x63,
             Some("swap"),
-            false,
+            true,
         ),
         (
             "ccleanup",

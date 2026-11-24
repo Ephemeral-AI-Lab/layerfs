@@ -323,7 +323,15 @@ pub(crate) fn settle_leftover(
     // after the swap (AC-28) does not inflate the resumed `G + 1` report's
     // `physicalShrink`. The op carries the rest of the original report too.
     let rows = history_rows(session, schema)?;
-    cleanup(handles, session, schema, op.dead, op.totals_applied, op_id)?;
+    cleanup(
+        handles,
+        session,
+        schema,
+        op.dead,
+        op.totals_applied,
+        op_id,
+        op.artifact.as_deref(),
+    )?;
     metrics.end_phase();
     metrics.leftover_settled = true;
     let dead_bytes = u64::try_from(op.dead.stored).unwrap_or(0);
@@ -683,10 +691,14 @@ fn settle(
     })
 }
 
-/// Phase C: delete only the persisted `gc_dead` members, in bounded batches
-/// (one layer stack's closed closure per transaction, then the signature and
-/// digest sets), settle the totals once, and clear the op. The Store is usable
-/// at `G + 1` throughout, and the retained object set is asserted exactly.
+/// Phase C: drop the scratch schema, which holds the payload tables the swap
+/// retired (their files are unlinked here, under no Store lock), then delete
+/// only the persisted `gc_dead` members, in bounded batches (one layer
+/// stack's closed closure per transaction, then the signature and digest
+/// sets), settle the totals once, and clear the op. The Store is usable at
+/// `G + 1` throughout, and the retained object set is asserted exactly.
+/// `scratch` is the op's recorded artifact; a resumed run drops it the same
+/// way, and a scratch already dropped is no error.
 ///
 /// §8: Phase C never touches Init's three working tables. `unfinished_work`
 /// refuses a Store that already holds one, but an Init can begin after that
@@ -702,7 +714,11 @@ pub(crate) fn cleanup(
     dead: DeadTotals,
     totals_applied: bool,
     op_id: Option<[u8; 16]>,
+    scratch: Option<&str>,
 ) -> HistoryResult<()> {
+    if let Some(scratch) = scratch {
+        drop_scratch(session, scratch)?;
+    }
     let (mark_serial, mark_stamp, visited) = mark_watermarks(session, schema)?;
     assert_retained_object_set(session, schema, visited)?;
     // F50R2-3: the `cleanup` phase is its own small transaction before the

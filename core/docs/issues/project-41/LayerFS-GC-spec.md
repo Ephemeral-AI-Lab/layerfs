@@ -968,9 +968,26 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
 > therefore reported (`Integrity`) before the tuple re-check of step 6 can
 > report `Conflict`. The fingerprint, trigger and `logical` checks and the
 > single `live_heads_digest` read stay under the Store-wide lock.
+>
+> **As built (#776 P5).** The checks that grow with the Store no longer run
+> under the Store-wide lock. After the scratch counts, the swap measures the
+> scratch tables' relation size (its `physical_after`; `SET SCHEMA` keeps the
+> files), sets `lock_timeout` and takes the publication lane (the `store_lane`
+> row `FOR UPDATE` and the lane barrier), so no writer can publish, allocate
+> or move a head until COMMIT. Holding the lane and no table lock, it re-reads
+> the full step 6 tuple (with the `COUNT` of the history rows and
+> `MAX(content_signature.stamp)`), the `live_heads_digest` and the history
+> `SUM(logical)`; readers are not blocked meanwhile, writers wait for the lane
+> as for any lane holder, and a lane wait that reaches `lock_timeout` is
+> `Busy` naming the lane holder. Only then does step 5 lock the tables, and
+> under that lock step 6 re-reads only the one-row tables (generation,
+> serial, allocators, totals). Step 8 retires the old tables by renames
+> instead of `DROP TABLE`, and the scratch schema is dropped by Phase C, so no
+> payload file is unlinked under the lock.
 
 5. `LOCK TABLE` every base table of the Store schema (from `pg_class`,
-   including `store_lane`, `store_totals`, `history_meta`,
+   except `store_lane`, whose row the swap already holds and on which the
+   writers queued behind that row hold `RowShare`; including `store_totals`, `history_meta`,
    `content_signature`, the history tables and `gc_intent`/`gc_op`) in one
    `ACCESS EXCLUSIVE NOWAIT`, with `store.*`/`scratch.*` qualified names. A
    `55P03` abort is `Busy` with holder detail (not `Conflict`); `ROLLBACK`
@@ -984,17 +1001,24 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
    publication that reused a pre-reserved pack/ordinal may move none of the
    first three but always bumps `store_totals`; any change abandons the round
    with no writes (`Conflict`). No delta copy is attempted, so the new pack
-   stays in the old Store.
+   stays in the old Store. As built (#776 P5), the full tuple and the digest
+   are read under the lane before step 5, and only the one-row values again
+   under the lock.
 7. Copy the old tables' owner and ACL onto the new ones.
-8. `DROP TABLE` the old `object_location` and `pack`; `ALTER TABLE … SET SCHEMA`
-   the new ones into the Store's schema; create the `pack_immutable` trigger
+8. Rename the old `object_location` and `pack` and their indexes
+   (`gc_retired_*`); `ALTER TABLE … SET SCHEMA` the new ones into the Store's
+   schema and the retired ones into the now-empty scratch schema, which Phase
+   C drops with them (#776 P5: catalog updates only, no file unlinked under
+   the lock); create the `pack_immutable` trigger
    there, bound to the Store schema's `pack_immutable()` so doctor sees
    `EXECUTE FUNCTION pack_immutable()`
    (`diagnostic/postgresql_contract_expected.rs:213`).
 9. Verify inside the transaction: row counts against the mark;
    `SUM(new) = mark_totals - dead_*` with `logical` unchanged; the
    `pg_attribute`/`attstorage`/`reloptions`/`tablespace` fingerprint recorded
-   in `gc_op` at mark equals the scratch tables' fingerprint; persist the
+   in `gc_op` at mark equals the scratch tables' fingerprint (the history
+   `SUM(logical)` and `live_heads_digest` are read under the lane before step
+   5, as built in #776 P5); persist the
    `dead_*` totals **before** the swap COMMIT. The settle transaction then
    subtracts once and asserts the four `store_totals` sums.
    `live_heads_digest` unchanged, and the bounded checks on the moved tables
@@ -1014,11 +1038,14 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
     swap before COMMIT; a missing standby abandons with no writes (`Busy`,
     standby list). A standby that dies after the check blocks the COMMIT;
     `SET LOCAL` cannot bound that wait.
-    `DROP` the empty scratch schema before `COMMIT` (it is transactional).
+    The scratch schema now holds the retired tables; it is not dropped here
+    (#776 P5).
 
 **Phase C — cleanup (batched, after the swap).**
 
-11. Delete only ids in the mark's **persisted dead set** in `gc_op`
+11. First drop the recorded scratch schema with the retired tables in it
+    (`DROP SCHEMA IF EXISTS … CASCADE`, its own transaction under no Store
+    lock; a resumed Phase C does the same). Then delete only ids in the mark's **persisted dead set** in `gc_op`
     (membership, not a predicate: exact `content_signature` slots,
     `file_digest` roots, history/lineage ids, a deleted project's
     `path_removed`/`project_epoch` rows, and marker/base row pairs). Per-table
@@ -1053,7 +1080,8 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
   the Store, not only from the caller's home.
 - **Crash:** a crash in Phase M/A leaves only the scratch schema, which the
   Store's op names and the next attempt removes. Phase B is atomic; a crash
-  after COMMIT resumes Phase C.
+  after COMMIT leaves the scratch schema holding the retired tables, and the
+  resumed Phase C drops it first.
 - **Lost `COMMIT` reply:** record `pid`, `backend_start`, `usename` and the
   incarnation in `gc_op` in a transaction **before** the swap. Recovery on a
   second connection (before taking the exclusive key) is one statement:
@@ -1069,7 +1097,10 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
   cleanup: a live, healthy backend left named there would be judged a lost
   `COMMIT` and terminated (#776 P1). An uncertain outcome keeps the owner.
 - **Lock time:** `ACCESS EXCLUSIVE` is held for the swap only, seconds rather
-  than the length of the copy or the cleanup. No long transaction holds back
+  than the length of the copy or the cleanup; since #776 P5 the swap's
+  history- and Branch-sized checks run under the lane before it, and the old
+  files are unlinked by Phase C, so the lock covers constant-size work plus
+  the ACL replay. No long transaction holds back
   vacuum for other Stores in the same database.
 - **Space:** old tables + new heap/TOAST + indexes + up to the live bytes of
   WAL. The guide states the WAL headroom requirement; a full `pg_wal` stops

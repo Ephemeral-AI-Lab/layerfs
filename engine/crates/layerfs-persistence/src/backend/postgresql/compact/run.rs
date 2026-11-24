@@ -160,6 +160,7 @@ pub(crate) fn round(
         swapped.dead,
         false,
         Some(request.op_id),
+        Some(&scratch),
     )?;
     metrics.end_phase();
     stop(

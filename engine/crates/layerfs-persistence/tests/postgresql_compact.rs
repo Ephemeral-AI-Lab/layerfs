@@ -1458,6 +1458,110 @@ fn an_access_share_reader_makes_the_swap_busy_and_is_named() {
     assert_eq!(db_generation(&schema), before, "nothing was swapped");
 }
 
+/// Backends that wait for a lock `client`'s backend holds.
+fn blocked_by(client: &mut postgres::Client) -> i64 {
+    client
+        .query_one(
+            "SELECT count(*) FROM pg_stat_activity \
+              WHERE pg_backend_pid() = ANY(pg_blocking_pids(pid))",
+            &[],
+        )
+        .expect("blocked backends")
+        .get(0)
+}
+
+/// Polls (at most 5 s) until a backend waits for `client`'s lock, or `round`
+/// has ended without waiting. True when one waits.
+fn wait_blocked<T>(client: &mut postgres::Client, round: &std::thread::JoinHandle<T>) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if blocked_by(client) > 0 {
+            return true;
+        }
+        if round.is_finished() {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    false
+}
+
+/// #776 P5: the swap takes the lane before its history- and Branch-sized
+/// checks and before any base-table lock. A head that moved after the mark
+/// while the swap waited for the lane is a `Conflict` once the lane is free,
+/// with nothing swapped, and readers are not blocked while it waits. Before,
+/// the swap locked every table `NOWAIT` (the lane row's table included), so a
+/// held lane was `Busy`.
+#[test]
+fn a_head_moved_while_the_swap_waits_for_the_lane_is_a_conflict() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "lane_wait");
+    schema.drop_scratch();
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    let project = initialize(&handles, 1, live);
+    fork(&handles, project.id, branch_id(2), 2);
+    let _dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = db_generation(&schema);
+    let s = schema.selection.schema.clone();
+    let reader = schema.open();
+
+    // Pause the round after its mark: a test-only trigger on Phase M's
+    // `gc_op` insert waits for an advisory key this test holds.
+    let key = 776_005_000_i64 + i64::from(std::process::id());
+    let mut pause = schema.client();
+    pause
+        .batch_execute(&format!(
+            "CREATE FUNCTION {s}.lfs_test_pause() RETURNS trigger LANGUAGE plpgsql AS \
+             $fn$ BEGIN PERFORM pg_advisory_xact_lock_shared({key}); RETURN NEW; END $fn$;\
+             CREATE TRIGGER lfs_test_pause BEFORE INSERT ON {s}.gc_op \
+              FOR EACH ROW EXECUTE FUNCTION {s}.lfs_test_pause();\
+             SELECT pg_advisory_lock({key});"
+        ))
+        .expect("the pause trigger");
+    let round = spawn_round(schema.selection.clone(), schema.binding.clone(), 9, None);
+    assert!(
+        wait_blocked(&mut pause, &round),
+        "the round never reached its gc_op insert"
+    );
+
+    // The mark is taken. Hold the lane and move the live heads (a new Branch
+    // at an existing head: the digest moves, the allocators do not).
+    let mut lane = schema.client();
+    lane.batch_execute(&format!(
+        "BEGIN; SELECT 1 FROM {s}.store_lane WHERE id=1 FOR UPDATE; \
+         INSERT INTO {s}.branch (branch_id,layer_stack_id,name,base_layer_id,forked_from_id,head_commit_id) \
+         SELECT '\\x11'::bytea || decode(repeat('ee',16),'hex'),layer_stack_id,'moved',base_layer_id, \
+                forked_from_id,head_commit_id FROM {s}.branch WHERE name='branch-2';"
+    ))
+    .expect("hold the lane and move a head");
+    pause
+        .batch_execute(&format!("SELECT pg_advisory_unlock({key})"))
+        .expect("release the round");
+    let waited = wait_blocked(&mut lane, &round);
+    if waited {
+        // Readers are not blocked while the swap waits for the lane.
+        assert!(
+            reader.history.layer_stack(project.id).unwrap().is_some(),
+            "a read while the swap waits"
+        );
+        assert!(reader.history.branch(branch_id(2)).unwrap().is_some());
+    }
+    lane.batch_execute("COMMIT").expect("release the lane");
+    let result = round.join().expect("the round's thread");
+    assert!(
+        matches!(
+            result,
+            Err(layerfs_history::HistoryError::Conflict(
+                "live heads moved after the mark"
+            ))
+        ),
+        "a head moved while the swap waited for the lane: {result:?}"
+    );
+    assert!(waited, "the swap waited for the held lane");
+    assert_eq!(db_generation(&schema), before, "nothing was swapped");
+}
+
 // --- AC-44: a killed backend and the lost COMMIT reply ---------------------
 //
 // The failpoints above stop a live session and return `UnknownOutcome`: the
@@ -1858,13 +1962,18 @@ fn a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1() {
         .expect("the failpoint returned");
 
     // The committed incarnation says the swap happened; the op still names
-    // Phase C and the scratch is already gone. The child is still holding its
-    // handles open, so this backend is alive and idle: the real kill below
-    // proves the owner ended.
+    // the swap, and the scratch schema now holds the retired payload tables
+    // for Phase C to drop (#776 P5). The child is still holding its handles
+    // open, so this backend is alive and idle: the real kill below proves the
+    // owner ended.
     assert_eq!(db_generation(&schema), before + 1);
     let (pid, start, phase) = wait_for_op_owner(&schema);
     assert_eq!(phase, "swap");
-    assert!(!schema.scratch_exists());
+    let scratch = schema.scratch();
+    assert!(schema.exists(&format!(
+        "SELECT ((to_regclass('{scratch}.gc_retired_pack') IS NOT NULL) \
+            AND (to_regclass('{scratch}.gc_retired_object_location') IS NOT NULL))::int::bigint"
+    )));
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
     // A simulated lost reply keeps the process alive and releases its intent;
     // the real kill below then proves the owner ended. The child installed
