@@ -280,15 +280,6 @@ const INLINE_ALLOWED: &[InlineAllow] = &[
                  exclusive compaction window",
     },
     InlineAllow {
-        file: "src/backend/postgresql/schema.rs",
-        needle: "INSERT INTO project_epoch(layer_stack_id, epoch)",
-        markers: &[],
-        reason: "4/8 additive migration: seeds one `project_epoch` row per existing \
-                 LayerStack, live or retired, so a later removal marker always finds the row \
-                 it bumps; a one-time schema step inside the Store write lane, not a client \
-                 read",
-    },
-    InlineAllow {
         file: "src/diagnostic/mounts.rs",
         needle: "SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine",
         markers: &[],
@@ -299,9 +290,9 @@ const INLINE_ALLOWED: &[InlineAllow] = &[
         file: "src/backend/sqlite/schema.rs",
         needle: "INSERT INTO project_epoch(layer_stack_id,epoch)",
         markers: &[],
-        reason: "4/8 additive migration: the SQLite half of the same one-time seed of one \
-                 `project_epoch` row per existing LayerStack, live or retired; not a client \
-                 read",
+        reason: "4/8 additive migration: a one-time seed of one `project_epoch` row per \
+                 existing LayerStack, live or retired; not a client read (its PostgreSQL \
+                 half was deleted with the PostgreSQL migrations, #776)",
     },
 ];
 
