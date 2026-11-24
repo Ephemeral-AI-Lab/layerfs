@@ -571,7 +571,12 @@ malformed one decodes as no token: missing evidence is no proof, never death
   state) on every route, with the `liveness` admission would give each holder
   now (owner check, then the calling home's place view, sent to a worker with
   the call) and `safe` (not `live`); `settle` refuses a holder still `live`
-  unless forced. The doctor's read-only `store.diagnose` forwards only the
+  unless forced. Besides the Branch's mount rows it lists the Init, merge
+  and removal rows at the Branch or its project, each with its `kind`: they
+  record no place, so one whose owner ran in another PID namespace or on
+  another host is cleared only here, by a forced settle and a release
+  (#776 G1); `settle_legacy` marks mount rows only. The doctor's read-only
+  `store.diagnose` forwards only the
   typed holder view from a worker (owner, place, generation and state), not
   `liveness` or `safe`. The Store-wide compact barrier is retained: a live or
   uncertain holder still refuses `store.compact`; an owner the owner evidence

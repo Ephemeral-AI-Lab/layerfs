@@ -603,8 +603,11 @@ $ layerfs store remove nope
 
 ### store.repair_mount_holders
 
-Explicit, operator-only repair of the mount admissions held at one Branch.
-Nothing is automatic: list, preview and audit write nothing, the doctor only
+Explicit, operator-only repair of the admissions that hold one Branch: its
+mount rows, and the Init, merge and removal rows at the Branch or its
+project. An operation row records no place, so when its owner ran in another
+PID namespace or on another host nothing can prove it gone, and this call is
+how it is cleared (#776 G1). Nothing is automatic: list, preview and audit write nothing, the doctor only
 reports the same rows without releasing them, and no action deletes a live
 row.
 
@@ -618,7 +621,7 @@ CLI     layerfs store repair-mount-holders <project> <branch> <action> [--op HEX
 | `branch` | name | the Branch whose holders are repaired; `audit` reads the rows recorded under this name, so a removed Branch's rows stay readable |
 | `action` | name | `list`, `preview`, `settle`, `release`, `settle_legacy` or `audit` |
 | `op` option | text | the holder `settle` and `release` act on: 16 bytes of hex |
-| `legacy` option | bool | `settle` only a row without owner or place evidence |
+| `legacy` option | bool | `settle` only a mount row without owner or place evidence |
 | `force` option | bool | `settle` a holder that still looks `live` |
 | `operator` option | text | the label a release records: at most 128 characters, no control characters; empty is `local`; not an authenticated principal |
 | `limit` option | int | rows of one page (`list`, `preview`, `audit`): 1 to 1000, default 100 |
@@ -630,13 +633,13 @@ CLI     layerfs store repair-mount-holders <project> <branch> <action> [--op HEX
 | `preview` | the same page (what `settle` and `release` would act on), read-only |
 | `settle` | marks exactly `--op` uncertain, answering `{ action, op, state: "uncertain" }`; a holder whose `liveness` is `live` is refused `InUse` unless `--force` (or `--legacy` for a row without evidence); a row released since it was listed is `NotFound`; a later call reports `Unresolved`, never `Busy` |
 | `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` (replacing the `place:v1;...` place tokens a live row keeps there) and clears the owner columns, so the unique owner key cannot block a remount, answering `{ action, op, state: "done" }`. The row is stamped no earlier than one millisecond after the Branch's newest done row, so a host whose clock is behind still ranks it newest. A Branch keeps its newest 100 done rows: a release deletes the oldest beyond them, never the row it retains. On PostgreSQL the holder's own session keeps its advisory keys until the owner releases its op (that release unlocks them and leaves the done row) or the session closes |
-| `settle_legacy` | marks only rows with missing owner or place evidence: `{ action, settled }` |
+| `settle_legacy` | marks only mount rows with missing owner or place evidence: `{ action, settled }` |
 | `audit` | one page of the Branch's retained `done` rows, oldest first by `(updated_ms, op)`; the next page starts strictly after the last row, so a release between two pages repeats no row and skips none of the Branch's own (releases are serialized and each is stamped after its Branch's newest done row). The audit selects by project and Branch name, while the stamp follows only the current Branch's rows: after a Branch (or its project) is removed and created again under the same names, a release of the new Branch whose host clock is not past the earlier Branch's newest stamp sorts among the earlier rows, and a cursor already past them misses it; a read without `cursor` returns every retained row. Changes nothing |
 
-A page answers `{ action, items, next_cursor }`. Each holder row carries the
-typed view (`op`, `project`, `branch`, `workspace`, `sandbox`, `machine`,
+A page answers `{ action, items, next_cursor }`. Each holder row carries its
+`kind` (`mount`, `init`, `merge` or `removal`), the typed view (`op`, `project`, `branch`, `workspace`, `sandbox`, `machine`,
 `owner_runtime`, `owner_boot`, `machine_incarnation`, `sandbox_generation`,
-`legacy`) and three state words: `state`, the row's own state (`live`, or
+`legacy`, never true for an operation row) and three state words: `state`, the row's own state (`live`, or
 `uncertain` once settled); `liveness`, what admission would say of it now
 from the owner check and this home's place view (`live`, `uncertain` or
 `dead`; a shared PostgreSQL Store proves no death from a place, so there a
@@ -655,7 +658,7 @@ runs in the calling process.
 | `NoSuchStore` | no Store of that name in this home |
 | `NoSuchProject` | no project of that name in the Store |
 | `NoSuchBranch` | no Branch of that name (every action but `audit`, which reads the names the rows recorded) |
-| `NotFound` | no mount holder with that op at the Branch (for a settle or release: already released, on either Store kind) |
+| `NotFound` | no holder with that op at the Branch or its project (for a settle or release: already released, on either Store kind) |
 | `InUse` | `settle` of a holder that still looks `live`; `fix: … settle --op HEX --force` |
 | `Conflict` | release before settle |
 | `Unavailable`, `Unknown` | the owning worker is not reachable or its answer was lost |
