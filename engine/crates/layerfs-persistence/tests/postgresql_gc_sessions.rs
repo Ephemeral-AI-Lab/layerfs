@@ -13,6 +13,10 @@
 //! * A release whose row was already removed elsewhere still unlocks its
 //!   session keys, and a lock refused for a stale catalog leaves no key held.
 //! * A session with a registered mount still meets the generation fence.
+//! * An owner release whose unlock statement fails, or whose reply is lost,
+//!   quarantines the session: its connection closes, so the server holds
+//!   none of its keys, another live mount's included; that mount's row still
+//!   refuses a compaction and a removal on another session.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 mod support;
@@ -25,7 +29,7 @@ use layerfs_persistence::{
 };
 use layerfs_storage::StoragePolicy;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use support::pg::{catalog, project, url, Schema};
 use support::Temp;
 
@@ -488,4 +492,245 @@ fn a_registered_mount_still_meets_the_generation_fence() {
         .unwrap()
         .is_empty());
     drop(handles);
+}
+
+/// How long a backend may take to end after its client closed or was
+/// terminated, or to reach a lock wait.
+const BACKEND_WAIT: Duration = Duration::from_secs(10);
+
+/// How the unlock statement of op 1's release is made to fail.
+#[derive(Clone, Copy, Debug)]
+enum Failure {
+    /// The statement fails on the server.
+    Error,
+    /// The statement blocks, and its backend is terminated: the reply is
+    /// never read.
+    LostReply,
+}
+
+/// A trap for the unlock statement of op 1's owner release, in a schema of
+/// its own, dropped with it. An `AFTER DELETE` trigger on op 1's row sets
+/// the deleting session's `search_path` to the trap schema with `pg_catalog`
+/// explicitly last, so the release's next statement, the unlock, resolves
+/// `pg_advisory_unlock` and `pg_advisory_unlock_shared` to the trap's
+/// functions. The delete itself commits unchanged; only that session's later
+/// unqualified function calls are trapped.
+struct UnlockTrap {
+    url: String,
+    name: String,
+}
+
+impl UnlockTrap {
+    fn install(schema: &Schema, failure: Failure, blocker: i64) -> Self {
+        let name = format!("{}_trap", schema.name);
+        let body = match failure {
+            Failure::Error => "RAISE EXCEPTION 'forced unlock failure';".to_owned(),
+            Failure::LostReply => {
+                format!("PERFORM pg_catalog.pg_advisory_lock({blocker}::bigint); RETURN true;")
+            }
+        };
+        let op1 = "01".repeat(16);
+        let store = &schema.name;
+        let mut admin = schema.admin();
+        admin
+            .batch_execute(&format!(
+                "DROP SCHEMA IF EXISTS {name} CASCADE;
+                 CREATE SCHEMA {name};
+                 CREATE FUNCTION {name}.pg_advisory_unlock(bigint) RETURNS boolean
+                   LANGUAGE plpgsql AS $$ BEGIN {body} END $$;
+                 CREATE FUNCTION {name}.pg_advisory_unlock_shared(bigint) RETURNS boolean
+                   LANGUAGE plpgsql AS $$ BEGIN {body} END $$;
+                 CREATE FUNCTION {name}.arm() RETURNS trigger LANGUAGE plpgsql AS $$
+                   BEGIN
+                     PERFORM pg_catalog.set_config('search_path', '{name}, pg_catalog', false);
+                     RETURN NULL;
+                   END $$;
+                 CREATE TRIGGER unlock_trap AFTER DELETE ON {store}.gc_intent
+                   FOR EACH ROW WHEN (OLD.op_id = decode('{op1}', 'hex'))
+                   EXECUTE FUNCTION {name}.arm();"
+            ))
+            .unwrap();
+        Self {
+            url: schema.url.clone(),
+            name,
+        }
+    }
+}
+
+impl Drop for UnlockTrap {
+    fn drop(&mut self) {
+        if let Ok(mut client) = postgres::Client::connect(&self.url, postgres::NoTls) {
+            let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {} CASCADE", self.name));
+        }
+    }
+}
+
+/// The backend holding advisory `key`, as `pg_locks` reports it.
+fn key_holder(admin: &mut postgres::Client, key: i64) -> i32 {
+    admin
+        .query_one(
+            "SELECT pid FROM pg_locks WHERE locktype='advisory' AND granted AND objsubid=1 \
+               AND classid::bigint = (($1::bigint >> 32) & 4294967295) \
+               AND objid::bigint = ($1::bigint & 4294967295)",
+            &[&key],
+        )
+        .unwrap()
+        .get(0)
+}
+
+/// Waits, bounded by [`BACKEND_WAIT`], until `query` over `pid` is true.
+fn wait_for(admin: &mut postgres::Client, query: &str, pid: i32, what: &str) {
+    let deadline = Instant::now() + BACKEND_WAIT;
+    loop {
+        let done: bool = admin.query_one(query, &[&pid]).unwrap().get(0);
+        if done {
+            return;
+        }
+        assert!(Instant::now() < deadline, "backend {pid}: {what}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// Session `a` holds two live mounts (projects 1 and 2), and the unlock of
+/// mount 1's owner release fails. The release's delete committed and the
+/// unlock is `Unknown`, so the session is quarantined and its connection
+/// closed: the server then holds none of that session's keys, mount 2's
+/// included. Mount 2's row stays, so a compaction and a Branch removal on
+/// session `b` are refused `MountsActive` by the intent-row scan (its owner
+/// and place give no proof of death, so admission does not settle it), and
+/// every later call on `a` is refused.
+fn failed_unlock_quarantines_the_session(failure: Failure) {
+    let Some(url) = url() else { return };
+    let tag = match failure {
+        Failure::Error => "unlock_error",
+        Failure::LostReply => "unlock_lost",
+    };
+    let schema = Schema::new(url, tag);
+    let binding = binding(tag);
+    let (a, b) = sessions(&schema, &binding);
+    let (stack1, branch1, _) = project(&a.history, 1);
+    let (stack2, branch2, _) = project(&a.history, 2);
+    a.history.gc_register(&mount(stack1, branch1, 1)).unwrap();
+    a.history.gc_register(&mount(stack2, branch2, 2)).unwrap();
+    let keys1 = mount_keys(&binding, stack1, branch1);
+    let keys2 = mount_keys(&binding, stack2, branch2);
+    let mut admin = schema.admin();
+    let pid = key_holder(&mut admin, keys1[2]);
+    assert_eq!(key_holder(&mut admin, keys2[2]), pid, "one writer session");
+    for key in keys1.iter().chain(&keys2) {
+        assert!(!key_free(&mut admin, *key), "the mounts hold {key}");
+    }
+
+    let blocker = advisory_key(&binding, 9, b"unlock blocker");
+    let _trap = UnlockTrap::install(&schema, failure, blocker);
+    let released = match failure {
+        Failure::Error => a.history.gc_release(&op(1)),
+        Failure::LostReply => std::thread::scope(|scope| {
+            // Declared inside the scope: if this thread panics, the holder
+            // closes before the scope joins, the trap takes the blocker and
+            // the release's thread ends.
+            let mut holder = schema.admin();
+            holder
+                .query_one("SELECT pg_advisory_lock($1::bigint)", &[&blocker])
+                .unwrap();
+            let release = scope.spawn(|| a.history.gc_release(&op(1)));
+            wait_for(
+                &mut admin,
+                "SELECT count(*) > 0 FROM pg_stat_activity \
+                  WHERE pid=$1 AND wait_event_type='Lock'",
+                pid,
+                "the trapped unlock waits for the blocker",
+            );
+            let terminated: bool = admin
+                .query_one("SELECT pg_terminate_backend($1)", &[&pid])
+                .unwrap()
+                .get(0);
+            assert!(terminated, "backend {pid} terminated");
+            let released = release.join().expect("the release's thread");
+            drop(holder);
+            released
+        }),
+    };
+    // The owner's release reports the delete, which committed: its keys are
+    // gone with the connection, so op 1 is fully released. The unlock's
+    // `Unknown` is not returned (`authority::release` discards it); it
+    // quarantined the session, and the session's next call reports it.
+    assert!(released.is_ok(), "{failure:?}: {released:?}");
+    let rows: Vec<Vec<u8>> = (admin.query("SELECT op_id FROM gc_intent", &[]).unwrap())
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(rows, vec![op(2).to_vec()], "op 1 deleted, op 2 live");
+
+    // The quarantine closed the connection: the backend ends and holds no
+    // advisory key, mount 2's included.
+    wait_for(
+        &mut admin,
+        "SELECT count(*) = 0 FROM pg_stat_activity WHERE pid=$1",
+        pid,
+        "the quarantined session's backend ends",
+    );
+    let held: i64 = admin
+        .query_one(
+            "SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND pid=$1",
+            &[&pid],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(held, 0, "backend {pid} holds no advisory key");
+    for key in keys1.iter().chain(&keys2) {
+        assert!(key_free(&mut admin, *key), "{key} is free");
+    }
+
+    // Every later call on the quarantined session is refused, and changes
+    // nothing.
+    let refusal = a.history.gc_release(&op(2)).unwrap_err();
+    assert!(
+        matches!(refusal, HistoryError::UnknownOutcome),
+        "{refusal:?}"
+    );
+    let refusal = a
+        .history
+        .gc_register(&mount(stack1, branch1, 3))
+        .unwrap_err();
+    assert!(
+        matches!(refusal, HistoryError::UnknownOutcome),
+        "{refusal:?}"
+    );
+
+    // Mount 2's row still excludes, now by the intent-row scan alone.
+    let refusal = b.history.gc_register(&compaction(&binding, 4)).unwrap_err();
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("a compaction beside mount 2's row is MountsActive: {refusal:?}");
+    };
+    let holders: Vec<&str> = state.holders.iter().map(|h| h.op.as_str()).collect();
+    assert_eq!(holders, vec!["02".repeat(16)], "{state:?}");
+    let refusal = b
+        .history
+        .gc_remove_branch(branch2, 1_000, &removal(stack2, 5))
+        .unwrap_err();
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+    let rows: i64 = admin
+        .query_one("SELECT count(*) FROM gc_intent", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(rows, 1, "the refused calls wrote no row");
+
+    // Settling mount 2's row (as an operator would) admits the compaction.
+    b.history.gc_release(&op(2)).unwrap();
+    b.history.gc_register(&compaction(&binding, 4)).unwrap();
+    b.history.gc_release(&op(4)).unwrap();
+}
+
+#[test]
+fn a_failed_unlock_quarantines_the_session_and_rows_still_exclude() {
+    failed_unlock_quarantines_the_session(Failure::Error);
+}
+
+#[test]
+fn a_lost_unlock_reply_quarantines_the_session_and_rows_still_exclude() {
+    failed_unlock_quarantines_the_session(Failure::LostReply);
 }

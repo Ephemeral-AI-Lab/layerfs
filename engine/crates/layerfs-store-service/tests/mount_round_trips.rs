@@ -1,9 +1,15 @@
 //! #768: the pinned SQL work of one Workspace mount through the Store
 //! service, by Branch id and by project and Branch name, on SQLite and on
-//! PostgreSQL.
+//! PostgreSQL; and of the Commits and the unmount of one mounted Workspace.
 //!
-//! Each scenario is the first mount on a newly opened Store (`first`), or a
-//! second mount on the same Store after the first one closed (`again`).
+//! Each mount scenario is the first mount on a newly opened Store (`first`),
+//! or a second mount on the same Store after the first one closed (`again`).
+//! The Commit scenarios run on a third Store open, after one mount: the
+//! first and the second Commit of a one-file change, an UpToDate Commit,
+//! then the unmount (`BoundWorkspace::close` and the overlay namespace's
+//! retirement). They cover the whole Store-service Commit, the pre-lane
+//! whiteout read (`materialize_commit`) included; the lane itself is pinned
+//! by persistence `postgresql_commit_round_trips.rs`.
 //! Counts come from the sessions' own counters (`SqlWork`), split into the
 //! writer (with its lane connection), the control reader (session 0) and
 //! the Workspace readers:
@@ -19,6 +25,7 @@
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL` and reports
 //! NOT_RUN without it. Mount admission is still being reworked (#768), so
 //! these pins are expected to move with it; they never loosen a guard.
+use layerfs_history::records::CommitOutcome;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
     LayerStackId, WorkspaceId,
@@ -30,7 +37,8 @@ use layerfs_persistence::{
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{ReservationBlocks, Storage, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
-use layerfs_store_service::store::{BindRequest, BoundWorkspace, NamedBindRequest};
+use layerfs_store_service::store::{BindRequest, BoundWorkspace, CommitOptions, NamedBindRequest};
+use layerfs_store_service::write::mutation::Mutation;
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};
 use layerfs_telemetry::timer::Timing;
 use std::path::{Path, PathBuf};
@@ -111,9 +119,109 @@ const POSTGRESQL: &[Pin] = &[
     },
 ];
 
+// The Commit scenarios, measured by [`commit_scenarios`]. A real Commit's
+// whiteout step (`materialize_commit`) reads the bound node's serial and the
+// project's markers on the control reader. Before #768's mount change
+// (measured on this branch with only `hidden_paths` put back to its
+// d3fe2c4506 form, two reads: `node_history_serial`, then `path_removals` in
+// a Read transaction) that cost SQLite 6 statements in 2 transactions per
+// Commit; now it is one read (3 statements, 1 transaction). The writer and
+// the Workspace reader are unchanged by it, and an UpToDate Commit never
+// reaches the whiteout step.
+const SQLITE_COMMIT: &[Pin] = &[
+    Pin {
+        scenario: "commit.first",
+        writer: [0, 0, 52, 11],
+        control: [0, 0, 3, 1],
+        workspace: [0, 0, 5, 0],
+    },
+    Pin {
+        scenario: "commit.second",
+        writer: [0, 0, 44, 9],
+        control: [0, 0, 3, 1],
+        workspace: [0, 0, 5, 0],
+    },
+    Pin {
+        scenario: "commit.up_to_date",
+        writer: [0, 0, 3, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "unmount",
+        writer: [0, 0, 3, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+];
+
+// On PostgreSQL the mount no longer opens the control reader, so the first
+// Commit's whiteout read opens it (1 connect). Measured the same way, the
+// two reads were control [1, 7, 3, 1] on the first Commit and [0, 4, 2, 1]
+// on the second (a fenced autocommit statement, then a Read transaction:
+// `BEGIN` batch, statement, `COMMIT`); the one statement is now 4 and 3
+// round trips fewer. The writer's first Commit opens the lane connection.
+// The unmount is the owner's release on the writer, cold on this session (2
+// statements, each prepared once): `postgresql_gc_sessions` pins the warm
+// release at 2 round trips, 8 before #768's admission change.
+const POSTGRESQL_COMMIT: &[Pin] = &[
+    Pin {
+        scenario: "commit.first",
+        writer: [1, 65, 28, 7],
+        control: [1, 3, 2, 0],
+        workspace: [0, 5, 5, 0],
+    },
+    Pin {
+        scenario: "commit.second",
+        writer: [0, 42, 24, 6],
+        control: [0, 1, 1, 0],
+        workspace: [0, 5, 5, 0],
+    },
+    Pin {
+        scenario: "commit.up_to_date",
+        writer: [0, 1, 1, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "unmount",
+        writer: [0, 4, 2, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+];
+
+/// What one test measures on a Store holding Branch `work`.
+type Scenarios = fn(&Path, &dyn Fn() -> StoreSelection, BranchId) -> Vec<Measured>;
+
 #[test]
 fn sqlite_mount_counts() {
-    let dir = scratch("sqlite");
+    check("sqlite", &on_sqlite("sqlite", scenarios), SQLITE);
+}
+
+#[test]
+fn postgresql_mount_counts() {
+    if let Some(measured) = on_postgresql("postgresql", "mount", scenarios) {
+        check("postgresql", &measured, POSTGRESQL);
+    }
+}
+
+#[test]
+fn sqlite_commit_counts() {
+    let measured = on_sqlite("sqlite-commit", commit_scenarios);
+    check("sqlite", &measured, SQLITE_COMMIT);
+}
+
+#[test]
+fn postgresql_commit_counts() {
+    if let Some(measured) = on_postgresql("postgresql-commit", "commit", commit_scenarios) {
+        check("postgresql", &measured, POSTGRESQL_COMMIT);
+    }
+}
+
+/// Runs `run` on a new sealed SQLite Store.
+fn on_sqlite(label: &str, run: Scenarios) -> Vec<Measured> {
+    let dir = scratch(label);
     let config = PersistenceConfig::sqlite(dir.join("store.sqlite"))
         .with_sqlite_profile(SqlitePersistenceProfile::Normal)
         .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
@@ -125,19 +233,20 @@ fn sqlite_mount_counts() {
     let sealed = handles.seal().unwrap();
     let config = PersistenceConfig::sqlite(&sealed.path)
         .with_sqlite_profile(SqlitePersistenceProfile::Normal);
-    let measured = scenarios(&dir, || StoreSelection::Sqlite(config.clone()), branch);
+    let measured = run(&dir, &|| StoreSelection::Sqlite(config.clone()), branch);
     std::fs::remove_dir_all(&dir).unwrap();
-    check("sqlite", &measured, SQLITE);
+    measured
 }
 
-#[test]
-fn postgresql_mount_counts() {
+/// Runs `run` on a new PostgreSQL Store in its own schema, or reports
+/// NOT_RUN without a server.
+fn on_postgresql(label: &str, tag: &str, run: Scenarios) -> Option<Vec<Measured>> {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset");
-        return;
+        return None;
     };
-    let dir = scratch("postgresql");
-    let schema = format!("lfs768_mount_{}", std::process::id());
+    let dir = scratch(label);
+    let schema = format!("lfs768_{tag}_{}", std::process::id());
     let selection = PostgresSelection::new(&url, &schema);
     let result = std::panic::catch_unwind(|| {
         let handles =
@@ -147,14 +256,18 @@ fn postgresql_mount_counts() {
         let branch = initialize(&dir, &storage, &handles.history, &handles.acquisition);
         drop(storage);
         drop(handles);
-        scenarios(&dir, || StoreSelection::Postgres(selection.clone()), branch)
+        run(
+            &dir,
+            &|| StoreSelection::Postgres(selection.clone()),
+            branch,
+        )
     });
     if let Ok(mut client) = postgres::Client::connect(&url, postgres::NoTls) {
         let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {schema} CASCADE"));
     }
     let _ = std::fs::remove_dir_all(&dir);
     match result {
-        Ok(measured) => check("postgresql", &measured, POSTGRESQL),
+        Ok(measured) => Some(measured),
         Err(panic) => std::panic::resume_unwind(panic),
     }
 }
@@ -285,6 +398,17 @@ impl Opened {
             .unwrap()
             .workspace
     }
+    /// One Workspace Commit, as the daemon's `workspace.commit` runs it.
+    fn commit(&self, workspace: &BoundWorkspace) -> CommitOutcome {
+        let success = workspace
+            .commit_captured(&CommitOptions {
+                force: false,
+                message: Some("round trips".to_owned()),
+                expected: None,
+            })
+            .unwrap_or_else(|failure| panic!("commit: {failure}"));
+        success.history.expect("a published Commit")
+    }
     fn unmount(&self, workspace: BoundWorkspace) {
         let namespace = workspace.route().namespace();
         workspace.close().unwrap();
@@ -311,14 +435,14 @@ fn counts(work: &SqlWork) -> Counts {
     ]
 }
 
-fn measure(
+fn measure<T>(
     opened: &Opened,
     scenario: &'static str,
     out: &mut Vec<Measured>,
-    mount: impl FnOnce() -> BoundWorkspace,
-) -> BoundWorkspace {
+    step: impl FnOnce() -> T,
+) -> T {
     let before = opened.work();
-    let workspace = mount();
+    let value = step();
     let after = opened.work();
     let mut measured = [[0; 4]; 3];
     for (slot, (after, before)) in measured.iter_mut().zip(after.iter().zip(before.iter())) {
@@ -328,12 +452,12 @@ fn measure(
         scenario,
         counts: measured,
     });
-    workspace
+    value
 }
 
 fn scenarios(
     dir: &Path,
-    selection: impl Fn() -> StoreSelection,
+    selection: &dyn Fn() -> StoreSelection,
     branch: BranchId,
 ) -> Vec<Measured> {
     let mut out = Vec::new();
@@ -353,6 +477,39 @@ fn scenarios(
         opened.by_name(3)
     });
     opened.unmount(named);
+    opened.stop();
+    out
+}
+
+/// After one mount by Branch id on a newly opened Store: two Commits of a
+/// one-file change, an UpToDate Commit, then the unmount. Each change is
+/// written before its measured Commit, outside the count.
+fn commit_scenarios(
+    dir: &Path,
+    selection: &dyn Fn() -> StoreSelection,
+    branch: BranchId,
+) -> Vec<Measured> {
+    let mut out = Vec::new();
+    let opened = Opened::open(dir, selection(), "c");
+    let workspace = opened.by_id(4, branch);
+    for (scenario, path) in [("commit.first", "/one"), ("commit.second", "/two")] {
+        let mut change = Mutation::new(&workspace).unwrap();
+        change.write(path, b"changed\n", None).unwrap();
+        change.finish().unwrap();
+        let outcome = measure(&opened, scenario, &mut out, || opened.commit(&workspace));
+        assert!(
+            matches!(outcome, CommitOutcome::Committed { .. }),
+            "{scenario}: {outcome:?}"
+        );
+    }
+    let outcome = measure(&opened, "commit.up_to_date", &mut out, || {
+        opened.commit(&workspace)
+    });
+    assert!(
+        matches!(outcome, CommitOutcome::UpToDate { .. }),
+        "{outcome:?}"
+    );
+    measure(&opened, "unmount", &mut out, || opened.unmount(workspace));
     opened.stop();
     out
 }

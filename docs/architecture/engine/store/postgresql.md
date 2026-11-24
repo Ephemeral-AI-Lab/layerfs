@@ -505,6 +505,14 @@ Keys and their custody:
   statement that fails, or whose reply cannot be read, leaves the held keys
   unknown: it is `Unknown`, which quarantines the session and closes its
   connection, so the server gives back every key.
+  The same holds for the owner release's unlock statement. Its delete has
+  committed, so the release still answers success (the unlock's `Unknown`
+  is not returned) and the session's next call is refused `UnknownOutcome`.
+  Every other mount of that session loses its keys with the connection,
+  but its row stays, so a compaction or removal on another session is still
+  refused `MountsActive` by the intent-row scan. `postgresql_gc_sessions`
+  forces both a failed unlock statement and a lost reply
+  (`a_failed_unlock_…`, `a_lost_unlock_reply_…`) and checks this.
 - §5.2 item 34 is kept: the lock and unlock statements return
   `pg_backend_pid()`, compared with the session's recorded backend, and a
   transaction-pooled connection is `Unsupported`.
@@ -583,7 +591,7 @@ intent; merge, Init and the removals follow the same rule
 
 | Test | Command | Checks |
 | --- | --- | --- |
-| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched |
+| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched. Also a mounted Workspace's first and second one-file Commit, an UpToDate Commit and the unmount: the Commit's whiteout read is one statement on the control reader (4 round trips fewer on the first Commit and 3 on later ones than the two reads before #768), which the first Commit opens |
 | [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller of a mount; a catalog without admission still mounts. `a_pooled_connection_refuses_a_shared_intent`: the same for a merge |
 
 ## Delta chains
