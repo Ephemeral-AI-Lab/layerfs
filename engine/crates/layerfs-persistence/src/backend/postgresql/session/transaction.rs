@@ -391,9 +391,19 @@ impl Session {
                                 actual = row.try_get(0).ok().flatten();
                             }
                         }
-                        let generation = actual
-                            .and_then(|text| text.parse::<u64>().ok())
-                            .ok_or(BackendError::Integrity)?;
+                        // An unreadable fence still ends the transaction its
+                        // `BEGIN` opened: a `Write` holds the lane row from
+                        // there, and leaving it open on a live connection kept
+                        // every other writer waiting (#776 P7).
+                        let Some(generation) = actual.and_then(|text| text.parse::<u64>().ok())
+                        else {
+                            if rollback(state).is_err() {
+                                state.quarantine();
+                                return Err(BackendError::Unknown.into());
+                            }
+                            state.work.rollbacks += 1;
+                            return Err(BackendError::Integrity.into());
+                        };
                         if generation != expected {
                             if rollback(state).is_err() {
                                 state.quarantine();

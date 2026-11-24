@@ -1014,7 +1014,13 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
     `(slot, stamp)` with `stamp <= mark_stamp`; reduce
     `store_totals` by those totals in the **same transaction that settles the
     op**, or gate on `totals_applied`; never re-sum. Assert the new tables'
-    sums equal old totals minus dead totals. The op phase is `cleanup`; a crash resumes the
+    sums equal old totals minus dead totals. The settle transaction reads
+    `store_totals` and the four Store-wide sums in one statement (one
+    snapshot, so a publication is in both or neither) without locking the
+    row, asserts them, and takes the row lock last with a relative
+    `UPDATE`, so publications are not held behind the scans (#776 P3); the
+    retained-set check reads `count(*)` and `count(DISTINCT object_id)` in one
+    statement too (#776 P4). The op phase is `cleanup`; a crash resumes the
     persisted set — there is no "re-derive from the current Store" path. The
     Store is usable at `G + 1` throughout; the full doctor runs after cleanup.
 
@@ -1033,7 +1039,12 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
   a.datname = current_database() AND a.pid <> pg_backend_pid()`, checking the
   boolean and polling until the pair is gone, then reading the incarnation.
   Terminating another role's backend needs `pg_signal_backend` or membership;
-  the precheck reports `Unsupported` when neither is available.
+  the precheck reports `Unsupported` when neither is available. A round that
+  fails **definitely** in Phase A or B (a refusal, or a swap that rolled back)
+  clears `pid`, `backend_start` and `usename` from `gc_op` before it releases
+  the exclusive key, keeping the op and its scratch for the next attempt's
+  cleanup: a live, healthy backend left named there would be judged a lost
+  `COMMIT` and terminated (#776 P1). An uncertain outcome keeps the owner.
 - **Lock time:** `ACCESS EXCLUSIVE` is held for the swap only, seconds rather
   than the length of the copy or the cleanup. No long transaction holds back
   vacuum for other Stores in the same database.
