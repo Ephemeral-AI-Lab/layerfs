@@ -41,15 +41,17 @@ pub struct Bound {
 /// stopped. Answers a `left` sentence for each one it could not end.
 pub fn end(open: Result<&OpenArgs, &str>, bound: &[Bound]) -> Vec<SdkValue> {
     (bound.iter())
-        .filter_map(|workspace| {
-            let why = end_one(open, workspace).err()?;
-            Some(SdkValue::text(format!(
-                "Workspace {}'s mount intent was not ended ({why}): `layerfs branch remove` of its \
-                 Branch and `layerfs store compact` are refused while it remains",
-                workspace.path
-            )))
-        })
+        .filter_map(|workspace| Some(not_ended(&workspace.path, &end_one(open, workspace).err()?)))
         .collect()
+}
+
+/// The `left` sentence of Workspace `path`'s mount intent, not ended for
+/// reason `why`.
+fn not_ended(path: &str, why: &str) -> SdkValue {
+    SdkValue::text(format!(
+        "Workspace {path}'s mount intent was not ended ({why}): `layerfs branch remove` of its \
+         Branch and `layerfs store compact` are refused while it remains"
+    ))
 }
 
 /// [`end`]'s one Workspace: why its intent was not ended.
@@ -105,15 +107,23 @@ pub fn end_handed(home: &Path, record: &SandboxRecord, answer: SdkValue) -> SdkV
     };
     let (handed, mut fields): (Vec<_>, Vec<_>) =
         fields.into_iter().partition(|(name, _)| name == HANDED);
-    let bound = match handed.into_iter().next() {
-        Some((_, SdkValue::List(items))) => items.iter().map(taken).collect::<Vec<_>>(),
+    let (bound, undecoded): (Vec<_>, Vec<_>) = match handed.into_iter().next() {
+        Some((_, SdkValue::List(items))) => {
+            (items.iter().map(taken)).partition(|workspace: &Bound| workspace.bound.is_some())
+        }
         Some(_) | None => return SdkValue::Map(fields),
     };
-    if bound.is_empty() {
+    if bound.is_empty() && undecoded.is_empty() {
         return SdkValue::Map(fields);
     }
-    let open = store_of(home, record);
-    let more = end(open.as_ref().map_err(String::as_str), &bound);
+    let why = "the ids it was handed back do not decode";
+    let mut more: Vec<_> = (undecoded.iter())
+        .map(|workspace| not_ended(&workspace.path, why))
+        .collect();
+    if !bound.is_empty() {
+        let open = store_of(home, record);
+        more.extend(end(open.as_ref().map_err(String::as_str), &bound));
+    }
     match fields.iter_mut().find(|(name, _)| name == "left") {
         Some((_, SdkValue::List(left))) => left.extend(more),
         _ => fields.push(("left".to_owned(), SdkValue::List(more))),
@@ -121,8 +131,8 @@ pub fn end_handed(home: &Path, record: &SandboxRecord, answer: SdkValue) -> SdkV
     SdkValue::Map(fields)
 }
 
-/// One Workspace [`handed`] names; one whose ids do not read is listed
-/// with neither, so its `left` sentence says so.
+/// One Workspace [`handed`] names; one whose ids do not decode is listed
+/// with neither, and [`end_handed`] says they did not decode.
 fn taken(item: &SdkValue) -> Bound {
     let id = |field: &str| item.get_text(field).and_then(unhex);
     let workspace = id("workspace").and_then(|bytes| <[u8; 32]>::try_from(bytes).ok());
@@ -180,5 +190,116 @@ pub fn remedy(home: &Path, record: &SandboxRecord) -> String {
                  kernel, after which {adopts}"
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn branch(n: u8) -> BranchId {
+        BranchId::from_authority([n; 16])
+    }
+
+    fn workspaces() -> Vec<Bound> {
+        vec![
+            Bound {
+                path: "/w/a".to_owned(),
+                bound: Some(([1; 32], Branch::Id(branch(7)))),
+            },
+            Bound {
+                path: "/w/named".to_owned(),
+                bound: Some(([3; 32], Branch::Named("main".to_owned()))),
+            },
+            Bound {
+                path: "/w/b".to_owned(),
+                bound: Some(([2; 32], Branch::Id(branch(8)))),
+            },
+            Bound {
+                path: "/w/none".to_owned(),
+                bound: None,
+            },
+        ]
+    }
+
+    /// What a close hands back ([`handed`]) is what its caller reads
+    /// ([`taken`]): each Workspace bound by Branch id, in order, with the
+    /// same path and ids; one bound by name or by nothing is not handed.
+    #[test]
+    fn handed_intents_decode_as_their_caller_reads_them() {
+        let SdkValue::List(items) = handed(&workspaces()) else {
+            panic!("handed is a list");
+        };
+        assert_eq!(items.len(), 2, "{items:?}");
+        let expected = [("/w/a", [1; 32], branch(7)), ("/w/b", [2; 32], branch(8))];
+        for (item, (path, workspace, id)) in items.iter().zip(expected) {
+            let read = taken(item);
+            assert_eq!(read.path, path);
+            match read.bound {
+                Some((read_workspace, Branch::Id(read_branch))) => {
+                    assert_eq!(read_workspace, workspace, "{path}");
+                    assert!(read_branch == id, "{path}");
+                }
+                _ => panic!("{path} reads with no ids: {item:?}"),
+            }
+        }
+    }
+
+    /// The caller of a close ends what it handed back and drops the field:
+    /// each one not ended is a sentence of `left`, after what was there; an
+    /// item whose ids do not decode says so (N2 of the 3cf2cfc246 review),
+    /// not that nothing records its Workspace id.
+    #[test]
+    fn an_item_whose_ids_do_not_decode_says_so() {
+        let home = std::env::temp_dir().join(format!("layerfs-handed-{}", std::process::id()));
+        let record = SandboxRecord::from_record(
+            "sb",
+            SdkValue::map([("project", SdkValue::text("shop/api"))]),
+        );
+        let SdkValue::List(mut items) = handed(&workspaces()) else {
+            panic!("handed is a list");
+        };
+        items.push(SdkValue::map([
+            ("path", SdkValue::text("/w/bad")),
+            ("workspace", SdkValue::text("not hex")),
+            ("branch", SdkValue::text(hex(branch(9).as_slice()))),
+        ]));
+        let answer = SdkValue::map([
+            ("kind", SdkValue::text("Closed")),
+            ("left", SdkValue::List(vec![SdkValue::text("earlier")])),
+            (HANDED, SdkValue::List(items)),
+        ]);
+        let answer = end_handed(&home, &record, answer);
+        assert!(answer.get(HANDED).is_none(), "{answer:?}");
+        let Some(SdkValue::List(left)) = answer.get("left") else {
+            panic!("no left: {answer:?}");
+        };
+        let left: Vec<&str> = (left.iter())
+            .filter_map(|line| match line {
+                SdkValue::Text(line) => Some(line.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(left.len(), 4, "{left:?}");
+        assert_eq!(left[0], "earlier");
+        let of = |path: &str| {
+            let found = left
+                .iter()
+                .find(|line| line.contains(&format!("{path}'s ")));
+            found
+                .copied()
+                .unwrap_or_else(|| panic!("no {path}: {left:?}"))
+        };
+        // decoded: not ended for want of the Store (this home has none)
+        for path in ["/w/a", "/w/b"] {
+            let line = of(path);
+            assert!(line.contains("no Store named shop"), "{line}");
+        }
+        let line = of("/w/bad");
+        assert!(
+            line.contains("ids it was handed back do not decode"),
+            "{line}"
+        );
+        assert!(!line.contains("nothing records"), "{line}");
     }
 }

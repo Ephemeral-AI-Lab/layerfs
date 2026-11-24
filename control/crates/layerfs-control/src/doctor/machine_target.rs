@@ -75,13 +75,12 @@ pub(super) fn diagnose(
         // network, and only for root: for anyone else it does not apply
         #[cfg(target_os = "linux")]
         if layerfs_sandbox_backend::network::privileged() {
-            let records = layerfs_sandbox::record::sandboxes(home).unwrap_or_default();
-            let owned = super::network::owned_links(&records);
-            match super::network::report(home) {
-                Ok(report) => {
+            match (super::network::owned_in(home), super::network::report(home)) {
+                (Ok(owned), Ok(report)) => {
                     super::network::machine(&report, (name, sandboxes, true), &owned, checks)
                 }
-                Err(refusal) => checks.unknown("machine.network", refusal.message),
+                (Err(why), _) => checks.unknown("machine.network", why),
+                (_, Err(refusal)) => checks.unknown("machine.network", refusal.message),
             }
         }
         return Ok(());
@@ -564,17 +563,17 @@ impl Machine<'_> {
             )
         });
         // every Sandbox this home records, on any machine: on a Linux host
-        // `native`'s links are in the namespace a Linux Engine's worker reads
-        let records = layerfs_sandbox::record::sandboxes(self.home).unwrap_or_default();
-        let owned = super::network::owned_links(&records);
-        match answer {
-            Ok(report) => super::network::machine(
+        // `native`'s links are in the namespace a Linux Engine's worker
+        // reads; with a record that cannot be read, no link is a leftover
+        match (answer, super::network::owned_in(self.home)) {
+            (Ok(report), Ok(owned)) => super::network::machine(
                 &report,
                 (self.name, self.sandboxes, self.host_network),
                 &owned,
                 self.checks,
             ),
-            Err(error) => self.checks.unknown(
+            (Ok(_), Err(why)) => self.checks.unknown(ID, why),
+            (Err(error), _) => self.checks.unknown(
                 ID,
                 format!(
                     "its worker did not read its Sandbox network: {}",

@@ -141,12 +141,19 @@ pub(super) fn inner(spec_path: &Path) -> Result<i32, String> {
 /// The outer stage's half of the gate: once the inner stage says its root
 /// is built (end of file instead: it failed, and its own error is in the
 /// log), the commands' view with the `written` resolver file, then the
-/// answer that lets the inner stage start the daemon.
+/// answer that lets the inner stage start the daemon. Any other byte ends
+/// the Sandbox, naming it in the log.
 fn view(mut gate: UnixStream, written: &Path) -> Result<(), String> {
     let mut said = [0u8; 1];
     match gate.read(&mut said) {
         Ok(1) if said[0] == BUILT => {}
-        Ok(_) => return Ok(()),
+        Ok(0) => return Ok(()),
+        Ok(_) => {
+            return Err(format!(
+                "the init stages' gate: the inner stage said {:?}, not that its root is built",
+                char::from(said[0])
+            ))
+        }
         Err(error) => return Err(format!("reading the init stages' gate: {error}")),
     }
     mounts::commands_view(written)?;

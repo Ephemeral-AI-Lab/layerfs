@@ -114,6 +114,19 @@ reads `broken` `outdated` (`StoreRecord::outdated_fields`), fixed by `store
 update <s> --auth <auth>`; every PostgreSQL record write (`connect`,
 `update`, `save_own`, `forget_machine`) drops those fields
 (`StoreRecord::cleaned`, spec v23 V23-6), and no read does.
+A URL's user part has two readings, and what is shown or written down
+strips both: the daemon's client ends it at the first `@` anywhere (where
+`secrets::with_login` puts the login, the one place that split is used),
+the URL's authority at the last `@` before the first `/`.
+`connect::without_login` (record writes, `connections` rows, fix lines)
+drops the wider user part and every login parameter of the query either
+reading leaves, read as the client reads it (a value runs to the next `&`;
+a `#` ends nothing, and a fragment ahead of the query goes with it); an `@` inside a login parameter ends no user part, so
+`postgres://h/db?password=p@ss` is kept as `postgres://h/db`, never as a
+host `ss`. It strips again until no reading finds a user part or a login,
+so one write leaves a record current. `url_user` (a fix's `--user`) never
+answers a user part that holds part of a login parameter, and `target`
+(a row's `server`, a refusal's host) reads the stripped URL.
 `machine.remove` forgets the machine's entry and its reach in every Store.
 
 ### Who connects (spec v23)
@@ -169,7 +182,7 @@ update as its fix
 
 | Rule | Source |
 | --- | --- |
-| The login is a saved one: a URL that names a user, holds a password or names a `passfile` is refused `InvalidInput` (`refuse_login`), with a fix giving the address alone (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store); `sslkey` and `sslcert` pass; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
+| The login is a saved one: a URL that names a user, holds a password or names a `passfile` is refused `InvalidInput` (`refuse_login`: any `@`, which the client reads as ending a user part, or a login parameter either reading finds), with a fix giving the address alone (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store); `sslkey` and `sslcert` pass; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
 | Every byte outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `percent` |
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |

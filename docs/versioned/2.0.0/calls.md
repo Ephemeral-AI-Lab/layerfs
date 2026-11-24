@@ -881,8 +881,13 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   ended, whose uncommitted changes end with it. Once its runtime is
   confirmed stopped, the mount intent each of those Workspaces held in the
   Store is ended, once each; on a PostgreSQL Store whose URL its machine
-  cannot dial, the machine hands those intents back and the caller ends
-  them with the Store's own address. One it could not end (its Store could not be
+  cannot dial, the machine hands those intents back in its answer and the
+  caller ends them with the Store's own address. Nothing else records
+  them: if that answer is lost (`Unknown`), the machine cannot remove the
+  Sandbox's folder after stopping it (`Failed`), or the caller ends before
+  it ends them, they stay, and a retried remove answers `already_gone`
+  with an empty `left`. A missing or unnamed saved login refuses the
+  remove, forced or not, with its fix. One it could not end (its Store could not be
   opened, say) is a sentence of `left` that says why: `branch remove` of
   its Branch and `store compact` are refused while it remains, and only the
   Store's admission ends it later, once it can prove the owner gone (for a

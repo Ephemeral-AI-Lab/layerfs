@@ -1645,3 +1645,250 @@ fn a_machine_that_would_drop_sandbox_traffic_refuses_the_start() {
     admitted.stop(5).unwrap();
     admitted.delete().unwrap();
 }
+
+/// A Sandbox directory of `fixture` named `name`, laid out as a launch
+/// lays one out over the image a launch unpacked, and its spec with host
+/// end `link` and the resolver file `resolver` names (given the directory):
+/// the init stage then holds the commands' own view whatever this host's
+/// resolver is (`resolver_file` answers `Bind` on many hosts, and the
+/// launcher then names none). Returns the spec's path, the directory and
+/// the cgroup the spec names.
+fn gated(
+    fixture: &Fixture,
+    name: &str,
+    link: &str,
+    resolver: &dyn Fn(&Path) -> PathBuf,
+) -> (PathBuf, PathBuf, PathBuf) {
+    use layerfs_sandbox_backend::{HelperSpec, SpecNetwork};
+    // the image's unpacked root, as a launch's own spec names it
+    let provider = fixture.provider().unwrap();
+    let mut launched = fixture.launch(&provider, "unpack").unwrap();
+    let written = fs::read(fixture.directory("unpack").join("config/helper.spec")).unwrap();
+    let lower = HelperSpec::parse(&written).unwrap().lower;
+    launched.stop(5).unwrap();
+    launched.delete().unwrap();
+    let directory = fixture.directory(name);
+    let root = fixture.root.join(format!("{name}-root"));
+    for (path, mode) in [
+        (directory.clone(), 0o755),
+        (directory.join("bin"), 0o755),
+        (directory.join("config"), 0o700),
+        (directory.join("overlay"), 0o700),
+        (directory.join("overlay/upper"), 0o700),
+        (directory.join("overlay/work"), 0o700),
+        (root.clone(), 0o755),
+    ] {
+        fs::create_dir(&path).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+    }
+    fs::copy(&fixture.daemon, directory.join("bin/layerfs-daemon")).unwrap();
+    fs::write(directory.join("config/daemon.setup"), b"stub setup").unwrap();
+    let group =
+        Path::new("/sys/fs/cgroup").join(format!("layerfs-{name}-test-{}", std::process::id()));
+    fs::create_dir(&group).unwrap();
+    let spec = HelperSpec {
+        root,
+        sandbox: directory.clone(),
+        daemon: directory.join("bin/layerfs-daemon"),
+        config: directory.join("config/daemon.setup"),
+        cgroup: group.clone(),
+        lower,
+        upper: directory.join("overlay/upper"),
+        work: directory.join("overlay/work"),
+        binds: Vec::new(),
+        runtime: None,
+        network: Some(SpecNetwork {
+            pool: layerfs_sandbox_backend::network::pool().unwrap(),
+            link: link.to_owned(),
+        }),
+        resolver: Some(resolver(&directory)),
+    };
+    let path = fixture.base.join(format!("{name}.spec"));
+    fs::write(&path, spec.encode().unwrap()).unwrap();
+    (path, directory, group)
+}
+
+/// `helper init` on `spec`, its standard output read line by line on a
+/// thread of its own.
+fn init_stage(
+    spec: &Path,
+) -> (
+    std::process::Child,
+    std::sync::mpsc::Receiver<String>,
+    std::thread::JoinHandle<String>,
+) {
+    use std::io::{BufRead, Read};
+    let mut child = std::process::Command::new(helper())
+        .arg("init")
+        .arg("--spec")
+        .arg(spec)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let out = child.stdout.take().unwrap();
+    let (lines, read) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(out).lines() {
+            let Ok(line) = line else { break };
+            if lines.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let mut err = child.stderr.take().unwrap();
+    let said = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = err.read_to_string(&mut text);
+        text
+    });
+    (child, read, said)
+}
+
+/// Ends every process of cgroup `group` and removes it, once it is empty
+/// (a bounded wait: the kernel empties it after the processes end).
+fn end_group(group: &Path) {
+    let _ = fs::write(group.join("cgroup.kill"), "1");
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while fs::read_to_string(group.join("cgroup.procs")).is_ok_and(|procs| !procs.is_empty())
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    fs::remove_dir(group).unwrap();
+}
+
+/// The commands' view and its gate, from a spec that names a written
+/// resolver file (review of 210f032bc4, finding 2), on any host: once the
+/// daemon listens, the commands' view (the outer stage's mount namespace,
+/// which commands join) has the written file at `/etc/resolv.conf` and the
+/// daemon's has this machine's; a mount the daemon's side makes, and its
+/// unmount, reach the commands' view, and nothing reaches the machine.
+#[test]
+fn a_spec_naming_a_written_resolver_gives_commands_their_own_view() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces commands' view: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("view");
+    let text = "# written for this test\nnameserver 192.0.2.53\n";
+    let link = "lfs0000view001";
+    let (spec, directory, group) = gated(&fixture, "sandbox-1", link, &|directory| {
+        let file = directory.join("resolv.conf");
+        fs::write(&file, text).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        file
+    });
+    let (mut child, lines, said) = init_stage(&spec);
+    let listening = lines
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap_or_default();
+    let outer = child.id().to_string();
+    let children =
+        fs::read_to_string(format!("/proc/{outer}/task/{outer}/children")).unwrap_or_default();
+    let inner = children.split_whitespace().next().unwrap_or("").to_owned();
+    let read = |pid: &str, path: &str| {
+        fs::read_to_string(format!("/proc/{pid}/root{path}")).unwrap_or_default()
+    };
+    let commands = read(&outer, "/etc/resolv.conf");
+    let daemon = read(&inner, "/etc/resolv.conf");
+    let launcher = fs::read_to_string("/etc/resolv.conf").unwrap_or_default();
+    // a mount on the daemon's side, then its unmount
+    let point = directory.join("probe");
+    fs::create_dir(&point).unwrap();
+    let on_daemon_side = |script: &str| {
+        std::process::Command::new("nsenter")
+            .args(["--target", &inner, "--mount", "/bin/sh", "-c", script])
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    let seen = point.join("seen");
+    let mounted = on_daemon_side(&format!(
+        "/bin/mount -t tmpfs -o mode=0755 probe {p} && /bin/echo seen > {s}",
+        p = point.display(),
+        s = seen.display()
+    ));
+    let machine_saw = seen.exists();
+    let probe = seen.display().to_string();
+    let commands_saw = read(&outer, &probe);
+    let unmounted = on_daemon_side(&format!("/bin/umount {}", point.display()));
+    let commands_still = fs::exists(format!("/proc/{outer}/root{probe}")).unwrap_or(true);
+    end_group(&group);
+    let _ = child.wait();
+    let said = said.join().unwrap();
+    assert!(
+        listening.starts_with("LAYERFS_DAEMON_LISTEN"),
+        "the daemon did not start: {listening:?} {said}"
+    );
+    assert!(!inner.is_empty(), "no inner stage: {said}");
+    assert_eq!(commands, text, "the commands' view lacks the written file");
+    assert_eq!(
+        daemon, launcher,
+        "the daemon does not resolve as this machine does"
+    );
+    assert!(mounted, "the daemon's side could not mount: {said}");
+    assert!(!machine_saw, "the probe mount reached the machine");
+    assert_eq!(
+        commands_saw, "seen\n",
+        "a daemon-side mount did not reach commands"
+    );
+    assert!(unmounted);
+    assert!(
+        !commands_still,
+        "a daemon-side unmount did not reach commands"
+    );
+    assert!(link_gone(link), "{link} outlived its Sandbox");
+}
+
+/// A commands' view that cannot be made (the written resolver file is not
+/// there inside the root) ends the Sandbox before its daemon starts: the
+/// stage fails, naming why, the daemon never says it listens, and no
+/// process of the Sandbox is left.
+#[test]
+fn a_commands_view_that_cannot_be_made_ends_the_sandbox_before_its_daemon() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces failed commands' view: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("no-view");
+    let link = "lfs0000noview1";
+    let (spec, _, group) = gated(&fixture, "sandbox-1", link, &|directory| {
+        directory.join("absent-resolv.conf")
+    });
+    let (mut child, lines, said) = init_stage(&spec);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        match child.try_wait().unwrap() {
+            Some(status) => break Some(status),
+            None if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20))
+            }
+            None => break None,
+        }
+    };
+    let left = fs::read_to_string(group.join("cgroup.procs")).unwrap_or_default();
+    end_group(&group);
+    if status.is_none() {
+        let _ = child.wait();
+    }
+    let said = said.join().unwrap();
+    let printed: Vec<String> = lines.try_iter().collect();
+    assert_eq!(
+        status.and_then(|status| status.code()),
+        Some(125),
+        "the stage did not end on its own: {said}"
+    );
+    assert!(
+        !printed
+            .iter()
+            .any(|line| line.contains("LAYERFS_DAEMON_LISTEN")),
+        "the daemon started without the commands' view: {printed:?}"
+    );
+    assert!(said.contains("absent-resolv.conf"), "{said}");
+    assert!(
+        left.trim().is_empty(),
+        "processes outlived the stage: {left}"
+    );
+    assert!(link_gone(link), "{link} outlived its Sandbox");
+}

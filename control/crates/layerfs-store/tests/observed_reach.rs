@@ -269,11 +269,20 @@ fn a_missing_login_reads_missing_and_wins_over_old_fields() {
 #[test]
 fn urls_lose_their_login_and_keep_the_rest() {
     for (url, clean) in [
+        // the client reads a value to the next `&`: the `#f` is the
+        // password file's, and goes with it
         (
             "postgresql://a:b@h:1/d?sslmode=require&user=x&sslpassword=y&PassFile=%2Fp#f",
-            "postgresql://h:1/d?sslmode=require#f",
+            "postgresql://h:1/d?sslmode=require",
         ),
         ("postgres://h/d?user=x", "postgres://h/d"),
+        // a fragment holding the query goes with it
+        ("postgresql://h/d#x?password=y", "postgresql://h/d"),
+        // a `#` after a parameter that carries no login stays
+        (
+            "postgresql://h/d?sslmode=require#f",
+            "postgresql://h/d?sslmode=require#f",
+        ),
         ("postgresql://h/d", "postgresql://h/d"),
         (
             "postgresql://h/d?sslkey=%2Fk&sslcert=%2Fc",
@@ -370,4 +379,128 @@ fn only_a_dial_no_server_answered_is_not_connected() {
         assert!(answered.contains("db error"), "{answered}");
         assert!(!not_connected(&answered), "{answered}");
     }
+}
+
+/// A password holding `@` (M1 of the 3cf2cfc246 review). The daemon's
+/// client reads a URL's user part up to its first `@` anywhere; the URL's
+/// own authority ends its user part at the last `@` before the first `/`.
+/// Dialling keeps the client's split, but nothing shown or written down
+/// keeps any part of the password under either reading, nor of a
+/// `password` or `sslpassword` parameter (which the client reads to the
+/// next `&`, a `#` included): not the address or `--user` a fix line
+/// names, a `connections` row, a refusal's server, a state's fix, nor the
+/// record a write cleans, which then reads current.
+#[test]
+fn a_password_holding_at_never_shows_and_dialling_keeps_the_client_split() {
+    use layerfs_home::outcome::shell_word;
+    use layerfs_store::postgresql::connect::{
+        refuse_login, refuse_login_with_fix, target, url_user,
+    };
+    use layerfs_store::postgresql::login;
+    const PASSWORD: [&str; 2] = ["Zq7", "Xw9"];
+    let leaks = |text: &str| PASSWORD.iter().any(|part| text.contains(part));
+    let home = tempdir("at-password");
+    login::save(&home, "pg", "alice", "s3 cret").unwrap();
+    // (given, the address shown and kept, the user a fix names, the host)
+    for (given, shown, user, host) in [
+        (
+            "postgres://h/db?user=u&password=Zq7@Xw9",
+            "postgres://h/db",
+            Some("u"),
+            "h",
+        ),
+        (
+            "postgres://h/db?sslpassword=Zq7@Xw9",
+            "postgres://h/db",
+            None,
+            "h",
+        ),
+        (
+            "postgres://u:Zq7@Xw9@db.example/app",
+            "postgres://db.example/app",
+            Some("u"),
+            "db.example",
+        ),
+        // the client's user part is the wider one: a `/` in the password
+        (
+            "postgres://u:Zq7/Xw9@db.example/app",
+            "postgres://db.example/app",
+            Some("u"),
+            "db.example",
+        ),
+        // a `#` ends no parameter for the client
+        (
+            "postgres://h:6543/db?password=Zq7#Xw9",
+            "postgres://h:6543/db",
+            None,
+            "h",
+        ),
+        (
+            "postgres://h:6543/db?sslmode=require&password=Zq7@Xw9",
+            "postgres://h:6543/db?sslmode=require",
+            None,
+            "h",
+        ),
+        // the client's user part holds a password parameter: it names no user
+        (
+            "postgres://h/db?password=Zq7&x=a@db.example",
+            "postgres://db.example",
+            None,
+            "db.example",
+        ),
+    ] {
+        assert!(refuse_login(given).is_err(), "{given}");
+        assert_eq!(without_login(given), shown, "{given}");
+        assert!(refuse_login(shown).is_ok(), "{given}");
+        assert_eq!(url_user(given).as_deref(), user, "{given}");
+        assert_eq!(target(given).unwrap().0, host, "{given}");
+        for (first, machine) in [(true, None), (false, None), (false, Some("lab"))] {
+            let refusal = refuse_login_with_fix("pg", given, first, machine).unwrap_err();
+            let text = format!("{} {:?}", refusal.message, refusal.detail);
+            assert!(!leaks(&text), "{given}: {text}");
+            let fix = refusal.detail.get_text("fix").unwrap_or_default();
+            assert!(fix.contains(&shell_word(shown)), "{given}: {fix}");
+        }
+        // an older record holding it, as the Store's address and a machine's own
+        let own = SdkValue::map([("url", t(given))]);
+        let record = store(
+            &home,
+            "pg",
+            &[
+                ("url", t(given)),
+                ("machines", SdkValue::map([("lab", own)])),
+            ],
+        );
+        assert!(record.outdated_fields(), "{given}");
+        let shown_rows = format!("{:?}", rows(&record, &["lab"]));
+        assert!(!leaks(&shown_rows), "{given}: {shown_rows}");
+        let fixes = format!(
+            "{:?} {} {}",
+            layerfs_store::state::recorded_under(&record, None),
+            login::no_auth_fix(&record),
+            login::missing_fix(&record, "pg")
+        );
+        assert!(!leaks(&fixes), "{given}: {fixes}");
+        // one write cleans it: nothing of the password on disk, and current
+        record.cleaned().write(&home).unwrap();
+        let written = std::fs::read_to_string(paths::store_record(&home, "pg")).unwrap();
+        assert!(!leaks(&written), "{given}: {written}");
+        let clean = StoreRecord::of(&home, "pg").unwrap();
+        assert!(!clean.outdated_fields(), "{given}: {written}");
+        assert_eq!(clean.text("url"), Some(shown), "{given}");
+        let own = clean.own_connection("lab").unwrap().url;
+        assert_eq!(own.as_deref(), Some(shown), "{given}");
+    }
+    // dialling keeps the client's split: the login replaces everything
+    // before the first `@`, where the client reads its user part
+    let record = store(
+        &home,
+        "pg",
+        &[("url", t("postgres://u:Zq7@Xw9@db.example/app"))],
+    );
+    assert_eq!(
+        layerfs_store::record::url(&record).unwrap(),
+        "postgres://alice:s3%20cret@Xw9@db.example/app"
+    );
+    std::fs::remove_dir_all(home).unwrap();
 }

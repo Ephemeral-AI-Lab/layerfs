@@ -14,7 +14,10 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// client (tokio-postgres 0.7, `UrlParser::parse_credentials`) splits it:
 /// the userinfo is everything before the first `@` anywhere after the
 /// scheme, not only before the first `/`, so the user part a login
-/// replaces and a URL naming a user are the ones the client reads.
+/// replaces is the one the client reads. What is shown or written down
+/// strips more: the widest user part this split or the URL's authority
+/// (to the last `@` before the first `/`) finds, and every login
+/// parameter (`layerfs_store::postgresql::connect::without_login`).
 pub fn parts(url: &str) -> Result<(&str, Option<&str>, &str)> {
     let (scheme, after) = url
         .split_once("://")

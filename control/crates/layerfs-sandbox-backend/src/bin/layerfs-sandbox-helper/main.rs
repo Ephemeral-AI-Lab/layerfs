@@ -8,7 +8,12 @@
 //!   and starts the inner stage, which is PID 1 of them, on the machine's
 //!   network.
 //! - `init-inner --spec <file>`: builds the private root, pivots to it, starts
-//!   `layerfs-daemon` as root and reaps, as an init process does.
+//!   `layerfs-daemon` as root and reaps, as an init process does. When the
+//!   spec names a written resolver file, it first shares its mounts (so the
+//!   daemon's later Workspace mounts reach the commands' copy) and holds a
+//!   gate: on its standard input, a socket to the outer stage, it says the
+//!   root is built and starts the daemon only once the outer stage answers
+//!   that the commands' own mount view, with that file, is made.
 //! - `exec …`: enters a running Sandbox's namespaces (its network one
 //!   included, else the command never runs), becomes the requested
 //!   nonroot identity with no-new-privs and runs one command under the

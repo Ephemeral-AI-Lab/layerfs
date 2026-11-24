@@ -18,6 +18,7 @@ use layerfs_home::home::{self, paths};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_home::secrets::parts;
+use std::ops::Range;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -100,10 +101,13 @@ fn query(rest: &str) -> Vec<(String, String)> {
 
 /// Refuses a URL that names a user or holds a password, in its user part
 /// or as a `user` or any `password` (`sslpassword`) parameter: the login
-/// is a saved one, named with `--auth`.
+/// is a saved one, named with `--auth`. Any `@` is a user part to the
+/// daemon's client (its first one ends it, [`parts`]), so a URL holding
+/// one is refused whichever reading finds the user part, as is a login
+/// parameter of the query either reading finds ([`Shown`]).
 pub fn refuse_login(url: &str) -> Result<()> {
-    let (_, user, rest) = parts(url)?;
-    if user.is_some() || query(rest).iter().any(|(name, _)| login_parameter(name)) {
+    let shown = Shown::of(url)?;
+    if shown.after.contains('@') || !shown.pairs.is_empty() {
         return Err(refused(
             "InvalidInput",
             "the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one)",
@@ -151,66 +155,163 @@ fn login_parameter(name: &str) -> bool {
     name == "user" || name == "passfile" || name.contains("password")
 }
 
-/// `url` without a login: its user part dropped, and every query
-/// parameter that carries one ([`refuse_login`]'s). What a PostgreSQL
-/// record write keeps of an old URL (V23-6); a URL that is not a
-/// PostgreSQL one is kept as it is.
-pub fn without_login(url: &str) -> String {
-    let Ok((scheme, _, rest)) = parts(url) else {
-        return url.to_owned();
+/// The byte ranges of `after` (a URL after its `scheme://`) holding a
+/// pair of the query of `after[start..]` that carries a login
+/// ([`login_parameter`]). The query is read as the daemon's client reads
+/// it: from the first `?` to the end, its pairs split at `&`; a `#` ends
+/// no value.
+fn login_pairs(after: &str, start: usize) -> Vec<Range<usize>> {
+    let Some(mark) = after[start..].find('?') else {
+        return Vec::new();
     };
-    // a fragment holding `?` is where `query` reads parameters: dropped
-    // with them, so no login parameter survives in it
-    let (path, fragment) = match rest.split_once('#') {
-        Some((path, fragment)) => (path, Some(fragment).filter(|f| !f.contains('?'))),
-        None => (rest, None),
-    };
-    let (path, kept) = match path.split_once('?') {
-        Some((path, query)) => {
-            let kept: Vec<&str> = (query.split('&'))
-                .filter(|pair| {
-                    let name = pair.split_once('=').map_or(*pair, |(name, _)| name);
-                    !pair.is_empty() && !login_parameter(&decode(name))
-                })
-                .collect();
-            (path, kept)
+    let mut pairs = Vec::new();
+    let mut at = start + mark + 1;
+    for pair in after[at..].split('&') {
+        let name = pair.split_once('=').map_or(pair, |(name, _)| name);
+        if !pair.is_empty() && login_parameter(&decode(name)) {
+            pairs.push(at..at + pair.len());
         }
-        None => (path, Vec::new()),
-    };
-    let mut clean = format!("{scheme}://{path}");
-    if !kept.is_empty() {
-        clean.push('?');
-        clean.push_str(&kept.join("&"));
+        at += pair.len() + 1;
     }
-    if let Some(fragment) = fragment {
-        clean.push('#');
-        clean.push_str(fragment);
+    pairs
+}
+
+/// A PostgreSQL URL read for showing or writing down (M1 of the
+/// 3cf2cfc246 review). Its user part has two readings: the daemon's
+/// client's, to the first `@` anywhere ([`parts`], what a login is put
+/// into), and the URL's own authority's, to the last `@` before the first
+/// `/`. What is shown or kept drops the widest user part either reading
+/// finds and every login pair the query with no user part, or after
+/// either reading's, holds; an `@` inside such a pair ends no user part
+/// (the pair is dropped whole, so no part of its value is left as a host).
+struct Shown<'a> {
+    scheme: &'a str,
+    /// The URL after `scheme://`.
+    after: &'a str,
+    /// Where the widest user part ends: its `@`.
+    user_end: Option<usize>,
+    /// Every login pair either reading finds, as byte ranges of `after`.
+    pairs: Vec<Range<usize>>,
+}
+
+impl<'a> Shown<'a> {
+    fn of(url: &'a str) -> Result<Self> {
+        let (scheme, _, _) = parts(url)?;
+        let after = &url[scheme.len() + "://".len()..];
+        let first = after.find('@');
+        let own = after[..after.find('/').unwrap_or(after.len())].rfind('@');
+        let mut pairs = login_pairs(after, 0);
+        for at in [first, own].into_iter().flatten() {
+            pairs.extend(login_pairs(after, at + 1));
+        }
+        pairs.sort_by_key(|pair| (pair.start, pair.end));
+        pairs.dedup();
+        let user_end = ([first, own].into_iter().flatten())
+            .filter(|at| !pairs.iter().any(|pair| pair.contains(at)))
+            .max();
+        Ok(Self {
+            scheme,
+            after,
+            user_end,
+            pairs,
+        })
+    }
+
+    /// Whether `range` of `after` shares a byte with a login pair other
+    /// than itself.
+    fn overlaps(&self, range: &Range<usize>) -> bool {
+        (self.pairs.iter())
+            .any(|pair| pair != range && pair.start < range.end && range.start < pair.end)
+    }
+
+    /// The URL after its user part, with no login pair and no empty pair;
+    /// a fragment before the query is dropped with the query.
+    fn rest(&self) -> String {
+        let mut at = self.user_end.map_or(0, |end| end + 1);
+        let mut kept = String::new();
+        for pair in &self.pairs {
+            if pair.start > at {
+                kept.push_str(&self.after[at..pair.start]);
+            }
+            at = at.max(pair.end);
+        }
+        kept.push_str(&self.after[at..]);
+        let Some((path, query)) = kept.split_once('?') else {
+            return kept;
+        };
+        // a fragment holding the query (`#x?…`) goes with it, as its
+        // parameters may have held a login
+        if let Some((path, _)) = path.split_once('#') {
+            return path.to_owned();
+        }
+        let query: Vec<&str> = query.split('&').filter(|pair| !pair.is_empty()).collect();
+        match query.is_empty() {
+            true => path.to_owned(),
+            false => format!("{path}?{}", query.join("&")),
+        }
+    }
+
+    /// The user the URL names, decoded: its widest user part's (before
+    /// any password) unless that holds part of a login pair, else a `user`
+    /// pair that shares nothing with another login pair.
+    fn user(&self) -> Option<String> {
+        let user = match self.user_end {
+            Some(end) => {
+                let user = self.after[..end].split(':').next().unwrap_or("");
+                (!self.overlaps(&(0..user.len()))).then(|| decode(user))
+            }
+            None => None,
+        };
+        let user = user.or_else(|| {
+            (self.pairs.iter())
+                .filter(|pair| !self.overlaps(pair))
+                .find_map(|pair| {
+                    let (name, value) = self.after[pair.clone()].split_once('=')?;
+                    decode(name)
+                        .eq_ignore_ascii_case("user")
+                        .then(|| decode(value))
+                })
+        });
+        user.filter(|user| !user.is_empty())
+    }
+}
+
+/// `url` without a login: the widest user part dropped, and every query
+/// parameter that carries one ([`refuse_login`]'s), as [`Shown`] reads
+/// them, until no reading finds one. What a row shows and what a
+/// PostgreSQL record write keeps of an old URL (V23-6); a URL that is not
+/// a PostgreSQL one is kept as it is.
+pub fn without_login(url: &str) -> String {
+    let mut clean = url.to_owned();
+    // each pass only drops text; one whose result still holds an `@` or a
+    // login pair drops more, so what is left is refused by no reading
+    while let Ok(shown) = Shown::of(&clean) {
+        let next = format!("{}://{}", shown.scheme, shown.rest());
+        if next == clean {
+            break;
+        }
+        clean = next;
     }
     clean
 }
 
-/// The user a URL names, decoded: its user part (before any password), or
-/// else its `user` parameter. A 2.0 record's URL names none; one recorded
-/// before saved logins may, and its no-login fix names that user.
+/// The user a URL names, decoded ([`Shown::user`]): its user part's, or
+/// else its `user` parameter's. A 2.0 record's URL names none; one recorded
+/// before saved logins may, and its no-login fix names that user. No part
+/// of a password is ever answered as the user.
 pub fn url_user(url: &str) -> Option<String> {
-    let (_, user, rest) = parts(url).ok()?;
-    let user = match user {
-        Some(user) => decode(user.split(':').next().unwrap_or("")),
-        None => {
-            (query(rest).into_iter())
-                .find(|(name, _)| name.eq_ignore_ascii_case("user"))?
-                .1
-        }
-    };
-    Some(user).filter(|user| !user.is_empty())
+    Shown::of(url).ok()?.user()
 }
 
 /// The server and database a URL names, as libpq reads it: `(host, port,
 /// database)` from the authority and path, overridden by `host`, `port`
 /// and `dbname` parameters; port 5432 by default; the host in lower case.
-/// What a refusal names, never the URL.
+/// What a refusal names, never the URL: read from the URL
+/// [`without_login`] leaves, so no part of a login is named.
 pub fn target(url: &str) -> Result<(String, String, String)> {
-    let (_, _, rest) = parts(url)?;
+    parts(url)?;
+    let clean = without_login(url);
+    let (_, _, rest) = parts(&clean)?;
     let path = rest.split(['?', '#']).next().unwrap_or("");
     let (authority, database) = path.split_once('/').unwrap_or((path, ""));
     let (mut host, mut port) = match authority.strip_prefix('[') {

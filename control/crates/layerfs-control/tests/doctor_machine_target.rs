@@ -260,8 +260,28 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
     let server = worker(&f.home, "answer");
     let running = f.report("docker", SECOND);
     server.join().unwrap();
-    assert_eq!(ids(&running).len(), 10, "{running:?}");
+    assert_eq!(ids(&running).len(), 11, "{running:?}");
+    assert_eq!(
+        ids(&running),
+        [
+            "machine.record",
+            "machine.operation",
+            "machine.configuration",
+            "machine.provider",
+            "machine.state",
+            "machine.worker.endpoint",
+            "machine.worker.auth",
+            "machine.worker.compatibility",
+            "machine.worker.ping",
+            "machine.network",
+            "machine.capacity"
+        ],
+        "{running:?}"
+    );
     is(&running, "machine.worker.ping", Some("pass"));
+    // the Sandbox network is read on a connection of its own: this
+    // stand-in answers one request, so the read has no verdict
+    is(&running, "machine.network", Some("unknown"));
     let (severity, message, fix) = finding(&running, "machine.capacity");
     assert_eq!(severity, "warning");
     assert!(message.starts_with("its data disk has "), "{message}");
@@ -278,6 +298,27 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
         "{evidence:?}"
     );
     assert_eq!(evidence.get_int("disk_free_bytes"), Some(1234));
+    // a link no Sandbox of the home owns is a leftover, with its delete fix
+    let server = worker(&f.home, "network");
+    let leftover = f.report("docker", SECOND);
+    server.join().unwrap();
+    let (severity, message, fix) = finding(&leftover, "machine.network");
+    assert_eq!(severity, "warning", "{leftover:?}");
+    assert!(message.contains("lfs00000000000f"), "{message}");
+    assert!(fix.contains("ip link delete lfs00000000000f"), "{fix}");
+    // but with a Sandbox record that cannot be read, no link can be told a
+    // leftover: no verdict, and never a delete fix (the link may be that
+    // Sandbox's, live); `owned_in`'s unit test checks the reason it names
+    let unreadable = paths::sandbox_record(&f.home, "unreadable");
+    std::fs::create_dir_all(unreadable.parent().unwrap()).unwrap();
+    std::fs::write(&unreadable, "{not json").unwrap();
+    let server = worker(&f.home, "network");
+    let unread = f.report("docker", SECOND);
+    server.join().unwrap();
+    is(&unread, "machine.network", Some("unknown"));
+    let printed = json(&unread);
+    assert!(!printed.contains("ip link delete"), "{printed}");
+    std::fs::remove_dir_all(paths::sandbox_dir(&f.home, "unreadable")).unwrap();
     // a worker of another build: stop and start, no request sent
     let server = worker(&f.home, "protocol");
     let old = f.report("docker", Duration::from_millis(250));
@@ -430,6 +471,8 @@ fn json(report: &SdkValue) -> String {
 
 /// A stand-in worker for machine `docker`, saved in its `worker.json`:
 /// `answer` is this build's worker (a ping answers 1234 free bytes);
+/// `network` is too, and answers the Sandbox network read on a second
+/// connection with one `lfs` link its report names no Sandbox for;
 /// `protocol` answers hello as another build and takes no request;
 /// `version`, `refusal` and `timeout` answer the ping wrongly, refuse it
 /// or never answer it.
@@ -450,7 +493,7 @@ fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         use std::io::Read;
         let deadline = Instant::now() + Duration::from_secs(3);
-        let mut stream = loop {
+        let accept = || loop {
             match listener.accept() {
                 Ok((stream, _)) => break stream,
                 Err(error)
@@ -462,22 +505,26 @@ fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
                 Err(error) => panic!("accept: {error}"),
             }
         };
-        stream.set_nonblocking(false).unwrap();
-        stream.set_read_timeout(Some(SECOND)).unwrap();
-        stream.set_write_timeout(Some(SECOND)).unwrap();
-        assert!(read_frame_within(&mut stream, MAX_HELLO).unwrap().is_some());
+        let hello = |stream: &mut std::net::TcpStream, protocol: i64| {
+            stream.set_nonblocking(false).unwrap();
+            stream.set_read_timeout(Some(SECOND)).unwrap();
+            stream.set_write_timeout(Some(SECOND)).unwrap();
+            assert!(read_frame_within(stream, MAX_HELLO).unwrap().is_some());
+            write_frame(
+                stream,
+                &SdkValue::map([
+                    ("ready", SdkValue::Bool(true)),
+                    ("protocol", SdkValue::Int(protocol)),
+                ]),
+            )
+            .unwrap();
+        };
+        let mut stream = accept();
         let protocol = match mode {
             "protocol" => PROTOCOL + 1,
             _ => PROTOCOL,
         };
-        write_frame(
-            &mut stream,
-            &SdkValue::map([
-                ("ready", SdkValue::Bool(true)),
-                ("protocol", SdkValue::Int(protocol)),
-            ]),
-        )
-        .unwrap();
+        hello(&mut stream, protocol);
         if mode != "protocol" {
             let request = read_frame_within(&mut stream, MAX_HELLO).unwrap().unwrap();
             assert_eq!(request.get_text("op"), Some("worker.ping"));
@@ -486,7 +533,7 @@ fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
                 _ => env!("CARGO_PKG_VERSION"),
             };
             let answer = match mode {
-                "answer" | "version" => Some(SdkValue::map([(
+                "answer" | "network" | "version" => Some(SdkValue::map([(
                     "value",
                     SdkValue::map([
                         ("kind", SdkValue::text("worker")),
@@ -509,6 +556,24 @@ fn worker(home: &Path, mode: &'static str) -> std::thread::JoinHandle<()> {
             }
         }
         if mode == "answer" {
+            return;
+        }
+        if mode == "network" {
+            let mut stream = accept();
+            hello(&mut stream, PROTOCOL);
+            let request = read_frame_within(&mut stream, MAX_HELLO).unwrap().unwrap();
+            assert_eq!(request.get_text("op"), Some("network.inspect"));
+            let link = SdkValue::map([
+                ("link", SdkValue::text("lfs00000000000f")),
+                ("addresses", SdkValue::List(Vec::new())),
+                ("sandbox", SdkValue::Null),
+            ]);
+            let report = SdkValue::map([
+                ("table", SdkValue::Bool(true)),
+                ("forwarding", SdkValue::Bool(true)),
+                ("links", SdkValue::List(vec![link])),
+            ]);
+            write_frame(&mut stream, &SdkValue::map([("value", report)])).unwrap();
             return;
         }
         // no second request and no abandoned peer after a timeout or refusal

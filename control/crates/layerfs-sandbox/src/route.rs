@@ -340,10 +340,11 @@ fn host_op(
     let kind = target.store_ref.kind();
     // a PostgreSQL Store's URL is resolved (and a URL the machine cannot
     // dial refused) only for an operation that dials it. A close runs
-    // without a URL the machine cannot dial, so a Sandbox can always be
-    // read and removed: its side hands back the mount intents it then
+    // without a URL the machine cannot dial, so such a Sandbox can still
+    // be read and removed: its side hands back the mount intents it then
     // cannot end, and `reach` ends them here. Any other reason the URL
-    // cannot be made (a missing saved login, say) refuses the close
+    // cannot be made (a missing saved login, say) refuses the close, a
+    // forced one too
     let (postgresql, hint) = match (kind, op.store_url()) {
         (StoreKind::Postgresql, StoreUrl::Dialled) => {
             let (value, hint) = reached(&home, machine, &target.record)?;

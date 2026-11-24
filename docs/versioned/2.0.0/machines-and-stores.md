@@ -502,15 +502,25 @@ shown in [the calls](calls.md#store-13).)
   `native` and `docker` on a Linux Engine share the loopback and dial it
   as given. A Sandbox resolves names as its machine does. Only the calls
   that dial the URL (`sandbox create`, Commit, a Workspace status) are
-  refused for it: a Sandbox can always be read and removed. A forced
-  `sandbox remove` there still ends the mount intent each of its
-  Workspaces held: the machine closes the Sandbox without the URL and
-  hands those intents back, and this computer ends each once with the
-  Store's own address (PostgreSQL Store calls run in the caller), so
-  `branch remove` and `store compact` are not refused for them afterwards;
-  one it could not end is a sentence of `left`. Any other reason the URL
-  cannot be made (the saved login is gone, or the Store names none)
-  refuses the remove with that reason and its fix. The login
+  refused for it: a Sandbox whose URL its machine cannot dial can still be
+  read and removed. A forced `sandbox remove` there still ends the mount
+  intent each of its Workspaces held: the machine closes the Sandbox
+  without the URL and hands those intents back in its answer, and this
+  computer ends each once with the Store's own address (PostgreSQL Store
+  calls run in the caller), so `branch remove` and `store compact` are not
+  refused for them afterwards; one it could not end is a sentence of
+  `left`. The intents travel only in that answer and nothing records
+  them, so they stay if the remove ends between the machine stopping the
+  Sandbox and this computer ending them: the answer is lost (the remove
+  reports `Unknown`), the machine cannot delete the Sandbox's folder after
+  stopping and deleting its runtime (the remove is refused `Failed`), or
+  this computer's process ends first. A retried `sandbox remove` then
+  answers `already_gone` with an empty `left`, and `branch remove` of the
+  Branch and `store compact` stay refused (`InUse`, `mounts active`), since
+  nothing can prove a PostgreSQL mount intent's owner gone. Any other
+  reason the URL cannot be made (the saved login is gone, or the Store
+  names none) refuses the remove, forced or not, with that reason and its
+  fix: save the login and the remove goes through. The login
   travels only in the one request. The server always runs off the
   machine; nothing installs PostgreSQL in a machine (D12).
 - `store doctor <store>` checks the Store from this computer and from each

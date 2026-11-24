@@ -57,6 +57,21 @@ pub(super) fn owned_links(records: &[SandboxRecord]) -> Vec<(String, String)> {
     owned
 }
 
+/// [`owned_links`] of every Sandbox recorded in `home`, on any machine. A
+/// record that cannot be read refuses it, naming why: no link is then told
+/// a leftover (its delete fix would cut a live Sandbox's network).
+#[cfg(any(target_os = "linux", feature = "machine"))]
+pub(super) fn owned_in(home: &Path) -> Result<Vec<(String, String)>, String> {
+    match layerfs_sandbox::record::sandboxes(home) {
+        Ok(records) => Ok(owned_links(&records)),
+        Err(refusal) => Err(format!(
+            "this home's Sandbox records could not be read, so no Sandbox link can be told a \
+             leftover: {}",
+            refusal.message
+        )),
+    }
+}
+
 /// This kernel's Sandbox network as doctor reads it: `{ table, forwarding,
 /// links: [{ link, addresses, sandbox }] }`, where `sandbox` names the
 /// Sandbox recorded under `root`, on any machine, whose host end the link
@@ -70,8 +85,7 @@ pub(crate) fn report(root: &Path) -> Outcome {
             format!("this machine's Sandbox network could not be read: {error}"),
         )
     })?;
-    let records = layerfs_sandbox::record::sandboxes(root).unwrap_or_default();
-    let owners = owned_links(&records);
+    let owners = owned_in(root).map_err(|why| refused("Failed", why))?;
     let links = (seen.links.iter())
         .map(|(link, addresses)| {
             let owner = owners.iter().find(|(name, _)| name == link);
@@ -332,6 +346,33 @@ mod tests {
             owned.contains(&("lfsba9876543210".to_owned(), "on-docker".to_owned())),
             "{owned:?}"
         );
+    }
+
+    /// One Sandbox record that cannot be read leaves no owner list: the
+    /// home's owners are refused, naming the read, so no live link is
+    /// reported a leftover with a delete fix.
+    #[cfg(any(target_os = "linux", feature = "machine"))]
+    #[test]
+    fn an_unreadable_record_leaves_no_owner_list() {
+        use layerfs_home::home::{self, paths, write_entity};
+        let home = std::env::temp_dir().join(format!("lfs-owned-in-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        home::ensure(&home).unwrap();
+        let good = record("good", "docker", "lfsba9876543210");
+        write_entity(&paths::sandbox_record(&home, "good"), &good.to_record()).unwrap();
+        assert_eq!(
+            owned_in(&home).unwrap(),
+            [("lfsba9876543210".to_owned(), "good".to_owned())]
+        );
+        let unreadable = paths::sandbox_record(&home, "unreadable");
+        std::fs::create_dir_all(unreadable.parent().unwrap()).unwrap();
+        std::fs::write(&unreadable, "{not json").unwrap();
+        let why = owned_in(&home).unwrap_err();
+        assert!(
+            why.starts_with("this home's Sandbox records could not be read"),
+            "{why}"
+        );
+        std::fs::remove_dir_all(home).unwrap();
     }
 
     #[cfg(feature = "machine")]
