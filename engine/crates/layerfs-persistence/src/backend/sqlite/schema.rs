@@ -42,9 +42,9 @@ pub(crate) const POSITION_COLUMNS: [(&str, &str, &str); 4] = [
         "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
     ),
 ];
-const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
-const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
-const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
+pub(crate) const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
+pub(crate) const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
+pub(crate) const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
 type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
 pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {

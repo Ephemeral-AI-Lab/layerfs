@@ -43,6 +43,9 @@ pub struct Loaded {
     /// The SQLite version that wrote the remote copy, as its push recorded
     /// it (`layerfs-sqlite`); `None` when the copy carries none.
     pub sqlite: Option<String>,
+    /// The copy was a schema version 1 Store (before #91), converted to
+    /// schema version 2 before it was opened.
+    pub converted: Option<layerfs_persistence::ConvertedStore>,
 }
 
 /// A failed load: its cause and the temporary file it left, if any.
@@ -179,6 +182,13 @@ fn fetch(
         // The verified bytes must open as this Store before they are
         // installed; closing it removes the sidecars it created.
         progress::begin("verify", None);
+        // a copy backed up before #91 holds one row per inode value and
+        // binding hint: this private download is converted to the blocks
+        // first, as `tools/store_blocks.py migrate` converts a closed copy
+        let converted =
+            layerfs_persistence::convert_schema_version_1(&temporary).map_err(|error| {
+                format!("the pulled Store is schema version 1 and could not be converted: {error}")
+            })?;
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&temporary)
                 .with_sqlite_profile(SqlitePersistenceProfile::Normal),
@@ -219,6 +229,7 @@ fn fetch(
             pieces: moved.pieces,
             heads: digest,
             sqlite: remote_sqlite(&stat.metadata),
+            converted,
         })
     })();
     result.map_err(|cause: String| PullFailure {
