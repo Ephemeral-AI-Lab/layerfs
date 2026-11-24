@@ -55,6 +55,18 @@ pub const DONE_RETAINED: i64 = 100;
 /// whose clock is behind another's still ranks the row it retains newest, so
 /// the cap in the same transaction keeps it (the cap also never deletes the
 /// op it was given) and the keyset audit returns it after every older row.
+///
+/// The stamps of one scope follow commit order because releases are
+/// serialized: SQLite's `BEGIN IMMEDIATE` writer, and on PostgreSQL the Store
+/// lane row every write transaction locks at its `BEGIN` (READ COMMITTED), so
+/// the newest-time read runs after any earlier release has committed and no
+/// other release commits before this one does. The floor is per scope, that
+/// is per Branch identity: a Branch removed and created again under the same
+/// project and Branch names starts from its own rows, not from the earlier
+/// identity's, which the name-scoped audit also reads (see
+/// `gc_intent_done_branch.sql` for the guarantee that leaves). Finding the
+/// earlier identity's rows would need a scan of every retained row, as no
+/// index covers the names, so the floor does not.
 fn retain_done_in(tx: &Transaction<'_>, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
     let newest = one(tx, DONE_NEWEST, [op_id.as_slice()], |row| {
         cell::<Option<i64>>(row, 0)
