@@ -25,7 +25,11 @@
 //! Every probe that should not get through also shows that its tool ran
 //! (a TCP refusal or timeout, never a missing command; an ICMP echo or a
 //! UDP datagram that left), and has a positive control: the same probe
-//! that does get through somewhere else.
+//! that does get through somewhere else. Every probe bounded in time runs
+//! in a session of its own that its bound ends whole (`bounded`), so a
+//! probe that gets no answer fails at its bound and never holds its exec
+//! open: `busybox timeout` ended only the process it ran, and git's
+//! `remote-https` helper outlived it with the exec's output.
 //!
 //! Checks, per machine: 1 two Sandboxes both bind `127.0.0.1:3000`; 2 a
 //! sibling's address is unreachable by TCP, ICMP and UDP, while the same
@@ -169,9 +173,8 @@ struct Box {
     guest: String,
 }
 
-/// Runs `command` in Workspace `ws` from `/`: `busybox timeout`'s watcher
-/// outlives the command it bounds, and from the Workspace it would keep
-/// the Workspace busy at unmount.
+/// Runs `command` in Workspace `ws` from `/`, so nothing it runs holds the
+/// Workspace busy at unmount.
 fn exec(home: &Path, ws: &str, command: &str) -> (i64, String) {
     let command = format!("cd /; {command}");
     let ran = ok(
@@ -234,11 +237,48 @@ fn sandbox(home: &Path, project: &str, name: &str, machine: &str) -> Box {
     }
 }
 
+/// `script` as one shell word.
+fn quoted(script: &str) -> String {
+    format!("'{}'", script.replace('\'', r"'\''"))
+}
+
+/// `bounded`'s shell: `$1` the bound in seconds, `$2` the probe. The probe
+/// runs in a new session (`busybox setsid` keeps its pid, which is then its
+/// process group's id), with the exec's output; a watcher in another
+/// session ends the probe's whole group at the bound (`SIGTERM`, `SIGKILL`
+/// a second later). Once the probe's own process ended, whatever of its
+/// group is left and the watcher are killed, so nothing it started holds
+/// the exec's output open. Its status is the probe's: 143 when the bound
+/// ended it. The shell's own notices of killed jobs go to `/dev/null`.
+const BOUNDED: &str = r#"exec 3>&2 2>/dev/null
+busybox setsid bash -c "$2" 2>&3 3>&- &
+p=$!
+busybox setsid bash -c "busybox sleep $1; kill -TERM -- -$p; busybox sleep 1; kill -KILL -- -$p" </dev/null >/dev/null 3>&- &
+w=$!
+wait $p
+r=$?
+kill -KILL -- -$p -$w
+wait $w
+exit $r"#;
+
+/// Probe `script` (a `bash` script) ended whole after `seconds`, everything
+/// it started included ([`BOUNDED`]).
+fn bounded(seconds: u32, script: &str) -> String {
+    format!(
+        "bash -c {} bounded {seconds} {}",
+        quoted(BOUNDED),
+        quoted(script)
+    )
+}
+
 /// `bash`'s TCP connect to `at` (`host/port`), ended after 3 s: `rc=0`
 /// connected, `rc=1` with bash's `connect:` error refused or unreachable,
-/// `rc=143` no answer (ended by `busybox timeout`'s TERM).
+/// `rc=143` no answer (ended by its bound's TERM).
 fn connect(at: &str) -> String {
-    format!("busybox timeout 3 bash -c 'exec 3<>/dev/tcp/{at}'; echo rc=$?")
+    format!(
+        "{}; echo rc=$?",
+        bounded(3, &format!("exec 3<>/dev/tcp/{at}"))
+    )
 }
 
 /// `connect`'s outcome: `Some(true)` connected, `Some(false)` refused or no
@@ -439,7 +479,7 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
     let ssh = exec(
         home,
         &a.ws,
-        "busybox timeout 10 bash -c 'exec 3<>/dev/tcp/github.com/22; head -c 4 <&3'",
+        &bounded(10, "exec 3<>/dev/tcp/github.com/22; head -c 4 <&3"),
     );
     assert_eq!(ssh, (0, "SSH-".to_owned()), "{ssh:?}");
     // a public remote (GitHub's by default); where direct HTTPS to it is
@@ -449,13 +489,34 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         .map_or(String::new(), |at| format!("https_proxy={at} "));
     let remote = per_machine("LAYERFS_TEST_NET_GIT", machine)
         .unwrap_or_else(|| "https://github.com/git/git".to_owned());
+    let has_git = exec(home, &a.ws, "command -v git >/dev/null && echo GIT");
+    // the bound itself: a remote that never answers (TEST-NET-1, direct)
+    // fails at its bound, and the exec returns, git's helper included
+    if has_git.1.contains("GIT") {
+        let asked = Instant::now();
+        let silent = exec(
+            home,
+            &a.ws,
+            &format!(
+                "{}; echo rc=$?",
+                bounded(5, "git ls-remote https://192.0.2.1/none HEAD")
+            ),
+        );
+        let took = asked.elapsed();
+        eprintln!("BOUNDED git ls-remote to 192.0.2.1 on {machine}: {silent:?} in {took:?}");
+        assert!(!silent.1.contains("rc=0"), "{silent:?}");
+        assert!(took < Duration::from_secs(15), "{took:?}: {silent:?}");
+    }
     let git = exec(
         home,
         &a.ws,
         &format!(
             "command -v git >/dev/null || {{ echo NOGIT; exit 0; }}; \
-             {proxy}busybox timeout 30 git ls-remote {remote} HEAD 2>&1 >/tmp/ls; \
-             r=$?; busybox cat /tmp/ls; exit $r"
+             {}; r=$?; busybox cat /tmp/ls; exit $r",
+            bounded(
+                30,
+                &format!("{proxy}git ls-remote {remote} HEAD 2>&1 >/tmp/ls")
+            )
         ),
     );
     match git.1.contains("NOGIT") {
@@ -468,8 +529,12 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         Some(at) => {
             let (name, port) = at.rsplit_once(':').unwrap();
             // PostgreSQL's SSLRequest: a server answers one byte, N or S
-            let probe = format!(
-                "busybox timeout 10 bash -c \"exec 3<>/dev/tcp/{name}/{port}; printf '\\x00\\x00\\x00\\x08\\x04\\xd2\\x16\\x2f' >&3; head -c 1 <&3\""
+            let probe = bounded(
+                10,
+                &format!(
+                    "exec 3<>/dev/tcp/{name}/{port}; \
+                     printf '\\x00\\x00\\x00\\x08\\x04\\xd2\\x16\\x2f' >&3; head -c 1 <&3"
+                ),
             );
             let answered = exec(home, &a.ws, &probe);
             assert!(

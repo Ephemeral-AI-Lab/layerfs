@@ -6,7 +6,10 @@
 //!   `<sandbox cgroup>/ws-<workspace id>/exec-<exec id>`. Cancel sends
 //!   `SIGTERM` to its processes, waits up to the grace, then writes
 //!   `cgroup.kill` and checks it is empty; a child that left its process
-//!   group ends too.
+//!   group ends too. Once it is empty, the cancel removes the group (and
+//!   its Workspace's, when that is empty too): the run that waited for the
+//!   command removes it only if nothing else of it was left when the
+//!   command ended, and a signalled child may end after that.
 //! - `Group { pgid, leader }` (`host_process`): the command's own process
 //!   group, known by its leader (id, start time, boot) against id reuse.
 //!   Cancel sends `SIGTERM` to the group, waits up to the grace, then
@@ -134,14 +137,22 @@ pub(crate) trait Stoppable {
     fn signal(&self, signal: Signal) -> io::Result<()>;
     /// Ends every one of its processes with `SIGKILL`.
     fn kill(&self) -> io::Result<()>;
+    /// Once nothing of it runs: removes what the handle names, if anything
+    /// is left of it (a command's own cgroup). Best effort, one attempt;
+    /// what cannot be removed stays and ends with its Sandbox.
+    fn release(&self);
 }
 
+/// Every answer but an error comes once nothing of `group` runs, after its
+/// [`Stoppable::release`].
 fn ended(group: &dyn Stoppable, grace: Duration) -> io::Result<Cancelled> {
     if !group.running()? {
+        group.release();
         return Ok(Cancelled::Ended);
     }
     group.signal(Signal::SIGTERM)?;
     if gone(group, grace)? {
+        group.release();
         return Ok(Cancelled::Signalled(Signal::SIGTERM));
     }
     killed(group)
@@ -150,10 +161,12 @@ fn ended(group: &dyn Stoppable, grace: Duration) -> io::Result<Cancelled> {
 /// The kill, then up to [`KILL_WAIT`] for its processes to be gone.
 fn killed(group: &dyn Stoppable) -> io::Result<Cancelled> {
     if !group.running()? {
+        group.release();
         return Ok(Cancelled::Ended);
     }
     group.kill()?;
     if gone(group, KILL_WAIT)? {
+        group.release();
         return Ok(Cancelled::Signalled(Signal::SIGKILL));
     }
     Err(io::Error::other(

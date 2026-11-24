@@ -232,9 +232,13 @@ pub(crate) fn create_exec(directory: &Path) -> io::Result<()> {
     }
 }
 
-/// Removes command group `directory` once its command ended and nothing it
-/// started runs, then its Workspace's group when that is empty too. A group
-/// something still runs in stays, and ends with its Sandbox.
+/// Removes command group `directory` if nothing of it runs, then its
+/// Workspace's group when that is empty too; one look, no wait. A process
+/// leaves its group as it exits, before it is reaped, but one signalled with
+/// the command may exit after the command did: the run that waited for the
+/// command can find its group still populated, and the cancel removes it once
+/// it reports it empty (`crate::stop`). A group something still runs in
+/// (nothing cancelled it) stays, and ends with its Sandbox.
 pub(crate) fn remove_exec(directory: &Path) {
     if populated(directory).ok() != Some(0) || fs::remove_dir(directory).is_err() {
         return;
@@ -276,5 +280,9 @@ impl crate::stop::Stoppable for ExecGroup<'_> {
 
     fn kill(&self) -> io::Result<()> {
         kill(self.0)
+    }
+
+    fn release(&self) {
+        remove_exec(self.0)
     }
 }

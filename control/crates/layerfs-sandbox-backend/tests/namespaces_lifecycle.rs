@@ -897,6 +897,53 @@ fn a_cancelled_command_and_what_it_started_leave_its_own_group_empty() {
 }
 
 #[test]
+fn a_cancelled_command_whose_child_ends_after_it_leaves_no_group() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces exec late child: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("late");
+    let provider = fixture.provider().unwrap();
+    let sandbox = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
+    let sandbox_group = Path::new("/sys/fs/cgroup/layerfs").join(sandbox.identity().as_str());
+    // the foreground child ends at once on SIGTERM; the background one,
+    // whose streams are not the command's (so the run does not wait for
+    // them), traps it and ends half a second later: the run that waited for
+    // the command finds its group still populated
+    let script = r#"/bin/sh -c 'trap "/bin/sleep 0.5; exit 0" TERM; /bin/sleep 600 & echo > /var/tmp/armed; wait' >/dev/null 2>&1 & /bin/sleep 600"#;
+    let (stop, thread) = started(&sandbox, "e6", script);
+    let group = sandbox_group.join("ws-ws1").join("exec-e6");
+    assert_eq!(
+        stop,
+        Stop::Cgroup {
+            path: group.clone()
+        }
+    );
+    // the trap is set before the cancel comes (a bounded wait)
+    let armed = fixture
+        .directory("sandbox-1")
+        .join("overlay/upper/var/tmp/armed");
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !armed.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(armed.exists(), "the background child never set its trap");
+    let asked = std::time::Instant::now();
+    let outcome = cancel(&stop, Duration::from_secs(5)).unwrap();
+    // the cancel answered only once the late child had ended too
+    assert!(asked.elapsed() >= Duration::from_millis(500));
+    assert_eq!(outcome, Cancelled::Signalled(Signal::SIGTERM));
+    assert_eq!(thread.join().unwrap(), Ok(143));
+    // its group is empty and gone, and so is its Workspace's
+    assert!(!group.exists());
+    assert!(!sandbox_group.join("ws-ws1").exists());
+    let mut sandbox = Arc::try_unwrap(sandbox).unwrap();
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+    assert!(!sandbox_group.exists());
+}
+
+#[test]
 fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
     if let Some(reason) = unavailable() {
         eprintln!("SKIPPED namespaces early cancel: {reason}");

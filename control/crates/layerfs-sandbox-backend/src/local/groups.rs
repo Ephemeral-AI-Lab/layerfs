@@ -186,4 +186,7 @@ impl crate::stop::Stoppable for Led {
     fn kill(&self) -> io::Result<()> {
         self.signal(Signal::SIGKILL)
     }
+
+    /// A process group with no member is gone: nothing is left to remove.
+    fn release(&self) {}
 }
