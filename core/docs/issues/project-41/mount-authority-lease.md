@@ -87,7 +87,10 @@ Record the authority on the mount intent and make admission consult it:
 | `workspace_id` / `branch` | existing `gc_intent.workspace` / `branch` + `project` | The own-intent end key (7ab's `mount_intents::end`); never a path/folder. |
 | `owner_runtime` / `owner_boot` | existing `gc_intent` | The fallback evidence for private/place-null mounts; unchanged. |
 
-Schema: additive columns on `gc_intent` (see `engine/crates/layerfs-persistence/sql/sqlite/gc.sql`
+Schema (as built, superseding the additive columns proposed here): no new
+column; a live row keeps both tokens in `gc_intent.evidence` as
+`place:v1;inc=<token>;gen=<token>`, decoded as no token when NULL, prefixless
+(a `done` row's audit text) or malformed. Proposed: additive columns on `gc_intent` (see `engine/crates/layerfs-persistence/sql/sqlite/gc.sql`
 and `sql/postgresql/gc.sql`; the `GcIntent` struct at
 `core/crates/layerfs-history/src/contract/records.rs:750`, builders `placed`/`owned`
 at 847/861). A `machine_incarnation` authority row (per machine) and a

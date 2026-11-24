@@ -182,7 +182,6 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | `Capacity` | `Refused "Capacity"` | `Capacity("persistence")` | A bound or the disk margin was reached |
 | `Integrity` | `Malformed` | `Integrity("persistence")` | Stored or supplied data broke a rule |
 | `SchemaVersion1` | `Refused` (names the conversion) | `Integrity` | A schema version 1 SQLite Store |
-| `SchemaVersion2` | `Refused` (names `tools/store_gc_convert.py convert`) | `Integrity` | A schema version 2 SQLite Store (36–38, or 42–44 with acquisition); the phase-3 authority tables convert offline |
 | `UnsupportedSchemaVersion` | `Refused` | `Unsupported` | Diagnostic open of an unknown layout |
 | `Unknown` | `Uncertain` | `UnknownOutcome` | Outcome unknown; session quarantined, its connection closed and the writer lane released ([SQLite](sqlite.md#quarantine), [PostgreSQL](postgresql.md#session)) |
 

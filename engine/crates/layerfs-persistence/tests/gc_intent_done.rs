@@ -63,11 +63,9 @@ fn done_row(path: &std::path::Path, branch: BranchId, body: u8, evidence: &str, 
             "INSERT INTO gc_intent (
                 op_id, kind, scope_kind, scope_id, workspace, sandbox, machine,
                 project, branch, owner_runtime, owner_boot, state, uncertain,
-                phase, machine_incarnation, sandbox_generation,
-                evidence, updated_ms
+                phase, evidence, updated_ms
              ) VALUES (?1, 'mount', 'branch', ?2, NULL, 'box', 'box',
-                'proj', 'work', NULL, NULL, 'done', 0, 'release', NULL, NULL,
-                ?3, ?4)",
+                'proj', 'work', NULL, NULL, 'done', 0, 'release', ?3, ?4)",
             params![op(body).as_slice(), branch.as_slice(), evidence, updated_ms],
         )
         .unwrap();
@@ -331,10 +329,131 @@ fn a_branch_audit_reads_only_its_own_done_rows() {
             .unwrap();
     }
 
-    let page = history.gc_done_intents_branch("proj", "work", 0, 10).unwrap();
+    let page = history
+        .gc_done_intents_branch("proj", "work", 0, 10)
+        .unwrap();
     assert_eq!(page.items.len(), 1, "only the named Branch's row");
     assert_eq!(page.items[0].op_id, op(0x01));
-    let other = history.gc_done_intents_branch("proj", "other", 0, 10).unwrap();
+    let other = history
+        .gc_done_intents_branch("proj", "other", 0, 10)
+        .unwrap();
     assert_eq!(other.items.len(), 1);
     assert_eq!(other.items[0].op_id, op(0x02));
+}
+
+fn stored(path: &std::path::Path, body: u8) -> (String, Option<String>) {
+    rusqlite::Connection::open(path)
+        .unwrap()
+        .query_row(
+            "SELECT state, evidence FROM gc_intent WHERE op_id = ?1",
+            params![op(body).as_slice()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap()
+}
+
+/// The place tokens live in the base format's `evidence` column: a live row
+/// round-trips both, a value without the `place:v1` prefix (a `done` row's
+/// audit text) or a malformed one decodes as no tokens, and the live-path
+/// release, uncertain and insert-conflict statements neither delete nor
+/// revive a retained `done` row.
+#[test]
+fn place_tokens_round_trip_through_evidence_and_live_statements_keep_a_done_row() {
+    let temp = Temp::new("gc-done-place-evidence");
+    let path = temp.join("store.sqlite");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let incarnation = "p1:worker:0000000000000010:aa";
+    let generation = "p1:sandbox:0000000000000020:bb";
+    let mounted = GcIntent::shared(
+        op(40),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack(1).as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([40; 32]), Some("box"), Some("box"))
+    .owned(Some("pid:1@0"), Some("boot:40"))
+    .authorized(PlaceAuthority {
+        machine_incarnation: Some(incarnation.to_owned()),
+        sandbox_generation: Some(generation.to_owned()),
+    });
+    history.gc_register(&mounted).unwrap();
+    let encoded = format!("place:v1;inc={incarnation};gen={generation}");
+    assert_eq!(stored(&path, 40), ("live".to_owned(), Some(encoded)));
+    let tokens = |history: &HistoryProvider| {
+        let listed = history
+            .gc_intents(GcScopeKind::Branch, branch.as_slice())
+            .unwrap();
+        assert_eq!(listed.len(), 1, "{listed:?}");
+        (
+            listed[0].machine_incarnation.clone(),
+            listed[0].sandbox_generation.clone(),
+        )
+    };
+    assert_eq!(
+        tokens(&history),
+        (Some(incarnation.to_owned()), Some(generation.to_owned()))
+    );
+
+    // Foreign or malformed evidence is no proof: no token at all.
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    for text in [
+        "place:v2;inc=a",
+        "place:v1",
+        "place:v1;inc=",
+        "place:v1;inc=a;inc=b",
+        "place:v1;who=a",
+    ] {
+        connection
+            .execute(
+                "UPDATE gc_intent SET evidence = ?1 WHERE op_id = ?2",
+                params![text, op(40).as_slice()],
+            )
+            .unwrap();
+        assert_eq!(tokens(&history), (None, None), "{text}");
+    }
+    connection
+        .execute(
+            "UPDATE gc_intent SET evidence = ?1 WHERE op_id = ?2",
+            params![format!("place:v1;gen={generation}"), op(40).as_slice()],
+        )
+        .unwrap();
+    assert_eq!(tokens(&history), (None, Some(generation.to_owned())));
+
+    // The operator retains the row as `done`; its evidence is the audit text.
+    let audit = "action=release;operator=alice;op=28282828282828282828282828282828";
+    assert!(history.gc_release_done(&op(40), audit).unwrap());
+    let done = ("done".to_owned(), Some(audit.to_owned()));
+    assert_eq!(stored(&path, 40), done);
+
+    // The owner's own release, a late uncertain mark and a retried
+    // registration under the same op id all leave the done row as it was.
+    history.gc_release(&op(40)).unwrap();
+    assert_eq!(stored(&path, 40), done, "release keeps the done row");
+    history.gc_mark_uncertain(&op(40)).unwrap();
+    assert_eq!(stored(&path, 40), done, "uncertain keeps the done row");
+    assert!(matches!(
+        history.gc_register(&mounted),
+        Err(layerfs_history::HistoryError::Conflict(_))
+    ));
+    assert_eq!(
+        stored(&path, 40),
+        done,
+        "a retry does not revive the done row"
+    );
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
+
+    // Read as a live row, the done row's audit text decodes as no tokens.
+    connection
+        .execute(
+            "UPDATE gc_intent SET state = 'live' WHERE op_id = ?1",
+            params![op(40).as_slice()],
+        )
+        .unwrap();
+    assert_eq!(tokens(&history), (None, None));
 }

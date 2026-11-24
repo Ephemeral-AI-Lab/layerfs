@@ -109,7 +109,7 @@ pub(super) fn read(
     view: &dyn View,
     stack: Option<LayerStackId>,
 ) -> Result<Vec<MountHolder>, BackendError> {
-    let mut sql = String::from("SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine,p.name,b.name,g.owner_runtime,g.owner_boot,g.machine_incarnation,g.sandbox_generation,g.uncertain FROM gc_intent g LEFT JOIN branch b ON g.scope_kind='branch' AND b.branch_id=g.scope_id LEFT JOIN layer_stack p ON p.layer_stack_id=CASE WHEN g.scope_kind='project' THEN g.scope_id ELSE b.layer_stack_id END WHERE g.kind='mount' AND g.state<>'done'");
+    let mut sql = String::from("SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine,p.name,b.name,g.owner_runtime,g.owner_boot,g.evidence,g.uncertain FROM gc_intent g LEFT JOIN branch b ON g.scope_kind='branch' AND b.branch_id=g.scope_id LEFT JOIN layer_stack p ON p.layer_stack_id=CASE WHEN g.scope_kind='project' THEN g.scope_id ELSE b.layer_stack_id END WHERE g.kind='mount' AND g.state<>'done'");
     let mut params = Vec::new();
     if let Some(stack) = stack {
         sql.push_str(" AND (g.scope_kind='store' OR p.layer_stack_id=?1)");
@@ -119,6 +119,7 @@ pub(super) fn read(
     view.query(&sql, params)?
         .iter()
         .map(|r| {
+            let (machine_incarnation, sandbox_generation) = crate::history::place_tokens(r.get(9)?);
             Ok(MountHolder {
                 operation: r.get(0)?,
                 scope: r.get(1)?,
@@ -129,9 +130,9 @@ pub(super) fn read(
                 branch: r.get(6)?,
                 owner_runtime: r.get(7)?,
                 owner_boot: r.get(8)?,
-                machine_incarnation: r.get(9)?,
-                sandbox_generation: r.get(10)?,
-                uncertain: r.get::<i64>(11)? != 0,
+                machine_incarnation,
+                sandbox_generation,
+                uncertain: r.get::<i64>(10)? != 0,
             })
         })
         .collect()

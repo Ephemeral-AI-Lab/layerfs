@@ -40,8 +40,7 @@ fn make_old(path: &std::path::Path) {
          ALTER TABLE store_policy DROP COLUMN trace_salt; \
          ALTER TABLE history_meta DROP COLUMN next_history_serial; \
          DROP TABLE branch_retired; DROP TABLE layer_stack_retired; DROP TABLE path_removed; \
-         DROP TABLE project_epoch; \
-         DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead; DROP TABLE kept_node;",
+         DROP TABLE project_epoch; DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead; DROP TABLE kept_node;",
     )
     .unwrap();
     let source: String = sql

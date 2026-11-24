@@ -41,15 +41,11 @@ the exported pages; admission is unaffected.
 
 ## G3. 2.0 conversion
 
-`tools/store_gc_convert.py` already implements the per-machine conversion
-(copy the machine incarnation and Sandbox tombstones, export old audit rows
-to JSONL, `--gone` for a missing machine, drop the three old tables only after
-every machine converts, never touch the source file). Remaining work: a test
-on a real old-format Store fixture and a documented operator runbook (the
-`gc-runbook.md` already describes it).
-
-Acceptance: a 3-table Store fixture converts to the lean schema; `--gone`
-covers a missing machine; the source is unchanged.
+Withdrawn (pre-merge review): the Store keeps the base format exactly. A
+live mount row stores its place tokens in the existing `gc_intent.evidence`
+column (`place:v1;inc=<token>;gen=<token>`), so no schema version bump,
+refusal or conversion tool exists, and `tools/store_gc_convert.py` was
+removed.
 
 ## G4. Durable preview row
 

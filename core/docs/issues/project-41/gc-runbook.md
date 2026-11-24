@@ -122,17 +122,14 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   and frees no bytes; objects reachable only via the path are retained (§6.2, decisions 16/35).
 - **No path-level physical reclaim:** path-aware walk and per-entry page pruning are follow-ups; `keptWaste` has no page component (§6.2).
 - 1.0 Stores convert offline (§4.1); no online migration.
-- **2.0 Stores convert per machine.** The lean 2.0 GC has no Store-side authority,
-  tombstone or audit tables: the proof is the home `MachineRecord.incarnation`, the
-  `SandboxRecord.generation`, the machine-level
-  `machine/<machine>/sandbox-retired/*.json` tombstone and the retained
-  `gc_intent` `done` rows. `tools/store_gc_convert.py convert` copies each owner
-  home's incarnation and tombstones into the new closed Store, exports any old
-  audit rows to `<home>/log/gc-audit.jsonl`, and drops the three old tables only
-  after every machine with rows is copied, named `--converted`, or declared
-  `--gone` (the missing-machine policy). The source file is never changed: it is
-  the backup. The tool converts SQLite Stores; a PostgreSQL Store's per-machine
-  copy and the final `DROP TABLE` remain an explicit operator step.
+- **No Store format change for place authority.** The lean 2.0 GC has no
+  Store-side authority, tombstone or audit tables and no new `gc_intent` column:
+  the proof is the home `MachineRecord.incarnation`, the `SandboxRecord.generation`,
+  the machine-level `machine/<machine>/sandbox-retired/*.json` tombstone, the
+  tokens a live mount row keeps in `gc_intent.evidence` (`place:v1;...`) and the
+  retained `gc_intent` `done` rows. A Store of the base format opens unchanged;
+  there is nothing to convert. The owner's release, an uncertain mark and a
+  retried registration never delete or revive a `done` row.
 - **Four SQLite deviations from the frozen text remain** (D1, D3, D4, D5),
   plus the settled D2 build decision; all are recorded in
   [`gc-42-decisions.md`](gc-42-decisions.md) and the frozen spec text is

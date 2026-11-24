@@ -619,9 +619,9 @@ The action is one of:
 | Action | Effect |
 | --- | --- |
 | `list` | lists the typed holder view (op, project, Branch, Workspace, Sandbox, machine, place authority, state, legacy, `safe`, `reason`); read-only, writes nothing |
-| `preview` | lists the same typed view and writes one retained `done` row with `action=preview;operator=NAME` in `evidence`, `op` null, the operator label and no owner or place columns; it changes no live intent |
+| `preview` | lists the same typed view and writes one retained `done` row with `action=preview;operator=NAME` in `evidence`, `op` null, the operator label and no owner columns or place tokens; it changes no live intent |
 | `settle` | marks exactly `--op` uncertain; a later call reports `Unresolved`, never `Busy` |
-| `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` and clears the owner columns, so the unique owner key cannot block a remount |
+| `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` (replacing the `place:v1;...` place tokens a live row keeps there) and clears the owner columns, so the unique owner key cannot block a remount; the owner's own release, a later settle or a retried registration never deletes or revives that row |
 | `settle_legacy` | marks only rows with missing owner or place evidence |
 | `audit` | one bounded page of the named project/Branch's retained `done` rows, oldest first (`--page`, `--limit`, clamped to 1000); changes nothing. The scope is the recorded project and Branch names, so a removed Branch's retained rows stay readable |
 

@@ -31,7 +31,7 @@
 
 use super::rows::{cell, one, unsigned};
 use super::transaction::Transaction;
-use super::{branch, layerstack, params, paths, position};
+use super::{branch, layerstack, params, paths, place_evidence, place_tokens, position};
 use crate::backend::records::Param;
 use crate::backend::Engine;
 use crate::history::provider::HistoryProvider;
@@ -149,10 +149,9 @@ fn workspace_of(text: Option<String>) -> HistoryResult<Option<[u8; 32]>> {
     Ok(Some(body))
 }
 
-/// Decodes the sixteen columns every intent query returns, in order:
-/// op_id, kind, scope_kind, scope_id, workspace, sandbox, machine, project,
-/// branch, owner_runtime, owner_boot, state, uncertain, phase,
-/// machine_incarnation, sandbox_generation.
+/// Decodes the fifteen columns every intent query returns, in order: op_id,
+/// kind, scope_kind, scope_id, workspace, sandbox, machine, project, branch,
+/// owner_runtime, owner_boot, state, uncertain, phase, evidence (place tokens).
 fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> {
     let op_id: Vec<u8> = cell(row, 0)?;
     let op_id: [u8; 16] = op_id
@@ -161,6 +160,7 @@ fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> 
         .map_err(|_| HistoryError::Integrity("gc intent op_id"))?;
     let state: String = cell(row, 11)?;
     let uncertain_flag: i64 = cell(row, 12)?;
+    let (machine_incarnation, sandbox_generation) = place_tokens(cell(row, 14)?);
     Ok(GcIntent {
         op_id,
         kind: kind_of(&cell::<String>(row, 1)?)?,
@@ -175,8 +175,8 @@ fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> 
         owner_boot: cell(row, 10)?,
         project_id: None,
         phase: cell(row, 13)?,
-        machine_incarnation: cell(row, 14)?,
-        sandbox_generation: cell(row, 15)?,
+        machine_incarnation,
+        sandbox_generation,
         uncertain: state == "uncertain" || uncertain_flag != 0,
     })
 }
@@ -555,7 +555,7 @@ pub(super) fn register_in(
         "live"
     };
     let uncertain = i64::from(intent.uncertain);
-    tx.execute(
+    let written = tx.execute(
         INSERT,
         params![
             intent.op_id.to_vec(),
@@ -572,12 +572,13 @@ pub(super) fn register_in(
             state,
             uncertain,
             intent.phase.clone(),
-            intent.machine_incarnation.clone(),
-            intent.sandbox_generation.clone(),
+            place_evidence(intent),
             now_ms(),
         ],
     )?;
-    Ok(())
+    (written > 0)
+        .then_some(())
+        .ok_or(HistoryError::Conflict("gc intent op released as done"))
 }
 
 /// The advisory keys a PostgreSQL intent names, Store key first, each with the
@@ -996,4 +997,3 @@ pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> History
         }
     }
 }
-
