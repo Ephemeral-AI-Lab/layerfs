@@ -151,7 +151,11 @@ impl State<'_> {
                 (0, 0)
             };
             let canonical_cost = location.canonical_length as u64;
-            if (!batch.objects.is_empty() || !batch.packs.is_empty())
+            // Values alone can fill a batch: finish publishes its last wave's
+            // values with the sealed tail (#768).
+            if (!batch.objects.is_empty()
+                || !batch.packs.is_empty()
+                || !batch.inode_values.is_empty())
                 && (canonical_bytes.saturating_add(canonical_cost) > limits.transaction_bytes
                     || physical_bytes.saturating_add(body_bytes)
                         > limits.transaction_physical_bytes
@@ -203,6 +207,13 @@ impl State<'_> {
             batch.signatures.push(row);
         }
         if self.finishing && self.next_ordinal < self.ordinal_end {
+            // The release is a row of the publication too.
+            if batch.objects.len() + pack_rows + batch.inode_values.len() + batch.signatures.len()
+                >= limits.transaction_rows as usize
+            {
+                self.acknowledge(&mut batch, &members)?;
+                batch = Publication::default();
+            }
             batch.release_ordinals = Some((
                 u32::try_from(self.next_ordinal)
                     .map_err(|_| StorageError::Integrity("unused ordinal tail"))?,

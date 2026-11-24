@@ -186,7 +186,7 @@ peer mount rows.
 | `Mode` | `BEGIN` | Lane row | Used by |
 | --- | --- | --- | --- |
 | `Read` | `REPEATABLE READ READ ONLY` | no | history reads, policy, signatures |
-| `Write` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` and the lane barrier; nested in the held lane: the barrier key shared and a lane check before `COMMIT` | history writes, allocation, acquisition writes |
+| `Write` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` and the lane barrier; nested in the held lane: the barrier key shared and a lane check in the `COMMIT` round trip | history writes, allocation, acquisition writes |
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records |
 | `Publish` | as `Write` | `FOR UPDATE` and the lane barrier after the pack bodies; nested: as a nested `Write` | one Save publication, up to 16 MiB − 1 |
 | `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
@@ -356,8 +356,7 @@ Store.
                                                   shared from BEGIN)
    one statement: INSERT locations ... RETURNING, totals, inode value
      blocks, released ordinals, signatures
-   nested? the lane check                        lost -> ROLLBACK, Closed
-   COMMIT
+   COMMIT; nested: the lane check rides in it    lost -> ROLLBACK, Closed
    any failure rolls the whole publication back; ids are never reused
 ```
 
@@ -389,11 +388,28 @@ database ([`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backe
  lock_timeout):  pg_advisory_lock(class, key); pg_advisory_unlock(class, key)
  every nested Write/Publish: BEGIN ...; pg_advisory_xact_lock_shared(class, key)
    body
-   lane check, one round trip on the lane connection:
-     pg_current_xact_id_if_assigned() = the id recorded at hold_lane?
-     no, or any error -> close the lane connection; ROLLBACK; Closed
-   COMMIT
+   lane check and COMMIT, one simple-query round trip on the writer (#768):
+     SELECT 1/(pg_xact_status('<lane xid8>') IS NOT DISTINCT FROM
+               'in progress')::int; COMMIT
+     22012 (not in progress, or NULL) or 22023 (an id this server never
+     issued) -> the server skipped the COMMIT; close the lane connection;
+     ROLLBACK; Closed.  No lane id recorded -> ROLLBACK; Closed, nothing sent
 ```
+
+The lane transaction holds `store_lane` until it ends, and its id stays
+`in progress` exactly until then: the server takes a transaction out of the
+running set before it releases its locks, so a check that sees it in
+progress saw the row locked. A failing statement in a simple query skips the
+rest of the string, so the `COMMIT` after a failed check never runs and the
+transaction is left aborted for the `ROLLBACK`. Until #768 the check was its
+own round trip on the lane connection
+(`pg_current_xact_id_if_assigned()` against the recorded id). Two effects
+follow: the lane connection now receives no statement between its `BEGIN`
+and its `ROLLBACK`, so an `idle_in_transaction_session_timeout` shorter than
+a whole lane hold ends it (a definite `Closed`, never a write without the
+row); and the Store role needs `EXECUTE` on `pg_xact_status`, which
+PostgreSQL grants to `PUBLIC`. Like the check it replaces, it assumes the
+writer and the lane connection reach the same server.
 
 The barrier key is a two-key advisory lock (a fixed class and a hash of the
 schema name), a key space apart from the GC keys. A new lane holder takes it
@@ -593,6 +609,91 @@ intent; merge, Init and the removals follow the same rule
 | --- | --- | --- |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched. Also a mounted Workspace's first and second one-file Commit, an UpToDate Commit and the unmount: the Commit's whiteout read is one statement on the control reader (4 round trips fewer on the first Commit and 3 on later ones than the two reads before #768), which the first Commit opens |
 | [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller of a mount; a catalog without admission still mounts. `a_pooled_connection_refuses_a_shared_intent`: the same for a merge |
+
+### Commit round trips
+
+A Workspace Commit ([`store/commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs))
+does everything that grows with the change before the lane: the capture,
+the Save and its publication, the logical count, the binding hints and the
+validation. In the lane it checks the head and publishes. Measured with
+`log_statement=all` on a one-file change (`mount_round_trips.rs`, warm
+statements), the second Commit of a mounted Workspace cost 46 round trips
+before #768's Commit cuts and 36 after:
+
+```text
+ before the lane                                         before after
+   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3
+   file digests, every row below the floor (empty Write)     2   0  (a)
+   base pack and inode values (construct)                    2   2
+   whiteout read (control reader)                            1   1
+   head: branch_snapshot                                     1   1
+   logical.known: the head Commit                            1   1
+   finish: locate                                            1   1
+   finish: the last wave's publication (values only)         4   0  (b)
+   finish: sealed tail (BEGIN, COPY 2, lane, rows, COMMIT)   6   6
+   logical.count reads                                       2   2
+   binding hints (Write: BEGIN+lane row, INSERT, COMMIT)     3   3
+   validate (Workspace reader)                               5   5
+ in the lane
+   hold_lane BEGIN batch                                     1   1  (c)
+   head.lane: branch_snapshot                                1   0  (c)
+   commit_branch BEGIN batch                                 1   1
+   Branch probe, epoch read, Branch re-read                  3   1  (d)
+   serial, Commit insert, parent line, lineage, advance      5   5
+   epoch FOR SHARE                                           1   1
+   lane check (lane connection), COMMIT                      2   1  (e)
+   lane ROLLBACK                                             1   1
+ total                                                      46  36
+```
+
+- (a) `record_file_digests` returns before opening a transaction when every
+  row is below the digest floor; it wrote nothing and took the lane row.
+- (b) `Save::finish` prepares its last wave without publishing it
+  (`State::prepare`), so one publication carries that wave's values, the
+  sealed packs and the signatures, still split at the transaction row and
+  byte limits. A batch holding only values now splits before it overflows,
+  and the ordinal release counts as a row.
+- (c) `HistoryCatalog::publish_lane_unmoved`: the lane's `BEGIN` batch ends
+  with an `EXISTS` over the Branch, with the `branch_snapshot` retirement
+  filters, at the head and base the Commit read before the lane. It runs
+  after the row lock and the barrier, so it sees what the read it replaces
+  would. `true` skips the in-lane read; `false` (moved, absent, SQLite)
+  reads as before. It is not generation-fenced: `commit_branch`'s own
+  transaction is, and refuses a moved head itself, so a wrong `true` could
+  only turn an in-lane merge into `HeadMoved`, never a wrong publication.
+  The lane transaction now holds `AccessShareLock` on the history tables it
+  read until it ends; nothing runs DDL on them while a Store is open.
+- (d) `commit_snapshot_epoch`: the Branch snapshot row plus the project's
+  `project_epoch.epoch`, one statement and one snapshot (SQLite too). A
+  removal marker bumps the epoch and writes its row in one transaction, so it
+  is either wholly visible (the row is filtered: `Missing`) or wholly not
+  (the `FOR SHARE` re-check sees the new epoch: `Conflict`). The probe and
+  re-read existed only to close the gap between two snapshots.
+- (e) [Lane barrier](#lane-barrier).
+
+Checked and not done:
+
+- *Reservation off the lane.* Allocation serializes on the `store_policy`
+  row, and a compaction's swap locks that table `NOWAIT`, so it needs no lane
+  row; but a bare autocommit statement would lose `lock_timeout` and the
+  Store's `synchronous_commit`. As one simple-query batch (`BEGIN`, settings,
+  a fenced `UPDATE … RETURNING`, `COMMIT`) it would save 2 round trips; left
+  for a separate change.
+- *Binding hints off the lane.* A hint block's `seq` is `max(seq) + 1` in its
+  group under `PRIMARY KEY (grp, seq)`: two Commits naming new entries under
+  the same directory would collide without the lane. It stays a lane write.
+- *Merging the barrier lock and unlock.* They are already in one batch: no
+  round trip to save.
+- *The serial with the Commit insert, the parent line with the lineage
+  insert, the `FOR SHARE` re-check with `COMMIT`.* Each needs a
+  PostgreSQL-only statement form or a server-side assert with its own error
+  mapping; about 1 round trip each, not done.
+
+| Test | Command | Checks |
+| --- | --- | --- |
+| [`postgresql_commit_round_trips.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_commit_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_commit_round_trips` | The lane with a head read and `commit_branch` is 12 round trips (15 before), with the head check in the lane's `BEGIN` 11; a moved head and an absent Branch are never answered unmoved |
+| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | see [Mount reads](#mount-reads) | A real Commit's writer: first 54 round trips (65 before), second 32 (42); SQLite 46/9 and 38/7 statements/transactions (52/11, 44/9) |
+| [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `… --test postgresql_lane_liveness` | A nested write after its lane connection was terminated fails `Closed` and writes nothing: now through `pg_xact_status` |
 
 ## Delta chains
 

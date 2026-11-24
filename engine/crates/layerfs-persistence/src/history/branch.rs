@@ -155,6 +155,28 @@ pub(crate) fn snapshot_rows(
     snapshot_of(tx.query(SNAPSHOT, [id.as_slice()])?)
 }
 
+const SNAPSHOT_EPOCH: &str = "commit_snapshot_epoch";
+
+/// [`snapshot_rows`] and the `project_epoch` of the Branch's LayerStack, from
+/// one statement and so one snapshot: a publication's fence opens on the
+/// rows it then checks (spec 5). `Some(None)` is a Branch whose project has
+/// no epoch row.
+pub(crate) fn snapshot_rows_with_epoch(
+    tx: &Transaction<'_>,
+    id: BranchId,
+) -> HistoryResult<Option<(SnapshotRows, Option<i64>)>> {
+    let mut rows = tx.query(SNAPSHOT_EPOCH, [id.as_slice()])?;
+    let mut epoch = None;
+    for row in &mut rows {
+        epoch = match row.cells.pop() {
+            Some(Value::Integer(epoch)) => Some(epoch),
+            Some(Value::Null) => None,
+            _ => return Err(HistoryError::Integrity("catalog row")),
+        };
+    }
+    Ok(snapshot_of(rows)?.map(|rows| (rows, epoch)))
+}
+
 /// The one snapshot row of `rows`, decoded, if any.
 fn snapshot_of(mut rows: Vec<Row>) -> HistoryResult<Option<SnapshotRows>> {
     if rows.len() > 1 {

@@ -40,7 +40,7 @@ pub const BATCH_OBJECT_LIMIT: usize = 512;
 /// **The wave is bounded by the transaction it runs in.** A preparation wave
 /// holds the Store's arbitration for its whole duration, every seal inside it
 /// joins the one transaction the wave opened, and that transaction is
-/// acknowledged at the wave's end - so the transaction's own declared capacity is
+/// acknowledged at the wave's end (a Save's last wave with its sealed tail) - so the transaction's own declared capacity is
 /// the bound that describes a wave, and this is that capacity rather than a
 /// second, smaller figure with no stated relation to it.
 ///

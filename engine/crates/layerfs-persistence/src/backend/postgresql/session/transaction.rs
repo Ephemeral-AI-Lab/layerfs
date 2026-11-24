@@ -379,7 +379,7 @@ impl Session {
         let autocommit = generation.filter(|_| matches!(mode, Mode::Immutable | Mode::Statement));
         // A write nested in this thread's held lane relies on the lane
         // connection's row lock: it holds the lane barrier shared and checks
-        // that lane transaction before its COMMIT (finding #10).
+        // that lane transaction in its COMMIT round trip (finding #10).
         let in_lane = turn.nested && matches!(mode, Mode::Write | Mode::Publish);
         let begin = match mode {
             Mode::Read => self.settings.read_begin(),
@@ -470,20 +470,22 @@ impl Session {
                 state.quarantine();
                 return Err(BackendError::Unknown.into());
             }
+            // A nested write's lane check rides in its COMMIT round trip.
+            let commit_sql = match in_lane && result.is_ok() {
+                true => self.lane_commit().ok(),
+                false => Some("COMMIT".to_owned()),
+            };
             match result {
-                Ok(_) if in_lane && self.lane_still_held().is_err() => {
-                    // The lane was lost: nothing of this write is kept.
-                    if rollback(state).is_err() {
-                        state.quarantine();
-                        return Err(BackendError::Unknown.into());
-                    }
-                    state.work.rollbacks += 1;
-                    Err(BackendError::Closed.into())
+                Ok(_) if commit_sql.is_none() => {
+                    // No lane transaction is recorded: nothing is kept.
+                    lost_lane(state)
                 }
                 Ok(value) => {
                     let commit = Instant::now();
                     state.work.round_trips += 1;
-                    let outcome = state.client.batch_execute("COMMIT");
+                    let outcome = state
+                        .client
+                        .batch_execute(commit_sql.as_deref().unwrap_or("COMMIT"));
                     state.work.commit_ns += commit.elapsed().as_nanos() as u64;
                     match outcome {
                         Ok(()) => {
@@ -493,15 +495,25 @@ impl Session {
                             }
                             Ok(value)
                         }
+                        Err(e) if in_lane && lane_lost(&e) => {
+                            // The check failed and the server skipped the
+                            // COMMIT: the lane was lost, nothing is kept.
+                            self.close_lane();
+                            lost_lane(state)
+                        }
                         Err(e) => {
                             // A COMMIT whose reply was lost is uncertain; one
-                            // the server refused (a deferred constraint) rolled back.
+                            // the server refused (a deferred constraint) rolled
+                            // back. A nested write's batch may have stopped
+                            // before its COMMIT, so it is rolled back too.
                             let error = e.backend();
-                            if error == BackendError::Unknown {
+                            if error == BackendError::Unknown
+                                || (in_lane && rollback(state).is_err())
+                            {
                                 state.quarantine();
-                            } else {
-                                state.work.rollbacks += 1;
+                                return Err(BackendError::Unknown.into());
                             }
+                            state.work.rollbacks += 1;
                             Err(error.into())
                         }
                     }
@@ -615,6 +627,26 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
         return Err(BackendError::Unknown.into());
     }
     result
+}
+
+/// Whether a nested write's COMMIT batch failed its lane check: division by
+/// zero (the lane transaction is not in progress) or an id the server does
+/// not know (a different server).
+fn lane_lost(error: &super::driver::Error) -> bool {
+    error.code().is_some_and(|code| {
+        *code == postgres::error::SqlState::DIVISION_BY_ZERO
+            || *code == postgres::error::SqlState::INVALID_PARAMETER_VALUE
+    })
+}
+
+/// Rolls back a nested write whose lane was lost: a definite `Closed`.
+fn lost_lane<T, E: From<BackendError>>(state: &mut State) -> Result<T, E> {
+    if rollback(state).is_err() {
+        state.quarantine();
+        return Err(BackendError::Unknown.into());
+    }
+    state.work.rollbacks += 1;
+    Err(BackendError::Closed.into())
 }
 
 fn rollback(state: &mut State) -> Result<(), super::driver::Error> {

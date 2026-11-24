@@ -46,10 +46,11 @@ fn canonical_and_shared_physical_bytes_are_bounded_independently() {
     }
     assert_eq!(save.finish().unwrap().inserted, 60);
     let after = h.diagnostics().unwrap();
-    // One reservation, one wave publication and one final open-group publication.
-    // Each side is below4MiB; adding the shared representations would need an
-    // additional wave publication. Finishing keeps its existing separate boundary.
-    assert_eq!(after.write_commits - before.write_commits, 3);
+    // One reservation and one publication: the last wave and the sealed tail
+    // publish together at finish (#768; two publications before). Each side
+    // is below 4 MiB; adding the shared representations would need an
+    // additional publication.
+    assert_eq!(after.write_commits - before.write_commits, 2);
     assert!(after.sealed_body_bytes - before.sealed_body_bytes > 2500000);
     assert!(
         after.sealed_body_bytes - before.sealed_body_bytes

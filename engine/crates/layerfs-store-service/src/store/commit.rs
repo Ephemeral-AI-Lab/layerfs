@@ -317,19 +317,25 @@ impl BoundWorkspace {
                 let conflicted = merge
                     .as_ref()
                     .is_some_and(|report: &MergeReport| !report.conflicts.is_empty());
-                let lane = if conflicted {
-                    None
+                // Taking the lane also checks, in the same round trip where
+                // the provider can, that the head is still `current` (#768).
+                let (lane, unmoved) = if conflicted {
+                    (None, false)
                 } else {
-                    Some(phase(timing, "lane", || {
-                        self.store
-                            .history
-                            .publish_lane()
-                            .map_err(CommitError::History)
-                    })?)
+                    let (lane, unmoved) = phase(timing, "lane", || match force {
+                        true => Ok((self.store.history.publish_lane()?, false)),
+                        false => self.store.history.publish_lane_unmoved(
+                            snapshot.branch.id,
+                            current.branch.head_commit,
+                            current.branch.base_layer,
+                        ),
+                    })
+                    .map_err(CommitError::History)?;
+                    (Some(lane), unmoved)
                 };
                 // A forced Commit is decided by the publication itself,
                 // which reads the head inside the lane.
-                let (current, root, logical) = if force || conflicted {
+                let (current, root, logical) = if force || conflicted || unmoved {
                     (current, root, logical)
                 } else {
                     let now = phase(timing, "head.lane", || {

@@ -60,7 +60,8 @@ impl<'a> Save<'a> {
         }
         let mut state = self.state.borrow_mut();
         let objects = state.pending.drain();
-        state.wave(objects)?;
+        // The last wave is published below, with the sealed tail.
+        state.prepare(objects)?;
         let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;
         if state.packer.unfinished() {

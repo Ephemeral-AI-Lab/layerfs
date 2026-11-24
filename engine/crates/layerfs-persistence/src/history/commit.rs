@@ -88,18 +88,15 @@ pub(crate) fn commit_branch(
     tx: &Transaction<'_>,
     request: &CommitRequest,
 ) -> HistoryResult<CommitOutcome> {
-    // Spec 5: the project epoch is read before the resources the write
-    // depends on. The Branch is read once to learn its project, the fence
-    // opens, and the Branch is read again: a removal that committed before
-    // the fence is visible in the second read (its row is filtered), and one
-    // that commits after it changes the epoch `confirm` re-checks. Reading
-    // the Branch before the fence would let a removal land in that window
-    // unseen and the Commit land on a retired Branch.
-    let probe = super::branch::snapshot_rows(tx, request.branch)?
+    // Spec 5: the project epoch is read no later than the resources the
+    // write depends on. One statement reads the Branch, the rows it resolves
+    // to and its project's epoch from one snapshot (#768; it was a probe, the
+    // epoch, then a re-read): a removal that committed before it is visible
+    // (its row is filtered), and one that commits after it changes the epoch
+    // `confirm` re-checks, so the Commit never lands on a retired Branch.
+    let (rows, epoch) = super::branch::snapshot_rows_with_epoch(tx, request.branch)?
         .ok_or(HistoryError::Missing(Missing::Branch))?;
-    let fence = super::epoch::open(tx, probe.branch.stack)?;
-    let rows = super::branch::snapshot_rows(tx, request.branch)?
-        .ok_or(HistoryError::Missing(Missing::Branch))?;
+    let fence = super::epoch::observed(rows.branch.stack, epoch)?;
     let branch = rows.branch.clone();
     let stack = rows.stack()?.ok_or(HistoryError::Integrity("LayerStack"))?;
     if stack.profile != request.profile || stack.scope != request.scope {

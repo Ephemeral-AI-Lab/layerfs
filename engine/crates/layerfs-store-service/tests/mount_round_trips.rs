@@ -128,16 +128,23 @@ const POSTGRESQL: &[Pin] = &[
 // Commit; now it is one read (3 statements, 1 transaction). The writer and
 // the Workspace reader are unchanged by it, and an UpToDate Commit never
 // reaches the whiteout step.
+//
+// #768's Commit cuts then took 6 statements and 2 transactions off each real
+// Commit's writer (first 52/11, second 44/9 before): no write transaction
+// for a digest window of only small files (BEGIN IMMEDIATE, COMMIT), one
+// statement for the Branch, its roots and its project epoch in
+// `commit_branch` (three before), and one publication at a Save's finish
+// for its last wave and its sealed tail (two before).
 const SQLITE_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
-        writer: [0, 0, 52, 11],
+        writer: [0, 0, 46, 9],
         control: [0, 0, 3, 1],
         workspace: [0, 0, 5, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 0, 44, 9],
+        writer: [0, 0, 38, 7],
         control: [0, 0, 3, 1],
         workspace: [0, 0, 5, 0],
     },
@@ -164,16 +171,25 @@ const SQLITE_COMMIT: &[Pin] = &[
 // The unmount is the owner's release on the writer, cold on this session (2
 // statements, each prepared once): `postgresql_gc_sessions` pins the warm
 // release at 2 round trips, 8 before #768's admission change.
+//
+// #768's Commit cuts then took 11 round trips off the first Commit's writer
+// (65 before) and 10 off the second's (42 before; 40 of them warm): the
+// empty digest write (2), the last wave's own publication (4), the probe,
+// epoch read and re-read as one statement (2), the lane check in the
+// COMMIT round trip (1) and the head check in the lane's BEGIN batch (1).
+// The first Commit also prepares the new joined statement once fewer than
+// the three it replaces. Ledger and rules: `docs/architecture/engine/store/
+// postgresql.md`, "Commit round trips".
 const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
-        writer: [1, 65, 28, 7],
+        writer: [1, 54, 23, 5],
         control: [1, 3, 2, 0],
         workspace: [0, 5, 5, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 42, 24, 6],
+        writer: [0, 32, 19, 4],
         control: [0, 1, 1, 0],
         workspace: [0, 5, 5, 0],
     },

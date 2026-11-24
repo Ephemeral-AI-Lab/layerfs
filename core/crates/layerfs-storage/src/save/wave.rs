@@ -45,6 +45,21 @@ impl State<'_> {
         if objects.is_empty() {
             return Ok(());
         }
+        self.prepare(objects)?;
+        let flush = self.storage.work.span(super::Stage::Flush);
+        // Keep the existing bounded partial queues until pressure, dependency
+        // closure or finish requires them. Ready packs still publish this wave.
+        self.flush_signatures()?;
+        drop(flush);
+        self.register_ready()
+    }
+    /// One wave's membership, exact reuse and selection, without publishing
+    /// it: `Save::finish` publishes its last wave with the sealed tail, in
+    /// one publication rather than two (#768).
+    pub(super) fn prepare(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
+        if objects.is_empty() {
+            return Ok(());
+        }
         self.storage.source.begin_demand(false);
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         let mut start = 0;
@@ -97,12 +112,7 @@ impl State<'_> {
             }
             start = end;
         }
-        let flush = self.storage.work.span(super::Stage::Flush);
-        // Keep the existing bounded partial queues until pressure, dependency
-        // closure or finish requires them. Ready packs still publish this wave.
-        self.flush_signatures()?;
-        drop(flush);
-        self.register_ready()
+        Ok(())
     }
     /// Admits `objects[index]`: a duplicate in the wave, an exact reuse or a
     /// new object offered for selection.

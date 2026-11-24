@@ -343,6 +343,20 @@ pub trait HistoryCatalog: Send + Sync {
         Ok(PublishLane(None))
     }
 
+    /// [`Self::publish_lane`], and whether Branch `branch` is visible at head
+    /// Commit `head` over base Layer `base` once the lane is held. `true`
+    /// only when the provider read that in the same step as taking the lane;
+    /// `false` when it did not read (the default) or found anything else, and
+    /// the caller then reads the Branch itself.
+    fn publish_lane_unmoved(
+        &self,
+        _branch: BranchId,
+        _head: Option<CommitId>,
+        _base: LayerId,
+    ) -> HistoryResult<(PublishLane, bool)> {
+        Ok((self.publish_lane()?, false))
+    }
+
     /// Returns once every publication that held this Store's lane when the
     /// call began has ended, committed or rolled back, on a connection of its
     /// own: a lost `COMMIT` reply may leave the server still applying it, and

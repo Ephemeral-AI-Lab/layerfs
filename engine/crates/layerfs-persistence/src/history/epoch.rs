@@ -51,6 +51,14 @@ pub(crate) fn open(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<F
     Ok(Fence { stack, epoch })
 }
 
+/// The fence of an epoch read by the statement that also read the rows the
+/// write checks ([`super::branch::snapshot_rows_with_epoch`]); `None` (no
+/// epoch row) is `Conflict`, as in [`open`].
+pub(crate) fn observed(stack: LayerStackId, epoch: Option<i64>) -> HistoryResult<Fence> {
+    let epoch = epoch.ok_or(HistoryError::Conflict("project epoch"))?;
+    Ok(Fence { stack, epoch })
+}
+
 impl Fence {
     /// Re-checks the epoch as the last statement before `COMMIT`; a changed or
     /// removed row is `Conflict` and the caller's transaction writes nothing.
