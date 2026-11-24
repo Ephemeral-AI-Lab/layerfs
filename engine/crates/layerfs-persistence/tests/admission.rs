@@ -8,7 +8,9 @@ use layerfs_history::records::{
     GcDeletion, GcIntent, GcIntentKind, GcScopeKind, PathRemovalKind, PathRemovalRequest,
     StackInitialization,
 };
-use layerfs_history::{BranchId, CatalogId, HistoryCatalog, HistoryCatalogConfig, LayerStackId};
+use layerfs_history::{
+    BranchId, CatalogId, HistoryCatalog, HistoryCatalogConfig, LayerStackId, PlaceAuthority,
+};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use support::{branch_id, name, root, stack, Temp};
 
@@ -350,6 +352,56 @@ fn a_missing_epoch_row_is_conflict_and_release_is_idempotent() {
     ));
 }
 
+#[test]
+fn an_intent_round_trips_its_place_and_lease_authority() {
+    let temp = Temp::new("admission-intent-authority");
+    let path = temp.join("store.sqlite");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+
+    let authority = PlaceAuthority {
+        machine_incarnation: Some("worker:7".to_owned()),
+        sandbox_generation: Some("sandbox:3".to_owned()),
+        lease_expires_ms: Some(1_000),
+        fence_token: Some("fence:3".to_owned()),
+    };
+    let intent = mount(project_id, branch, 30).authorized(authority.clone());
+    assert_eq!(intent.machine_incarnation.as_deref(), Some("worker:7"));
+    assert_eq!(intent.sandbox_generation.as_deref(), Some("sandbox:3"));
+    assert_eq!(intent.lease_expires_ms, Some(1_000));
+    assert_eq!(intent.fence_token.as_deref(), Some("fence:3"));
+
+    let renewed = intent.clone().renewed(Some(2_000), Some("fence:4"));
+    assert_eq!(renewed.lease_expires_ms, Some(2_000));
+    assert_eq!(renewed.fence_token.as_deref(), Some("fence:4"));
+
+    history.gc_register(&intent).unwrap();
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].machine_incarnation, authority.machine_incarnation);
+    assert_eq!(listed[0].sandbox_generation, authority.sandbox_generation);
+    assert_eq!(listed[0].lease_expires_ms, authority.lease_expires_ms);
+    assert_eq!(listed[0].fence_token, authority.fence_token);
+
+    // The registration writes the four columns, not just the in-memory value.
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let row: (Option<String>, Option<String>, Option<i64>, Option<String>) = connection
+        .query_row(
+            "SELECT machine_incarnation, sandbox_generation, lease_expires_ms, fence_token \
+             FROM gc_intent WHERE op_id = ?1",
+            [op(30).as_slice()],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!(row.0.as_deref(), Some("worker:7"));
+    assert_eq!(row.1.as_deref(), Some("sandbox:3"));
+    assert_eq!(row.2, Some(1_000));
+    assert_eq!(row.3.as_deref(), Some("fence:3"));
+    history.gc_release(&op(30)).unwrap();
+}
+
 /// A mount whose owner is provably dead (the same boot and PID namespace, a
 /// pid that does not run) no longer blocks a removal: the removal adopts the
 /// row, while a live owner still reports a holder.
@@ -619,6 +671,434 @@ fn a_retried_live_op_replaces_its_dead_predecessors_evidence() {
     assert_eq!(Some(runtime.as_str()), live.owner_runtime.as_deref());
     assert_eq!(Some(boot.as_str()), live.owner_boot.as_deref());
     history.gc_release(&op(35)).expect("release");
+}
+
+/// The Store's clock plus a minute, for a lease that has not expired.
+fn future_ms() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock is after the epoch")
+        .as_millis();
+    i64::try_from(now).expect("the clock fits an i64") + 60_000
+}
+
+/// An ordered place value in the format the records mint.
+fn token(label: &str, milliseconds: u64, nonce: &str) -> String {
+    format!("p1:{label}:{milliseconds:016}:{nonce}")
+}
+
+/// A mount placed at `machine`/`sandbox` carrying `authority`.
+fn authority_mount(
+    stack: LayerStackId,
+    branch: BranchId,
+    tag: u8,
+    machine: &str,
+    sandbox: &str,
+    authority: PlaceAuthority,
+) -> GcIntent {
+    GcIntent::shared(
+        op(tag),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack.as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([tag; 32]), Some(sandbox), Some(machine))
+    .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
+    .authorized(authority)
+}
+
+/// A newer machine incarnation proves the older placement dead while its lease
+/// is still live: admitting the newer mount settles the older one. Place death
+/// wins over lease state, and the newer place still holds the Branch.
+#[test]
+fn a_newer_machine_incarnation_settles_the_older_mount_at_admission() {
+    let temp = Temp::new("admission-machine-incarnation");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&authority_mount(
+            project_id,
+            branch,
+            80,
+            "machine-80",
+            "sandbox-80",
+            PlaceAuthority {
+                machine_incarnation: Some(token("worker", 10, "a")),
+                sandbox_generation: None,
+                lease_expires_ms: Some(future_ms()),
+                fence_token: Some("fence:80".to_owned()),
+            },
+        ))
+        .expect("admit the stale mount");
+    history
+        .gc_register(&authority_mount(
+            project_id,
+            branch,
+            81,
+            "machine-80",
+            "sandbox-81",
+            PlaceAuthority {
+                machine_incarnation: Some(token("worker", 20, "b")),
+                sandbox_generation: None,
+                lease_expires_ms: Some(future_ms()),
+                fence_token: None,
+            },
+        ))
+        .expect("admit the current mount");
+
+    // Admitting the newer place settles the older row in the same transaction.
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].op_id, op(81));
+
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 82))
+        .expect_err("the current incarnation holds the Branch");
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.holders.len(), 1);
+    assert_eq!(state.holders[0].op, hex16(&op(81)));
+    history
+        .gc_release(&op(81))
+        .expect("release the current place");
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 83))
+        .expect("the stale place no longer holds");
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents")
+        .is_empty());
+}
+
+/// A newer Sandbox generation proves the older generation dead even when the
+/// machine incarnation still matches: a recreated Sandbox cannot revive the
+/// old intent. The newer generation still holds the Branch.
+#[test]
+fn a_newer_sandbox_generation_settles_the_older_mount_at_admission() {
+    let temp = Temp::new("admission-sandbox-generation");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&authority_mount(
+            project_id,
+            branch,
+            84,
+            "machine-84",
+            "sandbox-84",
+            PlaceAuthority {
+                machine_incarnation: None,
+                sandbox_generation: Some(token("sandbox", 10, "a")),
+                lease_expires_ms: Some(future_ms()),
+                fence_token: None,
+            },
+        ))
+        .expect("admit the older generation");
+    history
+        .gc_register(&authority_mount(
+            project_id,
+            branch,
+            85,
+            "machine-84",
+            "sandbox-84",
+            PlaceAuthority {
+                machine_incarnation: None,
+                sandbox_generation: Some(token("sandbox", 20, "b")),
+                lease_expires_ms: Some(future_ms()),
+                fence_token: None,
+            },
+        ))
+        .expect("admit the newer generation");
+
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].op_id, op(85));
+
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 86))
+        .expect_err("the live generation holds the Branch");
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.holders.len(), 1);
+    assert_eq!(state.holders[0].op, hex16(&op(85)));
+    history
+        .gc_release(&op(85))
+        .expect("release the live Sandbox");
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 87))
+        .expect("the retired generation no longer holds");
+}
+
+/// An expired lease on a place-null (private) intent is uncertain, never
+/// dead: the call reports `Unresolved`, the stored row is not rewritten, and
+/// the owner settles it. A stale fencing token may not settle it.
+#[test]
+fn an_expired_lease_is_uncertain_and_is_not_settled() {
+    let temp = Temp::new("admission-lease-uncertain");
+    let path = temp.join("store.sqlite");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    // No place authority: admission falls back to the caller evidence, which
+    // does not prove this owner gone, and the lease has expired.
+    history
+        .gc_register(&mount(project_id, branch, 88).renewed(Some(0), Some("fence:88")))
+        .expect("admit the expired lease");
+
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 89))
+        .expect_err("an expired lease is unresolved");
+    let HistoryError::Unresolved(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.op, hex16(&op(88)));
+    let connection = rusqlite::Connection::open(&path).expect("raw connection");
+    let uncertain: i64 = connection
+        .query_row(
+            "SELECT uncertain FROM gc_intent WHERE op_id = ?1",
+            [op(88).as_slice()],
+            |row| row.get(0),
+        )
+        .expect("the row");
+    assert_eq!(uncertain, 0, "the classification does not rewrite the row");
+    drop(connection);
+
+    let stale = history
+        .gc_release_fenced(&op(88), Some("fence:87"))
+        .expect_err("a stale token may not settle");
+    assert!(
+        matches!(stale, HistoryError::Conflict("gc intent fence")),
+        "{stale:?}"
+    );
+    history
+        .gc_release_fenced(&op(88), Some("fence:88"))
+        .expect("the owner settles its lease");
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 90))
+        .expect("removal after settlement");
+}
+
+/// A lease that has not expired keeps a place-null mount a holder.
+#[test]
+fn a_live_lease_keeps_the_mount_a_holder() {
+    let temp = Temp::new("admission-lease-live");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&mount(project_id, branch, 91).renewed(Some(future_ms()), None))
+        .expect("admit the live lease");
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 92))
+        .expect_err("the live lease holds");
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+    history.gc_release(&op(91)).expect("release the mount");
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 93))
+        .expect("removal after release");
+}
+
+/// A live place with an expired lease is uncertain, never dead: the Store
+/// does not adopt it, and the owner's fenced release settles it.
+#[test]
+fn a_current_place_with_an_expired_lease_is_uncertain() {
+    let temp = Temp::new("admission-place-lease");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+
+    history
+        .gc_register(&authority_mount(
+            project_id,
+            branch,
+            95,
+            "machine-95",
+            "sandbox-95",
+            PlaceAuthority {
+                machine_incarnation: Some("worker:1".to_owned()),
+                sandbox_generation: None,
+                lease_expires_ms: Some(0),
+                fence_token: Some("fence:95".to_owned()),
+            },
+        ))
+        .expect("admit the expired lease");
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 96))
+        .expect_err("a live place with an expired lease is unresolved");
+    let HistoryError::Unresolved(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.op, hex16(&op(95)));
+    assert_eq!(
+        history
+            .gc_intents(GcScopeKind::Branch, branch.as_slice())
+            .expect("intents")
+            .len(),
+        1,
+        "the Store never adopts an uncertain row"
+    );
+    history
+        .gc_release_fenced(&op(95), Some("fence:95"))
+        .expect("the owner settles its row");
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 97))
+        .expect("removal after settlement");
+}
+
+/// A retried operation replaces its fence. The resurrected predecessor's
+/// token must not release the newer owner's row.
+#[test]
+fn a_stale_fencing_token_cannot_release_a_newer_owner() {
+    let temp = Temp::new("admission-fence");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&mount(project_id, branch, 94).renewed(Some(future_ms()), Some("fence:1")))
+        .expect("admit the first owner");
+    history
+        .gc_register(&mount(project_id, branch, 94).renewed(Some(future_ms()), Some("fence:2")))
+        .expect("retry with a newer fence");
+
+    let stale = history
+        .gc_release_fenced(&op(94), Some("fence:1"))
+        .expect_err("the old token may not release");
+    assert!(
+        matches!(stale, HistoryError::Conflict("gc intent fence")),
+        "{stale:?}"
+    );
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].fence_token.as_deref(), Some("fence:2"));
+    history
+        .gc_release_fenced(&op(94), Some("fence:2"))
+        .expect("the newer owner settles its row");
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents")
+        .is_empty());
+}
+
+/// A heartbeat extends an expired lease in place: admission then reports the
+/// mount a live holder instead of `Unresolved`, and the same fenced owner may
+/// settle it.
+#[test]
+fn a_heartbeat_extends_an_expired_lease_and_its_owner_may_remove() {
+    let temp = Temp::new("admission-lease-renew");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&mount(project_id, branch, 98).renewed(Some(0), Some("fence:98")))
+        .expect("admit the expired lease");
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 99))
+        .expect_err("an expired lease is unresolved");
+    assert!(
+        matches!(refusal, HistoryError::Unresolved(_)),
+        "{refusal:?}"
+    );
+
+    let deadline = future_ms();
+    assert!(history
+        .gc_renew_lease(&op(98), Some("fence:98"), deadline)
+        .expect("renew the lease"));
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(listed[0].lease_expires_ms, Some(deadline));
+    let refusal = history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 100))
+        .expect_err("a renewed lease holds");
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+
+    history
+        .gc_release_fenced(&op(98), Some("fence:98"))
+        .expect("the owner settles its row");
+    history
+        .gc_remove_branch(branch, 3_000, &removal(project_id, 101))
+        .expect("removal after settlement");
+}
+
+/// A stale fencing token may not renew the newer owner's lease: the call is
+/// `Conflict` and the recorded deadline, and therefore the holder, is
+/// unchanged.
+#[test]
+fn a_stale_fencing_token_may_not_renew_a_lease() {
+    let temp = Temp::new("admission-lease-renew-fence");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&mount(project_id, branch, 102).renewed(Some(0), Some("fence:2")))
+        .expect("admit the first owner");
+    let stale = history
+        .gc_renew_lease(&op(102), Some("fence:1"), future_ms())
+        .expect_err("the old token may not renew");
+    assert!(
+        matches!(stale, HistoryError::Conflict("gc intent fence")),
+        "{stale:?}"
+    );
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(
+        listed[0].lease_expires_ms,
+        Some(0),
+        "a stale fence changes nothing"
+    );
+    assert!(history
+        .gc_renew_lease(&op(102), Some("fence:2"), future_ms())
+        .expect("the newer owner renews"));
+    history
+        .gc_release_fenced(&op(102), Some("fence:2"))
+        .expect("the newer owner settles its row");
+}
+
+/// A heartbeat keeps the later deadline: a delayed renewal carrying an older
+/// value never shortens a lease already set.
+#[test]
+fn a_heartbeat_never_shortens_a_lease() {
+    let temp = Temp::new("admission-lease-renew-monotonic");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    let deadline = future_ms();
+    history
+        .gc_register(&mount(project_id, branch, 103).renewed(Some(deadline), None))
+        .expect("admit the live lease");
+    assert!(history
+        .gc_renew_lease(&op(103), None, 1)
+        .expect("an unfenced heartbeat renews"));
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(listed[0].lease_expires_ms, Some(deadline));
+    history.gc_release(&op(103)).expect("release the mount");
+}
+
+/// A heartbeat for an intent the Store no longer records reports absent, so a
+/// closed or adopted mount stops instead of resurrecting its row.
+#[test]
+fn a_heartbeat_for_a_released_intent_reports_absent() {
+    let temp = Temp::new("admission-lease-renew-absent");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&mount(project_id, branch, 104))
+        .expect("admit the mount");
+    history.gc_release(&op(104)).expect("release the mount");
+    assert!(!history
+        .gc_renew_lease(&op(104), None, future_ms())
+        .expect("a released intent is absent"));
 }
 
 fn hex16(bytes: &[u8; 16]) -> String {

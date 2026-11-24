@@ -20,6 +20,8 @@ mod transaction;
 pub use postgresql::connection as postgresql_connection;
 pub(crate) use postgresql::with_cancellation;
 
+mod mounts;
+pub use mounts::{DoneAuditPage, DoneAuditRow, MountHolder};
 mod observation;
 pub(crate) use observation::emit;
 pub use observation::{Observation, Options, Outcome, Resolver};

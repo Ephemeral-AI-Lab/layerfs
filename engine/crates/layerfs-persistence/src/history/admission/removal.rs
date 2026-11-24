@@ -4,6 +4,7 @@
 //! boundary guard's length limit; the items are the module's own.
 
 use super::*;
+use layerfs_history::Liveness;
 
 /// The admission every removal runs before its marker, inside the marker's
 /// own write transaction. On PostgreSQL it takes the Store key shared, the
@@ -12,11 +13,15 @@ use super::*;
 /// `exclusive` (class, id). On both backends it then holds the project epoch
 /// and scans again, settling the intents dead owners left. `scan` is the
 /// statement and its parameters; a conflict is refused as [`classify`] names
-/// it.
+/// it. The eight parameters are one transaction's own state, the two keys it
+/// takes and the one scan it runs; bundling them would hide that they always
+/// travel together and are never defaulted.
+#[allow(clippy::too_many_arguments)]
 fn admit(
     tx: &Transaction<'_>,
     provider: &HistoryProvider,
     owners: &OwnerView,
+    intent: &GcIntent,
     stack: LayerStackId,
     hold_project: bool,
     exclusive: (u8, &[u8]),
@@ -24,23 +29,37 @@ fn admit(
 ) -> HistoryResult<()> {
     let postgres = postgres(provider);
     let (statement, scope) = scan;
+    let mut place = PlaceView::for_intent(intent);
     if postgres {
         let catalog = provider.catalog_id;
         lock_store_shared(tx, catalog)?;
         if hold_project {
             lock_scope(tx, catalog, 2, stack.as_slice(), true)?;
         }
-        let live: Vec<GcIntent> = query(tx, statement, scope.clone())?
-            .into_iter()
-            .filter(|intent| !owners.settleable(intent, postgres))
-            .collect();
+        let mut live = Vec::new();
+        for intent in query(tx, statement, scope.clone())? {
+            if place.settleable(tx, &intent, postgres, owners)? {
+                continue;
+            }
+            let mut intent = intent;
+            if place.liveness(tx, &intent, postgres, owners)? == Liveness::Uncertain {
+                intent.uncertain = true;
+            }
+            live.push(intent);
+        }
         if !live.is_empty() {
             return Err(classify(&live));
         }
         lock_scope(tx, catalog, exclusive.0, exclusive.1, false)?;
     }
     epoch_hold(tx, postgres, stack)?;
-    let found = settle_dead(tx, query(tx, statement, scope)?, postgres, owners)?;
+    let found = settle_dead(
+        tx,
+        query(tx, statement, scope)?,
+        postgres,
+        owners,
+        &mut place,
+    )?;
     if !found.is_empty() {
         return Err(classify(&found));
     }
@@ -62,6 +81,7 @@ pub(crate) fn remove_branch(
             tx,
             provider,
             &owners,
+            intent,
             record.stack,
             true,
             (3, branch.as_slice()),
@@ -106,6 +126,7 @@ pub(crate) fn delete_stack(
             tx,
             provider,
             &owners,
+            intent,
             stack,
             false,
             (2, stack.as_slice()),
@@ -140,6 +161,7 @@ pub(crate) fn remove_path(
             tx,
             provider,
             &owners,
+            intent,
             request.stack,
             false,
             (2, request.stack.as_slice()),

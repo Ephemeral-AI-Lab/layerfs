@@ -289,6 +289,13 @@ const INLINE_ALLOWED: &[InlineAllow] = &[
                  read",
     },
     InlineAllow {
+        file: "src/diagnostic/mounts.rs",
+        needle: "SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine",
+        markers: &[],
+        reason: "the mount_holders diagnostic is the read-only operator holder view; it must \
+                 see a retired Branch/Stack so a holder is not hidden, and it changes nothing",
+    },
+    InlineAllow {
         file: "src/backend/sqlite/schema.rs",
         needle: "INSERT INTO project_epoch(layer_stack_id,epoch)",
         markers: &[],

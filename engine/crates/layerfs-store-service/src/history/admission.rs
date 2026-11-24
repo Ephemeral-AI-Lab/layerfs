@@ -1,13 +1,115 @@
 //! Store-service side of GC admission: operation ids, intent builders and the
 //! short-lived guard a shared Init/merge holds.
 use crate::history::lookup;
-use layerfs_bridge::control::SdkRefusal;
-use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
-use layerfs_history::{BranchRecord, HistoryCatalog, LayerStackId, LayerStackRecord};
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_history::records::{
+    GcAuditPage, GcIntent, GcIntentDone, GcIntentKind, GcReconcile, GcScopeKind,
+};
+use layerfs_history::{
+    BranchRecord, HistoryCatalog, HistoryResult, LayerStackId, LayerStackRecord, PlaceAuthority,
+    PlaceView,
+};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static NEXT_OP: AtomicU64 = AtomicU64::new(0);
+
+/// The incarnation of the worker process serving this Store's mounts, when
+/// this process is one. A worker records it once at its start, and every
+/// mount intent that worker places carries it; a process that is not a worker
+/// has none, and its intents record only their owner tokens.
+static MACHINE_INCARNATION: OnceLock<String> = OnceLock::new();
+
+/// Records the incarnation of this process's worker, once, at its start.
+pub fn set_machine_incarnation(incarnation: String) {
+    let _ = MACHINE_INCARNATION.set(incarnation);
+}
+
+/// This process's worker incarnation, when it has one.
+pub fn machine_incarnation() -> Option<&'static str> {
+    MACHINE_INCARNATION.get().map(String::as_str)
+}
+
+/// Installs the bounded place view the control layer built from its home for
+/// the duration of one Store call. The engine reads only this value; it never
+/// opens a home record. A call that supplies \`None\` keeps the admission the
+/// caller has always had.
+pub use layerfs_persistence::{has_place_view, with_place_view};
+
+/// The bounded place view as the worker frame carries it. One entry per
+/// machine and Sandbox the control home could see; a name it could not read is
+/// absent, and absence is no proof.
+#[must_use]
+pub fn encode_place_view(view: &PlaceView) -> SdkValue {
+    let machines = view
+        .machines()
+        .iter()
+        .map(|(machine, incarnation)| {
+            SdkValue::map([
+                ("machine", SdkValue::text(machine)),
+                ("incarnation", SdkValue::text(incarnation)),
+            ])
+        })
+        .collect();
+    let sandboxes = view
+        .sandboxes()
+        .iter()
+        .map(|((machine, sandbox), place)| {
+            SdkValue::map([
+                ("machine", SdkValue::text(machine)),
+                ("sandbox", SdkValue::text(sandbox)),
+                (
+                    "generation",
+                    SdkValue::opt_text(place.generation.as_deref()),
+                ),
+                ("retired", SdkValue::opt_text(place.retired.as_deref())),
+            ])
+        })
+        .collect();
+    SdkValue::map([
+        ("machines", SdkValue::List(machines)),
+        ("sandboxes", SdkValue::List(sandboxes)),
+    ])
+}
+
+/// The bounded place view a worker frame carries, when it carries one. An
+/// absent or empty value is \`None\`: the admission falls back to the
+/// caller's own recorded place, never to a guess.
+#[must_use]
+pub fn decode_place_view(value: Option<&SdkValue>) -> Option<PlaceView> {
+    let value = value?;
+    let mut view = PlaceView::new();
+    if let Some(SdkValue::List(items)) = value.get("machines") {
+        for item in items {
+            if let (Some(machine), Some(incarnation)) =
+                (item.get_text("machine"), item.get_text("incarnation"))
+            {
+                view.set_machine(machine, incarnation);
+            }
+        }
+    }
+    if let Some(SdkValue::List(items)) = value.get("sandboxes") {
+        for item in items {
+            let (Some(machine), Some(sandbox)) =
+                (item.get_text("machine"), item.get_text("sandbox"))
+            else {
+                continue;
+            };
+            if let Some(generation) = item.get_text("generation") {
+                view.set_sandbox_generation(machine, sandbox, generation);
+            }
+            if let Some(retired) = item.get_text("retired") {
+                view.set_sandbox_retired(machine, sandbox, retired);
+            }
+        }
+    }
+    if view.is_empty() {
+        None
+    } else {
+        Some(view)
+    }
+}
 
 /// One fresh 16-byte operation identity.
 pub fn op_id() -> [u8; 16] {
@@ -159,13 +261,27 @@ fn owned(mut intent: GcIntent, op: [u8; 16]) -> GcIntent {
 /// A mount intent at Branch scope, naming its project identity for the
 /// PostgreSQL key derivation. The Workspace is always placed; the Sandbox
 /// and machine are placed only when the caller that mounted knows them
-/// (a daemon mount does; a private Store-call Workspace does not). The owner
-/// evidence is always recorded, so a gone mount can be told from a live one.
+/// (a daemon mount does; a private Store-call Workspace does not).
+///
+/// `authority` is the place and lease evidence the caller's place knows: a
+/// machine incarnation and Sandbox generation, a lease deadline and a fencing
+/// token. A caller with none (a private Store-call Workspace) passes
+/// [`PlaceAuthority::default`], and the intent records only the owner tokens:
+/// admission then falls back to this process's namespace and boot, never to a
+/// place it does not have.
 pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
     place: &layerfs_bridge::control::MountPlace,
+    mut authority: PlaceAuthority,
 ) -> GcIntent {
+    // The place the mount records is the worker that serves the Store: its
+    // incarnation is the one this process recorded at start, so a later
+    // worker start can prove this mount old. A caller that already states one
+    // (a test, or a later producer) keeps it.
+    if place.machine.is_some() && authority.machine_incarnation.is_none() {
+        authority.machine_incarnation = machine_incarnation().map(str::to_owned);
+    }
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
     let (runtime, boot) = owner_tokens(&format!("ws:{}", hex16(&body)));
     GcIntent::shared(
@@ -182,6 +298,38 @@ pub fn mount_intent(
         place.machine.as_deref(),
     )
     .owned(Some(&runtime), Some(&boot))
+    .authorized(authority)
+}
+
+/// The heartbeat deadline `ttl_ms` from this process's clock, saturating at
+/// `i64::MAX`. A non-positive lifetime asks for a deadline that has already
+/// expired, which admission reports `Unresolved`, never adopts.
+#[must_use]
+pub fn lease_deadline(ttl_ms: i64) -> i64 {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
+        });
+    now.saturating_add(ttl_ms.max(0))
+}
+
+/// Extends one mount intent's lease by `ttl_ms`, but only while
+/// `fence_token` still names its owner.
+///
+/// A bound Workspace calls this while it holds the mount: a slow owner is not
+/// a dead owner, so an expired lease is `Unresolved` rather than adopted, and
+/// the heartbeat is how a long-lived mount stays live. A stale token is a
+/// conflict, and `false` reports that the Store no longer records the intent
+/// (already released or adopted), so the caller stops instead of resurrecting
+/// it.
+pub fn renew_lease(
+    catalog: &dyn HistoryCatalog,
+    op_id: &[u8; 16],
+    fence_token: Option<&str>,
+    ttl_ms: i64,
+) -> Result<bool, layerfs_history::HistoryError> {
+    catalog.gc_renew_lease(op_id, fence_token, lease_deadline(ttl_ms))
 }
 
 /// Releases one intent. When the Store refuses the delete, the owner has gone
@@ -282,3 +430,97 @@ impl Drop for SharedIntent<'_> {
         }
     }
 }
+
+/// Settles the intents at `machine` the ordered `incarnation` proves dead,
+/// never an uncertain one.
+pub fn reconcile_machine(
+    catalog: &dyn HistoryCatalog,
+    machine: &str,
+    incarnation: &str,
+) -> HistoryResult<GcReconcile> {
+    catalog.gc_reconcile_machine(machine, incarnation)
+}
+
+/// One bounded page of retained `done` admission rows, for the operator
+/// audit. This is the only read that sees a done row; admission and preview
+/// keep filtering them out.
+pub fn done_intents(
+    catalog: &dyn HistoryCatalog,
+    page: u32,
+    limit: u32,
+) -> HistoryResult<GcAuditPage> {
+    catalog.gc_done_intents(page, limit)
+}
+
+/// Writes one retained `done` row directly, for the operator preview audit:
+/// the release/done row path without a live intent. The owner and place
+/// columns stay NULL and admission keeps filtering `state <> 'done'`.
+pub fn record_done(
+    catalog: &dyn HistoryCatalog,
+    intent: &GcIntent,
+    evidence: &str,
+) -> HistoryResult<bool> {
+    catalog.gc_record_done(intent, evidence)
+}
+
+/// Deletes the retained `done` rows the operator exported. Only rows still
+/// in state `done` are removed; the answer counts them.
+pub fn prune_done(catalog: &dyn HistoryCatalog, op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
+    catalog.gc_prune_done(op_ids)
+}
+
+/// The wire answer of one audit page.
+pub fn audit_value(page: &GcAuditPage) -> SdkValue {
+    let item = |row: &GcIntentDone| {
+        SdkValue::map([
+            ("op", SdkValue::text(hex16(&row.op_id))),
+            ("kind", SdkValue::text(row.kind.as_str())),
+            ("scope_kind", SdkValue::text(row.scope_kind.as_str())),
+            ("scope_id", SdkValue::text(hex16(&row.scope_id))),
+            ("project", SdkValue::opt_text(row.project.as_deref())),
+            ("branch", SdkValue::opt_text(row.branch.as_deref())),
+            ("machine", SdkValue::opt_text(row.machine.as_deref())),
+            ("sandbox", SdkValue::opt_text(row.sandbox.as_deref())),
+            ("phase", SdkValue::opt_text(row.phase.as_deref())),
+            ("evidence", SdkValue::opt_text(row.evidence.as_deref())),
+            ("updated_ms", SdkValue::Int(row.updated_ms)),
+        ])
+    };
+    SdkValue::map([
+        (
+            "items",
+            SdkValue::List(page.items.iter().map(item).collect()),
+        ),
+        ("page", SdkValue::Int(i64::from(page.page))),
+        ("limit", SdkValue::Int(i64::from(page.limit))),
+        ("has_more", SdkValue::Bool(page.has_more)),
+    ])
+}
+
+/// The wire answer of one reconcile: the authority recorded, the settled
+/// operations and the owners it kept.
+pub fn reconcile_value(reconcile: &GcReconcile) -> SdkValue {
+    SdkValue::map([
+        ("machine", SdkValue::text(&reconcile.machine)),
+        ("incarnation", SdkValue::text(&reconcile.incarnation)),
+        (
+            "settled",
+            SdkValue::List(
+                reconcile
+                    .settled
+                    .iter()
+                    .map(|op| SdkValue::text(hex16(op)))
+                    .collect(),
+            ),
+        ),
+        (
+            "held",
+            SdkValue::Int(i64::try_from(reconcile.held).unwrap_or(i64::MAX)),
+        ),
+        (
+            "uncertain",
+            SdkValue::Int(i64::try_from(reconcile.uncertain).unwrap_or(i64::MAX)),
+        ),
+    ])
+}
+

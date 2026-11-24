@@ -26,7 +26,8 @@ use support::pg::{
 const BINDING: &[u8] = b"postgresql-gc-mark";
 const CURSOR: [u8; 32] = [76; 32];
 
-/// The eight tables T1.3b appended; the pre-GC Store has none of them.
+/// The GC tables the additive migration restores; the pre-GC Store has none
+/// of them. The lean phase 3 schema keeps no authority or audit table.
 const GC_TABLES: [&str; 8] = [
     "branch_retired",
     "gc_dead",

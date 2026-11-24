@@ -13,6 +13,8 @@ pub struct BoundWorkspace {
     pub(super) workspace: Arc<Workspace>,
     /// The mount admission intent this Workspace must delete on unmount.
     pub(super) gc_op: Option<[u8; 16]>,
+    /// The fencing token that intent recorded, when the caller had one.
+    pub(super) gc_fence: Option<String>,
     pub(super) committing: AtomicBool,
     pub(super) producer: super::producer::Producer,
     /// A conflicted merge installed locally and not yet committed.
@@ -27,6 +29,26 @@ pub struct StoreOperation {
     owner: OwnerClient,
 }
 impl BoundWorkspace {
+    /// Extends this mount's lease by `ttl_ms`: the heartbeat a live owner
+    /// sends while it holds the Workspace.
+    ///
+    /// The heartbeat is fenced to the token the mount recorded, so a
+    /// resurrected predecessor cannot extend a newer owner's lease. It
+    /// answers `false` when the Store no longer records the intent, so a
+    /// closed or adopted mount stops heartbeating. A Store without lease
+    /// support is `Unsupported`; the bind already registered no lease there.
+    pub fn heartbeat(&self, ttl_ms: i64) -> Result<bool, layerfs_history::HistoryError> {
+        let Some(op) = self.gc_op else {
+            return Ok(false);
+        };
+        crate::history::admission::renew_lease(
+            self.store.history(),
+            &op,
+            self.gc_fence.as_deref(),
+            ttl_ms,
+        )
+    }
+
     /// Terminal local close, then the Workspace's opened Store reader.
     /// A failed boundary retains its original cause and permits no replay.
     pub fn close(&self) -> Result<(), super::CloseError> {

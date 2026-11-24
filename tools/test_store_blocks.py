@@ -38,11 +38,7 @@ def _old_store(path, version=16, layout=16, tables=False):
     metadata, history = sb._read_sql("sqlite", "metadata.sql"), sb._read_sql("sqlite", "history.sql")
     v2_values = sb._statement(metadata, "CREATE TABLE inode_value_block (")
     v2_hints = sb._statement(history, "CREATE TABLE binding_hint_block (")
-    source = (
-        sb._source(version, layout, tables)
-        .replace(v2_values, sb.V1_VALUES)
-        .replace(v2_hints, sb.V1_HINTS)
-    )
+    source = sb._source(version, layout, tables).replace(v2_values, sb.V1_VALUES).replace(v2_hints, sb.V1_HINTS)
     con = sqlite3.connect(path, isolation_level=None)
     con.executescript(source)
     con.execute(f"PRAGMA application_id={sb.APPLICATION_ID}")
@@ -118,12 +114,15 @@ class StoreBlocksTest(unittest.TestCase):
             self.assertEqual(version_now, 36)
             self.assertEqual(source_now, sb._source(36, 16, False))
             self.assertNotEqual(source_now, old_source)
-            self.assertEqual(definition_now, "".join(
-                f"{t}\n{n}\n{s}\n"
-                for t, n, s in con.execute(
-                    "SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name"
-                )
-            ))
+            self.assertEqual(
+                definition_now,
+                "".join(
+                    f"{t}\n{n}\n{s}\n"
+                    for t, n, s in con.execute(
+                        "SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name"
+                    )
+                ),
+            )
             con.close()
 
     def test_a_changed_byte_fails_the_checksum(self):

@@ -15,7 +15,7 @@ use layerfs_history::records::{
     ForkRequest, ForkSource, GcDeletion, GcIntent, GcIntentKind, GcScopeKind, PathRemovalKind,
     PathRemovalRequest,
 };
-use layerfs_history::{CatalogId, HistoryCatalog, LayerStackId};
+use layerfs_history::{CatalogId, HistoryCatalog, LayerStackId, PlaceAuthority};
 use support::pg::{
     commit, commit_request, counts, epoch, layer_request, merge_request, project, publish, url,
     Schema,
@@ -107,6 +107,20 @@ fn hex16(bytes: &[u8; 16]) -> String {
         out.push_str(&format!("{byte:02x}"));
     }
     out
+}
+
+/// The Store's clock plus a minute, for a lease that has not expired.
+fn future_ms() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock is after the epoch")
+        .as_millis();
+    i64::try_from(now).expect("the clock fits an i64") + 60_000
+}
+
+/// An ordered place value in the format the records mint.
+fn token(milliseconds: u64, nonce: &str) -> String {
+    format!("p1:worker:{milliseconds:016}:{nonce}")
 }
 
 /// A trigger that bumps the project epoch before each inserted row, standing
@@ -346,7 +360,13 @@ fn a_mount_blocks_all_three_removals_until_released() {
     let binding = binding("admission_mount");
     let handles = schema.create(&binding, CURSOR);
     let (project_id, branch, _genesis) = project(&handles.history, 1);
-    let mount = mount(project_id, branch, 1);
+    let lease = future_ms();
+    let mount = mount(project_id, branch, 1).authorized(PlaceAuthority {
+        machine_incarnation: Some("worker:7".to_owned()),
+        sandbox_generation: Some("sandbox:3".to_owned()),
+        lease_expires_ms: Some(lease),
+        fence_token: Some("fence:3".to_owned()),
+    });
     handles.history.gc_register(&mount).unwrap();
 
     let refusal = handles
@@ -387,6 +407,10 @@ fn a_mount_blocks_all_three_removals_until_released() {
         .unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].kind, GcIntentKind::Mount);
+    assert_eq!(listed[0].machine_incarnation.as_deref(), Some("worker:7"));
+    assert_eq!(listed[0].sandbox_generation.as_deref(), Some("sandbox:3"));
+    assert_eq!(listed[0].lease_expires_ms, Some(lease));
+    assert_eq!(listed[0].fence_token.as_deref(), Some("fence:3"));
     handles.history.gc_release(&op(1)).unwrap();
     assert!(handles
         .history
@@ -414,6 +438,126 @@ fn a_mount_blocks_all_three_removals_until_released() {
         GcDeletion::Marked { deleted_ms: 3_000 }
     ));
     assert_eq!(epoch(&mut schema.admin(), project_id), 3);
+}
+
+/// Place authority on PostgreSQL: admitting a mount whose ordered machine
+/// incarnation is newer settles the older placement's mount, and a stale
+/// fencing token may not settle the current row.
+#[test]
+fn a_newer_machine_incarnation_settles_the_older_mount_on_postgresql() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "admission_place");
+    let binding = binding("admission_place");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&handles.history, 1);
+    let stale = mount(project_id, branch, 0x71)
+        .placed(
+            Some([0x71; 32]),
+            Some("sandbox-place"),
+            Some("machine-place"),
+        )
+        .authorized(PlaceAuthority {
+            machine_incarnation: Some(token(10, "a")),
+            sandbox_generation: None,
+            lease_expires_ms: Some(future_ms()),
+            fence_token: Some("fence:71".to_owned()),
+        });
+    handles.history.gc_register(&stale).unwrap();
+    let current = mount(project_id, branch, 0x73)
+        .placed(
+            Some([0x73; 32]),
+            Some("sandbox-place"),
+            Some("machine-place"),
+        )
+        .authorized(PlaceAuthority {
+            machine_incarnation: Some(token(20, "b")),
+            sandbox_generation: None,
+            lease_expires_ms: Some(future_ms()),
+            fence_token: Some("fence:73".to_owned()),
+        });
+    handles.history.gc_register(&current).unwrap();
+
+    let listed = handles
+        .history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].op_id, op(0x73));
+
+    let refusal = handles
+        .history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 0x74))
+        .unwrap_err();
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.holders.len(), 1);
+    assert_eq!(state.holders[0].op, hex16(&op(0x73)));
+
+    let refused = handles
+        .history
+        .gc_release_fenced(&op(0x73), Some("fence:72"))
+        .expect_err("a stale token may not release");
+    assert!(
+        matches!(refused, HistoryError::Conflict("gc intent fence")),
+        "{refused:?}"
+    );
+    handles
+        .history
+        .gc_release_fenced(&op(0x73), Some("fence:73"))
+        .expect("the owner settles its row");
+    handles
+        .history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 0x75))
+        .expect("the dead places no longer hold");
+    assert!(handles
+        .history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
+}
+
+/// A fenced heartbeat extends the lease on PostgreSQL and a stale token may
+/// not renew it.
+#[test]
+fn a_lease_heartbeat_round_trips_on_postgresql() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "admission_lease");
+    let binding = binding("admission_lease");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&handles.history, 1);
+    let intent = mount(project_id, branch, 0x61).authorized(PlaceAuthority {
+        machine_incarnation: None,
+        sandbox_generation: None,
+        lease_expires_ms: Some(0),
+        fence_token: Some("fence:61".to_owned()),
+    });
+    handles.history.gc_register(&intent).unwrap();
+
+    let stale = handles
+        .history
+        .gc_renew_lease(&op(0x61), Some("fence:60"), future_ms())
+        .expect_err("a stale token may not renew");
+    assert!(
+        matches!(stale, HistoryError::Conflict("gc intent fence")),
+        "{stale:?}"
+    );
+    assert!(handles
+        .history
+        .gc_renew_lease(&op(0x61), Some("fence:61"), future_ms())
+        .expect("the owner renews its lease"));
+    let refusal = handles
+        .history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 0x62))
+        .unwrap_err();
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+    handles
+        .history
+        .gc_release_fenced(&op(0x61), Some("fence:61"))
+        .expect("the owner settles its row");
 }
 
 #[test]

@@ -38,7 +38,7 @@ use layerfs_history::records::{FileDigest, GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{
     BranchId, CommitId, CommitMeta, CommitOutcome, CommitRequest, CommitVia, ForkRequest,
     ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError, LayerStackId, LayerStackRecord,
-    StackInitialization,
+    PlaceAuthority, StackInitialization,
 };
 use layerfs_persistence::{
     compact_op_status, CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig,
@@ -2361,4 +2361,118 @@ fn the_sqlite_half_of_the_acceptance_matrix_is_executed_and_reported() {
         count(Status::Deferred),
         count(Status::Gap)
     );
+}
+
+// ---- the compact barrier under the place/lease authority ------------------
+
+fn future_ms() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock is after the epoch")
+        .as_millis();
+    i64::try_from(now).expect("the clock fits an i64") + 60_000
+}
+
+/// The §5 Store-wide compact barrier, retained: a live place or a live lease
+/// refuses the rebuild with `MountsActive`; an uncertain owner (an expired
+/// lease, or an operator's settle) refuses it with `Unresolved`. Neither
+/// writes a staged Store or an op record.
+#[test]
+fn a_live_or_uncertain_authority_keeps_the_compact_barrier() {
+    let (_temp, handles, path, stack, branch) = mounted_store();
+    let live = mount_intent(
+        stack,
+        branch,
+        0x91,
+        [0x91; 32],
+        "sandbox-live",
+        "machine-live",
+    )
+    .authorized(PlaceAuthority {
+        machine_incarnation: Some("worker:1".to_owned()),
+        sandbox_generation: Some("generation:1".to_owned()),
+        lease_expires_ms: Some(future_ms()),
+        fence_token: Some("fence:91".to_owned()),
+    });
+    handles.history.gc_register(&live).unwrap();
+    let refused = handles.compact(&request(0x92)).unwrap_err();
+    match refused {
+        HistoryError::MountsActive(state) => {
+            assert_eq!(state.holders.len(), 1, "{state:?}");
+            assert_eq!(state.holders[0].op, hex16(&[0x91; 16]));
+        }
+        other => panic!("expected MountsActive, got {other:?}"),
+    }
+    assert!(
+        !compact_path(&path).exists(),
+        "a refused run stages no Store"
+    );
+    assert!(!op_path(&path).exists(), "and no op record");
+
+    // An uncertain owner is `Unresolved`, never adopted.
+    let reopened = reopen(&path);
+    reopened.history.gc_mark_uncertain(&live.op_id).unwrap();
+    assert!(matches!(
+        reopen(&path).compact(&request(0x93)).unwrap_err(),
+        HistoryError::Unresolved(_)
+    ));
+    assert!(!compact_path(&path).exists());
+    reopened.history.gc_release(&live.op_id).unwrap();
+
+    // An expired lease is uncertain too: a slow owner is not a dead owner.
+    let expired = mount_intent(
+        stack,
+        branch,
+        0x94,
+        [0x94; 32],
+        "sandbox-expired",
+        "machine-live",
+    )
+    .authorized(PlaceAuthority {
+        machine_incarnation: Some("worker:1".to_owned()),
+        sandbox_generation: None,
+        lease_expires_ms: Some(0),
+        fence_token: None,
+    });
+    reopened.history.gc_register(&expired).unwrap();
+    assert!(matches!(
+        reopen(&path).compact(&request(0x95)).unwrap_err(),
+        HistoryError::Unresolved(_)
+    ));
+    assert!(!compact_path(&path).exists());
+    reopened.history.gc_release(&expired.op_id).unwrap();
+}
+
+/// The barrier adopts what the caller's boot evidence proves dead: an owner
+/// from another boot of a local SQLite Store is adopted inside the
+/// compaction's admission transaction, and the rebuild proceeds. The lean
+/// schema keeps no Store-side place table for the compaction to read, so a
+/// place-only holder stays conservative here.
+#[test]
+fn a_dead_owner_is_adopted_before_the_compaction_runs() {
+    let (_temp, handles, path, stack, branch) = mounted_store();
+    let dead_owner = |body: u8, sandbox: &str| {
+        mount_intent(stack, branch, body, [body; 32], sandbox, "machine-dead")
+            // another boot of a local sqlite Store cannot still run it
+            .owned(
+                Some("pid:999999@1@ns:1"),
+                Some(&format!("boot:{:032x}", body)),
+            )
+    };
+    let first = dead_owner(0x96, "sandbox-old");
+    let second = dead_owner(0x97, "sandbox-retired");
+    handles.history.gc_register(&first).unwrap();
+    handles.history.gc_register(&second).unwrap();
+
+    // The seal must own the Store's last connection: a second in-process
+    // handle leaves `-wal`/`-shm` behind, and the seal refuses the sidecar with
+    // `Conflict("Store sidecar remains after seal")` instead of rebuilding.
+    let receipt = handles.compact(&request(0x98)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let reopened = reopen(&path);
+    assert!(reopened
+        .history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
 }

@@ -9,6 +9,21 @@
 //! `Busy`; a dead, uncertain owner is `Unresolved`, while a dead, certain one
 //! is adopted.
 //!
+//! The place is the first authority: an intent that records a machine
+//! incarnation or a Sandbox generation is classified from the bounded
+//! `PlaceView` the control layer supplies (and, for a name the view does not
+//! carry, from the current records the admitted call itself carries). The
+//! control layer reads its home once for the call; this engine opens no home
+//! file. A recorded value older than the current one is dead even with a live
+//! lease; a recorded value newer than the current one (a home restore) is
+//! uncertain, never dead; an expired lease is uncertain. The caller's
+//! namespace/boot evidence is the fallback when the caller cannot see the
+//! place, never a second opinion about a place it can see. Admission also
+//! settles the rows at the admitted call's own machine that an ordered value
+//! proves older, so a restarted worker does not leave its predecessor's mount
+//! behind when its successor registers; a live or uncertain row stays for its
+//! owner or the worker-start reconcile.
+//!
 //! PostgreSQL adds transaction-scoped advisory keys to a removal's marker
 //! transaction and session-scoped shared keys to a mount, so a removal on one
 //! machine sees a mount on another. Its `gc_intent` rows carry the same
@@ -27,17 +42,28 @@ use layerfs_history::identity::CatalogId;
 use layerfs_history::identity::{BranchId, LayerStackId};
 use layerfs_history::path::trace_key;
 use layerfs_history::records::{
-    GcDeletion, GcIntent, GcIntentKind, GcScopeKind, PathRemovalKind, PathRemovalOutcome,
-    PathRemovalRequest,
+    GcAuditPage, GcDeletion, GcIntent, GcIntentDone, GcIntentKind, GcReconcile, GcScopeKind,
+    PathRemovalKind, PathRemovalOutcome, PathRemovalRequest,
 };
+use layerfs_history::{Liveness, MAXIMUM_AUDIT_PAGE};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod authority;
+mod lease;
+mod place;
 mod removal;
+mod session;
+pub(crate) use authority::{reconcile_machine, release, release_done, release_fenced};
+pub(crate) use lease::renew_lease;
+pub(crate) use place::PlaceView;
+pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
+use session::{session_lock, session_unlock};
 
 const INSERT: &str = "gc_intent_insert";
 const GET: &str = "gc_intent_get";
 const RELEASE: &str = "gc_intent_release";
+const RELEASE_DONE: &str = "gc_intent_release_done";
 const UNCERTAIN: &str = "gc_intent_uncertain";
 const LIST: &str = "gc_intent_list";
 const OPS_BRANCH: &str = "gc_intent_ops_branch";
@@ -46,6 +72,11 @@ const OPS_STORE: &str = "gc_intent_ops_store";
 const ALL_BRANCH: &str = "gc_intent_all_branch";
 const ALL_PROJECT: &str = "gc_intent_all_project";
 const ALL_STORE: &str = "gc_intent_all_store";
+const MACHINE_INTENTS: &str = "gc_intent_list_machine";
+const DONE: &str = "gc_intent_done";
+const DONE_INSERT: &str = "gc_intent_done_insert";
+const DONE_DELETE: &str = "gc_intent_done_delete";
+
 const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
@@ -119,9 +150,10 @@ fn workspace_of(text: Option<String>) -> HistoryResult<Option<[u8; 32]>> {
     Ok(Some(body))
 }
 
-/// Decodes the fourteen columns every intent query returns, in order:
+/// Decodes the eighteen columns every intent query returns, in order:
 /// op_id, kind, scope_kind, scope_id, workspace, sandbox, machine, project,
-/// branch, owner_runtime, owner_boot, state, uncertain, phase.
+/// branch, owner_runtime, owner_boot, state, uncertain, phase,
+/// machine_incarnation, sandbox_generation, lease_expires_ms, fence_token.
 fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> {
     let op_id: Vec<u8> = cell(row, 0)?;
     let op_id: [u8; 16] = op_id
@@ -144,7 +176,34 @@ fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> 
         owner_boot: cell(row, 10)?,
         project_id: None,
         phase: cell(row, 13)?,
+        machine_incarnation: cell(row, 14)?,
+        sandbox_generation: cell(row, 15)?,
+        lease_expires_ms: cell(row, 16)?,
+        fence_token: cell(row, 17)?,
         uncertain: state == "uncertain" || uncertain_flag != 0,
+    })
+}
+
+/// Decodes one retained `done` row: op_id, kind, scope_kind, scope_id,
+/// project, branch, machine, sandbox, phase, evidence, updated_ms.
+fn done_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntentDone> {
+    let op_id: Vec<u8> = cell(row, 0)?;
+    let op_id: [u8; 16] = op_id
+        .as_slice()
+        .try_into()
+        .map_err(|_| HistoryError::Integrity("gc intent op_id"))?;
+    Ok(GcIntentDone {
+        op_id,
+        kind: kind_of(&cell::<String>(row, 1)?)?,
+        scope_kind: scope_of(&cell::<String>(row, 2)?)?,
+        scope_id: cell(row, 3)?,
+        project: cell(row, 4)?,
+        branch: cell(row, 5)?,
+        machine: cell(row, 6)?,
+        sandbox: cell(row, 7)?,
+        phase: cell(row, 8)?,
+        evidence: cell(row, 9)?,
+        updated_ms: cell(row, 10)?,
     })
 }
 
@@ -323,37 +382,67 @@ impl OwnerView {
             None => true,
         }
     }
-
-    /// True only when an observer may settle `intent` as dead: it is certain
-    /// and its owner is provably gone. An uncertain intent is never settled
-    /// by an observer, even when its owner is dead: the owning call (or an
-    /// operator's `gc_release`) clears it, so the scope reports `Unresolved`
-    /// (§5.1's dead-uncertain cell) instead of deleting the evidence that the
-    /// operation may not have finished.
-    fn settleable(&self, intent: &GcIntent, shared_store: bool) -> bool {
-        !intent.uncertain && self.dead(intent, shared_store)
-    }
 }
 
-/// Adopts the rows whose owner is provably dead and that are not uncertain:
-/// their operation cannot still be running, so their intent is deleted and
-/// does not hold the scope. The uncertain rows stay and the caller reports
-/// them as `Unresolved`.
+/// Adopts the rows whose place authority proves them dead and that are not
+/// uncertain: their operation cannot still be running, so their intent is
+/// deleted and does not hold the scope. A live place with an expired lease is
+/// kept and reported `Unresolved`; an uncertain row stays until its owner
+/// settles it.
 fn settle_dead(
     tx: &Transaction<'_>,
     found: Vec<GcIntent>,
     shared_store: bool,
     owners: &OwnerView,
+    place: &mut PlaceView,
 ) -> HistoryResult<Vec<GcIntent>> {
     let mut live = Vec::with_capacity(found.len());
-    for intent in found {
-        if owners.settleable(&intent, shared_store) {
+    for mut intent in found {
+        if place.settleable(tx, &intent, shared_store, owners)? {
             release_in(tx, &intent.op_id)?;
         } else {
+            if place.liveness(tx, &intent, shared_store, owners)? == Liveness::Uncertain {
+                intent.uncertain = true;
+            }
             live.push(intent);
         }
     }
     Ok(live)
+}
+
+/// Settles the intents at the admitted call's own machine that its current
+/// place proves dead, before the registration writes the new place.
+///
+/// A newer ordered `machine_incarnation` or `sandbox_generation` at a machine
+/// means every older placement there belongs to a worker generation that no
+/// longer serves it: admitting the newer mount settles the older row instead
+/// of leaving two rows for one place (and the schema's
+/// `UNIQUE(scope_kind, scope_id, owner_boot)` cannot then refuse the insert).
+/// Only a dead, certain row is released; a live row, an uncertain one (an
+/// expired lease or a restored newer record) and every other machine's rows
+/// stay for their owner or the worker-start reconcile.
+fn settle_place(
+    tx: &Transaction<'_>,
+    intent: &GcIntent,
+    shared_store: bool,
+    owners: &OwnerView,
+    place: &mut PlaceView,
+) -> HistoryResult<()> {
+    if intent.machine_incarnation.is_none() && intent.sandbox_generation.is_none() {
+        return Ok(());
+    }
+    let Some(machine) = intent.machine.as_deref() else {
+        return Ok(());
+    };
+    for existing in query(tx, MACHINE_INTENTS, params![machine])? {
+        if existing.op_id == intent.op_id {
+            continue;
+        }
+        if place.settleable(tx, &existing, shared_store, owners)? {
+            release_in(tx, &existing.op_id)?;
+        }
+    }
+    Ok(())
 }
 
 /// The refusal a non-empty conflict set reports: an uncertain owner is
@@ -449,7 +538,17 @@ pub(super) fn register_in(
 ) -> HistoryResult<()> {
     validate_mount(tx, intent)?;
     let owners = OwnerView::now();
-    let found = settle_dead(tx, conflicts_for(tx, intent)?, postgres, &owners)?;
+    // The admitted call carries the current records it read, so admission
+    // compares a conflicting intent's recorded place with those values.
+    let mut place = PlaceView::for_intent(intent);
+    settle_place(tx, intent, postgres, &owners, &mut place)?;
+    let found = settle_dead(
+        tx,
+        conflicts_for(tx, intent)?,
+        postgres,
+        &owners,
+        &mut place,
+    )?;
     if !found.is_empty() {
         return Err(classify(&found));
     }
@@ -476,6 +575,10 @@ pub(super) fn register_in(
             state,
             uncertain,
             intent.phase.clone(),
+            intent.machine_incarnation.clone(),
+            intent.sandbox_generation.clone(),
+            intent.lease_expires_ms,
+            intent.fence_token.clone(),
             now_ms(),
         ],
     )?;
@@ -672,6 +775,11 @@ fn uncertain_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<()> {
     tx.execute(UNCERTAIN, params![now_ms(), op_id.as_slice()])?;
     Ok(())
 }
+
+/// Marks one intent uncertain; its owner should settle it later.
+pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
+    provider.write(|tx| uncertain_in(tx, op_id))
+}
 fn get_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcIntent>> {
     one(tx, GET, [op_id.as_slice()], intent_row)
 }
@@ -772,6 +880,79 @@ impl HistoryProvider {
     }
 }
 
+/// Writes one retained `done` row directly: the release/done path without a
+/// live intent. The owner and place columns stay NULL, so the row never
+/// blocks a mount, and admission filters `state <> 'done'`.
+fn record_done_in(tx: &Transaction<'_>, intent: &GcIntent, evidence: &str) -> HistoryResult<bool> {
+    let rows = tx.query(
+        DONE_INSERT,
+        params![
+            intent.op_id.to_vec(),
+            intent.kind.as_str(),
+            intent.scope_kind.as_str(),
+            intent.scope_id.clone(),
+            intent.project.clone(),
+            intent.branch.clone(),
+            intent.phase.clone(),
+            evidence,
+            now_ms(),
+        ],
+    )?;
+    Ok(!rows.is_empty())
+}
+
+/// [`record_done_in`] for one Store write transaction: the durable preview
+/// audit row.
+pub(crate) fn record_done(
+    provider: &HistoryProvider,
+    intent: &GcIntent,
+    evidence: &str,
+) -> HistoryResult<bool> {
+    provider.write(|tx| record_done_in(tx, intent, evidence))
+}
+
+/// Deletes the retained `done` rows the operator exported, and only those:
+/// each delete names one op and keeps filtering `state = 'done'`, so a live
+/// intent is never removed by a prune. Answers how many rows went.
+pub(crate) fn prune_done(provider: &HistoryProvider, op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
+    provider.write(|tx| {
+        let mut removed = 0u64;
+        for op_id in op_ids {
+            let rows = tx.query(DONE_DELETE, [op_id.as_slice()])?;
+            if !rows.is_empty() {
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    })
+}
+
+/// One bounded page of retained `done` audit rows, oldest first. The live
+/// admission queries filter `state <> 'done'`; this read is the only one that
+/// sees them, and it never changes a row.
+pub(crate) fn done_intents(
+    provider: &HistoryProvider,
+    page: u32,
+    limit: u32,
+) -> HistoryResult<GcAuditPage> {
+    let limit = limit.clamp(1, MAXIMUM_AUDIT_PAGE);
+    let offset = i64::from(page) * i64::from(limit);
+    provider.read(|tx| {
+        let rows = tx.query(DONE, params![i64::from(limit), offset])?;
+        let items = rows
+            .iter()
+            .map(done_row)
+            .collect::<HistoryResult<Vec<GcIntentDone>>>()?;
+        let has_more = items.len() as u64 == u64::from(limit);
+        Ok(GcAuditPage {
+            items,
+            page,
+            limit,
+            has_more,
+        })
+    })
+}
+
 /// Registers one shared (`mount`, `init`, `merge`) or exclusive
 /// (`compaction`) intent.
 pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> HistoryResult<()> {
@@ -791,143 +972,3 @@ pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> History
     }
 }
 
-/// Deletes one intent, and on PostgreSQL releases the session keys it held.
-pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
-    match &provider.engine {
-        Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
-        Engine::Postgres(session) => {
-            let found = provider.write(|tx| {
-                let Some(intent) = get_in(tx, op_id)? else {
-                    return Ok(None);
-                };
-                release_in(tx, op_id)?;
-                Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
-            })?;
-            if let Some(ReleaseKeys { keys }) = found {
-                let _ = session_unlock(session, provider.catalog_id, &keys);
-            }
-            Ok(())
-        }
-    }
-}
-
-/// Marks one intent uncertain; its owner should settle it later.
-pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
-    provider.write(|tx| uncertain_in(tx, op_id))
-}
-
-/// The refusal a transaction-pooled connection gets for a session lock.
-const POOLED: &str = "transaction-pooled PostgreSQL connection";
-fn session_lock(
-    session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
-    catalog: CatalogId,
-    keys: &[(u8, Vec<u8>, bool)],
-) -> HistoryResult<()> {
-    let mut taken: Vec<(u8, Vec<u8>, bool)> = Vec::new();
-    for (kind, id, shared) in keys {
-        let key = advisory_key(catalog, *kind, id);
-        let found = session.read_statement(|statements| {
-            Transaction::new(statements).query(
-                if *shared {
-                    LOCK_SESSION_SHARED
-                } else {
-                    LOCK_SESSION_EXCLUSIVE
-                },
-                params![key],
-            )
-        })?;
-        if found.is_empty() {
-            let _ = session_unlock(session, catalog, &taken);
-            return Err(session_lock_refusal(session, *kind, id, key, *shared)?);
-        }
-        // Spec §5.2 item 34: a session advisory lock only means presence if the
-        // same backend keeps it. The lock statement returns the backend that
-        // took it; a transaction-pooling proxy hands the next statement to a
-        // different one, so mounts and compaction are `Unsupported` there.
-        let pid: i64 = found[0].get(1)?;
-        if !session.note_backend(pid) {
-            let _ = session_unlock(session, catalog, &taken);
-            return Err(HistoryError::Unsupported(POOLED));
-        }
-        taken.push((*kind, id.clone(), *shared));
-    }
-    Ok(())
-}
-
-/// The refusal a failed session key reports: the intents at its scope, or the
-/// backend the server names; never a holderless `MountsActive`/`Busy` when a
-/// holder is available.
-fn session_lock_refusal(
-    session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
-    kind: u8,
-    id: &[u8],
-    key: i64,
-    shared: bool,
-) -> HistoryResult<HistoryError> {
-    // A read transaction, not `Mode::Statement`: the intent queries are the
-    // search-path ones the write path uses.
-    let found = session.run(false, |statements| {
-        scope_intents(&Transaction::new(statements), kind, id)
-    })?;
-    if !found.is_empty() {
-        return Ok(classify(&found));
-    }
-    if shared {
-        return Ok(HistoryError::MountsActive(Box::new(MountHolders::new(
-            Vec::new(),
-        ))));
-    }
-    let scope = match kind {
-        2 => GcScopeKind::Project,
-        3 => GcScopeKind::Branch,
-        _ => GcScopeKind::Store,
-    };
-    let mut conflict = OpConflict::new(
-        if kind == 1 {
-            GcIntentKind::Compaction
-        } else {
-            GcIntentKind::Removal
-        },
-        scope,
-        if kind == 1 {
-            "store".to_owned()
-        } else {
-            hex(id)
-        },
-        None,
-        String::new(),
-        false,
-    );
-    if let Some((pid, client_addr, backend_start)) = session.run(false, |statements| {
-        advisory_holder(&Transaction::new(statements), key)
-    })? {
-        conflict = conflict.with_backend(Some(pid), client_addr, backend_start);
-    }
-    Ok(HistoryError::BusyOp(Box::new(conflict)))
-}
-fn session_unlock(
-    session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
-    catalog: CatalogId,
-    keys: &[(u8, Vec<u8>, bool)],
-) -> HistoryResult<()> {
-    for (kind, id, shared) in keys {
-        let key = advisory_key(catalog, *kind, id);
-        let found = session.read_statement(|statements| {
-            Transaction::new(statements).query(
-                if *shared {
-                    UNLOCK_SESSION_SHARED
-                } else {
-                    UNLOCK_SESSION_EXCLUSIVE
-                },
-                params![key],
-            )
-        })?;
-        if let Some(row) = found.first() {
-            let pid: i64 = row.get(1)?;
-            if !session.note_backend(pid) {
-                return Err(HistoryError::Unsupported(POOLED));
-            }
-        }
-    }
-    Ok(())
-}

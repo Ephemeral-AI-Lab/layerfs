@@ -47,6 +47,10 @@ CREATE TABLE gc_intent (
     high_water BIGINT,
     evidence TEXT,
     updated_ms BIGINT NOT NULL,
+    machine_incarnation TEXT,
+    sandbox_generation TEXT,
+    lease_expires_ms BIGINT,
+    fence_token TEXT,
     UNIQUE (scope_kind, scope_id, owner_boot)
 );
 CREATE TABLE gc_op (
@@ -96,3 +100,4 @@ CREATE TABLE kept_node (
         OR (kind = 'stack' AND length(node_id) = 17 AND get_byte(node_id, 0) = 49)
     )
 );
+

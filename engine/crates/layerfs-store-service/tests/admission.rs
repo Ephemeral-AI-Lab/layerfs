@@ -9,13 +9,28 @@ mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
-use layerfs_history::WorkspaceId;
+use layerfs_history::{PlaceAuthority, WorkspaceId};
 use layerfs_store_service::history::{admission, deletion, lookup, removal};
+use layerfs_store_service::store::BindRequest;
 use std::fs;
 use support::Fixture;
 
 fn text(value: &str) -> SdkValue {
     SdkValue::text(value)
+}
+
+/// The Store's clock plus a minute, for a lease that has not expired.
+fn future_ms() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock is after the epoch")
+        .as_millis();
+    i64::try_from(now).expect("the clock fits an i64") + 60_000
+}
+
+/// An ordered place value in the format the records mint.
+fn token(milliseconds: u64, nonce: &str) -> String {
+    format!("p1:worker:{milliseconds:016}:{nonce}")
 }
 
 /// Finding 5: a mount intent records who owns it (pid/start, boot, machine,
@@ -38,7 +53,12 @@ fn a_mount_intent_records_owner_evidence_and_settles_unresolved() {
         .expect("the Branch");
     let workspace = WorkspaceId::from_authority([7; 32]).expect("workspace");
     let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
-    let intent = admission::mount_intent(workspace, &snapshot, &place);
+    let intent = admission::mount_intent(
+        workspace,
+        &snapshot,
+        &place,
+        layerfs_history::PlaceAuthority::default(),
+    );
     let runtime = intent.owner_runtime.clone().expect("runtime evidence");
     let boot = intent.owner_boot.clone().expect("boot evidence");
     assert!(runtime.starts_with("pid:"), "{runtime}");
@@ -74,6 +94,112 @@ fn a_mount_intent_records_owner_evidence_and_settles_unresolved() {
     // The owning call settles the row by releasing it.
     history.gc_release(&intent.op_id).expect("settle");
     removal::remove(&fixture.service.store, &stack, "work").expect("removal after settlement");
+    fixture.cleanup();
+}
+
+/// The mount builder records the place and lease authority its caller knows,
+/// and the fenced owner settles exactly its own row.
+#[test]
+fn a_mount_intent_records_the_callers_place_and_lease_authority() {
+    let fixture = Fixture::new("admission-authority", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
+    let history = fixture.service.store.history();
+    let snapshot = history
+        .branch_snapshot(branch.id)
+        .expect("snapshot")
+        .expect("the Branch");
+    let workspace = WorkspaceId::from_authority([8; 32]).expect("workspace");
+    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-8"), Some("machine-8"));
+    let authority = PlaceAuthority {
+        machine_incarnation: Some("worker:2".to_owned()),
+        sandbox_generation: Some("generation:2".to_owned()),
+        lease_expires_ms: Some(future_ms()),
+        fence_token: Some("fence:2".to_owned()),
+    };
+    let intent = admission::mount_intent(workspace, &snapshot, &place, authority.clone());
+    assert_eq!(intent.machine_incarnation, authority.machine_incarnation);
+    assert_eq!(intent.sandbox_generation, authority.sandbox_generation);
+    assert_eq!(intent.lease_expires_ms, authority.lease_expires_ms);
+    assert_eq!(intent.fence_token, authority.fence_token);
+
+    history.gc_register(&intent).expect("admit the mount");
+    let stored = history
+        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
+        .expect("intents");
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].machine_incarnation, authority.machine_incarnation);
+    assert_eq!(stored[0].sandbox_generation, authority.sandbox_generation);
+    assert_eq!(stored[0].lease_expires_ms, authority.lease_expires_ms);
+    assert_eq!(stored[0].fence_token, authority.fence_token);
+
+    history
+        .gc_release_fenced(&intent.op_id, Some("fence:1"))
+        .expect_err("a stale token may not release");
+    history
+        .gc_release_fenced(&intent.op_id, Some("fence:2"))
+        .expect("the owner settles its row");
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
+        .expect("intents")
+        .is_empty());
+    fixture.cleanup();
+}
+
+/// Admitting a mount with a newer ordered machine incarnation settles the
+/// older placement at the same Branch even while its lease is live; the newer
+/// place still holds.
+#[test]
+fn a_newer_incarnation_settles_the_older_mount_through_the_service() {
+    let fixture = Fixture::new("admission-place-dead", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let work = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
+    let history = fixture.service.store.history();
+    let mount = |tag: u8, incarnation: &str| {
+        let snapshot = history
+            .branch_snapshot(work.id)
+            .expect("snapshot")
+            .expect("the Branch");
+        admission::mount_intent(
+            WorkspaceId::from_authority([tag; 32]).expect("workspace"),
+            &snapshot,
+            &layerfs_bridge::control::MountPlace::new(Some("sandbox-9"), Some("machine-9")),
+            PlaceAuthority {
+                machine_incarnation: Some(incarnation.to_owned()),
+                sandbox_generation: None,
+                lease_expires_ms: Some(future_ms()),
+                fence_token: None,
+            },
+        )
+    };
+    let stale = mount(0x61, &token(10, "a"));
+    history.gc_register(&stale).expect("admit the stale mount");
+    let current = mount(0x62, &token(20, "b"));
+    history
+        .gc_register(&current)
+        .expect("admit the current mount");
+
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, work.id.as_slice())
+        .expect("intents");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].op_id, current.op_id);
+
+    let refused = removal::remove(&fixture.service.store, &stack, "work")
+        .expect_err("the current incarnation holds");
+    assert_eq!(refused.code, "MountsActive", "{refused:?}");
+    history
+        .gc_release(&current.op_id)
+        .expect("release the current mount");
+    removal::remove(&fixture.service.store, &stack, "work").expect("removal after release");
     fixture.cleanup();
 }
 
@@ -156,6 +282,7 @@ fn a_mount_sees_a_live_init_or_merge_but_shares_with_another_mount() {
             WorkspaceId::from_authority([tag; 32]).expect("workspace"),
             &snapshot,
             &place,
+            layerfs_history::PlaceAuthority::default(),
         )
     };
 
@@ -201,6 +328,65 @@ fn a_mount_sees_a_live_init_or_merge_but_shares_with_another_mount() {
     history
         .gc_release(&second.op_id)
         .expect("release the second");
+    fixture.cleanup();
+}
+
+/// A bound Workspace heartbeats the lease of the mount intent it registered:
+/// the Store records the deadline, a later heartbeat never shortens it, and a
+/// closed Workspace reports no renewal instead of resurrecting the row.
+#[test]
+fn a_bound_workspace_heartbeat_extends_its_mount_lease() {
+    let fixture = Fixture::new("admission-heartbeat", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
+    let bound = fixture
+        .service
+        .store
+        .bind(
+            fixture.owner.client(),
+            BindRequest {
+                workspace: WorkspaceId::from_authority([11; 32]).expect("workspace"),
+                branch: branch.id,
+            },
+        )
+        .expect("bind");
+    let history = fixture.service.store.history();
+
+    // A private mount records no lease until its owner heartbeats.
+    let before = history
+        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
+        .expect("intents");
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].lease_expires_ms, None);
+
+    assert!(bound.workspace.heartbeat(60_000).expect("heartbeat"));
+    let renewed = history
+        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
+        .expect("intents");
+    let deadline = renewed[0]
+        .lease_expires_ms
+        .expect("the heartbeat records a lease");
+    assert!(deadline > 0);
+
+    // A delayed heartbeat with a tiny lifetime keeps the later deadline.
+    assert!(bound.workspace.heartbeat(1).expect("heartbeat"));
+    let again = history
+        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
+        .expect("intents");
+    assert_eq!(again[0].lease_expires_ms, Some(deadline));
+
+    bound.workspace.close().expect("close the Workspace");
+    assert!(
+        !bound
+            .workspace
+            .heartbeat(60_000)
+            .expect("a closed mount reports absent"),
+        "a released intent is not resurrected"
+    );
     fixture.cleanup();
 }
 
@@ -312,5 +498,53 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
     {
         catalog.gc_release(&intent.op_id).expect("settle the row");
     }
+    fixture.cleanup();
+}
+
+/// A reconcile settles exactly the mount its newer ordered incarnation proves
+/// dead, answering the wire shape the worker reports; a second reconcile at
+/// the same value settles nothing.
+#[test]
+fn the_service_reconcile_settles_the_dead_mount() {
+    let fixture = Fixture::new("admission-place-writers", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
+    let history = fixture.service.store.history();
+    let snapshot = history
+        .branch_snapshot(branch.id)
+        .expect("snapshot")
+        .expect("the Branch");
+    let workspace = WorkspaceId::from_authority([9; 32]).expect("workspace");
+    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-9"), Some("machine-9"));
+    let authority = PlaceAuthority {
+        machine_incarnation: Some(token(10, "a")),
+        sandbox_generation: Some(token(10, "g")),
+        ..PlaceAuthority::default()
+    };
+    let intent = admission::mount_intent(workspace, &snapshot, &place, authority);
+    history.gc_register(&intent).expect("admit the mount");
+
+    let newer = token(20, "b");
+    let reconcile =
+        admission::reconcile_machine(history, "machine-9", &newer).expect("the reconcile");
+    assert_eq!(reconcile.settled, vec![intent.op_id]);
+    assert_eq!((reconcile.held, reconcile.uncertain), (0, 0));
+    let value = admission::reconcile_value(&reconcile);
+    assert_eq!(value.get_text("machine"), Some("machine-9"));
+    assert_eq!(value.get_text("incarnation"), Some(newer.as_str()));
+    let settled = value.get("settled").expect("settled list");
+    assert_eq!(
+        settled,
+        &SdkValue::List(vec![SdkValue::text(lookup::hex(&intent.op_id))])
+    );
+    assert_eq!(value.get_int("held"), Some(0));
+
+    let again =
+        admission::reconcile_machine(history, "machine-9", &newer).expect("the second reconcile");
+    assert!(again.settled.is_empty());
     fixture.cleanup();
 }

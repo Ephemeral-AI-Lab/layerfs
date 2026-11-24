@@ -74,7 +74,8 @@ fn make_old(path: &std::path::Path) {
          DROP TABLE layer_lineage; DROP TABLE commit_lineage; DROP TABLE absorbed; DROP TABLE reach; \
          DROP TABLE merge_operation; DROP TABLE merge_record; DROP TABLE file_digest; \
          DROP TABLE branch_retired; DROP TABLE layer_stack_retired; DROP TABLE path_removed; \
-         DROP TABLE project_epoch; DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead; DROP TABLE kept_node;",
+         DROP TABLE project_epoch; \
+         DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead; DROP TABLE kept_node;",
     )
     .unwrap();
     let source: String = sql
