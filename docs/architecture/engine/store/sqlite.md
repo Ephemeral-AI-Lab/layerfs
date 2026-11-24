@@ -471,6 +471,31 @@ only. The group-row layouts and PostgreSQL ask for exact ranges
 (`Mechanics::pack_range_fill` is 0): there every byte read is a byte
 transferred.
 
+## Fused Commit
+
+A Workspace Commit over its bound head is one `BEGIN IMMEDIATE` transaction
+under the writer lock (#768 stage 2, `Committer`,
+[`history/fused.rs`](../../../../engine/crates/layerfs-persistence/src/history/fused.rs)):
+the Save's held last publication (`backend::publish::run`, the same
+statements as a publication on its own), the binding hints
+(`hints::record`) and `commit_branch`, exactly as they run apart. A lost
+object identity in the publication, a moved head (`HeadMoved`) or an
+`UpToDate` answer rolls the transaction back and is `Fused::Race`: nothing
+was written, and the Store service publishes the tail and the hints on
+their own and continues on the separate path, once. Any other refusal is
+the Commit's own (`Conflict` for a missing or moved epoch, `Busy` for the
+lane), with no fallback. Before the transaction the tail is checked against
+SQLite's publication bound (`TRANSACTION_CANONICAL_BYTES_LIMIT`, 4 MiB − 1),
+the unit layout and the file system's headroom, as a publication on its own
+is; one that does not fit is `Fused::Overflow`, and the tail and the hints
+are published first. An identical Commit identity follows `commit_branch`'s
+own rule on both paths. `mount_round_trips.rs` pins the second one-file
+Commit of a mounted Workspace at 16 statements in 1 transaction (28 in 5
+before) and the first at 35 in 5 (46 in 9); `fused_commit.rs` checks one
+transaction per Commit and that each race and the epoch refusal wrote
+nothing. Not tested on SQLite: `Busy` from another process's writer lock
+and an epoch change during the transaction (the writer lock excludes it).
+
 ## Acquisition
 
 `AcquisitionProvider` gives Project Init indexed working tables in the same

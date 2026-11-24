@@ -51,7 +51,7 @@ impl State<'_> {
         // closure or finish requires them. Ready packs still publish this wave.
         self.flush_signatures()?;
         drop(flush);
-        self.register_ready()
+        self.register_ready(false).map(|_| ())
     }
     /// One wave's membership, exact reuse and selection, without publishing
     /// it: `Save::finish` publishes its last wave with the sealed tail, in

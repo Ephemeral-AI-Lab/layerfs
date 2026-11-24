@@ -10,7 +10,7 @@ mod select;
 mod source;
 mod state;
 mod wave;
-pub use operation::{Save, SaveSink};
+pub use operation::{PreparedTail, Save, SaveSink};
 pub(crate) use reservation::IdBlock;
 pub use state::WriteOutcome;
 

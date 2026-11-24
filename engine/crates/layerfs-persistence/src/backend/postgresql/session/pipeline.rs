@@ -178,10 +178,31 @@ impl Session {
         &self,
         requests: &[Request<'_>],
     ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
+        self.pipeline_turn(requests, true)
+    }
+
+    /// [`Self::pipeline`] refused (`Integrity`, nothing sent) inside this
+    /// thread's held lane: a flight that takes the lane row itself (a fused
+    /// Commit) would wait for its own lane connection.
+    pub(crate) fn pipeline_unnested(
+        &self,
+        requests: &[Request<'_>],
+    ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
+        self.pipeline_turn(requests, false)
+    }
+
+    fn pipeline_turn(
+        &self,
+        requests: &[Request<'_>],
+        nested: bool,
+    ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
         if !self.writable {
             return Err(BackendError::ReadOnly);
         }
-        let _turn = self.admission.enter(Wait::Writer)?;
+        let turn = self.admission.enter(Wait::Writer)?;
+        if turn.nested && !nested {
+            return Err(BackendError::Integrity);
+        }
         let mut guard = self.state.lock().map_err(|_| BackendError::Unknown)?;
         let state: &mut State = &mut guard;
         if state.quarantined {
@@ -266,6 +287,35 @@ impl Session {
             state.quarantine();
         }
         Ok(replies)
+    }
+}
+
+impl Session {
+    /// Counts one transaction a pipelined flight began and ended: a write,
+    /// committed or rolled back.
+    pub(crate) fn count_fused(&self, committed: bool) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        let work = &mut state.work;
+        work.transactions += 1;
+        work.write_transactions += 1;
+        if committed {
+            work.commits += 1;
+            work.write_commits += 1;
+        } else {
+            work.rollbacks += 1;
+        }
+    }
+
+    /// Quarantines the session after a flight whose outcome is unknown
+    /// (`State::quarantine`).
+    pub(crate) fn quarantine_now(&self) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        state.quarantine();
     }
 }
 

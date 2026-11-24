@@ -155,16 +155,27 @@ const POSTGRESQL: &[Pin] = &[
 // base inode leaf's pack and values from what the first Save published
 // instead of fetching them back. The first Commit's new handle reserves and
 // releases the tail past its kept prefix, as before.
+//
+// #768 stage 2 then made each Commit over an unmoved head one write
+// transaction (`commit_fused.rs`, `layerfs_persistence::Committer`): the
+// sealed tail's publication, the binding hints and `commit_branch` in one
+// `BEGIN IMMEDIATE`, and no head read before it (its transaction checks the
+// bound head). The Save's handle also keeps the inode values its Saves
+// read, beside the ones they published, so a base leaf's values are read
+// once, not by construction and again by the logical count. Second Commit:
+// 28 statements in 5 transactions before, now 16 in 1 (the fused
+// transaction); first: 46/9 before, now 35/5 (the new handle's
+// reservation, its first reads and the fused transaction).
 const SQLITE_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
-        writer: [0, 0, 46, 9],
+        writer: [0, 0, 35, 5],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 0, 28, 5],
+        writer: [0, 0, 16, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -217,22 +228,37 @@ const SQLITE_COMMIT: &[Pin] = &[
 // Save published (2). The first Commit's handle is new: it reserves and
 // reads as before, and its ordinal release, now of the tail past the
 // `KEPT_ORDINALS` it keeps, rides in the sealed tail's statement as before.
+//
+// #768 stage 2 (see the SQLite pins) then sent each Commit over an unmoved
+// head as one pipelined message, one transaction and one round trip
+// (`backend/postgresql/history/fused.rs`). The second Commit's writer was
+// [0, 25, 15, 3]: the base leaf's values read by construction and again by
+// the logical count (2), the head read (1), the membership locate (1), the
+// sealed tail's publication (6), the hint write (3) and the lane (11), with
+// one cold prepare. Now it is the membership locate (1) and the message (1),
+// plus one cold prepare (the lineage statement for a Commit with a parent
+// is first used here): 2 round trips once warm. The first Commit no longer
+// opens the lane connection (connects 1 -> 0; its own transaction locks
+// the lane row) and prepares the message's statements once ([1, 54, 23, 5]
+// before). The UpToDate Commit's Branch read is now that statement's first
+// use on this session (no head read before the lane), so one prepare:
+// [0, 1, 1, 0] before.
 const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
-        writer: [1, 54, 23, 5],
+        writer: [0, 23, 21, 3],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 25, 15, 3],
+        writer: [0, 3, 12, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.up_to_date",
-        writer: [0, 1, 1, 0],
+        writer: [0, 2, 1, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -609,10 +635,24 @@ fn merge_scenarios(
             })
             .unwrap_or_else(|failure| panic!("commit: {failure}"))
     };
+    // #768 stage 2: `(fused Commits, race refusals that went on the
+    // separate path)` the Store counted for each Commit.
+    let fused = |since: (u64, u64)| {
+        let now = opened.service.store.fused_counts();
+        (now.0 - since.0, now.1 - since.1)
+    };
     write(&first, "/a");
+    let start = opened.service.store.fused_counts();
     commit(&first);
+    assert_eq!(fused(start), (1, 0), "an unmoved head: one fused Commit");
     write(&second, "/b");
+    let start = opened.service.store.fused_counts();
     let merged = measure(&opened, "commit.merge", &mut out, || commit(&second));
+    // The second Workspace's bound head moved: its fused attempt is refused
+    // as a race, which wrote nothing, and the Commit goes on the separate
+    // path exactly once: the head read, the merge before the lane, then the
+    // lane and the publication.
+    assert_eq!(fused(start), (0, 1), "one race refusal, one fallback");
     assert!(merged.merge.is_some(), "the head moved: a merge runs");
     assert!(
         matches!(merged.history, Some(CommitOutcome::Committed { .. })),
@@ -627,7 +667,9 @@ fn merge_scenarios(
     // the next install waiting.
     view.finish().unwrap();
     write(&second, "/c");
+    let start = opened.service.store.fused_counts();
     let after = measure(&opened, "commit.after_merge", &mut out, || commit(&second));
+    assert_eq!(fused(start), (1, 0), "over its own head: fused again");
     assert!(after.merge.is_none(), "over its own head: no merge");
     assert!(
         matches!(after.history, Some(CommitOutcome::Committed { .. })),

@@ -215,61 +215,12 @@ pub(crate) fn new_commit(
     second_parent: Option<NodeId>,
     meta: &CommitMeta,
 ) -> HistoryResult<CommitRecord> {
-    meta.check()?;
-    let meta = CommitMeta {
-        message: Some(
-            meta.message
-                .clone()
-                .unwrap_or_else(|| format!("{:?} filesystem change", meta.via)),
-        ),
-        branch: Some(branch),
-        time_ms: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| {
-                i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
-            }),
-        ..meta.clone()
-    };
-    let record = CommitRecord {
-        id: CommitId::derive(root, parent, base_layer, second_parent, &meta),
-        stack,
-        root,
-        parent,
-        base_layer,
-        second_parent,
-        meta,
-    };
+    let record = derive_record(stack, branch, root, parent, base_layer, second_parent, meta)?;
     // Every new Commit takes the next Store serial in this transaction.
     let serial = super::position::next_serial(tx)?;
     // The insert names a new identity; an existing one is then verified.
     let inserted = tx
-        .execute(
-            INSERT_COMMIT,
-            params![
-                record.id.as_slice(),
-                record.stack.as_slice(),
-                record.root.as_bytes().as_slice(),
-                record.parent.map(|id| id.to_bytes().to_vec()),
-                record.base_layer.as_slice(),
-                record.second_parent.map(|id| id.as_slice().to_vec()),
-                record.meta.branch.map(|id| id.to_bytes().to_vec()),
-                i64::from(record.meta.via.code()),
-                record.meta.message.clone(),
-                record.meta.merged_from.map(|id| id.as_slice().to_vec()),
-                record.meta.time_ms,
-                i64::try_from(record.meta.statistics.logical)
-                    .map_err(|_| HistoryError::Capacity("logical bytes"))?,
-                i64::try_from(record.meta.statistics.new_canonical)
-                    .map_err(|_| HistoryError::Capacity("canonical bytes"))?,
-                i64::try_from(record.meta.statistics.new_stored)
-                    .map_err(|_| HistoryError::Capacity("stored bytes"))?,
-                i64::try_from(record.meta.statistics.new_metadata)
-                    .map_err(|_| HistoryError::Capacity("metadata bytes"))?,
-                super::facts::encode(&record.meta.lww, &record.meta.units)?,
-                record.meta.displaced.map(|id| id.to_bytes().to_vec()),
-                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
-            ],
-        )
+        .execute(INSERT_COMMIT, insert_params(&record, serial)?)
         .map_err(sql)?;
     if inserted == 1 {
         super::lineage::record_commit(tx, &record)?;
@@ -280,6 +231,101 @@ pub(crate) fn new_commit(
         return Err(HistoryError::Integrity("Commit identity"));
     }
     commit(tx, record.id)?.ok_or(HistoryError::Integrity("Commit identity"))
+}
+
+/// The record of one Commit made on `branch` now: its checked meta with the
+/// default message, the Branch and the time filled, and its identity.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn derive_record(
+    stack: LayerStackId,
+    branch: BranchId,
+    root: ObjectId,
+    parent: Option<CommitId>,
+    base_layer: LayerId,
+    second_parent: Option<NodeId>,
+    meta: &CommitMeta,
+) -> HistoryResult<CommitRecord> {
+    derive_record_at(
+        stack,
+        branch,
+        root,
+        parent,
+        base_layer,
+        second_parent,
+        meta,
+        None,
+    )
+}
+
+/// [`derive_record`] made at `time_ms` instead of now, when given.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn derive_record_at(
+    stack: LayerStackId,
+    branch: BranchId,
+    root: ObjectId,
+    parent: Option<CommitId>,
+    base_layer: LayerId,
+    second_parent: Option<NodeId>,
+    meta: &CommitMeta,
+    time_ms: Option<i64>,
+) -> HistoryResult<CommitRecord> {
+    meta.check()?;
+    let meta = CommitMeta {
+        message: Some(
+            meta.message
+                .clone()
+                .unwrap_or_else(|| format!("{:?} filesystem change", meta.via)),
+        ),
+        branch: Some(branch),
+        time_ms: time_ms.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| {
+                    i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
+                })
+        }),
+        ..meta.clone()
+    };
+    Ok(CommitRecord {
+        id: CommitId::derive(root, parent, base_layer, second_parent, &meta),
+        stack,
+        root,
+        parent,
+        base_layer,
+        second_parent,
+        meta,
+    })
+}
+
+/// The 18 values of a Commit row, in `commit_insert_commit` order.
+pub(crate) fn insert_params(
+    record: &CommitRecord,
+    serial: u64,
+) -> HistoryResult<Vec<crate::backend::records::Param>> {
+    Ok(params![
+        record.id.as_slice(),
+        record.stack.as_slice(),
+        record.root.as_bytes().as_slice(),
+        record.parent.map(|id| id.to_bytes().to_vec()),
+        record.base_layer.as_slice(),
+        record.second_parent.map(|id| id.as_slice().to_vec()),
+        record.meta.branch.map(|id| id.to_bytes().to_vec()),
+        i64::from(record.meta.via.code()),
+        record.meta.message.clone(),
+        record.meta.merged_from.map(|id| id.as_slice().to_vec()),
+        record.meta.time_ms,
+        i64::try_from(record.meta.statistics.logical)
+            .map_err(|_| HistoryError::Capacity("logical bytes"))?,
+        i64::try_from(record.meta.statistics.new_canonical)
+            .map_err(|_| HistoryError::Capacity("canonical bytes"))?,
+        i64::try_from(record.meta.statistics.new_stored)
+            .map_err(|_| HistoryError::Capacity("stored bytes"))?,
+        i64::try_from(record.meta.statistics.new_metadata)
+            .map_err(|_| HistoryError::Capacity("metadata bytes"))?,
+        super::facts::encode(&record.meta.lww, &record.meta.units)?,
+        record.meta.displaced.map(|id| id.to_bytes().to_vec()),
+        i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
+    ])
 }
 
 /// Walks one Branch's ancestry from an immutable start, newest first.

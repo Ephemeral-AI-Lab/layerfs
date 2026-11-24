@@ -72,3 +72,16 @@ pub fn postgresql_write_ignoring(
             Ok(())
         })
 }
+
+/// A fused Commit made at `time_ms` (`Committer::commit_at`): the
+/// PostgreSQL identity is then the same for the same request, so a test can
+/// make one that already exists.
+pub fn fused_commit_at(
+    committer: &crate::Committer,
+    tail: Option<&layerfs_storage::port::Publication>,
+    stack: layerfs_history::LayerStackId,
+    request: &layerfs_history::records::CommitRequest,
+    time_ms: i64,
+) -> Result<layerfs_history::records::CommitOutcome, crate::Fused> {
+    committer.commit_at(tail, stack, request, &[], Some(time_ms))
+}

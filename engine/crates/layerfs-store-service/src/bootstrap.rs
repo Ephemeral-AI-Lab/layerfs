@@ -230,6 +230,7 @@ pub fn open_store_observed(
         observe(&registry, index, provider, reader)
     });
     let control = factory(0)?;
+    let committer = writer.history.committer();
     let store = Arc::new(
         Store::new(
             writer.storage.clone(),
@@ -240,7 +241,8 @@ pub fn open_store_observed(
             reservations,
             workspace_capacity,
         )?
-        .with_merge_scratch(writer.storage.merge_scratch()),
+        .with_merge_scratch(writer.storage.merge_scratch())
+        .with_committer(committer),
     );
     Ok(OpenedStore {
         store,
@@ -281,6 +283,7 @@ fn open_postgres(
             .with_usable(move || session.usable());
         observe(&registry, index, provider, reader)
     });
+    let committer = writer.history.committer();
     let store = Arc::new(
         Store::with_shared_readers(
             writer.storage.clone(),
@@ -290,7 +293,8 @@ fn open_postgres(
             reservations,
             workspace_capacity,
         )?
-        .with_merge_scratch(writer.storage.merge_scratch()),
+        .with_merge_scratch(writer.storage.merge_scratch())
+        .with_committer(committer),
     );
     Ok(OpenedStore {
         store,

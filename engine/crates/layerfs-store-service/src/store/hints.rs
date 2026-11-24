@@ -56,6 +56,62 @@ pub fn record_new_bindings(
     Ok(recorded)
 }
 
+/// [`record_new_bindings`] for a fused Commit (#768): up to one write
+/// transaction's worth of rows ([`BATCH`]) is returned unrecorded, for the
+/// Commit's own transaction; past that, every row is recorded in bounded
+/// write transactions as there, and `None` is returned.
+pub fn collect_new_bindings(
+    reader: &dyn AuthenticatedObjects,
+    catalog: &dyn HistoryCatalog,
+    left: Option<FilesystemRootId>,
+    right: FilesystemRootId,
+) -> Result<Option<Vec<BindingHint>>, CommitError> {
+    let left = left
+        .map(|root| TreeTable::open(reader, root))
+        .transpose()
+        .map_err(CommitError::from)?;
+    let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
+    let (mut rows, mut recorded, mut failure) = (Vec::new(), false, None);
+    let walked = new_bindings(reader, left.as_ref(), &right, |child, parent, name| {
+        rows.push(BindingHint {
+            child,
+            parent,
+            name: name.as_bytes().to_vec(),
+        });
+        if rows.len() == BATCH {
+            if let Err(error) = catalog.record_bindings(&rows) {
+                failure = Some(error);
+                return Err(ContentError::OutputRejected);
+            }
+            recorded = true;
+            rows.clear();
+        }
+        Ok(())
+    });
+    if let Some(error) = failure {
+        return Err(CommitError::History(error));
+    }
+    walked.map_err(CommitError::from)?;
+    if !recorded {
+        return Ok(Some(rows));
+    }
+    record_rows(catalog, &rows)?;
+    Ok(None)
+}
+
+/// Records `rows` in bounded write transactions.
+pub(super) fn record_rows(
+    catalog: &dyn HistoryCatalog,
+    rows: &[BindingHint],
+) -> Result<(), CommitError> {
+    for part in rows.chunks(BATCH) {
+        catalog
+            .record_bindings(part)
+            .map_err(CommitError::History)?;
+    }
+    Ok(())
+}
+
 /// The History catalog's recorded bindings, as Content's hint port; a
 /// catalog failure is kept to answer with its own cause.
 pub struct CatalogHints<'a> {

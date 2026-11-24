@@ -128,6 +128,7 @@ compaction holds one already and never retains the URL.
 | Lost reply inside a transaction, or a SQLSTATE without a definite rule (class 58, class XX, ...) | `Unknown`; session quarantined and its connection closed (below) | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs), [`rows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/rows.rs) |
 | A statement refused with a reply in class 21, 22, 23, 42, P0 (PL/pgSQL, such as the `pack_immutable` trigger's `P0001`) or 54 outside the capacity codes | `Integrity`, definite; the transaction is rolled back | [`rows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/rows.rs) |
 | `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
+| A body that ignored a statement's refusal and returned success (#768) | The transaction ends with `SELECT 1; COMMIT`: in an aborted transaction the `SELECT` answers `25P02` and the `COMMIT` never runs, so the session sends `ROLLBACK` and answers the first refusal it saw in that transaction (else `Integrity`), definite and counted as a rollback. A bare `COMMIT` there would be answered with the tag `ROLLBACK` and no error, which reads as success. A failed `ROLLBACK` quarantines: `Unknown` | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `round_trips` | each exchange that waits for the server; the handshake is not one | same |
 | `prepares`, `connects` | statement-cache misses and COPY statements; new connections (session and lane) | same |
 
@@ -148,8 +149,9 @@ flight, plus one for preparing every statement not yet cached, all in one
 flight of their own (`prepares` counts each). A request that cannot be
 encoded stops the flight before it, and when earlier requests went out, one
 `ROLLBACK` follows. A lost reply quarantines the session; a reply the server
-gave is the caller's to classify. No Store call uses it yet (#768 stage 2);
-`postgresql_pipeline.rs` proves that a flight is one network wait by
+gave is the caller's to classify. The fused Workspace Commit uses it
+([Fused Commit](#fused-commit), #768 stage 2), sending every request of its
+one transaction in one flight; `postgresql_pipeline.rs` proves that a flight is one network wait by
 holding every server byte at a proxy until the server shows the whole
 flight ran. `sslmode` is used exactly as given: the driver's default `prefer`
 costs one extra round trip per connection on a server without TLS, so a
@@ -222,6 +224,7 @@ peer mount rows.
 | `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
 | `Admit` | as `Publish`: `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | never | a mount's GC registration ([GC admission](#gc-admission)) |
 | `Bare` | none; exactly one autocommit statement that may write, sent as written | no | the GC session keys and the owner's release; each carries its own generation check ([GC admission](#gc-admission)) |
+| Fused | as `Write`, sent in one pipelined message with the generation fence and a per-attempt token | `FOR UPDATE` and the lane barrier in the transaction itself, never nested in a held lane | a Workspace Commit over its bound head ([Fused Commit](#fused-commit)) |
 
 Source: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs),
 [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs).
@@ -646,35 +649,37 @@ the Save and its publication, the logical count, the binding hints and the
 validation. In the lane it checks the head and publishes. Measured with
 `log_statement=all` on a one-file change (`mount_round_trips.rs`, warm
 statements), the second Commit of a mounted Workspace cost 46 round trips
-before #768's Commit cuts, 36 after them and 24 after the stage-1 cuts
+before #768's Commit cuts, 36 after them, 24 after the stage-1 cuts
 (column `stage 1`, notes (f) to (j); derived from the cuts
 `mount_round_trips.rs` pins per session, not re-measured with
-`log_statement`):
+`log_statement`) and 2 after stage 2 (column `s2`, notes (k) to (m);
+measured with `log_statement=all` on the private test server, and pinned):
 
 ```text
- before the lane                                         before after stage 1
-   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3   0  (i)
-   file digests, every row below the floor (empty Write)     2   0   0  (a)
-   base pack and inode values (construct)                    2   2   0  (j)
-   whiteout read (control reader)                            1   1   0  (h)
-   head: branch_snapshot                                     1   1   1
-   logical.known: the head Commit                            1   1   0  (g)
-   finish: locate                                            1   1   1
-   finish: the last wave's publication (values only)         4   0   0  (b)
-   finish: sealed tail (BEGIN, COPY 2, lane, rows, COMMIT)   6   6   6
-   logical.count reads                                       2   2   2
-   binding hints (Write: BEGIN+lane row, INSERT, COMMIT)     3   3   3
-   validate (Workspace reader)                               5   5   0  (f)
+ before the lane                                         before after stage 1  s2
+   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3   0   0  (i)
+   file digests, every row below the floor (empty Write)     2   0   0   0  (a)
+   base pack and inode values (construct)                    2   2   0   0  (j)
+   whiteout read (control reader)                            1   1   0   0  (h)
+   head: branch_snapshot                                     1   1   1   0  (k)
+   logical.known: the head Commit                            1   1   0   0  (g)
+   finish: locate                                            1   1   1   1  (m)
+   finish: the last wave's publication (values only)         4   0   0   0  (b)
+   finish: sealed tail (BEGIN, COPY 2, lane, rows, COMMIT)   6   6   6   0  (k)
+   logical.count reads                                       2   2   2   0  (l)
+   binding hints (Write: BEGIN+lane row, INSERT, COMMIT)     3   3   3   0  (k)
+   validate (Workspace reader)                               5   5   0   0  (f)
  in the lane
-   hold_lane BEGIN batch                                     1   1   1  (c)
-   head.lane: branch_snapshot                                1   0   0  (c)
-   commit_branch BEGIN batch                                 1   1   1
-   Branch probe, epoch read, Branch re-read                  3   1   1  (d)
-   serial, Commit insert, parent line, lineage, advance      5   5   5
-   epoch FOR SHARE                                           1   1   1
-   lane check (lane connection), COMMIT                      2   1   1  (e)
-   lane ROLLBACK                                             1   1   1
- total                                                      46  36  24
+   hold_lane BEGIN batch                                     1   1   1   0  (k)
+   head.lane: branch_snapshot                                1   0   0   0  (c)
+   commit_branch BEGIN batch                                 1   1   1   0  (k)
+   Branch probe, epoch read, Branch re-read                  3   1   1   0  (d)
+   serial, Commit insert, parent line, lineage, advance      5   5   5   0  (k)
+   epoch FOR SHARE                                           1   1   1   0  (k)
+   lane check (lane connection), COMMIT                      2   1   1   0  (e)
+   lane ROLLBACK                                             1   1   1   0  (k)
+ the fused message, BEGIN to COMMIT                          -   -   -   1  (k)
+ total                                                      46  36  24   2
 ```
 
 - (a) `record_file_digests` returns before opening a transaction when every
@@ -740,6 +745,25 @@ before #768's Commit cuts, 36 after them and 24 after the stage-1 cuts
   cut alone (before (f) to (h)) it measured 31 to 33 throughout.
   `mount_round_trips.rs` pins the second Commit's writer at 25 round trips
   (30 before).
+- (k) Stage 2: the sealed tail's publication, the binding hints and
+  `commit_branch` are one transaction sent as one pipelined message
+  ([Fused Commit](#fused-commit)). No head is read before it: the message
+  asserts the bound head. A race sends the Commit on the path above, once.
+- (l) A Storage handle keeps the inode values its Saves read beside those
+  they published (`Fetch::inode_values`, the same 512 KiB bound): a stored
+  value never changes, so the logical count reads none of the values
+  construction read.
+- (m) Kept: `finish`'s membership locate. The publication's objects are
+  inserted if absent; a lost identity must be compared with its winner, and
+  in the message one already stored refuses the whole transaction as a race.
+  Without the locate every Commit that reuses an object stored since the
+  handle last looked would fall back. A cold connection adds one round trip
+  that prepares every message statement not yet cached:
+  `mount_round_trips.rs` pins the second Commit at 3 (the lineage statement
+  for a Commit with a parent is first used there), the first Commit at 23
+  (its new handle reserves ids, reads its base and prepares the message;
+  54 before) and an UpToDate Commit at 2 (its head read, now that
+  statement's first use on the session; 1 before).
 
 Checked and not done:
 
@@ -762,8 +786,92 @@ Checked and not done:
 | Test | Command | Checks |
 | --- | --- | --- |
 | [`postgresql_commit_round_trips.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_commit_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_commit_round_trips` | The lane with a head read and `commit_branch` is 12 round trips (15 before), with the head check in the lane's `BEGIN` 11; a moved head and an absent Branch are never answered unmoved |
-| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | see [Mount reads](#mount-reads) | A real Commit's writer: first 54 round trips (65 before), second 32 (42); SQLite 46/9 and 38/7 statements/transactions (52/11, 44/9) |
+| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | see [Mount reads](#mount-reads) | A real Commit's writer: first 23 round trips (54 before stage 2), second 3 (25), UpToDate 2 (1); SQLite 35/5 and 16/1 statements/transactions (46/9, 28/5). A merge Commit is exactly one race refusal and one fallback (`Store::fused_counts`); the Commits around it are fused |
+| [`fused_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/fused_commit.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test fused_commit` | The message is 1 round trip and 1 transaction warm (2 with its prepares); a moved head, an object stored meanwhile and an existing Commit identity are `Fused::Race`; a generation change `StaleStore`; a lane wait past `lock_timeout` `Busy`; a missing epoch row and a removal committed while the message waits `Conflict`; a lost reply `UnknownOutcome` with the session quarantined. Each refusal wrote nothing (head, locators, packs and hints checked with admin SQL). SQLite: one transaction per Commit, the race and epoch cases |
+| [`postgresql_aborted_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_aborted_commit.rs) | `… --test postgresql_aborted_commit` | A body that ignores a refused statement is answered with that refusal, writes nothing and leaves the session usable. Before the `SELECT 1; COMMIT` guard it answered `Ok(())` |
 | [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `… --test postgresql_lane_liveness` | A nested write after its lane connection was terminated fails `Closed` and writes nothing: now through `pg_xact_status` |
+
+### Fused Commit
+
+A Workspace Commit over its bound head is one write transaction
+(`layerfs_persistence::Committer`,
+[`history/fused.rs`](../../../../engine/crates/layerfs-persistence/src/history/fused.rs)):
+the Save's last publication, held by `Save::finish_prepared`
+(`PreparedTail`), the new tree's binding hints and the Commit. On
+PostgreSQL its requests go in one pipelined message, one round trip
+([`backend/postgresql/history/fused.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/fused.rs),
+statements in [`sql/postgresql/fused`](../../../../engine/crates/layerfs-persistence/sql/postgresql/fused)):
+
+```text
+ 1  BEGIN READ COMMITTED; SET LOCAL search_path, synchronous_commit,
+    lock_timeout; set_config('layerfs.attempt', <nonce>, true);
+    generation fence 1/(catalog_incarnation = G)             simple text
+ 2  pack bodies, INSERT ... FROM unnest                      only with packs
+ 3  attempt check; store_lane FOR UPDATE; barrier lock+unlock simple text
+ 4  the Branch at the expected head and base (branch_snapshot filters), its
+    root as expected, project_epoch.epoch kept in layerfs.epoch
+ 5  the publication's rows (publish_rows, checked)           only with rows
+ 6  the binding hint blocks                                  only with hints
+ 7  the next serial and the Commit insert, one statement
+ 8  the lineage, the parent's line read in SQL
+ 9  the Branch advance, exactly one row
+10  project_epoch FOR SHARE, equal to layerfs.epoch
+11  COMMIT                                                   simple text
+```
+
+Every statement checks the attempt token, a transaction-local setting only
+this transaction holds (a blake3 hash of the process, a counter and the
+clock): if `BEGIN` failed, a statement that ran on its own in an implicit
+transaction fails that check and writes nothing. Each request ends in its
+own `Sync`, so after a refusal the rest answer `25P02` and the `COMMIT`
+rolls back. Asserts raise from values the planner cannot fold
+(`1/(x.n-x.n)` is `22012`, `(32768+x.n)::smallint` is `22003`), and the
+first refusal decides:
+
+| Request | Refusal | Outcome |
+| --- | --- | --- |
+| 1 | `22012` (generation moved) | `StaleStore` |
+| 3 | `55P03`, `40P01` (lock wait) | `Busy` |
+| 4 | `22012` (Branch moved, absent or retired; root differs) | race |
+| 4 | `22003` (no `project_epoch` row) | `Conflict("project epoch")` |
+| 5 | `22012` (an object already stored: a lost identity) | race |
+| 5 | `22003` (a value block or signature refused) | `Integrity` |
+| 7 | `22012` (the Commit identity exists) | race |
+| 8, 9 | `22012` (no parent line; the Branch moved) | race |
+| 10 | `22012` (the epoch moved or its row went) | `Conflict("project epoch")` |
+| any | another SQLSTATE with a definite rule (`rows::sqlstate`) | that refusal |
+| any | a SQLSTATE without one, `25P02` first, or no reply | `UnknownOutcome`, session quarantined |
+
+The fence statement holds `AccessShareLock` on `history_meta` until
+`COMMIT`; the lane row and the barrier are taken by the transaction itself,
+on the writer connection (the held-lane connection is not used); the epoch
+is read under the lane at step 4 and re-checked `FOR SHARE` last. A race
+(`Fused::Race`) wrote nothing: the Store service publishes the held tail
+and the hints on their own and continues on the separate path in the same
+call, once, from its head read (`reread_after_fused`: a moved head is
+merged with before the lane, in a Save of its own), then
+`publish_lane_unmoved` and the rest of that path. The message is never sent again, an epoch
+`Conflict` has no fallback, and an unknown outcome never continues: custody
+is kept. The pack ids the attempt carried are published unchanged; the
+rolled-back transaction wrote nothing and they stay reserved to the handle.
+
+Only a Commit whose construction kept its whole built set is fused
+(`ConstructedObjects::covers`): its validation reads its own objects from
+those bytes, since the Store does not hold the held publication until the
+message commits. A Commit without a built set (an SDK `fs.apply`, a
+construction a test drives), one whose set dropped an object past its bound,
+or one whose removals rebuilt the root goes on the separate path without an
+attempt. So does a forced Commit (it reads the head it displaces in the
+lane), a Commit that `--expected` names another head for, and a
+request too large for one message (`Fused::Overflow`: more hint blocks than
+one array, more rows than the transaction row limit, or a publication past
+16 MiB − 1): the tail and the hints are published first, then the Commit
+alone is attempted fused.
+
+Not done: the fused transaction and a held lane assume one server, as the
+lane barrier does. A writer whose route reaches another server than another
+writer's lane connection is the multi-host case #768 records; the fused
+transaction does not use the lane connection, so it adds no new pairing.
 
 ## Delta chains
 

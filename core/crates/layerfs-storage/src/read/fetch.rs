@@ -53,7 +53,9 @@ impl Published {
         self.bodies.iter().find(|(info, _)| info.pack_id == id)
     }
     fn insert(&mut self, info: PackInfo, body: Arc<Vec<u8>>) {
-        if body.len() > DEPENDENCY_PACK_CACHE_BYTES {
+        // A held tail's bodies are kept before its publication and again
+        // when it is acknowledged (#768): one copy.
+        if body.len() > DEPENDENCY_PACK_CACHE_BYTES || self.get(info.pack_id).is_some() {
             return;
         }
         while self.bytes + body.len() > DEPENDENCY_PACK_CACHE_BYTES {
@@ -677,6 +679,17 @@ impl Source for Fetch {
                     return Err(StorageError::Integrity("unrequested inode value"));
                 }
                 found.insert(row.ordinal, row.value);
+            }
+            // A stored ordinal's value never changes: values a Save (or a
+            // reader continuing one) read are kept beside the ones it
+            // published, within the same bound, so the next Save of this
+            // handle and a Commit's logical count read the base leaf's
+            // values once (#768 stage 2).
+            if self.serve_published.get() {
+                let mut published = self.published.borrow_mut();
+                for row in &rows {
+                    published.value(row.ordinal, row.value);
+                }
             }
         }
         ordinals
