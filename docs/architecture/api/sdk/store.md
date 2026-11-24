@@ -295,14 +295,19 @@ connected one ([`postgresql/connect.rs`](../../../../control/crates/layerfs-stor
 The record keeps the URL with no user and no password and names its saved
 login (`auth`), put into the URL only when the Store is dialled; a URL that
 names a user or holds a password, holds an `@` or `#` (written `%40` or
-`%23` when part of the address) or is not read by the PostgreSQL client is
+`%23` when part of the address), is not read by the PostgreSQL client, or
+whose host, database or a value that client reads holds `&` or `#` right
+before one of its keys and an `=` (`postgres://h/db&password=p`) is
 `InvalidInput`. A URL is read only as that client reads it, and shown only
 in a form it reads as the same servers and database with no login, else as
 `postgresql://<hidden: not an address alone>`. The client takes `sslmode`
 `disable`, `prefer` or `require` and no certificate or key file:
 `sslmode=require` verifies the server's certificate chain and host name, and
 `sslmode=verify-full`, `verify-ca`, `sslrootcert`, `sslcert` and `sslkey` are
-refused, the refusal naming the one it met.
+refused, the refusal naming the one it met. A private CA is trusted where
+the Store is dialled: on Linux, where `native-tls` is OpenSSL, through
+`SSL_CERT_FILE`; on macOS, where it is the Security framework, in the
+system keychain.
 
 On a Store's first connect `--auth` is required and must be saved;
 `--synchronous-commit` defaults to `local`. It creates the `layerfs` schema

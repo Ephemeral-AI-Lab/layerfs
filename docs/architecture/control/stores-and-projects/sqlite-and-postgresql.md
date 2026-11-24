@@ -84,7 +84,9 @@ another operation holds the Store
                               reads it: any `@` or `#`, a user or a
                               password, a URL it does not read
                               (passfile, sslpassword, sslmode=
-                              verify-full, sslrootcert) -> InvalidInput
+                              verify-full, sslrootcert), `&` or `#`
+                              before a key in its host, database or
+                              a value (db&password=) -> InvalidInput
    auth                       required, and saved (`store save-auth`):
                               else InvalidInput / NotFound
    synchronous_commit         off | local (default) | remote_write | on
@@ -119,9 +121,19 @@ below, is replaced instead: a machine's own with `store connect <s> <url>
 names no login, which `store connect --machine` needs to dial, a machine's
 own goes first with `store disconnect <s> --machine <m>`, or with the whole
 Store's `store disconnect <s>` when the Store's address has no clean form,
-and is connected again as the fix's last step; `store update --auth`
-refuses such a record with that fix, naming the login it was given, and
-writes nothing); every PostgreSQL record write (`connect`,
+and is connected again as the fix's last step; `store connect --machine`
+checks from that machine, which must be running, while `store disconnect
+--machine` dials nothing; `store update <s> --auth <new>` refuses such a
+record and writes nothing, with a fix built from the record as it is
+(`login::update_fix`), so each step dials with a login that exists: when
+the record's own login is saved, those replacements while it dials with
+it, then `store update <s> --auth <new>` (unless it names `<new>`
+already); when it names none, or one not saved, the steps of a record
+naming none with `<new>` and no `save-auth`: `store disconnect <s>
+--machine <m> && store update <s> --auth <new> && store connect <s> <url>
+--machine <m>`, or `store disconnect <s> && store connect <s> <url> --auth
+<new>` and the machines' connects when the Store's address has no clean
+form); every PostgreSQL record write (`connect`,
 `update`, `save_own`, `forget_machine`) drops those fields
 (`StoreRecord::cleaned`, spec v23 V23-6), and no read does. Such a record
 keeps its URL, and any password in it, on disk byte for byte until its fix
@@ -143,9 +155,13 @@ host addresses, ports and database as the original, and no piece of the
 client's password (any three bytes, or all of a shorter one) is in it, as
 written or percent-decoded, in its `target` or in the client's user. A URL
 with no clean form (the client does not read it; its client user part
-holds a `?`, a user holding one of `/ ? & = #`, or a `/` followed by `&`,
-`=` or `#`, so the login cannot be told from an address or a query, as in
-`postgres://h/db&password=p@ss`; an `@` is left; or a check fails) is shown as `postgresql://<hidden: not an address alone>` with no
+holds one of `? & # ; ,`, or a user holding one of `/ ? & = #`, so the
+login cannot be told from an address or a query, as in
+`postgres://h/db&password=p@ss` or `postgres://h:5432&password=p@ss`,
+whose client user is `h`; its client's hosts, database, `options` or
+`application_name` hold `&` or `#` before a key the client reads or
+`passfile`/`sslpassword`, as in `postgres://h/db&password=p`, whose
+database is `db&password=p`; an `@` is left; or a check fails) is shown as `postgresql://<hidden: not an address alone>` with no
 `server`, and a write keeps it as it was, never rewritten: the record stays
 `outdated`. `without_login` (rows, fix lines), `url_user` (a fix's
 `--user`: the client's user of a URL with a clean form, unless it holds
@@ -217,7 +233,7 @@ update as its fix
 
 | Rule | Source |
 | --- | --- |
-| The login is a saved one, and only an address alone is dialled or recorded: `refuse_login` refuses `InvalidInput` a URL holding any `@` (the client ends a user part at the first, wherever it is) or `#`, one the client does not read (an unknown key such as `passfile`, `sslpassword`, `sslrootcert`, `sslkey` or `sslcert`, an `sslmode` other than `disable`, `prefer` or `require`, or a bad value), and one whose client reads a user or a password (`user=`, `password=` in any spelling the client decodes); an `@` or `#` of the address itself is written `%40` or `%23`, which the client decodes. A refusal of a URL the client does not read names what it refuses only by a key or value from fixed lists (`sslmode=verify-full`, `sslrootcert`, the value of `port`), never by other URL text; `sslmode=require` verifies the server's certificate chain and host name (the engine's `native-tls` connector, with its defaults), so `verify-ca` and `verify-full` are refused rather than dialled; any refusal of a URL holding a `#` names `%23`. The refusal's fix gives the clean form (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store), `<url>` and `<user>` when there is none; a URL refused only for a `#` or a TLS setting holds no login (`address::holds_login`), so its fix is the connect of the address alone, saving none. A named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs), [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
+| The login is a saved one, and only an address alone is dialled or recorded: `refuse_login` refuses `InvalidInput` a URL holding any `@` (the client ends a user part at the first, wherever it is) or `#`, one the client does not read (an unknown key such as `passfile`, `sslpassword`, `sslrootcert`, `sslkey` or `sslcert`, an `sslmode` other than `disable`, `prefer` or `require`, or a bad value), and one whose client reads a user or a password (`user=`, `password=` in any spelling the client decodes), or whose client reads `&` or `#` (or `%26`, `%23`) right before a key it reads or `passfile`/`sslpassword` and an `=` in a host, the database, `options` or `application_name` (a fixed list, no grammar guessed: `postgres://h/db&password=p` is the database `db&password=p` to the client, refused with fixed words and a fix whose address is `<url>`, saving a login first when the key is a login's); an `@` or `#` of the address itself is written `%40` or `%23`, which the client decodes. A refusal of a URL the client does not read names what it refuses only by a key or value from fixed lists (`sslmode=verify-full`, `sslrootcert`, the value of `port`), never by other URL text (a value the client would read but for a `#` in it, `sslmode=require#f`, is named by that `#`; `sslrootcert` adds where a private CA is trusted: on Linux, where `native-tls` is OpenSSL and `openssl-probe` reads it, in `SSL_CERT_FILE`, on macOS, where it is the Security framework, which reads no such variable, in the system keychain); `sslmode=require` verifies the server's certificate chain and host name (the engine's `native-tls` connector, with its defaults), so `verify-ca` and `verify-full` are refused rather than dialled; any refusal of a URL holding a `#` names `%23`. The refusal's fix gives the clean form (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store), `<url>` and `<user>` when there is none; a URL refused only for a `#` or a TLS setting holds no login (`address::holds_login`), so its fix is the connect of the address alone, saving none, unless the client does not read its hosts and path alone (`postgres://alice:secret/db?sslmode=verify-full`, an `@host` left out) or they or a value hold `&` or `#` before a login key. A named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs), [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
 | Every byte of the user and password outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs) `percent` |
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |

@@ -146,7 +146,10 @@ fn fix(record: &StoreRecord, save: bool, auth: &str) -> String {
     // With none, `store connect --machine` cannot dial: the address goes
     // first (`store disconnect --machine`, or with the whole Store), the
     // login is named, and the address alone is connected last, so the
-    // machine does not stay on the Store's address.
+    // machine does not stay on the Store's address. `store connect
+    // --machine` checks the address from that machine, so the machine must
+    // be running (and its platform run PostgreSQL Sandboxes) for that step;
+    // `store disconnect --machine` dials nothing (review 57d0aea5ad N2).
     let mut last = Vec::new();
     for (machine, own) in record.own_connections() {
         let Some(url) = own.url.as_deref() else {
@@ -173,6 +176,38 @@ fn fix(record: &StoreRecord, save: bool, auth: &str) -> String {
     });
     steps.extend(last);
     steps.join(" && ")
+}
+
+/// The fix of `store update <store> --auth <auth>` refused because
+/// PostgreSQL Store `record` (as it is, not as the update would leave it)
+/// keeps a URL with no clean form: each step dials with a login that
+/// exists. When the record names a saved login, its URLs are replaced
+/// while it dials with that one ([`fix`]), and the steps end with `store
+/// update --auth <auth>` unless that login is `auth` already. Otherwise
+/// (it names none, or one not saved, which a `store connect --machine`
+/// would dial with) they are the steps of a record naming none, naming
+/// `auth` and saving nothing: the machine's own address is disconnected
+/// first, or the whole Store when its address has no clean form and it is
+/// connected again with `--auth <auth>` (review 57d0aea5ad S1).
+pub fn update_fix(record: &StoreRecord, auth: &str) -> String {
+    let auth = shell_word(auth);
+    let saved = |old: &str| record.home().is_some_and(|home| read(home, old).is_ok());
+    let old = record.text("auth");
+    if !old.is_some_and(saved) {
+        return fix(&record.clone().without("auth"), false, &auth);
+    }
+    let steps = fix(record, false, &auth);
+    if old.map(shell_word).as_deref() == Some(auth.as_str()) {
+        return steps;
+    }
+    let update = format!(
+        "layerfs store update {} --auth {auth}",
+        shell_word(record.name())
+    );
+    match steps.ends_with(&update) {
+        true => steps,
+        false => format!("{steps} && {update}"),
+    }
 }
 
 /// The fix of PostgreSQL Store `record` naming no saved login: save one,

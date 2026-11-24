@@ -11,8 +11,11 @@
 //! login and the address's endpoints; (e) a fix's `--user` is the client's
 //! user, unless it holds an address or a query; (f) a refusal names only
 //! fixed words, a URL holding a `#` gets the `%23` hint, and a fix saves a
-//! login only when the URL may hold one. A record whose URL has no clean form is shown hidden and never
-//! rewritten, and `store update --auth` refuses it with its fix.
+//! login only when the URL may hold one; (g) a URL whose client reads `&` or
+//! `#` before a client or login key in its host, database or a text value
+//! is refused and hidden. A record whose URL has no clean form is shown
+//! hidden and never rewritten, and `store update --auth` refuses it with a
+//! fix each step of which dials with a login that exists.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
 use layerfs_home::names::StoreName;
@@ -159,6 +162,19 @@ const MESSAGES: [&str; 5] = [
 /// What a refusal of a URL holding a `#` ends with.
 const HASH: &str = "; a `#` that is part of the address is written %23";
 
+/// The refusal of a URL whose client reads `&` or `#` before a key in its
+/// host, database or a text value (review 57d0aea5ad S3).
+const SMUGGLED: &str = "the URL's host, database or a value holds `&` or `#` (or %26 or %23) before a key its PostgreSQL client reads or a login key, and the client reads it as part of that text, not as a setting: give the address alone with its settings after a `?`, and the login with --auth (`layerfs store save-auth` saves one)";
+
+/// What the `sslrootcert` refusal adds (review 57d0aea5ad N4).
+const PRIVATE_CA: &str = "; a private CA is trusted where the Store is dialled: on Linux (OpenSSL) by naming its file in `SSL_CERT_FILE`, on macOS by trusting it in the system keychain";
+
+/// The refusal of a value the client reads but for the `#` in it (review
+/// 57d0aea5ad N3).
+fn hash_in(key: &str) -> String {
+    format!("the URL's value of `{key}` holds a `#`, which its PostgreSQL client reads as part of the value: end the value before the `#`")
+}
+
 /// The refusal of a TLS key or `sslmode` value the client does not read.
 fn tls(what: &str) -> String {
     format!("the URL's {what} is not read by its PostgreSQL client, which takes `sslmode` disable, prefer or require and no certificate, key or revocation file; `sslmode=require` verifies the server's certificate chain and host name against the trusted roots: give `sslmode=require` and keys the client knows")
@@ -168,12 +184,13 @@ fn tls(what: &str) -> String {
 /// key or value from fixed lists, each also with the `#` hint.
 fn messages() -> Vec<String> {
     let mut all: Vec<String> = MESSAGES.iter().map(|m| (*m).to_owned()).collect();
+    all.push(SMUGGLED.to_owned());
+    all.push(format!("{}{PRIVATE_CA}", tls("`sslrootcert`")));
     for mode in ["allow", "verify-ca", "verify-full"] {
         all.push(tls(&format!("`sslmode={mode}`")));
     }
     all.push(tls("`sslmode` value"));
     for key in [
-        "sslrootcert",
         "sslcert",
         "sslkey",
         "sslcrl",
@@ -211,6 +228,7 @@ fn messages() -> Vec<String> {
         "load_balance_hosts",
     ] {
         all.push(format!("the URL's value of `{key}` is not one its PostgreSQL client reads: give the address with values the client reads"));
+        all.push(hash_in(key));
     }
     let hinted: Vec<String> = all.iter().map(|m| format!("{m}{HASH}")).collect();
     all.extend(hinted);
@@ -462,6 +480,38 @@ const CORPUS: &[(&str, &str)] = &[
     ("postgres://h/db?sslmode=verify-full&password", ""),
     ("postgres://h/db?user=%db&sslmode=verify-full", ""),
     ("postgres://h/db?password=Zq7%db&sslmode=verify-full", "Zq7"),
+    // review 57d0aea5ad S2: a user part of a host with a port, an IPv6 host
+    // or a host list running into a login, with no path
+    ("postgres://h:5432&password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://[::1]:5432&password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://h1,h2:5433&password=Zq7@Xw9", "Zq7@Xw9"),
+    (
+        "postgres://h1,h2:5433&user=alice&password=Zq7@Xw9",
+        "Zq7@Xw9",
+    ),
+    ("postgres://h:5432#password=Zq7@Xw9", "Zq7@Xw9"),
+    // and `;` or `,` where `?` belongs, with and without a path
+    ("postgres://h:5432;password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://h:5432/db;password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://h:5432/db,password=Zq7@Xw9", "Zq7@Xw9"),
+    // a raw base64 password of a pre-2.0 user part is cleaned, not hidden
+    (
+        "postgres://app_user:EhJc4g0i9YdUxm/xWMIlq0==@db.example.com/appdb",
+        "EhJc4g0i9YdUxm/xWMIlq0==",
+    ),
+    // S3: `&` or `#` where `?` belongs, with no `@`: the client's database,
+    // host or value holds the password
+    ("postgres://h/db&password=Zq7", "Zq7"),
+    ("postgres://h/db#password=Zq7", "Zq7"),
+    ("postgres://h/db%26password=Zq7", "Zq7"),
+    ("postgres://h:5432/db&user=alice&password=Zq7Xw9", "Zq7Xw9"),
+    ("postgres://h&password=Zq7/db", "Zq7"),
+    ("postgres://h/db?application_name=me#password=Zq7", "Zq7"),
+    ("postgres://h/db?sslmode=require#password=Zq7", "Zq7"),
+    ("postgres://h/db&sslmode=require", ""),
+    // N3: a `#` in a value, and a user part with no `@host`
+    ("postgres://h/db?sslmode=require#f", ""),
+    ("postgres://alice:Secret9/db?sslmode=verify-full", "Secret9"),
     ("postgresq://alice:Zq7Xw9q@h/db", "Zq7Xw9q"),
     ("host=h password=Zq7Xw9q", "Zq7Xw9q"),
 ];
@@ -545,6 +595,34 @@ fn check(home: &Path, given: &str, meant: &str) {
         texts.extend([derived(&shown), host, database]);
     } else {
         assert!(target(given).is_err(), "{given}");
+    }
+    // (g) a URL whose client reads `&` or `#` before a client or login key
+    // in its host, database or a text value is refused and hidden
+    if let Some(read) = read.as_ref() {
+        let mut values: Vec<String> = (read.get_hosts().iter())
+            .map(|host| match host {
+                postgres::config::Host::Tcp(name) => name.clone(),
+                #[cfg(unix)]
+                postgres::config::Host::Unix(path) => path.display().to_string(),
+            })
+            .collect();
+        let texts = [
+            read.get_dbname(),
+            read.get_options(),
+            read.get_application_name(),
+        ];
+        values.extend(texts.into_iter().flatten().map(str::to_owned));
+        let keys = KNOWN[..19].iter().chain(["passfile", "sslpassword"].iter());
+        let keys: Vec<&str> = keys.copied().collect();
+        let held = values.iter().any(|value| {
+            let value = value.to_ascii_lowercase();
+            (keys.iter())
+                .any(|k| value.contains(&format!("&{k}=")) || value.contains(&format!("#{k}=")))
+        });
+        if held {
+            assert!(refuse_login(given).is_err(), "(g) {given}");
+            assert_eq!(shown, HIDDEN, "(g) {given}");
+        }
     }
     // (e) and the fix lines of a refused connect
     let messages = messages();
@@ -829,7 +907,7 @@ fn the_d194c7e9df_review_rows_show_name_and_fix_as_their_client_reads() {
             "postgresql://db.example/app?sslrootcert=%2Fca.pem&sslmode=require",
             false,
             None,
-            tls("`sslrootcert`"),
+            format!("{}{PRIVATE_CA}", tls("`sslrootcert`")),
             "layerfs store connect pg <url>",
         ),
         // N5: a `#` is named with any other refusal, and one refused only
@@ -838,7 +916,7 @@ fn the_d194c7e9df_review_rows_show_name_and_fix_as_their_client_reads() {
             "postgres://h/db?sslmode=require#f",
             false,
             Some("lab"),
-            format!("{}{HASH}", tls("`sslmode` value")),
+            format!("{}{HASH}", hash_in("sslmode")),
             "layerfs store connect pg <url> --machine lab",
         ),
         (
@@ -896,7 +974,8 @@ fn the_d194c7e9df_review_rows_show_name_and_fix_as_their_client_reads() {
 /// N2, N3 of the d194c7e9df review: a machine's own address with no clean
 /// form is connected again as the address alone (after its disconnect when
 /// the record names no login), and `store update --auth`'s fix names the
-/// login it was given.
+/// login it was given, built from the record as it is (review 57d0aea5ad
+/// S1: the record's login `old` is not saved, so no step dials with it).
 #[test]
 fn a_machine_address_is_connected_again_and_an_update_names_its_login() {
     let home = tempdir("machine-fix");
@@ -922,7 +1001,8 @@ fn a_machine_address_is_connected_again_and_an_update_names_its_login() {
         login::no_auth_fix(&both),
         "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> && layerfs store connect pg <url> --machine lab"
     );
-    // N3: the record names `old`, not saved; the update gives `new`
+    // N3: the record names `old`, not saved; the update gives `new`; its fix
+    // is a record naming no login's, naming `new` and saving nothing
     store_with(&home, clean, unclean, Some("old"));
     let before = std::fs::read(paths::store_record(&home, "pg")).unwrap();
     let request = layerfs_store::postgresql::update::StoreUpdate {
@@ -934,9 +1014,248 @@ fn a_machine_address_is_connected_again_and_an_update_names_its_login() {
     assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
     assert_eq!(
         refusal.detail.get_text("fix"),
-        Some("layerfs store connect pg <url> --machine lab && layerfs store update pg --auth new")
+        Some("layerfs store disconnect pg --machine lab && layerfs store update pg --auth new && layerfs store connect pg <url> --machine lab")
     );
     let after = std::fs::read(paths::store_record(&home, "pg")).unwrap();
     assert_eq!(before, after, "the record was written");
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// `store update pg --auth new` of record `pg` (address `url`, machine
+/// `lab`'s own `lab`, login `auth`): its refusal's fix, the record left as
+/// it was.
+fn update_fix(home: &Path, url: &str, lab: &str, auth: Option<&str>, new: &str) -> String {
+    store_with(home, url, lab, auth);
+    let before = std::fs::read(paths::store_record(home, "pg")).unwrap();
+    let request = layerfs_store::postgresql::update::StoreUpdate {
+        store: StoreName::parse("pg").unwrap(),
+        auth: Some(new.to_owned()),
+        synchronous_commit: None,
+    };
+    let refusal = layerfs_store::postgresql::update::update(home, &request).unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+    let after = std::fs::read(paths::store_record(home, "pg")).unwrap();
+    assert_eq!(before, after, "the record was written");
+    refusal.detail.get_text("fix").unwrap().to_owned()
+}
+
+/// S1 of the 57d0aea5ad review: `store update --auth new`'s fix is built
+/// from the record as it is, so each step dials with a login that exists:
+/// the record's own when it is saved (its URLs replaced first, `update
+/// --auth new` last), else none (a machine's own address disconnected
+/// first, which dials nothing, or the whole Store, connected again with
+/// `--auth new`). Every step is one the call guide accepts; a Store address
+/// with no clean form still ends in `--auth new`.
+#[test]
+fn an_update_fix_dials_only_with_a_login_that_exists() {
+    let home = tempdir("update-fix");
+    login::save(&home, "new", "alice", LOGIN_PASSWORD).unwrap();
+    login::save(&home, "old", "bob", LOGIN_PASSWORD).unwrap();
+    let (clean, unclean) = (
+        "postgres://db.invalid/app",
+        "postgres://u:Zq7@Xw9@db.invalid/app",
+    );
+    for (url, lab, auth, fix) in [
+        // the record's login `old` is saved: it dials with it until the end
+        (
+            clean,
+            unclean,
+            Some("old"),
+            "layerfs store connect pg <url> --machine lab && layerfs store update pg --auth new",
+        ),
+        (
+            unclean,
+            clean,
+            Some("old"),
+            "layerfs store connect pg <url> && layerfs store update pg --auth new",
+        ),
+        (
+            unclean,
+            unclean,
+            Some("old"),
+            "layerfs store connect pg <url> --machine lab && layerfs store connect pg <url> && layerfs store update pg --auth new",
+        ),
+        // the update names the record's own login: no second update
+        (
+            clean,
+            unclean,
+            Some("new"),
+            "layerfs store connect pg <url> --machine lab && layerfs store update pg --auth new",
+        ),
+        (
+            unclean,
+            clean,
+            Some("new"),
+            "layerfs store connect pg <url>",
+        ),
+        // `gone` is not saved: nothing dials with it
+        (
+            clean,
+            unclean,
+            Some("gone"),
+            "layerfs store disconnect pg --machine lab && layerfs store update pg --auth new && layerfs store connect pg <url> --machine lab",
+        ),
+        (
+            unclean,
+            clean,
+            Some("gone"),
+            "layerfs store disconnect pg && layerfs store connect pg <url> --auth new && layerfs store connect pg <url> --machine lab",
+        ),
+        // a record naming no login (one from before saved logins)
+        (
+            clean,
+            unclean,
+            None,
+            "layerfs store disconnect pg --machine lab && layerfs store update pg --auth new && layerfs store connect pg <url> --machine lab",
+        ),
+        (
+            unclean,
+            unclean,
+            None,
+            "layerfs store disconnect pg && layerfs store connect pg <url> --auth new && layerfs store connect pg <url> --machine lab",
+        ),
+    ] {
+        let got = update_fix(&home, url, lab, auth, "new");
+        assert_eq!(got, fix, "{url} {lab} {auth:?}");
+        assert!(!got.contains("save-auth") && !got.contains("Zq7"), "{got}");
+        // a fix that ends anywhere but `--auth new` would leave the old
+        // login; one already naming `new` keeps it
+        let last = got.rsplit(" && ").find(|step| !step.contains("--machine"));
+        assert!(auth == Some("new") || last.unwrap().ends_with("--auth new"), "{got}");
+    }
+    // the first step of a fix naming no login dials nothing and leaves the
+    // update to pass the address check: `store disconnect --machine` is
+    // `check::save_own` with no connection
+    let record = store_with(&home, clean, unclean, Some("gone"));
+    let own = layerfs_store::record::OwnConnection::default();
+    let name = StoreName::parse("pg").unwrap();
+    layerfs_store::postgresql::check::save_own(&home, &name, "lab", &own, record.binding())
+        .unwrap();
+    let request = layerfs_store::postgresql::update::StoreUpdate {
+        store: name,
+        auth: Some("new".to_owned()),
+        synchronous_commit: None,
+    };
+    // its next step dials `new` on the Store's address: `db.invalid` is not
+    // reached, and the refusal is no longer the URL's
+    let refusal = layerfs_store::postgresql::update::update(&home, &request).unwrap_err();
+    assert!(
+        !refusal.message.contains("has no form"),
+        "{}",
+        refusal.message
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The rows of the 57d0aea5ad review: S2 (a user part of a host with a
+/// port, an IPv6 host or a host list), S3 (`&` or `#` where `?` belongs,
+/// with no `@`), N1 (a raw base64 password) and N3, N4 (refusal words).
+#[test]
+fn the_57d0aea5ad_review_rows_are_hidden_refused_and_named() {
+    // S2: hidden, no `--user`, the fix's address `<url>`
+    for given in [
+        "postgres://h:5432&password=Zq7@Xw9",
+        "postgres://[::1]:5432&password=Zq7@Xw9",
+        "postgres://h1,h2:5433&user=alice&password=Zq7@Xw9",
+        "postgres://h:5432#password=Zq7@Xw9",
+        "postgres://h:5432/db;password=Zq7@Xw9",
+    ] {
+        assert_eq!(without_login(given), HIDDEN, "{given}");
+        assert_eq!(url_user(given), None, "{given}");
+        assert!(target(given).is_err(), "{given}");
+        let fix = refuse_login_with_fix("pg", given, true, None).unwrap_err();
+        assert_eq!(
+            fix.detail.get_text("fix"),
+            Some("layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>"),
+            "{given}"
+        );
+    }
+    // N1: a raw base64 password in a pre-2.0 user part is cleaned
+    let given = "postgres://app_user:EhJc4g0i9YdUxm/xWMIlq0==@db.example.com/appdb";
+    assert_eq!(without_login(given), "postgres://db.example.com/appdb");
+    assert_eq!(url_user(given).as_deref(), Some("app_user"));
+    // S3: refused with fixed words, the fix's address `<url>`, a login
+    // saved first when the key is a login's
+    for (given, fix) in [
+        (
+            "postgres://h/db&password=Zq7",
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgres://h/db#password=Zq7",
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgres://h/db&sslmode=require",
+            "layerfs store connect pg <url> --auth <auth>",
+        ),
+    ] {
+        let refusal = refuse_login_with_fix("pg", given, true, None).unwrap_err();
+        assert_eq!(refusal.message, SMUGGLED, "{given}");
+        assert_eq!(refusal.detail.get_text("fix"), Some(fix), "{given}");
+        assert_eq!(without_login(given), HIDDEN, "{given}");
+        assert!(target(given).is_err(), "{given}");
+    }
+    // S3: `store connect` refuses it before any dial, and records nothing
+    let home = tempdir("smuggled");
+    login::save(&home, "pg", "alice", LOGIN_PASSWORD).unwrap();
+    for given in [
+        "postgres://h/db&password=Zq7",
+        "postgres://h/db#password=Zq7",
+    ] {
+        let request = layerfs_store::postgresql::connect::StoreConnect {
+            store: StoreName::parse("pg").unwrap(),
+            url: given.to_owned(),
+            auth: Some("pg".to_owned()),
+            synchronous_commit: None,
+        };
+        let refusal = layerfs_store::postgresql::connect::connect(&home, &request).unwrap_err();
+        assert_eq!(refusal.message, SMUGGLED, "{given}");
+        let fix = refusal.detail.get_text("fix").unwrap();
+        assert!(!fix.contains("Zq7") && fix.contains(" <url> "), "{fix}");
+        assert!(
+            !paths::store_record(&home, "pg").exists(),
+            "{given} recorded"
+        );
+        // an older record holding it is hidden and never rewritten
+        let record = store(&home, given);
+        assert!(record.outdated_fields(), "{given}");
+        let kept = record.clone().cleaned();
+        assert_eq!(kept.text("url"), Some(given), "{given} rewritten");
+        assert!(!row_texts(&record).iter().any(|text| text.contains("Zq7")));
+        let dialled = layerfs_store::record::url(&record).unwrap_err();
+        let fix = dialled.detail.get_text("fix").unwrap();
+        assert!(!fix.contains("Zq7") && fix.contains(" <url>"), "{fix}");
+        std::fs::remove_file(paths::store_record(&home, "pg")).unwrap();
+    }
+    std::fs::remove_dir_all(home).unwrap();
+    // N3: a `#` in a value is named as the fault; a user part with no
+    // `@host` may hold a login, so its fix saves one; N4: `sslrootcert`
+    // names where a private CA is trusted
+    for (given, message, fix) in [
+        (
+            "postgres://h/db?sslmode=require#f",
+            format!("{}{HASH}", hash_in("sslmode")),
+            "layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgres://h/db?sslmode=verify-full#f",
+            format!("{}{HASH}", tls("`sslmode=verify-full`")),
+            "layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgres://alice:Secret9/db?sslmode=verify-full",
+            tls("`sslmode=verify-full`"),
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgresql://db.example/app?sslrootcert=%2Fca.pem&sslmode=require",
+            format!("{}{PRIVATE_CA}", tls("`sslrootcert`")),
+            "layerfs store connect pg <url> --auth <auth>",
+        ),
+    ] {
+        let refusal = refuse_login_with_fix("pg", given, true, None).unwrap_err();
+        assert_eq!(refusal.message, message, "{given}");
+        assert_eq!(refusal.detail.get_text("fix"), Some(fix), "{given}");
+    }
 }

@@ -76,10 +76,11 @@ pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
             let message = format!(
                 "Store {name}'s recorded URL has no form without its login that its client reads as the same server; nothing was written"
             );
-            // the fix names the login given here, not the record's old one
+            // the fix is built from the record as it is, whose login each
+            // step dials with, and names the login given here
             return Err(with_fix(
                 refused("InvalidInput", message),
-                login::fix_of(&changed(record, request)),
+                login::update_fix(&record, auth),
             ));
         }
         same_store(&trial, &selection(&trial)?).map_err(|refusal| named(refusal, name))?;

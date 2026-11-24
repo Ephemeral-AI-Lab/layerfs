@@ -1326,13 +1326,19 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   parameter, `passfile`), holding an `@` or `#` (one of the address is
   written `%40` or `%23`), or that the client does not read (an unknown key
   such as `sslrootcert`, `sslkey` or `sslcert`, or an `sslmode` other than
-  `disable`, `prefer` or `require`) is refused `InvalidInput` with a fix that
+  `disable`, `prefer` or `require`), or whose host, database or a value the
+  client reads holds `&` or `#` right before one of its keys and an `=`
+  (`postgres://h/db&password=p`, a `?` mistyped; its fix names `<url>`) is
+  refused `InvalidInput` with a fix that
   gives the address alone (a first connect saves the login with `save-auth`
   and names it with `--auth`; `<url>` and `<user>` when no form of the URL
   can be shown; one refused only for a `#` or a TLS setting saves no
   login). The refusal names the TLS key or `sslmode` value it met
-  (`sslmode=verify-full`), and `sslmode=require` verifies the server's
-  certificate chain and host name. The login goes into the URL only when the Store is
+  (`sslmode=verify-full`), or the `#` ending a value it would otherwise
+  read (`sslmode=require#f`), and `sslmode=require` verifies the server's
+  certificate chain and host name; a private CA is trusted where the Store
+  is dialled: on Linux (OpenSSL) through `SSL_CERT_FILE`, on macOS in the
+  system keychain. The login goes into the URL only when the Store is
   dialled, and the URL made is read back by the client first. A URL is
   shown or written only in a form its client reads as the same servers and
   database with no login and no part of the password, else as
