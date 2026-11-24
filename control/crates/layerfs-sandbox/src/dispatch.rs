@@ -22,7 +22,9 @@ pub fn call(host: Host, call: Call) -> Outcome {
         // the operator view of control admission and retained failures
         // (#540): a bounded read model, never a product operation
         Call::Capacity => capacity(&host),
-        Call::Create { platform } => crate::lifecycle::create(&host, platform.as_deref()),
+        Call::Create { platform, place } => {
+            crate::lifecycle::create(&host, platform.as_deref(), place.as_ref())
+        }
         Call::Close { force, held } => {
             crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default())
         }

@@ -139,7 +139,13 @@ impl Message {
 pub enum Call {
     /// `sandbox.create`; the image travels in [`Deploy`]. `platform` is a
     /// caller's named platform (#529), checked against the deployment.
-    Create { platform: Option<String> },
+    /// `place` is the machine name and Sandbox generation the caller's home
+    /// record minted: a worker writes them into its own record, so the
+    /// mounts it places carry them (a mount there reads no home record).
+    Create {
+        platform: Option<String>,
+        place: Option<(String, String)>,
+    },
     /// `sandbox.close(force)`; `held` names Workspaces the caller records
     /// (a Sandbox it reaches directly, #535 G4).
     Close {

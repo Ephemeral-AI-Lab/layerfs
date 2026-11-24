@@ -155,7 +155,7 @@ fn a_create_of_the_same_name_forgets_a_retired_docker_record() {
         }),
         ..host(&root)
     };
-    let refusal = layerfs_sandbox::lifecycle::create(&host, None).unwrap_err();
+    let refusal = layerfs_sandbox::lifecycle::create(&host, None, None).unwrap_err();
     assert_ne!(refusal.code, "Exists", "{}", refusal.message);
     assert!(
         matches!(refusal.code.as_str(), "InvalidInput" | "Unsupported"),

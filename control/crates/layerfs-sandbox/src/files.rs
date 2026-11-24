@@ -118,6 +118,25 @@ pub fn save_sandbox(
     let record = record.with_start(format!("{store}/{}", state.project), facts, daemon);
     record.write_in(directory)
 }
+/// Writes the machine and generation a worker's caller minted (`place`)
+/// into the worker's own record of Sandbox `name` in `directory`, so the
+/// mounts it places carry them (#783 gap 1). A record that names a
+/// generation already (on `native`, the home's own) is left as it is. Best
+/// effort: a record left without them only means its mounts carry no place
+/// evidence, and missing evidence is never death.
+pub fn save_place(directory: &Path, name: &str, (machine, generation): &(String, String)) {
+    let _ = (|| -> Result<()> {
+        let _sandbox = crate::record::lock_in(directory, name)?;
+        let Some(record) = SandboxRecord::read_in(directory, name)? else {
+            return Ok(());
+        };
+        if record.generation().is_some() {
+            return Ok(());
+        }
+        record.with_place(machine, generation).write_in(directory)
+    })();
+}
+
 /// The kernel route a running Sandbox's Workspaces use: loopback NFS for a
 /// native (macOS) one, FUSE for every other.
 pub fn route(runtime: &Sandbox) -> &'static str {

@@ -272,6 +272,14 @@ impl SandboxRecord {
         self
     }
 
+    /// The record naming the machine it runs on and the generation its
+    /// caller's home minted: what a worker's own record of it keeps.
+    pub fn with_place(mut self, machine: &str, generation: &str) -> Self {
+        self.fields.set(Field::Machine(machine.to_owned()));
+        self.fields.set(Field::Generation(generation.to_owned()));
+        self
+    }
+
     /// The intent the record holds, if any.
     pub fn op(&self) -> Option<Op> {
         self.fields
@@ -540,11 +548,13 @@ impl SandboxRecord {
 }
 
 /// The place a mount of Sandbox `name` records: the record in `directory`
-/// names the machine it runs on and the generation its create minted, and the
-/// machine record under the same `home` names that machine's current ordered
-/// incarnation. A record this side cannot read supplies no authority (no
-/// proof, never death): the names alone, and admission falls back to the
-/// owner evidence.
+/// names the machine it runs on and the generation its create minted (a
+/// worker's own record keeps the values its caller sent with the create),
+/// and the machine record under the same `home` names that machine's current
+/// ordered incarnation (a worker's root keeps no machine record, so its
+/// mounts carry no incarnation). A record this side cannot read supplies no
+/// authority (no proof, never death): the names alone, and admission falls
+/// back to the owner evidence.
 pub fn mount_place(home: &Path, directory: &Path, name: &str) -> Result<MountPlace> {
     let record = SandboxRecord::read_in(directory, name)?;
     let machine = record.as_ref().map(|record| record.machine().to_owned());

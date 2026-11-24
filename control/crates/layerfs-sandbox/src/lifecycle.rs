@@ -223,9 +223,11 @@ pub fn start(
 /// as `sandbox remove` forgets it (D-8). `deploy.sandbox` names its backend, `native` or
 /// `namespaces`; a native one's `image` is `local`. `platform` (#529) is
 /// checked against that backend and recorded.
+/// `place`, the machine and generation the caller's home minted, goes into
+/// a worker's own record once the Sandbox started ([`crate::files::save_place`]).
 /// The only call that starts a Sandbox. Failures are `Failed` or
 /// `Unknown`, never retried.
-pub fn create(host: &Host, named: Option<&str>) -> Outcome {
+pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>) -> Outcome {
     // the platform is checked against the deployment before any effect (#529)
     let deploy = host
         .deploy()
@@ -259,7 +261,11 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
             }
             None => {}
         }
-        start((host, &platform), &directory, store)
+        let state = start((host, &platform), &directory, store)?;
+        if let Some(place) = place {
+            crate::files::save_place(&directory, &state.id, place);
+        }
+        Ok(state)
     })();
     let state = match made {
         Ok(state) => state,
@@ -318,10 +324,12 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         ));
     };
     if recorded.retired() {
+        let _ = retired(host, &id);
         return forget(&id, &directory, &recorded);
     }
     if let Some(why) = crate::reopen::unread(&recorded) {
-        return forget_unread(&id, &directory, &recorded, &why);
+        let unretired = retired(host, &id);
+        return forget_unread(&id, &directory, &recorded, &why, unretired);
     }
     let state = match crate::registry::sandbox_live(host) {
         Ok(state) => state,
@@ -400,12 +408,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // before the record (the folder) goes. It is best effort: a missing
     // tombstone is only "no proof of death", so the close goes on, still
     // ends the mount intents and reports the failure in `left`.
-    let unretired = match crate::record::SandboxRecord::read(&host.home, &id) {
-        Ok(Some(record)) => crate::record::retire(&host.home, &record).err(),
-        Ok(None) => None,
-        Err(refusal) => Some(refusal),
-    }
-    .map(|refusal| not_retired(&id, &refusal.message));
+    let unretired = retired(host, &id);
     let pg = (host.store_record.as_ref())
         .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
     let (left, handed) = match (pg, &host.postgresql) {
@@ -449,14 +452,23 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
 }
 
 /// The `left` sentence of a close whose retired tombstone of Sandbox `id`
-/// was not written for reason `why`. Nothing is unsafe about it: without a
-/// tombstone, admission has no proof the Sandbox is gone, so a mount intent
-/// it held and that was not ended stays live until its owner settles it.
+/// was not written for reason `why` ([`crate::record::unretired`]).
 pub(crate) fn not_retired(id: &str, why: &str) -> SdkValue {
-    SdkValue::text(format!(
-        "Sandbox {id}'s retired tombstone was not written ({why}): a mount intent it held \
-         that was not ended is not proven dead"
-    ))
+    SdkValue::text(crate::record::unretired(id, why))
+}
+
+/// Writes the retirement tombstone of Sandbox `id` from its record in
+/// `host`'s home, best effort, before that record goes: `left`'s sentence
+/// when it was not written. On a worker's root there is no home record to
+/// retire ([`crate::record::retire`] writes none there): the caller writes the
+/// home's tombstone when its `sandbox.remove` removes its own record.
+fn retired(host: &Host, id: &str) -> Option<SdkValue> {
+    match crate::record::SandboxRecord::read(&host.home, id) {
+        Ok(Some(record)) => crate::record::retire(&host.home, &record).err(),
+        Ok(None) => None,
+        Err(refusal) => Some(refusal),
+    }
+    .map(|refusal| not_retired(id, &refusal.message))
 }
 
 /// The Branch and Workspace identity of each of `mounted` this process
@@ -505,18 +517,24 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
 /// its identity cannot be checked, so nothing is signalled. Its folder goes
 /// under its guard, and the answer (`Forgotten`, with `left`) says what may
 /// remain: its daemon or init process and its run folder.
-fn forget_unread(id: &str, directory: &Path, recorded: &DaemonRecord, why: &str) -> Outcome {
+/// `unretired` is the sentence of a retirement tombstone that was not
+/// written, which `left` carries too.
+fn forget_unread(
+    id: &str,
+    directory: &Path,
+    recorded: &DaemonRecord,
+    why: &str,
+    unretired: Option<SdkValue>,
+) -> Outcome {
     let _guard = layerfs_store::project::discovery::guard(directory)?;
     discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(directory);
+    let left = std::iter::once(SdkValue::text(unread_left(recorded, why))).chain(unretired);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Forgotten")),
         ("sandbox", SdkValue::text(id)),
-        (
-            "left",
-            SdkValue::List(vec![SdkValue::text(unread_left(recorded, why))]),
-        ),
+        ("left", SdkValue::List(left.collect())),
     ]))
 }
 
@@ -587,6 +605,9 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
             .delete()
             .map_err(values::wire)?;
     }
+    // its runtime is gone: the home record's tombstone first, best effort
+    // (the close that reclaimed it answers `NoSuchSandbox`, with no `left`)
+    let _ = retired(host, id);
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);
