@@ -88,6 +88,16 @@ SLOW = {
     # A provider call waits out its own 10 s and 30 s bounds (cp-platform
     # fix of tool::run's deadline), estimated from those bounds, 2026-11-23.
     ("layerfs-platform", "machine_deadline"): 31.0,
+    # #768 adversarial Commit tests against the private PostgreSQL test
+    # server (each skips its PostgreSQL half without one), macOS host,
+    # 2026-11-25: a fault at every server message of one Commit's flight.
+    ("layerfs-store-service", "commit_fault_drop"): 30.3,
+    ("layerfs-store-service", "commit_fault_kill"): 31.4,
+    ("layerfs-store-service", "commit_fault_first_drop"): 43.4,
+    ("layerfs-store-service", "commit_fault_first_kill"): 44.6,
+    ("layerfs-store-service", "commit_lane_kill"): 15.0,
+    ("layerfs-store-service", "commit_random_model"): 8.4,
+    ("layerfs-store-service", "commit_stress"): 6.7,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
