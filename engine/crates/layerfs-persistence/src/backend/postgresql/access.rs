@@ -114,7 +114,7 @@ pub(crate) fn compaction_missing(session: &Session) -> HistoryResult<Option<&'st
 /// Reads what the role `url` logs in as may do in `schema`.
 pub fn access(url: &str, schema: &str) -> Result<PostgresAccess, PostgresStatusError> {
     let connector = Connector::new(&PostgresSelection::new(url, "public"))
-        .map_err(|_| PostgresStatusError::Unreachable("the URL does not parse".to_owned()))?;
+        .map_err(|_| crate::backend::postgresql::status::unparsed())?;
     let mut client = connector.connect_status()?;
     let failed = |error: postgres::Error| PostgresStatusError::Failed(error.to_string());
     let started = Instant::now();

@@ -7,6 +7,7 @@
 //! `gc_intent` — for `store.status` (T10.5): one query, with no Store open,
 //! schema change, artifact read or scratch-schema read.
 use crate::backend::postgresql::session::connection::Connector;
+use crate::diagnostic::ConnectionStep;
 use crate::report::{CompactStatus, POSTGRES_COMPACT_PHASES};
 use crate::PostgresSelection;
 use std::time::{Duration, Instant};
@@ -23,25 +24,47 @@ pub struct PostgresStatus {
     pub schemas: Vec<(String, Option<u64>)>,
 }
 
-/// Why a status read did not complete.
+/// Why a status read did not complete, with the connection step it
+/// stopped at ([`ConnectionStep`]).
 #[derive(Debug)]
 pub enum PostgresStatusError {
-    /// The server was not reached, or the connection failed before a query.
-    Unreachable(String),
-    /// The server refused the credentials or the database.
-    Denied(String),
+    /// The server was not reached (`Transport`), or the address could not
+    /// be dialled (`Configuration`).
+    Unreachable(ConnectionStep, String),
+    /// The server refused the login (`Authentication`) or the database
+    /// (`Database`).
+    Denied(ConnectionStep, String),
     /// A query failed after the connection was made.
     Failed(String),
+}
+
+impl PostgresStatusError {
+    /// The step it stopped at. A query after the connection was made is
+    /// the schema's: the first read a doctor makes once it is connected.
+    pub fn step(&self) -> ConnectionStep {
+        match self {
+            Self::Unreachable(step, _) | Self::Denied(step, _) => *step,
+            Self::Failed(_) => ConnectionStep::Schema,
+        }
+    }
 }
 
 impl std::fmt::Display for PostgresStatusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unreachable(why) => write!(f, "PostgreSQL server unreachable: {why}"),
-            Self::Denied(why) => write!(f, "PostgreSQL server refused the connection: {why}"),
+            Self::Unreachable(_, why) => write!(f, "PostgreSQL server unreachable: {why}"),
+            Self::Denied(_, why) => write!(f, "PostgreSQL server refused the connection: {why}"),
             Self::Failed(why) => write!(f, "PostgreSQL status query failed: {why}"),
         }
     }
+}
+
+/// The refusal of an address the connector cannot read.
+pub(crate) fn unparsed() -> PostgresStatusError {
+    PostgresStatusError::Unreachable(
+        ConnectionStep::Configuration,
+        "the URL does not parse".to_owned(),
+    )
 }
 
 const SIZES: &str = "SELECT s.name, CASE WHEN n.oid IS NULL THEN NULL ELSE \
@@ -53,8 +76,8 @@ const SIZES: &str = "SELECT s.name, CASE WHEN n.oid IS NULL THEN NULL ELSE \
 
 /// Reads the status of the server at `url` and the sizes of `schemas`.
 pub fn status(url: &str, schemas: &[String]) -> Result<PostgresStatus, PostgresStatusError> {
-    let connector = Connector::new(&PostgresSelection::new(url, "public"))
-        .map_err(|_| PostgresStatusError::Unreachable("the URL does not parse".to_owned()))?;
+    let connector =
+        Connector::new(&PostgresSelection::new(url, "public")).map_err(|_| unparsed())?;
     let mut client = connector.connect_status()?;
     let failed = |error: postgres::Error| PostgresStatusError::Failed(error.to_string());
     let started = Instant::now();
@@ -185,8 +208,7 @@ pub fn compact_status(
     url: &str,
     schema: &str,
 ) -> Result<Option<PostgresCompactOpStatus>, PostgresStatusError> {
-    let connector = Connector::new(&PostgresSelection::new(url, schema))
-        .map_err(|_| PostgresStatusError::Unreachable("the URL does not parse".to_owned()))?;
+    let connector = Connector::new(&PostgresSelection::new(url, schema)).map_err(|_| unparsed())?;
     let mut client = connector.connect_status()?;
     let table = quote_ident(schema);
     let sql = format!(

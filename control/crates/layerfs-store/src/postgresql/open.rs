@@ -235,8 +235,8 @@ pub fn status(url: &str, schemas: &[String]) -> Outcome {
                 ),
             ),
         ])),
-        Err(error @ E::Unreachable(_)) => Ok(unreached("Unavailable", error.to_string())),
-        Err(error @ E::Denied(_)) => Ok(unreached("Denied", error.to_string())),
+        Err(error @ E::Unreachable(..)) => Ok(unreached("Unavailable", error.to_string())),
+        Err(error @ E::Denied(..)) => Ok(unreached("Denied", error.to_string())),
         Err(error @ E::Failed(_)) => Err(refused("Failed", error.to_string())),
     }
 }

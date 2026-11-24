@@ -1,5 +1,5 @@
 //! PostgreSQL connection, coherent logical audit and supported online checks.
-use super::{emit, scan, Observation, Options, Outcome};
+use super::{emit, scan, ConnectionStep, Observation, Options, Outcome};
 use crate::{
     backend::{
         postgresql::session::driver::Driver,
@@ -46,21 +46,20 @@ pub fn connection(
             {
                 emit(
                     observer,
-                    "store.connection.configuration",
+                    ConnectionStep::Configuration.id(),
                     Outcome::Unknown,
                     *reason,
                 );
                 return Ok(());
             }
-            let code = error.code().map(|c| c.code()).unwrap_or("unavailable");
-            let (id, outcome) = if code.starts_with("28") {
-                ("store.connection.authentication", Outcome::Fail)
-            } else if code == "3D000" {
-                ("store.connection.database", Outcome::Fail)
-            } else {
-                ("store.connection.transport", Outcome::Unknown)
+            let code = error.code().map(|c| c.code());
+            let step = ConnectionStep::of_refused_connection(code);
+            let outcome = match step {
+                ConnectionStep::Transport => Outcome::Unknown,
+                _ => Outcome::Fail,
             };
-            emit(observer,id,outcome,format!("PostgreSQL connection not established; SQLSTATE {code}; credentials and driver error text omitted"));
+            let code = code.unwrap_or("unavailable");
+            emit(observer,step.id(),outcome,format!("PostgreSQL connection not established; SQLSTATE {code}; credentials and driver error text omitted"));
             return Ok(());
         }
     };

@@ -47,8 +47,8 @@ pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue>
     let access =
         layerfs_persistence::postgresql_access(postgresql.url()?, SCHEMA).map_err(|error| {
             match error {
-                E::Denied(_) => refused("Denied", error.to_string()),
-                E::Unreachable(_) => refused("Unavailable", error.to_string()),
+                E::Denied(..) => refused("Denied", error.to_string()),
+                E::Unreachable(..) => refused("Unavailable", error.to_string()),
                 E::Failed(_) => refused("Failed", error.to_string()),
             }
         })?;
