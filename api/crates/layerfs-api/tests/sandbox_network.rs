@@ -15,13 +15,22 @@
 //! for `git ls-remote` where direct HTTPS to GitHub is filtered
 //! (`lima=http://192.168.5.2:15236`), and LAYERFS_TEST_NET_GIT another
 //! public remote (`apple-container=https://gitlab.com/gitlab-org/gitlab-foss.git`). Commands use
-//! only what the runtime layer guarantees: `bash` (`/dev/tcp`, `/dev/udp`),
-//! `busybox` and `getent`. A missing setting says NOT_RUN and passes.
+//! what the runtime layer guarantees, `bash` (`/dev/tcp`, `/dev/udp`),
+//! `busybox` and `getent`, and the Sandbox image's `python3` for ICMP: a
+//! command runs with no capability, and `busybox ping` opens only a raw
+//! socket (`CAP_NET_RAW`), so ICMP goes through an ICMP datagram socket,
+//! which `ping_group_range` lets any group open. An image without
+//! `python3` fails check 2. A missing setting says NOT_RUN and passes.
+//!
+//! Every probe that should not get through also shows that its tool ran
+//! (a TCP refusal or timeout, never a missing command; an ICMP echo or a
+//! UDP datagram that left), and has a positive control: the same probe
+//! that does get through somewhere else.
 //!
 //! Checks, per machine: 1 two Sandboxes both bind `127.0.0.1:3000`; 2 a
 //! sibling's address is unreachable by TCP, ICMP and UDP, while the same
-//! ICMP and UDP probes reach B's own host end and A counts what reaches it
-//! (the controls); 3 outbound TCP to
+//! TCP, ICMP and UDP probes reach B's own listener and host end and A
+//! counts what reaches it (the controls); 3 outbound TCP to
 //! the internet, `git ls-remote` when the image has git, and PostgreSQL by
 //! the machine's host name; 4 names resolve; 5 the daemon's control port and
 //! a worker's non-loopback port are closed; 7 remove and a killed daemon
@@ -225,6 +234,93 @@ fn sandbox(home: &Path, project: &str, name: &str, machine: &str) -> Box {
     }
 }
 
+/// `bash`'s TCP connect to `at` (`host/port`), ended after 3 s: `rc=0`
+/// connected, `rc=1` with bash's `connect:` error refused or unreachable,
+/// `rc=143` no answer (ended by `busybox timeout`'s TERM).
+fn connect(at: &str) -> String {
+    format!("busybox timeout 3 bash -c 'exec 3<>/dev/tcp/{at}'; echo rc=$?")
+}
+
+/// `connect`'s outcome: `Some(true)` connected, `Some(false)` refused or no
+/// answer, `None` the probe itself failed (no `bash`, no `busybox`, ...).
+fn connected(probe: &(i64, String)) -> Option<bool> {
+    let rc = probe.1.lines().rev().find_map(|l| l.strip_prefix("rc="));
+    match rc {
+        Some("0") => Some(true),
+        Some("1") if probe.1.contains("connect:") => Some(false),
+        Some("143") => Some(false),
+        _ => None,
+    }
+}
+
+/// Asserts that `probe` ran and did not connect: a refusal or no answer,
+/// never a tool failure, which would not connect either.
+fn closed(probe: &(i64, String), what: &str) {
+    assert_eq!(connected(probe), Some(false), "{what}: {probe:?}");
+}
+
+/// Two ICMP echoes to `argv[1]` through an ICMP datagram socket, which an
+/// unprivileged command may open; prints `sent` once both left, then
+/// `answered` (an echo reply within 3 s), `no answer` or `error <reason>`
+/// (an ICMP error).
+const ICMP: &str = "import socket, struct, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_ICMP)
+s.settimeout(3)
+for seq in (1, 2):
+    s.sendto(struct.pack(\"!BBHHH\", 8, 0, 0, 0, seq) + b\"layerfs\", (sys.argv[1], 0))
+print(\"sent\", flush=True)
+try:
+    data = s.recv(1024)
+    print(\"answered\" if data[0] == 0 else \"type %d\" % data[0])
+except socket.timeout:
+    print(\"no answer\")
+except OSError as e:
+    print(\"error %s\" % e)
+";
+
+/// Sends `ICMP` from Workspace `ws` to `to` and answers its outcome line,
+/// after checking that the probe ran and its echoes left: a Sandbox image
+/// without `python3`, or a socket the command may not open, fails here.
+fn icmp(home: &Path, ws: &str, to: &str) -> String {
+    let probe = format!(
+        "command -v python3 >/dev/null || {{ echo NOPYTHON; exit 3; }}; python3 -c '{ICMP}' {to}"
+    );
+    let (code, out) = exec(home, ws, &probe);
+    assert!(
+        !out.contains("NOPYTHON"),
+        "the Sandbox image has no python3: the ICMP probes need it for an unprivileged ICMP datagram socket (busybox ping needs CAP_NET_RAW, which commands never have)"
+    );
+    assert!(
+        code == 0 && out.lines().next() == Some("sent"),
+        "the ICMP probe to {to} did not send: {code} {out}"
+    );
+    out.lines().nth(1).unwrap_or_default().to_owned()
+}
+
+/// Three UDP datagrams from Workspace `ws` to `to`'s port 4001, through
+/// bash's `/dev/udp`; asserts that each left.
+fn udp(home: &Path, ws: &str, to: &str) {
+    let sent = exec(
+        home,
+        ws,
+        &format!("for i in 1 2 3; do echo probe > /dev/udp/{to}/4001 || exit 1; done; echo sent"),
+    );
+    assert_eq!(sent, (0, "sent\n".to_owned()), "UDP to {to}");
+}
+
+/// The outcome of check `check` in a doctor's long form: the row of its
+/// tree that names it.
+fn outcome(report: &SdkValue, check: &str) -> Option<String> {
+    match report {
+        SdkValue::Map(_) if report.get_text("check") == Some(check) => {
+            report.get_text("outcome").map(str::to_owned)
+        }
+        SdkValue::Map(fields) => fields.iter().find_map(|(_, v)| outcome(v, check)),
+        SdkValue::List(items) => items.iter().find_map(|v| outcome(v, check)),
+        _ => None,
+    }
+}
+
 /// The sum of `names` of `proto` in the Sandbox's own `/proc/net/snmp`.
 fn snmp(home: &Path, ws: &str, proto: &str, names: &[&str]) -> u64 {
     let (code, out) = exec(home, ws, "cat /proc/net/snmp");
@@ -283,29 +379,23 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
     // its own loopback, nor by ICMP or UDP
     let serve = "busybox httpd -p 0.0.0.0:4000 -h /tmp && echo serving";
     assert_eq!(exec(home, &a.ws, serve), (0, "serving\n".to_owned()));
-    let connect = |at: &str| {
-        // refused or dropped (ended by the timeout): never `reached`
-        format!("busybox timeout 3 bash -c 'exec 3<>/dev/tcp/{at}' && echo reached || echo refused")
-    };
-    // a control: A reaches its own listener
+    // the controls: A reaches its own listener, and B its own (check 1's
+    // :3000), with the probe B's checks use
     let own = exec(home, &a.ws, &connect("127.0.0.1/4000"));
-    assert_eq!(own.1.trim(), "reached", "{own:?}");
+    assert_eq!(connected(&own), Some(true), "A to its own :4000: {own:?}");
+    let own = exec(home, &b.ws, &connect("127.0.0.1/3000"));
+    assert_eq!(connected(&own), Some(true), "B to its own :3000: {own:?}");
     for at in [format!("{}/4000", a.guest), "127.0.0.1/4000".to_owned()] {
         let tried = exec(home, &b.ws, &connect(&at));
-        assert!(
-            !tried.1.contains("reached"),
-            "B reached A at {at}: {tried:?}"
-        );
+        closed(&tried, &format!("B to A at {at}"));
     }
-    let ping = |to: &str| format!("busybox ping -c 2 -W 2 {to} && echo answered");
-    let udp =
-        |to: &str| format!("for i in 1 2 3; do echo probe > /dev/udp/{to}/4001; done; echo sent");
     // the controls: B sends ICMP and UDP out (the same probes, to its own
     // host end, which answers: an echo reply, and a port unreachable that
     // B's own kernel counts), and A's counters count what reaches A (an
-    // echo from the machine; UDP A sends itself to its own address), so the
-    // sibling checks below cannot pass because B sends nothing or because
-    // A counts nothing
+    // echo from the machine, whose root shell may open busybox ping's raw
+    // socket; UDP A sends itself to its own address), so the sibling
+    // checks below cannot pass because B sends nothing or because A counts
+    // nothing
     let gateway = exec(
         home,
         &b.ws,
@@ -314,13 +404,10 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
     .1;
     let gateway = gateway.trim().to_owned();
     assert!(!gateway.is_empty(), "B has no default route");
-    let answered = exec(home, &b.ws, &ping(&gateway));
-    assert!(
-        answered.1.contains("answered"),
-        "B's ICMP out: {answered:?}"
-    );
+    let answered = icmp(home, &b.ws, &gateway);
+    assert_eq!(answered, "answered", "B's ICMP to its host end {gateway}");
     let unreachable_before = snmp(home, &b.ws, "Icmp", &["InDestUnreachs"]);
-    exec(home, &b.ws, &udp(&gateway));
+    udp(home, &b.ws, &gateway);
     let unreachable_after = snmp(home, &b.ws, "Icmp", &["InDestUnreachs"]);
     assert!(
         unreachable_after > unreachable_before,
@@ -328,7 +415,7 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
     );
     let (udp_before, echo_before) = counters(home, &a.ws);
     let (pinged, said) = host.shell(&format!("busybox ping -c 1 -W 2 {}", a.guest));
-    exec(home, &a.ws, &udp(&a.guest));
+    udp(home, &a.ws, &a.guest);
     let (udp_after, echo_after) = counters(home, &a.ws);
     assert!(
         pinged && echo_after > echo_before,
@@ -338,11 +425,11 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         udp_after >= udp_before + 3,
         "A counted no UDP: {udp_before} -> {udp_after}"
     );
-    // B to A: nothing arrives
+    // B to A: B's echoes and datagrams leave, and nothing arrives
     let (udp_before, echo_before) = (udp_after, echo_after);
-    let tried = exec(home, &b.ws, &ping(&a.guest));
-    assert!(!tried.1.contains("answered"), "{tried:?}");
-    exec(home, &b.ws, &udp(&a.guest));
+    let tried = icmp(home, &b.ws, &a.guest);
+    assert_ne!(tried, "answered", "A answered B's ICMP echo");
+    udp(home, &b.ws, &a.guest);
     let (udp_after, echo_after) = counters(home, &a.ws);
     assert_eq!(udp_after, udp_before, "a UDP datagram from B reached A");
     assert_eq!(echo_after, echo_before, "an ICMP echo from B reached A");
@@ -424,20 +511,25 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         })
         .unwrap_or_else(|| panic!("no daemon port in {record}"))
         .to_owned();
-    let daemon = exec(home, &a.ws, &connect(&format!("127.0.0.1/{port}")));
+    // the controls: the machine lists both ports listening, so a closed
+    // one is closed to the command, not missing
+    let (listed, sockets) = host.shell("busybox netstat -lnt");
     assert!(
-        !daemon.1.contains("reached"),
-        "the daemon's port {port}: {daemon:?}"
+        listed && sockets.contains(&format!("127.0.0.1:{port} ")),
+        "the daemon does not listen on the machine's 127.0.0.1:{port}: {sockets}"
     );
+    let daemon = exec(home, &a.ws, &connect(&format!("127.0.0.1/{port}")));
+    closed(&daemon, &format!("the daemon's port {port}"));
     if host.platform != "lima" {
         // Docker Desktop's and apple-container's worker listens on 0.0.0.0:7070
+        assert!(
+            sockets.contains("0.0.0.0:7070 ") || sockets.contains(":::7070 "),
+            "the worker does not listen on the machine's :7070: {sockets}"
+        );
         let addresses = exec(home, &a.ws, "getent hosts $(busybox hostname) | busybox awk '{print $1}'; busybox ip route | busybox awk '/default/ {print $3}'").1;
         for address in addresses.split_whitespace() {
             let worker = exec(home, &a.ws, &connect(&format!("{address}/7070")));
-            assert!(
-                !worker.1.contains("reached"),
-                "the worker at {address}: {worker:?}"
-            );
+            closed(&worker, &format!("the worker at {address}"));
         }
         assert!(
             !addresses.trim().is_empty(),
@@ -479,10 +571,19 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         printed.contains(&format!("ip link delete {planted}")),
         "{printed}"
     );
-    let clean = format!(
-        "{:?}",
-        ok(home, "machine.doctor", &[("machine", t(machine))])
+    // the same check ran again (the long form's tree names each check
+    // made and its outcome), and lists the link no more
+    let clean = ok(
+        home,
+        "machine.doctor",
+        &[("machine", t(machine)), ("detail", SdkValue::Bool(true))],
     );
+    assert_eq!(
+        outcome(&clean, "machine.network").as_deref(),
+        Some("pass"),
+        "{clean:?}"
+    );
+    let clean = format!("{clean:?}");
     assert!(
         !clean.contains(planted) && !clean.contains("lfs000000000001"),
         "{clean}"
