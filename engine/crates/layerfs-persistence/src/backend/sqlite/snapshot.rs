@@ -61,12 +61,12 @@ impl Session {
             .ok_or_else(|| refused("the snapshot path is not UTF-8"))?
             .to_owned();
         let work = RefCell::new(SqlWork::default());
-        let source = Connection::open_with_flags(
-            &self.path,
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )
-        .map_err(rows::error)?;
-        source.busy_timeout(Duration::ZERO).map_err(rows::error)?;
+        // The Store open rule: the lane only while no connection holds the
+        // Store, through the source's first read (#776).
+        let (source, writer) = self.admitted_read_only()?;
+        if let Some(writer) = writer {
+            writer.release().map_err(|_| BackendError::Unknown)?;
+        }
         // VACUUM INTO writes its output with the source connection's
         // synchronous setting: the Store's own (NORMAL), never OFF.
         let synchronous = self.profile.persistence.synchronous();

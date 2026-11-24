@@ -3,6 +3,7 @@ use super::profile;
 use super::query;
 use super::rows;
 use crate::backend::records::BackendError;
+use crate::backend::sqlite::lane::writer_admission::Writer;
 use crate::backend::sqlite::lifecycle::identity::FileIdentity;
 use crate::SqlitePersistenceProfile;
 use rusqlite::{limits::Limit, Connection, OpenFlags};
@@ -184,6 +185,63 @@ fn sidecar(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// The Store open rule (#776 C3, S6). A writable open runs PRAGMA and schema
+/// statements that write, so it takes the same local-volume lane a
+/// transaction takes: another opener waits for it instead of meeting
+/// SQLite's Busy (#534, #647). A read-only open takes it only when the Store
+/// has no `-shm`: its first read creates the sidecars by path and runs
+/// SQLite's WAL recovery, so unadmitted it could leave sidecars beside the
+/// file a compaction is installing, or recover under an admitted writer's
+/// transaction. With `-shm` there, another connection holds the Store and the
+/// open maps it without the lane. Returns the lane, if taken, and the file
+/// the path names before the open; it must still name it after the first
+/// read, or the open may have reached a file a compaction replaced meanwhile
+/// (#776 C3).
+fn admit_open(
+    path: &Path,
+    writable: bool,
+) -> Result<(Option<Writer>, Option<FileIdentity>), BackendError> {
+    let writer = if writable || !sidecar(path, "-shm").exists() {
+        Some(Writer::acquire(path)?)
+    } else {
+        None
+    };
+    let before = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
+    Ok((writer, before))
+}
+
+/// A raw read-only connection to the Store at `path` opened under the open
+/// rule, for a reader outside a Session's connection: the structure probe, a
+/// compaction's leftover-work check, a snapshot's source. The lane (taken
+/// only when the Store has no `-shm`) is held through the connection's first
+/// read, which creates the sidecars, and is returned for the caller to
+/// release; an error exit closes the connection under it. A `-shm` that
+/// appears or goes between the check and that read is benign: the identity
+/// check here and a compaction's re-check before its rename catch a replaced
+/// file or a sidecar left beside one. `error` maps SQLite's errors, so a
+/// caller can classify the first read's. Returns the file it opened.
+pub(crate) fn open_admitted_read_only(
+    path: &Path,
+    error: &mut dyn FnMut(rusqlite::Error) -> BackendError,
+) -> Result<(Connection, Option<Writer>, Option<FileIdentity>), BackendError> {
+    let (writer, before) = admit_open(path, false)?;
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(&mut *error)?;
+    connection
+        .busy_timeout(std::time::Duration::ZERO)
+        .map_err(&mut *error)?;
+    connection
+        .query_row("PRAGMA schema_version", [], |_| Ok(()))
+        .map_err(&mut *error)?;
+    if FileIdentity::capture(path).map_err(|_| BackendError::Integrity)? != before {
+        return Err(BackendError::Stale);
+    }
+    Ok((connection, writer, before))
+}
+
 impl Session {
     pub(crate) fn connect(
         path: &Path,
@@ -226,27 +284,10 @@ impl Session {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
         }
-        // A writable open runs PRAGMA and schema statements that write, so it
-        // takes the same local-volume lane a transaction takes: another
-        // opener waits for it instead of meeting SQLite's Busy (#534, #647).
-        // A read-only or diagnostic open takes it only when the Store has no
-        // `-shm`: that open creates the sidecars by path and runs SQLite's
-        // WAL recovery, so unadmitted it could leave sidecars beside the file
-        // a compaction is installing, or recover under an admitted writer's
-        // transaction (#776 C3, S6). With `-shm` there, another connection
-        // holds the Store and the open maps it without the lane. The lane is
-        // released below, after the last step that can fail, before this
-        // session serves its first call.
-        let writer = if writable || !sidecar(path, "-shm").exists() {
-            Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?)
-        } else {
-            None
-        };
-        // The file the path names before the open; it must still name it
-        // after the open, or the open may have reached a file a compaction
-        // replaced meanwhile and this session would fence on the wrong one
-        // (#776 C3).
-        let before = FileIdentity::capture(path).map_err(|_| BackendError::Integrity)?;
+        // The lane, when the open rule takes it, is released below, after
+        // the last step that can fail, before this session serves its first
+        // call.
+        let (writer, before) = admit_open(path, writable)?;
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -420,6 +461,22 @@ impl Session {
         let s = self.state.lock().map_err(|_| BackendError::Unknown)?;
         let w = *s.work.borrow();
         Ok(w)
+    }
+    /// A raw read-only connection to this Session's Store
+    /// ([`open_admitted_read_only`]), for work that must not occupy the
+    /// Session's own connection. A quarantined Session is refused `Unknown`,
+    /// and the connection must reach the file this Session opened, or
+    /// `Stale`. The caller releases the returned lane once it is back.
+    pub(crate) fn admitted_read_only(&self) -> Result<(Connection, Option<Writer>), BackendError> {
+        if self.state().quarantined {
+            return Err(BackendError::Unknown);
+        }
+        self.check_identity()?;
+        let (connection, writer, opened) = open_admitted_read_only(&self.path, &mut rows::error)?;
+        if self.identity.is_some() && opened != self.identity {
+            return Err(BackendError::Stale);
+        }
+        Ok((connection, writer))
     }
     /// §10: the Store path must still name the file this handle opened, or the
     /// call is `StaleStore` before it reads or writes anything.
