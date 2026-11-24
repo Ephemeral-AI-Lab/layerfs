@@ -78,13 +78,14 @@ const TLS_KEYS: [&str; 10] = [
 /// percent-decoded text, in any case, makes it hold one ([`holds_login`]):
 /// the client's `user` and `password` (tokio-postgres 0.7.18
 /// `Config::param`), and libpq's keys of a password, a password file, a
-/// client key or certificate and its password, and an OAuth client secret
-/// (libpq 18: `Database-User`, `Database-Password`,
-/// `Database-Password-File`, `SSL-Client-Key`, `SSL-Client-Cert`,
-/// `SSL-Client-Key-Password`, `OAuth-Client-Secret`). A fixed list, no
-/// guess at a grammar: `password=` in a database name or a value is
-/// counted too.
-const LOGIN_KEYS: [&str; 7] = [
+/// client key or certificate and its password, an OAuth client secret, and
+/// a SCRAM client or server key (libpq 18: `Database-User`,
+/// `Database-Password`, `Database-Password-File`, `SSL-Client-Key`,
+/// `SSL-Client-Cert`, `SSL-Client-Key-Password`, `OAuth-Client-Secret`,
+/// `scram_client_key`, `scram_server_key`; a ClientKey alone authenticates
+/// as the role). A fixed list, no guess at a grammar: `password=` in a
+/// database name or a value is counted too.
+const LOGIN_KEYS: [&str; 9] = [
     "user",
     "password",
     "passfile",
@@ -92,6 +93,8 @@ const LOGIN_KEYS: [&str; 7] = [
     "sslcert",
     "sslpassword",
     "oauth_client_secret",
+    "scram_client_key",
+    "scram_server_key",
 ];
 
 /// libpq's keys of a login the client does not read, which a refusal of a
@@ -141,9 +144,17 @@ fn endpoints(read: &Config) -> (&[Host], &[IpAddr], &[u16], Option<&str>) {
     (hosts, addrs, read.get_ports(), read.get_dbname())
 }
 
-/// Whether a reading has a user or a password.
+/// Whether a reading has a user or a password, or a host holding an `@`:
+/// a login written percent-encoded (`alice%3Asecret%40db`) is read as part
+/// of a host, which no real host name or socket directory holds, and would
+/// otherwise be shown and resolved.
 fn has_login(read: &Config) -> bool {
-    read.get_user().is_some() || read.get_password().is_some()
+    let at = |host: &Host| match host {
+        Host::Tcp(name) => name.contains('@'),
+        #[cfg(unix)]
+        Host::Unix(path) => path.as_os_str().as_encoded_bytes().contains(&b'@'),
+    };
+    read.get_user().is_some() || read.get_password().is_some() || read.get_hosts().iter().any(at)
 }
 
 /// `text` with each `%XX` decoded, as the client decodes a URL's parts;
@@ -179,8 +190,9 @@ fn names_login_key(url: &str) -> bool {
 
 /// Whether `url` may hold a login, and so is never shown, dialled or
 /// rewritten: it is no PostgreSQL URL; or it has an `@` after its scheme;
-/// or the client does not read it; or the client reads a user or a
-/// password in it; or it holds a login key and `=` ([`LOGIN_KEYS`]).
+/// or the client does not read it; or the client reads a user, a password
+/// or a host holding an `@` in it ([`has_login`]); or it holds a login key
+/// and `=` ([`LOGIN_KEYS`]).
 pub fn holds_login(url: &str) -> bool {
     let Ok((_, after)) = scheme(url) else {
         return true;
@@ -264,12 +276,13 @@ fn unread(scheme: &str, after: &str) -> String {
 
 /// Refuses a URL that is not an address alone, the one kind dialled and
 /// recorded, or one that is not PostgreSQL's: one that may hold a login
-/// ([`holds_login`]: an `@`, a user or password the client reads, a login
-/// key, one the client does not read, [`unread`]), or holding a `#` (the
-/// client reads it as text, other readers end the URL there), which every
-/// refusal of a URL holding one also names. An `@` or `#` of the address
-/// itself is written `%40` or `%23`, which the client decodes, so no
-/// reading of an accepted URL can differ from the client's. Text the
+/// ([`holds_login`]: an `@`, a user, password or host holding an `@` the
+/// client reads, a login key, one the client does not read, [`unread`]),
+/// or holding a `#` (the client reads it as text, other readers end the
+/// URL there), which every refusal of a URL holding one also names. An `@`
+/// or `#` of the address itself (in a database name or a value: no host
+/// holds an `@`) is written `%40` or `%23`, which the client decodes, so
+/// no reading of an accepted URL can differ from the client's. Text the
 /// client reads as part of a host, database or value (`/db&sslmode=require`
 /// is the database `db&sslmode=require`) is the client's to refuse.
 pub fn refuse_login(url: &str) -> Result<()> {

@@ -1322,14 +1322,18 @@ attached to the Store and dial with both.
   read only as the PostgreSQL client reads it, and is recorded and shown
   exactly as given: no URL is ever cleaned or rewritten. A URL that may
   hold a login is refused `InvalidInput`: one holding an `@`, one whose
-  client reads a user or a password, one the client does not read (an
+  client reads a user, a password or a host holding an `@` (a login written
+  percent-encoded, `postgres://alice%3Ap%40db/app`), one the client does
+  not read (an
   unknown key such as `sslrootcert`, `sslkey` or `sslcert`, or an
   `sslmode` other than `disable`, `prefer` or `require`), or one whose
   percent-decoded text holds, in any case, `user`, `password`, `passfile`,
-  `sslkey`, `sslcert`, `sslpassword` or `oauth_client_secret` followed by
+  `sslkey`, `sslcert`, `sslpassword`, `oauth_client_secret`,
+  `scram_client_key` or `scram_server_key` followed by
   `=` anywhere (`postgres://h/db&password=p` and
   `postgres://h/db?application_name=me?password=p` too). One holding a `#`
-  is refused too (one of the address is written `%40` or `%23`). The fix
+  is refused too (one in a database name or a value is written `%40` or
+  `%23`; no host holds an `@`). The fix
   names the address `<url>` and the user `<user>`: `layerfs store connect
   <store> <url> --user <user> --password-stdin`. Other text the client
   reads as part of a host, database or value is the client's
