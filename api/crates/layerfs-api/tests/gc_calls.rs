@@ -521,14 +521,14 @@ fn a_mount_intent_a_forced_remove_cannot_end_is_left() {
 }
 
 /// The Branch id [`handed_back`] names, set by its test before the close.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "machine"))]
 static HANDED_BRANCH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// A Sandbox's own side closing it on a machine that could not dial its
 /// PostgreSQL Store's URL: its runtime is stopped and the one Workspace
 /// mount intent it could not end goes back to the caller (`ending`: the
 /// Workspace's kernel path and its bound Workspace and Branch ids).
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "machine"))]
 fn handed_back(
     _host: layerfs_sandbox::host::Host,
     _call: layerfs_sandbox::host::Call,
@@ -557,7 +557,7 @@ fn handed_back(
 /// and `store compact` are admitted after it and nothing is `left`.
 /// `LAYERFS_TEST_POSTGRES_URL` names a server where a database of the
 /// test's own is made and dropped.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "machine"))]
 #[test]
 fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
@@ -695,10 +695,10 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
 
 /// Drops database `.1` of the server `.0` names when the test ends, passed
 /// or not.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "machine"))]
 struct DroppedDatabase(String, String);
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "machine"))]
 impl Drop for DroppedDatabase {
     fn drop(&mut self) {
         if let Ok(mut client) = postgres::Client::connect(&self.0, postgres::NoTls) {
