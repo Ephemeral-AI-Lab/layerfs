@@ -457,3 +457,62 @@ fn place_tokens_round_trip_through_evidence_and_live_statements_keep_a_done_row(
         .unwrap();
     assert_eq!(tokens(&history), (None, None));
 }
+
+/// #783 gap 3: one Branch's retained `done` audit is bounded with no schema
+/// change. A release that retains a row deletes that Branch's oldest done
+/// rows beyond the newest 100 (`DONE_RETAINED`); another Branch's rows and
+/// live intents are untouched.
+#[test]
+fn a_release_keeps_at_most_the_newest_done_rows_of_its_branch() {
+    const RETAINED: usize = 100;
+    let temp = Temp::new("gc-done-audit-cap");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let path = temp.join("store.sqlite");
+    for body in 1..=RETAINED as u8 {
+        done_row(&path, branch, body, "release", i64::from(body));
+    }
+    // another Branch's done row is not this Branch's to bound
+    let other = branch_id(2);
+    history
+        .fork(&layerfs_history::records::ForkRequest {
+            stack: stack(1),
+            branch: other,
+            name: name("other"),
+            source: layerfs_history::records::ForkSource::Layer(
+                history.layer_stack(stack(1)).unwrap().unwrap().head_layer,
+            ),
+        })
+        .unwrap();
+    done_row(&path, other, 250, "release other", 0);
+    let mounted = GcIntent::shared(
+        op(200),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack(1).as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([200; 32]), Some("box"), Some("box"))
+    .owned(Some("pid:1@0"), Some("boot:1"));
+    history.gc_register(&mounted).unwrap();
+    history.gc_mark_uncertain(&op(200)).unwrap();
+    assert!(history.gc_release_done(&op(200), "release").unwrap());
+
+    // the test rows all record the names proj/work: count by Branch scope
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let kept = |scope: BranchId| -> Vec<Vec<u8>> {
+        let mut statement = connection
+            .prepare("SELECT op_id FROM gc_intent WHERE state = 'done' AND scope_id = ?1")
+            .unwrap();
+        let rows = statement
+            .query_map([scope.as_slice()], |row| row.get(0))
+            .unwrap();
+        rows.map(Result::unwrap).collect()
+    };
+    let work = kept(branch);
+    assert_eq!(work.len(), RETAINED, "the Branch keeps its newest rows");
+    assert!(!work.contains(&op(1).to_vec()), "the oldest went");
+    assert!(work.contains(&op(2).to_vec()) && work.contains(&op(200).to_vec()));
+    assert_eq!(kept(other).len(), 1, "another Branch's row stays");
+}

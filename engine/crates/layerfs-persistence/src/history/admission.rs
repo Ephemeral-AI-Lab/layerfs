@@ -75,6 +75,7 @@ const DONE: &str = "gc_intent_done";
 const DONE_BRANCH: &str = "gc_intent_done_branch";
 const DONE_INSERT: &str = "gc_intent_done_insert";
 const DONE_DELETE: &str = "gc_intent_done_delete";
+const DONE_CAP: &str = "gc_intent_done_cap";
 
 const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
