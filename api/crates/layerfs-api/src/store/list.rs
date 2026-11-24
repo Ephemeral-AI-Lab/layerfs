@@ -1,5 +1,5 @@
 //! `store.list`: every Store, from the home's records.
-use super::get::PARTS;
+use super::get::ITEM_PARTS;
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Part, Section};
@@ -13,8 +13,8 @@ const ITEM: Form = Form::of(
     &[
         "state",
         "machine",
-        "auth",
-        "connections",
+        "user",
+        "machines",
         "projects",
         "projects_count",
         "backups",
@@ -29,9 +29,13 @@ const ITEM: Form = Form::of(
         "engine",
         "state",
         "machine",
-        "auth",
+        "url",
+        "user",
+        "password_saved",
+        "password_changed_at",
         "binding",
-        "connections",
+        "reach",
+        "machines",
         "projects",
         "projects_count",
         "backups",
@@ -47,7 +51,7 @@ const ITEM: Form = Form::of(
         "last_transfer",
     ],
 )
-.parts(PARTS)
+.parts(ITEM_PARTS)
 .short_when(&[crate::calls::form::OBSERVED]);
 
 /// Its answer: the items, unpaged (the list is the home's Store records).
@@ -72,6 +76,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .map(MachineName::parse)
         .transpose()?;
     let machine = machine.as_ref().map(MachineName::as_str);
-    let reads = layerfs_control::store::reads();
-    layerfs_store::list::list(&context.home, machine, context.with("stats"), reads)
+    let machines = layerfs_control::store::reads();
+    layerfs_store::list::list(&context.home, machine, context.with("stats"), machines)
 }

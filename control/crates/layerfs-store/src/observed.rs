@@ -106,10 +106,10 @@ pub fn seen_at(home: &Path, store: &str, ms: i64) {
     }
 }
 
-/// The key `machine`'s reach of `record` is kept under: none for this
-/// computer's (`native` without an address of its own).
-fn from<'a>(record: &StoreRecord, machine: Option<&'a str>) -> Option<&'a str> {
-    machine.filter(|m| *m != "native" || record.own_connection(m).is_some())
+/// The key `machine`'s reach is kept under: none for this computer's
+/// (`native`'s too).
+fn from(machine: Option<&str>) -> Option<&str> {
+    machine.filter(|m| *m != "native")
 }
 
 /// Records what `machine` (none: this computer) saw dialling PostgreSQL
@@ -120,7 +120,7 @@ pub fn record(home: &Path, store: &str, machine: Option<&str>, reach: &Reach) {
             return Ok(());
         }
         let entry = reach.to_record(now_ms());
-        match from(record, machine) {
+        match from(machine) {
             None => observed::merge(file, HERE, entry),
             Some(machine) => {
                 let machines = reaches(&observed::fields(file));

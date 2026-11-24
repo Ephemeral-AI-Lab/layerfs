@@ -585,20 +585,16 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
     std::fs::write(folder.join("base.txt"), "hello\n").unwrap();
     // the URL's user becomes a saved login (a trust-auth server takes any
     // password); the address is connected without it
-    ok(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(&user)),
-            ("password", t("unused")),
-        ],
-    );
     let clean = format!("postgresql://{address}:{port}/{database}?sslmode=disable");
     ok(
         &home,
         "store.connect",
-        &[("store", t("pg")), ("url", t(&clean)), ("auth", t("pg"))],
+        &[
+            ("store", t("pg")),
+            ("url", t(&clean)),
+            ("user", t(&user)),
+            ("password", t("unused")),
+        ],
     );
     ok(
         &home,

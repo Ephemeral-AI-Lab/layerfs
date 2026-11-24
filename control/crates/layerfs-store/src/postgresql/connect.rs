@@ -1,12 +1,13 @@
-//! PostgreSQL Stores (#533 step 10a, call surface 2.0 `pg.html`): `store
-//! connect` records a database as a Store in the fixed `layerfs` schema,
-//! or sets the address every machine dials; `store disconnect` forgets it
-//! (its data stays). The record keeps the URL as given, an address alone
-//! with no user and no password, and names its saved login (`auth`,
-//! [`super::login`]), put into the URL on each call; the full URL is never
-//! written down, and no recorded URL is ever rewritten. A machine's own address
-//! is `layerfs-control`'s part of the call, proven from that machine.
-use super::address;
+//! PostgreSQL Stores (#533 step 10a; owner, 2026-11-24): `store connect`
+//! records a database as a Store in the fixed `layerfs` schema, or changes
+//! a connected Store's address, user, password or `synchronous_commit`;
+//! `store disconnect` forgets it (its data stays). The host is the one
+//! place a Store's URL and login are saved: the record keeps the URL as
+//! given, an address alone, and the user; the password is a secret of the
+//! home ([`super::login`]), put into the URL on each call. The full URL is
+//! never written down, and no recorded URL is ever rewritten. Machines
+//! attach to a Store (`layerfs-control`'s `store.attach`) and dial both.
+use super::address::{self, with_login};
 pub use super::address::{holds_login, refuse_login, shown, target, HIDDEN};
 use super::login;
 use crate::open_args::{OpenArgs, PgSelection};
@@ -27,13 +28,12 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The one schema a 2.0 PostgreSQL Store lives in.
 pub const SCHEMA: &str = "layerfs";
 
-/// What a call on Store `record` dials: its URL with its saved login.
+/// What a call on Store `record` dials: its URL with its login.
 pub fn selection(record: &StoreRecord) -> Result<PgSelection> {
     Ok(selection_at(record, url(record)?))
 }
 
-/// [`selection`] dialling `url`: an address of the record with its login
-/// in it, as a machine reaches it (#535 §7.4).
+/// [`selection`] dialling `url`, the record's address with a login in it.
 pub fn selection_at(record: &StoreRecord, url: String) -> PgSelection {
     PgSelection {
         url: Some(url),
@@ -47,49 +47,37 @@ pub fn selection_at(record: &StoreRecord, url: String) -> PgSelection {
     }
 }
 
-/// `store.connect(store, url, { auth, synchronous_commit })` without a
-/// machine: a Store's first connect, or a new address every machine dials.
-#[derive(Clone, Debug)]
+/// `store.connect(store, url, { user, password, synchronous_commit })`.
+/// No `Debug`: it holds the password.
+#[derive(Clone)]
 pub struct StoreConnect {
     /// The Store's name.
     pub store: StoreName,
-    /// The database's URL, with no user and no password.
+    /// The database's URL, an address alone: no user, no password.
     pub url: String,
-    /// The saved login; required on the first connect, refused afterwards.
-    pub auth: Option<String>,
-    /// `synchronous_commit`, `local` by default; first connect only.
+    /// The PostgreSQL role; required for a new Store, else the saved one.
+    pub user: Option<String>,
+    /// Its password; required for a new Store, else the saved one.
+    pub password: Option<String>,
+    /// `synchronous_commit`; `local` for a new Store, else the saved one.
     pub synchronous_commit: Option<String>,
 }
 
 /// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
-/// fix (spec v23 V23-13), which names the address `<url>` and the user
-/// `<user>`, never text of the URL. A URL that may hold a login
-/// ([`holds_login`]) is connected as the address alone with a saved login:
-/// on a first connect (`connected` none) the login saved and named with
-/// `--auth`; on a connected Store, which takes no `--auth` on connect, the
-/// steps that leave it naming the saved login ([`login::login_fix`]), then
-/// the address alone (for `machine`'s own connection when given). One
-/// refused only for a `#` holds no login: its fix is the connect of the
-/// address alone, saving none.
-pub fn refuse_login_with_fix(
-    store: &str,
-    url: &str,
-    connected: Option<&StoreRecord>,
-    machine: Option<&str>,
-) -> Result<()> {
+/// fix, which names the address `<url>` and the user `<user>`, never text
+/// of the URL: the address alone, the login given apart (`new`: the
+/// Store's first connect, which needs it; on a connected Store only when
+/// the URL may hold one).
+pub fn refuse_url(store: &str, url: &str, new: bool) -> Result<()> {
     // a URL that is not a PostgreSQL one is refused without a fix: its login
     // cannot be told apart, so no line may repeat it
     address::scheme(url)?;
     refuse_login(url).map_err(|refusal| {
-        let name = shell_word(store);
-        let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
-        let connect = format!("layerfs store connect {name} <url>{on}");
-        let fix = match (holds_login(url), connected) {
-            (true, None) => format!("{} && {connect} --auth <auth>", login::SAVE),
-            (false, None) => format!("{connect} --auth <auth>"),
-            (true, Some(record)) => login::login_fix(record, &connect),
-            (false, Some(_)) => connect,
+        let login = match new || holds_login(url) {
+            true => " --user <user> --password-stdin",
+            false => "",
         };
+        let fix = format!("layerfs store connect {} <url>{login}", shell_word(store));
         with_fix(refusal, fix)
     })
 }
@@ -129,84 +117,47 @@ pub fn unclaimed_by_others(home: &Path, name: &str, binding: &[u8]) -> Result<()
     Ok(())
 }
 
-/// Every side that connects to PostgreSQL Store `record` (spec v23
-/// V23-3), as answers show them: this computer first (`machine` null, the
-/// Store's address), then by name each machine with an address of its own,
-/// a reach seen from it ([`crate::observed`]) or a Sandbox of the Store
-/// (`sandboxes`, the machines the caller found). `native` without an
-/// address of its own dials as this computer does and is its row. Each row
-/// is `{ machine, url, own, server, reached, reach }`: the URL it dials
-/// (no login), whether it is its own, the `{ host, port, database }` it
-/// names, and the last reach seen with its word (`ok`, `failed`, null).
-pub fn connections(record: &StoreRecord, sandboxes: &[String]) -> SdkValue {
+/// This computer's last reach of PostgreSQL Store `record`, `{ at, ok,
+/// latency_ms, server_version, error }`, or null when none was seen.
+pub fn reach(record: &StoreRecord) -> SdkValue {
+    let seen = (record.home()).map(|home| crate::observed::read(home, record.name()));
+    seen.and_then(|seen| seen.here).unwrap_or_default()
+}
+
+/// The machines attached to PostgreSQL Store `record`, as answers show
+/// them: with `rows`, `{ machine, reached, reach }` each, the last reach
+/// seen from it and its word (`ok`, `failed`, null); else their names.
+pub fn machines(record: &StoreRecord, rows: bool) -> SdkValue {
+    let attached = record.attached();
+    if !rows {
+        return SdkValue::List(attached.iter().map(SdkValue::text).collect());
+    }
     let seen = (record.home())
         .map(|home| crate::observed::read(home, record.name()))
         .unwrap_or_default();
-    let own = record.own_connections();
-    let own_url = |machine: &str| {
-        let mut found = own.iter();
-        found
-            .find(|(m, _)| m == machine)
-            .and_then(|(_, own)| own.url.clone())
-    };
-    let mut machines: Vec<String> = (own.iter().map(|(m, _)| m.clone()))
-        .chain(seen.machines.iter().map(|(m, _)| m.clone()))
-        .chain(sandboxes.iter().cloned())
-        .filter(|m| m != "native" || own_url(m).is_some())
-        .collect();
-    machines.sort();
-    machines.dedup();
-    let store_url = record.text("url").map(str::to_owned);
-    let mut rows = vec![row(None, store_url.clone(), false, seen.here.clone())];
-    for machine in machines {
-        let mine = own_url(&machine);
+    let rows = attached.into_iter().map(|machine| {
         let reach = seen.of(&machine);
-        let own = mine.is_some();
-        rows.push(row(Some(machine), mine.or(store_url.clone()), own, reach));
-    }
-    SdkValue::List(rows)
+        SdkValue::map([
+            ("machine", SdkValue::text(machine)),
+            ("reached", crate::observed::reached(reach.as_ref())),
+            ("reach", reach.unwrap_or_default()),
+        ])
+    });
+    SdkValue::List(rows.collect())
 }
 
-/// One `connections` row.
-fn row(
-    machine: Option<String>,
-    url: Option<String>,
-    own: bool,
-    reach: Option<SdkValue>,
-) -> SdkValue {
-    let server = (url.as_deref()).and_then(|url| target(url).ok()).map_or(
-        SdkValue::Null,
-        |(host, port, database)| {
-            let port = port
-                .parse::<i64>()
-                .map_or(SdkValue::text(&port), SdkValue::Int);
-            SdkValue::map([
-                ("host", SdkValue::text(host)),
-                ("port", port),
-                ("database", SdkValue::text(database)),
-            ])
-        },
-    );
-    SdkValue::map([
-        ("machine", SdkValue::opt_text(machine)),
-        // an outdated record may still hold a login in its URL: a row never shows it (V23-3)
-        ("url", SdkValue::opt_text(url.as_deref().map(shown))),
-        ("own", SdkValue::Bool(own)),
-        ("server", server),
-        ("reached", crate::observed::reached(reach.as_ref())),
-        ("reach", reach.unwrap_or_default()),
-    ])
+/// When Store `record`'s password was last saved, as an answer's time.
+pub fn password_changed(record: &StoreRecord) -> (bool, SdkValue) {
+    let saved = (record.home()).and_then(|home| login::read(home, record.name()).ok().flatten());
+    let at = saved.as_ref().and_then(|saved| saved.changed_ms);
+    (saved.is_some(), crate::get::at(at))
 }
 
 /// `store.connect`'s answer for `record`: `outcome` (`connected` or
 /// `updated`), the projects found on a first connect (the first 20 names,
-/// and the count only when there were more), the login, the addresses and the setting.
-pub fn answer(
-    record: &StoreRecord,
-    outcome: &str,
-    projects: Option<&[String]>,
-    sandboxes: &[String],
-) -> SdkValue {
+/// and the count only when there were more), the address, the user, the
+/// setting and the attached machines; never the password.
+pub fn answer(record: &StoreRecord, outcome: &str, projects: Option<&[String]>) -> SdkValue {
     let (names, count) = match projects {
         Some(found) => layerfs_home::helpers::shown_names(found),
         None => (SdkValue::Null, SdkValue::Null),
@@ -219,38 +170,67 @@ pub fn answer(
         ("outcome", SdkValue::text(outcome)),
         ("store", SdkValue::text(record.name())),
         ("engine", SdkValue::text("postgresql")),
-        ("auth", text("auth")),
-        ("connections", connections(record, sandboxes)),
+        ("url", text("url")),
+        ("user", text("user")),
         ("synchronous_commit", text("synchronous_commit")),
+        ("machines", machines(record, false)),
     ])
 }
 
+/// A given user or password that is empty, refused.
+fn given<'a>(value: Option<&'a str>, what: &str) -> Result<Option<&'a str>> {
+    match value {
+        Some("") => Err(refused("InvalidInput", format!("the {what} is empty"))),
+        other => Ok(other),
+    }
+}
+
+/// `store.connect`: a new Store ([`connect`]), or a connected one's
+/// address, login or setting ([`update`]). A sqlite Store of the name is
+/// `Exists`.
+pub fn run(home_dir: &Path, request: &StoreConnect) -> Outcome {
+    let name = request.store.as_str();
+    let Some(record) = StoreRecord::read(home_dir, name)? else {
+        return connect(home_dir, request);
+    };
+    if record.kind()? != StoreKind::Postgresql {
+        return Err(refused(
+            "Exists",
+            format!("a sqlite Store named {name} exists"),
+        ));
+    }
+    update(home_dir, request)
+}
+
 /// `store.connect` of a new Store: records a PostgreSQL database as Store
-/// `request.store`, its login `auth` required and saved. Every refusal of
-/// its input comes before any effect. The connection is made from this
-/// process, which gives an empty database the schema and a new id or reads
-/// the id the schema holds, and lists its projects, before the home lock;
-/// the lock covers the re-checks and the record writes only. A database
-/// whose id another Store of this home holds is `Exists`.
+/// `request.store`, its user and password required. Every refusal of its
+/// input comes before any effect. The connection is made from this
+/// process with the given login, which gives an empty database the schema
+/// and a new id or reads the id the schema holds, and lists its projects,
+/// before the home lock; the lock covers the re-checks and the writes
+/// only: the record, then the password. A database whose id another
+/// Store of this home holds is `Exists`.
 pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
-    let given = request.url.as_str();
-    refuse_login_with_fix(name, given, None, None)?;
-    target(given)?;
-    let auth = request.auth.as_deref().ok_or_else(|| {
+    let given_url = request.url.as_str();
+    refuse_url(name, given_url, true)?;
+    target(given_url)?;
+    let needs = |what: &str| {
         refused(
             "InvalidInput",
-            format!("connecting Store {name} needs its login: --auth <auth> (`layerfs store save-auth` saves one)"),
+            format!("connecting Store {name} needs its login: --user <user> --password-stdin (no {what} was given)"),
         )
-    })?;
-    login::saved(home_dir, auth)?;
+    };
+    let user = given(request.user.as_deref(), "user")?.ok_or_else(|| needs("user"))?;
+    let password =
+        given(request.password.as_deref(), "password")?.ok_or_else(|| needs("password"))?;
     let sync = request.synchronous_commit.as_deref().unwrap_or("local");
     synchronous_commit(sync)?;
     if paths::store_record(home_dir, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
-    let record = StoreRecord::connected(name, given, SCHEMA, sync, Some(auth)).in_home(home_dir);
-    let probe = selection(&record)?;
+    let record = StoreRecord::connected(name, given_url, user, SCHEMA, sync).in_home(home_dir);
+    let probe = selection_at(&record, with_login(given_url, user, password)?);
     // an empty database gets the schema, with a new binding (#533 step
     // 10b); an existing LayerFS schema keeps its binding, read once. The
     // cursor key is this home's own either way.
@@ -280,35 +260,69 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
     unclaimed_by_others(home_dir, name, &binding)?;
-    login::saved(home_dir, auth)?;
     home::private_dir(&directory)?;
     record.write(home_dir)?;
+    login::save(home_dir, name, password)?;
     let mut projects = Vec::new();
     for project in listed {
         let stack = SdkValue::text(hex(&project.stack.to_bytes()));
         ProjectRecord::found(name, &project.name, stack).write(home_dir)?;
         projects.push(project.name);
     }
-    Ok(answer(&record, "connected", Some(&projects), &[]))
+    Ok(answer(&record, "connected", Some(&projects)))
 }
 
-/// `store.connect` of a connected Store without a machine: `request.url`
-/// becomes the address every machine dials, proven from this process (it
-/// must read this Store's id: `Unavailable` otherwise). `--auth` and
-/// `--synchronous-commit` are refused (`store update` changes both). The
-/// record is written under the home lock and the Store's, `Conflict` when
-/// it was disconnected or connected to another database meanwhile; this
-/// process's open sessions on it are closed. A running Sandbox keeps the
-/// connection it started with.
-pub fn readdress(home_dir: &Path, request: &StoreConnect, sandboxes: &[String]) -> Outcome {
+/// `store.connect` of a connected Store: its address `request.url`, and
+/// any of a new user, password and `synchronous_commit` (those not given
+/// are kept). The new values are dialled once from this process and must
+/// read this Store's id (`Unavailable` otherwise) before anything is
+/// saved. The record (and a new password) are written under
+/// the home lock and the Store's, `Conflict` when it was disconnected or
+/// connected to another database meanwhile; this process's open sessions
+/// on it are closed. A running Sandbox keeps the connection it started
+/// with.
+pub fn update(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let record = super::check::postgresql_record(home_dir, name)?;
-    refuse_settings(name, request)?;
-    refuse_login_with_fix(name, &request.url, Some(&record), None)?;
+    refuse_url(name, &request.url, false)?;
     target(&request.url)?;
     record.unblocked()?;
-    let trial = record.clone().with("url", SdkValue::text(&request.url));
-    super::check::same_store(&trial, &selection(&trial)?).map_err(|refusal| {
+    let user = given(request.user.as_deref(), "user")?.or(record.text("user"));
+    let user = user.map(str::to_owned).ok_or_else(|| {
+        refused(
+            "InvalidInput",
+            format!("Store {name}'s record names no user: give it with --user"),
+        )
+    })?;
+    let new_password = given(request.password.as_deref(), "password")?;
+    let saved = login::read(home_dir, name)?;
+    let password = match (new_password, &saved) {
+        (Some(password), _) => password.to_owned(),
+        (None, Some(saved)) => saved.password().to_owned(),
+        (None, None) => {
+            return Err(refused(
+                "InvalidInput",
+                format!(
+                "Store {name}'s password is not saved in this home: give it with --password-stdin"
+            ),
+            ))
+        }
+    };
+    if let Some(sync) = &request.synchronous_commit {
+        synchronous_commit(sync)?;
+    }
+    let changed = |record: StoreRecord| {
+        let record = record
+            .with("url", SdkValue::text(&request.url))
+            .with("user", SdkValue::text(&user));
+        match &request.synchronous_commit {
+            Some(sync) => record.with("synchronous_commit", SdkValue::text(sync)),
+            None => record,
+        }
+    };
+    let trial = changed(record.clone());
+    let probe = selection_at(&trial, with_login(&request.url, &user, &password)?);
+    super::check::same_store(&trial, &probe).map_err(|refusal| {
         refused(
             &refusal.code,
             format!("PostgreSQL Store {name}: {}", refusal.message),
@@ -320,43 +334,30 @@ pub fn readdress(home_dir: &Path, request: &StoreConnect, sandboxes: &[String]) 
     let Some(current) = current else {
         return Err(refused(
             "Conflict",
-            format!("Store {name} changed while its address was checked; connect it again"),
+            format!("Store {name} changed while its connection was checked; connect it again"),
         ));
     };
     current.unblocked()?;
     crate::open::close(&current.postgresql_key(home_dir, name))?;
-    // the address as given; nothing else of the record changes
-    let current = current.with("url", SdkValue::text(&request.url));
+    let current = changed(current);
     current.write(home_dir)?;
+    if let Some(password) = new_password {
+        login::save(home_dir, name, password)?;
+    }
     drop((store_lock, home_lock));
-    Ok(answer(&current, "updated", None, sandboxes))
+    Ok(answer(&current, "updated", None))
 }
 
-/// Refuses `--auth` and `--synchronous-commit` on a connected Store's
-/// connect: a machine never has its own login, and both are the Store's,
-/// changed with `store update`.
-pub fn refuse_settings(name: &str, request: &StoreConnect) -> Result<()> {
-    let given = match (&request.auth, &request.synchronous_commit) {
-        (Some(_), _) => "--auth",
-        (None, Some(_)) => "--synchronous-commit",
-        (None, None) => return Ok(()),
-    };
-    Err(refused(
-        "InvalidInput",
-        format!(
-            "Store {name} is connected: a connect sets an address only and takes no {given}; `layerfs store update {name}` changes its login or setting"
-        ),
-    ))
-}
-
-/// `store.disconnect` of a whole Store: forgets a PostgreSQL Store; its
-/// data stays. Refused `InUse` while a process holds it or a Sandbox of its
-/// projects exists; a sqlite Store is `InvalidInput`, naming `store remove`.
+/// `store.disconnect`: forgets a PostgreSQL Store, its saved password and
+/// its attachments; its data stays. Refused `InUse` while a process holds
+/// it or a Sandbox of its projects exists; a sqlite Store is
+/// `InvalidInput`, naming `store remove`.
 pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcome {
     // a record this build does not read: its records alone go
     if StoreRecord::read(home_dir, name)?.is_some_and(|record| record.store_ref().is_err()) {
         crate::record::forget_unread(home_dir, name, related)?;
-        return Ok(disconnected(name, None));
+        login::forget(home_dir, name)?;
+        return Ok(disconnected(name));
     }
     let _lock = home::lock::take(home_dir)?;
     let _store = crate::record::lock(home_dir, name)?;
@@ -373,18 +374,17 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     (related.store_idle)(home_dir, name)?;
     crate::open::close(&record.postgresql_key(home_dir, name))?;
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
+    login::forget(home_dir, name)?;
     layerfs_home::home::generation::moved(home_dir);
-    Ok(disconnected(name, None))
+    Ok(disconnected(name))
 }
 
-/// `store.disconnect`'s answer: `{ ok, outcome: disconnected, store,
-/// machine }`.
-pub fn disconnected(store: &str, machine: Option<&str>) -> SdkValue {
+/// `store.disconnect`'s answer: `{ ok, outcome: disconnected, store }`.
+pub fn disconnected(store: &str) -> SdkValue {
     SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("outcome", SdkValue::text("disconnected")),
         ("store", SdkValue::text(store)),
-        ("machine", machine.map_or(SdkValue::Null, SdkValue::text)),
     ])
 }
 

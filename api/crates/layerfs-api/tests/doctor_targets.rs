@@ -339,56 +339,28 @@ fn what_is_not_there_is_refused_and_no_home_is_made() {
 }
 
 /// A Store whose record alone makes it broken (UI pass 2, F6): the doctor's
-/// finding carries the fix its state gives in `store.list`. A PostgreSQL
-/// Store naming no saved login fails `store.record` and `store.connection`
-/// with the save-auth fix, its `--user` the one its URL names, before
-/// anything is dialled; one with old fields (V23-6) or naming a login this
-/// home does not hold fails `store.record` with `store.list`'s fix (area
-/// 15); a record of a kind this build does not read fails `store.record`
-/// with `store remove`.
+/// finding carries the fix its state gives in `store.list` (a record of a
+/// kind this build does not read: `store remove`). A PostgreSQL Store that
+/// cannot be dialled fails `store.connection` before anything is dialled,
+/// with its refusal's fix: its password not saved in this home, the
+/// connect that saves it; its record naming no user, none.
 #[test]
 fn a_store_s_broken_record_gives_its_state_s_fix() {
     let home = tempdir("store-fix");
     short(&home, "home.init", &[]);
-    write_entity(
-        &paths::store_record(&home, "pg"),
-        &SdkValue::map([
-            ("name", t("pg")),
+    for (store, user) in [("pg", None), ("gone", Some(("user", t("owner"))))] {
+        let mut fields = vec![
+            ("name", t(store)),
             ("kind", t("postgresql")),
-            ("url", t("postgresql://owner@db.invalid:5432/layerfs_db")),
+            ("url", t("postgresql://127.0.0.1:1/layerfs_db")),
             ("schema", t("layerfs")),
             ("synchronous_commit", t("local")),
             ("binding", SdkValue::Bytes(vec![1; 16])),
             ("cursor", SdkValue::Bytes(vec![7; 32])),
-        ]),
-    )
-    .unwrap();
-    // a saved login, and a URL naming a user (V23-6), to a port nothing
-    // listens on: refused at once when the doctor dials it
-    short(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("a")),
-            ("user", t("owner")),
-            ("password", t("pw")),
-        ],
-    );
-    for (store, auth) in [("old", "a"), ("gone", "nosuch")] {
-        write_entity(
-            &paths::store_record(&home, store),
-            &SdkValue::map([
-                ("name", t(store)),
-                ("kind", t("postgresql")),
-                ("url", t("postgresql://owner@127.0.0.1:1/layerfs_db")),
-                ("auth", t(auth)),
-                ("schema", t("layerfs")),
-                ("synchronous_commit", t("local")),
-                ("binding", SdkValue::Bytes(vec![1; 16])),
-                ("cursor", SdkValue::Bytes(vec![7; 32])),
-            ]),
-        )
-        .unwrap();
+        ];
+        fields.extend(user);
+        let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
+        write_entity(&paths::store_record(&home, store), &SdkValue::Map(fields)).unwrap();
     }
     write_entity(
         &paths::store_record(&home, "odd"),
@@ -396,40 +368,16 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
     )
     .unwrap();
     let listed = short(&home, "store.list", &[]);
-    let item = |name: &str| {
-        (list(&listed, "items").iter())
-            .find(|item| item.get_text("store") == Some(name))
-            .cloned()
-            .unwrap_or_else(|| panic!("{name}: {listed:?}"))
-    };
-    // a URL naming a user is never rewritten: the Store is connected again
-    // with the address alone, `<user>` and `<auth>` to fill in (the fix named
-    // `--user owner` and updated the Store, cleaning its URL, before the
-    // e0aa26e149 Decision)
-    let pg_fix = "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> --synchronous-commit local";
-    assert_eq!(item("pg").get_text("reason"), Some("outdated"));
-    assert_eq!(item("pg").get_text("fix"), Some(pg_fix));
-    assert_eq!(
-        item("odd").get_text("fix"),
-        Some("layerfs store remove odd")
-    );
-
-    assert_eq!(item("old").get_text("reason"), Some("outdated"));
-    let old_fix = "layerfs store disconnect old && layerfs store connect old <url> --auth <auth> --synchronous-commit local";
-    assert_eq!(item("old").get_text("fix"), Some(old_fix));
-    assert_eq!(item("gone").get_text("reason"), Some("missing"));
-    let gone_fix = item("gone").get_text("fix").unwrap().to_owned();
-    assert!(
-        gone_fix.starts_with("layerfs store save-auth nosuch "),
-        "{gone_fix}"
-    );
-
+    let odd = (list(&listed, "items").iter())
+        .find(|item| item.get_text("store") == Some("odd"))
+        .cloned()
+        .unwrap_or_else(|| panic!("{listed:?}"));
+    assert_eq!(odd.get_text("fix"), Some("layerfs store remove odd"));
+    let gone_fix = "layerfs store connect gone <url> --password-stdin";
     for (store, check, fix) in [
-        ("pg", "store.record", pg_fix),
-        ("pg", "store.connection", pg_fix),
-        ("old", "store.record", old_fix),
-        ("gone", "store.record", gone_fix.as_str()),
-        ("odd", "store.record", "layerfs store remove odd"),
+        ("pg", "store.connection", None),
+        ("gone", "store.connection", Some(gone_fix)),
+        ("odd", "store.record", Some("layerfs store remove odd")),
     ] {
         let short_form = short(&home, "store.doctor", &[("store", t(store))]);
         let long_form = long(&home, "store.doctor", &[("store", t(store))]);
@@ -439,7 +387,8 @@ fn a_store_s_broken_record_gives_its_state_s_fix() {
                 .find(|f| f.get_text("check") == Some(check))
                 .unwrap_or_else(|| panic!("{store}: {report:?}"));
             assert_eq!(found.get_text("store"), Some(store), "{found:?}");
-            assert_eq!(found.get_text("fix"), Some(fix), "{found:?}");
+            assert_eq!(found.get_text("severity"), Some("error"), "{found:?}");
+            assert_eq!(found.get_text("fix"), fix, "{found:?}");
         }
     }
     let _ = std::fs::remove_dir_all(home);
@@ -465,15 +414,7 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
     });
     let home = tempdir("silent");
     short(&home, "home.init", &[]);
-    short(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("a")),
-            ("user", t("owner")),
-            ("password", t("pw")),
-        ],
-    );
+    layerfs_store::postgresql::login::save(&home, "silent", "pw").unwrap();
     let url = format!("postgresql://127.0.0.1:{port}/layerfs_db?sslmode=disable");
     write_entity(
         &paths::store_record(&home, "silent"),
@@ -481,7 +422,7 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
             ("name", t("silent")),
             ("kind", t("postgresql")),
             ("url", t(&url)),
-            ("auth", t("a")),
+            ("user", t("owner")),
             ("schema", t("layerfs")),
             ("synchronous_commit", t("local")),
             ("binding", SdkValue::Bytes(vec![1; 16])),
@@ -505,10 +446,8 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
         .all(|n| n.get_text("check") != Some("store.connection")));
 
     let got = long(&home, "store.get", &[("store", t("silent"))]);
-    let here = (list(&got, "connections").iter())
-        .find(|row| row.get("machine") == Some(&SdkValue::Null))
-        .unwrap_or_else(|| panic!("{got:?}"));
-    assert_eq!(here.get_text("reached"), Some("failed"), "{here:?}");
+    let here = got.get("reach").unwrap_or_else(|| panic!("{got:?}"));
+    assert_eq!(here.get("ok"), Some(&SdkValue::Bool(false)), "{here:?}");
 
     let started = Instant::now();
     let live = long(
@@ -567,22 +506,14 @@ fn a_sqlite_project_without_a_manifest_fails_project_doctor() {
     }
 
     // PostgreSQL project records hold no manifest; project.record still passes.
-    short(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("a")),
-            ("user", t("owner")),
-            ("password", t("pw")),
-        ],
-    );
+    layerfs_store::postgresql::login::save(&home, "pg", "pw").unwrap();
     write_entity(
         &paths::store_record(&home, "pg"),
         &SdkValue::map([
             ("name", t("pg")),
             ("kind", t("postgresql")),
             ("url", t("postgresql://db.invalid:5432/layerfs_db")),
-            ("auth", t("a")),
+            ("user", t("owner")),
             ("schema", t("layerfs")),
             ("synchronous_commit", t("local")),
             ("binding", SdkValue::Bytes(vec![1; 16])),

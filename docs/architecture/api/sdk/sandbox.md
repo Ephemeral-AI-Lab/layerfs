@@ -81,7 +81,10 @@ record is written once with the answer, dropping the `op`; a refused start
 removes the record. With no `--machine` the Sandbox runs on its sqlite
 Store's machine, else on `native`; another machine than a sqlite Store's is
 `Unsupported`, and the support table must accept the platform and Store
-kind. For a PostgreSQL Store the caller resolves the saved login and sends
+kind. A PostgreSQL Store's Sandbox runs on `native` or on a machine attached
+to it: any other is refused `InvalidInput` with `layerfs store attach
+<store> --machine <machine>` as its fix. The caller puts the Store's user
+and saved password into the URL and sends
 the URL only in this request; the launching side checks that it reaches the
 server and holds the project first. Nothing starts a stopped machine.
 

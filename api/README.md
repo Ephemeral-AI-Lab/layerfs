@@ -22,7 +22,7 @@ library's call table as ten families of functions, 83 calls in all:
 | [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `remove`, `files`, `log`, `doctor` |
 | [`workspace`](../docs/architecture/api/sdk/workspace.md) | `list`, `mount`, `exec`, `cancel`, `commit`, `unmount`, `status` |
 | [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `get`, `images`, `load_image`, `prune`, `stats`, `files`, `log`, `start`, `stop`, `create`, `remove`, `update`, `doctor` |
-| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `create`, `connect`, `disconnect`, `save_auth`, `auths`, `remove_auth`, `update`, `move`, `remove`, `compact`, `doctor` |
+| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `create`, `connect`, `disconnect`, `attach`, `detach`, `move`, `remove`, `compact`, `doctor` |
 | [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore`, `doctor` |
 
 `layerfs.table` lists every call with its arguments and options; it is the

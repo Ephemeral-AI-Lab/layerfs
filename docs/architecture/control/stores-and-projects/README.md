@@ -26,7 +26,7 @@ this process has open, and moves or removes a sqlite Store's file.
                      lease::claim under store/<s>/lock
       |
       +-- StoreRef::Postgres --> this process: URL from the record,
-      |                          its saved login (auth) put in now
+      |                          its user and saved password put in now
       |
       +-- StoreRef::Sqlite --> place::plan(machine)
               |                         |
@@ -73,7 +73,7 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | `create` | sqlite | empty Store on `native`; `Exists` if named | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
 | `move` | sqlite | moves the file between `native` and a machine (1.x and the 2.0 previews: `push`, `pull`) | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
 | `remove` | sqlite | delete the file wherever it is, with its projects; PostgreSQL `InvalidInput` | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
-| `connect`, `disconnect`, `update`, `save_auth`, `auths`, `remove_auth` | PostgreSQL | record or forget a database (with `machine`, one machine's own address); change its login or `synchronous_commit`; keep named logins in the home's secret folder | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
+| `connect`, `disconnect`, `attach`, `detach` | PostgreSQL | record a database with its login (the password in the home's secret folder) or change its address, login or `synchronous_commit`; forget it; let a machine run its Sandboxes, checked from that machine, or stop it | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
 
 ### Multi-step operations
 

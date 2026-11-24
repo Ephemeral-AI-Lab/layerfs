@@ -1,6 +1,7 @@
 //! `store.doctor`: one Store's checks without the whole-Store data scan,
-//! then a shallow check of each of its projects. A PostgreSQL Store is also
-//! probed from each machine that has a Sandbox of it, and from `--machine`.
+//! then a shallow check of each of its projects. A PostgreSQL Store is
+//! checked from this computer, then from each machine attached to it, or
+//! from `--machine` alone (which must be attached).
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
@@ -28,13 +29,24 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if let Some(machine) = &machine {
         // a sqlite Store lives on one machine: no other dials it
         let record = StoreRecord::read(&context.home, store)?;
-        if record.and_then(|record| record.kind().ok()) == Some(StoreKind::Sqlite) {
-            return Err(refused(
-                "InvalidInput",
-                format!(
-                    "--machine {machine} probes a PostgreSQL Store's connection; {store} is a sqlite Store, which only its own machine reaches"
-                ),
-            ));
+        match record.as_ref().and_then(|record| record.kind().ok()) {
+            Some(StoreKind::Sqlite) => {
+                return Err(refused(
+                    "InvalidInput",
+                    format!(
+                        "--machine {machine} probes a PostgreSQL Store's connection; {store} is a sqlite Store, which only its own machine reaches"
+                    ),
+                ))
+            }
+            // `native` is this computer, which every PostgreSQL Store is
+            // attached to
+            Some(StoreKind::Postgresql)
+                if machine != "native"
+                    && !record.as_ref().is_some_and(|r| r.is_attached(machine)) =>
+            {
+                return Err(layerfs_control::store::not_attached(store, machine));
+            }
+            _ => {}
         }
     }
     let options = Options {

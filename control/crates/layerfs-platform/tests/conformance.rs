@@ -14,7 +14,7 @@
 //! - `reach` against the §7.3 rules (owner, 2026-11-24): every URL is
 //!   dialled exactly as given, never rewritten, and no provider tool runs;
 //!   a loopback host the machine does not share is refused, naming the
-//!   machine's name for this host and `store connect --machine`; no error
+//!   machine's name for this host and `store connect <store> <url>`; no error
 //!   text or `Debug` holds the password;
 //! - `forward` (#535 G4): a daemon's port is used as it is, carried by a
 //!   detached `ssh -L 127.0.0.1:<free port>:127.0.0.1:<guest port>` that
@@ -441,7 +441,7 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
                         assert!(message.contains("loopback"), "{message}");
                         assert!(message.contains(name), "{message}");
                         assert!(
-                            message.contains("layerfs store connect pg <url> --machine dev"),
+                            message.contains("`layerfs store connect pg <url>`"),
                             "{message}"
                         );
                     }

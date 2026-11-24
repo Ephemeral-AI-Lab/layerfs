@@ -4,9 +4,9 @@
 //! Store is reached through its machine (this process for `native`, the
 //! worker's `store.diagnose` with `cut: schema` elsewhere), which also
 //! reads its heads when it has a bucket link; a PostgreSQL Store from this
-//! computer, then once more from each machine with an address of its own
-//! or a Sandbox of it and from `--machine` (R9, spec v23 V23-9), one
-//! `store.connection` each with `from`; every reach is recorded
+//! computer, then, when this computer reached it, once more from each
+//! machine attached to it, or from `--machine` alone (owner, 2026-11-24),
+//! one `store.connection` each with `from`; every reach is recorded
 //! (`layerfs_store::observed`).
 //! `store.operation` reads the home's record and, for a sqlite Store, the
 //! compaction record beside its file through its machine (the shallow cut
@@ -126,7 +126,7 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
     }
     match identity::identity_in(&record) {
         Ok(identity) => {
-            own_state(&record, checks);
+            checks.pass(RECORD, "its record names it, its engine and its id");
             Some((record, identity))
         }
         Err(error) => {
@@ -136,33 +136,6 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
             );
             None
         }
-    }
-}
-
-/// `store.record` passes unless the record itself breaks a PostgreSQL
-/// Store (spec v23): naming no saved login, one this home does not hold,
-/// or holding what 2.0 no longer writes (V23-6). It then fails with the
-/// state's fix, the one `store list` and `store get` give.
-fn own_state(record: &StoreRecord, checks: &mut Checks) {
-    let own = match record.store_ref() {
-        Ok(StoreRef::Postgres { .. }) => layerfs_store::state::postgresql(record),
-        _ => None,
-    };
-    let Some(State::Broken { reason, fix }) = own else {
-        checks.pass(RECORD, "its record names it, its engine and its id");
-        return;
-    };
-    let why = match (reason, record.text("auth")) {
-        (Reason::Missing, Some(auth)) => {
-            format!("it names login {auth}, which this home does not hold")
-        }
-        (_, None) => "it names no saved login".to_owned(),
-        _ => "it holds what 2.0 no longer writes (a password, a login in a URL or an old machine entry)"
-            .to_owned(),
-    };
-    checks.fail(RECORD, format!("its record is {}: {why}", reason.word()));
-    if let Some(fix) = fix {
-        checks.fix(RECORD, fix);
     }
 }
 
@@ -466,7 +439,7 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
     };
     let mut seen = Vec::new();
     let made = diagnostic::postgresql(record, identity, options, true, &mut |o| seen.push(o));
-    match made {
+    let reached = match made {
         Err(error) if seen.is_empty() => {
             checks.fail(
                 CONNECTION,
@@ -476,11 +449,12 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
                 CONNECTION,
                 SdkValue::map([("step", SdkValue::text("login"))]),
             );
-            // a refusal before any dial carries its own fix: a record
-            // naming no saved login gives its `outdated` state's (V20-7)
+            // a refusal before any dial carries its own fix: a password
+            // this home does not hold names `store connect` again
             fix_of(&error, checks);
             let failed = layerfs_store::observed::Reach::failed(&error.message);
             layerfs_store::observed::record(probe.home, record.name(), None, &failed);
+            false
         }
         // a server that said nothing within the handshake limit is not
         // dialled a second time: its silence is the reach recorded
@@ -488,21 +462,28 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
             Some(silent) => {
                 let failed = layerfs_store::observed::Reach::failed(&silent);
                 layerfs_store::observed::record(probe.home, record.name(), None, &failed);
+                false
             }
             None => here(probe.home, record),
         },
+    };
+    // the machines dial the same URL with the same login: when this
+    // computer was not let in, each would only repeat its failure
+    if reached {
+        reach(probe, record, checks);
     }
-    reach(probe, record, checks);
 }
 
 /// Records this computer's reach of PostgreSQL Store `record` (spec v23
-/// V23-9): the check a machine's own connection is checked by, so the
-/// observation carries its latency and the server's version.
-fn here(home: &Path, record: &StoreRecord) {
+/// V23-9): the check an attached machine is checked by, so the
+/// observation carries its latency and the server's version. Whether it
+/// was reached.
+fn here(home: &Path, record: &StoreRecord) -> bool {
     use layerfs_store::postgresql::{check, connect};
     let checked = connect::selection(record).and_then(|pg| check::check(record, &pg));
     let seen = layerfs_store::observed::Reach::of(&checked);
     layerfs_store::observed::record(home, record.name(), None, &seen);
+    checked.is_ok()
 }
 
 /// The step id `o` gives, without its `store.connection.` prefix.
@@ -599,28 +580,17 @@ fn fold(
     None
 }
 
-/// `store.connection` of PostgreSQL Store `record` from each machine that
-/// has an address of its own or a Sandbox of it, and from `--machine`, as
-/// those machines dial it; each result is what was seen of its reach
-/// (spec v23 V23-9). A machine that is not ready is not dialled.
+/// `store.connection` of PostgreSQL Store `record` from each machine
+/// attached to it, or from `--machine` alone (the call refuses one that is
+/// not attached), as those machines dial it; each result is what was seen
+/// of its reach (spec v23 V23-9). A machine that is not ready is not
+/// dialled; `native` is this computer, checked above.
 fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
-    let name = record.name();
-    let mut machines: Vec<String> = crate::inventory::sandboxes(probe.home)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|sandbox| {
-            let project = sandbox.project().unwrap_or("");
-            project.split_once('/').map(|(store, _)| store) == Some(name)
-        })
-        .map(|sandbox| sandbox.machine().to_owned())
-        .collect();
-    machines.extend(probe.options.machine.clone());
-    machines.extend(record.own_connections().into_iter().map(|(m, _)| m));
-    // this computer dialled the Store's own address above; `native` is
-    // probed again only for an address of its own
-    machines.retain(|machine| machine != "native" || record.own_connection(machine).is_some());
-    machines.sort();
-    machines.dedup();
+    let mut machines = match &probe.options.machine {
+        Some(machine) => vec![machine.clone()],
+        None => record.attached(),
+    };
+    machines.retain(|machine| machine != "native");
     for machine in &machines {
         let state = crate::store::machine_state(probe.home, machine)
             .unwrap_or_else(|_| State::broken(Reason::Missing, None));

@@ -76,9 +76,9 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &MachineCreate) -> 
     layerfs_machine::create(home, events, request, RELATED)
 }
 
-/// `machine.remove`. A removed machine's own connection to each
-/// PostgreSQL Store is forgotten with it, so a later machine of its name
-/// dials the Store's, and so are the home's image copy locks of it
+/// `machine.remove`. A removed machine's attachment to each PostgreSQL
+/// Store is forgotten with it, so a later machine of its name is attached
+/// to none, and so are the home's image copy locks of it
 /// (`run/image-lock/<machine>/`).
 pub fn remove(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
     let removed = layerfs_machine::remove(home, name, RELATED, events)?;
@@ -86,7 +86,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outco
         layerfs_home::outcome::refused(
             &refusal.code,
             format!(
-                "machine {name} was removed, but its own PostgreSQL connection was not forgotten: {}",
+                "machine {name} was removed, but its PostgreSQL Store attachments were not forgotten: {}",
                 refusal.message
             ),
         )

@@ -398,7 +398,7 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
   `--with live` reads the Store where it lives (its file through its
   machine) and settles an uncertain backup or restore whose owner is gone;
   `--with stats` opens it for its counters. See
-  [`store`](calls.md#store-13) for every key and the compaction phases.
+  [`store`](calls.md#store-11) for every key and the compaction phases.
 - A lease or `op` records its process's start time and boot, so one whose
   process id was reused by another process is stale. A process that ends
   with Stores open leaves their leases; taking a lease removes the Store's
@@ -422,47 +422,46 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
 
 ### PostgreSQL Stores
 
-The PostgreSQL calls were run for this manual's [`store`](calls.md#store-13)
-section against a local `postgres:17` on macOS (`store save-auth`, `connect`,
-`auths`, `get`, `update`, `remove-auth`, `disconnect`). In short:
+This computer is the one place a PostgreSQL Store's address and login are
+saved (owner, 2026-11-24). Machines are attached to the Store and dial with
+both; no machine has an address or a login of its own. The calls were run
+for this manual's [`store`](calls.md#store-11) section against a local
+`postgres:17` on macOS (`connect`, `list`, `get`, `attach`, `doctor`,
+`disconnect`). In short:
 
 ```console
-$ printf '%s' "$PG_PASSWORD" | layerfs store save-auth pg-app --user postgres --password-stdin
-{"ok":true}
-$ layerfs store connect shop-pg 'postgresql://127.0.0.1:55231/shop?sslmode=disable' --auth pg-app
+$ printf '%s' "$PG_PASSWORD" | layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --user postgres --password-stdin
 {"ok":true}
 $ layerfs project init shop-pg/load ./load        # not run here
-$ layerfs store connect shop-pg 'postgresql://10.0.0.5:5432/shop' --machine build-vm   # not run
-$ layerfs store update shop-pg --synchronous-commit off
-$ layerfs store doctor shop-pg                     # not run here
+$ layerfs store attach shop-pg --machine build-vm  # not run: needs a reachable address
+$ layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --synchronous-commit off
+$ layerfs store doctor shop-pg
+{"ok":true}
 ```
 
-(The two `{"ok":true}` lines are the short forms of the `--detail` answers
-shown in [the calls](calls.md#store-13).)
-
-- **Saved logins.** `store save-auth <auth> --user <role> --password-stdin`
-  saves a login in the home's secret folder (`secret/auth/<auth>.json`, mode
-  0600, in a 0700 folder); the password comes on stdin only (Node and
-  Python pass `password`) and is never answered, logged or traced. `store
-  auths` lists the logins and the Stores using each; `store remove-auth`
-  deletes one no Store uses. There is no login per machine.
-- **`store connect <store> <url> --auth A`.** The URL starts `postgresql://`
-  or `postgres://` and holds host, port, database and TLS settings, read
-  only as the PostgreSQL client reads it, and is recorded and shown exactly
-  as given: LayerFS never cleans or rewrites a URL. One that may hold a
-  login is refused `InvalidInput`, before any effect: it holds an `@`, the
-  client reads a user or a password in it, the client does not read it (a
-  key it does not know, such as `sslpassword`, `sslrootcert`, `sslkey` or
-  `sslcert`, or an `sslmode` other than `disable`, `prefer` or `require`),
-  or its percent-decoded text holds a login key and `=` anywhere, in any
-  case (`user`, `password`, `passfile`, `sslkey`, `sslcert`,
-  `sslpassword`, `oauth_client_secret`: so
-  `postgres://h/db?application_name=me?password=p` and
+- **`store connect <store> <url> --user U --password-stdin`.** The user and
+  password are required on a Store's first connect and are checked from
+  this computer before anything is saved. The record keeps the URL, the
+  user and `synchronous_commit`; the password is kept in the home's secret
+  folder (`secret/login/<store>.json`, mode 0600, in a 0700 folder), comes
+  on stdin only (Node and Python pass `password`) and is never answered,
+  logged or traced. `store get` says whether it is saved
+  (`password_saved`) and when it was last changed (`password_changed_at`).
+  The URL starts `postgresql://` or `postgres://` and holds host, port,
+  database and TLS settings, read only as the PostgreSQL client reads it,
+  and is recorded and shown exactly as given: LayerFS never cleans or
+  rewrites a URL. One that may hold a login is refused `InvalidInput`,
+  before any effect: it holds an `@`, the client reads a user or a password
+  in it, the client does not read it (a key it does not know, such as
+  `sslpassword`, `sslrootcert`, `sslkey` or `sslcert`, or an `sslmode`
+  other than `disable`, `prefer` or `require`), or its percent-decoded text
+  holds a login key and `=` anywhere, in any case (`user`, `password`,
+  `passfile`, `sslkey`, `sslcert`, `sslpassword`, `oauth_client_secret`:
+  so `postgres://h/db?application_name=me?password=p` and
   `postgres://h/db&password=p` are refused too). One holding a `#` is
   refused as well (write a `#` or `@` that is part of the address `%23` or
   `%40`). The fix names the address `<url>` and the user `<user>`: `store
-  save-auth`, then the address alone named with `--auth` on a first
-  connect, with no `save-auth` when only a `#` is refused. Other text the
+  connect <store> <url> --user <user> --password-stdin`. Other text the
   client reads as part of a host, database or value is the client's
   (`postgres://h/db&sslmode=require` names the database
   `db&sslmode=require`). The refusal names the TLS key or `sslmode` value
@@ -472,66 +471,49 @@ shown in [the calls](calls.md#store-13).)
   the Store is dialled: on Linux (OpenSSL) in the system's trusted roots
   (`SSL_CERT_FILE` reaches only calls in the process that reads it: a
   Sandbox's daemon starts with a cleared environment), on macOS in the
-  login or system keychain. `--auth` is required on a Store's first connect. An empty database
-  gets the `layerfs` schema with a new identity; a database that already
-  holds it keeps its identity, and its projects become this home's project
-  records. A Store name already in the home is `Exists`, and so is the same
-  database under a second name, whatever address or login reaches it: a
-  database is known by the binding (the id) in its `layerfs` schema, read on
-  connect and checked again under the home lock. A replica or a copy of the
-  database carries the same binding, so it is the same Store; `store get`'s
-  long form shows the binding's first 16 hex characters.
-  `synchronous_commit` is `off`, `local` (the default), `remote_write`, `on`
-  or `remote_apply`.
-- **One machine's own address.** `store connect <store> <url> --machine M`
-  gives machine `M` an address of its own (a proxy, another host name),
-  checked from `M` with the Store's login before it is saved; it refuses
-  `--auth`, and its check is recorded as `M`'s reach. `store disconnect
-  <store> --machine M` removes it and forgets `M`'s reach; `machine remove`
-  forgets a machine's own addresses and reaches.
-- **Who connects.** `store get` and `store list` answer `connections`: this
-  computer, then every machine with an address of its own, a reach seen
-  from it or a Sandbox of the Store, each with `reached` (`ok`, `failed`,
-  or absent when nothing was seen) and, in the long form, the address, the
-  server it names and the last reach (`at`, `ok`, `latency_ms`,
-  `server_version`, `error`). Nothing about a database is stored on a
-  machine; reaches are kept beside the Store's record.
-- **Old records.** A PostgreSQL record that still holds a `password`, a URL
-  that is not an address alone, or an old `machines.<m>.checked` reads
-  `broken` `outdated` with a fix you run; nothing is migrated for you. A URL
-  that may hold a login is never dialled, shown (it reads
-  `postgresql://<hidden: not an address alone>`) or rewritten: the record
-  keeps it, and any password in it, on disk as it was until a connect of
-  the address alone replaces it. Every fix dials only with the login it
-  names, never with the one the record names, so it works when that login
-  no longer authenticates; it names the address `<url>` and the user
-  `<user>`. With only old fields, `store update <store> --auth <auth>`
-  drops them. A machine's own URL that may hold a login is replaced with
-  `store disconnect <store> --machine <m> && store update <store> --auth
-  <auth> && store connect <store> <url> --machine <m>` (the machine must be
-  running for the last step). The Store's own URL is replaced with `store
-  disconnect <store> && store connect <store> <url> --auth <auth>
-  --synchronous-commit <its value>`, then `store connect <store> <url>
-  --machine <m>` for each machine's own address: the Store is forgotten
-  (refused while a Sandbox of it exists; its data stays) and connected
-  again, its projects found again, its backup links and reach
-  observations not kept. The `outdated` fix names `<auth>` when it replaces
-  a URL (the Store's own login, which `store get` names, or another). `store
-  update <store> --auth <new>` (or `--synchronous-commit` alone) refuses
-  such a record, writing nothing, with the same steps naming `<new>` and
-  carrying the `--synchronous-commit` given. A record naming a login the
-  home does not hold reads `broken` `missing`, fixed by saving that login
-  first.
-- **`store update <store>`** changes the login (`--auth`, checked against the
-  same Store) or `--synchronous-commit`. A new address is `store connect`
-  again, checked against the same Store's id.
-- **`store disconnect <store>`** forgets the Store; its data stays on the
-  server. It is `InUse` while a Sandbox or Workspace uses the Store.
+  login or system keychain. An empty database gets the `layerfs` schema
+  with a new identity; a database that already holds it keeps its
+  identity, and its projects become this home's project records. A Store
+  name already in the home is `Exists` (a sqlite Store's too), and so is
+  the same database under a second name, whatever address or login reaches
+  it: a database is known by the binding (the id) in its `layerfs` schema,
+  read on connect and checked again under the home lock. A replica or a
+  copy of the database carries the same binding, so it is the same Store;
+  `store get`'s long form shows the binding's first 16 hex characters.
+  `synchronous_commit` is `off`, `local` (the default), `remote_write`,
+  `on` or `remote_apply`.
+- **`store connect` again** changes a connected Store's address, user,
+  password or `synchronous_commit`; an omitted user or password keeps the
+  saved one. The result must reach the same Store (its binding) before
+  anything is saved. Attached machines dial the new address and login from
+  their next connection.
+- **`store attach <store> --machine M`** lets machine `M` run Sandboxes of
+  the Store: `M` must exist and its platform run PostgreSQL Sandboxes, and
+  the Store is checked from `M` with the URL and login saved here before
+  `M` is recorded as attached; the check is kept as `M`'s reach. Attaching
+  again checks again (`outcome: "checked"`). `native` is this computer and
+  needs no attaching. `store detach <store> --machine M` removes it,
+  refused while a Sandbox of the Store's projects is on `M`; `machine
+  remove` detaches a machine from every Store.
+- **Who connects.** `store get` answers `reach` (this computer's) and
+  `machines`, one row per attached machine with `reached` (`ok`, `failed`,
+  or absent when nothing was seen) and, in the long form, the last reach
+  (`at`, `ok`, `latency_ms`, `server_version`, `error`); `store list` names
+  the attached machines. Nothing about a database is stored on a machine;
+  reaches are kept beside the Store's record.
+- **No migration.** A record an earlier build wrote is read as it is, with
+  no state of its own: a call that dials a record without a `user`, or one
+  whose password this home does not hold, is refused `InvalidInput` (the
+  latter with `store connect <store> <url> --password-stdin` as its fix).
+- **`store disconnect <store>`** forgets the Store, its saved password and
+  its attachments; its data stays on the server. It is `InUse` while a
+  Sandbox or Workspace uses the Store.
 - `project init` into a PostgreSQL Store runs in the caller's process,
   under the Store's lease. PostgreSQL is built into every artifact.
 - A PostgreSQL Store is on no machine and has no default machine. A
   Sandbox of it runs on `native` unless `sandbox create --machine M` names
-  another machine whose platform runs PostgreSQL Sandboxes (`native` on
+  a machine attached to it (refused `InvalidInput`, with `store attach` as
+  its fix, otherwise) whose platform runs PostgreSQL Sandboxes (`native` on
   macOS and Linux, `docker`, `lima`, `apple-container`); `sandbox create`
   checks from the machine that the server answers and holds this Store.
   The URL is dialled exactly as configured, never rewritten. On a machine
@@ -540,36 +522,37 @@ shown in [the calls](calls.md#store-13).)
   127.0.0.0/8, `0.0.0.0`, `::1`, in any spelling) or a Unix socket is
   refused `Unsupported`, naming what the machine calls this computer
   (`host.docker.internal`; `host.lima.internal`; `apple-container`: its
-  network's gateway, on which the server must listen) and the per-machine
-  URL call `layerfs store connect <store> <url> --machine <machine>`;
-  `native` and `docker` on a Linux Engine share the loopback and dial it
-  as given. A Sandbox resolves names as its machine does. Only the calls
-  that dial the URL (`sandbox create`, Commit, a Workspace status) are
-  refused for it: a Sandbox whose URL its machine cannot dial can still be
-  read and removed. A forced `sandbox remove` there still ends the mount
-  intent each of its Workspaces held: the machine closes the Sandbox
-  without the URL and hands those intents back in its answer, and this
-  computer ends each once with the Store's own address (PostgreSQL Store
-  calls run in the caller), so `branch remove` and `store compact` are not
-  refused for them afterwards; one it could not end is a sentence of
-  `left`. The intents travel only in that answer and nothing records
-  them, so they stay if the remove ends between the machine stopping the
-  Sandbox and this computer ending them: the answer is lost (the remove
-  reports `Unknown`), the machine cannot delete the Sandbox's folder after
-  stopping and deleting its runtime (the remove is refused `Failed`), or
-  this computer's process ends first. A retried `sandbox remove` then
-  answers `already_gone` with an empty `left`, and `branch remove` of the
-  Branch and `store compact` stay refused (`InUse`, `mounts active`), since
-  nothing can prove a PostgreSQL mount intent's owner gone. Any other
-  reason the URL cannot be made (the saved login is gone, or the Store
-  names none) refuses the remove, forced or not, with that reason and its
-  fix: save the login and the remove goes through. The login
-  travels only in the one request. The server always runs off the
-  machine; nothing installs PostgreSQL in a machine (D12).
-- `store doctor <store>` checks the Store from this computer and from each
-  machine that has an address of its own or a Sandbox of it (`--machine M`
-  adds one), each as one `store.connection` row with `from`, and records
-  each reach.
+  network's gateway, on which the server must listen) and advising to
+  connect the Store again with an address the machine reaches (`layerfs
+  store connect <store> <url>`); `native` and `docker` on a Linux Engine
+  share the loopback and dial it as given. A Sandbox resolves names as its
+  machine does. Only the calls that dial the URL (`sandbox create`,
+  Commit, a Workspace status) are refused for it: a Sandbox whose URL its
+  machine cannot dial can still be read and removed. A forced `sandbox
+  remove` there still ends the mount intent each of its Workspaces held:
+  the machine closes the Sandbox without the URL and hands those intents
+  back in its answer, and this computer ends each once with the Store's
+  address (PostgreSQL Store calls run in the caller), so `branch remove`
+  and `store compact` are not refused for them afterwards; one it could
+  not end is a sentence of `left`. The intents travel only in that answer
+  and nothing records them, so they stay if the remove ends between the
+  machine stopping the Sandbox and this computer ending them: the answer is
+  lost (the remove reports `Unknown`), the machine cannot delete the
+  Sandbox's folder after stopping and deleting its runtime (the remove is
+  refused `Failed`), or this computer's process ends first. A retried
+  `sandbox remove` then answers `already_gone` with an empty `left`, and
+  `branch remove` of the Branch and `store compact` stay refused (`InUse`,
+  `mounts active`), since nothing can prove a PostgreSQL mount intent's
+  owner gone. Any other reason the URL cannot be made (the password is not
+  saved, or the record names no user) refuses the remove, forced or not,
+  with that reason and its fix: connect the Store again with its login and
+  the remove goes through. The login travels only in the one request. The
+  server always runs off the machine; nothing installs PostgreSQL in a
+  machine (D12).
+- `store doctor <store>` checks the Store from this computer and then from
+  every attached machine (`--machine M`: from `M` alone, which must be
+  attached), each as one `store.connection` row with `from`, and records
+  each reach; when this computer cannot connect, no machine is checked.
 - Not built: backups of PostgreSQL Stores (back it up with PostgreSQL's own
   tools).
 
@@ -646,15 +629,15 @@ layerfs backup doctor lab --full
 
 ## Secrets
 
-A PostgreSQL login (`store save-auth`) and a bucket's secret key (`backup
-connect --key-stdin`) are kept in the home's secret folder (`secret/`, 0700;
-each file 0600), read from stdin only in the shell, and never answered,
-logged or traced; the call log records a secret's byte count. A Store
-record names its login by name (`auth`). Anyone who can read the home can
-make every call. There is no keychain (O1). A reference an older record
-names (`env:NAME` or `file:/absolute/path`) is not read: a PostgreSQL Store
-whose record names no saved login reads `broken` `outdated` with the fix
-`layerfs store save-auth <auth> --user <user> --password-stdin && layerfs
-store update <store> --auth <auth>`, and a bucket record with no key id is
-refused with the fix that connects it again (`layerfs backup connect <name>
-<url> --access-key <key> --key-stdin`).
+A PostgreSQL Store's password (`store connect --password-stdin`) and a
+bucket's secret key (`backup connect --key-stdin`) are kept in the home's
+secret folder (`secret/`, 0700; each file 0600), read from stdin only in the
+shell, and never answered, logged or traced; the call log records a secret's
+byte count. A PostgreSQL Store's record keeps its user; its password is
+`secret/login/<store>.json`. Anyone who can read the home can make every
+call. There is no keychain (O1). A reference an older record names
+(`env:NAME` or `file:/absolute/path`) is not read: a PostgreSQL Store whose
+password this home does not hold is refused when it is dialled, with the
+fix `layerfs store connect <store> <url> --password-stdin`, and a bucket
+record with no key id is refused with the fix that connects it again
+(`layerfs backup connect <name> <url> --access-key <key> --key-stdin`).

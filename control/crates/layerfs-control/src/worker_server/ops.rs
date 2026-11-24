@@ -118,7 +118,7 @@ pub(super) fn run(
         crate::doctor::NETWORK_OP => crate::doctor::inspect_network_in_worker(root),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // the check of this machine's connection to a PostgreSQL Store
-        // (`store.update`): the caller sends the record and
+        // (`store.attach`, `store.doctor`): the caller sends the record and
         // what it dials
         "store.reach" => crate::store::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)

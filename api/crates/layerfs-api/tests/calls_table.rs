@@ -412,10 +412,20 @@ fn machine_family() {
 fn store_family() {
     assert!(code("store.move", map(&[("store", t("shop"))])).contains("`machine` is required"));
     // a required option is refused before the call runs
-    let auth = map(&[("auth", t("pg")), ("password", t("pw"))]);
-    assert!(code("store.save_auth", auth).contains("`user` is required"));
+    for call in ["store.attach", "store.detach"] {
+        assert!(code(call, map(&[("store", t("pg"))])).contains("`machine` is required"));
+    }
     // the old names are gone, with no alias
-    for gone in ["store.status", "store.stats", "store.push", "store.pull"] {
+    for gone in [
+        "store.status",
+        "store.stats",
+        "store.push",
+        "store.pull",
+        "store.save_auth",
+        "store.auths",
+        "store.remove_auth",
+        "store.update",
+    ] {
         assert!(layerfs_api::find(gone).is_none(), "{gone}");
     }
     let reached = code("store.list", SdkValue::Null);
@@ -454,7 +464,7 @@ fn backup_family() {
     };
     for (name, required) in [
         ("backup.connect", ["access_key", "secret_key"]),
-        ("store.save_auth", ["user", "password"]),
+        ("store.attach", ["machine", "machine"]),
         ("file.edit", ["old_string", "new_string"]),
     ] {
         let Some(SdkValue::List(options)) = entry(name).get("options").cloned() else {
@@ -782,10 +792,8 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.create",
         "store.connect",
         "store.disconnect",
-        "store.save_auth",
-        "store.auths",
-        "store.remove_auth",
-        "store.update",
+        "store.attach",
+        "store.detach",
         "store.move",
         "store.remove",
         "store.compact",

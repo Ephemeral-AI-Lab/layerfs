@@ -5367,7 +5367,7 @@
           ],
           "sometimes": [
            "projects",
-           "connections",
+           "machines",
            "state",
            "op",
            "blocked_by",
@@ -5379,7 +5379,7 @@
           "store",
           "engine",
           "projects",
-          "connections",
+          "machines",
           "state",
           "op",
           "blocked_by",
@@ -5446,59 +5446,8 @@
           "branch"
          ]
         },
-        "connections": {
-         "short": {
-          "always": [
-           "url"
-          ],
-          "sometimes": [
-           "machine",
-           "reached"
-          ]
-         },
-         "long": [
-          "machine",
-          "url",
-          "own",
-          "server",
-          "reached",
-          "reach"
-         ]
-        },
-        "server": {
-         "short": {
-          "always": [
-           "host",
-           "port",
-           "database"
-          ],
-          "sometimes": []
-         },
-         "long": [
-          "host",
-          "port",
-          "database"
-         ]
-        },
-        "reach": {
-         "short": {
-          "always": [
-           "at",
-           "ok"
-          ],
-          "sometimes": [
-           "latency_ms",
-           "server_version",
-           "error"
-          ]
-         },
-         "long": [
-          "at",
-          "ok",
-          "latency_ms",
-          "server_version",
-          "error"
-         ]
+        "machines": {
+         "scalar": "machine"
         }
        },
        "example": {
@@ -7361,8 +7310,8 @@
        "sometimes": [
         "state",
         "machine",
-        "auth",
-        "connections",
+        "user",
+        "machines",
         "projects",
         "projects_count",
         "backups",
@@ -7378,9 +7327,13 @@
        "engine",
        "state",
        "machine",
-       "auth",
+       "url",
+       "user",
+       "password_saved",
+       "password_changed_at",
        "binding",
-       "connections",
+       "reach",
+       "machines",
        "projects",
        "projects_count",
        "backups",
@@ -7398,9 +7351,9 @@
      },
      "examples": {
       "short": [
-       "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\",\"reached\":\"ok\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\",\"reached\":\"failed\"},{\"machine\":\"build\",\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"abc\"]}]}"
+       "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"machine\":\"dev\",\"projects\":[\"api\",\"web\"],\"backups\":[{\"bucket\":\"r2-main\"}]},{\"store\":\"sim-website\",\"engine\":\"sqlite\",\"machine\":\"docker\",\"state\":\"blocked\",\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"},\"projects\":[\"website\"]},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"user\":\"app\",\"machines\":[\"lab\",\"build\"],\"projects\":[\"abc\"]}]}"
       ],
-      "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"binding\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"normal\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"auth\":\"pg-app\",\"binding\":\"f64587b8a1c2d3e4\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\",\"own\":false,\"server\":{\"host\":\"db.internal\",\"port\":5432,\"database\":\"shop\"},\"reached\":\"ok\",\"reach\":{\"at\":\"2026-11-18T09:15:59Z\",\"ok\":true,\"latency_ms\":2,\"server_version\":\"17.6\",\"error\":null}},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\",\"own\":true,\"server\":{\"host\":\"proxy.lab\",\"port\":6432,\"database\":\"shop\"},\"reached\":\"failed\",\"reach\":{\"at\":\"2026-11-18T09:14:02Z\",\"ok\":false,\"latency_ms\":null,\"server_version\":null,\"error\":\"machine lab cannot reach PostgreSQL Store shop-pg's server at proxy.lab: connection refused\"}},{\"machine\":\"build\",\"url\":\"postgres://db.internal:5432/shop\",\"own\":false,\"server\":{\"host\":\"db.internal\",\"port\":5432,\"database\":\"shop\"},\"reached\":null,\"reach\":null}],\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
+      "long": "{\"items\":[{\"store\":\"shop\",\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"url\":null,\"user\":null,\"password_saved\":null,\"password_changed_at\":null,\"binding\":null,\"reach\":null,\"machines\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":\"normal\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}},{\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"state\":\"ready\",\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"password_saved\":true,\"password_changed_at\":\"2026-11-17T09:16:59Z\",\"binding\":\"f64587b8a1c2d3e4\",\"reach\":{\"at\":\"2026-11-18T09:15:59Z\",\"ok\":true,\"latency_ms\":2,\"server_version\":\"17.6\",\"error\":null},\"machines\":[\"lab\",\"build\"],\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"profile\":null,\"synchronous_commit\":\"local\",\"sqlite_version\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":null}]}"
      },
      "dropped": [],
      "new_work": "A records-only state is new: today each item's state comes from the leases and a `stat` on the Store's machine, and is idle, in_use, busy, down or unresolved. `--machine` is a new filter. `blocked` with `blocked_by` replaces `down`.",
@@ -7477,8 +7430,9 @@
       ],
       "sometimes": [
        "machine",
-       "auth",
-       "connections",
+       "url",
+       "user",
+       "machines",
        "projects",
        "projects_count",
        "backups",
@@ -7493,9 +7447,13 @@
       "engine",
       "state",
       "machine",
-      "auth",
+      "url",
+      "user",
+      "password_saved",
+      "password_changed_at",
       "binding",
-      "connections",
+      "reach",
+      "machines",
       "projects",
       "projects_count",
       "backups",
@@ -7518,9 +7476,9 @@
        "its machine is stopped: {\"engine\":\"sqlite\",\"state\":\"blocked\",\"machine\":\"docker\",\"projects\":[\"website\"],\"blocked_by\":{\"machine\":\"docker\",\"reason\":\"stopped\"}}",
        "moving: {\"engine\":\"sqlite\",\"state\":\"busy\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"op\":{\"name\":\"move\",\"phase\":\"send\",\"started_at\":\"2026-11-18T09:16:59Z\"}}",
        "lost reply on a move: {\"engine\":\"sqlite\",\"state\":\"broken\",\"machine\":\"native\",\"projects\":[\"api\",\"web\"],\"reason\":\"unresolved\",\"fix\":\"layerfs store move shop dev\"}",
-       "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"auth\":\"pg-app\",\"connections\":[{\"url\":\"postgres://db.internal:5432/shop\",\"reached\":\"ok\"},{\"machine\":\"lab\",\"url\":\"postgres://proxy.lab:6432/shop\",\"reached\":\"failed\"},{\"machine\":\"build\",\"url\":\"postgres://db.internal:5432/shop\"}],\"projects\":[\"api\",\"web\"]}"
+       "PostgreSQL: {\"engine\":\"postgresql\",\"state\":\"ready\",\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"machines\":[{\"machine\":\"lab\",\"reached\":\"failed\"},{\"machine\":\"build\"}],\"projects\":[\"api\",\"web\"]}"
       ],
-      "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"auth\":null,\"binding\":null,\"connections\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"normal\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
+      "long": "{\"engine\":\"sqlite\",\"state\":\"ready\",\"machine\":\"dev\",\"url\":null,\"user\":null,\"password_saved\":null,\"password_changed_at\":null,\"binding\":null,\"reach\":null,\"machines\":null,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"backups\":[{\"bucket\":\"r2-main\",\"file\":\"shop\",\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"last\":{\"call\":\"create\",\"ended_at\":\"2026-11-18T09:15:59Z\",\"size\":213263952},\"attempt\":null}],\"op\":null,\"blocked_by\":null,\"reason\":null,\"fix\":null,\"observed_at\":\"2026-11-18T09:15:59Z\",\"store\":\"shop\",\"profile\":\"normal\",\"synchronous_commit\":null,\"sqlite_version\":\"3.53.2\",\"created_at\":\"2026-11-17T09:16:59Z\",\"last_transfer\":{\"call\":\"move\",\"from\":\"native\",\"to\":\"dev\",\"ended_at\":\"2026-11-17T09:16:59Z\",\"size\":213263952,\"sha256\":\"8888888888888888888888888888888888888888888888888888888888888888\",\"heads_sha256\":\"9999999999999999999999999999999999999999999999999999999999999999\",\"retired\":true}}"
      },
      "dropped": [
       {
@@ -7611,8 +7569,8 @@
      "today": [
       "store.connect"
      ],
-     "help": "connect a PostgreSQL database as a Store, or set an address of a connected one",
-     "cli": "layerfs store connect <store> <url> [--auth A] [--machine M] [--synchronous-commit local]",
+     "help": "connect a PostgreSQL database as a Store, or change a connected one's address, login or setting",
+     "cli": "layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local]",
      "positionals": [
       {
        "name": "store",
@@ -7626,23 +7584,25 @@
      ],
      "options": [
       {
-       "name": "auth",
-       "kind": "Name",
-       "help": "the saved login; required on a Store's first connect, refused afterwards"
+       "name": "user",
+       "kind": "Text",
+       "help": "the PostgreSQL role; needed on a Store's first connect, else the saved one is kept"
       },
       {
-       "name": "machine",
-       "kind": "Name",
-       "help": "on a connected Store: the address is this machine's own"
+       "name": "password",
+       "kind": "Content",
+       "help": "its password; needed on a Store's first connect, else the saved one is kept; the shell reads it from stdin with --password-stdin",
+       "redact": true,
+       "shell": "--password-stdin"
       },
       {
        "name": "synchronous_commit",
        "kind": "Text",
-       "help": "off, local, remote_write, on or remote_apply; first connect only",
+       "help": "off, local, remote_write, on or remote_apply; a new Store takes local",
        "default": "local"
       }
      ],
-     "stdin": null,
+     "stdin": "secret",
      "with": {},
      "paging": null,
      "progress": false,
@@ -7663,17 +7623,18 @@
       "outcome",
       "store",
       "engine",
-      "auth",
-      "connections",
-      "synchronous_commit"
+      "url",
+      "user",
+      "synchronous_commit",
+      "machines"
      ],
      "item": null,
      "examples": {
       "short": [
        "first connect: {\"projects\":[\"api\",\"web\"]}",
-       "an empty database, or an address set: {\"ok\":true}"
+       "an empty database, or a connected Store changed: {\"ok\":true}"
       ],
-      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"auth\":\"pg-app\",\"connections\":[{\"machine\":null,\"url\":\"postgres://db.internal:5432/shop\",\"own\":false,\"server\":{\"host\":\"db.internal\",\"port\":5432,\"database\":\"shop\"},\"reached\":null,\"reach\":null}],\"synchronous_commit\":\"local\"}"
+      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"synchronous_commit\":\"local\",\"machines\":[]}"
      },
      "dropped": [
       {
@@ -7682,12 +7643,17 @@
        "why": "an existing thing is named by its own word, never `name`"
       },
       {
-       "today": "--password",
-       "now": "--auth",
-       "why": "a login is saved once in the home and named by any number of Stores"
+       "today": "--auth",
+       "now": "--user, --password-stdin",
+       "why": "this computer is the one place a Store's URL and login are saved; machines attach and inherit both (owner, 2026-11-24)"
+      },
+      {
+       "today": "--machine",
+       "now": "store attach",
+       "why": "no machine has an address of its own"
       }
      ],
-     "new_work": "Saved logins and a URL with no user are new: today the record holds the URL with its user and a password reference (env:NAME or file:/path) per Store. A machine's own address through connect replaces store.update --machine --url, and no longer takes a password; the proof from that machine exists. Replacing the address every machine uses is store.update --url today. The id-only uniqueness check is a change: today a second Store is also refused when its URL names the same host, port and database. `outcome` is connected for a new Store and updated for an address."
+     "new_work": "Owner, 2026-11-24: the login is given to connect itself, checked from this process before anything is saved; the user is kept in the record and the password in the home's secret folder (kind `login`, by Store). A connect of a connected Store changes its address, user, password or synchronous_commit, keeping what it is not given, and must reach the same Store (binding) first. `outcome` is connected for a new Store and updated otherwise. Saved logins by name, --auth and --machine are gone."
     },
     {
      "call": "store.disconnect",
@@ -7695,8 +7661,54 @@
      "today": [
       "store.disconnect"
      ],
-     "help": "forget a PostgreSQL Store, or one machine's own address and reach; its data stays",
-     "cli": "layerfs store disconnect <store> [--machine M]",
+     "help": "forget a PostgreSQL Store, its saved login and its attachments; its data stays",
+     "cli": "layerfs store disconnect <store>",
+     "positionals": [
+      {
+       "name": "store",
+       "kind": "Name"
+      }
+     ],
+     "options": [],
+     "stdin": null,
+     "with": {},
+     "paging": null,
+     "progress": false,
+     "quiet": false,
+     "profile": "full",
+     "short": {
+      "always": [
+       "ok"
+      ],
+      "sometimes": []
+     },
+     "long": [
+      "ok",
+      "outcome",
+      "store"
+     ],
+     "item": null,
+     "examples": {
+      "short": [
+       "{\"ok\":true}"
+      ],
+      "long": "{\"ok\":true,\"outcome\":\"disconnected\",\"store\":\"shop-pg\"}"
+     },
+     "dropped": [
+      {
+       "today": "<name>",
+       "now": "<store>",
+       "why": "an existing thing is named by its own word, never `name`"
+      }
+     ],
+     "new_work": "Owner, 2026-11-24: --machine is gone (no machine has an address of its own); the Store's saved password and attachments go with it."
+    },
+    {
+     "call": "store.attach",
+     "badge": "new",
+     "today": [],
+     "help": "let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first",
+     "cli": "layerfs store attach <store> --machine M",
      "positionals": [
       {
        "name": "store",
@@ -7707,7 +7719,62 @@
       {
        "name": "machine",
        "kind": "Name",
-       "help": "remove only this machine's own address"
+       "help": "the machine; required",
+       "required": true
+      }
+     ],
+     "stdin": null,
+     "with": {},
+     "paging": null,
+     "progress": false,
+     "quiet": false,
+     "profile": "full",
+     "short": {
+      "always": [
+       "ok",
+       "outcome"
+      ],
+      "sometimes": [
+       "latency_ms"
+      ]
+     },
+     "long": [
+      "ok",
+      "outcome",
+      "store",
+      "machine",
+      "latency_ms",
+      "server_version"
+     ],
+     "item": null,
+     "examples": {
+      "short": [
+       "{\"ok\":true,\"outcome\":\"attached\",\"latency_ms\":3}",
+       "an attached machine checked again: {\"ok\":true,\"outcome\":\"checked\",\"latency_ms\":2}"
+      ],
+      "long": "{\"ok\":true,\"outcome\":\"attached\",\"store\":\"shop-pg\",\"machine\":\"lab\",\"latency_ms\":3,\"server_version\":\"17.6\"}"
+     },
+     "dropped": [],
+     "new_work": "New (owner, 2026-11-24): the Store is checked from the machine with the URL and login this computer saved, as its Sandboxes dial them; the machine is then recorded in the Store's `attached` and its reach observed. sandbox.create on a machine not attached is refused with this call as its fix."
+    },
+    {
+     "call": "store.detach",
+     "badge": "new",
+     "today": [],
+     "help": "stop a machine running Sandboxes of a PostgreSQL Store; refused while one runs there",
+     "cli": "layerfs store detach <store> --machine M",
+     "positionals": [
+      {
+       "name": "store",
+       "kind": "Name"
+      }
+     ],
+     "options": [
+      {
+       "name": "machine",
+       "kind": "Name",
+       "help": "the machine; required",
+       "required": true
       }
      ],
      "stdin": null,
@@ -7733,259 +7800,10 @@
       "short": [
        "{\"ok\":true}"
       ],
-      "long": "{\"ok\":true,\"outcome\":\"disconnected\",\"store\":\"shop-pg\",\"machine\":null}"
-     },
-     "dropped": [
-      {
-       "today": "<name>",
-       "now": "<store>",
-       "why": "an existing thing is named by its own word, never `name`"
-      }
-     ],
-     "new_work": "`--machine` moves here from store.update --machine --clear; the capability exists."
-    },
-    {
-     "call": "store.save_auth",
-     "badge": "new",
-     "today": [],
-     "help": "save a PostgreSQL login in the home; saving again rotates it",
-     "cli": "layerfs store save-auth <auth> --user U --password-stdin",
-     "positionals": [
-      {
-       "name": "auth",
-       "kind": "Name"
-      }
-     ],
-     "options": [
-      {
-       "name": "user",
-       "kind": "Text",
-       "help": "the PostgreSQL role; required",
-       "required": true
-      },
-      {
-       "name": "password",
-       "kind": "Content",
-       "help": "the password; required; the shell reads it from stdin with --password-stdin",
-       "required": true,
-       "redact": true,
-       "shell": "--password-stdin"
-      }
-     ],
-     "stdin": "secret",
-     "with": {},
-     "paging": null,
-     "progress": false,
-     "quiet": false,
-     "profile": "full",
-     "short": {
-      "always": [
-       "ok"
-      ],
-      "sometimes": []
-     },
-     "long": [
-      "ok",
-      "outcome",
-      "auth",
-      "user",
-      "stores",
-      "stores_count"
-     ],
-     "item": null,
-     "examples": {
-      "short": [
-       "{\"ok\":true}"
-      ],
-      "long": "{\"ok\":true,\"outcome\":\"saved\",\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[],\"stores_count\":null}"
+      "long": "{\"ok\":true,\"outcome\":\"detached\",\"store\":\"shop-pg\",\"machine\":\"lab\"}"
      },
      "dropped": [],
-     "new_work": "All of it: saved logins, the home's secret folder and reading a secret from stdin do not exist. Today each Store records its own password reference (env:NAME or file:/path), resolved by the caller on each call."
-    },
-    {
-     "call": "store.auths",
-     "badge": "new",
-     "today": [],
-     "help": "the saved PostgreSQL logins and the Stores that use each",
-     "cli": "layerfs store auths",
-     "positionals": [],
-     "options": [],
-     "stdin": null,
-     "with": {},
-     "paging": null,
-     "progress": false,
-     "quiet": false,
-     "profile": "full",
-     "short": {
-      "always": [
-       "items"
-      ],
-      "sometimes": []
-     },
-     "long": [
-      "items"
-     ],
-     "item": {
-      "short": {
-       "always": [
-        "auth",
-        "user"
-       ],
-       "sometimes": [
-        "state",
-        "reason",
-        "fix",
-        "stores",
-        "stores_count"
-       ]
-      },
-      "long": [
-       "auth",
-       "user",
-       "state",
-       "reason",
-       "fix",
-       "stores",
-       "stores_count",
-       "created_at",
-       "updated_at"
-      ]
-     },
-     "examples": {
-      "short": [
-       "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"stores\":[\"shop-pg\",\"analytics\"]},{\"auth\":\"pg-ro\",\"user\":\"reader\"}]}"
-      ],
-      "long": "{\"items\":[{\"auth\":\"pg-app\",\"user\":\"app\",\"state\":\"ready\",\"reason\":null,\"fix\":null,\"stores\":[\"shop-pg\",\"analytics\"],\"stores_count\":null,\"created_at\":\"2026-11-17T09:16:59Z\",\"updated_at\":\"2026-11-18T09:16:59Z\"},{\"auth\":\"pg-old\",\"user\":null,\"state\":\"broken\",\"reason\":\"failed\",\"fix\":\"layerfs store save-auth pg-old --user <user> --password-stdin\",\"stores\":[],\"stores_count\":null,\"created_at\":null,\"updated_at\":null}]}"
-     },
-     "dropped": [],
-     "new_work": "All of it (see store.save_auth).",
-     "states": {
-      "reasons": [
-       "failed"
-      ],
-      "ops": []
-     }
-    },
-    {
-     "call": "store.remove_auth",
-     "badge": "new",
-     "today": [],
-     "help": "remove a saved PostgreSQL login no Store uses",
-     "cli": "layerfs store remove-auth <auth>",
-     "positionals": [
-      {
-       "name": "auth",
-       "kind": "Name"
-      }
-     ],
-     "options": [],
-     "stdin": null,
-     "with": {},
-     "paging": null,
-     "progress": false,
-     "quiet": false,
-     "profile": "full",
-     "short": {
-      "always": [
-       "ok"
-      ],
-      "sometimes": []
-     },
-     "long": [
-      "ok",
-      "outcome",
-      "auth"
-     ],
-     "item": null,
-     "examples": {
-      "short": [
-       "{\"ok\":true}"
-      ],
-      "long": "{\"ok\":true,\"outcome\":\"removed\",\"auth\":\"pg-ro\"}"
-     },
-     "dropped": [],
-     "new_work": "All of it (see store.save_auth)."
-    },
-    {
-     "call": "store.update",
-     "badge": "reshaped",
-     "today": [
-      "store.update"
-     ],
-     "help": "change a PostgreSQL Store's saved login or its synchronous_commit",
-     "cli": "layerfs store update <store> [--auth A] [--synchronous-commit S]",
-     "positionals": [
-      {
-       "name": "store",
-       "kind": "Name"
-      }
-     ],
-     "options": [
-      {
-       "name": "auth",
-       "kind": "Name",
-       "help": "another saved login"
-      },
-      {
-       "name": "synchronous_commit",
-       "kind": "Text",
-       "help": "off, local, remote_write, on or remote_apply"
-      }
-     ],
-     "stdin": null,
-     "with": {},
-     "paging": null,
-     "progress": false,
-     "quiet": false,
-     "profile": "full",
-     "short": {
-      "always": [
-       "ok"
-      ],
-      "sometimes": []
-     },
-     "long": [
-      "ok",
-      "outcome",
-      "store",
-      "auth",
-      "synchronous_commit"
-     ],
-     "item": null,
-     "examples": {
-      "short": [
-       "{\"ok\":true}"
-      ],
-      "long": "{\"ok\":true,\"outcome\":\"updated\",\"store\":\"shop-pg\",\"auth\":\"pg-app-2\",\"synchronous_commit\":\"local\"}"
-     },
-     "dropped": [
-      {
-       "today": "<name>",
-       "now": "<store>",
-       "why": "an existing thing is named by its own word, never `name`"
-      },
-      {
-       "today": "--url",
-       "now": "store connect <store> <url>",
-       "why": "an address change is a connect, checked like one"
-      },
-      {
-       "today": "--machine",
-       "now": "store connect <store> <url> --machine M",
-       "why": "a machine's own address is a connect; the login is the Store's"
-      },
-      {
-       "today": "--password",
-       "now": "--auth, or store save-auth to rotate",
-       "why": "the login is saved once and named"
-      },
-      {
-       "today": "--clear",
-       "now": "store disconnect <store> --machine M",
-       "why": "removing an address is a disconnect"
-      }
-     ],
-     "new_work": "`--auth` is new (see store.save_auth). `--synchronous-commit` exists today."
+     "new_work": "New (owner, 2026-11-24): refused InUse while a Sandbox of the Store's projects is on the machine, NotFound when it is not attached; its reach is forgotten."
     },
     {
      "call": "store.move",
@@ -8240,7 +8058,7 @@
       {
        "name": "machine",
        "kind": "Name",
-       "help": "also probe a PostgreSQL Store's connection from this machine"
+       "help": "check a PostgreSQL Store from this computer and this attached machine only"
       }
      ],
      "stdin": null,
@@ -8316,7 +8134,7 @@
        },
        {
         "check": "store.connection",
-        "what": "it is reached where it lives: a sqlite Store through its machine; a PostgreSQL Store from this computer, and once more from each machine that has a Sandbox of it, with `from` naming that machine",
+        "what": "it is reached where it lives: a sqlite Store through its machine; a PostgreSQL Store from this computer, then (when this computer is let in) once more from each machine attached to it, with `from` naming that machine",
         "full_only": false
        },
        {

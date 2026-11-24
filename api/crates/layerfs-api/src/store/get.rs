@@ -23,38 +23,33 @@ const BACKUP: Form = Form::of(
     ],
 );
 
-/// A row's `server`: what its URL names.
-const SERVER: Form = Form::of(
-    &["host", "port", "database"],
-    &[],
-    &["host", "port", "database"],
-);
-
-/// A row's `reach`: the last one seen.
+/// A reach: the last one seen, from this computer (`reach`) or from an
+/// attached machine (a `machines` row's).
 const REACH: Form = Form::of(
     &["at", "ok"],
     &["latency_ms", "server_version", "error"],
     &["at", "ok", "latency_ms", "server_version", "error"],
 );
 
-/// One `connections` row of a PostgreSQL Store (spec v23): a side that
-/// connects (`machine` null for this computer), the URL it dials, and the
-/// word of its last reach; the long form adds whether the address is its
-/// own, the server it names and the reach itself.
-pub(crate) const CONNECTION: Form = Form::of(
-    &["url"],
-    &["machine", "reached"],
-    &["machine", "url", "own", "server", "reached", "reach"],
-)
-.parts(&[
-    ("server", Part::Rows(&SERVER)),
-    ("reach", Part::Rows(&REACH)),
-]);
+/// One `machines` row of a PostgreSQL Store: a machine attached to it, the
+/// word of its last reach (`ok`, `failed`, null) and, in the long form, the
+/// reach itself.
+const MACHINE: Form = Form::of(&["machine"], &["reached"], &["machine", "reached", "reach"])
+    .parts(&[("reach", Part::Rows(&REACH))]);
 
-/// The rows inside a Store's answer; `store.list` items share them.
-pub(super) const PARTS: &[(&str, Part)] = &[
+/// The rows inside a Store's answer.
+const PARTS: &[(&str, Part)] = &[
     ("projects", Part::Scalars("project")),
-    ("connections", Part::Rows(&CONNECTION)),
+    ("reach", Part::Rows(&REACH)),
+    ("machines", Part::Rows(&MACHINE)),
+    ("backups", Part::Rows(&BACKUP)),
+];
+
+/// The rows inside a `store.list` item: its `machines` are names.
+pub(super) const ITEM_PARTS: &[(&str, Part)] = &[
+    ("projects", Part::Scalars("project")),
+    ("reach", Part::Rows(&REACH)),
+    ("machines", Part::Scalars("machine")),
     ("backups", Part::Rows(&BACKUP)),
 ];
 
@@ -63,8 +58,9 @@ const FORM: Form = Form::of(
     &["engine", "state"],
     &[
         "machine",
-        "auth",
-        "connections",
+        "url",
+        "user",
+        "machines",
         "projects",
         "projects_count",
         "backups",
@@ -78,9 +74,13 @@ const FORM: Form = Form::of(
         "engine",
         "state",
         "machine",
-        "auth",
+        "url",
+        "user",
+        "password_saved",
+        "password_changed_at",
         "binding",
-        "connections",
+        "reach",
+        "machines",
         "projects",
         "projects_count",
         "backups",

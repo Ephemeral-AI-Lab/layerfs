@@ -2,7 +2,7 @@
 //! Sandbox daemon on each platform dials, which is the URL as configured,
 //! never rewritten. A machine that does not share the caller's loopback
 //! (docker on Docker Desktop, lima, apple-container) refuses a loopback host,
-//! naming its own name for this host and `store connect <store> --machine`;
+//! naming its own name for this host and `store connect <store> <url>`;
 //! every other URL is passed on as given, `sslmode=verify-full` included
 //! (a reach input only: the Store's client reads `sslmode` disable, prefer
 //! or require, and `store connect` refuses `verify-full`). Hosts
@@ -26,8 +26,9 @@ fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
     machine::reach(spec, STORE, url)
 }
 
-/// The per-machine URL call every refusal on machine `dev` advises.
-const CONNECT: &str = "`layerfs store connect pg <url> --machine dev`";
+/// The connect every refusal on machine `dev` advises: the Store again,
+/// with an address the machine reaches.
+const CONNECT: &str = "`layerfs store connect pg <url>`";
 
 /// `getent ahostsv4 host.docker.internal` in a Docker Desktop worker
 /// container (D-8 live receipt), which the former lookup ran per call.
@@ -230,7 +231,7 @@ fn a_failed_dial_carries_the_loopback_hint_where_it_is_not_shared() {
         assert!(hint.contains(CONNECT), "{hint}");
         // the same advice as the up-front refusal
         let (_, message) = refused(reach(&spec, &loopback_urls()[0]));
-        let advice = &hint[hint.find("give the Store").unwrap()..];
+        let advice = &hint[hint.find("connect the Store again").unwrap()..];
         assert!(message.ends_with(advice), "{message} / {hint}");
     }
     assert_eq!(scratch.log(), "", "no provider tool runs");

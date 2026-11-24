@@ -224,20 +224,12 @@ fn postgresql_statistics_have_null_free_and_count_publications() {
     let (user, clean_url) = split_pg_test_url(&url);
     call(
         &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(&user)),
-            ("password", t("unused")),
-        ],
-    );
-    call(
-        &home,
         "store.connect",
         &[
             ("store", t("stats")),
             ("url", t(&clean_url)),
-            ("auth", t("pg")),
+            ("user", t(&user)),
+            ("password", t("unused")),
             ("synchronous_commit", t("off")),
         ],
     );

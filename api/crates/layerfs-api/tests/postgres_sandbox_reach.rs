@@ -4,7 +4,7 @@
 //! binding is another Store's is `Unavailable`, both as before. Needs
 //! LAYERFS_TEST_PG_URL (a server URL with its user and no password, to a
 //! database with no `layerfs` schema; the test leaves one behind) and
-//! LAYERFS_TEST_PG_PASSWORD (saved as the Store's login); without them the
+//! LAYERFS_TEST_PG_PASSWORD (the Store's password); without them the
 //! test says so and passes.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
@@ -49,21 +49,12 @@ fn the_reach_check_finds_the_binding_and_the_project_on_one_session() {
     let password = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();
     call(
         &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(user)),
-            ("password", t(&password)),
-        ],
-    )
-    .unwrap();
-    call(
-        &home,
         "store.connect",
         &[
             ("store", t("pg")),
             ("url", t(&format!("{scheme}://{address}"))),
-            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t(&password)),
         ],
     )
     .unwrap();

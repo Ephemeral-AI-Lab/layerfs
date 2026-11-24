@@ -56,8 +56,9 @@ pub struct Created {
 }
 
 /// Starts the Sandbox: with no `machine`, on a sqlite Store's machine, or
-/// `native` for a PostgreSQL Store (#536 §10), which runs on any machine
-/// whose platform runs PostgreSQL Sandboxes.
+/// `native` for a PostgreSQL Store (#536 §10), which also runs on each
+/// machine attached to it (`store.attach`) whose platform runs PostgreSQL
+/// Sandboxes.
 pub fn create(
     home: &Path,
     events: &mut Events<'_>,
@@ -120,9 +121,27 @@ pub fn create(
     if layerfs_machine::record::MachineRecord::read(&home, machine)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
-    // a PostgreSQL Store is on no machine: its Sandboxes run on any machine
-    // the support table allows, each dialling the server with its own
-    // connection or the Store's, and the create's reach check proves it can
+    // a PostgreSQL Store is on no machine: its Sandboxes run on this
+    // computer (`native`) and on each machine attached to it, each dialling
+    // the URL and login this computer saved; the create's reach check
+    // proves it can
+    if let StoreRef::Postgres { .. } = target.store_ref {
+        if machine != "native" && !target.record.is_attached(machine) {
+            let refusal = refused(
+                "InvalidInput",
+                format!(
+                    "machine {machine} is not attached to PostgreSQL Store {}",
+                    target.store
+                ),
+            );
+            let attach = format!(
+                "layerfs store attach {} --machine {}",
+                shell_word(&target.store),
+                shell_word(machine)
+            );
+            return Err(with_fix(refusal, attach));
+        }
+    }
     if let StoreRef::Sqlite { .. } = target.store_ref {
         let store_machine = target.store_ref.machine()?;
         if store_machine != machine {

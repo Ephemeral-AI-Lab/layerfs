@@ -5,7 +5,7 @@
 //! record keeps it byte for byte until the user connects an address
 //! holding none. Any other URL is shown and stored exactly as written. A
 //! URL is dialled only when it is an address alone ([`refuse_login`]), with
-//! the saved login put in and read back by the client ([`with_login`]):
+//! the Store's login put in and read back by the client ([`with_login`]):
 //! tokio-postgres 0.7, [`layerfs_persistence::PostgresConfig`], the reading
 //! every Store session dials with.
 use layerfs_bridge::control::SdkRefusal;
@@ -20,11 +20,11 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub const HIDDEN: &str = "postgresql://<hidden: not an address alone>";
 
 /// The refusal of a URL holding a login (spec v23 V23-13).
-const LOGIN: &str = "the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one)";
+const LOGIN: &str = "the URL names a user or holds a password (or a password file); give the address alone and the login with --user and --password-stdin";
 
 /// The refusal of a URL the client does not read, when no key or value
 /// of it can be named ([`unread`]).
-const UNREAD: &str = "the URL is not one its PostgreSQL client reads, or names a user or holds a password (or a password file) under a key it does not know: give the address alone, postgresql://host[:port][,host[:port]...]/database?key=value&... with keys the client knows (not `passfile`, `sslpassword`, `sslkey` or `sslcert`), and the login with --auth (`layerfs store save-auth` saves one)";
+const UNREAD: &str = "the URL is not one its PostgreSQL client reads, or names a user or holds a password (or a password file) under a key it does not know: give the address alone, postgresql://host[:port][,host[:port]...]/database?key=value&... with keys the client knows (not `passfile`, `sslpassword`, `sslkey` or `sslcert`), and the login with --user and --password-stdin";
 
 /// What a refusal of a URL holding a `#` ends with.
 const HASH: &str = "; a `#` that is part of the address is written %23";
@@ -227,7 +227,7 @@ fn unread(scheme: &str, after: &str) -> String {
     };
     if let Some(pair) = pairs.iter().copied().find(as_login) {
         return match UNREAD_LOGIN_KEYS.iter().find(|login| **login == key(pair)) {
-            Some(login) => format!("the URL names a user or holds a password (or a password file) in `{login}`, which its PostgreSQL client does not read; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"),
+            Some(login) => format!("the URL names a user or holds a password (or a password file) in `{login}`, which its PostgreSQL client does not read; give the address alone and the login with --user and --password-stdin"),
             None => LOGIN.to_owned(),
         };
     }

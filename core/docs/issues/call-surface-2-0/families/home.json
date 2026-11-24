@@ -198,7 +198,7 @@
         ],
         "sometimes": [
          "projects",
-         "connections",
+         "machines",
          "state",
          "op",
          "blocked_by",
@@ -210,7 +210,7 @@
         "store",
         "engine",
         "projects",
-        "connections",
+        "machines",
         "state",
         "op",
         "blocked_by",
@@ -277,59 +277,8 @@
         "branch"
        ]
       },
-      "connections": {
-       "short": {
-        "always": [
-         "url"
-        ],
-        "sometimes": [
-         "machine",
-         "reached"
-        ]
-       },
-       "long": [
-        "machine",
-        "url",
-        "own",
-        "server",
-        "reached",
-        "reach"
-       ]
-      },
-      "server": {
-       "short": {
-        "always": [
-         "host",
-         "port",
-         "database"
-        ],
-        "sometimes": []
-       },
-       "long": [
-        "host",
-        "port",
-        "database"
-       ]
-      },
-      "reach": {
-       "short": {
-        "always": [
-         "at",
-         "ok"
-        ],
-        "sometimes": [
-         "latency_ms",
-         "server_version",
-         "error"
-        ]
-       },
-       "long": [
-        "at",
-        "ok",
-        "latency_ms",
-        "server_version",
-        "error"
-       ]
+      "machines": {
+       "scalar": "machine"
       }
      },
      "example": {

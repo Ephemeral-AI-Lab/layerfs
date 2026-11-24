@@ -89,8 +89,8 @@ enum RunRoot {
 }
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
-/// (#535 §7.4): the URL the machine's own connection names, else the record's,
-/// with its password, resolved here in the caller and dialled as it is: a
+/// (#535 §7.4): the record's URL with its login, resolved here in the
+/// caller and dialled as it is: a
 /// loopback host the machine does not share is refused, nothing is
 /// rewritten and no machine is asked (`layerfs_machine::platform::reach`).
 /// It travels only in the one request that runs the call and is never
@@ -99,8 +99,8 @@ enum RunRoot {
 /// when the machine does not share this host's loopback and the URL names
 /// a host by name (`layerfs_machine::platform::loopback_hint`): a name
 /// resolving to a loopback address there fails its one dial, never
-/// resolved here to be refused up front. `store.update` and `store.status`
-/// build their check's argument here too.
+/// resolved here to be refused up front. `store.attach` and
+/// `store.doctor` build their check's argument here too.
 pub fn reached(
     home: &Path,
     machine: &str,
@@ -119,7 +119,7 @@ fn dialled(
     machine: &str,
     record: &StoreRecord,
 ) -> Result<Result<(PgSelection, Option<String>)>> {
-    let url = layerfs_store::record::url_on(record, machine)?;
+    let url = layerfs_store::record::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
