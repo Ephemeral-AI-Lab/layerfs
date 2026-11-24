@@ -607,7 +607,7 @@ $ layerfs store remove nope
 ### store.repair_mount_holders
 
 Explicit, operator-only repair of the mount admissions held at one Branch.
-Nothing is automatic: preview and audit change no live intent, the doctor only
+Nothing is automatic: list, preview and audit write nothing, the doctor only
 reports the same rows without releasing them, and no action deletes a row.
 
 ```text
@@ -619,7 +619,7 @@ The action is one of:
 | Action | Effect |
 | --- | --- |
 | `list` | lists the typed holder view (op, project, Branch, Workspace, Sandbox, machine, place authority, state, legacy, `safe`, `reason`); read-only, writes nothing |
-| `preview` | lists the same typed view and writes one retained `done` row with `action=preview;operator=NAME` in `evidence`, `op` null, the operator label and no owner or place columns; it changes no live intent |
+| `preview` | lists the same typed view, each row's `safe` and `reason` saying what `release` would do; read-only, writes nothing |
 | `settle` | marks exactly `--op` uncertain; a later call reports `Unresolved`, never `Busy` |
 | `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` and clears the owner columns, so the unique owner key cannot block a remount |
 | `settle_legacy` | marks only rows with missing owner or place evidence |
@@ -628,9 +628,9 @@ The action is one of:
 Every holder row carries `safe` and `reason`: an uncertain (settled) row is
 safe to release and says so; a live row still holds the admission and must be
 settled first. Release answers `{ action: "release", op, audit: "gc_intent" }`;
-preview answers the holders plus `{ action: "preview", op: null, audit:
-"gc_intent" }`; list answers the holders alone; settle and `settle_legacy` are
-in the home's `trace/calls.jsonl` call log only. `--operator` is the local name
+preview answers the holders plus `{ action: "preview", op: null, audit: null
+}`; list answers the holders alone; list, preview, settle and `settle_legacy`
+are in the home's `trace/calls.jsonl` call log only. `--operator` is the local name
 the caller gives (at most 128 characters, no control characters; empty is
 `local`): it is not an authenticated principal. On a SQLite Store the call runs
 on the machine that holds the file through its worker; a PostgreSQL Store runs

@@ -192,11 +192,12 @@ pub(super) fn run(
         }
         // the operator's repair of one Branch's mount holders on the Store
         // under this worker's root: `{ store, store_record, project, branch,
-        // action, op?, legacy, operator? }`. Preview changes no intent: it
-        // lists the typed holders and the call log records the read.
-        // settle/release/settle_legacy act on one explicit op or the legacy
-        // rows; release retains the row as the durable done audit, and the
-        // call log records every action.
+        // action, op?, legacy, operator?, page?, limit? }`. List and preview
+        // write nothing: they answer the typed holders, each with what release
+        // would do. settle/release act on one explicit op (`legacy` settles
+        // only a row without owner or place evidence); release retains the
+        // row as the durable done audit; `audit` reads the Branch's retained
+        // rows. The call log records every action.
         "store.repair" => {
             let store = args
                 .get_text("store")
@@ -239,14 +240,9 @@ pub(super) fn run(
                 store_record: args.get("store_record").cloned(),
                 postgresql: None,
             };
-            let place = layerfs_store_service::history::admission::decode_place_view(
-                args.get("place_view"),
-            );
-            layerfs_store_service::history::admission::with_place_view(place, || {
-                layerfs_store::service::repair_mount_holders_at(
-                    &open, project, branch, action, op, legacy, operator, page, limit,
-                )
-            })
+            layerfs_store::service::repair_mount_holders_at(
+                &open, project, branch, action, op, legacy, operator, page, limit,
+            )
         }
         // one step of a Store move, remove or create, or a live read's, on
         // this machine

@@ -70,9 +70,10 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
 }
 
 /// `store.repair_mount_holders`: first-class explicit operator repair of
-/// one Branch's mount intents. Preview lists them and writes its own retained
-/// done row; settle/release act on one explicit op; release retains the row as
-/// the durable done audit; `audit` reads the retained rows of that Branch.
+/// one Branch's mount intents. List and preview write nothing (preview says
+/// what release would do for each holder); settle/release act on one explicit
+/// op; release retains the row as the durable done audit; `audit` reads the
+/// retained rows of that Branch.
 /// Nothing is automatic. A SQLite
 /// Store on another machine is repaired by that machine's worker
 /// (`store.repair`), so the live Docker Store is reachable; a PostgreSQL
@@ -103,7 +104,7 @@ pub fn repair(
             )
         }
         Executor::Worker(mut worker) => {
-            let mut fields = vec![
+            let fields = vec![
                 ("store".to_owned(), SdkValue::text(name.as_str())),
                 ("store_record".to_owned(), record.to_record().clone()),
                 ("project".to_owned(), SdkValue::text(project)),
@@ -118,9 +119,8 @@ pub fn repair(
                 ("page".to_owned(), SdkValue::Int(i64::from(page))),
                 ("limit".to_owned(), SdkValue::Int(i64::from(limit))),
             ];
-            if let Some(place) = layerfs_store::place_view::encoded_from_home(home) {
-                fields.push(("place_view".to_owned(), place));
-            }
+            // no repair action compares a place (it names its op), so the
+            // frame carries no place view
             let request = SdkValue::Map(fields);
             worker.call("store.repair", request, &mut |_: SdkValue| {})
         }

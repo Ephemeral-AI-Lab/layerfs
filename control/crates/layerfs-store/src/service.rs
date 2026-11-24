@@ -126,13 +126,7 @@ pub fn with_service<T>(
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
     acquire(args)?;
-    let result = service(args).and_then(|service| {
-        let place = match layerfs_store_service::history::admission::has_place_view() {
-            true => None,
-            false => crate::place_view::from_open(args),
-        };
-        layerfs_store_service::history::admission::with_place_view(place, || work(&service))
-    });
+    let result = service(args).and_then(|service| work(&service));
     let released = release(args);
     let value = result?;
     released?;
@@ -253,16 +247,19 @@ pub fn reconcile_machine(
     match crate::place::plan(home, store_ref)? {
         crate::place::Executor::Local => {
             let args = OpenArgs::of_record(home, store, &record)?;
-            with_service(&args, |service| {
-                layerfs_store_service::history::admission::reconcile_machine(
-                    service.store.history(),
-                    machine,
-                    incarnation,
-                )
-                .map(|reconcile| {
-                    layerfs_store_service::history::admission::reconcile_value(&reconcile)
+            // the reconcile compares placed mount intents: it reads the view
+            crate::place_view::scoped(&args, || {
+                with_service(&args, |service| {
+                    layerfs_store_service::history::admission::reconcile_machine(
+                        service.store.history(),
+                        machine,
+                        incarnation,
+                    )
+                    .map(|reconcile| {
+                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                    })
+                    .map_err(layerfs_store_service::history::lookup::history)
                 })
-                .map_err(layerfs_store_service::history::lookup::history)
             })
         }
         crate::place::Executor::Worker(mut worker) => {
@@ -341,12 +338,11 @@ pub fn done_audit(
 /// is never released by preview.
 ///
 /// Release retains the `gc_intent` row in state `done` with the action,
-/// operator label and op in `evidence`, and clears the owner columns. Preview
-/// writes its own retained `done` row the same way, with `action=preview`,
-/// the operator label and no operation; it changes no live intent. Settle
-/// changes the row to uncertain and is in the home's `trace/calls.jsonl` call
-/// log only. The `audit` action reads the Branch's retained done rows in
-/// bounded pages.
+/// operator label and op in `evidence`, and clears the owner columns. List
+/// and preview write nothing; preview answers what release would do for each
+/// holder. Settle changes the row to uncertain and is in the home's
+/// `trace/calls.jsonl` call log only. The `audit` action reads the Branch's
+/// retained done rows in bounded pages.
 #[allow(clippy::too_many_arguments)]
 pub fn repair_mount_holders(
     args: &OpenArgs,
@@ -382,33 +378,16 @@ pub fn repair_mount_holders(
                 ("op", SdkValue::Null),
                 ("audit", SdkValue::Null),
             ])),
-            "preview" => {
-                // Preview changes no live intent, but the operator action is
-                // durable: it writes a retained `done` row through the same
-                // release/done columns, with the operator label and no
-                // operation (`evidence` has no `op=`). The row never admits
-                // (admission filters `state <> 'done'`) and the bounded
-                // `gc_intent_done` read reports it.
-                let operator = operator_label(operator)?;
-                let mut op = [0u8; 16];
-                op.copy_from_slice(&layerfs_home::helpers::random()?[..16]);
-                let evidence = format!("action=preview;operator={operator}");
-                let intent = layerfs_history::GcIntent::shared(
-                    op,
-                    layerfs_history::GcIntentKind::Mount,
-                    layerfs_history::GcScopeKind::Branch,
-                    branch.as_slice(),
-                )
-                .named(Some(project), Some(branch_name));
-                catalog.gc_record_done(&intent, &evidence).map_err(failed)?;
-                Ok(SdkValue::map([
-                    ("holders", holder_rows(&holders)),
-                    ("legacy", SdkValue::Bool(legacy)),
-                    ("action", SdkValue::text("preview")),
-                    ("op", SdkValue::Null),
-                    ("audit", SdkValue::text("gc_intent")),
-                ]))
-            }
+            // Preview is read-only: it answers what release would do for each
+            // holder (`safe`, `reason`) and writes nothing; the call log
+            // records the call.
+            "preview" => Ok(SdkValue::map([
+                ("holders", holder_rows(&holders)),
+                ("legacy", SdkValue::Bool(legacy)),
+                ("action", SdkValue::text("preview")),
+                ("op", SdkValue::Null),
+                ("audit", SdkValue::Null),
+            ])),
             "settle" | "release" => {
                 let op = op.ok_or_else(|| {
                     refused("InvalidInput", format!("{action} needs the holder op"))
