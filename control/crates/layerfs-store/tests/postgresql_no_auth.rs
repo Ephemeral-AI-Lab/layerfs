@@ -136,37 +136,47 @@ fn a_key_value_address_is_refused_before_anything_dials_it() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
-/// The user part a saved login replaces is the one the daemon's client
+/// The user part a URL holds is the one the daemon's client
 /// (tokio-postgres 0.7, `UrlParser::parse_credentials`) reads: everything
 /// before the first `@` anywhere in the URL, not only before its first
-/// `/`. So the login goes where the client reads it, a URL naming a user
-/// that way is refused at connect, and a URL with no `@` keeps its host,
-/// path and parameters.
+/// `/`. A URL holding an `@` names a user that way and is refused at
+/// connect, and is never dialled: the login goes only into an address
+/// alone, which keeps its host, path and parameters (the client reads them
+/// back as given before it is dialled).
 #[test]
 fn the_login_replaces_the_user_part_its_client_reads() {
-    use layerfs_home::secrets::parts;
-    // (url, the user part the client reads, the rest it reads the hosts from)
-    for (given, user, rest) in [
+    // (url, the user the client reads, the hosts it reads after it)
+    for (given, user, hosts) in [
         // the review's case: both rules read `b`
-        ("postgres://localhost?x=a@b", Some("localhost?x=a"), "b"),
+        (
+            "postgres://localhost?x=a@b",
+            Some("localhost?x=a"),
+            vec!["b"],
+        ),
         // an `@` only after the path: the client's user part runs to it
         (
             "postgres://localhost/db?x=a@b",
             Some("localhost/db?x=a"),
-            "b",
+            vec!["b"],
         ),
         // two `@` before the path: the first ends the user part
-        ("postgres://a@b@c/db", Some("a"), "b@c/db"),
+        ("postgres://a@b@c/db", Some("a"), vec!["b@c"]),
         (
             "postgresql://u:p@db.example/db?x=1",
-            Some("u:p"),
-            "db.example/db?x=1",
+            Some("u"),
+            vec!["db.example"],
         ),
-        ("postgres://db.example:5432/db", None, "db.example:5432/db"),
+        ("postgres://db.example:5432/db", None, vec!["db.example"]),
     ] {
-        let (scheme, read, after) = parts(given).unwrap();
-        assert_eq!((read, after), (user, rest), "{given}");
-        assert_eq!(scheme, given.split_once("://").unwrap().0, "{given}");
+        // the client reads the whole URL only where it knows each key
+        let known = given.replace("?x=1", "?application_name=1");
+        let read: postgres::Config = known.parse().unwrap();
+        assert_eq!(read.get_user(), user, "{given}");
+        let read_hosts: Vec<String> = (read.get_hosts().iter())
+            .map(|host| format!("{host:?}"))
+            .collect();
+        let hosts: Vec<String> = hosts.iter().map(|h| format!("Tcp({h:?})")).collect();
+        assert_eq!(read_hosts, hosts, "{given}");
         // a user part the client reads is a user the URL names: refused
         let refused = layerfs_store::postgresql::connect::refuse_login(given);
         assert_eq!(refused.is_err(), user.is_some(), "{given}");
@@ -175,20 +185,30 @@ fn the_login_replaces_the_user_part_its_client_reads() {
     let _ = std::fs::remove_dir_all(&home);
     layerfs_home::home::ensure(&home).unwrap();
     layerfs_store::postgresql::login::save(&home, "pg-app", "alice", "s3 cret").unwrap();
+    // (recorded, dialled): a recorded URL holding an `@` is not dialled
     for (recorded, dialled) in [
-        (
-            "postgres://localhost/db?x=a@b",
-            "postgres://alice:s3%20cret@b",
-        ),
-        ("postgres://a@b@c/db", "postgres://alice:s3%20cret@b@c/db"),
+        ("postgres://localhost/db?x=a@b", None),
+        ("postgres://a@b@c/db", None),
         (
             "postgres://db.example/layerfs_db?application_name=x",
-            "postgres://alice:s3%20cret@db.example/layerfs_db?application_name=x",
+            Some("postgres://alice:s3%20cret@db.example/layerfs_db?application_name=x"),
         ),
     ] {
         let record = StoreRecord::connected("pg", recorded, "layerfs", "local", Some("pg-app"))
             .in_home(&home);
-        assert_eq!(url(&record).unwrap(), dialled, "{recorded}");
+        match url(&record) {
+            Ok(url) => assert_eq!(Some(url.as_str()), dialled, "{recorded}"),
+            Err(refusal) => {
+                assert_eq!(dialled, None, "{recorded}: {}", refusal.message);
+                assert_eq!(refusal.code, "InvalidInput", "{recorded}");
+                assert!(!refusal.message.contains("s3"), "{}", refusal.message);
+                assert_eq!(
+                    refusal.detail.get_text("fix"),
+                    Some("layerfs store connect pg <url>"),
+                    "{recorded}"
+                );
+            }
+        }
     }
     std::fs::remove_dir_all(home).unwrap();
 }

@@ -126,7 +126,8 @@ pub fn recorded_under(record: &StoreRecord, under: Option<&State>) -> Result<Sta
 /// naming no saved login, `outdated` with the fix that saves one and names
 /// it; naming one this home does not hold, `missing` with the same fix for
 /// that name; holding what 2.0 no longer writes (V23-6), `outdated` with
-/// the update that rewrites it. A missing login wins over the old fields:
+/// the update that rewrites it (or, for a URL with no clean form, the
+/// connect that replaces it, `login::outdated_fix`). A missing login wins over the old fields:
 /// its fix clears both. The Store doctor's `store.record` reports the same
 /// state and fix. Only for a PostgreSQL record: a sqlite one names no login.
 pub fn postgresql(record: &StoreRecord) -> Option<State> {
@@ -146,14 +147,9 @@ pub fn postgresql(record: &StoreRecord) -> Option<State> {
             Some(&login::missing_fix(record, auth)),
         ));
     }
-    record.outdated_fields().then(|| {
-        let fix = format!(
-            "layerfs store update {} --auth {}",
-            shell_word(record.name()),
-            shell_word(auth)
-        );
-        State::broken(Reason::Outdated, Some(&fix))
-    })
+    record
+        .outdated_fields()
+        .then(|| State::broken(Reason::Outdated, Some(&login::outdated_fix(record, auth))))
 }
 
 /// The machine a sqlite Store's record places it on, if it names one.

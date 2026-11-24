@@ -1321,12 +1321,20 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   write (`connect`, `update`, `disconnect --machine`, `machine remove`)
   drops those fields, and a read never does. Neither state refuses a call.
   A Store records only the login's name (`auth`); its URL holds host,
-  port, database and TLS settings, and one naming a user or carrying a
-  login (`user`, any `password` parameter, `passfile`) is refused
-  `InvalidInput` with a fix that gives the address alone (a first connect
-  saves the login with `save-auth` and names it with `--auth`); `sslkey` and
-  `sslcert` name files and pass. The login
-  goes into the URL only when the Store is dialled. `auths` answers
+  port, database and TLS settings, read only as the PostgreSQL client reads
+  it, and one naming a user or carrying a login (`user`, any `password`
+  parameter, `passfile`), holding an `@` or `#` (one of the address is
+  written `%40` or `%23`), or that the client does not read (an unknown key
+  such as `sslkey` or `sslcert`) is refused `InvalidInput` with a fix that
+  gives the address alone (a first connect saves the login with `save-auth`
+  and names it with `--auth`; `<url>` and `<user>` when no form of the URL
+  can be shown). The login goes into the URL only when the Store is
+  dialled, and the URL made is read back by the client first. A URL is
+  shown or written only in a form its client reads as the same servers and
+  database with no login and no part of the password, else as
+  `postgresql://<hidden: not an address alone>`, never rewritten: such a
+  record stays `outdated`, its fix `layerfs store connect <store> <url>`
+  (`layerfs store disconnect <store> --machine <m>` for a machine's own). `auths` answers
   `{ items }`, short `{ auth, user }` with `stores` (at most 20) when
   used, `stores_count` only past 20, and `state`, `reason`, `fix` when the
   login's file cannot be read (`broken` `failed`, fixed by saving it
@@ -1390,7 +1398,9 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   `machine, url, own, server, reached, reach`: `own` says the URL is the
   machine's own, `server` is the `{ host, port, database }` the URL names,
   `reach` the last one seen, `{ at, ok, latency_ms, server_version,
-  error }`, or null. No URL holds a login. A reach is written beside the
+  error }`, or null. No URL holds a login: an older record's URL with no
+  clean form is `postgresql://<hidden: not an address alone>`, with a null
+  `server`. A reach is written beside the
   Store's record (its observation file, which moves no `generation`) by
   `connect --machine`, every `store doctor` reach and each Sandbox made on
   a machine. `projects` shows at most 20 names;
@@ -1510,7 +1520,7 @@ $ layerfs store auths
 $ layerfs store get shop-pg
 {"engine":"postgresql","state":"ready","auth":"pg-app","connections":[{"url":"postgresql://127.0.0.1:55231/shop?sslmode=disable"}]}
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
-{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
+{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one); an `@` or `#` that is part of the address is written %40 or %23"}
 $ layerfs store update shop-pg --synchronous-commit off --detail
 {"ok":true,"outcome":"updated","store":"shop-pg","auth":"pg-app","synchronous_commit":"off"}
 $ layerfs store remove-auth pg-app

@@ -5,6 +5,8 @@
 //! and names its saved login (`auth`, [`super::login`]), put into the URL on
 //! each call; the full URL is never written down. A machine's own address
 //! is `layerfs-control`'s part of the call, proven from that machine.
+use super::address;
+pub use super::address::{refuse_login, target, url_user, without_login, HIDDEN};
 use super::login;
 use crate::open_args::{OpenArgs, PgSelection};
 use crate::project::listing;
@@ -17,8 +19,6 @@ use layerfs_bridge::sdk_values::hex;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
-use layerfs_home::secrets::parts;
-use std::ops::Range;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -60,68 +60,14 @@ pub struct StoreConnect {
     pub synchronous_commit: Option<String>,
 }
 
-/// `text` with its `%XX` escapes decoded; a malformed escape stays as is.
-fn decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let pair = bytes
-            .get(i + 1..i + 3)
-            .and_then(|pair| u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok());
-        match (bytes[i], pair) {
-            (b'%', Some(byte)) => {
-                out.push(byte);
-                i += 3;
-            }
-            (byte, _) => {
-                out.push(byte);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-/// `(name, value)` of each query parameter, both decoded.
-fn query(rest: &str) -> Vec<(String, String)> {
-    let Some((_, query)) = rest.split_once('?') else {
-        return Vec::new();
-    };
-    let query = query.split('#').next().unwrap_or("");
-    query
-        .split('&')
-        .filter(|pair| !pair.is_empty())
-        .map(|pair| {
-            let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
-            (decode(name), decode(value))
-        })
-        .collect()
-}
-
-/// Refuses a URL that names a user or holds a password, in its user part
-/// or as a `user` or any `password` (`sslpassword`) parameter: the login
-/// is a saved one, named with `--auth`. Any `@` is a user part to the
-/// daemon's client (its first one ends it, [`parts`]), so a URL holding
-/// one is refused whichever reading finds the user part, as is a login
-/// parameter of the query either reading finds ([`Shown`]).
-pub fn refuse_login(url: &str) -> Result<()> {
-    let shown = Shown::of(url)?;
-    if shown.after.contains('@') || !shown.pairs.is_empty() {
-        return Err(refused(
-            "InvalidInput",
-            "the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one)",
-        ));
-    }
-    Ok(())
-}
-
 /// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
 /// fix (spec v23 V23-13): the login saved by name, then the address alone.
 /// A first connect names the saved login with `--auth`; a connected Store
 /// takes no `--auth` on connect, so its fix names the login with `store
 /// update --auth` before the address alone (for `machine`'s own connection
-/// when given). The URL's user fills `--user` when it names one.
+/// when given). The address is the URL's clean form, `<url>` when it has
+/// none; `--user` the user its client reads there, else `<user>`
+/// ([`address`]).
 pub fn refuse_login_with_fix(
     store: &str,
     url: &str,
@@ -130,214 +76,21 @@ pub fn refuse_login_with_fix(
 ) -> Result<()> {
     // a URL that is not a PostgreSQL one is refused without a fix: its login
     // cannot be told apart, so no line may repeat it
-    parts(url)?;
+    address::scheme(url)?;
     refuse_login(url).map_err(|refusal| {
-        let address = shell_word(&without_login(url));
+        let shown = address::clean(url).map_or("<url>".to_owned(), |(shown, _)| shell_word(&shown));
         let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
         let store = shell_word(store);
         let save = format!("layerfs store save-auth <auth> --user {user} --password-stdin");
         let fix = match (first, machine) {
-            (true, _) => format!("{save} && layerfs store connect {store} {address} --auth <auth>"),
+            (true, _) => format!("{save} && layerfs store connect {store} {shown} --auth <auth>"),
             (false, machine) => {
                 let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
-                format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {address}{on}")
+                format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {shown}{on}")
             }
         };
         with_fix(refusal, fix)
     })
-}
-
-/// Whether query parameter `name` carries a login: `user`, any
-/// `password` (`sslpassword`), or `passfile` (spec v23 V23-13). A client
-/// certificate's `sslkey` and `sslcert` name files, not secrets, and pass.
-fn login_parameter(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    name == "user" || name == "passfile" || name.contains("password")
-}
-
-/// The byte ranges of `after` (a URL after its `scheme://`) holding a
-/// pair of the query of `after[start..]` that carries a login
-/// ([`login_parameter`]). The query is read as the daemon's client reads
-/// it: from the first `?` to the end, its pairs split at `&`; a `#` ends
-/// no value.
-fn login_pairs(after: &str, start: usize) -> Vec<Range<usize>> {
-    let Some(mark) = after[start..].find('?') else {
-        return Vec::new();
-    };
-    let mut pairs = Vec::new();
-    let mut at = start + mark + 1;
-    for pair in after[at..].split('&') {
-        let name = pair.split_once('=').map_or(pair, |(name, _)| name);
-        if !pair.is_empty() && login_parameter(&decode(name)) {
-            pairs.push(at..at + pair.len());
-        }
-        at += pair.len() + 1;
-    }
-    pairs
-}
-
-/// A PostgreSQL URL read for showing or writing down (M1 of the
-/// 3cf2cfc246 review). Its user part has two readings: the daemon's
-/// client's, to the first `@` anywhere ([`parts`], what a login is put
-/// into), and the URL's own authority's, to the last `@` before the first
-/// `/`. What is shown or kept drops the widest user part either reading
-/// finds and every login pair the query with no user part, or after
-/// either reading's, holds; an `@` inside such a pair ends no user part
-/// (the pair is dropped whole, so no part of its value is left as a host).
-struct Shown<'a> {
-    scheme: &'a str,
-    /// The URL after `scheme://`.
-    after: &'a str,
-    /// Where the widest user part ends: its `@`.
-    user_end: Option<usize>,
-    /// Every login pair either reading finds, as byte ranges of `after`.
-    pairs: Vec<Range<usize>>,
-}
-
-impl<'a> Shown<'a> {
-    fn of(url: &'a str) -> Result<Self> {
-        let (scheme, _, _) = parts(url)?;
-        let after = &url[scheme.len() + "://".len()..];
-        let first = after.find('@');
-        let own = after[..after.find('/').unwrap_or(after.len())].rfind('@');
-        let mut pairs = login_pairs(after, 0);
-        for at in [first, own].into_iter().flatten() {
-            pairs.extend(login_pairs(after, at + 1));
-        }
-        pairs.sort_by_key(|pair| (pair.start, pair.end));
-        pairs.dedup();
-        let user_end = ([first, own].into_iter().flatten())
-            .filter(|at| !pairs.iter().any(|pair| pair.contains(at)))
-            .max();
-        Ok(Self {
-            scheme,
-            after,
-            user_end,
-            pairs,
-        })
-    }
-
-    /// Whether `range` of `after` shares a byte with a login pair other
-    /// than itself.
-    fn overlaps(&self, range: &Range<usize>) -> bool {
-        (self.pairs.iter())
-            .any(|pair| pair != range && pair.start < range.end && range.start < pair.end)
-    }
-
-    /// The URL after its user part, with no login pair and no empty pair;
-    /// a fragment before the query is dropped with the query.
-    fn rest(&self) -> String {
-        let mut at = self.user_end.map_or(0, |end| end + 1);
-        let mut kept = String::new();
-        for pair in &self.pairs {
-            if pair.start > at {
-                kept.push_str(&self.after[at..pair.start]);
-            }
-            at = at.max(pair.end);
-        }
-        kept.push_str(&self.after[at..]);
-        let Some((path, query)) = kept.split_once('?') else {
-            return kept;
-        };
-        // a fragment holding the query (`#x?…`) goes with it, as its
-        // parameters may have held a login
-        if let Some((path, _)) = path.split_once('#') {
-            return path.to_owned();
-        }
-        let query: Vec<&str> = query.split('&').filter(|pair| !pair.is_empty()).collect();
-        match query.is_empty() {
-            true => path.to_owned(),
-            false => format!("{path}?{}", query.join("&")),
-        }
-    }
-
-    /// The user the URL names, decoded: its widest user part's (before
-    /// any password) unless that holds part of a login pair, else a `user`
-    /// pair that shares nothing with another login pair.
-    fn user(&self) -> Option<String> {
-        let user = match self.user_end {
-            Some(end) => {
-                let user = self.after[..end].split(':').next().unwrap_or("");
-                (!self.overlaps(&(0..user.len()))).then(|| decode(user))
-            }
-            None => None,
-        };
-        let user = user.or_else(|| {
-            (self.pairs.iter())
-                .filter(|pair| !self.overlaps(pair))
-                .find_map(|pair| {
-                    let (name, value) = self.after[pair.clone()].split_once('=')?;
-                    decode(name)
-                        .eq_ignore_ascii_case("user")
-                        .then(|| decode(value))
-                })
-        });
-        user.filter(|user| !user.is_empty())
-    }
-}
-
-/// `url` without a login: the widest user part dropped, and every query
-/// parameter that carries one ([`refuse_login`]'s), as [`Shown`] reads
-/// them, until no reading finds one. What a row shows and what a
-/// PostgreSQL record write keeps of an old URL (V23-6); a URL that is not
-/// a PostgreSQL one is kept as it is.
-pub fn without_login(url: &str) -> String {
-    let mut clean = url.to_owned();
-    // each pass only drops text; one whose result still holds an `@` or a
-    // login pair drops more, so what is left is refused by no reading
-    while let Ok(shown) = Shown::of(&clean) {
-        let next = format!("{}://{}", shown.scheme, shown.rest());
-        if next == clean {
-            break;
-        }
-        clean = next;
-    }
-    clean
-}
-
-/// The user a URL names, decoded ([`Shown::user`]): its user part's, or
-/// else its `user` parameter's. A 2.0 record's URL names none; one recorded
-/// before saved logins may, and its no-login fix names that user. No part
-/// of a password is ever answered as the user.
-pub fn url_user(url: &str) -> Option<String> {
-    Shown::of(url).ok()?.user()
-}
-
-/// The server and database a URL names, as libpq reads it: `(host, port,
-/// database)` from the authority and path, overridden by `host`, `port`
-/// and `dbname` parameters; port 5432 by default; the host in lower case.
-/// What a refusal names, never the URL: read from the URL
-/// [`without_login`] leaves, so no part of a login is named.
-pub fn target(url: &str) -> Result<(String, String, String)> {
-    parts(url)?;
-    let clean = without_login(url);
-    let (_, _, rest) = parts(&clean)?;
-    let path = rest.split(['?', '#']).next().unwrap_or("");
-    let (authority, database) = path.split_once('/').unwrap_or((path, ""));
-    let (mut host, mut port) = match authority.strip_prefix('[') {
-        Some(v6) => {
-            let (host, after) = v6.split_once(']').unwrap_or((v6, ""));
-            (host.to_owned(), after.trim_start_matches(':').to_owned())
-        }
-        None if authority.contains(',') => (authority.to_owned(), String::new()),
-        None => {
-            let (host, port) = authority.rsplit_once(':').unwrap_or((authority, ""));
-            (host.to_owned(), port.to_owned())
-        }
-    };
-    let mut database = decode(database);
-    for (name, value) in query(rest) {
-        match name.as_str() {
-            "host" => host = value,
-            "port" => port = value,
-            "dbname" => database = value,
-            _ => {}
-        }
-    }
-    if port.is_empty() {
-        port = "5432".to_owned();
-    }
-    Ok((decode(&host).to_ascii_lowercase(), port, database))
 }
 
 /// Refuses a `synchronous_commit` that is not one of PostgreSQL's five.

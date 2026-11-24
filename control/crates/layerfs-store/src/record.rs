@@ -391,8 +391,8 @@ impl StoreRecord {
     }
 
     /// Whether a PostgreSQL Store's record holds what 2.0 no longer writes
-    /// (spec v23 V23-6): a `password`, a URL that names a user or holds a
-    /// login, or a `machines.<machine>` entry with anything but a `url`
+    /// (spec v23 V23-6): a `password`, a URL that is not an address alone
+    /// (`refuse_login`), or a `machines.<machine>` entry with anything but a `url`
     /// (an old `checked`). Such a record reads `broken` `outdated` until a
     /// write cleans it ([`Self::cleaned`]).
     pub fn outdated_fields(&self) -> bool {
@@ -415,11 +415,16 @@ impl StoreRecord {
     }
 
     /// The record as a PostgreSQL record write leaves it (V23-6): no
-    /// `password`, no login in any URL, and each machine entry its `url`
-    /// alone (none without one). Every write of `store connect`, `store
-    /// update`, `store disconnect --machine` and `machine remove` cleans.
+    /// `password`, each URL in its clean form (no login, read by its client
+    /// as the URL was), and each machine entry its `url` alone (none without
+    /// one). A URL with no clean form is kept as it is, never rewritten, and
+    /// the record stays `outdated` (`postgresql::address::clean`). Every
+    /// write of `store connect`, `store update`, `store disconnect
+    /// --machine` and `machine remove` cleans.
     pub fn cleaned(self) -> Self {
-        let clean = crate::postgresql::connect::without_login;
+        let clean = |url: &str| {
+            crate::postgresql::address::clean(url).map_or_else(|| url.to_owned(), |(url, _)| url)
+        };
         let record = self.without("password");
         let record = match record.text("url").map(clean) {
             Some(url) => record.with("url", SdkValue::text(url)),
@@ -548,17 +553,20 @@ pub fn url(record: &StoreRecord) -> Result<String> {
 /// the Store's saved login put in now: its own address where it has one,
 /// else the Store's.
 pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
-    let own = record.own_connection(machine).unwrap_or_default();
-    let url = match own.url.as_deref().or(record.text("url")) {
-        Some(url) => url,
-        None => {
-            return Err(refused(
-                "Failed",
-                format!("PostgreSQL Store {}'s record has no url", record.name()),
-            ))
-        }
-    };
-    crate::postgresql::login::dial(record, url)
+    let url = address_on(record, machine).ok_or_else(|| {
+        refused(
+            "Failed",
+            format!("PostgreSQL Store {}'s record has no url", record.name()),
+        )
+    })?;
+    crate::postgresql::login::dial(record, &url)
+}
+
+/// The address machine `machine` dials for PostgreSQL Store `record`, with
+/// no login: its own where it has one, else the Store's.
+pub fn address_on(record: &StoreRecord, machine: &str) -> Option<String> {
+    let own = record.own_connection(machine).and_then(|own| own.url);
+    own.or_else(|| record.text("url").map(str::to_owned))
 }
 
 /// Every Store record, by name.

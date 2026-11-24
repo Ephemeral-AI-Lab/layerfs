@@ -80,9 +80,10 @@ another operation holds the Store
 
 ```text
  store.connect(name, url, {auth, synchronous_commit})
-   refuse_login(url)          a user, user:pass@, any *password* param
-                              or passfile
-                              -> InvalidInput
+   refuse_login(url)          not an address alone, as the client
+                              reads it: any `@` or `#`, a user or a
+                              password, a URL it does not read
+                              (passfile, sslpassword) -> InvalidInput
    auth                       required, and saved (`store save-auth`):
                               else InvalidInput / NotFound
    synchronous_commit         off | local (default) | remote_write | on
@@ -108,25 +109,39 @@ whose platform runs PostgreSQL Sandboxes (#536 C4), and `sandbox.create`
 checks from the machine that it reaches this Store, so no call comes
 between `store.connect` and the first Sandbox. `machines` holds only the
 machines with a connection of their own (H9). A record holding what 2.0 no
-longer writes (a `password`, a URL with a user or a login parameter, a
+longer writes (a `password`, a URL that is not an address alone, a
 `machines.<m>` entry without `url` or with more, such as an old `checked`)
 reads `broken` `outdated` (`StoreRecord::outdated_fields`), fixed by `store
-update <s> --auth <auth>`; every PostgreSQL record write (`connect`,
+update <s> --auth <auth>` (`login::outdated_fix`; a URL with no clean form,
+below, is replaced instead: a machine's own with `store disconnect <s>
+--machine <m>`, the Store's with `store connect <s> <url>`, after `store
+disconnect <s>` when the record names no login, and `store update --auth`
+refuses such a record with that fix, writing nothing); every PostgreSQL record write (`connect`,
 `update`, `save_own`, `forget_machine`) drops those fields
 (`StoreRecord::cleaned`, spec v23 V23-6), and no read does.
-A URL's user part has two readings, and what is shown or written down
-strips both: the daemon's client ends it at the first `@` anywhere (where
-`secrets::with_login` puts the login, the one place that split is used),
-the URL's authority at the last `@` before the first `/`.
-`connect::without_login` (record writes, `connections` rows, fix lines)
-drops the wider user part and every login parameter of the query either
-reading leaves, read as the client reads it (a value runs to the next `&`;
-a `#` ends nothing, and a fragment ahead of the query goes with it); an `@` inside a login parameter ends no user part, so
-`postgres://h/db?password=p@ss` is kept as `postgres://h/db`, never as a
-host `ss`. It strips again until no reading finds a user part or a login,
-so one write leaves a record current. `url_user` (a fix's `--user`) never
-answers a user part that holds part of a login parameter, and `target`
-(a row's `server`, a refusal's host) reads the stripped URL.
+A Store's URL is read only as its client reads it
+([`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs),
+`postgres::Config`, tokio-postgres 0.7's `UrlParser`, which
+`layerfs-persistence` re-exports as `PostgresConfig`); LayerFS keeps no
+parser of its own. What is shown or written down is a URL's clean form
+(`address::clean`): the text after the client's user part (to the first
+`@` anywhere), without the query pairs the client reads as a login (each
+pair asked of the client alone), each `#` written `%23`. It is kept only
+when the client reads it with no user and no password and the same hosts,
+host addresses, ports and database as the original, and no three bytes of
+the client's password are in it or in the client's user. A URL with no
+clean form (the client does not read it, its client user part holds a `?`
+so the login cannot be told from the address, an `@` is left, or a check
+fails) is shown as `postgresql://<hidden: not an address alone>` with no
+`server`, and a write keeps it as it was, never rewritten: the record stays
+`outdated`. `without_login` (rows, fix lines), `url_user` (a fix's
+`--user`: the client's user of a URL with a clean form, else `<user>`;
+a fix's address is `<url>` when there is no clean form) and `target` (a
+row's `server`, a refusal's host: the clean form's hosts, ports and
+database as the client reads them) all read that form, so
+`postgres://h/d#x?password=y` is kept as `postgres://h/d%23x` (database
+`d#x`), and `postgres://u:pw@h/db?application_name=me@laptop` is hidden,
+never rewritten to the host `laptop`.
 `machine.remove` forgets the machine's entry and its reach in every Store.
 
 ### Who connects (spec v23)
@@ -154,8 +169,13 @@ reaches PostgreSQL only by an Init into it.
 
 A PostgreSQL Store's record names a saved login (`auth`), which
 `postgresql/login.rs` `dial` puts into the address it dials
-(`secrets::with_login`); a machine's own address (`machines.<m>.url`) is
-dialled with the same login. A record that names no `auth` (written before
+(`address::with_login`); a machine's own address (`machines.<m>.url`) is
+dialled with the same login. Only an address alone is dialled
+(`refuse_login`, below); a recorded URL that is not one (an older
+record's) is refused `InvalidInput` with the record's fix, never dialled.
+`with_login` reads the URL it makes back with the client and refuses it,
+undialled, unless the client reads exactly the saved user and password and
+the address's hosts, host addresses, ports and database. A record that names no `auth` (written before
 saved logins) is `broken` `outdated`, and every call that dials it is
 refused `InvalidInput` with the fix `layerfs store save-auth <auth> --user
 <user> --password-stdin && layerfs store update <store> --auth <auth>`; its
@@ -170,7 +190,8 @@ update as its fix
  secret/auth/<auth>.json: user, password (0600)
       |  each call, in the caller only
       v
- secrets::with_login -> <user>:<percent-encoded password>@h/db  (memory)
+ address::with_login -> <user>:<percent-encoded password>@h/db  (memory,
+                         read back by the client before it is dialled)
       v
  machine reach(spec, url) -> postgresql field of ONE request
       |  native: same process; else worker sandbox.host, whose decode
@@ -182,8 +203,8 @@ update as its fix
 
 | Rule | Source |
 | --- | --- |
-| The login is a saved one: a URL that names a user, holds a password or names a `passfile` is refused `InvalidInput` (`refuse_login`: any `@`, which the client reads as ending a user part, or a login parameter either reading finds), with a fix giving the address alone (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store); `sslkey` and `sslcert` pass; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
-| Every byte outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `percent` |
+| The login is a saved one, and only an address alone is dialled or recorded: `refuse_login` refuses `InvalidInput` a URL holding any `@` (the client ends a user part at the first, wherever it is) or `#`, one the client does not read (an unknown key such as `passfile`, `sslpassword`, `sslkey` or `sslcert`, or a bad value), and one whose client reads a user or a password (`user=`, `password=` in any spelling the client decodes); an `@` or `#` of the address itself is written `%40` or `%23`, which the client decodes. The refusal's fix gives the clean form (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store), `<url>` and `<user>` when there is none; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs), [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
+| Every byte of the user and password outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs) `percent` |
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 

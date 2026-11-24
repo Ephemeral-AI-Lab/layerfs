@@ -5,6 +5,7 @@
 //! here, with [`dial`], which puts a Store's login into the address it
 //! dials, and [`auth_of`], the login a Store names. A password is never
 //! answered, logged or written into a record.
+use super::address::{self, refuse_login, with_login};
 use crate::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::{map_of, shown_names};
@@ -91,19 +92,86 @@ pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
             ),
         )
     })?;
+    // a URL that is not an address alone (an older record's) is never
+    // dialled: its fix writes or connects one
+    refuse_login(url).map_err(|refusal| {
+        let message = format!(
+            "PostgreSQL Store {}'s URL: {}",
+            record.name(),
+            refusal.message
+        );
+        with_fix(refused(&refusal.code, message), fix_of(record))
+    })?;
     let login = read(home, auth)?;
-    layerfs_home::secrets::with_login(url, &login.user, login.password())
+    with_login(url, &login.user, login.password())
+}
+
+/// The fix of PostgreSQL Store `record` whose record alone makes it
+/// `broken` ([`crate::state::postgresql`]): [`no_auth_fix`] when it names
+/// no saved login, [`missing_fix`] when the home does not hold the one it
+/// names, else [`outdated_fix`].
+pub fn fix_of(record: &StoreRecord) -> String {
+    match record.text("auth") {
+        None => no_auth_fix(record),
+        Some(auth) if record.home().is_some_and(|home| is_missing(home, auth)) => {
+            missing_fix(record, auth)
+        }
+        Some(auth) => outdated_fix(record, auth),
+    }
+}
+
+/// The steps that leave PostgreSQL Store `record` naming login `auth` (a
+/// name, or `<auth>`) with every URL an address alone: the login saved
+/// first when `save`; each machine's own address with no clean form
+/// ([`address::clean`]) removed (`store disconnect --machine`); then the
+/// login named with `store update --auth`, which writes every URL clean.
+/// A Store address with no clean form is never rewritten: the Store is
+/// connected again with the address alone (`<url>`, an `@` or `#` in it
+/// written `%40` or `%23`), after a `store disconnect` when the record
+/// names no login, as a connected Store's connect takes no `--auth`.
+fn fix(record: &StoreRecord, save: bool, auth: &str) -> String {
+    let store = shell_word(record.name());
+    let unclean = |url: &str| address::clean(url).is_none();
+    let named = record.text("auth").is_some();
+    let address = record.text("url").is_some_and(unclean);
+    let mut steps = Vec::new();
+    if save {
+        let user = fix_user(record);
+        steps.push(format!(
+            "layerfs store save-auth {auth} --user {user} --password-stdin"
+        ));
+    }
+    for (machine, own) in record.own_connections() {
+        if (named || !address) && own.url.as_deref().is_some_and(unclean) {
+            let machine = shell_word(&machine);
+            steps.push(format!(
+                "layerfs store disconnect {store} --machine {machine}"
+            ));
+        }
+    }
+    steps.push(match (address, named) {
+        (false, _) => format!("layerfs store update {store} --auth {auth}"),
+        (true, true) => format!("layerfs store connect {store} <url>"),
+        (true, false) => format!(
+            "layerfs store disconnect {store} && layerfs store connect {store} <url> --auth {auth}"
+        ),
+    });
+    steps.join(" && ")
 }
 
 /// The fix of PostgreSQL Store `record` naming no saved login: save one,
-/// then name it. `--user` is the user its URL names when it names one (a
-/// record from before saved logins), shell-quoted, else `<user>`.
+/// then name it ([`fix`]). `--user` is the user its URL names when it
+/// names one (a record from before saved logins), shell-quoted, else
+/// `<user>`.
 pub fn no_auth_fix(record: &StoreRecord) -> String {
-    format!(
-        "layerfs store save-auth <auth> --user {} --password-stdin && layerfs store update {} --auth <auth>",
-        fix_user(record),
-        shell_word(record.name())
-    )
+    fix(record, true, "<auth>")
+}
+
+/// The fix of PostgreSQL Store `record` naming login `auth` whose record
+/// holds what 2.0 no longer writes (spec v23 V23-6): name it again, which
+/// writes the record clean ([`fix`]).
+pub fn outdated_fix(record: &StoreRecord, auth: &str) -> String {
+    fix(record, false, &shell_word(auth))
 }
 
 /// Whether `home` holds no saved login `auth` (its file is absent; one
@@ -117,18 +185,14 @@ pub fn is_missing(home: &Path, auth: &str) -> bool {
 /// to it, which also rewrites any old field. `--user` as [`no_auth_fix`]
 /// chooses it.
 pub fn missing_fix(record: &StoreRecord, auth: &str) -> String {
-    format!(
-        "layerfs store save-auth {auth} --user {} --password-stdin && layerfs store update {} --auth {auth}",
-        fix_user(record),
-        shell_word(record.name()),
-        auth = shell_word(auth)
-    )
+    fix(record, true, &shell_word(auth))
 }
 
-/// The `--user` a fix names: the user the record's URL names (one written
-/// before saved logins), shell-quoted, else `<user>`.
+/// The `--user` a fix names: the user the client reads in the record's
+/// URL (one written before saved logins) when it has a clean form
+/// ([`address::url_user`]), shell-quoted, else `<user>`.
 fn fix_user(record: &StoreRecord) -> String {
-    let user = record.text("url").and_then(super::connect::url_user);
+    let user = record.text("url").and_then(address::url_user);
     user.map_or_else(|| "<user>".to_owned(), |user| shell_word(&user))
 }
 

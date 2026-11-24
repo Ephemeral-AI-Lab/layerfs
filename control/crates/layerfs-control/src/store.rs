@@ -306,7 +306,10 @@ pub(crate) fn check_from(
         #[cfg(not(feature = "machine"))]
         Err(refusal) => return (None, Err(refusal)),
     };
-    let host = match postgresql.url().and_then(connect::target) {
+    // the host named is read from the address the machine dials, with no
+    // login: the URL dialled holds the password
+    let address = layerfs_store::record::address_on(record, machine).unwrap_or_default();
+    let host = match connect::target(&address) {
         Ok((host, _, _)) => host,
         Err(refusal) => return (None, Err(refusal)),
     };

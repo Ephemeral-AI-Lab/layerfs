@@ -447,10 +447,14 @@ shown in [the calls](calls.md#store-13).)
   auths` lists the logins and the Stores using each; `store remove-auth`
   deletes one no Store uses. There is no login per machine.
 - **`store connect <store> <url> --auth A`.** The URL starts `postgresql://`
-  or `postgres://` and holds host, port, database and TLS settings; one that
-  names a user or carries a login (`user`, a password, `passfile`) is
-  refused `InvalidInput`, before any effect, with a fix that gives the address
-  alone (after `store save-auth`, named with `--auth` on a first connect). `--auth` is required on a Store's first connect. An empty database
+  or `postgres://` and holds host, port, database and TLS settings, read
+  only as the PostgreSQL client reads it. One that names a user or carries
+  a login (`user`, a password, `passfile`), holds an `@` or a `#` (write one
+  that is part of the address `%40` or `%23`), or that the client does not
+  read (a key it does not know, such as `sslpassword`, `sslkey` or
+  `sslcert`) is refused `InvalidInput`, before any effect, with a fix that
+  gives the address alone (after `store save-auth`, named with `--auth` on a
+  first connect; `<url>` when no form of the URL can be shown). `--auth` is required on a Store's first connect. An empty database
   gets the `layerfs` schema with a new identity; a database that already
   holds it keeps its identity, and its projects become this home's project
   records. A Store name already in the home is `Exists`, and so is the same
@@ -475,10 +479,18 @@ shown in [the calls](calls.md#store-13).)
   `server_version`, `error`). Nothing about a database is stored on a
   machine; reaches are kept beside the Store's record.
 - **Old records.** A PostgreSQL record that still holds a `password`, a URL
-  with a user, or an old `machines.<m>.checked` reads `broken` `outdated`;
-  `store update <store> --auth <its auth>` writes it clean. A record naming
-  a login the home does not hold reads `broken` `missing`, fixed by saving
-  that login and running the same update.
+  that is not an address alone, or an old `machines.<m>.checked` reads
+  `broken` `outdated`, and a URL that is not an address alone is never
+  dialled; `store update <store> --auth <its auth>` writes it clean. A URL is
+  shown and written only in a form its client reads as the same servers and
+  database with no login and no part of the password; one with no such form
+  (an `@` left in a value, a user part holding a `?`, a URL the client does
+  not read) is shown as `postgresql://<hidden: not an address alone>` and
+  never rewritten: its fix replaces it (`store connect <store> <url>`, or
+  `store disconnect <store> --machine <m>` for a machine's own), and `store
+  update --auth` refuses such a record with that fix, writing nothing. A
+  record naming a login the home does not hold reads `broken` `missing`,
+  fixed by saving that login and running the same update.
 - **`store update <store>`** changes the login (`--auth`, checked against the
   same Store) or `--synchronous-commit`. A new address is `store connect`
   again, checked against the same Store's id.

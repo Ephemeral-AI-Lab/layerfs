@@ -11,7 +11,7 @@ use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::{refused, with_fix, Outcome};
 use std::path::Path;
 
 /// What `store.update` changes of a Store.
@@ -48,6 +48,8 @@ fn changed(record: StoreRecord, request: &StoreUpdate) -> StoreRecord {
 /// on it are closed (`InUse` while one of its calls runs). The login is
 /// checked again under the lock, and the write leaves no old field (spec
 /// v23 V23-6): an update to the Store's own login is its `outdated` fix.
+/// A new login is dialled on the clean record, and a record whose URL has
+/// no clean form is refused with its fix, nothing written.
 /// A running
 /// Sandbox keeps the connection it started with. Answers `{ ok, outcome:
 /// updated, store, auth, synchronous_commit }`.
@@ -66,7 +68,19 @@ pub fn update(home_dir: &Path, request: &StoreUpdate) -> Outcome {
     }
     if let Some(auth) = &request.auth {
         login::saved(home_dir, auth)?;
-        let trial = changed(record.clone(), request);
+        // the clean record is what is dialled and written; one whose URL has
+        // no clean form is never rewritten (it would read another server or
+        // keep part of a password), and its fix replaces that URL
+        let trial = changed(record.clone(), request).cleaned();
+        if trial.outdated_fields() {
+            let message = format!(
+                "Store {name}'s recorded URL has no form without its login that its client reads as the same server; nothing was written"
+            );
+            return Err(with_fix(
+                refused("InvalidInput", message),
+                login::fix_of(&record),
+            ));
+        }
         same_store(&trial, &selection(&trial)?).map_err(|refusal| named(refusal, name))?;
     }
     let home_lock = home::lock::take(home_dir)?;

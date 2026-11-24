@@ -165,9 +165,10 @@ machine `{ at, ok: true }` after its reply. A writer takes the Store's lock
 after its Store I/O and writes nothing once the record is gone; a live
 read's `at` merges without a lock, as a read takes none. None of it moves
 the home's `generation`. A PostgreSQL Store naming a login the home does not
-hold is `broken` `missing`; one whose record holds a `password`, a URL with
-a login or a `machines.<m>` entry with anything but `url` is `broken`
-`outdated`, fixed by `store update <store> --auth <auth>`
+hold is `broken` `missing`; one whose record holds a `password`, a URL that
+is not an address alone or a `machines.<m>` entry with anything but `url`
+is `broken` `outdated`, fixed by `store update <store> --auth <auth>` (a URL
+with no clean form is replaced instead, `store connect <store> <url>`)
 ([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs)). `projects` shows at
 most 20 names, `projects_count` only when there are more. A `backups` row's
 long form is `bucket, file, sha256, heads_sha256, last, attempt`: `last` the
@@ -289,7 +290,11 @@ Connects a PostgreSQL database as a Store, or sets an address of a
 connected one ([`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs)).
 The record keeps the URL with no user and no password and names its saved
 login (`auth`), put into the URL only when the Store is dialled; a URL that
-names a user or holds a password is `InvalidInput`.
+names a user or holds a password, holds an `@` or `#` (written `%40` or
+`%23` when part of the address) or is not read by the PostgreSQL client is
+`InvalidInput`. A URL is read only as that client reads it, and shown only
+in a form it reads as the same servers and database with no login, else as
+`postgresql://<hidden: not an address alone>`.
 
 On a Store's first connect `--auth` is required and must be saved;
 `--synchronous-commit` defaults to `local`. It creates the `layerfs` schema
@@ -305,7 +310,7 @@ recorded: `sandbox create --machine M` chooses where a Sandbox of it runs.
 
 | Refusal | When |
 | --- | --- |
-| `InvalidInput` | a URL that is not PostgreSQL, or names a user or holds a password; a bad `--synchronous-commit`; `--auth` missing on a first connect; `--auth` or `--synchronous-commit` on a connected Store |
+| `InvalidInput` | a URL that is not PostgreSQL, names a user or holds a password, holds an `@` or `#`, or that the PostgreSQL client does not read; a bad `--synchronous-commit`; `--auth` missing on a first connect; `--auth` or `--synchronous-commit` on a connected Store |
 | `NotFound` | the named login is not saved (the message names `store save-auth`) |
 | `Exists` | another Store of this home has that name or that database's id |
 | `Unavailable` | no session (no database, a refused login, no server); the machine is stopped |
@@ -315,7 +320,7 @@ Run on macOS native against a local `postgres:17`, with a debug build:
 
 ```console
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
-{"error":"InvalidInput","message":"the URL names a user or holds a password; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"}
+{"error":"InvalidInput","message":"the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one); an `@` or `#` that is part of the address is written %40 or %23"}
 ```
 
 ### store.disconnect
