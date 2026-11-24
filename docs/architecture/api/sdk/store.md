@@ -262,9 +262,9 @@ $ layerfs store create shop
 Connect a PostgreSQL database as a Store, or change a connected one's address, login or setting.
 
 ```text
-CLI     layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local]
-Node    await layerfs.store.connect(store, url, { user, password, synchronous_commit })
-Python  layerfs.store.connect(store, url, *, user=None, password=None, synchronous_commit=None)
+CLI     layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local] [--dry-run]
+Node    await layerfs.store.connect(store, url, { user, password, synchronous_commit, dry_run })
+Python  layerfs.store.connect(store, url, *, user=None, password=None, synchronous_commit=None, dry_run=None)
 ```
 
 | Argument | Kind | Rule |
@@ -274,11 +274,12 @@ Python  layerfs.store.connect(store, url, *, user=None, password=None, synchrono
 | `user` option | text | the PostgreSQL role; required on a Store's first connect, else the saved one is kept |
 | `password` option | content | its password; required on a Store's first connect, else the saved one is kept; the shell reads it from stdin with `--password-stdin` |
 | `synchronous_commit` option | text | off, local, remote_write, on or remote_apply; a new Store takes `local`, a connected one keeps its own when omitted |
+| `dry_run` option | bool | check from this computer and each attached machine, and save nothing |
 
 | Answer | Keys |
 | --- | --- |
-| short | each when set: `ok`, `projects`, `projects_count` |
-| long | `ok, projects, projects_count, outcome, store, engine, url, user, synchronous_commit, machines` |
+| short | each when set: `ok`, `projects`, `projects_count`; a dry run's also `outcome`, `here`, `machines` |
+| long | `ok, projects, projects_count, outcome, store, engine, url, user, synchronous_commit, machines, here` |
 | call | writes one call-log line; MCP `admin` |
 
 This computer is the one place a PostgreSQL Store's address and login are
@@ -327,15 +328,48 @@ Short `{"ok":true}`, long `outcome` `updated`. A connect that is saved,
 first or not, records its check as this computer's reach (`store get`'s
 `reach`: `ok` and how long the check took), as `store doctor` does; a
 refused connect records nothing. Attachments are kept: each
-attached machine dials the new address and login from its next connection,
-and `store doctor` checks them. A sqlite Store of that name is `Exists`.
+attached machine dials the new address and login from its next connection.
+So a change of the address, user or password is checked from every
+attached machine too, one after another, after this computer's check and
+before anything is saved
+([`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs)
+`connect`): one that fails refuses the connect `Conflict`, naming the
+machines, with `machines` (`[{ machine, ok: false, step, message }]`) beside
+it and `layerfs store detach <store> --machine <first>` as its fix; nothing
+is saved, so no attached machine is cut off unseen. A change of
+`synchronous_commit` alone checks no machine. A sqlite Store of that name
+is `Exists`.
+
+Every refused check names the connection step it stopped at as `step`,
+flat beside `error` and `message`: one of the doctor's
+`store.connection.<step>` words, decided by the one classifier both use
+([`layerfs-persistence` `ConnectionStep`](../../../../engine/crates/layerfs-persistence/src/diagnostic/step.rs)).
+`configuration` is the address, its options or the saved login before any
+dial; `transport` no server answered (the driver makes DNS, TCP and TLS as
+one step, so a TLS failure is `transport` too); `authentication` a login
+the server refused; `database` a database it does not have; `schema` no
+Store schema, or a role that may not use it or lacks a privilege a
+Sandbox needs; `identity` a schema holding another Store's id.
+
+`--dry-run` makes the same checks and saves and records nothing (no
+record, password or reach), and no check refuses it. It answers `{ ok,
+outcome: "tested", store, url, here, machines }`: `here` this computer's
+check, `{ ok: true, latency_ms, server_version }` or `{ ok: false, step,
+code, message }` (`code` the refusal's public code); `machines` one such row per attached machine with its
+`machine` (each checked for any change, the setting alone included), or,
+when this computer's check failed, each with `ok: null` and no dial; `ok`
+whether every check passed. A first connect's dry run checks from this
+computer only and makes no schema: an empty database answers
+`here.empty: true`. The password comes from stdin as usual; a connected
+Store's saved one is used when none is given. Input refusals (`InvalidInput`,
+`Exists`) refuse a dry run as they do a connect.
 
 | Refusal | When |
 | --- | --- |
 | `InvalidInput` | a URL that is not PostgreSQL, names a user or holds a password, holds an `@` or `#`, or that the PostgreSQL client does not read; a bad `--synchronous-commit`; `--user` or the password missing on a first connect; a connected Store whose record names no user or whose password this home does not hold, when none is given |
 | `Exists` | a sqlite Store of that name, or another Store of this home with that database's id |
-| `Unavailable` | no session (no database, a refused login, no server); a connected Store's new address that holds another Store |
-| `Conflict` | the Store was disconnected or connected to another database meanwhile |
+| `Unavailable` | no server answered, the server refused the login or the database, or the address holds another Store; `step` says which |
+| `Conflict` | an attached machine does not reach a new address or login (`machines`); the Store was disconnected or connected to another database meanwhile |
 
 Run on macOS native against a local `postgres:17`, with a debug build:
 
@@ -381,15 +415,16 @@ lease, or a call in this process is running on it;
 Let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first.
 
 ```text
-CLI     layerfs store attach <store> --machine M
-Node    await layerfs.store.attach(store, { machine })
-Python  layerfs.store.attach(store, *, machine)
+CLI     layerfs store attach <store> --machine M [--dry-run]
+Node    await layerfs.store.attach(store, { machine, dry_run })
+Python  layerfs.store.attach(store, *, machine, dry_run=None)
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `store` | name | a PostgreSQL Store |
 | `machine` option | name | the machine; required |
+| `dry_run` option | bool | check from the machine as attach does, and record nothing |
 
 | Answer | Keys |
 | --- | --- |
@@ -416,6 +451,16 @@ checked and detached like any other machine, its platform deciding whether
 a loopback URL is allowed (it shares this computer's loopback on macOS and
 Linux); its reach is its own, apart from this computer's. `store connect`
 attaches nothing.
+
+A refused check names the `machine` and the connection `step` it stopped at
+(as `store connect`'s do), flat beside `error` and `message`; a loopback
+address the machine does not share is refused `Unsupported` at
+`configuration`, before any dial, and a machine whose worker was not reached
+names no step. `--dry-run` makes the same checks (the Store, the machine's
+platform, the check from the machine) and records nothing: neither
+`attached` nor the reach. It answers `outcome: tested` or the refusal attach
+would give, and takes no lock, so dry runs of several machines of one Store
+may run at once (the UI's per-machine Test).
 
 | Refusal | When |
 | --- | --- |

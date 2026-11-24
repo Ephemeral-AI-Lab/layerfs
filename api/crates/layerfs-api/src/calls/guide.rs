@@ -488,9 +488,19 @@ const ARGS: &[(&str, &str, &str)] = &[
         "the role's password, read from stdin; needed on a Store's first connect",
     ),
     (
+        "store.connect",
+        "dry_run",
+        "check from this computer and each attached machine, and save nothing",
+    ),
+    (
         "store.attach",
         "machine",
         "the machine that may run the Store's Sandboxes",
+    ),
+    (
+        "store.attach",
+        "dry_run",
+        "check from the machine as attach does, and record nothing",
     ),
     (
         "store.detach",

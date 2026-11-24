@@ -9,8 +9,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix, Outcome, FIX};
+use layerfs_home::outcome::{refused, with_fix, with_next, Outcome, FIX};
 use layerfs_machine::worker::Unreached;
+use layerfs_store::diagnostic::ConnectionStep;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::postgresql::check;
@@ -225,11 +226,109 @@ pub fn disconnect(home: &Path, name: &StoreName) -> Outcome {
     connect::disconnect(home, name, RELATED)
 }
 
-/// `store.connect(store, url, { user, password, synchronous_commit })`:
-/// a new PostgreSQL Store, or a connected one's address, login or setting,
-/// checked from this process before anything is saved.
-pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
-    connect::run(home, request)
+/// `store.connect(store, url, { user, password, synchronous_commit,
+/// dry_run })`: a new PostgreSQL Store, or a connected one's address,
+/// login or setting, checked from this process before anything is saved.
+/// A change of a connected Store's address, user or password is then
+/// checked from every machine attached to it, one after another, as its
+/// Sandboxes would dial the new values: one that fails refuses the
+/// connect `Conflict` ([`cut_off`]), nothing saved, so no attached machine
+/// is cut off unseen. A dry run makes the same checks (the machines' for
+/// any change, and only once this computer passed), saves and records
+/// nothing and is refused by none of them: it answers
+/// [`connect::tested`].
+pub fn connect(home: &Path, events: &mut Events<'_>, request: &StoreConnect) -> Outcome {
+    let Some(update) = connect::prepare(home, request)? else {
+        return connect::connect(home, request);
+    };
+    if !request.dry_run {
+        if let Err(refusal) = &update.here {
+            return Err(refusal.clone());
+        }
+    }
+    let machines = update.trial().attached();
+    let mut checked = Vec::new();
+    if update.here.is_ok() && (request.dry_run || update.redials()) {
+        for machine in &machines {
+            let url = update.dial().to_owned();
+            let seen = check_dialling(home, events, update.trial(), machine, url).1;
+            checked.push((machine.as_str(), seen));
+        }
+    }
+    let name = request.store.as_str();
+    if request.dry_run {
+        let row = |machine: &str, tested: SdkValue| {
+            let mut fields = vec![("machine".to_owned(), SdkValue::text(machine))];
+            if let SdkValue::Map(tested) = tested {
+                fields.extend(tested);
+            }
+            SdkValue::Map(fields)
+        };
+        let rows = match update.here.is_ok() {
+            true => (checked.iter())
+                .map(|(machine, seen)| row(machine, check::tested(seen)))
+                .collect(),
+            // this computer not let in: each machine would only repeat it
+            false => (machines.iter())
+                .map(|machine| row(machine, not_checked()))
+                .collect(),
+        };
+        let here = check::tested(&update.here);
+        return Ok(connect::tested(name, &request.url, here, rows));
+    }
+    let failed: Vec<_> = (checked.iter())
+        .filter_map(|(machine, seen)| seen.as_ref().err().map(|refusal| (*machine, refusal)))
+        .collect();
+    if !failed.is_empty() {
+        return Err(cut_off(name, &failed));
+    }
+    update.save(home, request)
+}
+
+/// A dry run's row of a machine not checked: this computer's check failed
+/// first.
+fn not_checked() -> SdkValue {
+    SdkValue::map([
+        ("ok", SdkValue::Null),
+        (
+            "message",
+            SdkValue::text("not checked: this computer's check failed first"),
+        ),
+    ])
+}
+
+/// The `Conflict` of a connect whose new address or login the attached
+/// machines `failed` do not reach: their names in the message, `machines`
+/// `[{ machine, ok: false, step, message }]` beside it, and as its fix the
+/// detach of the first (or connect it with values they reach).
+fn cut_off(store: &str, failed: &[(&str, &SdkRefusal)]) -> SdkRefusal {
+    let names: Vec<_> = failed.iter().map(|(machine, _)| *machine).collect();
+    let message = format!(
+        "the new connection of PostgreSQL Store {store} does not reach attached machine(s) {}; nothing was saved",
+        names.join(", ")
+    );
+    let rows = failed.iter().map(|(machine, refusal)| {
+        SdkValue::map([
+            ("machine", SdkValue::text(*machine)),
+            ("ok", SdkValue::Bool(false)),
+            ("step", SdkValue::opt_text(check::step_of(refusal))),
+            ("message", SdkValue::text(&refusal.message)),
+        ])
+    });
+    let refusal = with_next(
+        refused("Conflict", message),
+        "machines",
+        SdkValue::List(rows.collect()),
+    );
+    let first = names.first().copied().unwrap_or_default();
+    with_fix(
+        refusal,
+        format!(
+            "layerfs store detach {} --machine {}",
+            shell_word(store),
+            shell_word(first)
+        ),
+    )
 }
 
 /// The PostgreSQL Store `name` a machine attaches to or detaches from: a
@@ -249,25 +348,32 @@ fn attachable(home: &Path, name: &StoreName, machine: &str) -> Result<StoreRecor
     Ok(record)
 }
 
-/// `store.attach(store, { machine })`: lets machine `machine` run Sandboxes
-/// of PostgreSQL Store `store`. The machine must exist and its platform
-/// run PostgreSQL Sandboxes; the Store is checked from it with the URL and
-/// login this computer saved, as its Sandboxes dial them, before it is
-/// recorded in the Store's `attached` and its reach observed. Attaching an
-/// attached machine checks it again (`outcome: checked`, its reach
-/// recorded either way). Answers `{ ok, outcome: attached | checked,
-/// store, machine, latency_ms, server_version }`.
+/// `store.attach(store, { machine, dry_run })`: lets machine `machine` run
+/// Sandboxes of PostgreSQL Store `store`. The machine must exist and its
+/// platform run PostgreSQL Sandboxes; the Store is checked from it with
+/// the URL and login this computer saved, as its Sandboxes dial them,
+/// before it is recorded in the Store's `attached` and its reach observed.
+/// Attaching an attached machine checks it again (`outcome: checked`, its
+/// reach recorded either way). Answers `{ ok, outcome: attached | checked,
+/// store, machine, latency_ms, server_version }`; a refused check names
+/// its `step` and the `machine`. A dry run makes the same checks, takes no
+/// lock and records nothing, neither the attachment nor the reach
+/// (`outcome: tested`), so dry runs of several machines may run at once.
 pub fn attach(
     home: &Path,
     events: &mut Events<'_>,
     name: &StoreName,
     machine: &MachineName,
+    dry_run: bool,
 ) -> Outcome {
     let machine = machine.as_str();
     let record = attachable(home, name, machine)?;
     runs_postgresql_sandboxes(home, name, machine)?;
     let attached = record.is_attached(machine);
     let checked = check_from(home, events, &record, machine).1;
+    if dry_run {
+        return Ok(attach_answer("tested", name, machine, &checked?));
+    }
     if attached || checked.is_ok() {
         let seen = layerfs_store::observed::Reach::of(&checked);
         layerfs_store::observed::record(home, name, Some(machine), &seen);
@@ -275,15 +381,20 @@ pub fn attach(
     let checked = checked?;
     let new = check::attach(home, name, machine, record.binding())?;
     let outcome = if new { "attached" } else { "checked" };
+    Ok(attach_answer(outcome, name, machine, &checked))
+}
+
+/// `store.attach`'s answer for the check `checked` of `machine`.
+fn attach_answer(outcome: &str, name: &StoreName, machine: &str, checked: &SdkValue) -> SdkValue {
     let copied = |key: &str| checked.get(key).cloned().unwrap_or_default();
-    Ok(SdkValue::map([
+    SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("outcome", SdkValue::text(outcome)),
         ("store", SdkValue::text(name.as_str())),
         ("machine", SdkValue::text(machine)),
         ("latency_ms", copied("latency_ms")),
         ("server_version", copied("server_version")),
-    ]))
+    ])
 }
 
 /// `store.detach(store, { machine })`: machine `machine` no longer runs
@@ -351,21 +462,24 @@ fn runs_postgresql_sandboxes(home: &Path, store: &str, machine: &str) -> Result<
 /// `refusal` of the check from machine `machine`, naming it, the Store and
 /// the host it dialled (never the URL), with the platform's `hint` only
 /// when no connection was made (a server that answered, with a refused
-/// login or another Store, was reached). A worker from a bundle without
-/// the check says how to update it.
+/// login or another Store, was reached), and the step the check named. A
+/// worker from a bundle without the check says how to update it.
 fn from_machine(
     refusal: SdkRefusal,
     (store, machine, host): (&str, &str, &str),
     hint: Option<&str>,
 ) -> SdkRefusal {
+    let step = check::step_of(&refusal).map(str::to_owned);
     let message = refusal.message;
-    match refusal.code.as_str() {
-        "InvalidInput" if message.contains("no operation store.reach") => refused(
-            "Unsupported",
-            format!(
-                "machine {machine}'s worker predates this check; `layerfs machine stop {machine}` and `layerfs machine start {machine}` update it"
-            ),
-        ),
+    let made = match refusal.code.as_str() {
+        "InvalidInput" if message.contains("no operation store.reach") => {
+            return refused(
+                "Unsupported",
+                format!(
+                    "machine {machine}'s worker predates this check; `layerfs machine stop {machine}` and `layerfs machine start {machine}` update it"
+                ),
+            )
+        }
         "Unavailable" if !message.starts_with(check::ANOTHER_STORE) => {
             let hint = hint
                 .filter(|_| layerfs_store::postgresql::open::not_connected(&message))
@@ -382,38 +496,81 @@ fn from_machine(
             code,
             format!("machine {machine}, PostgreSQL Store {store} at {host}: {message}"),
         ),
+    };
+    match step {
+        Some(step) => with_next(made, check::STEP, SdkValue::text(step)),
+        None => made,
     }
 }
 
 /// The check of machine `machine`'s connection to PostgreSQL Store
 /// `record` (the Store's URL with its login), run from that machine: in
-/// this process, or in its worker as
-/// `store.reach`. The URL is built as the machine's Sandboxes' calls build
-/// it. Answers the check, `{ at, server_version, latency_ms }`, or its
-/// refusal; either way with the host it dialled, once known.
+/// this process, or in its worker as `store.reach`. Answers the check,
+/// `{ at, server_version, latency_ms }`, or its refusal, which names the
+/// `machine` and, once the check began, the connection `step` it stopped
+/// at (`configuration` for a login this computer does not hold, or an
+/// address the machine cannot dial); either way with the host it
+/// dialled, once known.
 pub(crate) fn check_from(
     home: &Path,
     events: &mut Events<'_>,
     record: &StoreRecord,
     machine: &str,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
-    let name = record.name();
-    let (postgresql, hint) = match layerfs_sandbox::route::reached(home, machine, record) {
-        Ok(reached) => reached,
-        #[cfg(feature = "machine")]
+    match layerfs_store::record::url(record) {
+        Ok(url) => check_dialling(home, events, record, machine, url),
         Err(refusal) => {
-            let refusal = crate::machine::RELATED.nameless_fix(home, machine, refusal);
-            return (None, Err(refusal));
+            let refusal = check::at_step(refusal, ConnectionStep::Configuration);
+            (None, Err(on_machine(refusal, machine)))
         }
-        #[cfg(not(feature = "machine"))]
-        Err(refusal) => return (None, Err(refusal)),
+    }
+}
+
+/// `refusal` of a check from machine `machine`, naming it.
+fn on_machine(refusal: SdkRefusal, machine: &str) -> SdkRefusal {
+    with_next(refusal, "machine", SdkValue::text(machine))
+}
+
+/// [`check_from`] dialling `url`, the Store's address with a login in it,
+/// as the machine's Sandboxes' calls build it (`store.connect` checks new
+/// values before it saves them).
+fn check_dialling(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &StoreRecord,
+    machine: &str,
+    url: String,
+) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
+    let (host, checked) = dial_from(home, events, record, machine, url);
+    (
+        host,
+        checked.map_err(|refusal| on_machine(refusal, machine)),
+    )
+}
+
+/// [`check_dialling`] before its refusal names the machine.
+fn dial_from(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &StoreRecord,
+    machine: &str,
+    url: String,
+) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
+    let name = record.name();
+    let configuration = |refusal| check::at_step(refusal, ConnectionStep::Configuration);
+    let (postgresql, hint) = match layerfs_sandbox::route::dialled(home, machine, record, url) {
+        Ok(Ok(reached)) => reached,
+        // an address this machine cannot dial (a loopback of this host it
+        // does not share), refused before any dial
+        Ok(Err(refusal)) => return (None, Err(configuration(nameless(home, machine, refusal)))),
+        Err(refusal) => return (None, Err(nameless(home, machine, refusal))),
     };
     // the host named is read from the address the machine dials, with no
     // login: the URL dialled holds the password
     let address = record.text("url").unwrap_or_default();
     let host = match connect::target(address) {
         Ok((host, _, _)) => host,
-        Err(refusal) => return (None, Err(refusal)),
+        Err(refusal) => return (None, Err(configuration(refusal))),
     };
     let executor = match place::on_machine(home, machine) {
         Ok(executor) => executor,
@@ -439,6 +596,19 @@ pub(crate) fn check_from(
     let checked =
         checked.map_err(|refusal| from_machine(refusal, (name, machine, &host), hint.as_deref()));
     (Some(host), checked)
+}
+
+/// `refusal` with the fix of a machine that has no VM name, when it is one.
+fn nameless(home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
+    #[cfg(feature = "machine")]
+    {
+        crate::machine::RELATED.nameless_fix(home, machine, refusal)
+    }
+    #[cfg(not(feature = "machine"))]
+    {
+        let _ = (home, machine);
+        refusal
+    }
 }
 
 /// `store.reach` in a machine's worker: `{ store, store_record, postgresql }`

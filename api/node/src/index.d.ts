@@ -505,11 +505,13 @@ export interface StoreConnectOptions extends CallOptions {
   user?: string;
   password?: Content;
   synchronous_commit?: string;
+  dry_run?: boolean;
 }
 
 /** Options of `store.attach`; an unknown option is refused. */
 export interface StoreAttachOptions extends CallOptions {
   machine: string;
+  dry_run?: boolean;
 }
 
 /** Options of `store.detach`; an unknown option is refused. */

@@ -7572,7 +7572,7 @@
       "store.connect"
      ],
      "help": "connect a PostgreSQL database as a Store, or change a connected one's address, login or setting",
-     "cli": "layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local]",
+     "cli": "layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local] [--dry-run]",
      "positionals": [
       {
        "name": "store",
@@ -7602,6 +7602,11 @@
        "kind": "Text",
        "help": "off, local, remote_write, on or remote_apply; a new Store takes local",
        "default": "local"
+      },
+      {
+       "name": "dry_run",
+       "kind": "Bool",
+       "help": "check from this computer and each attached machine, and save nothing"
       }
      ],
      "stdin": "secret",
@@ -7614,8 +7619,11 @@
       "always": [],
       "sometimes": [
        "ok",
+       "outcome",
        "projects",
-       "projects_count"
+       "projects_count",
+       "here",
+       "machines"
       ]
      },
      "long": [
@@ -7628,15 +7636,17 @@
       "url",
       "user",
       "synchronous_commit",
-      "machines"
+      "machines",
+      "here"
      ],
      "item": null,
      "examples": {
       "short": [
        "first connect: {\"projects\":[\"api\",\"web\"]}",
-       "an empty database, or a connected Store changed: {\"ok\":true}"
+       "an empty database, or a connected Store changed: {\"ok\":true}",
+       "a dry run: {\"outcome\":\"tested\",\"here\":{\"ok\":true,\"latency_ms\":2,\"server_version\":\"17.6\"},\"machines\":[{\"machine\":\"lab\",\"ok\":false,\"step\":\"transport\",\"code\":\"Unavailable\",\"message\":\"machine lab cannot reach PostgreSQL Store shop-pg's server at db.internal: ...\"}]}"
       ],
-      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"synchronous_commit\":\"local\",\"machines\":[]}"
+      "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"synchronous_commit\":\"local\",\"machines\":[],\"here\":null}"
      },
      "dropped": [
       {
@@ -7710,7 +7720,7 @@
      "badge": "new",
      "today": [],
      "help": "let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first",
-     "cli": "layerfs store attach <store> --machine M",
+     "cli": "layerfs store attach <store> --machine M [--dry-run]",
      "positionals": [
       {
        "name": "store",
@@ -7723,6 +7733,11 @@
        "kind": "Name",
        "help": "the machine; required",
        "required": true
+      },
+      {
+       "name": "dry_run",
+       "kind": "Bool",
+       "help": "check from the machine as attach does, and record nothing"
       }
      ],
      "stdin": null,
@@ -7752,12 +7767,13 @@
      "examples": {
       "short": [
        "{\"ok\":true,\"outcome\":\"attached\",\"latency_ms\":3}",
-       "an attached machine checked again: {\"ok\":true,\"outcome\":\"checked\",\"latency_ms\":2}"
+       "an attached machine checked again: {\"ok\":true,\"outcome\":\"checked\",\"latency_ms\":2}",
+       "a dry run: {\"ok\":true,\"outcome\":\"tested\",\"latency_ms\":3}"
       ],
       "long": "{\"ok\":true,\"outcome\":\"attached\",\"store\":\"shop-pg\",\"machine\":\"lab\",\"latency_ms\":3,\"server_version\":\"17.6\"}"
      },
      "dropped": [],
-     "new_work": "New (owner, 2026-11-24): the Store is checked from the machine with the URL and login this computer saved, as its Sandboxes dial them; the machine is then recorded in the Store's `attached` and its reach observed. sandbox.create on a machine not attached is refused with this call as its fix."
+     "new_work": "New (owner, 2026-11-24): the Store is checked from the machine with the URL and login this computer saved, as its Sandboxes dial them; the machine is then recorded in the Store's `attached` and its reach observed. sandbox.create on a machine not attached is refused with this call as its fix. `--dry-run` (owner, 2026-11-24): the UI's per-machine Test, which shows the step a failure stopped at."
     },
     {
      "call": "store.detach",

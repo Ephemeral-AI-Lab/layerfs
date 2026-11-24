@@ -76,6 +76,18 @@ impl Server {
         })
     }
 
+    /// The admin URL's start, `postgres://user@host:port` (its user and any
+    /// password), in place of [`Self::base`].
+    fn admin_base(&self) -> String {
+        let config: postgres::Config = self.admin.parse().unwrap();
+        let host = match config.get_hosts().first() {
+            Some(postgres::config::Host::Tcp(host)) => host.clone(),
+            other => panic!("a TCP test server: {other:?}"),
+        };
+        let port = config.get_ports().first().copied().unwrap_or(5432);
+        format!("postgresql://{}@{host}:{port}", self.user)
+    }
+
     /// A new empty database's address, no user and no password.
     fn database(&mut self, tag: &str) -> String {
         let name = format!("pglogin_{tag}_{}", std::process::id());
@@ -166,7 +178,7 @@ fn connect_checks_and_saves_the_login_and_a_reconnect_keeps_what_it_is_not_given
     assert_eq!(
         layerfs_api::json::print(&connected),
         format!(
-            r#"{{"ok":true,"projects":[],"projects_count":null,"outcome":"connected","store":"pg","engine":"postgresql","url":"{url}","user":"{user}","synchronous_commit":"local","machines":[]}}"#
+            r#"{{"ok":true,"projects":[],"projects_count":null,"outcome":"connected","store":"pg","engine":"postgresql","url":"{url}","user":"{user}","synchronous_commit":"local","machines":[],"here":null}}"#
         )
     );
     let file = password_file(&home, "pg").expect("the password is saved");
@@ -433,5 +445,239 @@ fn the_doctor_checks_attached_machines_only_after_this_computer() {
     std::fs::remove_file(password_file(&home, "pg").unwrap()).unwrap();
     let report = long(&home, "store.doctor", &[("store", t("pg"))]);
     assert_eq!(froms(&report), Vec::<String>::new(), "{report:?}");
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
+/// A refusal's flat field `key` (its `next`), as the call boundary
+/// answers it beside `error` and `message`.
+fn flat(refusal: &layerfs_bridge::control::SdkRefusal, key: &str) -> SdkValue {
+    let next = refusal.detail.get("next").cloned().unwrap_or_default();
+    next.get(key).cloned().unwrap_or_default()
+}
+
+/// The full refusal of a call.
+fn refusal(
+    home: &Path,
+    name: &str,
+    args: &[(&str, SdkValue)],
+) -> layerfs_bridge::control::SdkRefusal {
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
+    );
+    match layerfs_api::call(Some(home), name, args, &mut |_| {}) {
+        Ok(answer) => panic!("{name} answered {answer:?}"),
+        Err(refusal) => refusal,
+    }
+}
+
+/// A connect refusal names the connection step it stopped at, as the
+/// doctor's `store.connection.<step>`: nothing answering is `transport`,
+/// a role the server does not know `authentication`, a database it does
+/// not have `database`; a dry run answers the same steps in `here` and
+/// saves nothing, and a first connect's dry run of an empty database
+/// says so (`empty`) without making the schema.
+#[test]
+fn connect_refusals_and_dry_runs_name_the_step() {
+    let Some(mut server) = Server::new() else {
+        return;
+    };
+    let url = server.database("step");
+    let empty_db = server.database("stepempty");
+    let user = server.user.clone();
+    let home = tempdir("step");
+    home::open(&home).unwrap();
+    let new = |address: &str, role: &str| {
+        vec![
+            ("store", t("pg")),
+            ("url", t(address)),
+            ("user", t(role)),
+            ("password", t("pw")),
+        ]
+    };
+    let nowhere = "postgresql://127.0.0.1:1/db?sslmode=disable&connect_timeout=5";
+    let missing_db = url.replace("pglogin_step_", "pglogin_nosuchdb_");
+    for (address, role, step) in [
+        (nowhere, user.as_str(), "transport"),
+        (url.as_str(), "layerfs_no_such_role", "authentication"),
+        (missing_db.as_str(), user.as_str(), "database"),
+    ] {
+        let refused = refusal(&home, "store.connect", &new(address, role));
+        assert_eq!(flat(&refused, "step"), t(step), "{}", refused.message);
+        let mut dry = new(address, role);
+        dry.push(("dry_run", SdkValue::Bool(true)));
+        let tested = long(&home, "store.connect", &dry);
+        assert_eq!(tested.get_text("outcome"), Some("tested"), "{tested:?}");
+        assert_eq!(tested.get("ok"), Some(&SdkValue::Bool(false)), "{tested:?}");
+        let here = tested.get("here").unwrap();
+        assert_eq!(here.get("ok"), Some(&SdkValue::Bool(false)), "{tested:?}");
+        assert_eq!(here.get_text("step"), Some(step), "{tested:?}");
+        assert_eq!(
+            here.get_text("code"),
+            Some(refused.code.as_str()),
+            "{tested:?}"
+        );
+        assert!(!paths::store_dir(&home, "pg").exists());
+    }
+    // an empty database: tested, empty, and still without the schema
+    let mut dry = new(&empty_db, &user);
+    dry.push(("dry_run", SdkValue::Bool(true)));
+    let tested = long(&home, "store.connect", &dry);
+    assert_eq!(tested.get("ok"), Some(&SdkValue::Bool(true)), "{tested:?}");
+    let here = tested.get("here").unwrap();
+    assert_eq!(here.get("empty"), Some(&SdkValue::Bool(true)), "{tested:?}");
+    assert!(here.get_int("latency_ms").is_some(), "{tested:?}");
+    assert_eq!(tested.get("machines"), Some(&SdkValue::List(vec![])));
+    assert!(!paths::store_dir(&home, "pg").exists());
+    assert!(password_file(&home, "pg").is_none());
+    let admin = empty_db.replace(&server.base, &server.admin_base());
+    let mut client = postgres::Client::connect(&admin, postgres::NoTls).unwrap();
+    let schemas = client
+        .query_one(
+            "SELECT count(*) FROM pg_namespace WHERE nspname = 'layerfs'",
+            &[],
+        )
+        .unwrap();
+    assert_eq!(schemas.get::<_, i64>(0), 0, "a dry run made the schema");
+    // connected, a new address where nothing answers: refused at
+    // `transport` with nothing saved; its dry run says the same
+    ok(&home, "store.connect", &new(&url, &user));
+    let record = || std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    let before = record();
+    let again = [("store", t("pg")), ("url", t(nowhere))];
+    let refused = refusal(&home, "store.connect", &again);
+    assert_eq!(refused.code, "Unavailable", "{}", refused.message);
+    assert_eq!(
+        flat(&refused, "step"),
+        t("transport"),
+        "{}",
+        refused.message
+    );
+    let mut dry = again.to_vec();
+    dry.push(("dry_run", SdkValue::Bool(true)));
+    let tested = long(&home, "store.connect", &dry);
+    let here = tested.get("here").unwrap();
+    assert_eq!(here.get_text("step"), Some("transport"), "{tested:?}");
+    assert_eq!(record(), before);
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
+/// `store.attach --dry-run` makes attach's check from the machine and
+/// records nothing: not the attachment, not the reach. A connect that
+/// changes the address is checked from every attached machine first and
+/// refused `Conflict`, nothing saved, when one fails (here a stopped lima
+/// machine), naming it in `machines` with the detach as its fix; its dry
+/// run answers each machine's check; a change of the setting alone checks
+/// no machine.
+#[cfg(feature = "machine")]
+#[test]
+fn dry_runs_record_nothing_and_an_address_change_checks_attached_machines() {
+    let Some(mut server) = Server::new() else {
+        return;
+    };
+    let url = server.database("machines");
+    let user = server.user.clone();
+    let home = tempdir("machines");
+    home::open(&home).unwrap();
+    ok(&home, "machine.list", &[]);
+    let connect = [
+        ("store", t("pg")),
+        ("url", t(&url)),
+        ("user", t(&user)),
+        ("password", t("pw")),
+    ];
+    ok(&home, "store.connect", &connect);
+    let seen_file = paths::store_record(&home, "pg").with_file_name("observed.json");
+    let seen = || std::fs::read(&seen_file).unwrap_or_default();
+    let record = || std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    // a dry run from native: tested, nothing recorded
+    let (record_before, seen_before) = (record(), seen());
+    let on_native = [
+        ("store", t("pg")),
+        ("machine", t("native")),
+        ("dry_run", SdkValue::Bool(true)),
+    ];
+    let tested = long(&home, "store.attach", &on_native);
+    assert_eq!(tested.get_text("outcome"), Some("tested"), "{tested:?}");
+    assert_eq!(tested.get_text("machine"), Some("native"), "{tested:?}");
+    assert!(tested.get_int("latency_ms").is_some(), "{tested:?}");
+    assert_eq!(record(), record_before, "a dry run attached");
+    assert_eq!(seen(), seen_before, "a dry run recorded a reach");
+    ok(&home, "store.attach", &on_native[..2]);
+    // a stopped lima machine, attached as `store.attach` records it
+    home::write_record(
+        &paths::machine_record(&home, "dev"),
+        &SdkValue::map([
+            ("name", t("dev")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-dev")),
+        ]),
+    )
+    .unwrap();
+    let path = paths::store_record(&home, "pg");
+    let held = home::read_record(&path).unwrap().unwrap();
+    let attached = SdkValue::List(vec![t("native"), t("dev")]);
+    home::write_record(&path, &home::with_field(held, "attached", attached)).unwrap();
+    // its dry run is refused as its attach would be, naming the machine
+    let on_dev = [
+        ("store", t("pg")),
+        ("machine", t("dev")),
+        ("dry_run", SdkValue::Bool(true)),
+    ];
+    let refused = refusal(&home, "store.attach", &on_dev);
+    assert_eq!(flat(&refused, "machine"), t("dev"), "{refused:?}");
+    // the same Store at another address: refused, dev named, nothing saved
+    let moved = url.replacen("127.0.0.1", "localhost", 1);
+    assert_ne!(moved, url, "the test server is at 127.0.0.1");
+    let (record_before, seen_before) = (record(), seen());
+    let change = [("store", t("pg")), ("url", t(&moved))];
+    let refused = refusal(&home, "store.connect", &change);
+    assert_eq!(refused.code, "Conflict", "{}", refused.message);
+    assert!(refused.message.contains("dev"), "{}", refused.message);
+    assert!(!refused.message.contains("native"), "{}", refused.message);
+    let machines = flat(&refused, "machines");
+    let SdkValue::List(rows) = &machines else {
+        panic!("{refused:?}");
+    };
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].get_text("machine"), Some("dev"));
+    assert_eq!(rows[0].get("ok"), Some(&SdkValue::Bool(false)));
+    assert_eq!(
+        refused.detail.get_text("fix"),
+        Some("layerfs store detach pg --machine dev")
+    );
+    assert_eq!(record(), record_before, "a refused connect saved");
+    // its dry run: this computer and each machine, nothing saved or seen
+    let mut dry = change.to_vec();
+    dry.push(("dry_run", SdkValue::Bool(true)));
+    let tested = long(&home, "store.connect", &dry);
+    assert_eq!(tested.get_text("outcome"), Some("tested"), "{tested:?}");
+    assert_eq!(tested.get("ok"), Some(&SdkValue::Bool(false)), "{tested:?}");
+    let here = tested.get("here").unwrap();
+    assert_eq!(here.get("ok"), Some(&SdkValue::Bool(true)), "{tested:?}");
+    let Some(SdkValue::List(rows)) = tested.get("machines") else {
+        panic!("{tested:?}");
+    };
+    let row = |name: &str| {
+        let found = rows
+            .iter()
+            .find(|row| row.get_text("machine") == Some(name));
+        found.unwrap_or_else(|| panic!("{name}: {rows:?}")).clone()
+    };
+    assert_eq!(row("native").get("ok"), Some(&SdkValue::Bool(true)));
+    assert!(row("native").get_int("latency_ms").is_some(), "{rows:?}");
+    assert_eq!(row("dev").get("ok"), Some(&SdkValue::Bool(false)));
+    assert!(row("dev").get_text("message").is_some(), "{rows:?}");
+    assert_eq!(record(), record_before, "a dry run saved");
+    assert_eq!(seen(), seen_before, "a dry run recorded a reach");
+    // the setting alone: no machine is dialled, so dev does not refuse it
+    let setting = [
+        ("store", t("pg")),
+        ("url", t(&url)),
+        ("synchronous_commit", t("on")),
+    ];
+    let updated = long(&home, "store.connect", &setting);
+    assert_eq!(updated.get_text("outcome"), Some("updated"), "{updated:?}");
     std::fs::remove_dir_all(&home).unwrap();
 }

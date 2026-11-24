@@ -851,8 +851,10 @@ fn connect_again(home: &Path) -> Result<SdkValue, layerfs_bridge::control::SdkRe
         user: None,
         password: None,
         synchronous_commit: None,
+        dry_run: false,
     };
-    layerfs_store::postgresql::connect::update(home, &request)
+    let update = layerfs_store::postgresql::connect::prepare(home, &request)?;
+    update.expect("pg is connected").save(home, &request)
 }
 
 /// The rows of the d194c7e9df review: what each shows, names and fixes.
@@ -1002,6 +1004,7 @@ fn the_57d0aea5ad_review_rows_are_hidden_refused_and_named() {
             user: Some("alice".to_owned()),
             password: Some(LOGIN_PASSWORD.to_owned()),
             synchronous_commit: None,
+            dry_run: false,
         };
         let refusal = layerfs_store::postgresql::connect::connect(&home, &request).unwrap_err();
         assert!(refusal.message.starts_with(MESSAGES[0]), "{given}");

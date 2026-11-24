@@ -321,12 +321,12 @@
     {
       "call": "store.connect",
       "badge": "reshaped",
-      "note": "PostgreSQL. The URL holds host, port, database and TLS options; one with a user or a password is refused <code>InvalidInput</code> with the fix <code>layerfs store connect &lt;store&gt; &lt;url&gt; --user &lt;user&gt; --password-stdin</code>. <b>First connect:</b> <code>--user</code> and the password are required and are checked from this computer before anything is saved; it gives an empty database the LayerFS schema and its id, or reads them, and answers the projects found. The record keeps the URL, the user and <code>synchronous_commit</code>; the password is kept in the home's secret folder (kind <code>login</code>, by Store), never answered or logged. <b>On a connected Store:</b> it changes the address, user, password or <code>synchronous_commit</code>, keeping what it is not given, and must reach the same Store (its binding) first (<code>Unavailable</code> otherwise). It attaches no machine, <code>native</code> included. A database whose id another Store of this home holds, or a sqlite Store of that name, is <code>Exists</code>. <code>projects</code> shows the first 20 names. A running Sandbox keeps its connection.",
+      "note": "PostgreSQL. The URL holds host, port, database and TLS options; one with a user or a password is refused <code>InvalidInput</code> with the fix <code>layerfs store connect &lt;store&gt; &lt;url&gt; --user &lt;user&gt; --password-stdin</code>. <b>First connect:</b> <code>--user</code> and the password are required and are checked from this computer before anything is saved; it gives an empty database the LayerFS schema and its id, or reads them, and answers the projects found. The record keeps the URL, the user and <code>synchronous_commit</code>; the password is kept in the home's secret folder (kind <code>login</code>, by Store), never answered or logged. <b>On a connected Store:</b> it changes the address, user, password or <code>synchronous_commit</code>, keeping what it is not given, and must reach the same Store (its binding) first (<code>Unavailable</code> otherwise). It attaches no machine, <code>native</code> included. A database whose id another Store of this home holds, or a sqlite Store of that name, is <code>Exists</code>. <code>projects</code> shows the first 20 names. A running Sandbox keeps its connection. <b>Changing the address, user or password</b> of a connected Store checks the new values from this computer, then from every attached machine, one after another, before anything is saved: one that fails refuses the connect <code>Conflict</code> naming the machines, with <code>machines</code> <code>[{machine, ok: false, step, message}]</code> beside it and <code>layerfs store detach &lt;store&gt; --machine &lt;m&gt;</code> (the first) as its fix. A change of <code>synchronous_commit</code> alone checks no machine. Every refused check names its <code>step</code> (the doctor's connection steps). <b><code>--dry-run</code></b> makes the same checks, saves and records nothing and is refused by none of them; it answers <code>{ok, outcome: tested, store, url, here, machines}</code>, <code>here</code> this computer's check <code>{ok, latency_ms, server_version}</code> or <code>{ok: false, step, code, message}</code>, <code>machines</code> one such row per attached machine with its <code>machine</code> (<code>ok: null</code> when this computer's check failed first, so no machine was dialled); <code>ok</code> is whether every check passed. A first connect's dry run checks from this computer only and makes no schema: an empty database is <code>here.empty: true</code>. The password comes from stdin as usual; on a connected Store the saved one is used when none is given.",
       "today": [
         "store.connect"
       ],
       "help": "connect a PostgreSQL database as a Store, or change a connected one's address, login or setting",
-      "cli": "layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local]",
+      "cli": "layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local] [--dry-run]",
       "positionals": [
         {
           "name": "store",
@@ -356,6 +356,11 @@
           "kind": "Text",
           "help": "off, local, remote_write, on or remote_apply; a new Store takes local",
           "default": "local"
+        },
+        {
+          "name": "dry_run",
+          "kind": "Bool",
+          "help": "check from this computer and each attached machine, and save nothing"
         }
       ],
       "stdin": "secret",
@@ -368,8 +373,11 @@
         "always": [],
         "sometimes": [
           "ok",
+          "outcome",
           "projects",
-          "projects_count"
+          "projects_count",
+          "here",
+          "machines"
         ]
       },
       "long": [
@@ -382,15 +390,17 @@
         "url",
         "user",
         "synchronous_commit",
-        "machines"
+        "machines",
+        "here"
       ],
       "item": null,
       "examples": {
         "short": [
           "first connect: {\"projects\":[\"api\",\"web\"]}",
-          "an empty database, or a connected Store changed: {\"ok\":true}"
+          "an empty database, or a connected Store changed: {\"ok\":true}",
+          "a dry run: {\"outcome\":\"tested\",\"here\":{\"ok\":true,\"latency_ms\":2,\"server_version\":\"17.6\"},\"machines\":[{\"machine\":\"lab\",\"ok\":false,\"step\":\"transport\",\"code\":\"Unavailable\",\"message\":\"machine lab cannot reach PostgreSQL Store shop-pg's server at db.internal: ...\"}]}"
         ],
-        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"synchronous_commit\":\"local\",\"machines\":[]}"
+        "long": "{\"ok\":true,\"projects\":[\"api\",\"web\"],\"projects_count\":null,\"outcome\":\"connected\",\"store\":\"shop-pg\",\"engine\":\"postgresql\",\"url\":\"postgres://db.internal:5432/shop\",\"user\":\"app\",\"synchronous_commit\":\"local\",\"machines\":[],\"here\":null}"
       },
       "dropped": [
         {
@@ -463,10 +473,10 @@
     {
       "call": "store.attach",
       "badge": "new",
-      "note": "Owner, 2026-11-24.",
+      "note": "Owner, 2026-11-24. <code>--dry-run</code> makes the same checks and records nothing (neither <code>attached</code> nor the reach), answering <code>outcome: tested</code>; it takes no lock, so dry runs of several machines may run at once. A refused check names its <code>step</code> (one of the doctor's connection steps: <code>configuration</code>, <code>transport</code>, <code>tls</code>, <code>authentication</code>, <code>database</code>, <code>schema</code>, <code>identity</code>) and the <code>machine</code>, flat beside <code>error</code> and <code>message</code>; an address of this computer's loopback the machine does not share is refused <code>Unsupported</code> at <code>configuration</code> before any dial.",
       "today": [],
       "help": "let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first",
-      "cli": "layerfs store attach <store> --machine M",
+      "cli": "layerfs store attach <store> --machine M [--dry-run]",
       "positionals": [
         {
           "name": "store",
@@ -479,6 +489,11 @@
           "kind": "Name",
           "help": "the machine; required",
           "required": true
+        },
+        {
+          "name": "dry_run",
+          "kind": "Bool",
+          "help": "check from the machine as attach does, and record nothing"
         }
       ],
       "stdin": null,
@@ -508,12 +523,13 @@
       "examples": {
         "short": [
           "{\"ok\":true,\"outcome\":\"attached\",\"latency_ms\":3}",
-          "an attached machine checked again: {\"ok\":true,\"outcome\":\"checked\",\"latency_ms\":2}"
+          "an attached machine checked again: {\"ok\":true,\"outcome\":\"checked\",\"latency_ms\":2}",
+          "a dry run: {\"ok\":true,\"outcome\":\"tested\",\"latency_ms\":3}"
         ],
         "long": "{\"ok\":true,\"outcome\":\"attached\",\"store\":\"shop-pg\",\"machine\":\"lab\",\"latency_ms\":3,\"server_version\":\"17.6\"}"
       },
       "dropped": [],
-      "new_work": "New (owner, 2026-11-24): the Store is checked from the machine with the URL and login this computer saved, as its Sandboxes dial them; the machine is then recorded in the Store's `attached` and its reach observed. sandbox.create on a machine not attached is refused with this call as its fix."
+      "new_work": "New (owner, 2026-11-24): the Store is checked from the machine with the URL and login this computer saved, as its Sandboxes dial them; the machine is then recorded in the Store's `attached` and its reach observed. sandbox.create on a machine not attached is refused with this call as its fix. `--dry-run` (owner, 2026-11-24): the UI's per-machine Test, which shows the step a failure stopped at."
     },
     {
       "call": "store.detach",

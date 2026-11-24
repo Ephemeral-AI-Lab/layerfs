@@ -492,12 +492,21 @@ $ layerfs store doctor shop-pg
   password or `synchronous_commit`; an omitted user or password keeps the
   saved one. The result must reach the same Store (its binding) before
   anything is saved. Attached machines dial the new address and login from
-  their next connection.
+  their next connection, so a new address, user or password is checked
+  from each of them too: one that does not reach it refuses the connect
+  `Conflict`, nothing saved, naming the machines (`machines`) with
+  `layerfs store detach <store> --machine <m>` as the fix. `--dry-run` makes
+  the same checks and saves nothing, answering `outcome: "tested"` with
+  `here` (this computer's check) and one row per attached machine.
 - **`store attach <store> --machine M`** lets machine `M` run Sandboxes of
   the Store: `M` must exist and its platform run PostgreSQL Sandboxes, and
   the Store is checked from `M` with the URL and login saved here before
   `M` is recorded as attached; the check is kept as `M`'s reach. Attaching
-  again checks again (`outcome: "checked"`). Machine native is attached
+  again checks again (`outcome: "checked"`); `--dry-run` checks and
+  records nothing (`outcome: "tested"`). A refused check names the
+  `machine` and the connection `step` it stopped at (`configuration`,
+  `transport`, `tls`, `authentication`, `database`, `schema`, `identity`,
+  the doctor's `store.connection.<step>`). Machine native is attached
   like any other (`store connect` attaches nothing); its platform decides
   whether a loopback URL is allowed, and its reach is its own, apart from
   this computer's. `store detach <store> --machine M` removes it,
