@@ -272,7 +272,7 @@ pub fn reconcile_machine(
                 ("machine".to_owned(), SdkValue::text(machine)),
                 ("incarnation".to_owned(), SdkValue::text(incarnation)),
             ];
-            if let Some(place) = crate::place_view::encoded_from_store(home, &record) {
+            if let Some(place) = crate::place_view::encoded_from_home(home) {
                 fields.push(("place_view".to_owned(), place));
             }
             let request = SdkValue::Map(fields);
@@ -299,7 +299,7 @@ pub fn repair_mount_holders_at(
     limit: u32,
 ) -> Result<SdkValue, SdkRefusal> {
     if action == "audit" {
-        return done_audit(open, page, limit);
+        return done_audit(open, project, branch, page, limit);
     }
     let resolved = branch_named(open, project, branch)?;
     repair_mount_holders(
@@ -307,13 +307,22 @@ pub fn repair_mount_holders_at(
     )
 }
 
-/// One bounded page of the retained `done` audit, oldest first. The live
-/// holder queries filter done rows; this is the only repair action that reads
-/// them. It changes no intent.
-pub fn done_audit(args: &OpenArgs, page: u32, limit: u32) -> Result<SdkValue, SdkRefusal> {
+/// One bounded page of the retained `done` audit of one Branch, oldest
+/// first. The live holder queries filter done rows; this is the only repair
+/// action that reads them, and it reads only the Branch it names. It changes
+/// no intent.
+pub fn done_audit(
+    args: &OpenArgs,
+    project: &str,
+    branch: &str,
+    page: u32,
+    limit: u32,
+) -> Result<SdkValue, SdkRefusal> {
     with_service(args, |service| {
-        let page = layerfs_store_service::history::admission::done_intents(
+        let page = layerfs_store_service::history::admission::done_intents_branch(
             service.store.history(),
+            project,
+            branch,
             page,
             limit,
         )
@@ -321,16 +330,6 @@ pub fn done_audit(args: &OpenArgs, page: u32, limit: u32) -> Result<SdkValue, Sd
         Ok(layerfs_store_service::history::admission::audit_value(
             &page,
         ))
-    })
-}
-
-/// Deletes the retained `done` rows `ops` names, after the operator exported
-/// them: only rows still in state `done` go, and a live intent is never
-/// removed. Answers how many rows were deleted.
-pub fn prune_done(args: &OpenArgs, ops: &[[u8; 16]]) -> Result<u64, SdkRefusal> {
-    with_service(args, |service| {
-        layerfs_store_service::history::admission::prune_done(service.store.history(), ops)
-            .map_err(failed)
     })
 }
 
@@ -346,9 +345,8 @@ pub fn prune_done(args: &OpenArgs, ops: &[[u8; 16]]) -> Result<u64, SdkRefusal> 
 /// writes its own retained `done` row the same way, with `action=preview`,
 /// the operator label and no operation; it changes no live intent. Settle
 /// changes the row to uncertain and is in the home's `trace/calls.jsonl` call
-/// log only. The `audit` action reads the done rows in bounded pages, and
-/// the caller's `archive` action exports them and prunes only what it
-/// exported.
+/// log only. The `audit` action reads the Branch's retained done rows in
+/// bounded pages.
 #[allow(clippy::too_many_arguments)]
 pub fn repair_mount_holders(
     args: &OpenArgs,
@@ -377,6 +375,13 @@ pub fn repair_mount_holders(
         let holders: Vec<MountHolderView> = mounts.iter().map(MountHolderView::of).collect();
         let holder = |op: &[u8; 16]| mounts.iter().find(|intent| &intent.op_id == op);
         match action {
+            "list" => Ok(SdkValue::map([
+                ("holders", holder_rows(&holders)),
+                ("legacy", SdkValue::Bool(legacy)),
+                ("action", SdkValue::text("list")),
+                ("op", SdkValue::Null),
+                ("audit", SdkValue::Null),
+            ])),
             "preview" => {
                 // Preview changes no live intent, but the operator action is
                 // durable: it writes a retained `done` row through the same
@@ -453,9 +458,14 @@ pub fn repair_mount_holders(
                 ]))
             }
             "audit" => {
-                let page =
-                    layerfs_store_service::history::admission::done_intents(catalog, page, limit)
-                        .map_err(failed)?;
+                let page = layerfs_store_service::history::admission::done_intents_branch(
+                    catalog,
+                    project,
+                    branch_name,
+                    page,
+                    limit,
+                )
+                .map_err(failed)?;
                 Ok(layerfs_store_service::history::admission::audit_value(
                     &page,
                 ))
@@ -528,14 +538,17 @@ fn holder_rows(holders: &[MountHolderView]) -> SdkValue {
                         "sandbox_generation",
                         SdkValue::opt_text(holder.sandbox_generation.as_deref()),
                     ),
-                    (
-                        "lease_expires_ms",
-                        holder
-                            .lease_expires_ms
-                            .map_or(SdkValue::Null, SdkValue::Int),
-                    ),
                     ("state", SdkValue::text(holder.state())),
                     ("legacy", SdkValue::Bool(holder.legacy())),
+                    ("safe", SdkValue::Bool(holder.uncertain)),
+                    (
+                        "reason",
+                        SdkValue::text(if holder.uncertain {
+                            "uncertain: the owner is already settled; release is available"
+                        } else {
+                            "live: the owner still holds the admission; settle it first"
+                        }),
+                    ),
                 ])
             })
             .collect(),

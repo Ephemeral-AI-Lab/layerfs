@@ -140,11 +140,11 @@ fn insert_done_audit(path: &Path, branch: BranchId, op: u8, evidence: &str, upda
             "INSERT INTO gc_intent (
                 op_id, kind, scope_kind, scope_id, workspace, sandbox, machine,
                 project, branch, owner_runtime, owner_boot, state, uncertain,
-                phase, machine_incarnation, sandbox_generation, lease_expires_ms,
-                fence_token, evidence, updated_ms
+                phase, machine_incarnation, sandbox_generation, evidence,
+                updated_ms
              ) VALUES (?1, 'mount', 'branch', ?2, NULL, 'box', 'box',
                 'proj', 'work', NULL, NULL, 'done', 0, 'release', NULL, NULL,
-                NULL, NULL, ?3, ?4)",
+                ?3, ?4)",
             rusqlite::params![[op; 16].as_slice(), branch.as_slice(), evidence, updated_ms],
         )
         .unwrap();

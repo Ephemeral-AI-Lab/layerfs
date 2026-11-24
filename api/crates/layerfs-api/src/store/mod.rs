@@ -38,5 +38,6 @@ pub(crate) fn calls() -> Calls {
         remove::CALL,
         compact::CALL,
         repair_mount_holders::CALL,
+        doctor::CALL,
     ]
 }

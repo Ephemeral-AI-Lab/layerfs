@@ -193,8 +193,6 @@ fn operator_repair_round_trips_on_postgresql() {
         .authorized(PlaceAuthority {
             machine_incarnation: Some("worker:1".to_owned()),
             sandbox_generation: Some("generation:1".to_owned()),
-            lease_expires_ms: Some(future_ms()),
-            fence_token: Some("fence:1".to_owned()),
         });
     let legacy = mount(branch.as_slice(), stack.as_slice(), 0x31);
     with_service(&open, |service| {

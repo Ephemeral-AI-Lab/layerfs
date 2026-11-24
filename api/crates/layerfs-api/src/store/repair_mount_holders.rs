@@ -3,9 +3,8 @@
 //! this process for a PostgreSQL Store. Preview changes no live admission,
 //! answers the typed holder view and writes its own retained done row
 //! (`action=preview`, no operation); settle/release name one op; `audit` reads
-//! the bounded retained done rows; `archive` exports them to the caller's
-//! `log/gc-audit.jsonl` and, only with `prune`, deletes exactly what it
-//! exported. Release retains the row as the durable operator audit and records
+//! the bounded retained done rows of that Branch. Release retains the row as
+//! the durable operator audit and records
 //! the operator label; every call is also in the home's `trace/calls.jsonl`
 //! call log.
 use crate::calls::table::{
@@ -32,9 +31,8 @@ pub(crate) const CALL: Call = call(
         opt("operator", Text),
         opt("page", Int),
         opt("limit", Int),
-        opt("prune", Bool),
     ],
-    "list, settle, release, audit or archive mount holders (operator)",
+    "list, preview, settle, release or audit mount holders (operator)",
     run,
 );
 
@@ -61,9 +59,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .get_int("limit")
         .and_then(|limit| u32::try_from(limit).ok())
         .unwrap_or(100);
-    let prune = matches!(args.get("prune"), Some(SdkValue::Bool(true)));
     let (home, _) = context.parts();
     layerfs_control::store::repair(
-        home, &name, &project, &branch, &action, op, legacy, operator, page, limit, prune,
+        home, &name, &project, &branch, &action, op, legacy, operator, page, limit,
     )
 }

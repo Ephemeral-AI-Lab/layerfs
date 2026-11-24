@@ -105,8 +105,6 @@ fn seed(home: &Path) {
         .authorized(PlaceAuthority {
             machine_incarnation: Some("worker:1".to_owned()),
             sandbox_generation: Some("generation:1".to_owned()),
-            lease_expires_ms: Some(future_ms()),
-            fence_token: Some("fence:1".to_owned()),
         });
     let legacy = mount(stack.as_slice(), branch.as_slice(), 0x31);
     with_service(&open, |service| {
@@ -136,7 +134,6 @@ fn repair(placed: &worker_store::Placed, action: &str, op: Option<u8>, legacy: b
         "alice",
         0,
         100,
-        false,
     )
     .unwrap_or_else(|refusal| panic!("{action}: {refusal:?}"))
 }
@@ -156,24 +153,19 @@ fn diagnostic_holders(placed: &worker_store::Placed) -> Vec<SdkValue> {
         Some(SdkValue::Bytes(bytes)) => SdkValue::Bytes(bytes.clone()),
         _ => panic!("the record holds {key} bytes"),
     };
-    let mut events = Vec::new();
-    let outcome = worker::call(
+    let value = worker::call(
         &placed.endpoint,
         "store.diagnose",
         SdkValue::map([
             ("store", SdkValue::text("shop")),
             ("binding", bytes("binding")),
             ("cursor", bytes("cursor")),
-            ("quick", SdkValue::Bool(true)),
+            ("cut", SdkValue::text("schema")),
         ]),
-        &mut |event| events.push(event),
-    );
-    outcome.expect("the worker diagnostics run");
-    let row = events
-        .iter()
-        .find(|event| event.get_text("id") == Some("store.mount_holders"))
-        .expect("the diagnostic reports mount holders");
-    match row.get("mount_holders") {
+        &mut |_event| {},
+    )
+    .expect("the worker diagnostics run");
+    match value.get("mount_holders") {
         Some(SdkValue::List(holders)) => holders.clone(),
         other => panic!("no typed mount holders: {other:?}"),
     }
@@ -208,10 +200,6 @@ fn repair_previews_settles_and_releases_through_the_worker() {
     assert_eq!(live.get_text("machine_incarnation"), Some("worker:1"));
     assert_eq!(live.get_text("sandbox_generation"), Some("generation:1"));
     assert_eq!(live.get("legacy"), Some(&SdkValue::Bool(false)));
-    assert!(matches!(
-        live.get("lease_expires_ms"),
-        Some(SdkValue::Int(_))
-    ));
     let legacy = rows
         .iter()
         .find(|row| row.get_text("op") == Some("31".repeat(16).as_str()))
@@ -231,7 +219,6 @@ fn repair_previews_settles_and_releases_through_the_worker() {
         "alice",
         0,
         100,
-        false,
     )
     .unwrap_err();
     assert_eq!(refused.code, "Conflict", "{refused:?}");

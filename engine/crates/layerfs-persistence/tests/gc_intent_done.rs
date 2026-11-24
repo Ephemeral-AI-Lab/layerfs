@@ -63,11 +63,11 @@ fn done_row(path: &std::path::Path, branch: BranchId, body: u8, evidence: &str, 
             "INSERT INTO gc_intent (
                 op_id, kind, scope_kind, scope_id, workspace, sandbox, machine,
                 project, branch, owner_runtime, owner_boot, state, uncertain,
-                phase, machine_incarnation, sandbox_generation, lease_expires_ms,
-                fence_token, evidence, updated_ms
+                phase, machine_incarnation, sandbox_generation,
+                evidence, updated_ms
              ) VALUES (?1, 'mount', 'branch', ?2, NULL, 'box', 'box',
                 'proj', 'work', NULL, NULL, 'done', 0, 'release', NULL, NULL,
-                NULL, NULL, ?3, ?4)",
+                ?3, ?4)",
             params![op(body).as_slice(), branch.as_slice(), evidence, updated_ms],
         )
         .unwrap();
@@ -126,8 +126,6 @@ fn release_retains_the_operator_audit_row_and_clears_the_owner() {
     .authorized(PlaceAuthority {
         machine_incarnation: Some("worker:1".to_owned()),
         sandbox_generation: Some("generation:1".to_owned()),
-        lease_expires_ms: Some(1_000),
-        fence_token: Some("fence:1".to_owned()),
     });
     history.gc_register(&mounted).unwrap();
     history.gc_mark_uncertain(&op(20)).unwrap();
@@ -298,4 +296,45 @@ fn a_prune_deletes_only_the_named_done_rows() {
         1,
         "the live intent stays"
     );
+}
+
+/// The operator audit is scoped to the Branch it names: a done row of one
+/// Branch never appears in another Branch's page, even at the same Store.
+#[test]
+fn a_branch_audit_reads_only_its_own_done_rows() {
+    let temp = Temp::new("gc-done-audit-scope");
+    let path = temp.join("store.sqlite");
+    let history = catalog(&temp);
+    let (_, first) = project(&history);
+    let second = branch_id(2);
+    history
+        .fork(&layerfs_history::records::ForkRequest {
+            stack: stack(1),
+            branch: second,
+            name: name("other"),
+            source: layerfs_history::records::ForkSource::Layer(
+                history.layer_stack(stack(1)).unwrap().unwrap().head_layer,
+            ),
+        })
+        .unwrap();
+    done_row(&path, first, 0x01, "action=preview;operator=alice", 10);
+    done_row(&path, second, 0x02, "action=preview;operator=alice", 20);
+    // The done row keeps the Branch name it recorded, so the scoped audit
+    // reads it even after the Branch itself is removed.
+    {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute(
+                "UPDATE gc_intent SET branch = 'other' WHERE op_id = ?1",
+                [op(0x02).as_slice()],
+            )
+            .unwrap();
+    }
+
+    let page = history.gc_done_intents_branch("proj", "work", 0, 10).unwrap();
+    assert_eq!(page.items.len(), 1, "only the named Branch's row");
+    assert_eq!(page.items[0].op_id, op(0x01));
+    let other = history.gc_done_intents_branch("proj", "other", 0, 10).unwrap();
+    assert_eq!(other.items.len(), 1);
+    assert_eq!(other.items[0].op_id, op(0x02));
 }

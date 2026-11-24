@@ -393,14 +393,17 @@ fn plant_mount(home: &Path, sandbox: &str) {
 /// A live-owned mount intent of a Sandbox this home no longer records (one
 /// `sandbox remove` forgot without stopping its daemon) is not ended by
 /// anything that cannot prove its owner gone (RV5 FAIL-1): `store compact`
-/// and `branch remove` stay `InUse` (mounts active), and `store
-/// doctor` adds no leftover check (V20-4).
+/// and `branch remove` stay `InUse` (mounts active). The Store doctor reports
+/// it as the `store.mount_holders` warning of the lean doctor, never as a
+/// leftover it releases itself (V20-4).
 #[test]
 fn a_live_mount_intent_of_a_forgotten_sandbox_keeps_holding_the_store() {
     let (home, folder) = project();
     plant_mount(&home, "gone");
     let doctor = ok(&home, "store.doctor", &[("store", t("shop"))]);
-    assert!(!format!("{doctor:?}").contains("gone"), "{doctor:?}");
+    let reported = format!("{doctor:?}");
+    assert!(reported.contains("store.mount_holders"), "{doctor:?}");
+    assert!(!reported.contains("leftovers"), "{doctor:?}");
     for _ in 0..2 {
         let (code, message) = refused(&home, "store.compact", &[("store", t("shop"))]);
         assert_eq!(code, "InUse", "{message}");
@@ -855,8 +858,6 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     .authorized(PlaceAuthority {
         machine_incarnation: Some("worker:1".to_owned()),
         sandbox_generation: Some("generation:1".to_owned()),
-        lease_expires_ms: Some(future_ms()),
-        fence_token: Some("fence:1".to_owned()),
     });
     let legacy = GcIntent::shared(
         [0x31; 16],
@@ -917,16 +918,11 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         Some("generation:1")
     );
     assert_eq!(live_row.get("legacy"), Some(&SdkValue::Bool(false)));
-    assert!(matches!(
-        live_row.get("lease_expires_ms"),
-        Some(SdkValue::Int(_))
-    ));
     let legacy_row = holders
         .iter()
         .find(|row| row.get_text("op") == Some(legacy_op.as_str()))
         .expect("the legacy holder");
     assert_eq!(legacy_row.get("legacy"), Some(&SdkValue::Bool(true)));
-    assert_eq!(legacy_row.get("lease_expires_ms"), Some(&SdkValue::Null));
 
     let (code, message) = refused(
         &home,
@@ -1087,95 +1083,3 @@ fn audit_items(home: &Path) -> Vec<SdkValue> {
     }
 }
 
-/// `archive` exports the bounded retained done rows to
-/// `<home>/log/gc-audit.jsonl`; export is the default, and `prune` deletes
-/// exactly the exported rows. A live intent is not an exported row and stays.
-#[test]
-fn store_repair_archive_exports_and_prunes_only_the_done_pages() {
-    let (home, folder) = project();
-    let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
-    let open = OpenArgs::of_record(&home, "shop", &record).unwrap();
-    let branch = branch_named(&open, "api", "main").unwrap();
-    let stack = with_service(&open, |service| {
-        Ok(lookup::project(&service.store, "api")?.id)
-    })
-    .unwrap();
-    for tag in [0x41u8, 0x42, 0x43, 0x44] {
-        let intent = GcIntent::shared(
-            [tag; 16],
-            GcIntentKind::Mount,
-            GcScopeKind::Branch,
-            branch.as_slice(),
-        )
-        .in_project(stack.as_slice())
-        .named(Some("api"), Some("main"));
-        with_service(&open, |service| {
-            service.store.history().gc_register(&intent).unwrap();
-            Ok(())
-        })
-        .unwrap();
-    }
-    // Three become the retained done audit; the fourth stays live.
-    for tag in [0x41u8, 0x42, 0x43] {
-        let evidence = format!(
-            "action=release;operator=tool;op={}",
-            format!("{tag:02x}").repeat(16)
-        );
-        with_service(&open, |service| {
-            assert!(service
-                .store
-                .history()
-                .gc_release_done(&[tag; 16], &evidence)
-                .unwrap());
-            Ok(())
-        })
-        .unwrap();
-    }
-    let archive = |prune: bool| {
-        let mut fields = vec![
-            ("name", t("shop")),
-            ("project", t("api")),
-            ("branch", t("main")),
-            ("action", t("archive")),
-            ("limit", SdkValue::Int(2)),
-        ];
-        if prune {
-            fields.push(("prune", SdkValue::Bool(true)));
-        }
-        ok(&home, "store.repair_mount_holders", &fields)
-    };
-
-    let exported = archive(false);
-    assert_eq!(exported.get_int("exported"), Some(3), "{exported:?}");
-    assert_eq!(exported.get_int("pruned"), Some(0), "{exported:?}");
-    let file = home.join("log/gc-audit.jsonl");
-    assert_eq!(
-        std::fs::read_to_string(&file).unwrap().lines().count(),
-        3,
-        "the export wrote one line per done row"
-    );
-    assert_eq!(audit_items(&home).len(), 3, "export keeps the rows");
-
-    let pruned = archive(true);
-    assert_eq!(pruned.get_int("exported"), Some(3), "{pruned:?}");
-    assert_eq!(pruned.get_int("pruned"), Some(3), "{pruned:?}");
-    assert_eq!(
-        std::fs::read_to_string(&file).unwrap().lines().count(),
-        6,
-        "the second export appended the rows it pruned"
-    );
-    assert!(audit_items(&home).is_empty(), "the prune deleted them");
-    let live = with_service(&open, |service| {
-        Ok(service
-            .store
-            .history()
-            .gc_intents(GcScopeKind::Branch, branch.as_slice())
-            .unwrap()
-            .len())
-    })
-    .unwrap();
-    assert_eq!(live, 1, "the prune deleted no live intent");
-
-    std::fs::remove_dir_all(home).unwrap();
-    let _ = std::fs::remove_dir_all(folder);
-}

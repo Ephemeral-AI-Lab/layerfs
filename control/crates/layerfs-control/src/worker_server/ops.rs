@@ -248,47 +248,6 @@ pub(super) fn run(
                 )
             })
         }
-        // deletes exactly the retained `done` rows the caller exported from
-        // this Store's audit: `{ store, store_record, ops }`, each op 16 bytes
-        // of hex. A row must still be in state `done`, so a live intent is
-        // never removed. Answers `{ pruned }`.
-        "store.prune" => {
-            let store = args
-                .get_text("store")
-                .ok_or_else(|| refused("InvalidInput", "a Store prune names its Store"))?
-                .to_owned();
-            layerfs_home::names::StoreName::parse(&store)?;
-            let ops = match args.get("ops") {
-                Some(SdkValue::List(items)) => items
-                    .iter()
-                    .map(|item| {
-                        let SdkValue::Text(text) = item else {
-                            return Err(refused(
-                                "InvalidInput",
-                                "an exported audit op is not text",
-                            ));
-                        };
-                        layerfs_bridge::sdk_values::unhex(text)
-                            .and_then(|bytes| bytes.try_into().ok())
-                            .ok_or_else(|| {
-                                refused("InvalidInput", "an audit op must be 16 bytes of hex")
-                            })
-                    })
-                    .collect::<Result<Vec<[u8; 16]>, layerfs_bridge::control::SdkRefusal>>()?,
-                _ => return Err(refused("InvalidInput", "a Store prune names its ops")),
-            };
-            let file = layerfs_home::home::paths::store_file(root, &store);
-            let open = layerfs_store::open_args::OpenArgs {
-                home: Some(root.to_path_buf()),
-                store: Some(store),
-                project: None,
-                store_path: Some(file.display().to_string()),
-                store_record: args.get("store_record").cloned(),
-                postgresql: None,
-            };
-            layerfs_store::service::prune_done(&open, &ops)
-                .map(|pruned| SdkValue::map([("pruned", SdkValue::Int(pruned as i64))]))
-        }
         // one step of a Store move, remove or create, or a live read's, on
         // this machine
         "store.file" => {

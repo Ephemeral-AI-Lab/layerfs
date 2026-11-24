@@ -145,8 +145,6 @@ fn seed(home: &Path) {
                 .authorized(PlaceAuthority {
                     machine_incarnation: Some("worker:1".to_owned()),
                     sandbox_generation: Some("generation:1".to_owned()),
-                    lease_expires_ms: Some(future_ms()),
-                    fence_token: Some(format!("fence:{}", tag - FIRST)),
                 }),
                 // A live place whose lease has expired: uncertain, not dead.
                 3 => GcIntent::shared(
@@ -162,8 +160,6 @@ fn seed(home: &Path) {
                 .authorized(PlaceAuthority {
                     machine_incarnation: Some("worker:1".to_owned()),
                     sandbox_generation: None,
-                    lease_expires_ms: Some(0),
-                    fence_token: Some("fence:3".to_owned()),
                 }),
                 // Owner evidence only: legacy, and a PID namespace this
                 // process cannot soundly probe, so conservatively live.
@@ -188,39 +184,6 @@ fn seed(home: &Path) {
             };
             history.gc_register(&intent).unwrap();
 
-            // The lease and the fence are the authority the repair must
-            // respect, and a heartbeat never shortens a lease.
-            match tag - FIRST {
-                0 => {
-                    let stale = history.gc_release_fenced(&intent.op_id, Some("fence:old"));
-                    assert!(
-                        matches!(stale, Err(HistoryError::Conflict("gc intent fence"))),
-                        "a stale fence may not settle the owner's row: {stale:?}"
-                    );
-                    let later = future_ms() + 60_000;
-                    assert!(history
-                        .gc_renew_lease(&intent.op_id, Some("fence:0"), later)
-                        .unwrap());
-                }
-                1 => {
-                    let later = future_ms() + 60_000;
-                    history
-                        .gc_renew_lease(&intent.op_id, Some("fence:1"), later)
-                        .unwrap();
-                    history
-                        .gc_renew_lease(&intent.op_id, Some("fence:1"), 1)
-                        .unwrap();
-                    let listed = history
-                        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
-                        .unwrap();
-                    assert_eq!(
-                        listed[0].lease_expires_ms,
-                        Some(later),
-                        "a delayed heartbeat never shortens the lease"
-                    );
-                }
-                _ => {}
-            }
         }
 
         // The 331 already retired behind the six: fork, a wholly dead pack,
@@ -280,7 +243,6 @@ fn repair(
         "alice",
         0,
         100,
-        false,
     )
     .unwrap_or_else(|refusal| panic!("{action} {branch}: {refusal:?}"))
 }
@@ -472,8 +434,6 @@ fn seed_reconcile(home: &Path) {
             .authorized(PlaceAuthority {
                 machine_incarnation: Some(recorded.to_owned()),
                 sandbox_generation: Some(generation.to_owned()),
-                lease_expires_ms: Some(future_ms()),
-                fence_token: Some(format!("fence:{op:02x}")),
             })
         };
         // The restored (newer) mount and the retired Sandbox come first; the
@@ -585,12 +545,6 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
     assert_eq!(live.get_text("machine_incarnation"), Some("worker:1"));
     assert_eq!(live.get_text("sandbox_generation"), Some("generation:1"));
     assert_eq!(live.get_text("state"), Some("live"));
-    assert!(matches!(
-        live.get("lease_expires_ms"),
-        Some(SdkValue::Int(_))
-    ));
-    let expired = diagnosed_row(&diagnosed, FIRST + 3);
-    assert_eq!(expired.get("lease_expires_ms"), Some(&SdkValue::Int(0)));
     assert_eq!(
         diagnosed_row(&diagnosed, FIRST + 4).get("machine_incarnation"),
         Some(&SdkValue::Null)
@@ -618,42 +572,25 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
                 assert_eq!(row.get_text("machine_incarnation"), Some("worker:1"));
                 assert_eq!(row.get_text("sandbox_generation"), Some("generation:1"));
                 assert_eq!(row.get("legacy"), Some(&SdkValue::Bool(false)));
-                assert!(matches!(
-                    row.get("lease_expires_ms"),
-                    Some(SdkValue::Int(_))
-                ));
             }
-            3 => {
-                assert_eq!(
-                    row.get("legacy"),
-                    Some(&SdkValue::Bool(false)),
-                    "an expired lease is still place evidence, not a legacy row"
-                );
-                assert_eq!(row.get("lease_expires_ms"), Some(&SdkValue::Int(0)));
-            }
+            3 => assert_eq!(
+                row.get("legacy"),
+                Some(&SdkValue::Bool(false)),
+                "a current place with owner evidence is not a legacy row"
+            ),
             _ => assert_eq!(row.get("legacy"), Some(&SdkValue::Bool(true))),
         }
     }
 
     // 2. Each Branch is still held and the Store-wide compact barrier stands:
-    // live and legacy owners are `MountsActive`, the expired lease is
-    // `Unresolved`, never adopted.
+    // every owner is `MountsActive`, never adopted.
     for tag in FIRST..FIRST + 6 {
         let name = format!("stuck-{}", tag - FIRST);
         let refusal = branch_remove(&placed, &name).expect_err("the mount holds the Branch");
-        match tag - FIRST {
-            3 => assert_eq!(refusal.code, "Unresolved", "{refusal:?}"),
-            _ => assert_eq!(refusal.code, "MountsActive", "{refusal:?}"),
-        }
+        assert_eq!(refusal.code, "MountsActive", "{refusal:?}");
     }
-    // The expired lease is classified uncertain before any live holder, so
-    // the compact reports that row as `Unresolved` rather than adopting it.
     let refused = compact(&placed).expect_err("the six mounts hold the Store");
-    assert_eq!(refused.code, "Unresolved", "{refused:?}");
-    assert_eq!(
-        refused.detail.get_text("op"),
-        Some(op_hex(FIRST + 3).as_str())
-    );
+    assert_eq!(refused.code, "MountsActive", "{refused:?}");
 
     // 3. The operator repairs one Branch at a time on the worker: settle is
     // explicit, then release; each legacy row goes through `settle_legacy`.
@@ -679,39 +616,34 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
         let preview = repair(&placed, &name, "preview", None, false);
         assert_eq!(holders(&preview).len(), 0, "{name}: {preview:?}");
     }
-    let audit = repair(&placed, "main", "audit", None, false);
-    let Some(SdkValue::List(rows)) = audit.get("items") else {
-        panic!("audit items: {audit:?}");
-    };
-    let releases: Vec<_> = rows
-        .iter()
-        .filter(|row| {
-            row.get_text("evidence")
-                .is_some_and(|evidence| evidence.contains("action=release;operator=alice;op="))
-        })
-        .collect();
-    assert_eq!(releases.len(), 6, "{audit:?}");
-    let previews: Vec<_> = rows
-        .iter()
-        .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-        .collect();
-    assert_eq!(previews.len(), 12, "{audit:?}");
-    // A preview row names the Branch the operator previewed, not `main`: the
-    // six Branches were each previewed twice (step 1 and step 3b).
-    let mut previewed: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
-    for row in previews {
-        assert_eq!(row.get_text("kind"), Some("mount"));
-        assert_eq!(row.get_text("project"), Some("app"));
-        let branch = row.get_text("branch").expect("a preview names its Branch");
-        *previewed.entry(branch).or_default() += 1;
-    }
+    // The audit is scoped to the Branch it names: each Branch's page holds
+    // exactly its own two preview rows and one release row.
     for tag in FIRST..FIRST + 6 {
         let name = format!("stuck-{}", tag - FIRST);
-        assert_eq!(
-            previewed.get(name.as_str()),
-            Some(&2),
-            "the preview row names {name}: {audit:?}"
-        );
+        let audit = repair(&placed, &name, "audit", None, false);
+        let Some(SdkValue::List(rows)) = audit.get("items") else {
+            panic!("audit items for {name}: {audit:?}");
+        };
+        for row in rows {
+            assert_eq!(
+                row.get_text("branch"),
+                Some(name.as_str()),
+                "a Branch audit never reports another Branch's row: {audit:?}"
+            );
+        }
+        let releases = rows
+            .iter()
+            .filter(|row| {
+                row.get_text("evidence")
+                    .is_some_and(|evidence| evidence.contains("action=release;operator=alice;op="))
+            })
+            .count();
+        let previews = rows
+            .iter()
+            .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
+            .count();
+        assert_eq!(releases, 1, "{name}: {audit:?}");
+        assert_eq!(previews, 2, "{name}: {audit:?}");
     }
 
     // 3c. The doctor's worker-side audit is the same bounded page (16 rows at
@@ -782,30 +714,37 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
     // durable operator audit. Preview still filters them.
     let preview = repair(&placed, "main", "preview", None, false);
     assert_eq!(holders(&preview).len(), 0, "no holder remains");
+    // The audit is scoped: main has only the preview this step wrote, and
+    // each repaired Branch keeps its own six rows through the rebuild.
     let audit = repair(&placed, "main", "audit", None, false);
     let Some(SdkValue::List(rows)) = audit.get("items") else {
         panic!("audit items: {audit:?}");
     };
-    let releases: Vec<_> = rows
-        .iter()
-        .filter(|row| {
-            row.get_text("evidence")
-                .is_some_and(|evidence| evidence.starts_with("action=release;"))
-        })
-        .collect();
-    let previews: Vec<_> = rows
-        .iter()
-        .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-        .collect();
+    assert_eq!(rows.len(), 1, "main's audit is the preview it wrote: {audit:?}");
     assert_eq!(
-        releases.len(),
-        6,
-        "the compaction kept the audit: {audit:?}"
+        rows[0].get_text("evidence"),
+        Some("action=preview;operator=alice")
     );
-    assert_eq!(
-        previews.len(),
-        13,
-        "the compaction kept every preview: {audit:?}"
-    );
+    for tag in FIRST..FIRST + 6 {
+        let name = format!("stuck-{}", tag - FIRST);
+        let audit = repair(&placed, &name, "audit", None, false);
+        let Some(SdkValue::List(rows)) = audit.get("items") else {
+            panic!("audit items for {name}: {audit:?}");
+        };
+        let releases = rows
+            .iter()
+            .filter(|row| {
+                row.get_text("evidence")
+                    .is_some_and(|evidence| evidence.starts_with("action=release;"))
+            })
+            .count();
+        let previews = rows
+            .iter()
+            .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
+            .count();
+        assert_eq!(releases, 1, "the compaction kept {name}'s release: {audit:?}");
+        assert_eq!(previews, 2, "the compaction kept {name}'s previews: {audit:?}");
+    }
+
     placed.remove();
 }

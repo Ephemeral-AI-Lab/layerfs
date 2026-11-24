@@ -72,8 +72,8 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
 /// `store.repair_mount_holders`: first-class explicit operator repair of
 /// one Branch's mount intents. Preview lists them and writes its own retained
 /// done row; settle/release act on one explicit op; release retains the row as
-/// the durable done audit; `archive` exports the done rows and prunes only
-/// what it exported, and only on request. Nothing is automatic. A SQLite
+/// the durable done audit; `audit` reads the retained rows of that Branch.
+/// Nothing is automatic. A SQLite
 /// Store on another machine is repaired by that machine's worker
 /// (`store.repair`), so the live Docker Store is reachable; a PostgreSQL
 /// Store runs here, as its calls do.
@@ -89,18 +89,12 @@ pub fn repair(
     operator: &str,
     page: u32,
     limit: u32,
-    prune: bool,
 ) -> Outcome {
     // The host holds the Store's lease while it repairs or sends the call,
     // as `store_call` does: a Store an operation is moving is left.
     let (_lease, record) = layerfs_store::lease::claim(home, name.as_str())?;
     let store_ref = record.store_ref()?;
     let executor = place::plan(home, store_ref)?;
-    if action == "archive" {
-        return archive(
-            home, name, &record, executor, project, branch, prune, page, limit,
-        );
-    }
     match executor {
         Executor::Local => {
             let open = OpenArgs::of_record(home, name.as_str(), &record)?;
@@ -124,130 +118,13 @@ pub fn repair(
                 ("page".to_owned(), SdkValue::Int(i64::from(page))),
                 ("limit".to_owned(), SdkValue::Int(i64::from(limit))),
             ];
-            if let Some(place) = layerfs_store::place_view::encoded_from_store(home, &record) {
+            if let Some(place) = layerfs_store::place_view::encoded_from_home(home) {
                 fields.push(("place_view".to_owned(), place));
             }
             let request = SdkValue::Map(fields);
             worker.call("store.repair", request, &mut |_: SdkValue| {})
         }
     }
-}
-
-/// The `archive` action: export the bounded retained `done` rows to
-/// `<home>/log/gc-audit.jsonl`, one audit item per line, and, only with
-/// `prune`, delete exactly the rows whose line was written. Export is the
-/// default; nothing is deleted automatically. A page read is bounded and the
-/// prune keeps the same page so the next read sees what moved down. On a
-/// worker-hosted Store the host writes its own home file and the worker
-/// performs the bounded read and the exact prune.
-#[allow(clippy::too_many_arguments)]
-fn archive(
-    home: &Path,
-    name: &StoreName,
-    record: &StoreRecord,
-    mut executor: Executor,
-    project: &str,
-    branch: &str,
-    prune: bool,
-    page: u32,
-    limit: u32,
-) -> Outcome {
-    let store = name.as_str();
-    let mut next_page = page;
-    let mut exported = 0u64;
-    let mut pruned = 0u64;
-    let mut local: Option<OpenArgs> = None;
-    loop {
-        let answer = match &mut executor {
-            Executor::Local => {
-                if local.is_none() {
-                    local = Some(OpenArgs::of_record(home, store, record)?);
-                }
-                let open = local.as_ref().expect("set above");
-                layerfs_store::service::done_audit(open, next_page, limit)?
-            }
-            Executor::Worker(worker) => {
-                let mut fields = vec![
-                    ("store".to_owned(), SdkValue::text(store)),
-                    ("store_record".to_owned(), record.to_record().clone()),
-                    ("project".to_owned(), SdkValue::text(project)),
-                    ("branch".to_owned(), SdkValue::text(branch)),
-                    ("action".to_owned(), SdkValue::text("audit")),
-                    ("page".to_owned(), SdkValue::Int(i64::from(next_page))),
-                    ("limit".to_owned(), SdkValue::Int(i64::from(limit))),
-                ];
-                if let Some(place) = layerfs_store::place_view::encoded_from_store(home, record) {
-                    fields.push(("place_view".to_owned(), place));
-                }
-                worker.call("store.repair", SdkValue::Map(fields), &mut |_| {})?
-            }
-        };
-        let items = match answer.get("items") {
-            Some(SdkValue::List(items)) => items,
-            _ => {
-                return Err(refused(
-                    "Failed",
-                    "the retained audit page carries no items",
-                ))
-            }
-        };
-        for item in items {
-            layerfs_home::home::log_line(home, "gc-audit.jsonl", item)?;
-            exported += 1;
-        }
-        if items.is_empty() {
-            break;
-        }
-        let has_more = matches!(answer.get("has_more"), Some(SdkValue::Bool(true)));
-        if prune {
-            let mut ops = Vec::with_capacity(items.len());
-            for item in items {
-                let text = item
-                    .get_text("op")
-                    .ok_or_else(|| refused("Failed", "an exported audit row names no operation"))?;
-                let op: [u8; 16] = layerfs_bridge::sdk_values::unhex(text)
-                    .and_then(|bytes| bytes.try_into().ok())
-                    .ok_or_else(|| refused("Failed", "an exported audit op is not 16 bytes"))?;
-                ops.push(op);
-            }
-            let before = pruned;
-            match &mut executor {
-                Executor::Local => {
-                    let open = local.as_ref().expect("set above");
-                    pruned += layerfs_store::service::prune_done(open, &ops)?;
-                }
-                Executor::Worker(worker) => {
-                    let listed = ops.iter().map(|op| SdkValue::text(hex(op))).collect();
-                    let request = SdkValue::map([
-                        ("store", SdkValue::text(store)),
-                        ("store_record", record.to_record().clone()),
-                        ("ops", SdkValue::List(listed)),
-                    ]);
-                    let answer = worker.call("store.prune", request, &mut |_| {})?;
-                    pruned += answer
-                        .get_int("pruned")
-                        .and_then(|count| u64::try_from(count).ok())
-                        .unwrap_or(0);
-                }
-            }
-            if pruned == before {
-                // Nothing went: the exported page cannot shrink, so stop
-                // rather than re-read it forever. The line is already written.
-                break;
-            }
-        } else if !has_more {
-            break;
-        } else {
-            next_page += 1;
-        }
-    }
-    let file = layerfs_home::home::paths::log_dir(home).join("gc-audit.jsonl");
-    Ok(SdkValue::map([
-        ("action", SdkValue::text("archive")),
-        ("exported", SdkValue::Int(exported as i64)),
-        ("pruned", SdkValue::Int(pruned as i64)),
-        ("file", SdkValue::text(file.display().to_string())),
-    ]))
 }
 
 /// Who uses a Store or a project, read from the Sandbox records.
@@ -385,7 +262,6 @@ pub fn connect(
     runs_postgresql_sandboxes(home, name, machine)?;
     let own = OwnConnection {
         url: Some(request.url.clone()),
-        home: None,
     };
     let trial = record.clone().with_own_connection(machine, &own);
     let checked = check_from(home, events, &trial, machine).1?;
