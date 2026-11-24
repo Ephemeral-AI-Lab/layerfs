@@ -189,9 +189,10 @@ fn repaired(
 /// Starts the Sandbox the call names (`sandbox`) as its deployment says
 /// (`deploy.sandbox`: native or namespaces), its daemon on `store`. Called
 /// under the guard of its folder `directory`, so no other call on it runs
-/// meanwhile.
+/// meanwhile. `place`, the machine and generation the caller's home minted,
+/// is written with its record ([`crate::files::save_sandbox`]).
 pub fn start(
-    (host, platform): (&Host, &str),
+    (host, platform, place): (&Host, &str, Option<&(String, String)>),
     directory: &Path,
     store: OpenedStore,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
@@ -202,11 +203,11 @@ pub fn start(
     let backend = crate::runtime::backend(deploy)?;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        crate::launch::local::start((host, platform), directory, store, backend)
+        crate::launch::local::start((host, platform, place), directory, store, backend)
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
-        drop((directory, store, backend, platform));
+        drop((directory, store, backend, platform, place));
         Err(refused(
             "Unsupported",
             "a Sandbox runs on Linux (namespaces) or macOS (native)",
@@ -224,7 +225,8 @@ pub fn start(
 /// `namespaces`; a native one's `image` is `local`. `platform` (#529) is
 /// checked against that backend and recorded.
 /// `place`, the machine and generation the caller's home minted, goes into
-/// a worker's own record once the Sandbox started ([`crate::files::save_place`]).
+/// a worker's own record in the same write that records it started
+/// ([`crate::files::save_sandbox`]).
 /// The only call that starts a Sandbox. Failures are `Failed` or
 /// `Unknown`, never retried.
 pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>) -> Outcome {
@@ -261,11 +263,7 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
             }
             None => {}
         }
-        let state = start((host, &platform), &directory, store)?;
-        if let Some(place) = place {
-            crate::files::save_place(&directory, &state.id, place);
-        }
-        Ok(state)
+        start((host, &platform, place), &directory, store)
     })();
     let state = match made {
         Ok(state) => state,
@@ -306,9 +304,12 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
 /// Stop, then delete, each attempted once: a failed stop is not followed by
 /// a delete and keeps its cause; the folder goes after the delete. A
 /// Sandbox whose runtime ended by itself is reclaimed ([`reclaim`]) and
-/// answered `NoSuchSandbox`, as gone. A local record this build does not
-/// read is forgotten ([`forget_unread`]), no signal sent: a worker's own
-/// record, when the caller's home keeps only the forward to it.
+/// answered `NoSuchSandbox`, as gone (its `left` detail names a retired
+/// tombstone the reclaim could not write). A local record this build does
+/// not read is forgotten ([`forget_unread`]), no signal sent: a worker's own
+/// record, when the caller's home keeps only the forward to it. Neither it
+/// nor a retired docker record ([`forget`]) gets a retired tombstone: its
+/// runtime was not stopped, so nothing proves its mounts dead.
 /// Once the runtime is gone, each drained Workspace's mount intent is
 /// ended once (`left` names each one not ended); on a PostgreSQL Store
 /// whose URL this machine cannot dial, those bound by id go back to the
@@ -324,19 +325,23 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         ));
     };
     if recorded.retired() {
-        let _ = retired(host, &id);
         return forget(&id, &directory, &recorded);
     }
     if let Some(why) = crate::reopen::unread(&recorded) {
-        let unretired = retired(host, &id);
-        return forget_unread(&id, &directory, &recorded, &why, unretired);
+        return forget_unread(&id, &directory, &recorded, &why);
     }
     let state = match crate::registry::sandbox_live(host) {
         Ok(state) => state,
         Err(gone) if gone.detail.get_bool("containerGone") => {
             let container = gone.detail.get_text("container").unwrap_or("").to_owned();
-            reclaim(host, &container, gone.detail.get_bool("containerStopped"))?;
-            return Err(gone);
+            let reclaimed = reclaim(host, &container, gone.detail.get_bool("containerStopped"))?;
+            return Err(match reclaimed.get("left") {
+                Some(left @ SdkValue::List(items)) if !items.is_empty() => SdkRefusal {
+                    detail: layerfs_home::home::with_field(gone.detail, "left", left.clone()),
+                    ..gone
+                },
+                _ => gone,
+            });
         }
         Err(refusal) => return Err(refusal),
     };
@@ -516,25 +521,18 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
 /// build does not read (`why`, [`crate::reopen::unread`]; RV3 FAIL 2, 3):
 /// its identity cannot be checked, so nothing is signalled. Its folder goes
 /// under its guard, and the answer (`Forgotten`, with `left`) says what may
-/// remain: its daemon or init process and its run folder.
-/// `unretired` is the sentence of a retirement tombstone that was not
-/// written, which `left` carries too.
-fn forget_unread(
-    id: &str,
-    directory: &Path,
-    recorded: &DaemonRecord,
-    why: &str,
-    unretired: Option<SdkValue>,
-) -> Outcome {
+/// remain: its daemon or init process and its run folder. No retired
+/// tombstone is written: that process may still run.
+fn forget_unread(id: &str, directory: &Path, recorded: &DaemonRecord, why: &str) -> Outcome {
     let _guard = layerfs_store::project::discovery::guard(directory)?;
     discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(directory);
-    let left = std::iter::once(SdkValue::text(unread_left(recorded, why))).chain(unretired);
+    let left = vec![SdkValue::text(unread_left(recorded, why))];
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Forgotten")),
         ("sandbox", SdkValue::text(id)),
-        ("left", SdkValue::List(left.collect())),
+        ("left", SdkValue::List(left)),
     ]))
 }
 
@@ -582,7 +580,9 @@ const STOP_S: u16 = 5;
 /// stopped (`container`, its runtime id; `stopped`): one Delete of a
 /// stopped runtime, then its folder. Under its folder's guard the record is
 /// read again: a Sandbox started again meanwhile has another runtime id
-/// and is left alone (`Busy`).
+/// and is left alone (`Busy`). Its runtime is confirmed gone, so the home
+/// record's retired tombstone is written before the folder goes; one that
+/// was not written is the sentence of its answer's `left`.
 pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
     let id = host.sandbox()?;
     let directory = crate::files::sandbox_dir(host)?;
@@ -606,13 +606,15 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
             .map_err(values::wire)?;
     }
     // its runtime is gone: the home record's tombstone first, best effort
-    // (the close that reclaimed it answers `NoSuchSandbox`, with no `left`)
-    let _ = retired(host, id);
+    // (the close that reclaimed it answers `NoSuchSandbox`, its `left`
+    // detail naming a tombstone that was not written)
+    let unretired = retired(host, id);
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Reclaimed")),
         ("id", SdkValue::text(id)),
+        ("left", SdkValue::List(unretired.into_iter().collect())),
     ]))
 }

@@ -55,11 +55,12 @@ pub fn started(directory: &Path) -> Result<Option<DaemonRecord>> {
 /// Records started Sandbox `state` in its folder `directory`: its daemon
 /// keys in `control.json`, then what reopens it in its record (`daemon`,
 /// with its backend, route and runtime id, and `platform`, which `create`
-/// checked before any effect, #529), the record's other fields kept.
+/// checked before any effect, #529), the record's other fields kept, and
+/// its place in the same write ([`write_started`]).
 pub fn save_sandbox(
     directory: &Path,
     state: &SandboxState,
-    (host, platform): (&Host, &str),
+    (host, platform, place): (&Host, &str, Option<&(String, String)>),
     secret: [u8; 32],
     peer: [u8; 32],
     instance: [u8; 32],
@@ -104,40 +105,49 @@ pub fn save_sandbox(
             ("instance", SdkValue::Bytes(instance.to_vec())),
         ]),
     )?;
-    // on `native` this is the home's record, which keeps its other fields
-    // (its `op` among them): changed under the Sandbox lock (#536 §8)
-    let _sandbox = crate::record::lock_in(directory, &state.id)?;
-    let record = SandboxRecord::read_in(directory, &state.id)?
-        .unwrap_or_else(|| SandboxRecord::from_record(&state.id, SdkValue::Null));
-    let store = &host.store;
     let facts = [
         crate::runtime::kind(runtime).to_owned(),
         route(runtime).to_owned(),
         runtime.identity().to_string(),
     ];
-    let record = record.with_start(format!("{store}/{}", state.project), facts, daemon);
-    record.write_in(directory)
+    let project = format!("{}/{}", host.store, state.project);
+    let worker = layerfs_home::home::guest::is_root(&host.home);
+    write_started(
+        directory,
+        &state.id,
+        (project, facts, daemon),
+        (place, worker),
+    )
 }
-/// Writes the machine and generation a worker's caller minted (`place`)
-/// into the worker's own record of Sandbox `name` in `directory`, so the
-/// mounts it places carry them (#783 gap 1). The caller's values always win:
-/// a record an interrupted removal left behind may name an older generation,
-/// and a mount recording that one would look retired beside the home's
-/// newer record. On `native` the record is the home's own and already names
-/// them (nothing is written). Best effort: a record left without them only
-/// means its mounts carry no place evidence, and missing evidence is never
-/// death.
-pub fn save_place(directory: &Path, name: &str, (machine, generation): &(String, String)) {
-    let _ = (|| -> Result<()> {
-        let _sandbox = crate::record::lock_in(directory, name)?;
-        let Some(record) = SandboxRecord::read_in(directory, name)? else {
-            return Ok(());
-        };
-        if record.generation() == Some(generation) && record.machine() == machine {
-            return Ok(());
-        }
-        record.with_place(machine, generation).write_in(directory)
-    })();
+
+/// Writes the record of Sandbox `name` in `directory` once it started: its
+/// `project`, backend, route and runtime id (`facts`) and `daemon`
+/// ([`SandboxRecord::with_start`]), with its place in the same write, so a
+/// mount never reads a place from another write (#783 gap 1). `place` is
+/// the machine and generation the caller's home minted; the caller's values
+/// always win. A worker's own record (`worker`) keeps no other place: a
+/// record an interrupted removal left behind may name an older generation,
+/// which the home's newer record would prove retired, so without `place`
+/// it names none (missing evidence is never death, wrong evidence is).
+/// On `native` the record is the home's own, which names its place already.
+/// Changed under the Sandbox lock (#536 §8), its other fields kept (its
+/// `op` among them).
+pub fn write_started(
+    directory: &Path,
+    name: &str,
+    (project, facts, daemon): (String, [String; 3], DaemonRecord),
+    (place, worker): (Option<&(String, String)>, bool),
+) -> Result<()> {
+    let _sandbox = crate::record::lock_in(directory, name)?;
+    let record = SandboxRecord::read_in(directory, name)?
+        .unwrap_or_else(|| SandboxRecord::from_record(name, SdkValue::Null))
+        .with_start(project, facts, daemon);
+    match (place, worker) {
+        (Some((machine, generation)), _) => record.with_place(machine, generation),
+        (None, true) => record.without_place(),
+        (None, false) => record,
+    }
+    .write_in(directory)
 }
 
 /// The kernel route a running Sandbox's Workspaces use: loopback NFS for a

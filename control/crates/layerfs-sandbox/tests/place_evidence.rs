@@ -1,11 +1,13 @@
 //! Place evidence on the Sandbox side (#783 gaps 1–3): a worker's own record
-//! keeps the machine and generation its caller minted, so its mounts carry
-//! them; a tombstone is written on the removal paths and goes once the name
-//! is recreated with a newer generation. Missing evidence is never death.
+//! keeps the machine and generation its caller minted, written with its
+//! start, so its mounts carry them; a tombstone is written on the removal
+//! paths that stopped the runtime and goes once the name is recreated with a
+//! newer generation. Missing evidence is never death.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::json::parse;
 use layerfs_home::op::Op;
-use layerfs_sandbox::record::{mount_place, retire, SandboxRecord, SandboxTombstone};
+use layerfs_sandbox::files::write_started;
+use layerfs_sandbox::record::{mount_place, retire, DaemonRecord, SandboxRecord, SandboxTombstone};
 use std::path::PathBuf;
 
 /// A fresh folder of its own under the temp directory: a worker's root
@@ -20,42 +22,82 @@ fn scratch(tag: &str, home: bool) -> PathBuf {
     root
 }
 
+/// What a Sandbox's own side records once it started (`files::save_sandbox`
+/// writes it through `files::write_started`): its project, facts and daemon.
+fn started() -> (String, [String; 3], DaemonRecord) {
+    let daemon = parse(r#"{"runtime":"namespaces","name":"lfs-t1"}"#).unwrap();
+    (
+        "shop/api".to_owned(),
+        ["namespaces".to_owned(), "fuse".to_owned(), "ab".repeat(32)],
+        DaemonRecord::from_record(&daemon),
+    )
+}
+
 #[test]
 fn a_worker_record_keeps_the_callers_place_and_its_mounts_read_it() {
     let root = scratch("worker", false);
     let directory = root.join("sandbox").join("t1");
     std::fs::create_dir_all(&directory).unwrap();
-    // the worker's record as its start writes it: no machine, no generation
-    SandboxRecord::from_record(
-        "t1",
-        parse(r#"{"name":"t1","project":"shop/api","backend":"namespaces"}"#).unwrap(),
-    )
-    .write_in(&directory)
-    .unwrap();
-    let before = mount_place(&root, &directory, "t1").unwrap();
-    assert_eq!(before.generation, None, "no evidence before the place");
-    assert_eq!(before.machine, None);
-
     let generation = "p1:aa11.sandbox:0000000000000010:aa".to_owned();
-    layerfs_sandbox::files::save_place(&directory, "t1", &("box".to_owned(), generation.clone()));
+    let place = ("box".to_owned(), generation.clone());
+    // the start's one write records the Sandbox started and its place
+    write_started(&directory, "t1", started(), (Some(&place), true)).unwrap();
     let placed = mount_place(&root, &directory, "t1").unwrap();
     assert_eq!(placed.sandbox.as_deref(), Some("t1"));
     assert_eq!(placed.machine.as_deref(), Some("box"));
     assert_eq!(placed.generation.as_deref(), Some(generation.as_str()));
     // a worker's root keeps no machine record: no incarnation is guessed
     assert_eq!(placed.machine_incarnation, None);
+    let _ = std::fs::remove_dir_all(&root);
+}
 
-    // a record an interrupted removal left with an older generation takes
-    // the caller's newer one: a mount recording the old one would look
-    // retired beside the home's newer record
+/// A worker's record an interrupted removal left behind names an older
+/// generation: the new start's write records the caller's newer one, or,
+/// sent no place, none, never the old one (a mount recording it would look
+/// retired beside the home's newer record: wrong evidence, worse than none).
+#[test]
+fn a_leftover_worker_record_never_keeps_its_older_generation() {
+    let root = scratch("leftover", false);
+    let directory = root.join("sandbox").join("t1");
+    std::fs::create_dir_all(&directory).unwrap();
+    let old = "p1:aa11.sandbox:0000000000000010:aa";
+    let leftover = || {
+        SandboxRecord::from_record(
+            "t1",
+            parse(&format!(
+                r#"{{"name":"t1","project":"shop/api","machine":"box","generation":"{old}"}}"#
+            ))
+            .unwrap(),
+        )
+        .write_in(&directory)
+        .unwrap();
+    };
+    leftover();
     let newer = (
         "box".to_owned(),
         "p1:aa11.sandbox:0000000000000020:bb".to_owned(),
     );
-    layerfs_sandbox::files::save_place(&directory, "t1", &newer);
+    write_started(&directory, "t1", started(), (Some(&newer), true)).unwrap();
     let replaced = SandboxRecord::read_in(&directory, "t1").unwrap().unwrap();
     assert_eq!(replaced.generation(), Some(newer.1.as_str()));
     assert_eq!(replaced.machine(), "box");
+    assert!(
+        replaced.daemon().is_some(),
+        "recorded started in the same write"
+    );
+
+    // a caller that sent no place: the worker's record names none
+    leftover();
+    write_started(&directory, "t1", started(), (None, true)).unwrap();
+    let bare = mount_place(&root, &directory, "t1").unwrap();
+    assert_eq!(bare.generation, None, "the older generation stayed");
+    assert_eq!(bare.machine, None);
+
+    // on `native` the record is the home's own, whose place stays
+    leftover();
+    write_started(&directory, "t1", started(), (None, false)).unwrap();
+    let home = SandboxRecord::read_in(&directory, "t1").unwrap().unwrap();
+    assert_eq!(home.generation(), Some(old));
     let _ = std::fs::remove_dir_all(&root);
 }
 

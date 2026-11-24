@@ -239,7 +239,14 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     );
 
     // forced, the remove stops that daemon and deletes its run folder,
-    // through the forced close a started Sandbox takes
+    // through the forced close a started Sandbox takes; that stop is
+    // confirmed, so the home keeps the tombstone of its generation
+    let generation = "p1:sandbox:0000000000000001:00";
+    let record = read_record(&paths::sandbox_record(&home, "s1"))
+        .unwrap()
+        .unwrap();
+    let record = home::with_field(record, "generation", t(generation));
+    write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
     match removed(&home, "s1", true) {
         Ok(Removed::Stopped { unmounted, left }) => {
             assert!(unmounted.is_empty(), "{unmounted:?}");
@@ -252,6 +259,10 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     assert!(!daemon.alive(), "its daemon still runs");
     assert!(!folder.exists(), "its run folder stays");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
+    let tombstone = read_record(&paths::sandbox_tombstone(&home, "native", "s1"))
+        .unwrap()
+        .expect("the confirmed stop's tombstone");
+    assert_eq!(tombstone.get_text("generation"), Some(generation));
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -297,5 +308,73 @@ fn a_forced_remove_goes_on_when_its_tombstone_cannot_be_written() {
         "its record stays"
     );
     assert!(retired.is_file());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A started `native` Sandbox whose daemon ended by itself: its record
+/// (with generation `generation`) and daemon keys, its process gone.
+#[cfg(target_os = "macos")]
+fn ended(home: &Path, name: &str, generation: &str) -> PathBuf {
+    let mut daemon = stand_in();
+    let folder = half_created(home, name, daemon.id());
+    let _ = daemon.kill();
+    let _ = daemon.wait();
+    let record = read_record(&paths::sandbox_record(home, name))
+        .unwrap()
+        .unwrap();
+    let record = home::with_field(record, "generation", t(generation));
+    let record = home::with_field(record, "id", t(name));
+    write_record(&paths::sandbox_record(home, name), &record).unwrap();
+    layerfs_home::secrets::save_daemon_keys(
+        &paths::sandbox_dir(home, name),
+        &SdkValue::map([
+            ("endpoint", SdkValue::Null),
+            ("secret", SdkValue::Bytes(vec![1; 32])),
+            ("peer", SdkValue::Bytes(vec![2; 32])),
+            ("instance", SdkValue::Bytes(vec![3; 32])),
+        ]),
+    )
+    .unwrap();
+    folder
+}
+
+/// The close a Sandbox's side runs reclaims one whose daemon ended by
+/// itself: it is gone, so the home keeps the tombstone of its generation,
+/// and a tombstone the reclaim could not write is named in its refusal's
+/// `left`, which `sandbox.remove` reports (it was dropped before).
+#[cfg(target_os = "macos")]
+#[test]
+fn a_reclaimed_sandbox_is_tombstoned_or_says_why_not() {
+    let home = new_home("reclaim");
+    let generation = "p1:sandbox:0000000000000002:00";
+    ended(&home, "s1", generation);
+    let host = layerfs_sandbox::force::local_host(&home, "s1").unwrap();
+    let refusal = layerfs_sandbox::lifecycle::close(&host, false, &[]).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchSandbox", "{refusal:?}");
+    assert!(refusal.detail.get("left").is_none(), "{refusal:?}");
+    assert!(!paths::sandbox_dir(&home, "s1").exists());
+    let tombstone = read_record(&paths::sandbox_tombstone(&home, "native", "s1"))
+        .unwrap()
+        .expect("the reclaim's tombstone");
+    assert_eq!(tombstone.get_text("generation"), Some(generation));
+
+    // its tombstone cannot be written: the reclaim goes on and says so
+    ended(&home, "s2", generation);
+    let retired = paths::sandbox_retired_dir(&home, "native");
+    std::fs::remove_dir_all(&retired).unwrap();
+    std::fs::write(&retired, b"not a folder").unwrap();
+    let host = layerfs_sandbox::force::local_host(&home, "s2").unwrap();
+    let refusal = layerfs_sandbox::lifecycle::close(&host, false, &[]).unwrap_err();
+    assert_eq!(refusal.code, "NoSuchSandbox", "{refusal:?}");
+    let left = match refusal.detail.get("left") {
+        Some(SdkValue::List(items)) => items.clone(),
+        _ => panic!("no left: {refusal:?}"),
+    };
+    assert_eq!(left.len(), 1, "{left:?}");
+    assert!(
+        matches!(&left[0], SdkValue::Text(said) if said.contains("retired tombstone was not written")),
+        "{left:?}"
+    );
+    assert!(!paths::sandbox_dir(&home, "s2").exists());
     std::fs::remove_dir_all(home).unwrap();
 }
