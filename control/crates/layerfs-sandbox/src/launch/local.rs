@@ -38,7 +38,7 @@ use std::sync::Arc;
 /// Store, whose daemon dials the server (#535 §7.4). `platform` is the
 /// one `create` checked, recorded with it.
 pub fn start(
-    (host, platform): (&Host, &str),
+    (host, platform, place): (&Host, &str, Option<&(String, String)>),
     directory: &Path,
     project: OpenedStore,
     backend: crate::runtime::Backend,
@@ -77,7 +77,7 @@ pub fn start(
     };
     let id = host.sandbox()?;
     start_named(
-        (host, platform),
+        (host, platform, place),
         directory,
         id,
         project,
@@ -88,7 +88,7 @@ pub fn start(
 /// Starts Sandbox `id`: directory and daemon on the installed Store, its
 /// first control connection, then its records in its folder `directory`.
 fn start_named(
-    (host, platform): (&Host, &str),
+    (host, platform, place): (&Host, &str, Option<&(String, String)>),
     directory: &Path,
     id: &str,
     project: OpenedStore,
@@ -243,7 +243,7 @@ fn start_named(
         crate::files::save_sandbox(
             &state.directory,
             &state,
-            (host, platform),
+            (host, platform, place),
             controller.private,
             daemon.public,
             instance,
