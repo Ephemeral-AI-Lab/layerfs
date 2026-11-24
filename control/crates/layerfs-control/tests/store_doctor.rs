@@ -122,6 +122,8 @@ fn a_native_store_is_reached_checked_to_its_schema_and_its_backups_compared() {
             ("store.connection", "pass"),
             ("store.identity", "pass"),
             ("store.schema", "pass"),
+            ("store.mount_holders", "pass"),
+            ("store.gc_audit", "pass"),
             ("store.backups", "notice"),
         ]),
         "{out:?}"

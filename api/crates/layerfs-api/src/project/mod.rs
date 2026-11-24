@@ -21,6 +21,5 @@ pub(crate) fn calls() -> Calls {
         export::CALL,
         delete::CALL,
         hide_path::CALL,
-        doctor::CALL,
     ]
 }
