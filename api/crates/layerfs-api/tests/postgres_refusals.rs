@@ -5,7 +5,7 @@
 //! written; `store.disconnect`
 //! refuses `InUse` while another process holds the Store and forgets its
 //! saved password; `store.attach` and `store.detach` refuse a sqlite
-//! Store, `native`, a missing machine, a loopback URL a machine does not
+//! Store, a missing machine, `native` when it does not reach the server, a loopback URL a machine does not
 //! share and a detach while a Sandbox runs there; `store.doctor --machine`
 //! refuses a machine that is not attached. The removed calls are gone from
 //! the table. The URLs name 127.0.0.1 port 1, where nothing listens, so a
@@ -438,9 +438,14 @@ fn attach_and_detach_refuse_what_is_not_theirs() {
         refusal(&home, "store.attach", &on("nope", "dev")).code,
         "NotFound"
     );
+    // `native` is checked like any machine: nothing listens on the
+    // Store's address, so it is not attached
     let native = refusal(&home, "store.attach", &on("pg", "native"));
-    assert_eq!(native.code, "InvalidInput", "{native:?}");
-    assert!(native.message.contains("this computer"), "{native:?}");
+    assert_eq!(native.code, "Unavailable", "{native:?}");
+    assert_eq!(
+        refusal(&home, "store.detach", &on("pg", "native")).code,
+        "NotFound"
+    );
     assert_eq!(
         refusal(&home, "store.attach", &on("pg", "ghost")).code,
         "NotFound"

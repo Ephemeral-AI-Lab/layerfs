@@ -63,7 +63,7 @@ Python  layerfs.sandbox.create(project, name, *, machine=None, image=None, mount
 | --- | --- | --- |
 | `project` | project | `<store>/<project>` |
 | `name` | name | the new Sandbox's name |
-| `machine` option | name | the machine to run on; default: the machine of the project's sqlite Store; this computer (native) for a project of a PostgreSQL Store |
+| `machine` option | name | the machine to run on; default: the machine of the project's sqlite Store, or the one machine attached to a PostgreSQL Store (none or several attached: refused) |
 | `image` option | image | the image the Sandbox runs; default: the machine's own |
 | `mount` option | name | also mount this Branch; the Workspace gets the default name, the Branch's name made valid, and the answer is its handle and path |
 | `on_progress` option | function |  |
@@ -79,10 +79,13 @@ under one home lock, where it is claimed with the `op` `create`; a name taken
 anywhere in the home is `Exists`. The machine starts the daemon, and the
 record is written once with the answer, dropping the `op`; a refused start
 removes the record. With no `--machine` the Sandbox runs on its sqlite
-Store's machine, else on `native`; another machine than a sqlite Store's is
+Store's machine, or on the one machine attached to its PostgreSQL Store
+(none attached is refused `InvalidInput` with `layerfs store attach <store>
+--machine <machine>` as its fix; several are listed in `next.machines` and
+the call must name one); another machine than a sqlite Store's is
 `Unsupported`, and the support table must accept the platform and Store
-kind. A PostgreSQL Store's Sandbox runs on `native` or on a machine attached
-to it: any other is refused `InvalidInput` with `layerfs store attach
+kind. A PostgreSQL Store's Sandbox runs only on a machine attached to it,
+machine native as much as any other: any other is refused `InvalidInput` with `layerfs store attach
 <store> --machine <machine>` as its fix. The caller puts the Store's user
 and saved password into the URL and sends
 the URL only in this request; the launching side checks that it reaches the

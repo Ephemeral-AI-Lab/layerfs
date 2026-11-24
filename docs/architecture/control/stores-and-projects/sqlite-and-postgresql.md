@@ -112,14 +112,22 @@ both; no machine has an address or a login of its own.
 | --- | --- | --- | --- |
 | `store.connect` | records the database as a Store in the fixed `layerfs` schema: the URL exactly as given (an address alone: no user or password), `user`, schema, `synchronous_commit`, binding, a cursor key of this home's own, no machine; the password goes to the home's secrets as kind `login` under the Store's name. On a connected Store it changes the address, user, password or `synchronous_commit`, an omitted user or password keeping the saved one; the result is checked from this process against the same binding before the record and password are written, and the Store's open connections in this process are closed | `InvalidInput`, `Exists`, `Unavailable`, `Denied`, `Conflict` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `connect` |
 | `store.disconnect` | forgets the Store, its saved password and its attachments; its data stays | `InvalidInput` for sqlite (`store remove`); `InUse` while leased or a Sandbox uses it | same |
-| `store.attach <s> --machine <m>` | checks the Store from the machine with the saved URL and login (in this process on a locally executing machine, else through the worker's `store.reach`): the server answers, its schema holds this Store, and the role has what a Sandbox's reads and writes need (the schema's `USAGE` and `CREATE`, the database's `TEMP`, each table's and sequence's privileges; never what only a compaction needs, which `store compact` checks itself); the machine's platform must run PostgreSQL Sandboxes. Only then is `<m>` added to the record's `attached` list and its reach recorded; an attached machine is checked again (`checked`) | `InvalidInput` (sqlite, `native`), `NotFound`, `Unsupported`, `Unavailable`, `Denied`, `Conflict` | [`check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs) `attach`, [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `attach` |
+| `store.attach <s> --machine <m>` | checks the Store from the machine with the saved URL and login (in this process on a locally executing machine, else through the worker's `store.reach`): the server answers, its schema holds this Store, and the role has what a Sandbox's reads and writes need (the schema's `USAGE` and `CREATE`, the database's `TEMP`, each table's and sequence's privileges; never what only a compaction needs, which `store compact` checks itself); the machine's platform must run PostgreSQL Sandboxes. Only then is `<m>` added to the record's `attached` list and its reach recorded; an attached machine is checked again (`checked`) | `InvalidInput` (sqlite), `NotFound`, `Unsupported`, `Unavailable`, `Denied`, `Conflict` | [`check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs) `attach`, [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `attach` |
 | `store.detach <s> --machine <m>` | removes `<m>` from `attached` and forgets its reach, under the home lock and the Store's, once no Sandbox of the Store's projects is on it | `InUse` (counted and named, with the removals as `fix`), `NotFound` (not attached), `InvalidInput` | [`check.rs`](../../../../control/crates/layerfs-store/src/postgresql/check.rs) `detach`, [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle_on` |
 | Store calls | open the schema in this process with the URL resolved now | — | [`open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
 | Host read session | one read-only session per process for Sandbox host operations: a create's reach check and a status's head read, on every route; opened with the light check on first read, checked with one empty query before each use (a dead one is replaced, not retried), closed after 60 s unused | — | [`reader.rs`](../../../../control/crates/layerfs-store/src/postgresql/reader.rs) |
 
-A PostgreSQL Store is on no machine. Its Sandboxes run on `native` and on
-every attached machine whose platform runs PostgreSQL Sandboxes (#536 C4);
-`sandbox.create` on a machine that is not attached is refused
+A PostgreSQL Store is on no machine. Its Sandboxes run on every attached
+machine whose platform runs PostgreSQL Sandboxes (#536 C4). This computer
+is the control process (home, records, secrets, the saved connection); it
+is never a machine. Machine native is the built-in machine whose platform
+runs Sandboxes directly on the host OS; what it allows (a shared loopback,
+a local executor) comes from its platform, not its name, and it runs a
+Store's Sandboxes only once attached. `store connect` attaches nothing.
+With no `--machine`, `sandbox.create` uses the one attached machine (none
+attached is refused with the attach as its fix; several are listed in
+`next.machines` and one must be named). `sandbox.create` on a machine
+that is not attached is refused
 `InvalidInput` with `layerfs store attach <s> --machine <m>` as its fix, and
 on an attached one still checks from the machine that it reaches this Store.
 A record is read as it is: there is no migration and no state for a record
@@ -169,7 +177,9 @@ Writers: `store.attach` (its check), `store.doctor` (this computer, measured
 with the same check, then every attached machine, or `--machine` alone) and
 a Sandbox create on a machine (`{ at, ok: true }`, on the host after the
 reply, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)
-`reach`). `native` dials as this computer and is recorded as `here`. A
+`reach`). `here` is this computer, the process that holds the connection;
+machine native's reach is `reach.native`, like any machine's, and neither
+is read as the other. A
 writer runs after its Store I/O, under the Store's lock, and writes nothing
 once the record is gone; a write never fails its call and moves no
 `generation`. `connect.rs` reads it back: `reach` (this computer's) and

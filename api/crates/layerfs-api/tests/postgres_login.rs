@@ -293,7 +293,8 @@ fn connect_checks_and_saves_the_login_and_a_reconnect_keeps_what_it_is_not_given
 }
 
 /// The doctor checks from this computer, then from each attached machine
-/// (here a stopped lima machine, which waits), or from `--machine` alone;
+/// (here stopped lima machines, which wait, and `native`, attached like any
+/// other machine and refused until it is), or from `--machine` alone;
 /// when this computer is not let in, no machine is checked. `store.get`
 /// answers each attached machine as a row with its reach.
 #[cfg(feature = "machine")]
@@ -356,13 +357,11 @@ fn the_doctor_checks_attached_machines_only_after_this_computer() {
         &[("store", t("pg")), ("machine", t("lab"))],
     );
     assert_eq!(froms(&report), ["lab"], "{report:?}");
-    // `native` is this computer, checked anyway
-    let report = long(
-        &home,
-        "store.doctor",
-        &[("store", t("pg")), ("machine", t("native"))],
-    );
-    assert_eq!(froms(&report), Vec::<String>::new(), "{report:?}");
+    // `native` is an ordinary machine: not attached, it is refused
+    let on_native = [("store", t("pg")), ("machine", t("native"))];
+    let (code, message) = call(&home, "store.doctor", &on_native).unwrap_err();
+    assert_eq!(code, "InvalidInput", "{message}");
+    assert!(message.contains("not attached"), "{message}");
     let got = long(&home, "store.get", &[("store", t("pg"))]);
     let reach = got.get("reach").unwrap();
     assert_eq!(reach.get("ok"), Some(&SdkValue::Bool(true)), "{got:?}");
@@ -384,6 +383,35 @@ fn the_doctor_checks_attached_machines_only_after_this_computer() {
         items[0].get("machines"),
         Some(&SdkValue::List(vec![t("dev"), t("lab")]))
     );
+    // attached like any machine, checked from it (it shares this host's
+    // loopback), then checked by the doctor with the others
+    let attached = long(&home, "store.attach", &on_native);
+    assert_eq!(
+        attached.get_text("outcome"),
+        Some("attached"),
+        "{attached:?}"
+    );
+    assert!(attached.get_int("latency_ms").is_some(), "{attached:?}");
+    let again = long(&home, "store.attach", &on_native);
+    assert_eq!(again.get_text("outcome"), Some("checked"), "{again:?}");
+    let report = long(&home, "store.doctor", &on_native);
+    assert_eq!(froms(&report), ["native"], "{report:?}");
+    let report = long(&home, "store.doctor", &[("store", t("pg"))]);
+    assert_eq!(froms(&report), ["dev", "lab", "native"], "{report:?}");
+    let got = long(&home, "store.get", &[("store", t("pg"))]);
+    let Some(SdkValue::List(rows)) = got.get("machines") else {
+        panic!("{got:?}");
+    };
+    let native = rows
+        .iter()
+        .find(|row| row.get_text("machine") == Some("native"));
+    assert_eq!(
+        native.and_then(|row| row.get_text("reached")),
+        Some("ok"),
+        "{rows:?}"
+    );
+    let detached = long(&home, "store.detach", &on_native);
+    assert_eq!(detached.get_text("outcome"), Some("detached"));
     // this computer not let in (its password forgotten): no machine is
     // checked, since each would only repeat it
     std::fs::remove_file(password_file(&home, "pg").unwrap()).unwrap();

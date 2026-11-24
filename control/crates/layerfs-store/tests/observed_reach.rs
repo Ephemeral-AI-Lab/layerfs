@@ -81,11 +81,12 @@ fn reaches_are_kept_beside_the_live_read_and_merged() {
     seen::record(&home, "pg", Some("lab"), &Reach::reached());
     let lab = seen::read(&home, "pg").of("lab").unwrap();
     assert_eq!(lab.get("latency_ms"), Some(&SdkValue::Null));
-    // `native` dials as this computer
+    // `native` is a machine like any other, apart from this computer
     seen::record(&home, "pg", Some("native"), &Reach::reached());
     let got = seen::read(&home, "pg");
-    assert!(got.of("native").is_none());
-    assert_eq!(got.here.unwrap().get("ok"), Some(&SdkValue::Bool(true)));
+    let native = got.of("native").expect("native's reach");
+    assert_eq!(native.get("ok"), Some(&SdkValue::Bool(true)));
+    assert_eq!(got.here.unwrap().get("ok"), Some(&SdkValue::Bool(false)));
     std::fs::remove_dir_all(home).unwrap();
 }
 

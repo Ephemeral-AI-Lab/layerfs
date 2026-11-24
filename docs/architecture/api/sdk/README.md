@@ -82,7 +82,7 @@ progress, the refusals the call names with their `fix`, and its MCP profile
 | To get | You first need | Made by |
 | --- | --- | --- |
 | a sqlite Store | nothing (`native` is built in) | [`store.create`](store.md#storecreate) |
-| a PostgreSQL Store | a database and its login | [`store.connect`](store.md#storeconnect); [`store.attach`](store.md#storeattach) for a machine other than `native` |
+| a PostgreSQL Store | a database and its login | [`store.connect`](store.md#storeconnect); [`store.attach`](store.md#storeattach) for each machine that runs its Sandboxes, machine native too |
 | a project | a Store | [`project.init`](project.md#projectinit) |
 | a Branch to work on | a project (`main` is its published line) | [`branch.fork`](branch.md#branchfork) |
 | a Sandbox | a project and a machine | [`sandbox.create`](sandbox.md#sandboxcreate) |

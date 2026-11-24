@@ -817,8 +817,9 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   with its `op` (`create`, #536 §7.1); its success records the result and
   drops the `op` in one write, a refused start removes the record. A name
   taken anywhere in the home is `Exists`. With no `machine` it runs on its
-  sqlite Store's machine, else on `native`; another machine than a sqlite
-  Store's is `Unsupported`. Its short answer is `{"ok":true}`, or with
+  sqlite Store's machine, or on the one machine attached to its PostgreSQL
+  Store (none or several attached: refused, [below](#store-11)); another
+  machine than a sqlite Store's is `Unsupported`. Its short answer is `{"ok":true}`, or with
   `--mount B` the Workspace's `workspace` (its name is the Branch's,
   lowercased, each other character `-`) and `path`. A refused mount keeps
   the Sandbox and answers the mount's refusal with `next.sandbox` and
@@ -1362,12 +1363,17 @@ attached to the Store and dial with both.
   and its reach. Short `{ ok, outcome }` with `latency_ms`; long `ok,
   outcome (attached, or checked for an attached machine checked again),
   store, machine, latency_ms, server_version`. A sqlite Store is refused
-  `InvalidInput` naming `store move`; so is `native`, which is this
-  computer and needs no attaching. A machine that reaches the server only
+  `InvalidInput` naming `store move`. Machine native is attached like any
+  other, its platform deciding whether a loopback URL is allowed, and its
+  reach is its own, apart from this computer's; `connect` attaches
+  nothing. A machine that reaches the server only
   through this computer's loopback is refused with advice to connect the
   Store again with an address the machine reaches. `sandbox create` on a
   machine that is not attached is refused `InvalidInput` with `layerfs
-  store attach <store> --machine <machine>` as its fix.
+  store attach <store> --machine <machine>` as its fix; with no
+  `--machine` it uses the one attached machine (none: the same refusal
+  naming `<machine>`; several: `InvalidInput` listing them in
+  `next.machines`).
 - **`detach --machine M`** long `ok, outcome: "detached", store, machine`;
   forgets `M`'s reach. Refused `InUse` while a Sandbox of the Store's
   projects is on `M` (counted and named, the removals as `fix`), `NotFound`
@@ -1510,7 +1516,7 @@ $ layerfs store move shop native
 ```
 
 PostgreSQL, against a local `postgres:17` (macOS, native; this build's
-outputs, run 2026-11-24 on a scratch home):
+outputs, run 2026-11-24 on a scratch home after the machine native correction):
 
 ```console
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55437/shop'
@@ -1523,17 +1529,25 @@ $ layerfs store get shop-pg
 {"engine":"postgresql","state":"ready","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres"}
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --synchronous-commit off --detail
 {"ok":true,"projects":null,"projects_count":null,"outcome":"updated","store":"shop-pg","engine":"postgresql","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres","synchronous_commit":"off","machines":[]}
+$ layerfs store doctor shop-pg --machine native
+{"error":"InvalidInput","message":"machine native is not attached to PostgreSQL Store shop-pg","fix":"layerfs store attach shop-pg --machine native"}
 $ layerfs store attach shop-pg --machine native
-{"error":"InvalidInput","message":"machine native is this computer, which every PostgreSQL Store is attached to; `layerfs store doctor shop-pg` checks it"}
-$ layerfs store doctor shop-pg --machine lab
-{"error":"InvalidInput","message":"machine lab is not attached to PostgreSQL Store shop-pg","fix":"layerfs store attach shop-pg --machine lab"}
+{"outcome":"attached","latency_ms":1}
+$ layerfs store attach shop-pg --machine native --detail
+{"ok":true,"outcome":"checked","store":"shop-pg","machine":"native","latency_ms":1,"server_version":"17.11 (Debian 17.11-1.pgdg13+2)"}
+$ layerfs store doctor shop-pg
+{"ok":true}
+$ layerfs store get shop-pg
+{"engine":"postgresql","state":"ready","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres","machines":[{"machine":"native","reached":"ok"}]}
+$ layerfs store detach shop-pg --machine native
+{"ok":true}
 $ layerfs store disconnect shop-pg --detail
 {"ok":true,"outcome":"disconnected","store":"shop-pg"}
 ```
 
 The URL above names `127.0.0.1`, which works only where the Sandbox's
-machine shares this computer's loopback: `native` and `docker` on a Linux
-Engine. On `docker` with Docker Desktop, `lima` or `apple-container`,
+machine shares this computer's loopback: machine native on macOS and Linux
+and `docker` on a Linux Engine. On `docker` with Docker Desktop, `lima` or `apple-container`,
 `store attach --machine` refuses it, naming what that machine calls this
 computer: connect the Store again with a host every attached machine
 reaches (`layerfs store connect shop-pg '<url>'`). That check, like the

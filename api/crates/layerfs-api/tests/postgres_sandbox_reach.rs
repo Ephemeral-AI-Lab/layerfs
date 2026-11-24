@@ -58,6 +58,13 @@ fn the_reach_check_finds_the_binding_and_the_project_on_one_session() {
         ],
     )
     .unwrap();
+    // its Sandboxes run on `native` once it is attached, like any machine
+    call(
+        &home,
+        "store.attach",
+        &[("store", t("pg")), ("machine", t("native"))],
+    )
+    .unwrap();
     // a project record whose project the schema does not hold
     home::write_record(
         &paths::project_record(&home, "pg", "ghost"),

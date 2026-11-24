@@ -2772,7 +2772,7 @@
       {
        "name": "machine",
        "kind": "Name",
-       "help": "the machine to run on; default: the machine of the project's sqlite Store; this computer (native) for a project of a PostgreSQL Store"
+       "help": "the machine to run on; default: the machine of the project's sqlite Store, or the one machine attached to a PostgreSQL Store (none or several attached: refused)"
       },
       {
        "name": "image",

@@ -584,13 +584,12 @@ fn fold(
 /// attached to it, or from `--machine` alone (the call refuses one that is
 /// not attached), as those machines dial it; each result is what was seen
 /// of its reach (spec v23 V23-9). A machine that is not ready is not
-/// dialled; `native` is this computer, checked above.
+/// dialled.
 fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
-    let mut machines = match &probe.options.machine {
+    let machines = match &probe.options.machine {
         Some(machine) => vec![machine.clone()],
         None => record.attached(),
     };
-    machines.retain(|machine| machine != "native");
     for machine in &machines {
         let state = crate::store::machine_state(probe.home, machine)
             .unwrap_or_else(|_| State::broken(Reason::Missing, None));

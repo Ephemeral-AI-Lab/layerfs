@@ -55,8 +55,9 @@ found it so; else `ready`. Every broken Sandbox's `fix` is
 ## `sandbox.create`
 
 Starts a named Sandbox of a project. With no `machine` it runs on its sqlite
-Store's machine, else on `native`; another machine than a sqlite Store's is
-`Unsupported`. `image` (a `sha256:` digest, a Docker image id or a Docker
+Store's machine, or on the one machine attached to its PostgreSQL Store
+(none attached, or several: `InvalidInput`; `store.attach` attaches one);
+another machine than a sqlite Store's is `Unsupported`. `image` (a `sha256:` digest, a Docker image id or a Docker
 reference) picks its root on every machine but macOS `native`, which refuses
 it `Unsupported`; an image the machine does not hold is copied from the
 host's Docker first, as [`machine.load_image`](machine.md) does, with its

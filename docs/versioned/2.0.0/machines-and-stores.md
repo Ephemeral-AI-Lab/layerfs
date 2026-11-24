@@ -427,11 +427,13 @@ saved (owner, 2026-11-24). Machines are attached to the Store and dial with
 both; no machine has an address or a login of its own. The calls were run
 for this manual's [`store`](calls.md#store-11) section against a local
 `postgres:17` on macOS (`connect`, `list`, `get`, `attach`, `doctor`,
-`disconnect`). In short:
+`detach`, `disconnect`). In short:
 
 ```console
 $ printf '%s' "$PG_PASSWORD" | layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --user postgres --password-stdin
 {"ok":true}
+$ layerfs store attach shop-pg --machine native
+{"outcome":"attached","latency_ms":1}
 $ layerfs project init shop-pg/load ./load        # not run here
 $ layerfs store attach shop-pg --machine build-vm  # not run: needs a reachable address
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --synchronous-commit off
@@ -491,8 +493,10 @@ $ layerfs store doctor shop-pg
   the Store: `M` must exist and its platform run PostgreSQL Sandboxes, and
   the Store is checked from `M` with the URL and login saved here before
   `M` is recorded as attached; the check is kept as `M`'s reach. Attaching
-  again checks again (`outcome: "checked"`). `native` is this computer and
-  needs no attaching. `store detach <store> --machine M` removes it,
+  again checks again (`outcome: "checked"`). Machine native is attached
+  like any other (`store connect` attaches nothing); its platform decides
+  whether a loopback URL is allowed, and its reach is its own, apart from
+  this computer's. `store detach <store> --machine M` removes it,
   refused while a Sandbox of the Store's projects is on `M`; `machine
   remove` detaches a machine from every Store.
 - **Who connects.** `store get` answers `reach` (this computer's) and
@@ -511,9 +515,12 @@ $ layerfs store doctor shop-pg
 - `project init` into a PostgreSQL Store runs in the caller's process,
   under the Store's lease. PostgreSQL is built into every artifact.
 - A PostgreSQL Store is on no machine and has no default machine. A
-  Sandbox of it runs on `native` unless `sandbox create --machine M` names
-  a machine attached to it (refused `InvalidInput`, with `store attach` as
-  its fix, otherwise) whose platform runs PostgreSQL Sandboxes (`native` on
+  Sandbox of it runs on the machine `sandbox create --machine M` names, or,
+  with none named, on the one machine attached to the Store (none attached
+  is refused with `store attach` as its fix; several are listed and one
+  must be named). The machine must be attached to the Store (refused
+  `InvalidInput`, with `store attach` as its fix, otherwise) and its
+  platform must run PostgreSQL Sandboxes (`native` on
   macOS and Linux, `docker`, `lima`, `apple-container`); `sandbox create`
   checks from the machine that the server answers and holds this Store.
   The URL is dialled exactly as configured, never rewritten. On a machine

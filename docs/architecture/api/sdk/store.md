@@ -406,12 +406,15 @@ Only after the check succeeds is the machine added to the record's
 outcome is `checked` instead of `attached`, and a failed check is recorded
 as its reach while the attachment stays. A machine that reaches the server
 only through this computer's loopback is refused with advice to connect the
-Store again with an address the machine reaches. `native` is this computer:
-it dials as this computer does and is never attached.
+Store again with an address the machine reaches. Machine native is attached,
+checked and detached like any other machine, its platform deciding whether
+a loopback URL is allowed (it shares this computer's loopback on macOS and
+Linux); its reach is its own, apart from this computer's. `store connect`
+attaches nothing.
 
 | Refusal | When |
 | --- | --- |
-| `InvalidInput` | a sqlite Store (`store move` moves one to a machine); `native` |
+| `InvalidInput` | a sqlite Store (`store move` moves one to a machine) |
 | `NotFound` | no such Store or machine |
 | `Unsupported` | the machine's platform runs no PostgreSQL Sandboxes on this host |
 | `Unavailable` | the machine is stopped or does not answer; the server does not answer the machine, or holds another Store |
@@ -445,7 +448,7 @@ Store's projects is on the machine (the message counts and names them, `next`
 lists them, and the `fix` removes them before the detach;
 [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)
 `store_idle_on`), `NotFound` when the machine is not attached, and
-`InvalidInput` for a sqlite Store or `native`. The long form is `ok,
+`InvalidInput` for a sqlite Store. The long form is `ok,
 outcome ("detached"), store, machine`.
 
 ### store.move

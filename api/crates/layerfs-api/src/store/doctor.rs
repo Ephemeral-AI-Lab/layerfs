@@ -38,11 +38,8 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     ),
                 ))
             }
-            // `native` is this computer, which every PostgreSQL Store is
-            // attached to
             Some(StoreKind::Postgresql)
-                if machine != "native"
-                    && !record.as_ref().is_some_and(|r| r.is_attached(machine)) =>
+                if !record.as_ref().is_some_and(|r| r.is_attached(machine)) =>
             {
                 return Err(layerfs_control::store::not_attached(store, machine));
             }

@@ -295,7 +295,7 @@ const ARGS: &[(&str, &str, &str)] = &[
     (
         "sandbox.create",
         "machine",
-        "the machine it runs on; the Store's machine when left out",
+        "the machine it runs on; when left out, a sqlite Store's machine or the one machine attached to a PostgreSQL Store",
     ),
     (
         "sandbox.create",

@@ -10,8 +10,8 @@
 //!   LAYERFS_TEST_PG_PASSWORD, LAYERFS_TEST_DAEMON (a host daemon built with
 //!   `postgresql`); the docker half also LAYERFS_TEST_IMAGE (a local image
 //!   digest, the worker container's) and LAYERFS_BUNDLE (a sealed Linux
-//!   bundle whose daemon has `postgresql`). The docker machine is attached
-//!   to the Store first. The URL is never rewritten: on Docker Desktop a
+//!   bundle whose daemon has `postgresql`). `native` and the docker machine
+//!   are each attached to the Store first, like any machine. The URL is never rewritten: on Docker Desktop a
 //!   loopback URL is refused for the docker machine, and the Store is then
 //!   connected again with a URL naming `host.docker.internal`, which its
 //!   Sandboxes resolve with the worker's resolver files; their Workspace
@@ -490,6 +490,12 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         ok(&home, "store.connect", &args)
     };
     connect(address);
+    // `native` is attached like any machine, checked from it
+    ok(
+        &home,
+        "store.attach",
+        &[("store", t("pg")), ("machine", t("native"))],
+    );
     ok(
         &home,
         "project.init",
@@ -507,20 +513,18 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
             ("machine", t("native")),
         ],
     );
-    // the create proved this computer reaches the Store: `native` is this
-    // computer, whose reach is the Store's own (spec v23 V23-2)
+    // the create proved `native` reaches the Store: its own row's reach
     let got = ok(
         &home,
         "store.get",
         &[("store", t("pg")), ("detail", SdkValue::Bool(true))],
     );
-    let reach = got.get("reach").unwrap_or_else(|| panic!("{got:?}"));
-    assert_eq!(reach.get("ok"), Some(&SdkValue::Bool(true)), "{got:?}");
-    assert_eq!(
-        got.get("machines"),
-        Some(&SdkValue::List(vec![])),
-        "{got:?}"
-    );
+    let Some(SdkValue::List(rows)) = got.get("machines") else {
+        panic!("{got:?}");
+    };
+    assert_eq!(rows.len(), 1, "{got:?}");
+    assert_eq!(rows[0].get_text("machine"), Some("native"), "{got:?}");
+    assert_eq!(rows[0].get_text("reached"), Some("ok"), "{got:?}");
     work(&home, "pg/app", "n", "on-native", "native.txt");
     ok(&home, "sandbox.remove", &[("sandbox", t("n"))]);
     if let (Some(image), Some(_)) = (env("LAYERFS_TEST_IMAGE"), env("LAYERFS_BUNDLE")) {
@@ -818,8 +822,9 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
 
 /// With no machine named, `sandbox.create` runs where the Store's calls
 /// run (#536 §10): a sqlite Store's machine (here a docker machine with no worker,
-/// so the create is refused naming its start), and `native` for a
-/// PostgreSQL Store (refused here by the reach check, which runs there).
+/// so the create is refused naming its start), and the one machine attached
+/// to a PostgreSQL Store (none or several are refused; with machine native
+/// attached, the reach check runs there).
 #[test]
 fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     let home = tempdir("default");
@@ -886,6 +891,38 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         Some("layerfs store attach pg --machine box")
     );
     assert!(!paths::sandbox_dir(&home, "t3").exists());
+    // with no machine named, a Store with no machine attached is refused
+    // with the attach as its fix: there is no default machine
+    let args = SdkValue::map([("project", t("pg/app")), ("name", t("t2"))]);
+    let none =
+        layerfs_api::call(Some(&home), "sandbox.create", args.clone(), &mut |_| {}).unwrap_err();
+    assert_eq!(none.code, "InvalidInput", "{none:?}");
+    assert_eq!(
+        none.message,
+        "no machine is attached to PostgreSQL Store pg to run a Sandbox on"
+    );
+    assert_eq!(
+        none.detail.get_text("fix"),
+        Some("layerfs store attach pg --machine <machine>")
+    );
+    // several attached: the call names one
+    pg_record(&home, &["box", "native"]);
+    let several = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    assert_eq!(several.code, "InvalidInput", "{several:?}");
+    assert!(
+        several.message.contains("name one with --machine"),
+        "{several:?}"
+    );
+    assert_eq!(
+        several
+            .detail
+            .get("next")
+            .and_then(|next| next.get("machines")),
+        Some(&SdkValue::List(vec![t("box"), t("native")])),
+        "{several:?}"
+    );
+    // one attached (machine native, here): the Sandbox runs there
+    pg_record(&home, &["native"]);
     let refused = call(
         &home,
         "sandbox.create",

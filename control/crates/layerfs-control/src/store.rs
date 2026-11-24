@@ -118,8 +118,7 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
 
 /// The PostgreSQL Store `name` a machine attaches to or detaches from: a
 /// sqlite Store is `InvalidInput` naming `store move` (it lives on one
-/// machine), and `native` (this computer, which every PostgreSQL Store is attached to)
-/// is `InvalidInput`.
+/// machine).
 fn attachable(home: &Path, name: &StoreName, machine: &str) -> Result<StoreRecord, SdkRefusal> {
     let record = StoreRecord::of(home, name)?;
     if record.kind()? == StoreKind::Sqlite {
@@ -129,12 +128,6 @@ fn attachable(home: &Path, name: &StoreName, machine: &str) -> Result<StoreRecor
             format!(
                 "Store {name} is a sqlite Store on machine {on}; machines attach to PostgreSQL Stores only, and `layerfs store move {name} {machine}` moves it"
             ),
-        ));
-    }
-    if machine == "native" {
-        return Err(refused(
-            "InvalidInput",
-            format!("machine native is this computer, which every PostgreSQL Store is attached to; `layerfs store doctor {name}` checks it"),
         ));
     }
     Ok(record)
