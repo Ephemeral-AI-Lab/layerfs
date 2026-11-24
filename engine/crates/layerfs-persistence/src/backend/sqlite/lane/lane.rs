@@ -29,7 +29,7 @@ impl Session {
             return Err(BackendError::Integrity);
         }
         let writer = Writer::acquire(&self.path)?;
-        turn.hold()?;
+        turn.hold();
         Ok(LaneHold {
             session: self.clone(),
             writer: Some(writer),

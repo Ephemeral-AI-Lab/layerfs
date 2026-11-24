@@ -127,7 +127,7 @@ impl Session {
             }
         };
         drop(lane);
-        turn.hold()?;
+        turn.hold();
         let hold = LaneHold {
             session: self.clone(),
             _thread: PhantomData,

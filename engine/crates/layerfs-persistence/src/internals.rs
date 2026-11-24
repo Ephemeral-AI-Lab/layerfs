@@ -53,3 +53,22 @@ pub fn postgresql_pipeline(
 ) -> Result<Vec<Result<PipelineReply, PipelineRefusal>>, BackendError> {
     handles.storage.session.pipeline(requests)
 }
+
+/// One write transaction on the session of `handles` whose body runs
+/// `scripts` in order and ignores every refusal, then answers success: what
+/// the session reports when a body leaves its transaction aborted (#768).
+pub fn postgresql_write_ignoring(
+    handles: &crate::PostgresHandles,
+    scripts: &[&str],
+) -> Result<(), BackendError> {
+    use crate::backend::postgresql::session::transaction::Mode;
+    handles
+        .storage
+        .session
+        .run_as(Mode::Write, |tx| -> Result<(), BackendError> {
+            for script in scripts {
+                let _ = tx.batch(script);
+            }
+            Ok(())
+        })
+}

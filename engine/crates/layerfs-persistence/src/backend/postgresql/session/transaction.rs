@@ -55,6 +55,9 @@ pub(crate) enum Mode {
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
     uncertain: Cell<bool>,
+    /// The first statement the server refused with a SQLSTATE: what a
+    /// `COMMIT` of the aborted transaction it left reports (#768).
+    refused: Cell<Option<BackendError>>,
     diagnostic: bool,
     /// `Mode::Statement`: whether its one statement was already sent.
     single: Option<Cell<bool>>,
@@ -128,6 +131,8 @@ impl Transaction<'_> {
             };
             if error == BackendError::Unknown {
                 self.uncertain.set(true);
+            } else if e.code().is_some() && self.refused.get().is_none() {
+                self.refused.set(Some(error));
             }
             error
         })
@@ -445,11 +450,12 @@ impl Session {
             if mode != Mode::Read {
                 state.work.write_transactions += 1;
             }
-            let (result, uncertain) = {
+            let (result, uncertain, refused) = {
                 let tx = Transaction {
                     diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
                     state: RefCell::new(&mut *state),
                     uncertain: Cell::new(false),
+                    refused: Cell::new(None),
                     single: None,
                     lane: Cell::new(mode == Mode::Publish && !turn.nested),
                     fence: None,
@@ -461,16 +467,22 @@ impl Session {
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
                     || result.as_ref().err().is_some_and(OutcomeError::uncertain);
-                (result, uncertain)
+                (result, uncertain, tx.refused.get())
             };
             if uncertain {
                 state.quarantine();
                 return Err(BackendError::Unknown.into());
             }
             // A nested write's lane check rides in its COMMIT round trip.
+            // Either way a statement runs before the `COMMIT` in the same
+            // text: in a transaction the server aborted (a refused statement
+            // the body did not propagate) it fails `25P02` and the `COMMIT`
+            // is skipped. A `COMMIT` of an aborted transaction rolls it back
+            // and answers like success (its tag, `ROLLBACK`, is not read),
+            // so it is never sent as one (#768).
             let commit_sql = match in_lane && result.is_ok() {
                 true => self.lane_commit().ok(),
-                false => Some("COMMIT".to_owned()),
+                false => Some(GUARDED_COMMIT.to_owned()),
             };
             match result {
                 Ok(_) if commit_sql.is_none() => {
@@ -491,6 +503,17 @@ impl Session {
                                 state.work.write_commits += 1;
                             }
                             Ok(value)
+                        }
+                        Err(e) if aborted(&e) => {
+                            // The transaction was already aborted: nothing
+                            // was committed. It reports the statement the
+                            // server refused first.
+                            if rollback(state).is_err() {
+                                state.quarantine();
+                                return Err(BackendError::Unknown.into());
+                            }
+                            state.work.rollbacks += 1;
+                            Err(refused.unwrap_or(BackendError::Integrity).into())
                         }
                         Err(e) if in_lane && lane_lost(&e) => {
                             // The check failed and the server skipped the
@@ -607,6 +630,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
             state: RefCell::new(&mut *state),
             uncertain: Cell::new(false),
+            refused: Cell::new(None),
             single,
             lane: Cell::new(false),
             fence,
@@ -624,6 +648,18 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
         return Err(BackendError::Unknown.into());
     }
     result
+}
+
+/// A transaction's `COMMIT`, after a statement that fails `25P02` when the
+/// transaction is aborted, so the `COMMIT` of an aborted transaction is
+/// never sent ([`aborted`]).
+const GUARDED_COMMIT: &str = "SELECT 1; COMMIT";
+
+/// Whether a `COMMIT` batch found its transaction already aborted.
+fn aborted(error: &super::driver::Error) -> bool {
+    error
+        .code()
+        .is_some_and(|code| *code == postgres::error::SqlState::IN_FAILED_SQL_TRANSACTION)
 }
 
 /// Whether a nested write's COMMIT batch failed its lane check: division by
