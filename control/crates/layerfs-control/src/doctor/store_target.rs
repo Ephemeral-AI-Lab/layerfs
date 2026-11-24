@@ -56,6 +56,10 @@ pub(super) const CHECKS: &[CheckId] = &[
 /// The worker's shallow cut, the one `cut` its `store.diagnose` takes.
 const CUT: &str = "schema";
 
+/// What a schema this build does not read is told with, beside its restore fix.
+const SCHEMA_HINT: &str =
+    "this build does not read its schema; use the LayerFS build that wrote it, or restore it";
+
 /// Checks Store `probe.thing` into `node`: its state from the home's
 /// records (`layerfs_store::state`, with the machine family's derivation
 /// handed in) says whether it waits on its machine, and what blocks the
@@ -367,9 +371,11 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         checks.pass(IDENTITY, "the id in its file is the id in its record");
         checks.fail(
             SCHEMA,
-            format!("its file does not open with the schema this build reads: {why}"),
+            format!(
+                "its file does not open with the schema this build reads: {why}; {SCHEMA_HINT}"
+            ),
         );
-        checks.fix(SCHEMA, schema_fix(record));
+        checks.fix(SCHEMA, restore_fix(record));
         checks.evidence(
             SCHEMA,
             SdkValue::map([
@@ -723,12 +729,11 @@ fn fold(
             match o.outcome {
                 Outcome::Pass => checks.pass(id, message),
                 Outcome::Fail => {
-                    checks.fail(id, message);
-                    let fix = match id == IDENTITY {
-                        true => restore_fix(record),
-                        false => schema_fix(record),
-                    };
-                    checks.fix(id, fix);
+                    match id == IDENTITY {
+                        true => checks.fail(id, message),
+                        false => checks.fail(id, format!("{message}; {SCHEMA_HINT}")),
+                    }
+                    checks.fix(id, restore_fix(record));
                     checks.evidence(id, SdkValue::map([("step", SdkValue::text(step(o)))]));
                 }
                 Outcome::Unknown => checks.unknown(id, message),
@@ -816,13 +821,4 @@ pub(super) fn restore_fix(record: &StoreRecord) -> String {
         ),
         None => format!("layerfs backup restore <bucket> <file> {name}"),
     }
-}
-
-/// The fix of a Store whose schema this build does not read: the build that
-/// wrote it, or its restore.
-fn schema_fix(record: &StoreRecord) -> String {
-    format!(
-        "use the LayerFS build that wrote it, or restore: {}",
-        restore_fix(record)
-    )
 }

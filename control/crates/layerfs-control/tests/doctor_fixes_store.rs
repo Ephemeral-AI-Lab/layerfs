@@ -140,7 +140,7 @@ fn a_file_of_another_store_gets_the_restore_fix_never_a_delete() {
 }
 
 #[test]
-fn a_file_with_another_schema_gets_the_matching_build_text() {
+fn a_file_with_another_schema_gets_the_restore_fix_and_the_build_text() {
     let f = Fixture::new();
     let path = paths::store_file(&f.root, "three");
     drop(store_file(&path));
@@ -158,8 +158,14 @@ fn a_file_with_another_schema_gets_the_matching_build_text() {
     let out = report(&f.root, Kind::Store, "three");
     let found = finding(&out, "store.schema");
     let fix = fix_of(&found);
+    assert_eq!(
+        fix, "layerfs backup restore <bucket> <file> three",
+        "{found:?}"
+    );
     assert!(
-        fix.starts_with("use the LayerFS build that wrote it, or restore: layerfs backup restore"),
+        found
+            .get_text("message")
+            .is_some_and(|m| m.contains("build that wrote it")),
         "{found:?}"
     );
     assert!(!fix.contains("remove") && !fix.contains("delete"), "{fix}");
