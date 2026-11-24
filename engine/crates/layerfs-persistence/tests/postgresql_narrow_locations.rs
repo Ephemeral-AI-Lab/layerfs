@@ -83,6 +83,7 @@ fn location(object_id: ObjectId, pack_id: i64, record_number: usize) -> ObjectLo
         pack_id,
         group_number: 0,
         record_number,
+        base: None,
     }
 }
 /// A publication of one new pack holding `objects`.

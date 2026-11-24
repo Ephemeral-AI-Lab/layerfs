@@ -1,8 +1,8 @@
 //! Bounded atomic physical persistence; one transaction attempt per operation.
 
-use super::{ObjectKey, PackReadPlan, PersistedPack, PersistedPackRead};
+use super::{ObjectKey, PackRange, PackReadPlan, PersistedPack, PersistedPackRead};
 use crate::location::{
-    InodeValueRow, LocatedObject, ObjectLocation, PackDomain, PackInfo, SignatureRow,
+    InodeValueRow, LocatedChains, LocatedObject, ObjectLocation, PackDomain, PackInfo, SignatureRow,
 };
 use crate::policy::StoragePolicy;
 use layerfs_content::ObjectId;
@@ -56,6 +56,26 @@ impl PublishedPack {
     pub fn body(&self) -> &Arc<Vec<u8>> {
         &self.body
     }
+}
+
+/// Whole encoded groups of one pack (#758): sorted, disjoint ranges that each
+/// cover complete groups, or no ranges for the whole pack.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GroupRead {
+    /// The pack, as a locate or chain locate named it.
+    pub pack: PackInfo,
+    /// Requested extents; empty asks for the whole pack.
+    pub ranges: Vec<PackRange>,
+}
+
+/// One [`GroupRead`]'s bytes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum GroupReadAnswer {
+    /// The complete pack, length and SHA-256 checked.
+    Whole(PersistedPack),
+    /// The bytes of each requested range, in request order. Unauthenticated
+    /// until the objects rebuilt from them pass their id hash.
+    Ranges(Vec<Vec<u8>>),
 }
 
 /// One atomic batch, closed under direct references before this call.
@@ -116,6 +136,52 @@ pub trait PackPersistence: Send + Sync {
         ids: &[ObjectId],
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError>;
+    /// Locates `roots` like [`Self::locate`] and, for each located delta root
+    /// whose chain the provider records, returns its members and, where it
+    /// has them, the directories of the packs rows and members name, in one
+    /// provider call. The reader calls it for every locate wave. Default:
+    /// `locate` and no chains.
+    fn locate_chains(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+    ) -> Result<(), PersistenceError> {
+        chains.chains.clear();
+        chains.directories.clear();
+        self.locate(roots, rows)
+    }
+    /// Whole encoded groups of several packs, one answer per read in request
+    /// order, at most DEPENDENCY_PACK_CACHE_BYTES requested in all. `Ranges`
+    /// answers are unauthenticated physical units, as `read_scoped_pack`
+    /// returns. Default: `read_packs` on the packs, answered `Whole`, one
+    /// call per cache bound of whole packs.
+    fn read_groups(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<GroupReadAnswer>,
+    ) -> Result<(), PersistenceError> {
+        out.clear();
+        let mut rest = reads;
+        while !rest.is_empty() {
+            // `read_packs` takes whole packs within one cache bound per call.
+            let mut bytes = 0;
+            let take = rest
+                .iter()
+                .take_while(|read| {
+                    bytes += read.pack.length;
+                    bytes <= crate::policy::DEPENDENCY_PACK_CACHE_BYTES
+                })
+                .count()
+                .max(1);
+            let ids: Vec<i64> = rest[..take].iter().map(|read| read.pack.pack_id).collect();
+            let mut packs = Vec::new();
+            self.read_packs(&ids, &mut packs)?;
+            out.extend(packs.into_iter().map(GroupReadAnswer::Whole));
+            rest = &rest[take..];
+        }
+        Ok(())
+    }
     /// Reads complete packs totalling at most DEPENDENCY_PACK_CACHE_BYTES,
     /// or one separately bounded singleton up to SINGLETON_PACK_LIMIT.
     /// Results use `PersistedPack::authenticate`: length/digest verified once,
@@ -161,6 +227,14 @@ pub trait PackPersistence: Send + Sync {
     /// than their control prefix. Bounded caches still bound what is kept.
     fn whole_pack_bytes(&self) -> usize {
         super::PACK_READ_PREFIX_BYTES
+    }
+    /// Whether the reader also fetches the chains it knows from its own
+    /// cache in one `read_groups` wave (#758): the bases this handle
+    /// published, followed through its authoritative locators. A provider
+    /// whose every read is a network round trip returns true; the default
+    /// reads each level when the walk reaches it.
+    fn batched_chain_reads(&self) -> bool {
+        false
     }
     /// Canonical bytes one preparation wave holds and one publication carries,
     /// and the sealed bytes it publishes. The default is the shared

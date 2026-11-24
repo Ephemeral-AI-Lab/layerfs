@@ -7,7 +7,8 @@ mod read_scoped;
 mod read_selection;
 pub use pack::ObjectKey;
 pub use persistence::{
-    PackPersistence, PersistenceError, Publication, Published, PublishedPack, Reserve, Reserved,
+    GroupRead, GroupReadAnswer, PackPersistence, PersistenceError, Publication, Published,
+    PublishedPack, Reserve, Reserved,
 };
 pub use read_pack::PersistedPack;
 
@@ -17,3 +18,4 @@ pub use read_selection::{
 };
 
 pub use read_scoped::{AcquiredPackRead, AcquiredPackUnits};
+pub(crate) use read_selection::check_ranges;

@@ -94,6 +94,8 @@ pub struct Resolver<'a> {
     workspace: &'a mut DecompressionWorkspace,
     counters: &'a mut ChainCounters,
     packs_read: u64,
+    /// Identities the current resolution walked, for the hint fallback.
+    walked: Vec<ObjectId>,
 }
 
 impl<'a> Resolver<'a> {
@@ -116,6 +118,7 @@ impl<'a> Resolver<'a> {
             workspace,
             counters,
             packs_read: 0,
+            walked: Vec::new(),
         }
     }
 
@@ -164,13 +167,38 @@ impl<'a> Resolver<'a> {
         self.resolve_charged(root, false)
     }
 
+    /// One resolution; when it fails in a way a stale delta-chain hint can
+    /// cause and a hinted locator was in use, it is rebuilt once from
+    /// authoritative locators (#758). A second failure stands.
     fn resolve_charged(
+        &mut self,
+        root: ObjectLocation,
+        charge_self: bool,
+    ) -> StorageResult<(Vec<u8>, ObjectId)> {
+        match self.resolve_once(root, charge_self) {
+            Err(error) if crate::read::hint_failure(&error) => {
+                let walked = std::mem::take(&mut self.walked);
+                if !self.connection.drop_hints(&walked)? {
+                    return Err(error);
+                }
+                let root = self
+                    .connection
+                    .location(root.object_id, self.ceiling)?
+                    .ok_or(StorageError::ObjectMissing(root.object_id))?;
+                self.resolve_once(root, charge_self)
+            }
+            other => other,
+        }
+    }
+
+    fn resolve_once(
         &mut self,
         root: ObjectLocation,
         charge_self: bool,
     ) -> StorageResult<(Vec<u8>, ObjectId)> {
         *self.counters = ChainCounters::default();
         self.packs_read = 0;
+        self.walked = vec![root.object_id];
         if root.pack_id > self.ceiling {
             return Err(StorageError::VisibilityCeiling {
                 pack_id: root.pack_id,
@@ -248,6 +276,7 @@ impl<'a> Resolver<'a> {
                 return Err(StorageError::Integrity("dependency cycle"));
             }
             chain.push(current);
+            self.walked.push(current.object_id);
             let Some(base) = self.base_of(&current)? else {
                 break;
             };
@@ -508,7 +537,7 @@ pub fn stored_base(
         view,
         bytes: selected,
     } = selected;
-    match header.lane {
+    let base = match header.lane {
         PackLane::Ordinary => {
             let body: &[u8] = match view.codec {
                 crate::pack::layout::GroupCodec::Raw => selected,
@@ -530,42 +559,82 @@ pub fn stored_base(
             if body.len() != view.decoded_length {
                 return Err(StorageError::Integrity("group body length"));
             }
-            let record = crate::encoding::decode::framed_record(body, location.record_number)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::Ordinary,
-                record,
-                location.canonical_length,
-                location.role,
-            )
+            record_base(PackLane::Ordinary, body, location)
         }
-        PackLane::WholeFile => {
-            let record = crate::encoding::decode::framed_record(selected, location.record_number)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::WholeFile,
-                record,
-                location.canonical_length,
-                location.role,
-            )
+        lane => record_base(lane, selected, location),
+    }?;
+    connection.bind_base(location, base)?;
+    Ok(base)
+}
+
+/// The base the record at `location` of `body` names: an ordinary lane's
+/// decoded group body, or another lane's encoded group.
+fn record_base(
+    lane: PackLane,
+    body: &[u8],
+    location: &ObjectLocation,
+) -> StorageResult<Option<ObjectId>> {
+    let at = match lane {
+        PackLane::Singleton => 0,
+        _ => location.record_number,
+    };
+    let record = crate::encoding::decode::framed_record(body, at)?;
+    crate::encoding::delta::record::stored_base(
+        lane,
+        record,
+        location.canonical_length,
+        location.role,
+    )
+}
+
+/// The base the record at `location` names, read only from bytes `packs`
+/// and `groups` already hold, leaving both as they were (#758): a guess
+/// for a locate, never trusted, so any miss or malformed byte is `None`.
+/// The record is not authenticated and `location` may be wrong. A group
+/// neither `groups` nor the caller's own `decoded` cache holds is
+/// decompressed, counted in `decodes` and kept in `decoded` (when it fits
+/// that cache's byte bound), so the caller decodes it again only after
+/// `decoded` evicted it or when it was too large to keep.
+pub(crate) fn cached_base(
+    packs: &crate::encoding::PackCache,
+    groups: &GroupCache,
+    decoded: &mut GroupCache,
+    workspace: &mut DecompressionWorkspace,
+    decodes: &mut u64,
+    location: &ObjectLocation,
+) -> Option<ObjectId> {
+    let selected = packs.peek_group(location.pack_id, location.group_number)?;
+    let fresh;
+    let body: &[u8] = match (selected.header.lane, selected.view.codec) {
+        (PackLane::Ordinary, crate::pack::layout::GroupCodec::Zstandard) => {
+            let key = (location.pack_id, location.group_number);
+            match groups.peek(key.0, key.1) {
+                Some(cached) => cached,
+                None if decoded.peek(key.0, key.1).is_some() => decoded.peek(key.0, key.1)?,
+                None => {
+                    *decodes = decodes.saturating_add(1);
+                    let body = workspace
+                        .decompress_group(selected.bytes, selected.view.decoded_length)
+                        .ok()?;
+                    // A body over the bound is used once and not kept.
+                    if body.len() > crate::policy::DECODED_GROUP_CACHE_BYTES {
+                        fresh = body;
+                        &fresh
+                    } else {
+                        decoded.insert(key.0, key.1, body).ok()?;
+                        decoded.peek(key.0, key.1)?
+                    }
+                }
+            }
         }
-        PackLane::Chunk => {
-            let record = crate::encoding::decode::framed_record(selected, location.record_number)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::Chunk,
-                record,
-                location.canonical_length,
-                location.role,
-            )
-        }
-        PackLane::Singleton => {
-            let record = crate::encoding::decode::framed_record(selected, 0)?;
-            crate::encoding::delta::record::stored_base(
-                PackLane::Singleton,
-                record,
-                location.canonical_length,
-                location.role,
-            )
-        }
+        _ => selected.bytes,
+    };
+    if selected.header.lane == PackLane::Ordinary && body.len() != selected.view.decoded_length {
+        return None;
     }
+    record_base(selected.header.lane, body, location)
+        .ok()
+        .flatten()
 }
 
 /// Adds one resolved chain's work to an operation's totals.
@@ -593,6 +662,7 @@ fn group_of<'b>(
     connection: &dyn Source,
     location: &ObjectLocation,
 ) -> StorageResult<(crate::encoding::GroupSlice<'b>, bool)> {
+    connection.prefetch_chain(location, packs)?;
     let (fetched, _) =
         packs.acquire_groups(connection, location.pack_id, &[location.group_number])?;
     let selected = packs

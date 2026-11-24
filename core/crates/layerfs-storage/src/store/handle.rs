@@ -34,6 +34,7 @@ impl Storage {
         let policy = source.metadata.policy()?.validated()?;
         let capacities = StorageCapacities::from_policy(policy)?
             .with_publication_bytes(source.metadata.publication_bytes())?;
+        source.capacities.set(Some(capacities));
         Ok(Self {
             source,
             work: crate::save::Work::default(),
@@ -69,6 +70,12 @@ impl Storage {
     /// Bounded recent and cumulative save-stage wall observations.
     pub fn save_work(&self) -> crate::save::SaveHistory {
         self.work.snapshot()
+    }
+    /// For tests and benches only: a stale delta-chain hint fails as
+    /// `Integrity("delta chain hint")` instead of falling back to a
+    /// level-by-level read, so a broken hint invariant fails a check (#758).
+    pub fn set_strict_hints(&self, strict: bool) {
+        self.source.strict_hints.set(strict);
     }
     /// Cumulative operation counts, labelled diagnostics; no timing claims.
     pub fn diagnostics(&self) -> Diagnostics {

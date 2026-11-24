@@ -27,7 +27,7 @@ impl Save<'_> {
                 actual: ids.len() as u64,
             });
         }
-        state.storage.source.begin_demand();
+        state.storage.source.begin_demand(false);
         // This Save's own pending and sealed objects are read from it; only
         // the rest are located in the Store.
         let stored: Vec<ObjectId> = ids

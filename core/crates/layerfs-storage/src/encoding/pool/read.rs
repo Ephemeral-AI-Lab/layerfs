@@ -50,6 +50,9 @@ pub struct PoolReader {
     /// asked for them to be kept ([`Self::with_chain_memo`]).
     pub(super) memo: Option<ChainMemo>,
     pub(super) counters: PoolReadCounters,
+    /// The last program-page reconstruction failed at an element a chain
+    /// hint located (#758, [`Self::hint_blamed`]).
+    pub(super) hint_blamed: bool,
 }
 
 /// One pooled chain rebuilt to physical bodies, root last, with the work it

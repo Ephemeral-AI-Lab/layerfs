@@ -202,6 +202,7 @@ fn publish_groups(f: &Fixture, objects: &[FinalizedObject]) -> (i64, Vec<u8>) {
                     pack_id: reserved.first_pack_id,
                     group_number: group,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()
@@ -259,6 +260,7 @@ fn publish_group_records(f: &Fixture, objects: &[FinalizedObject]) -> (i64, Vec<
                     pack_id: reserved.first_pack_id,
                     group_number: 0,
                     record_number: record,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()
@@ -645,6 +647,7 @@ fn a_delta_base_is_enqueued_and_reported() {
                 pack_id: reserved.first_pack_id,
                 group_number: 0,
                 record_number: 0,
+                base: None,
             }],
             ..Publication::default()
         })
@@ -750,6 +753,7 @@ fn publish_record_groups(f: &Fixture, groups: &[Vec<FinalizedObject>]) -> (i64, 
                             pack_id: reserved.first_pack_id,
                             group_number: group,
                             record_number: record,
+                            base: None,
                         })
                 })
                 .collect(),
@@ -990,6 +994,7 @@ fn publish_tree_pack(f: &Fixture, objects: &[FinalizedObject], padding: usize) -
                     pack_id: reserved.first_pack_id,
                     group_number: 0,
                     record_number: record,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()

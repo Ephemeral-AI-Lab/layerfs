@@ -1,12 +1,17 @@
 //! Membership, exact reuse and one preparation wave.
 use super::{source::WaveSource, state::State};
 use crate::{
-    encoding::delta::read::{BodyCaches, Resolver},
+    encoding::{
+        delta::read::{BodyCaches, ChainCounters, Resolver},
+        pool::{branch::is_program_role, read::PooledCaches, PoolReader},
+    },
     error::{StorageError, StorageResult},
+    location::ObjectLocation,
     policy::READ_OBJECT_LIMIT,
+    read::hint_failure,
     source::Source,
 };
-use layerfs_content::{FinalizedObject, ObjectId};
+use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
     pub(super) fn reserve_packs(&mut self, required: usize) -> StorageResult<()> {
@@ -40,7 +45,7 @@ impl State<'_> {
         if objects.is_empty() {
             return Ok(());
         }
-        self.storage.source.begin_demand();
+        self.storage.source.begin_demand(false);
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         let mut start = 0;
         while start < objects.len() {
@@ -52,17 +57,44 @@ impl State<'_> {
             let membership = self.storage.work.span(super::Stage::Membership);
             let (end, ids) = demand(&objects, start);
             self.storage.source.locate(&ids)?;
+            // The stored bases, none of them private to the Save, of each
+            // object that is not stored itself (an exact reuse reads none).
+            let fetch = &self.storage.source;
+            let bases: Vec<Vec<ObjectLocation>> = objects[start..end]
+                .iter()
+                .map(
+                    |object| match fetch.located(std::iter::once(object.id())).is_empty() {
+                        true => {
+                            let ids = object.predecessors().ids();
+                            fetch.located(ids.filter(|id| self.packer.location(*id).is_none()))
+                        }
+                        false => Vec::new(),
+                    },
+                )
+                .collect();
+            drop(membership);
             // Exact reuse and representation selection walk and authenticate
             // their own required chains. Consume those inputs with the object
             // demand: a wave-wide physical prewalk can exceed retention and
             // evict them before admission, or acquire candidates selection
-            // never needs.
-            drop(membership);
-            let admission = self.storage.work.span(super::Stage::Admission);
-            for index in start..end {
-                self.admit(&objects, index, &mut prepared)?;
+            // never needs. When the provider batches chains (#758), the
+            // objects are admitted a page at a time: one group read holds
+            // their bases' chains, consumed before the next.
+            let mut index = start;
+            while index < end {
+                let admission = self.storage.work.span(super::Stage::Admission);
+                let pages = bases[index - start..].iter().map(Vec::as_slice);
+                let next = match self.storage.source.page(pages, &mut self.packs)? {
+                    0 => end,
+                    covered => index + covered,
+                };
+                self.verify_bases(&objects[index..next], &bases[index - start..next - start])?;
+                for at in index..next {
+                    self.admit(&objects, at, &mut prepared)?;
+                }
+                drop(admission);
+                index = next;
             }
-            drop(admission);
             start = end;
         }
         let flush = self.storage.work.span(super::Stage::Flush);
@@ -128,6 +160,119 @@ impl State<'_> {
             self.offer(object)?;
         }
         Ok(())
+    }
+    /// Rebuilds the stored base of each object whose chain selection may walk
+    /// and that came with a chain, binding its members (#758), and keeps the
+    /// bound locators as authoritative once the rebuild has hashed every
+    /// element of the chain, so selection walks those chains with no locate
+    /// per level. Selection still sees authoritative locators only: an
+    /// element whose hash failed is never kept, the rebuild falls back to
+    /// authoritative locates (a stale hint, counted), and a chain with no
+    /// member is walked as before. A program page is rebuilt by a pool
+    /// reader of its own (its counts are not the Save's): that reader has no
+    /// rebuild, so a failure at an element a hint located drops every hint
+    /// (counted) and selection walks that chain from authoritative locates,
+    /// as it did before; any other failure is the Save's.
+    fn verify_bases(
+        &mut self,
+        objects: &[FinalizedObject],
+        bases: &[Vec<ObjectLocation>],
+    ) -> StorageResult<()> {
+        let fetch = &self.storage.source;
+        let mut seen = BTreeSet::new();
+        let chained: Vec<ObjectLocation> = objects
+            .iter()
+            .zip(bases)
+            .filter_map(|(object, stored)| self.walked_base(object, stored))
+            .filter(|base| fetch.has_hint(base.object_id))
+            .filter(|base| seen.insert(base.object_id))
+            .collect();
+        if chained.is_empty() {
+            return Ok(());
+        }
+        let _bind = fetch.binding();
+        let _pages = fetch.binding_pages();
+        let view = WaveSource {
+            fetch,
+            packer: &self.packer,
+            signatures: &self.signatures,
+            values: &self.values,
+        };
+        let capacities = self.storage.capacities();
+        let mut counters = ChainCounters::default();
+        let mut pages = PoolReader::new();
+        for base in chained {
+            // A stale hint on an earlier base drops every hint.
+            if !fetch.has_hint(base.object_id) {
+                continue;
+            }
+            if is_program_role(base.role) {
+                let stale_before = fetch.counters().chain_hint_stale;
+                let caches = PooledCaches {
+                    encoded: &mut self.packs,
+                    decoded: &mut self.groups,
+                };
+                let rebuilt = pages.branch_canonical_with_caches(
+                    &view,
+                    &capacities,
+                    i64::MAX,
+                    &mut self.decode,
+                    base,
+                    Some(caches),
+                );
+                match rebuilt {
+                    Ok(_) => {}
+                    Err(error) if hint_failure(&error) && pages.hint_blamed() => {
+                        // One stale hint, counted once.
+                        let counted = fetch.counters().chain_hint_stale > stale_before;
+                        fetch.hint_stale(counted)?;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                }
+            } else {
+                Resolver::new(
+                    &view,
+                    i64::MAX,
+                    &capacities,
+                    BodyCaches {
+                        packs: &mut self.packs,
+                        pool: &mut self.pool,
+                    },
+                    &mut self.groups,
+                    &mut self.decode,
+                    &mut counters,
+                )
+                .resolve_at(base)?;
+            }
+            fetch.promote_hints();
+        }
+        Ok(())
+    }
+    /// The stored base whose chain selection may walk for `object`, among
+    /// `stored` (its stored predecessors, none private, in order), if it is
+    /// one a Save checks. Wider than selection: `object` may still turn out
+    /// private to this Save or repeated in the wave (never selected), and an
+    /// ordinary role whose selection walks no base is checked too. A program
+    /// page's is its first advisory predecessor when stored with the page's
+    /// role (`encoding::delta::branch::trial`);
+    /// any other object's is its first stored predecessor of an ordinary
+    /// role, unless the Save already knows its depth. Pooled leaves bind no
+    /// member (`Fetch::bind`).
+    fn walked_base(
+        &self,
+        object: &FinalizedObject,
+        stored: &[ObjectLocation],
+    ) -> Option<ObjectLocation> {
+        let base = stored.first().copied()?;
+        if is_program_role(object.role()) {
+            let first = object.predecessors().ids().next()?;
+            return (base.object_id == first && base.role == object.role()).then_some(base);
+        }
+        (base.role != ObjectRole::InodeLeaf
+            && !is_program_role(base.role)
+            && !self.depths.knows(base.object_id))
+        .then_some(base)
     }
     pub(super) fn flush_signatures(&mut self) -> StorageResult<()> {
         let view = WaveSource {

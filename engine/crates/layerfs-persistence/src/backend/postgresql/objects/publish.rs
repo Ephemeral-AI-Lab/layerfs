@@ -10,19 +10,43 @@
 //! no unique key on the id, only a B-tree on its first eight bytes, and
 //! uniqueness holds because every location insert runs under the lane row.
 //! A signature must name a location of this publication or a stored one.
+//!
+//! Each pack row carries `directory`, a copy of its body's header and group
+//! directory (`body[0..body_offset)`); the schema's `pack_directory_check`
+//! refuses a copy that is not that prefix. Each inserted location carries
+//! its ancestor list (#758, `object_location.ancestors`): `''` for a FULL
+//! record, else one D1 entry per base down to the FULL record, nearest
+//! first, each `varint(zigzag(pack - previous pack)) || u8 group ||
+//! varint(record) || varint(canonical length - 1)`, the first relative to
+//! the row's own pack. The ROWS statement fills them from the catalog's
+//! winning rows, which is sound because publications serialise on the lane
+//! row and the statement runs under it in one snapshot: a base stored before
+//! this publication, or one this batch lost to it, gives `entry(winner) ||
+//! winner.ancestors`, found with the same prefix-index probe as the
+//! first-wins check; a base this batch inserts gives `entry(its row) || its
+//! list`, by recursion over the batch only. The entry being relative to the
+//! row's own pack is what lets a base's list be appended verbatim.
 use super::super::session::transaction::Transaction;
 use crate::backend::records::BackendError;
 use layerfs_content::ObjectId;
-use layerfs_storage::{location::PackDomain, port::*};
+use layerfs_storage::{location::PackDomain, pack::layout, port::*};
 use postgres::types::Type;
 use std::collections::BTreeSet;
 
 pub(crate) fn packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
+    let directories = packs.iter().map(directory).collect::<Result<Vec<_>, _>>()?;
     tx.copy_in(
-        "COPY pack (pack_id,domain,digest,length,body) FROM STDIN (FORMAT binary)",
-        &[Type::INT8, Type::INT8, Type::BYTEA, Type::INT8, Type::BYTEA],
+        "COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)",
+        &[
+            Type::INT8,
+            Type::INT8,
+            Type::BYTEA,
+            Type::INT8,
+            Type::BYTEA,
+            Type::BYTEA,
+        ],
         |writer| {
-            for pack in packs {
+            for (pack, directory) in packs.iter().zip(&directories) {
                 let info = pack.info();
                 let domain = i64::from(info.domain == PackDomain::Payload);
                 writer.write(&[
@@ -31,12 +55,22 @@ pub(crate) fn packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(),
                     &info.key.as_bytes().as_slice(),
                     &(info.length as i64),
                     &pack.body().as_slice(),
+                    directory,
                 ])?;
             }
             Ok(())
         },
     )?;
     Ok(())
+}
+
+/// A pack's directory copy: its header and group directory,
+/// `body[0..body_offset)`, as the reader's group plan takes it.
+fn directory(pack: &PublishedPack) -> Result<&[u8], BackendError> {
+    let body = pack.body();
+    let header = layout::parse_header(body).map_err(|_| BackendError::Integrity)?;
+    body.get(..header.body_offset)
+        .ok_or(BackendError::Integrity)
 }
 
 /// The whole publication: bodies, then the lane row, then the rows.
@@ -56,28 +90,18 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
 /// each location probe a correlated index lookup: without it the planner
 /// may hash the whole table, computing the prefix of every row, under the
 /// lane.
-const ROWS: &str = "WITH ins AS (\
-INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) \
-SELECT n.i,n.r,n.l,n.p,n.g,n.c FROM unnest($1::bytea[],$2::bigint[],$3::bigint[],$4::bigint[],$5::bigint[],$6::bigint[],$19::bigint[]) n(i,r,l,p,g,c,k) \
-WHERE NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=n.k AND x.object_id=n.i OFFSET 0) \
-RETURNING object_id,canonical_length), \
-added AS (SELECT coalesce(sum(canonical_length),0)::bigint AS n FROM ins), \
-totals AS (UPDATE store_totals SET canonical=store_totals.canonical+added.n,stored=store_totals.stored+$7::bigint,metadata=store_totals.metadata+$8::bigint \
-FROM added WHERE store_totals.id=1 AND (added.n<>0 OR $7::bigint<>0 OR $8::bigint<>0)), \
-values_ AS (INSERT INTO inode_value_block(first_ordinal,last_ordinal,body) \
-SELECT n.f,n.l,n.b FROM unnest($9::bigint[],$18::bigint[],$10::bytea[]) n(f,l,b) WHERE NOT EXISTS (\
-SELECT 1 FROM inode_value_block x WHERE x.first_ordinal=(SELECT max(y.first_ordinal) FROM inode_value_block y \
-WHERE y.first_ordinal<=n.l) AND x.last_ordinal>=n.f) RETURNING first_ordinal), \
-released AS (UPDATE store_policy SET next_ordinal=$11::bigint WHERE $13::boolean AND id=1 AND next_ordinal=$11::bigint+$12::bigint), \
-signed AS (INSERT INTO content_signature(slot,stamp,object_id,signature) \
-SELECT * FROM unnest($14::bigint[],$15::bigint[],$16::bytea[],$17::bytea[]) \
-ON CONFLICT(slot) DO UPDATE SET stamp=excluded.stamp,object_id=excluded.object_id,signature=excluded.signature \
-WHERE excluded.stamp>=content_signature.stamp) \
-SELECT object_id FROM ins \
-UNION ALL SELECT NULL::bytea WHERE (SELECT count(*) FROM values_)<>cardinality($9::bigint[]) \
-UNION ALL SELECT NULL::bytea WHERE EXISTS (SELECT 1 FROM unnest($16::bytea[],$20::bigint[]) s(i,k) \
-WHERE NOT EXISTS (SELECT 1 FROM unnest($1::bytea[]) b(i) WHERE b.i=s.i) \
-AND NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=s.k AND x.object_id=s.i OFFSET 0))";
+///
+/// `src` probes each batch id once (`lost`: a row of that id is stored).
+/// `lists` derives the ancestor lists of the rows to insert (module doc):
+/// its first branch takes FULL rows and rows whose base is not inserted by
+/// this batch, the winner found by one more prefix probe; its recursive
+/// branch walks the batch only, children after their in-batch base, at most
+/// 64 levels deep (`l.d<64`: deeper than any readable chain, whose policy
+/// ceiling is 50, so it only stops a malformed batch). Each entry's operands are columns of an `OFFSET 0`
+/// subquery, so `ancestor_entry` stays inlined. A list over the column's 850
+/// bytes (more entries than any readable chain) is left NULL, unrecorded,
+/// as is one whose base is stored nowhere.
+const ROWS: &str = include_str!("../../../../sql/postgresql/publish_rows.sql");
 
 /// The index key of an object id: its first eight bytes as a signed
 /// big-endian `bigint`, as the schema's `object_location_prefix` computes it.
@@ -132,7 +156,16 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
         .collect();
     let digests: Vec<&[u8]> = signatures.iter().map(|r| r.signature.as_slice()).collect();
     let signed_keys: Vec<i64> = signatures.iter().map(|r| prefix(&r.object_id)).collect();
-    let bytes = objects.len() as u64 * 72
+    // The logical base of each row, NULL for a FULL record (#758).
+    let bases: Vec<Option<&[u8]>> = objects
+        .iter()
+        .map(|o| o.base.as_ref().map(|b| b.as_bytes().as_slice()))
+        .collect();
+    let base_keys: Vec<Option<i64>> = objects
+        .iter()
+        .map(|o| o.base.as_ref().map(prefix))
+        .collect();
+    let bytes = objects.len() as u64 * 112
         + values.iter().map(|b| b.body.len() as u64 + 16).sum::<u64>()
         + signatures.len() as u64 * 80
         + 48;
@@ -160,6 +193,8 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
             &lasts,
             &keys,
             &signed_keys,
+            &bases,
+            &base_keys,
         ],
         bytes,
     )? {

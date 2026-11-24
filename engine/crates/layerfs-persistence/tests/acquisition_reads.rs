@@ -178,10 +178,7 @@ fn entry(parent: Option<u64>, name: Vec<u8>, position: u64, kind: InodeKind) -> 
 #[test]
 fn typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds() {
     let temp = Temp::new("owned-window-reads");
-    let handles = create(
-        &temp.join("store.sqlite"),
-        SqlitePersistenceProfile::Normal,
-    );
+    let handles = create(&temp.join("store.sqlite"), SqlitePersistenceProfile::Normal);
     let port = &handles.acquisition;
     let first = begin(&handles);
     let other = begin(&handles);

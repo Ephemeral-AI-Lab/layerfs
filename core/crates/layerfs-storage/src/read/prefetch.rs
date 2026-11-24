@@ -20,14 +20,17 @@ pub(crate) fn chains(
     let mut frontier = roots.to_vec();
     let mut visited = BTreeSet::new();
     let mut pooled = crate::encoding::pool::PoolReadCounters::default();
-    for _ in 0..=layerfs_content::MAXIMUM_DELTA_MAX_DEPTH {
+    for level in 0..=layerfs_content::MAXIMUM_DELTA_MAX_DEPTH {
         if frontier.is_empty() {
             return Ok(pooled);
         }
+        // One call for the frontier's and its chains' uncached groups (#758).
+        source.prefetch_groups(&frontier, packs)?;
         // Consume each byte-bounded physical cohort before acquiring another.
         // Discovery and reconstruction share the owning operation's group cache.
         frontier.sort_unstable_by_key(|row| (row.pack_id, row.group_number, row.record_number));
         let mut next = BTreeSet::new();
+        let mut edges = Vec::new();
         let mut from = 0;
         let mut decodes = 0;
         while from < frontier.len() {
@@ -49,11 +52,13 @@ pub(crate) fn chains(
                     continue;
                 }
                 let before = decodes;
-                if let Some(base) =
-                    stored_base(source, packs, groups, workspace, &mut decodes, location)?
-                {
-                    next.insert(base);
+                let unhinted = level == 0 && !source.has_hint(location.object_id);
+                let base = stored_base(source, packs, groups, workspace, &mut decodes, location)?;
+                if unhinted && base.is_some() {
+                    source.note(|c| c.chain_unhinted_roots += 1);
                 }
+                edges.extend(base.map(|base| (*location, base)));
+                next.extend(base);
                 if location.role == layerfs_content::ObjectRole::InodeLeaf && decodes > before {
                     pooled.physical_group_decodes += decodes - before;
                     pooled.physical_group_decoded_bytes += groups
@@ -66,7 +71,10 @@ pub(crate) fn chains(
         }
         source.note(|c| c.prefetch_group_decodes += decodes);
         let ids: Vec<ObjectId> = next.into_iter().collect();
-        source.locate(&ids)?;
+        // One locate for this level's bases and the deeper bases its chains
+        // let the cached records name (#758): authoritative rows only.
+        let ahead = source.chain_ahead(&ids, &edges, packs, groups, workspace);
+        source.locate(&[ids.as_slice(), ahead.as_slice()].concat())?;
         frontier = ids
             .into_iter()
             .filter(|id| !visited.contains(id))

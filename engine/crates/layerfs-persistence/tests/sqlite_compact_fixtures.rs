@@ -258,6 +258,7 @@ fn publish_groups(f: &Fixture, objects: &[FinalizedObject]) -> (i64, Vec<u8>) {
                     pack_id: reserved.first_pack_id,
                     group_number: group,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()

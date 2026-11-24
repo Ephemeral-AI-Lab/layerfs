@@ -55,8 +55,22 @@ impl GroupCache {
         Some(&entry.body)
     }
 
-    /// Retains authenticated decoded input within the same byte allowance.
-    /// Duplicate immutable input is idempotent; changed or oversized input fails.
+    /// Borrows retained input without recording recency: for a guess that
+    /// must leave the cache as it found it (`read/hints.rs` `chain_ahead`).
+    pub(crate) fn peek(&self, pack_id: i64, group_number: usize) -> Option<&[u8]> {
+        self.bodies
+            .get(&(pack_id, group_number))
+            .map(|entry| entry.body.as_slice())
+    }
+
+    /// Retains decoded input within the same byte allowance, evicting the least
+    /// recently used bodies. What the input is depends on the owner: a reader's
+    /// or Save's cache holds bodies its decoding authenticated, while the
+    /// private per-call cache of `read/hints.rs` `chain_ahead` (filled through
+    /// `delta::read::cached_base`) holds unauthenticated bytes for guesses that
+    /// nothing trusts; no other owner reads it and it is dropped when that call
+    /// returns. Duplicate immutable input is idempotent; changed or oversized
+    /// input fails.
     pub fn insert(
         &mut self,
         pack_id: i64,

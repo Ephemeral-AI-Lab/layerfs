@@ -77,6 +77,7 @@ fn publish(h: &SqliteHandles) -> Vec<FinalizedObject> {
                     pack_id: 1,
                     group_number: n,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()

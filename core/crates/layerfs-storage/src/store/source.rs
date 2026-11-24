@@ -58,6 +58,31 @@ pub trait Source {
     fn note_pack_directory_validation(&self, _groups: usize, _entries: usize) {}
     /// Records capacity eviction of real acquired bodies, never private invalidation.
     fn note_pack_evictions(&self, _entries: u64, _bytes: u64) {}
+    /// Before a walk reads `location`'s group: fetches it together with the
+    /// groups of its recorded delta chain (#758). Default: nothing.
+    fn prefetch_chain(
+        &self,
+        _location: &ObjectLocation,
+        _packs: &mut crate::encoding::PackCache,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
+    /// The walk decoded `base` from `child`'s record: binds and checks the
+    /// chain member there, if any (#758). Default: nothing.
+    fn bind_base(&self, _child: &ObjectLocation, _base: Option<ObjectId>) -> StorageResult<()> {
+        Ok(())
+    }
+    /// Whether `id`'s locator came from a chain hint (#758) and is not
+    /// authoritative. Default: never.
+    fn hinted(&self, _id: ObjectId) -> bool {
+        false
+    }
+    /// After a failure a stale hint may have caused on the walk of `chain`
+    /// (empty: any walk): drops every hint; true when a hinted locator was on
+    /// it, so the caller rebuilds once.
+    fn drop_hints(&self, _chain: &[ObjectId]) -> StorageResult<bool> {
+        Ok(false)
+    }
     /// Stores the bounded signature changes in the caller's transaction.
     fn write_signatures(&self, rows: &[SignatureRow]) -> StorageResult<usize>;
 }

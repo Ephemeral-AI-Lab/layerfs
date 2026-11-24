@@ -55,7 +55,7 @@ impl State<'_> {
             .ready
             .iter()
             .flat_map(|p| &p.members)
-            .map(|(l, m)| (l.object_id, (*l, m.references.clone(), m.prefix)))
+            .map(|(l, m)| (l.object_id, (*l, m.references.clone(), m.base.is_some())))
             .collect();
         let external: Vec<_> = members
             .values()
@@ -256,7 +256,12 @@ impl State<'_> {
                 .map(|id| self.resolve(*id))
                 .collect::<StorageResult<Vec<_>>>()?;
             self.storage.source.invalidate(&ids);
-            let actual = self.storage.reader()?.read_objects(&ids)?;
+            // The winners are read as this Save reads (#758): no chain member
+            // is bound, so the Save's later walks see authoritative locators.
+            let actual = {
+                let _save = self.storage.source.save_reads();
+                self.storage.reader()?.read_objects(&ids)?
+            };
             for ((id, expected), actual) in ids.iter().zip(expected).zip(actual) {
                 let winner = self
                     .storage

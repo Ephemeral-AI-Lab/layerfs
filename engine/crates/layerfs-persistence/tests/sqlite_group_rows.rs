@@ -70,6 +70,7 @@ fn fixture(h: &SqliteHandles) -> Vec<FinalizedObject> {
                     pack_id: 1,
                     group_number: n,
                     record_number: 0,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()
@@ -259,6 +260,7 @@ fn late_locator_failure_rolls_back_control_and_every_unit() {
             pack_id: 999,
             group_number: 0,
             record_number: 0,
+            base: None,
         }],
         ..Publication::default()
     };
@@ -294,6 +296,7 @@ fn exact_physical_fanout_refuses_over_budget_batch_before_begin() {
                 pack_id: 1,
                 group_number: 0,
                 record_number: 0,
+                base: None,
             })
             .collect(),
         ..Publication::default()

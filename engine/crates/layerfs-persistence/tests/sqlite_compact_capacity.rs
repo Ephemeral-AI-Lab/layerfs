@@ -587,12 +587,7 @@ fn capacity_measure() {
             object_bytes,
         );
         dead_seed = seed;
-        let measured = measured(
-            &store,
-            SqlitePersistenceProfile::Normal,
-            100 + run,
-            added,
-        );
+        let measured = measured(&store, SqlitePersistenceProfile::Normal, 100 + run, added);
         assert_eq!(measured.path, "rebuild", "10% dead takes the rebuild path");
         eprintln!(
             "capacity_measure: rebuild run {} -> {} us, dead {} B, shrink {} B, peak {} B",

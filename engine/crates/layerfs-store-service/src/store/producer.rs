@@ -101,6 +101,17 @@ pub(super) fn since(after: Diagnostics, before: Diagnostics) -> Diagnostics {
         directory_entry_bounds: after.directory_entry_bounds - before.directory_entry_bounds,
         prefetch_group_decodes: after.prefetch_group_decodes - before.prefetch_group_decodes,
         forced_seals: after.forced_seals - before.forced_seals,
+        chain_rows: after.chain_rows - before.chain_rows,
+        chain_members: after.chain_members - before.chain_members,
+        chain_hinted_bases: after.chain_hinted_bases - before.chain_hinted_bases,
+        chain_verified_bases: after.chain_verified_bases - before.chain_verified_bases,
+        chain_hint_stale: after.chain_hint_stale - before.chain_hint_stale,
+        chain_unhinted_roots: after.chain_unhinted_roots - before.chain_unhinted_roots,
+        group_reads: after.group_reads - before.group_reads,
+        group_read_packs: after.group_read_packs - before.group_read_packs,
+        group_read_ranges: after.group_read_ranges - before.group_read_ranges,
+        group_read_bytes: after.group_read_bytes - before.group_read_bytes,
+        group_read_whole: after.group_read_whole - before.group_read_whole,
         ..after
     }
 }

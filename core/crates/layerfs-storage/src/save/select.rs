@@ -169,7 +169,7 @@ impl State<'_> {
             role: object.role(),
             length: object.canonical_len(),
             references,
-            prefix: record.base.is_some(),
+            base: record.base,
         });
         if lane == PackLane::Singleton {
             self.packer.seal(

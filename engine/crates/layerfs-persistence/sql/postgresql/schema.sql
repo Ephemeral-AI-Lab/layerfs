@@ -4,7 +4,7 @@ CREATE TABLE store_lane (
 INSERT INTO store_lane (id) VALUES (1);
 CREATE TABLE store_policy (
  id bigint PRIMARY KEY CHECK (id = 1),
- schema_version bigint NOT NULL CHECK (schema_version = 2),
+ schema_version bigint NOT NULL CHECK (schema_version = 3),
  format_profile bigint NOT NULL CHECK (format_profile = 1),
  small_file_threshold_bytes bigint NOT NULL CHECK (small_file_threshold_bytes BETWEEN 131072 AND 1048576),
  whole_file_delta_max_depth bigint NOT NULL CHECK (whole_file_delta_max_depth BETWEEN 0 AND 50),
@@ -20,9 +20,13 @@ CREATE TABLE pack (
  digest bytea NOT NULL CHECK (octet_length(digest) = 32),
  length bigint NOT NULL CHECK (length BETWEEN 32 AND 16781312),
  body bytea NOT NULL CHECK (octet_length(body) = length),
+ directory bytea STORAGE PLAIN NOT NULL
+  CONSTRAINT pack_directory_check CHECK (octet_length(directory) >= 24 AND directory = substring(body FROM 1 FOR octet_length(directory))),
  CHECK (domain = 1 OR length <= 262144)
 );
 ALTER TABLE pack ALTER COLUMN body SET STORAGE EXTERNAL;
+ALTER TABLE pack SET (autovacuum_freeze_min_age = 0, autovacuum_vacuum_insert_scale_factor = 0.05,
+ toast.autovacuum_freeze_min_age = 0, toast.autovacuum_vacuum_insert_scale_factor = 0.05);
 CREATE FUNCTION pack_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'published pack immutable'; END $$;
 CREATE TRIGGER pack_immutable BEFORE UPDATE OR DELETE ON pack
@@ -33,10 +37,56 @@ CREATE TABLE object_location (
  role smallint NOT NULL CHECK (role BETWEEN 1 AND 13),
  group_number smallint NOT NULL CHECK (group_number BETWEEN 0 AND 255),
  record_number smallint NOT NULL CHECK (record_number BETWEEN 0 AND 8190),
- object_id bytea STORAGE PLAIN NOT NULL CHECK (octet_length(object_id) = 32)
+ object_id bytea STORAGE PLAIN NOT NULL CHECK (octet_length(object_id) = 32),
+ ancestors bytea STORAGE PLAIN CHECK (octet_length(ancestors) <= 850)
 );
+ALTER TABLE object_location SET (autovacuum_freeze_min_age = 0, autovacuum_vacuum_insert_scale_factor = 0.05);
 CREATE INDEX object_location_prefix ON object_location
  ((('x' || encode(substring(object_id FROM 1 FOR 8), 'hex'))::bit(64)::bigint));
+CREATE FUNCTION ancestor_varint(v bigint) RETURNS bytea LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+SELECT CASE
+ WHEN v >= 0 AND v < 128 THEN substring(int8send((v & 127)) FROM 8)
+ WHEN v >= 0 AND v < 16384 THEN substring(int8send((((v & 127) | 128) << 8) | ((v >> 7) & 127)) FROM 7)
+ WHEN v >= 0 AND v < 2097152 THEN substring(int8send((((v & 127) | 128) << 16) | ((((v >> 7) & 127) | 128) << 8) | ((v >> 14) & 127)) FROM 6)
+ WHEN v >= 0 AND v < 268435456 THEN substring(int8send((((v & 127) | 128) << 24) | ((((v >> 7) & 127) | 128) << 16) | ((((v >> 14) & 127) | 128) << 8) | ((v >> 21) & 127)) FROM 5)
+ WHEN v >= 0 AND v < 34359738368 THEN substring(int8send((((v & 127) | 128) << 32) | ((((v >> 7) & 127) | 128) << 24) | ((((v >> 14) & 127) | 128) << 16) | ((((v >> 21) & 127) | 128) << 8) | ((v >> 28) & 127)) FROM 4)
+ WHEN v >= 0 AND v < 4398046511104 THEN substring(int8send((((v & 127) | 128) << 40) | ((((v >> 7) & 127) | 128) << 32) | ((((v >> 14) & 127) | 128) << 24) | ((((v >> 21) & 127) | 128) << 16) | ((((v >> 28) & 127) | 128) << 8) | ((v >> 35) & 127)) FROM 3)
+ WHEN v >= 0 AND v < 562949953421312 THEN substring(int8send((((v & 127) | 128) << 48) | ((((v >> 7) & 127) | 128) << 40) | ((((v >> 14) & 127) | 128) << 32) | ((((v >> 21) & 127) | 128) << 24) | ((((v >> 28) & 127) | 128) << 16) | ((((v >> 35) & 127) | 128) << 8) | ((v >> 42) & 127)) FROM 2)
+ WHEN v >= 0 AND v < 72057594037927936 THEN substring(int8send((((v & 127) | 128) << 56) | ((((v >> 7) & 127) | 128) << 48) | ((((v >> 14) & 127) | 128) << 40) | ((((v >> 21) & 127) | 128) << 32) | ((((v >> 28) & 127) | 128) << 24) | ((((v >> 35) & 127) | 128) << 16) | ((((v >> 42) & 127) | 128) << 8) | ((v >> 49) & 127)) FROM 1)
+ WHEN v >= 0 THEN substring(int8send((((v & 127) | 128) << 56) | ((((v >> 7) & 127) | 128) << 48) | ((((v >> 14) & 127) | 128) << 40) | ((((v >> 21) & 127) | 128) << 32) | ((((v >> 28) & 127) | 128) << 24) | ((((v >> 35) & 127) | 128) << 16) | ((((v >> 42) & 127) | 128) << 8) | (((v >> 49) & 127) | 128)) FROM 1) || substring(int8send(((v >> 56) & 127)) FROM 8)
+ ELSE substring(int8send((((v & 127) | 128) << 56) | ((((v >> 7) & 127) | 128) << 48) | ((((v >> 14) & 127) | 128) << 40) | ((((v >> 21) & 127) | 128) << 32) | ((((v >> 28) & 127) | 128) << 24) | ((((v >> 35) & 127) | 128) << 16) | ((((v >> 42) & 127) | 128) << 8) | (((v >> 49) & 127) | 128)) FROM 1) || substring(int8send(((((v >> 56) & 127) | 128) << 8) | 1::bigint) FROM 7)
+ END $$;
+CREATE FUNCTION ancestor_entry(zigzag bigint, grp bigint, rec bigint, len_less_one bigint) RETURNS bytea
+ LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+SELECT ancestor_varint(zigzag) || substring(int2send(grp::smallint) FROM 2) || ancestor_varint(rec) || ancestor_varint(len_less_one) $$;
+CREATE FUNCTION ancestor_entries(own bigint, list bytea)
+ RETURNS TABLE (n integer, pack_id bigint, group_number integer, record_number bigint, canonical_length bigint, next integer)
+ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
+DECLARE at integer := 0; width integer := octet_length(list); v bigint; shift integer; b integer; part integer; moved numeric;
+BEGIN
+ n := 0; pack_id := own;
+ WHILE at < width LOOP
+  n := n + 1;
+  FOR part IN 1..3 LOOP
+   v := 0; shift := 0;
+   LOOP
+    IF at >= width OR shift > 63 THEN pack_id := NULL; RETURN NEXT; RETURN; END IF;
+    b := get_byte(list, at); at := at + 1;
+    v := v | ((b & 127)::bigint << shift); shift := shift + 7;
+    EXIT WHEN b < 128;
+   END LOOP;
+   IF part = 1 THEN
+    moved := pack_id::numeric + (((v >> 1) & 9223372036854775807) # -(v & 1));
+    IF at >= width OR moved NOT BETWEEN 1 AND 9223372036854775807 THEN pack_id := NULL; RETURN NEXT; RETURN; END IF;
+    pack_id := moved; group_number := get_byte(list, at); at := at + 1;
+   ELSIF part = 2 THEN record_number := v;
+   ELSE canonical_length := v + 1;
+   END IF;
+  END LOOP;
+  next := at + 1;
+  RETURN NEXT;
+ END LOOP;
+END $$;
 CREATE TABLE inode_value_block (
  first_ordinal bigint PRIMARY KEY CHECK (first_ordinal BETWEEN 1 AND 4294967295),
  last_ordinal bigint NOT NULL
@@ -70,7 +120,7 @@ CREATE TABLE history_meta (
  catalog_incarnation bigint NOT NULL CHECK (catalog_incarnation BETWEEN 1 AND 9223372036854775807),
  binding_key bytea NOT NULL CHECK (octet_length(binding_key) BETWEEN 1 AND 128),
  identity_format bigint NOT NULL CHECK (identity_format = 3),
- schema_version bigint NOT NULL CHECK (schema_version = 2),
+ schema_version bigint NOT NULL CHECK (schema_version = 3),
  next_history_serial bigint NOT NULL DEFAULT 1,
  schema_source text NOT NULL,
  schema_definition text NOT NULL

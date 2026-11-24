@@ -326,8 +326,7 @@ fn a_rebuild_at_block_edges_keeps_exactly_the_roots() {
             .unwrap();
         assert_eq!(receipt.path, CompactPath::Rebuild);
         let reopened = SqliteHandles::open_writable(
-            PersistenceConfig::sqlite(store)
-                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
+            PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             b"doctor-adversarial",
             [71; 32],
         )

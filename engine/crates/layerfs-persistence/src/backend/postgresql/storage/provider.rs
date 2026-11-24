@@ -6,7 +6,7 @@ use super::super::{
 use crate::{metadata, publication, SqlWork};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{InodeValueRow, LocatedObject, SignatureRow},
+    location::{InodeValueRow, LocatedChains, LocatedObject, SignatureRow},
     port::*,
     StoragePolicy,
 };
@@ -74,6 +74,82 @@ impl PackPersistence for PostgresStorage {
         self.session
             .read_immutable(|tx| metadata::locations::read(tx, ids, out))
     }
+    /// Design B (#758): the roots, their lists and their packs in one
+    /// statement, then the member packs it did not return in a second, both
+    /// autocommit reads of immutable rows (`metadata::chains`).
+    fn locate_chains(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+    ) -> Result<(), PersistenceError> {
+        rows.clear();
+        chains.chains.clear();
+        chains.directories.clear();
+        let policy = self.policy()?;
+        let incarnation = self
+            .session
+            .incarnation
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let kept = (&self.session.chain_packs, incarnation);
+        self.session.read_immutable(|tx| {
+            super::super::metadata::chains::locate_chains(tx, &policy, kept, roots, rows, chains)
+        })
+    }
+    /// Group reads (#758): every read's bytes in one statement per 2 MiB of
+    /// returned bytes, through the multi-range `substring` reader
+    /// (`objects::read::ranges`): a ranged read's ranges, and a whole read's
+    /// body as one range, authenticated against the descriptor it named.
+    /// Answers come in request order; an absent pack is `Missing`.
+    fn read_groups(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<GroupReadAnswer>,
+    ) -> Result<(), PersistenceError> {
+        out.clear();
+        let mut rest = reads;
+        while !rest.is_empty() {
+            let mut bytes = 0;
+            let take = rest
+                .iter()
+                .take_while(|read| {
+                    bytes += match read.ranges.is_empty() {
+                        true => read.pack.length,
+                        false => read.ranges.iter().map(|range| range.length).sum(),
+                    };
+                    bytes <= layerfs_storage::policy::DEPENDENCY_PACK_CACHE_BYTES
+                })
+                .count()
+                .max(1);
+            let requests: Vec<(i64, Vec<PackRange>)> = rest[..take]
+                .iter()
+                .map(|read| match read.ranges.is_empty() {
+                    true => (
+                        read.pack.pack_id,
+                        vec![PackRange {
+                            offset: 0,
+                            length: read.pack.length,
+                        }],
+                    ),
+                    false => (read.pack.pack_id, read.ranges.clone()),
+                })
+                .collect();
+            let mut bodies = Vec::new();
+            self.session
+                .read_immutable(|tx| objects::read::ranges(tx, &requests, &mut bodies))?;
+            for (read, mut body) in rest[..take].iter().zip(bodies) {
+                out.push(match read.ranges.is_empty() {
+                    true => GroupReadAnswer::Whole(PersistedPack::authenticate(
+                        read.pack,
+                        body.pop().ok_or(PersistenceError::Malformed)?,
+                    )?),
+                    false => GroupReadAnswer::Ranges(body),
+                });
+            }
+            rest = &rest[take..];
+        }
+        Ok(())
+    }
     fn read_packs(
         &self,
         ids: &[i64],
@@ -121,6 +197,11 @@ impl PackPersistence for PostgresStorage {
     /// taken whole in one statement and kept for the next demands.
     fn whole_pack_bytes(&self) -> usize {
         layerfs_storage::policy::PACK_LIMIT
+    }
+    /// Every read is a round trip, so the bases this handle published are
+    /// fetched in the same group-read wave as provider chains (#758).
+    fn batched_chain_reads(&self) -> bool {
+        true
     }
     /// Each statement is a round trip and a publication costs about seven
     /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at

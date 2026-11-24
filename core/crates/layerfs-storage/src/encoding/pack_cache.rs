@@ -202,6 +202,37 @@ impl PackCache {
             }))
         }
     }
+    /// A held group's bytes for a guess only (#758, `read/hints.rs`
+    /// `chain_ahead`): no descriptor check, no recency, no counter, so the
+    /// cache and the handle are left as they were. Never a source of bytes a
+    /// read returns: [`Self::group`] serves those.
+    pub(crate) fn peek_group(&self, id: i64, number: usize) -> Option<super::GroupSlice<'_>> {
+        let entry = self
+            .entries
+            .get(&(id, None))
+            .or_else(|| self.entries.get(&(id, Some(number))))?;
+        if let Some((header, view)) = entry.unit {
+            return Some(super::GroupSlice {
+                header,
+                view,
+                bytes: &entry.body,
+            });
+        }
+        let header = crate::pack::layout::parse_header(&entry.body).ok()?;
+        let view = crate::pack::layout::group_view(&entry.body, header, number).ok()?;
+        Some(super::GroupSlice {
+            header,
+            view,
+            bytes: entry.body.get(view.start..view.end)?,
+        })
+    }
+    /// The entry that holds `id`'s group `number` (its whole body or that
+    /// group's unit) and its retained bytes, without touching recency.
+    pub(crate) fn held(&self, id: i64, number: usize) -> Option<((i64, Option<usize>), usize)> {
+        [(id, None), (id, Some(number))]
+            .into_iter()
+            .find_map(|key| self.entries.get(&key).map(|entry| (key, entry.body.len())))
+    }
     // A whole body's immutable directory is shared only within this cohort.
     // Descriptor eligibility and recency still apply separately to every hit.
     fn whole_cohort(
@@ -282,6 +313,19 @@ impl PackCache {
         if whole_for_reuse && !matches!(&acquired, super::PackAcquisition::Whole { .. }) {
             return Err(StorageError::Integrity("whole reuse selection reply"));
         }
+        self.admit_groups(source, id, &wanted, &missing, acquired)
+    }
+    /// Admits one acquisition of pack `id`'s `missing` groups, which leaves
+    /// every `wanted` group cached: from [`Self::acquire_groups`], or from a
+    /// group read that already holds the bytes (#758).
+    pub(crate) fn admit_groups(
+        &mut self,
+        source: &dyn crate::source::Source,
+        id: i64,
+        wanted: &BTreeSet<usize>,
+        missing: &[usize],
+        acquired: super::PackAcquisition,
+    ) -> StorageResult<(bool, usize)> {
         let before = self.work;
         let bytes = match acquired {
             super::PackAcquisition::Whole { info, body } => {
@@ -298,7 +342,7 @@ impl PackCache {
                     return Err(StorageError::Integrity("cached whole domain"));
                 }
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
-                crate::pack::layout::validate_group_demand(&body, header, &wanted)?;
+                crate::pack::layout::validate_group_demand(&body, header, wanted)?;
                 let bytes = body.len();
                 let keys: Vec<_> = self
                     .entries
@@ -371,10 +415,10 @@ impl PackCache {
             self.work.evictions - before.evictions,
             self.work.evicted_bytes - before.evicted_bytes,
         );
-        if self.whole_cohort(source, id, &wanted)? {
+        if self.whole_cohort(source, id, wanted)? {
             return Ok((true, bytes));
         }
-        for group in wanted {
+        for &group in wanted {
             if self.group(source, id, group)?.is_none() {
                 return Err(StorageError::Integrity("cohort evicted required group"));
             }

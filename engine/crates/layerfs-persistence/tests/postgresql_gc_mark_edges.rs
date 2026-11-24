@@ -88,6 +88,7 @@ fn publish_group(handles: &PostgresHandles, lane: PackLane, group: &[FinalizedOb
                     pack_id: reserved.first_pack_id,
                     group_number: 0,
                     record_number: record,
+                    base: None,
                 })
                 .collect(),
             ..Publication::default()
@@ -156,6 +157,7 @@ fn leaf(handles: &PostgresHandles, files: &[ObjectId]) -> ObjectId {
                 pack_id: reserved.first_pack_id,
                 group_number: 0,
                 record_number: 0,
+                base: None,
             }],
             ..Publication::default()
         })

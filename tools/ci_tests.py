@@ -62,6 +62,11 @@ SLOW = {
     ("layerfs-persistence", "writer_admission"): 9.74,
     # Two cases each hold a lane 3 s (finding #20), macOS host, 2026-11-23.
     ("layerfs-persistence", "diagnostics_during_lane"): 6.06,
+    # 40 random ancestor-list histories (#758 phase 2), macOS host, 2026-11-23.
+    ("layerfs-persistence", "postgresql_chain_property"): 21.83,
+    # History scaling stage 1 of 5 (#758 phase 3); stages 2-5 are #[ignore]d
+    # and run by name in the order the test file states, macOS host, 2026-11-23.
+    ("layerfs-persistence", "postgresql_history_scaling"): 6.05,
     ("layerfs-store-service", "scale_lineage_cap"): 24.3,
     ("layerfs-store-service", "sdk_merge_scale"): 23.8,
     ("layerfs-daemon", "complete_installed_roots"): 9.0,

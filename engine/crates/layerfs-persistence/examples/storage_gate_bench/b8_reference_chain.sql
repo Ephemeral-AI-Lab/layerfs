@@ -1,0 +1,1 @@
+SELECT o.pack_id,o.group_number,o.record_number,o.ancestors,p.directory FROM unnest($1::bytea[],$2::bigint[]) k(i,k) CROSS JOIN LATERAL (SELECT * FROM {schema}.object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=k.k AND x.object_id=k.i OFFSET 0) o JOIN {schema}.pack p ON p.pack_id=o.pack_id
