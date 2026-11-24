@@ -1,7 +1,7 @@
 //! `store get --with live` (call surface 2.0, review fixes 1 and 23): a
 //! read of the Store where it lives, starting nothing: a sqlite Store's
-//! file through its machine (in this process for `native`, else its
-//! worker), a PostgreSQL Store's server from this computer.
+//! file through its machine (in this process for one whose calls run here,
+//! else its worker), a PostgreSQL Store's server from this computer.
 //!
 //! The read gives the state: `blocked` first, with nothing asked, while a
 //! sqlite Store's machine is not ready; `broken` `missing` when no file is

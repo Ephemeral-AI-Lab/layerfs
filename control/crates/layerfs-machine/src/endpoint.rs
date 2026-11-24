@@ -45,7 +45,7 @@ const DOCKER_PHASES: [&str; 4] = ["bundle", "image", "boot", "worker"];
 
 /// The worker of machine `name`, started (as `machine.start` starts it) if
 /// it does not answer its secret; `None` when the machine's calls run in
-/// this process (`native`). What a call that needs the machine's worker
+/// this process (`native` on macOS and Linux). What a call that needs the machine's worker
 /// asks before it sends one.
 pub fn running(home: &Path, name: &str, related: Related) -> Result<Option<Endpoint>> {
     let mut sink = |_| {};

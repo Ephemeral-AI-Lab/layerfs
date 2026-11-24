@@ -83,7 +83,7 @@ read. A check that does not apply is left out.
 | `home.build`, `home.prerequisites` | The calling executable; native runtime prerequisites | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
 | `home.layout` | pass for a current layout; fail for a folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout or one that cannot be parsed, or anything but `layerfs.lock`, the integration folders and `.DS_Store` with no `layerfs.json`), "this build writes nothing in it", `fix: mv <home> <home>.old && layerfs home init`; fail with the OS error and no fix when the system refuses to read `layerfs.json` or the folder; left out for a home not made yet | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
 | `home.records` | The records scan and record checks (`checks::check_local`, on a current-layout home only), each finding as an error or warning on the thing it is about, with its fix; no verdict when the record inventory changed or could not be read; see [Checks](checks.md) | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs), [`host_inventory.rs`](../../../../control/crates/layerfs-control/src/doctor/host_inventory.rs) |
-| `home.bundle` | When a record names a non-native machine: the Linux bundle manifest (this version, `linux-<arch>`) and its files present | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
+| `home.bundle` | When a record names a machine whose calls run in its worker (its platform's executor on this host), or one whose record cannot say: the Linux bundle manifest (this version, `linux-<arch>`) and its files present | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
 | `home.native_daemon` | The daemon the native machine runs, as its Sandbox launch chooses it (`NativeDaemon`, shared with `home.get`): its record's `daemon`, else the one beside this host's bundle; read from files. Missing or not executable: an error for a recorded one, a warning for the default (`fix: chmod +x <path>` where only the mode is wrong); its stamped commit (`layerfs-build-identity:`) against the calling build's (`Options.build`): another commit is a warning in `DaemonMismatch`'s words; unknown or dirty passes, saying it cannot compare | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs), [`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) |
 | `home.artifacts` | Each non-native machine's recorded `daemon` executable | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
 | `home.capacity` | `/bin/df -Pk` on the home or its nearest existing ancestor, capped at 5 s, killed and reaped when late; under 2 GiB free is a warning (`capacity::room`), evidence `disk_free_bytes` | [`host_capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_capacity.rs), [`capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/capacity.rs) |
@@ -99,8 +99,8 @@ change undone between the two reads is not seen.
 
 Ten checks, in order (`MACHINE` in `kinds.rs`). What a probe finds is read
 as `machine get --with live` reads it (`layerfs_machine::state`). A check
-that does not apply is left out: `native` has no provider, worker or data
-disk, and a stopped machine's worker checks are not made. After a failed
+that does not apply is left out: a machine no provider holds (`native`) has
+no provider or data disk to probe, nor a worker where its calls run in this process, and a stopped machine's worker checks are not made. After a failed
 check the ones that need it are not made, and the machine blocks what is on
 it with the reason found.
 
@@ -135,7 +135,7 @@ The Sandbox's records state comes from one function in `sandbox_target.rs`
 | `sandbox.operation` | Live owner `pass`; an ended owner's certain `op` a notice, its uncertain one an error | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
 | `sandbox.runtime`, `.forward_process` | Native or namespaces daemon/init process, or a forward's carrier, matched by pid, start time and boot; never by pid alone. A runtime seen gone is not dialled | [`sandbox_runtime.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_runtime.rs) |
 | `sandbox.network` | A running namespaces Sandbox read on this kernel (not through a forward): its init stage's network namespace is not the reader's, and its host end `lfs<id12>` is there with the address its record keeps; else an error with the `sandbox remove` fix | [`network.rs`](../../../../control/crates/layerfs-control/src/doctor/network.rs), [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
-| `sandbox.route`, `.worker_compatibility` | Native: direct. Forward: the machine's `worker.json` must exist (else `not_checked`, blocked by the machine); no worker call. Other machines: one request of the internal worker op `doctor.sandbox` to an authenticated worker of this build, whose report (checks, `workspaces`, `listing`) is read in; a malformed or cut report leaves the Sandbox `not_checked` with `reason` `lost` | [`sandbox_remote.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_remote.rs) |
+| `sandbox.route`, `.worker_compatibility` | A machine whose calls run in this process: direct. Forward: the machine's `worker.json` must exist (else `not_checked`, blocked by the machine); no worker call. Other machines: one request of the internal worker op `doctor.sandbox` to an authenticated worker of this build, whose report (checks, `workspaces`, `listing`) is read in; a malformed or cut report leaves the Sandbox `not_checked` with `reason` `lost` | [`sandbox_remote.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_remote.rs) |
 | `sandbox.daemon_keys`, `.daemon_connect`, `.daemon_auth`, `.daemon_instance`, `.daemon_ready` | Saved loopback endpoint and 32-byte keys; a refused connection is an error (nothing listens), any other failure `not_checked`; authenticated channel; `Hello` without waiting for startup must name the saved instance and `ControlReady` (still starting: warning; retained: error) | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
 | `sandbox.session` | `EndSession` for the doctor's own control session, only after a clean exchange | [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs) |
 | `sandbox.observation` | The saved keys file did not change while the daemon was read | [`sandbox_target.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_target.rs) |
@@ -143,7 +143,7 @@ The Sandbox's records state comes from one function in `sandbox_target.rs`
 **Workspaces.** A Workspace has no doctor of its own. After a ready daemon,
 `sandbox.doctor_workspaces` is read in pages of at most 32 rows under one
 generation ([`diagnostic.rs`](../../../../engine/crates/layerfs-daemon/src/control/diagnostic.rs)); each Workspace the daemon lists or the Sandbox's folder
-records (the home's on `native` and for a forward, the worker's own
+records (the home's on a machine whose calls run in this process and for a forward, the worker's own
 elsewhere) gets one shallow node named `<sandbox>:<name>` (its name, else
 its path, else its id), recorded ones first: `workspace.mounted` (the mount
 is present; being made or removed is a notice; held without a mount, or
@@ -164,7 +164,7 @@ then one `workspaces` event each.
 
 Six checks, in the frozen order (`CHECKS` in `store_target.rs`); no Store
 data is scanned. A sqlite Store is reached where it lives: in this process
-for `native`, else through its machine's worker (the internal worker op
+for a machine whose calls run here, else through its machine's worker (the internal worker op
 `store.diagnose` with `cut: schema`, connect 5 s). A PostgreSQL Store is
 reached from this computer, then once more from each machine with a Sandbox
 of it and from `--machine`, one `store.connection` row each with `from`.

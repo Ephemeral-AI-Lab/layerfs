@@ -12,7 +12,7 @@
           "sqlite": "in_process",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [],
-          "description": "this host; Sandboxes run as this user's processes, served over loopback NFS"
+          "description": "the host's own OS, with no VM; Sandboxes run as this user's processes, served over loopback NFS"
         },
         {
           "platform": "docker",
@@ -57,7 +57,7 @@
           "sqlite": "in_process",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [],
-          "description": "this host; Sandboxes run in Linux namespaces and a cgroup"
+          "description": "the host's own OS, with no VM; Sandboxes run in Linux namespaces and a cgroup"
         },
         {
           "platform": "docker",
@@ -102,7 +102,7 @@
           "sqlite": "worker",
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "no Sandbox backend on Windows" },
           "options": [],
-          "description": "this host"
+          "description": "the host's own OS, with no VM"
         },
         {
           "platform": "docker",

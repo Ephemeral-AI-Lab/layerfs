@@ -120,7 +120,7 @@ fn record(
     let mut written = true;
     let record = match MachineRecord::read(home, name) {
         Ok(Some(record)) => record,
-        Ok(None) if matches!(name, "native" | "docker") => match home::opened(home) {
+        Ok(None) if layerfs_home::names::BUILT_IN.contains(&name) => match home::opened(home) {
             Ok(file) => {
                 written = false;
                 MachineRecord::built_in(name, &file.id)

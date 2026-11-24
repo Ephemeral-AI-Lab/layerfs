@@ -9,7 +9,7 @@ use layerfs_home::home::{self, lock, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_machine::platform::{self as adapters, Platform};
+use layerfs_machine::platform::{self as adapters};
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::{machine_refusal as refusal, machine_spec, Phases, STOP_PHASES};
 use layerfs_sandbox::record::SandboxRecord;
@@ -69,7 +69,9 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
     let mut skipped = Vec::new();
     let mut native_attempt = None;
     let attempted = (|| -> Result<()> {
-        if spec.kind == Platform::Native {
+        // no provider holds the machine (`native`): no VM to stop, so each
+        // Sandbox's runtime on the host's own OS is stopped from here
+        if !spec.kind.provided() {
             let mut first_refusal = None;
             for sandbox in &sandboxes {
                 // A refusal before the signal leaves this runtime as it was,
@@ -128,9 +130,9 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
     if let Err(mut error) = attempted {
         // Native Sandboxes are recorded one by one as they stop, so only the
         // one being signalled is uncertain; a provider stop covers them all.
-        let uncertain = match spec.kind {
-            Platform::Native => native_attempt.is_some(),
-            _ => error.code != "Unsupported" || !stopped.is_empty(),
+        let uncertain = match spec.kind.provided() {
+            false => native_attempt.is_some(),
+            true => error.code != "Unsupported" || !stopped.is_empty(),
         };
         // Recording the outcome must not replace the stop's own refusal: a
         // failure here is reported beside it.
@@ -158,7 +160,7 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
         })());
         // A multi-container provider stop may have completed only part of its work.
         // Keep that uncertainty distinct from both a running or a confirmed gone runtime.
-        if spec.kind != Platform::Native && error.code != "Unsupported" {
+        if spec.kind.provided() && error.code != "Unsupported" {
             for sandbox in &sandboxes {
                 if !stopped.iter().any(|name| name == sandbox.name()) {
                     keep(mark(&home, sandbox, false));
@@ -199,10 +201,10 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                 Err(error) => return Err(failed(error)),
             }
             update(&home, machine, |record| {
-                let state = if machine == "native" {
-                    "ready"
-                } else {
-                    "stopped"
+                // a machine no provider holds (`native`) is never stopped
+                let state = match record.provided() {
+                    false => "ready",
+                    true => "stopped",
                 };
                 // a worker that was outdated or did not answer is gone with it
                 (record.without_op().with("state", SdkValue::text(state))).mended()
@@ -251,8 +253,9 @@ fn mark(home: &Path, sandbox: &SandboxRecord, stopped: bool) -> Result<()> {
     Ok(())
 }
 
-/// What a forced stop finds for one native Sandbox. Native is the host
-/// itself: only this home's recorded runtime processes stop.
+/// What a forced stop finds for one Sandbox on a machine no provider holds
+/// (`native`), whose Sandboxes run on the host's own OS: only this home's
+/// recorded runtime processes stop.
 enum Native {
     /// Its recorded runtime, reopened for the stop; nothing sent yet.
     Stop(Box<layerfs_sandbox_backend::Sandbox>),
@@ -268,7 +271,7 @@ fn native_runtime(home: &Path, sandbox: &SandboxRecord) -> Result<Native> {
     if sandbox.machine_stopped() {
         return Ok(Native::Stopped);
     }
-    let host = layerfs_sandbox::force::native_host(home, sandbox.name())?;
+    let host = layerfs_sandbox::force::local_host(home, sandbox.name())?;
     let Some(daemon) = files::started(&sandbox.dir(home))? else {
         if sandbox.id().is_some() {
             return Err(refused(

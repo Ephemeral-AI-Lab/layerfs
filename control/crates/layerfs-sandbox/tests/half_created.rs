@@ -157,7 +157,7 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
 fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
     use layerfs_bridge::process::LocalProcess;
     use layerfs_sandbox::record::{DaemonRecord, Local};
-    let host = layerfs_sandbox::force::native_host(home, name).unwrap();
+    let host = layerfs_sandbox::force::local_host(home, name).unwrap();
     let given = layerfs_sandbox::lifecycle::sandbox_name(host.deploy(), name).unwrap();
     let folder = paths::run_root(home).join(&given);
     std::fs::create_dir_all(folder.join("workspaces")).unwrap();

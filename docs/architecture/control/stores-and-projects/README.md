@@ -71,7 +71,7 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | --- | --- | --- | --- |
 | `list`, `get` (`--with live`, `--with stats`) | both | records and state; with `live` read where the Store lives, with `stats` opened for its counters | [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs), [`get.rs`](../../../../control/crates/layerfs-store/src/get.rs), [`live.rs`](../../../../control/crates/layerfs-store/src/live.rs), [`stats.rs`](../../../../control/crates/layerfs-store/src/stats.rs) |
 | `create` | sqlite | empty Store on `native`; `Exists` if named | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
-| `move` | sqlite | moves the file between `native` and a machine (1.x and the 2.0 previews: `push`, `pull`) | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
+| `move` | sqlite | moves the file between the machine whose calls run in this process (`native` on macOS and Linux) and another machine (1.x and the 2.0 previews: `push`, `pull`) | [SQLite and PostgreSQL](sqlite-and-postgresql.md#transfer-sqlitetransfer) |
 | `remove` | sqlite | delete the file wherever it is, with its projects; PostgreSQL `InvalidInput` | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 | `connect`, `disconnect`, `update`, `save_auth`, `auths`, `remove_auth` | PostgreSQL | record or forget a database (with `machine`, one machine's own address); change its login or `synchronous_commit`; keep named logins in the home's secret folder | [SQLite and PostgreSQL](sqlite-and-postgresql.md#postgresql-postgresql) |
 
@@ -108,7 +108,7 @@ live read found, else `ready`.
 | A guest never reads the home: the caller sends the Store's record with each call; the worker finds the file under its own root by name | [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | Direct Store access only where the Store's own directory is a real `0700` directory owned by this user and every opener shares one kernel and a local filesystem: Linux ext4, xfs, btrfs; macOS apfs, hfs; else every Store call is `Unsupported` with its reason, no fallback | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | One attempt per call; nothing is resent | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| Store records are created with `profile: normal`; a record written before 2026-11-23 that says `disposable` is read as `normal` and never rewritten for it; every Store opens with the Normal profile (WAL, synchronous=NORMAL); Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `created_on_native`, `restored`, `profile` |
+| Store records are created with `profile: normal`; a record written before 2026-11-23 that says `disposable` is read as `normal` and never rewritten for it; every Store opens with the Normal profile (WAL, synchronous=NORMAL); Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `created_on`, `restored`, `profile` |
 
 ## Limits and failures
 

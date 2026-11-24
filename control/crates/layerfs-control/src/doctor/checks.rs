@@ -19,9 +19,9 @@ use layerfs_store::lease;
 use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;
 
-/// `native` and `docker` exist with or without a record.
+/// The built-in machines exist with or without a record.
 fn built_in(machine: &str) -> bool {
-    matches!(machine, "native" | "docker")
+    layerfs_home::names::BUILT_IN.contains(&machine)
 }
 
 /// The record checks of the home's records (`home.records`): they read

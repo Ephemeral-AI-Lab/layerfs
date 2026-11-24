@@ -55,7 +55,7 @@ pub use image::docker_default;
 pub use layerfs_platform as platform;
 #[cfg(feature = "machine")]
 pub use list::{get, list};
-pub use local::runs_here;
+pub use local::{in_process, none_in_process, provided, runs_here};
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
 #[cfg(feature = "machine")]

@@ -66,13 +66,15 @@ impl Window {
 
 /// `Unsupported` `{reason: 'no_worker'}`: the machine's calls run in the
 /// caller's process, so it has no worker and no worker log.
-fn no_worker(machine: &str) -> SdkRefusal {
+/// `machine` is the one asked, when known.
+fn no_worker(machine: Option<&str>) -> SdkRefusal {
+    let machine = machine.map_or("the machine".to_owned(), |m| format!("machine {m}"));
     SdkRefusal {
         detail: SdkValue::map([("reason", SdkValue::text("no_worker"))]),
         ..refused(
             "Unsupported",
             format!(
-                "machine {machine} has no worker (its calls run in the caller's process), so it has no worker log"
+                "{machine} has no worker (its calls run in the caller's process), so it has no worker log"
             ),
         )
     }
@@ -80,8 +82,9 @@ fn no_worker(machine: &str) -> SdkRefusal {
 
 /// `machine.log(machine, { cursor, before, limit })`: one window of the
 /// machine's worker log, `{ lines: [{ text, continued? }], cursor,
-/// before?, has_more }` (`layerfs_home::tail::read`). A machine with no
-/// worker (every `native`) is `Unsupported`; one whose worker does not
+/// before?, has_more }` (`layerfs_home::tail::read`). A machine whose calls
+/// run in this process (`native` on macOS and Linux) has no worker and is
+/// `Unsupported`; one whose worker does not
 /// answer is `Unavailable`; nothing is started.
 pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outcome {
     let machine = machine.as_str();
@@ -92,7 +95,7 @@ pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outco
         window.limit,
     )?;
     if let Executor::Local = super::on_owner(home, machine)? {
-        return Err(no_worker(machine));
+        return Err(no_worker(Some(machine)));
     }
     super::ask(home, machine, MACHINE_LOG, window.request(None))
 }
@@ -125,7 +128,7 @@ pub(super) const SANDBOX_LOG: &str = "sandbox_log";
 /// empty log.
 pub(super) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let Side::Worker(root) = side else {
-        return Err(no_worker("native"));
+        return Err(no_worker(None));
     };
     Window::of(args).read(&Pair::of(paths::worker_log(root)), "machine.log")
 }

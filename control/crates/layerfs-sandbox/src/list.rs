@@ -180,7 +180,8 @@ pub fn list(home: &Path, request: &ListRequest) -> Result<Listed> {
 /// Sandbox `record` in state `state` as a page lists it.
 fn listed(home: &Path, record: SandboxRecord, state: State) -> Result<ListedSandbox> {
     let message = record.message(&state);
-    let kept_here = record.machine() == "native" || super::direct::forwarded(&record);
+    let kept_here = layerfs_machine::runs_here(home, record.machine()).unwrap_or(false)
+        || super::direct::forwarded(&record);
     let (workspaces, not_listed) = match (&state, kept_here) {
         (State::Blocked(_), _) => (None, false),
         (_, true) => (Some(recorded(home, &record)?), false),

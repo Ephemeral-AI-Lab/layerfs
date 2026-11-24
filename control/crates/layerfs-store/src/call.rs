@@ -1,6 +1,6 @@
 //! The route of one Store call, chosen from records (H §7.7): a PostgreSQL
-//! Store and a sqlite Store on `native` run in this process, under its
-//! lease; a sqlite Store
+//! Store and a sqlite Store on a machine whose calls run here (`native` on
+//! macOS and Linux) run in this process, under its lease; a sqlite Store
 //! on any other machine runs in that machine's worker, started first if it
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file

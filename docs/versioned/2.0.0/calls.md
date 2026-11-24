@@ -1247,7 +1247,8 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 - **`log`** answers `items: [{text, continued?}]`, newest page first, and
   `next_cursor` for the lines before it (left out at the start of the log).
   A cursor from before the worker's log rotated is stale (`InvalidInput`).
-  `native` has no worker: `Unsupported`.
+  A machine whose calls run in this process (`native` on macOS and Linux)
+  has no worker: `Unsupported`.
 - `stats`, `files` and `log` write no call-log line (`quiet`); like every
   `machine` call they are `full` profile calls, in the MCP `admin` profile.
   None of the reads starts a machine.
@@ -1473,12 +1474,15 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   item's `size` from one stat on its machine, starting nothing; null for a
   PostgreSQL Store and for a machine that does not answer.
 - **`create`**, short `{"ok":true}`; long `ok, outcome: "created", store,
-  engine, machine, profile, sqlite_version, created_at`. `--machine M`
-  makes the Store on `M` directly through its worker (a running machine),
-  recording a `create` operation while it runs.
-- **`move`** goes to or from this computer only: a Store on a machine moves
-  to another machine by `store move <store> native` first (refused
-  `InvalidInput` naming that call). Its progress phases are `check,
+  engine, machine, profile, sqlite_version, created_at`. Without
+  `--machine` the Store goes on the machine whose calls run in this process
+  (`native` on macOS and Linux; `Unsupported` on a host with none).
+  `--machine M` makes the Store on `M` directly through its worker (a
+  running machine), recording a `create` operation while it runs.
+- **`move`** always has the machine whose calls run in this process
+  (`native` on macOS and Linux) as one end: a Store on another machine
+  moves on by `store move <store> native` first (refused `InvalidInput`
+  naming that call); on a host with no such machine it is `Unsupported`. Its progress phases are `check,
   snapshot, send, verify, install, record, retire`. Short
   `{ moved_bytes }`; long `moved_bytes, outcome: "moved", store, from, to,
   heads_sha256`. A move whose owner is gone is cleared by the same move or

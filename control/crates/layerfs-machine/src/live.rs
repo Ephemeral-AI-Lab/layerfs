@@ -30,7 +30,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, lock, observed, paths};
 use layerfs_home::op::Standing;
 use layerfs_home::state::{Reason, State};
-use layerfs_platform::{self as adapters, Code, Platform, Spec};
+use layerfs_platform::{self as adapters, Code, Spec};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -83,14 +83,15 @@ impl Seen {
     }
 }
 
-/// The `live` section of a machine that is not probed. `native` is this
-/// computer: its data disk is the one that holds the home, read with one
-/// `statvfs`; it has no provider tool and no worker (its calls run in the
-/// caller's process), so those are null. One an `op` holds, one of a
-/// removed platform or one with no `vm_name`: nothing was read.
+/// The `live` section of a machine that is not probed. One whose platform
+/// has no provider (`native`) runs on the host's own OS: its data disk is
+/// the one that holds the home, read with one `statvfs`; it has no
+/// provider tool, and its worker, if any, is not asked, so those are null.
+/// One an `op` holds, one of a removed platform or one with no `vm_name`:
+/// nothing was read.
 pub(super) fn unprobed(home: &Path, record: &MachineRecord) -> SdkValue {
-    let native = record.removed().is_none() && record.platform().ok() == Some(Platform::Native);
-    let free = native
+    let own_os = record.removed().is_none() && record.platform().is_ok_and(|p| !p.provided());
+    let free = own_os
         .then(|| home::filesystem_available(home).ok())
         .flatten()
         .and_then(|bytes| i64::try_from(bytes).ok());
@@ -195,14 +196,14 @@ fn probe(
     })
 }
 
-/// Whether a live read probes the machine `record` describes: not
-/// `native`, not one of a removed platform, not one whose record has no
+/// Whether a live read probes the machine `record` describes: not one
+/// whose platform has no provider (`native`), not one of a removed platform, not one whose record has no
 /// `vm_name` (an earlier build's, `broken` `outdated` by its record alone),
 /// not one a live process holds, and not one a create or remove left
 /// unresolved. A machine not probed keeps the state its record gives it,
 /// with its reason and fix: a live read never answers it `unknown`.
 fn probed(record: &MachineRecord) -> Result<bool> {
-    if record.removed().is_some() || record.platform()? == Platform::Native {
+    if record.removed().is_some() || !record.platform()?.provided() {
         return Ok(false);
     }
     if record.nameless() {

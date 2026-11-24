@@ -189,7 +189,7 @@ pub fn usage(daemon: &DaemonRecord, root: &Path) -> (SdkValue, Option<&'static s
             Some(id) => usage_in(root, id),
             None => (SdkValue::Null, Some(NO_CGROUP)),
         },
-        Some("native") => (SdkValue::Null, Some(HOST_PROCESS)),
+        Some(crate::runtime::NATIVE) => (SdkValue::Null, Some(HOST_PROCESS)),
         _ => (SdkValue::Null, Some(NOT_SUPPORTED)),
     }
 }
@@ -309,7 +309,7 @@ pub fn workspaces(daemon: &DaemonRecord, root: &Path) -> Vec<(String, SdkValue)>
             Some(id) => sandbox_group(root, id).map(|group| workspace_groups(&group)),
             None => Err(NO_CGROUP),
         },
-        Some("native") => Err(HOST_PROCESS),
+        Some(crate::runtime::NATIVE) => Err(HOST_PROCESS),
         _ => Err(NOT_SUPPORTED),
     };
     match groups {

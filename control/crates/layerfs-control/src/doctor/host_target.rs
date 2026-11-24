@@ -32,7 +32,7 @@ pub(super) fn diagnose(
     install::prerequisites(checks);
     let scanned = layout(home, budget, checks);
     if let Some(records) = &scanned {
-        install::bundle(records, checks);
+        install::bundle(home, records, checks);
     }
     install::native_daemon(home, build, checks);
     if let Some(records) = &scanned {

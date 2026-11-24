@@ -151,7 +151,7 @@ A machine's LayerFS folders are the ones `roots::folders` names from the
 side's root alone: the root, what is in it, and beside it `state`, `bundle`
 and `image` (a worker's root is `/layerfs/data`, so these are `/layerfs/state`
 and the others). In a home only four are named, and there is no `/` view:
-`native` is its owner's own computer. The roots answer opens each as a base
+a home is on its owner's own computer, which no machine's view lists whole. The roots answer opens each as a base
 and `stat`s the descriptor, whatever filesystem it is on (Docker Desktop
 binds `/layerfs/bundle` from a `fakeowner` share), and gives the data root
 `free_bytes`.

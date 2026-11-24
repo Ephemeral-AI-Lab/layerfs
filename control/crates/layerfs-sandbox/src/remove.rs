@@ -151,7 +151,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
         };
         clearable(&record)?;
-        if record.id().is_none() && !may_run(&record) {
+        if record.id().is_none() && !may_run(&home, &record) {
             return remove_unstarted(&home, &record);
         }
         let created = record.id().is_none().then(|| record.op()).flatten();
@@ -200,12 +200,12 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
         }
     }
     phase(events, "stop", None);
-    let stopped = if force && record.machine() == "native" {
-        // a forced remove on `native` needs no Store or daemon discovery,
-        // even when active mounts or a broken Store would block the
-        // ordinary route
-        crate::force::native_free(&home)
-            .and_then(|()| crate::force::native_host(&home, name))
+    let stopped = if force && layerfs_machine::runs_here(&home, record.machine()).unwrap_or(false) {
+        // a forced remove on a machine whose calls run in this process needs
+        // no Store or daemon discovery, even when active mounts or a broken
+        // Store would block the ordinary route
+        crate::force::machine_free(&home, record.machine())
+            .and_then(|()| crate::force::local_host(&home, name))
             .and_then(|host| crate::force::close(&host, held.as_deref().unwrap_or(&[])))
     } else {
         on_machine(
@@ -391,9 +391,11 @@ fn forget(
         clearable(&record)?;
         record
     };
-    let left = match (record.machine(), worker) {
-        // a `native` Sandbox's record is the folder removed below
-        ("native", _) | (_, Worker::Skip) => None,
+    let here = layerfs_machine::runs_here(home, record.machine()).unwrap_or(false);
+    let left = match (here, worker) {
+        // the record of a Sandbox on a machine whose calls run in this
+        // process is the folder removed below
+        (true, _) | (_, Worker::Skip) => None,
         _ => on_machine(
             home,
             events,
@@ -434,12 +436,12 @@ fn forget(
 /// `machine.stop` ended (`machine_stopped`), or the remove is forced. The
 /// worker's own record and run folder of it stay on the machine until its
 /// worker next starts, which removes them (`crate::sweep::worker_start`).
-/// `None` on `native`, which this process closes itself, and on a machine
-/// not recorded stopped; refused `Unavailable` on a stopped machine
+/// `None` on a machine whose calls run in this process, which this
+/// process closes itself, and on a machine not recorded stopped; refused `Unavailable` on a stopped machine
 /// without either, naming both ways on.
 fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option<String>> {
     let machine = record.machine();
-    let stopped = (machine != "native")
+    let stopped = !layerfs_machine::runs_here(home, machine).unwrap_or(false)
         && layerfs_machine::record::MachineRecord::read(home, machine)?
             .is_some_and(|on| on.recorded_state() == Some("stopped"));
     if !stopped {
@@ -492,14 +494,14 @@ fn clearable(record: &SandboxRecord) -> Result<()> {
 
 /// Whether Sandbox `record`, which has no id, may have a daemon its create
 /// started, which its remove then stops through the close a started one
-/// takes: on `native` when its record names one (`daemon`, which its own
-/// side writes before the create records the id); on a machine with a
-/// worker, which keeps its own record of it, once its create got past
-/// claiming the name.
-fn may_run(record: &SandboxRecord) -> bool {
-    match record.machine() {
-        "native" => record.daemon().is_some(),
-        _ => record.op().is_none_or(|op| op.phase() != "claim"),
+/// takes: on a machine whose calls run in this process when its record
+/// names one (`daemon`, which its own side writes before the create
+/// records the id); on a machine with a worker, which keeps its own record
+/// of it, once its create got past claiming the name.
+fn may_run(home: &Path, record: &SandboxRecord) -> bool {
+    match layerfs_machine::runs_here(home, record.machine()).unwrap_or(false) {
+        true => record.daemon().is_some(),
+        false => record.op().is_none_or(|op| op.phase() != "claim"),
     }
 }
 
