@@ -86,8 +86,6 @@ pub fn convert_schema_version_1(path: &Path) -> Result<Option<ConvertedStore>, S
 }
 
 fn convert(path: &Path, old: i64) -> Result<ConvertedStore, String> {
-    let tables = old >= 22;
-    let layout = old - if tables { 6 } else { 0 };
     let new = old + 20;
     let con = open(path)?;
     let (recorded, definition): (String, String) = con
@@ -100,26 +98,11 @@ fn convert(path: &Path, old: i64) -> Result<ConvertedStore, String> {
     if definition != live_definition(&con)? {
         return Err("the live schema differs from the recorded definition".to_owned());
     }
+    let missing = (0..CANDIDATES)
+        .find(|&missing| old_source(old, missing) == recorded)
+        .ok_or("the recorded schema is not one a release before #91 wrote")?;
     let v2_values = statement(METADATA, "CREATE TABLE inode_value_block (");
     let v2_hints = statement(HISTORY, "CREATE TABLE binding_hint_block (");
-    // the open-time additive migrations add these, newest first; a Store may lack a suffix of them
-    let optional = [DIGESTS, SCRATCH, LINEAGE];
-    let hint_table = format!("{v2_hints}\n\n");
-    let without = (0..optional.len() + 2)
-        .map(|missing| {
-            let mut without: Vec<&str> = optional[..missing.min(optional.len())].to_vec();
-            if missing == optional.len() + 1 {
-                without.push(&hint_table);
-            }
-            without
-        })
-        .find(|without| {
-            source(old, layout, tables, without)
-                .replace(v2_values, V1_VALUES)
-                .replace(v2_hints, V1_HINTS)
-                == recorded
-        })
-        .ok_or("the recorded schema is not one a release before #91 wrote")?;
 
     con.execute_batch("BEGIN IMMEDIATE").map_err(text)?;
     let rows = {
@@ -224,7 +207,7 @@ fn convert(path: &Path, old: i64) -> Result<ConvertedStore, String> {
     let definition = live_definition(&con)?;
     con.execute(
         "UPDATE history_meta SET schema_version=?1,schema_source=?2,schema_definition=?3",
-        params![new, source(new, layout, tables, &without), definition],
+        params![new, new_source(old, missing), definition],
     )
     .map_err(text)?;
     con.execute_batch("COMMIT").map_err(text)?;
@@ -245,6 +228,57 @@ fn convert(path: &Path, old: i64) -> Result<ConvertedStore, String> {
         value_blocks: value_blocks.len(),
         hint_blocks,
     })
+}
+
+/// How many recorded sources a schema version 1 Store may have: the open-time
+/// additive migrations add file digests, merge scratch, lineage and the
+/// binding hint table, newest first, and a Store may lack a suffix of them.
+pub const CANDIDATES: usize = 5;
+
+/// The texts the `missing`-th candidate source lacks.
+fn lacking(missing: usize) -> Vec<String> {
+    let optional = [DIGESTS, SCRATCH, LINEAGE];
+    let mut texts: Vec<String> = optional[..missing.min(optional.len())]
+        .iter()
+        .map(|t| (*t).to_owned())
+        .collect();
+    if missing == optional.len() + 1 {
+        texts.push(format!(
+            "{}\n\n",
+            statement(HISTORY, "CREATE TABLE binding_hint_block (")
+        ));
+    }
+    texts
+}
+
+/// (layout, acquisition tables) of a schema version 1 `user_version`.
+fn selection(old: i64) -> (i64, bool) {
+    let tables = old >= 22;
+    (old - if tables { 6 } else { 0 }, tables)
+}
+
+/// The source a schema version 1 Store of `old` recorded, `missing`-th candidate.
+pub fn old_source(old: i64, missing: usize) -> String {
+    let (layout, tables) = selection(old);
+    let lacking = lacking(missing);
+    let without: Vec<&str> = lacking.iter().map(String::as_str).collect();
+    source(old, layout, tables, &without)
+        .replace(
+            statement(METADATA, "CREATE TABLE inode_value_block ("),
+            V1_VALUES,
+        )
+        .replace(
+            statement(HISTORY, "CREATE TABLE binding_hint_block ("),
+            V1_HINTS,
+        )
+}
+
+/// The source its conversion records (schema version 2, `old` + 20).
+pub fn new_source(old: i64, missing: usize) -> String {
+    let (layout, tables) = selection(old);
+    let lacking = lacking(missing);
+    let without: Vec<&str> = lacking.iter().map(String::as_str).collect();
+    source(old + 20, layout, tables, &without)
 }
 
 /// The schema source the engine records for `version` (its scripts in their
@@ -285,7 +319,7 @@ fn statement(script: &'static str, head: &str) -> &'static str {
 }
 
 /// The schema definition as the engine records it.
-fn live_definition(con: &Connection) -> Result<String, String> {
+pub fn live_definition(con: &Connection) -> Result<String, String> {
     let mut stmt = con
         .prepare("SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name")
         .map_err(text)?;
@@ -325,224 +359,4 @@ fn sidecar(path: &Path, suffix: &str) -> PathBuf {
 
 fn text(e: impl std::fmt::Display) -> String {
     e.to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn value(seed: u8, inline: bool) -> [u8; 73] {
-        let mut v = [seed; 73];
-        if inline {
-            // an inline file value: mode, mtime, nanos, then 16 zero bytes
-            v[0] = 0x81;
-            v[1..9].copy_from_slice(&1u64.to_be_bytes());
-            v[41..45].copy_from_slice(&0o100644u32.to_be_bytes());
-            v[45..53].copy_from_slice(&(1_700_000_000i64 + seed as i64).to_be_bytes());
-            v[57..].fill(0);
-        } else {
-            v[0] = 1;
-        }
-        v
-    }
-
-    /// A closed schema version 1 Store in the source a release before #91
-    /// recorded, as `tools/test_store_blocks.py` makes one: its schema and
-    /// rows only, not a whole Store the engine would open (no history).
-    fn old_store(
-        path: &Path,
-        version: i64,
-        without: &[&str],
-    ) -> (Vec<InodeValueRow>, Vec<BindingHint>) {
-        let layout = version - if version >= 22 { 6 } else { 0 };
-        let v2_values = statement(METADATA, "CREATE TABLE inode_value_block (");
-        let v2_hints = statement(HISTORY, "CREATE TABLE binding_hint_block (");
-        let src = source(version, layout, version >= 22, without)
-            .replace(v2_values, V1_VALUES)
-            .replace(v2_hints, V1_HINTS);
-        let con = Connection::open(path).unwrap();
-        con.execute_batch(&src).unwrap();
-        con.execute_batch(&format!(
-            "PRAGMA application_id={APPLICATION_ID}; PRAGMA user_version={version}"
-        ))
-        .unwrap();
-        con.execute(
-            "INSERT INTO store_policy(id,schema_version,format_profile,small_file_threshold_bytes,\
-             whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth) VALUES(1,?1,1,262144,3,3,3)",
-            params![version],
-        )
-        .unwrap();
-        let rows: Vec<InodeValueRow> = (1..=600u32)
-            .filter(|o| o % 97 != 0)
-            .map(|o| InodeValueRow {
-                ordinal: o,
-                value: value(o as u8, o % 3 != 0),
-            })
-            .collect();
-        for row in &rows {
-            con.execute(
-                "INSERT INTO inode_value VALUES (?1,?2)",
-                params![row.ordinal, row.value.to_vec()],
-            )
-            .unwrap();
-        }
-        let hints: Vec<BindingHint> = (1..200u64)
-            .map(|c| BindingHint {
-                child: c * 7,
-                parent: c % 5 + 1,
-                name: format!("file-{c}.txt").into_bytes(),
-            })
-            .collect();
-        let has_hints = !without.iter().any(|w| w.contains("binding_hint_block"));
-        if has_hints {
-            for h in &hints {
-                con.execute(
-                    "INSERT INTO binding_hint VALUES (?1,?2,?3)",
-                    params![h.child as i64, h.parent as i64, h.name],
-                )
-                .unwrap();
-            }
-        }
-        con.execute(
-            "INSERT INTO history_meta(id,catalog_id,catalog_incarnation,binding_key,identity_format,\
-             schema_version,schema_source,schema_definition) VALUES(1,?1,1,?2,3,?3,?4,?5)",
-            params![
-                layerfs_history::CatalogId::derive(b"binding").unwrap().as_slice().to_vec(),
-                b"binding".to_vec(),
-                version,
-                src,
-                live_definition(&con).unwrap()
-            ],
-        )
-        .unwrap();
-        con.close().unwrap();
-        (rows, if has_hints { hints } else { vec![] })
-    }
-
-    fn temp(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("lfs-convert-v1-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir.join("store.sqlite")
-    }
-
-    #[test]
-    fn every_schema_version_1_layout_converts_with_every_value_and_hint() {
-        let hint_table = format!(
-            "{}\n\n",
-            statement(HISTORY, "CREATE TABLE binding_hint_block (")
-        );
-        for version in [16, 17, 18, 22, 23, 24] {
-            for without in [
-                vec![],
-                vec![DIGESTS],
-                vec![DIGESTS, SCRATCH, LINEAGE, hint_table.as_str()],
-            ] {
-                let path = temp(&format!("{version}-{}", without.len()));
-                let (rows, hints) = old_store(&path, version, &without);
-                let done = convert_schema_version_1(&path).unwrap().unwrap();
-                assert_eq!(done.user_version, (version, version + 20));
-                let con = Connection::open(&path).unwrap();
-                let uv: i64 = con
-                    .query_row("PRAGMA user_version", [], |r| r.get(0))
-                    .unwrap();
-                assert_eq!(uv, version + 20);
-                let (src, def, sv): (String, String, i64) = con
-                    .query_row(
-                        "SELECT schema_source,schema_definition,schema_version FROM history_meta",
-                        [],
-                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                    )
-                    .unwrap();
-                assert_eq!(sv, version + 20);
-                assert_eq!(
-                    src,
-                    source(
-                        version + 20,
-                        version - if version >= 22 { 6 } else { 0 },
-                        version >= 22,
-                        &without
-                    )
-                );
-                assert_eq!(def, live_definition(&con).unwrap());
-                let mut back = Vec::new();
-                let mut stmt = con.prepare("SELECT first_ordinal,last_ordinal,body FROM inode_value_block ORDER BY first_ordinal").unwrap();
-                for r in stmt
-                    .query_map([], |r| {
-                        Ok((
-                            r.get::<_, u32>(0)?,
-                            r.get::<_, u32>(1)?,
-                            r.get::<_, Vec<u8>>(2)?,
-                        ))
-                    })
-                    .unwrap()
-                {
-                    let (first, last, body) = r.unwrap();
-                    for (i, v) in values::decode(first, last, &body)
-                        .unwrap()
-                        .into_iter()
-                        .enumerate()
-                    {
-                        back.push(InodeValueRow {
-                            ordinal: first + i as u32,
-                            value: v,
-                        });
-                    }
-                }
-                drop(stmt);
-                assert!(back == rows, "{version}: values differ");
-                let hint_table_kept: i64 = con
-                    .query_row(
-                        "SELECT count(*) FROM sqlite_schema WHERE name='binding_hint_block'",
-                        [],
-                        |r| r.get(0),
-                    )
-                    .unwrap();
-                // a Store written before the hint table converts without it; its first open adds it
-                assert_eq!(hint_table_kept == 1, !hints.is_empty(), "{version}");
-                if !hints.is_empty() {
-                    let mut got = Vec::new();
-                    let mut stmt = con
-                        .prepare("SELECT grp,body FROM binding_hint_block ORDER BY grp,seq")
-                        .unwrap();
-                    for r in stmt
-                        .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?)))
-                        .unwrap()
-                    {
-                        let (g, body) = r.unwrap();
-                        got.extend(hints::decode(g, &body).unwrap());
-                    }
-                    let mut want = hints.clone();
-                    want.sort_by(|a, b| {
-                        (a.child, a.parent, &a.name).cmp(&(b.child, b.parent, &b.name))
-                    });
-                    assert!(got == want, "{version}: hints differ");
-                }
-                drop(con);
-                // and a second conversion leaves it alone
-                assert_eq!(convert_schema_version_1(&path).unwrap(), None);
-            }
-        }
-    }
-
-    #[test]
-    fn a_schema_this_release_never_wrote_is_refused() {
-        let path = temp("foreign");
-        old_store(&path, 16, &[]);
-        let con = Connection::open(&path).unwrap();
-        con.execute_batch("CREATE TABLE extra (x INTEGER) STRICT")
-            .unwrap();
-        let def = live_definition(&con).unwrap();
-        con.execute("UPDATE history_meta SET schema_definition=?1", params![def])
-            .unwrap();
-        con.execute(
-            "UPDATE history_meta SET schema_source=schema_source||'-- edited'",
-            [],
-        )
-        .unwrap();
-        drop(con);
-        let err = convert_schema_version_1(&path).unwrap_err();
-        assert!(err.contains("not one a release before #91 wrote"), "{err}");
-    }
 }

@@ -17,4 +17,25 @@ pub use crate::backend::sqlite::compact::{
     trim, verify_inode_blocks, windows, PackLengths, PackScan, Rewritten, StagedLocators, Window,
     DELTA_BASE_REFERENCES_CAP, GAP_BYTES, SRC_MMAP_BYTES, WINDOW_BYTES,
 };
+pub use crate::backend::sqlite::convert_v1::{
+    live_definition as sqlite_definition, new_source as converted_source,
+    old_source as schema_version_1_source, CANDIDATES as SCHEMA_VERSION_1_SOURCES,
+};
 pub use crate::history::spill::{Space, BUDGET_BYTES, LEAST_BUDGET_BYTES};
+
+/// One inode value block's values (`blocks::values::decode`).
+pub fn decode_value_block(
+    first: u32,
+    last: u32,
+    body: &[u8],
+) -> Result<Vec<[u8; layerfs_content::inode_leaf::INODE_VALUE_BYTES]>, BackendError> {
+    crate::blocks::values::decode(first, last, body)
+}
+
+/// One binding hint block's hints (`blocks::hints::decode`).
+pub fn decode_hint_block(
+    group: i64,
+    body: &[u8],
+) -> Result<Vec<layerfs_history::records::BindingHint>, BackendError> {
+    crate::blocks::hints::decode(group, body)
+}
