@@ -247,9 +247,11 @@ fn quoted(script: &str) -> String {
 /// process group's id), with the exec's output; a watcher in another
 /// session ends the probe's whole group at the bound (`SIGTERM`, `SIGKILL`
 /// a second later). Once the probe's own process ended, whatever of its
-/// group is left and the watcher are killed, so nothing it started holds
-/// the exec's output open. Its status is the probe's: 143 when the bound
-/// ended it. The shell's own notices of killed jobs go to `/dev/null`.
+/// group is left and the watcher are killed (its group, and its pid too: a
+/// watcher that has not called `setsid` yet has no group of its own), so
+/// nothing it started holds the exec's output open and the last `wait`
+/// returns at once. Its status is the probe's: 143 when the bound ended it.
+/// The shell's own notices of killed jobs go to `/dev/null`.
 const BOUNDED: &str = r#"exec 3>&2 2>/dev/null
 busybox setsid bash -c "$2" 2>&3 3>&- &
 p=$!
@@ -257,7 +259,7 @@ busybox setsid bash -c "busybox sleep $1; kill -TERM -- -$p; busybox sleep 1; ki
 w=$!
 wait $p
 r=$?
-kill -KILL -- -$p -$w
+kill -KILL -- -$p -$w $w
 wait $w
 exit $r"#;
 
@@ -491,21 +493,36 @@ fn private_networks(home: &Path, machine: &str, project: &str) {
         .unwrap_or_else(|| "https://github.com/git/git".to_owned());
     let has_git = exec(home, &a.ws, "command -v git >/dev/null && echo GIT");
     // the bound itself: a remote that never answers (TEST-NET-1, direct)
-    // fails at its bound, and the exec returns, git's helper included
-    if has_git.1.contains("GIT") {
-        let asked = Instant::now();
-        let silent = exec(
-            home,
-            &a.ws,
-            &format!(
-                "{}; echo rc=$?",
-                bounded(5, "git ls-remote https://192.0.2.1/none HEAD")
-            ),
-        );
-        let took = asked.elapsed();
-        eprintln!("BOUNDED git ls-remote to 192.0.2.1 on {machine}: {silent:?} in {took:?}");
-        assert!(!silent.1.contains("rc=0"), "{silent:?}");
-        assert!(took < Duration::from_secs(15), "{took:?}: {silent:?}");
+    // is ended by its bound (rc 143, no sooner than the bound), and the
+    // exec returns, git's helper included. A network that answers
+    // 192.0.2.1 at once (an ICMP unreachable, no route, a REJECT rule)
+    // never reaches the bound: that control is NOT_RUN there, not a pass
+    // (review 650828a686 F2); so is an image with no git.
+    match has_git.1.contains("GIT") {
+        false => eprintln!("NOT_RUN TEST-NET-1 bound control on {machine}: the image has no git"),
+        true => {
+            let bound = Duration::from_secs(5);
+            let asked = Instant::now();
+            let silent = exec(
+                home,
+                &a.ws,
+                &format!(
+                    "{}; echo rc=$?",
+                    bounded(5, "git ls-remote https://192.0.2.1/none HEAD")
+                ),
+            );
+            let took = asked.elapsed();
+            eprintln!("BOUNDED git ls-remote to 192.0.2.1 on {machine}: {silent:?} in {took:?}");
+            assert!(!silent.1.contains("rc=0"), "{silent:?}");
+            assert!(took < Duration::from_secs(15), "{took:?}: {silent:?}");
+            match (silent.1.contains("rc=143"), took >= bound) {
+                (true, true) => eprintln!("RAN TEST-NET-1 bound control on {machine}"),
+                (false, false) => eprintln!(
+                    "NOT_RUN TEST-NET-1 bound control on {machine}: 192.0.2.1 was answered at once ({silent:?} in {took:?}), so the bound never fired"
+                ),
+                _ => panic!("the bound did not end the probe at its bound: {silent:?} in {took:?}"),
+            }
+        }
     }
     let git = exec(
         home,
