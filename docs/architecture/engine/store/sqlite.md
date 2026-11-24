@@ -21,13 +21,13 @@ The SQLite backend of the [Store](README.md): one WAL file every opener shares t
  store_totals  id=1                       file_digest
  lineage:  layer_lineage, commit_lineage, absorbed, reach
  merge:    merge_operation, merge_record
- Init:     init_operation, init_entry, init_host_file   (42-44 only)
+ Init:     init_operation, init_entry, init_host_file   (62-64 only)
 ```
 
 | Config at creation | Values | Source |
 | --- | --- | --- |
-| `sqlite_pack_layout` | `Monolithic` (`user_version` 36): whole `pack.body`; `GroupRows` (37): `control` row plus one `pack_unit` row per group; `GroupRowsIndexed` (38): adds index `pack_unit_mapping` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`objects_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects_units.sql) |
-| `sqlite_acquisition` | `Absent` (+0) or `Tables` (+6, versions 42–44, created with `auto_vacuum=INCREMENTAL`) | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
+| `sqlite_pack_layout` | `Monolithic` (`user_version` 56): whole `pack.body`; `GroupRows` (57): `control` row plus one `pack_unit` row per group; `GroupRowsIndexed` (58): adds index `pack_unit_mapping` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`objects_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects_units.sql) |
+| `sqlite_acquisition` | `Absent` (+0) or `Tables` (+6, versions 62–64, created with `auto_vacuum=INCREMENTAL`) | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
 | `sqlite_profile` | `Normal`, the only profile a Store opens with (see [Store](README.md)) | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 
 Every table is `STRICT`; history keys are `WITHOUT ROWID` blobs whose first
@@ -43,7 +43,7 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Open | Steps | Source |
 | --- | --- | --- |
 | `create` | platform check; policy and catalog config valid; `create_new` (an existing file refuses); schema scripts, `application_id`, `user_version`, `store_policy` and `history_meta` rows | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
-| `open_writable` | `user_version` 36–38 or 42–44 (16–18 and 22–24 get `SchemaVersion1`, others `Integrity`); additive `add_binding_hints`, `add_lineage` (with backfill), `add_merge_scratch`, `add_file_digests`, each only when the recorded schema is exactly the one before; then sweep merge records of expired owners | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| `open_writable` | `user_version` 56–58 or 62–64, schema version 3 (#776 R1: `commit.attempt` and its partial unique index `commit_attempt`); 36–38 and 42–44 (schema version 2, no Commit attempt) get `SchemaVersion2` ("not supported by this release and not migrated; create a new Store"), 16–18 and 22–24 `SchemaVersion1`, others `Integrity`; additive `add_binding_hints`, `add_lineage` (with backfill), `add_merge_scratch`, `add_file_digests`, each only when the recorded schema is exactly the one before; then sweep merge records of expired owners | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | `open_read_only` | same checks, no migrations; every write refused before `BEGIN` | same |
 | `open_diagnostic` | read-only, never changes journal or checkpoint settings; see [Diagnostics](diagnostics.md) | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
 

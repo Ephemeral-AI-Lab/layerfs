@@ -515,21 +515,32 @@ fn a_pre_2_0_store_is_refused_at_open() {
         .admin()
         .batch_execute(
             "ALTER TABLE history_meta DROP CONSTRAINT history_meta_schema_version_check; \
-             ALTER TABLE store_policy DROP CONSTRAINT store_policy_schema_version_check; \
-             UPDATE history_meta SET schema_version=2; UPDATE store_policy SET schema_version=2",
+             ALTER TABLE store_policy DROP CONSTRAINT store_policy_schema_version_check",
         )
         .unwrap();
-    for check in [PostgresCheck::Full, PostgresCheck::Light] {
-        let selection = store.selection.clone().with_check(check);
-        for opened in [
-            PostgresHandles::open_read_only(&selection, BINDING, CURSOR).err(),
-            PostgresHandles::open_writable(&selection, BINDING, CURSOR).err(),
-        ] {
-            assert!(
-                matches!(&opened, Some(PersistenceError::Refused { status })
-                    if status.starts_with("PostgreSQL Store schema version 2")),
-                "{check:?}: {opened:?}"
-            );
+    // Version 3 (2.0 before each Commit recorded its attempt, #776 R1) is
+    // refused by its own name too.
+    for version in [2, 3] {
+        store
+            .admin()
+            .batch_execute(&format!(
+                "UPDATE history_meta SET schema_version={version}; \
+                 UPDATE store_policy SET schema_version={version}"
+            ))
+            .unwrap();
+        let name = format!("PostgreSQL Store schema version {version}");
+        for check in [PostgresCheck::Full, PostgresCheck::Light] {
+            let selection = store.selection.clone().with_check(check);
+            for opened in [
+                PostgresHandles::open_read_only(&selection, BINDING, CURSOR).err(),
+                PostgresHandles::open_writable(&selection, BINDING, CURSOR).err(),
+            ] {
+                assert!(
+                    matches!(&opened, Some(PersistenceError::Refused { status })
+                        if status.starts_with(&name)),
+                    "{version} {check:?}: {opened:?}"
+                );
+            }
         }
     }
 }

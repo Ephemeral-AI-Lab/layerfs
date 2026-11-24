@@ -37,13 +37,20 @@ const ACQUISITION_TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_ope
 /// (#91) and object locations in narrow rows under an 8-byte-prefix index
 /// (#90). Version 3 (2.0, #758) adds each location's ancestor list
 /// (`object_location.ancestors`), each pack's directory copy
-/// (`pack.directory`) and the early-freeze reloptions. A version 2 schema is
-/// refused at open with [`POSTGRES_SCHEMA_2`](crate::backend::records::POSTGRES_SCHEMA_2)
-/// and a version 1 schema as malformed; neither is converted.
-pub(crate) const SCHEMA_VERSION: i64 = 3;
+/// (`pack.directory`) and the early-freeze reloptions. Version 4 (#776 R1)
+/// adds each Commit's attempt (`commit.attempt`, unique when present). A
+/// version 3 schema is refused at open with
+/// [`POSTGRES_SCHEMA_3`](crate::backend::records::POSTGRES_SCHEMA_3), a
+/// version 2 schema with
+/// [`POSTGRES_SCHEMA_2`](crate::backend::records::POSTGRES_SCHEMA_2) and a
+/// version 1 schema as malformed; none is converted.
+pub(crate) const SCHEMA_VERSION: i64 = 4;
 /// The schema version 2.0 refuses by name (D5): the Store layout before
-/// [`SCHEMA_VERSION`] 3.
+/// 2.0's version 3.
 const PRE_2_0_VERSION: i64 = 2;
+/// The schema version refused by name since #776 R1: 2.0's layout before
+/// [`SCHEMA_VERSION`] 4 recorded each Commit's attempt.
+const PRE_ATTEMPT_VERSION: i64 = 3;
 /// Every table of one Store schema, in name order.
 pub(crate) const TABLES: [&str; 27] = [
     "absorbed",
@@ -280,12 +287,15 @@ pub(crate) fn check(
     })
 }
 
-/// Refuses a schema version 2 Store by name (D5) before any source or table
-/// comparison, which would otherwise call it malformed: `row` holds the
-/// [`meta_columns`] from column `at`.
+/// Refuses a schema version 2 (D5) or 3 (#776 R1) Store by name before any
+/// source or table comparison, which would otherwise call it malformed:
+/// `row` holds the [`meta_columns`] from column `at`.
 fn refuse_pre_2_0(row: &SimpleQueryRow, at: usize) -> Result<(), BackendError> {
     match (int(row, at + 4), int(row, at + 10)) {
         (Ok(PRE_2_0_VERSION), _) | (_, Ok(PRE_2_0_VERSION)) => Err(BackendError::PostgresSchema2),
+        (Ok(PRE_ATTEMPT_VERSION), _) | (_, Ok(PRE_ATTEMPT_VERSION)) => {
+            Err(BackendError::PostgresSchema3)
+        }
         _ => Ok(()),
     }
 }

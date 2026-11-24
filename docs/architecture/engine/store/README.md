@@ -169,7 +169,8 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | Ordinals | end ordinal at most 2^32; else `Capacity` | [`metadata/allocation.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/allocation.rs) |
 | Signature ring | 8,192 slots | [`signatures.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/signatures.rs) |
 | SQLite disk margin | a pack batch must leave `STORE_HEADROOM_BYTES` (64 MiB) after counting its bytes twice; else `Capacity` | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
-| Schema version 1 Store (SQLite `user_version` 16–18, 22–24) | refused at open, naming the offline `tools/store_blocks.py migrate`; a backup of one is converted by `backup restore` before it is opened (the same conversion, on the restore's private download); PostgreSQL version 1 is `Integrity` | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs), [`convert_v1.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/convert_v1.rs) |
+| Schema version 1 Store (SQLite `user_version` 16–18, 22–24) | refused at open, naming the offline `tools/store_blocks.py migrate`, which converts it to schema version 3 (56–58, 62–64, with an empty `commit.attempt`); a backup of one is converted by `backup restore` before it is opened (the same conversion, on the restore's private download); PostgreSQL version 1 is `Integrity` | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs), [`convert_v1.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/convert_v1.rs) |
+| Schema version 2 Store (SQLite `user_version` 36–38, 42–44; PostgreSQL `SCHEMA_VERSION` 3), written before each Commit recorded its attempt (#776 R1) | refused at open by name (`SchemaVersion2`, `PostgresSchema3`: "not supported by this release and not migrated; create a new Store"); never converted | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs), [`postgresql/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | Work in the lane that grows with tree size, history or Branch count | a defect; lineage walks follow runs, not history length | [`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage.rs) |
 
 | `BackendError` | `PersistenceError` | `HistoryError` | Meaning |
@@ -182,6 +183,8 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | `Capacity` | `Refused "Capacity"` | `Capacity("persistence")` | A bound or the disk margin was reached |
 | `Integrity` | `Malformed` | `Integrity("persistence")` | Stored or supplied data broke a rule |
 | `SchemaVersion1` | `Refused` (names the conversion) | `Integrity` | A schema version 1 SQLite Store |
+| `SchemaVersion2` | `Refused` (create a new Store) | `Integrity` | A schema version 2 SQLite Store (no Commit attempt) |
+| `PostgresSchema2`, `PostgresSchema3` | `Refused` (create a new Store) | `Integrity` | A PostgreSQL Store of schema version 2 or 3 |
 | `UnsupportedSchemaVersion` | `Refused` | `Unsupported` | Diagnostic open of an unknown layout |
 | `Unknown` | `Uncertain` | `UnknownOutcome` | Outcome unknown; session quarantined, its connection closed and the writer lane released ([SQLite](sqlite.md#quarantine), [PostgreSQL](postgresql.md#session)) |
 

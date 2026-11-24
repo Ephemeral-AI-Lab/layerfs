@@ -61,6 +61,7 @@ Normal profile only; Durable execution is
 | `branch`, `via` | yes | Branch it was made on; `CommitVia` `Workspace` (1), `Files` (2), `Merge` (3) |
 | `message` | yes | ≤ 4,096 bytes; the provider fills `"<via> filesystem change"` when absent |
 | `merged_from`, `displaced` | yes | head a merge-on-commit started from; head a forced publication overwrote |
+| `attempt` | yes, when present | `CommitAttempt`, 16 bytes the publisher draws for one publication (#776 R1); unique in the Store, so `HistoryCatalog::commit_by_attempt` finds the Commit a lost publication reply made. Absent for Branch merges; a Commit without one keeps the identity it had before attempts existed |
 | `lww`, `lww_truncated`, `units` | no | persisted merge decisions and merge units |
 | `statistics`, `time_ms` | no | `logical`, `new_canonical`, `new_stored`, `new_metadata`; set on insert |
 
@@ -154,7 +155,8 @@ parent, then the smallest identity. The provider answers from lineage records
 | Type | Bytes | Made by |
 | --- | --- | --- |
 | `BranchId` | 17, tag `0x11` | `from_authority(body)`, or `named(stack, name)`: BLAKE3 of `layerfs/sdk-branch/v1`, stack and name, first 16 bytes |
-| `CommitId` | 33, tag `0x12` | BLAKE3 over `layerfs/commit/v3`, root, parent, base Layer, second parent, identity fields of `CommitMeta` |
+| `CommitId` | 33, tag `0x12` | BLAKE3 over `layerfs/commit/v3`, root, parent, base Layer, second parent, identity fields of `CommitMeta`; a second parent and an attempt are appended only when present |
+| `CommitAttempt` | 16 | supplied by the publisher (this crate draws none); see `CommitMeta::attempt` |
 | `LayerStackId` | 17, tag `0x31` | `from_authority(body)` |
 | `LayerId` | 33, tag `0x32` | BLAKE3 over `layerfs/layer/v2`, stack, parent, root; provenance outside it |
 | `WorkspaceId` | 32 | `from_authority`; all-zero is `InvalidInput` |

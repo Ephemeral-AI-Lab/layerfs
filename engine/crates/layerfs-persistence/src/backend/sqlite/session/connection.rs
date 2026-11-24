@@ -320,12 +320,15 @@ impl Session {
             // Versions 1 to 6 kept inode values in pooled packs behind an
             // ordinal catalogue. Versions 16 to 18 and 22 to 24 (schema
             // version 1) kept one row per inode value and binding hint;
-            // schema version 2 (#91) keeps them in blocks. Such a Store is
-            // refused here, never misread or converted.
+            // schema version 2 (#91) keeps them in blocks. Versions 36 to 38
+            // and 42 to 44 (schema version 2) record no Commit attempt;
+            // schema version 3 (#776 R1) does. Such a Store is refused here,
+            // never misread or converted.
             let acquisition = match stored {
-                36..=38 => crate::SqliteAcquisitionSchema::Absent,
-                42..=44 => crate::SqliteAcquisitionSchema::Tables,
+                56..=58 => crate::SqliteAcquisitionSchema::Absent,
+                62..=64 => crate::SqliteAcquisitionSchema::Tables,
                 16..=18 | 22..=24 => return Err(BackendError::SchemaVersion1),
+                36..=38 | 42..=44 => return Err(BackendError::SchemaVersion2),
                 _ => {
                     return Err(if diagnostic {
                         BackendError::UnsupportedSchemaVersion(stored)
@@ -335,8 +338,8 @@ impl Session {
                 }
             };
             let layout = match stored - acquisition.version_offset() {
-                36 => crate::SqlitePackLayout::Monolithic,
-                37 => crate::SqlitePackLayout::GroupRows,
+                56 => crate::SqlitePackLayout::Monolithic,
+                57 => crate::SqlitePackLayout::GroupRows,
                 _ => crate::SqlitePackLayout::GroupRowsIndexed,
             };
             (layout, acquisition)

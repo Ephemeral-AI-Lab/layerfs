@@ -1,5 +1,5 @@
 //! `backup restore` converts a closed schema version 1 SQLite Store (before
-//! #91) to schema version 2 before it opens it: every inode value and binding
+//! #91) to schema version 3 (#776) before it opens it: every inode value and binding
 //! hint comes back exactly from the blocks, the recorded schema is the one the
 //! engine recognizes, and a schema no release wrote is refused unchanged.
 //!
@@ -126,12 +126,12 @@ fn every_schema_version_1_layout_converts_with_every_value_and_hint() {
             let path = temp(&format!("{version}-{missing}"));
             let (values, hints) = old_store(&path, version, missing);
             let done = convert_schema_version_1(&path).unwrap().unwrap();
-            assert_eq!(done.user_version, (version, version + 20), "{at}");
+            assert_eq!(done.user_version, (version, version + 40), "{at}");
             let con = Connection::open(&path).unwrap();
             let user_version: i64 = con
                 .query_row("PRAGMA user_version", [], |r| r.get(0))
                 .unwrap();
-            assert_eq!(user_version, version + 20, "{at}");
+            assert_eq!(user_version, version + 40, "{at}");
             let (source, definition, recorded): (String, String, i64) = con
                 .query_row(
                     "SELECT schema_source,schema_definition,schema_version FROM history_meta",
@@ -139,7 +139,7 @@ fn every_schema_version_1_layout_converts_with_every_value_and_hint() {
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .unwrap();
-            assert_eq!(recorded, version + 20, "{at}");
+            assert_eq!(recorded, version + 40, "{at}");
             assert_eq!(source, converted_source(version, missing), "{at}");
             assert_eq!(definition, sqlite_definition(&con).unwrap(), "{at}");
             let tables: Vec<String> = con

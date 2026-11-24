@@ -163,24 +163,37 @@ both under `lock_timeout`, and rolls back, proves the original has ended. A
 wait that reaches the timeout is `Busy`, an undetermined attempt. On SQLite
 the publication ran in this process and the pass returns at once.
 
+Every Commit request carries a fresh attempt: 16 bytes the Commit draws from
+`/dev/urandom` before it captures (`CommitMeta::attempt`, #776 R1; a failed
+draw fails the Commit before anything is captured or published). The attempt
+is part of the Commit's identity (`CommitId::derive` appends it only when
+present, so a Commit without one keeps its identity) and unique in the Store
+(`commit.attempt`, a partial unique index), so `HistoryCatalog::commit_by_attempt`
+finds the one Commit the retained publication made, however the head moved
+since.
+
 | History read through the control reader | Step | Then |
 | --- | --- | --- |
 | Publication already known | Install its root (same validation, live check and mutation hold as a merged install) | Custody released, `Idle`; the Commit is admitted |
-| Head and base still the ones we published against, with another root | Nothing was published: `resolve_failed` folds the capture back | As above |
-| Still that head, with our root | `UpToDate`: install it | As above |
-| Moved head whose first-parent chain holds our Commit (our candidate root, parent and base Layer equal to the head and base we published against), or a forced Commit that displaced it | Install it, as above | As above |
-| Moved head whose first-parent chain reaches the head we published against through Commits all made on this Branch, displacing nothing, over the same base | Nothing was published: fold back, as above | As above |
-| A forced Commit displacing another head, a Commit from another Branch (a merge fast-forward), a moved base, more than 1,024 Commits, a failed read, or a lane that does not pass | None; the record is put back | Custody stays as it was; the Commit is refused `Unknown` with the reason |
+| Head and base still the ones we published against, with our root | `UpToDate` (which writes no Commit): install it | As above |
+| A Commit carries our attempt | It is ours (candidate root, parent and base Layer as published): install it, whatever later, forced or fast-forward Commits moved the head | As above |
+| No Commit carries our attempt, and the Branch exists | Nothing was published: `resolve_failed` folds the capture back | As above |
+| No Commit carries our attempt and the Branch is absent, an intent without an attempt, a failed read, or a lane that does not pass | None; the record is put back | Custody stays as it was; the Commit is refused `Unknown` with the reason |
 | A failed install or fold-back after a determined outcome | None | Custody stays (`LocalFailure` once a publication is known); the Commit is refused `Unknown` with the reason |
 
-Every head move keeps the previous head on the new head's first-parent chain
-(an advance's parent is the head it read), except a forced Commit, which
-records the head it displaced, and a merge fast-forward, which brings in
-another Branch's Commits; the walk stops undetermined at either rather than
-guess. History is read on the control reader's own connection, so a writer
-session that the unknown outcome quarantined does not stop it. A known
-install after a merge with overlapping live rows is refused like a
-Commit's own (`LiveConflict` in the reason), and the custody stays.
+Why an absent attempt proves nothing was published while the Branch exists:
+a publication inserts its Commit and advances the Branch in one transaction,
+and the lane pass proved that transaction ended. A Commit that was ever the
+head of a live Branch stays in the GC mark's closure from that Branch (both
+backends' `kept_node` closures follow the Branch head, Commit parents, second
+parents, merge origins, displaced heads and base Layers): a later Commit
+keeps it as first parent, a forced Commit records it as displaced, and a
+fast-forward moves only to a descendant, reached through parents and base
+Layers. So no GC removed it, and the lookup would find it. History is read
+on the control reader's own connection, so a writer session that the
+unknown outcome quarantined does not stop it. A known install after a merge
+with overlapping live rows is refused like a Commit's own (`LiveConflict` in
+the reason), and the custody stays.
 
 ## Invariants
 

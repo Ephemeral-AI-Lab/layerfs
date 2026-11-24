@@ -122,9 +122,9 @@ impl CommitVia {
 /// Maximum encoded UTF-8 bytes in a Commit or execution message.
 pub const MAXIMUM_MESSAGE_BYTES: usize = 4096;
 
-/// Commit provenance and publication facts. Branch, via, message, merge origin
-/// and displaced head participate in identity; time, byte statistics, LWW
-/// details and merge units are persisted facts outside that identity.
+/// Commit provenance and publication facts. Branch, via, message, merge origin,
+/// displaced head and attempt participate in identity; time, byte statistics,
+/// LWW details and merge units are persisted facts outside that identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitMeta {
     /// Branch the Commit was made on; the catalog sets it from the request.
@@ -146,6 +146,11 @@ pub struct CommitMeta {
     pub statistics: CommitStatistics,
     /// Head displaced by the original forced publication.
     pub displaced: Option<CommitId>,
+    /// The publisher's attempt (#776 R1): unique among the Store's Commits,
+    /// so [`HistoryCatalog::commit_by_attempt`](crate::HistoryCatalog::commit_by_attempt)
+    /// finds the Commit one publication made. Absent for Commits no
+    /// publisher needs to find again (Branch merges, fixtures).
+    pub attempt: Option<crate::identity::CommitAttempt>,
     /// Milliseconds since the Unix epoch; the catalog sets it on insert.
     pub time_ms: i64,
 }
@@ -163,6 +168,7 @@ impl CommitMeta {
             units: Vec::new(),
             statistics: CommitStatistics::ZERO,
             displaced: None,
+            attempt: None,
             time_ms: 0,
         }
     }

@@ -121,12 +121,12 @@ impl SqlitePersistenceProfile {
 /// Explicit physical layout for a newly created embedded Store.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SqlitePackLayout {
-    /// Complete pack BLOBs (schema version 36, or 42 with acquisition tables).
+    /// Complete pack BLOBs (schema version 56, or 62 with acquisition tables).
     #[default]
     Monolithic,
-    /// Complete encoded groups in independent immutable rows (37 or 43).
+    /// Complete encoded groups in independent immutable rows (57 or 63).
     GroupRows,
-    /// Group rows with a covering index for bounded mapping validation (38 or 44).
+    /// Group rows with a covering index for bounded mapping validation (58 or 64).
     GroupRowsIndexed,
 }
 impl SqlitePackLayout {
@@ -134,24 +134,25 @@ impl SqlitePackLayout {
         matches!(self, Self::GroupRows | Self::GroupRowsIndexed)
     }
     /// The stored schema version of this layout without acquisition
-    /// tables. Versions 36 to 38 (42 to 44 with them) are schema version 2
-    /// (#91): inode values and binding hints in append-only blocks. The
-    /// version 1 layouts, 16 to 18 and 22 to 24, are refused at open.
+    /// tables. Versions 56 to 58 (62 to 64 with them) are schema version 3
+    /// (#776 R1): schema version 2's inode value and binding hint blocks
+    /// (#91) with each Commit's attempt. Schema version 2 (36 to 38, 42 to
+    /// 44) and schema version 1 (16 to 18, 22 to 24) are refused at open.
     pub(crate) const fn version(self) -> i64 {
         match self {
-            Self::Monolithic => 36,
-            Self::GroupRows => 37,
-            Self::GroupRowsIndexed => 38,
+            Self::Monolithic => 56,
+            Self::GroupRows => 57,
+            Self::GroupRowsIndexed => 58,
         }
     }
 }
 /// Explicit creation-only selection of the initial-acquisition working tables.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SqliteAcquisitionSchema {
-    /// Schema versions 36 to 38: no acquisition tables; acquisition is unavailable.
+    /// Schema versions 56 to 58: no acquisition tables; acquisition is unavailable.
     #[default]
     Absent,
-    /// Schema versions 42 to 44: the same pack layouts with the acquisition tables.
+    /// Schema versions 62 to 64: the same pack layouts with the acquisition tables.
     Tables,
 }
 impl SqliteAcquisitionSchema {
