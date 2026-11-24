@@ -28,6 +28,16 @@ impl Session {
         if turn.nested {
             return Err(BackendError::Integrity);
         }
+        // A quarantined session, or one that still holds its own writer
+        // (a release that failed), is refused before the blocking wait: that
+        // writer is this very lock, so waiting for it would never end
+        // (#776 S4).
+        {
+            let state = self.state();
+            if state.quarantined || state.writer_hold.is_some() {
+                return Err(BackendError::Unknown);
+            }
+        }
         let writer = Writer::acquire(&self.path)?;
         turn.hold()?;
         Ok(LaneHold {
@@ -57,18 +67,21 @@ impl Drop for LaneHold {
             // here, while this thread still holds the lane, before the lane
             // is released (finding #2); if SQLite refuses the close with a
             // transaction open, the lane stays with the connection instead.
+            // A state a panic poisoned is recovered quarantined, so its
+            // connection (which may hold an open write transaction) is closed
+            // here too, before the lane goes (#776 S3).
             let mut writer = Some(writer);
-            if let Ok(mut state) = self.session.state.lock() {
+            {
+                let mut state = self.session.state();
                 if state.quarantined && !state.close_quarantined(self.session.background.as_ref()) {
                     state.writer_hold = writer.take();
                 }
             }
             if let Some(Err(retained)) = writer.map(Writer::release) {
                 // As a failed per-job release: keep the lock, refuse later work.
-                if let Ok(mut state) = self.session.state.lock() {
-                    state.quarantined = true;
-                    state.writer_hold = Some(retained);
-                }
+                let mut state = self.session.state();
+                state.quarantined = true;
+                state.writer_hold = Some(retained);
             }
         }
         self.session.admission.release_hold();

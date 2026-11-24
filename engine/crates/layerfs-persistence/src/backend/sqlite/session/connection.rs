@@ -9,7 +9,7 @@ use rusqlite::{limits::Limit, Connection, OpenFlags};
 use std::{
     cell::RefCell,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Mutex, MutexGuard},
 };
 /// The selected SQLite settings and actual runtime capabilities.
 #[derive(Clone, Debug)]
@@ -373,6 +373,20 @@ impl Session {
             layout,
             acquisition,
             identity,
+        })
+    }
+    /// The session state. A thread that panicked while holding it left the
+    /// connection in an unknown state (a transaction may still be open), so
+    /// a poisoned lock is recovered as a quarantined state: the next caller
+    /// refuses `Unknown` and closes that connection under any writer it
+    /// still holds, instead of every later call failing on the poisoned lock
+    /// while the lane or a write transaction stays held (#776 S3).
+    pub(crate) fn state(&self) -> MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(|poisoned| {
+            self.state.clear_poison();
+            let mut state = poisoned.into_inner();
+            state.quarantined = true;
+            state
         })
     }
     /// Stored schema version: the pack layout's, offset by the acquisition tables.

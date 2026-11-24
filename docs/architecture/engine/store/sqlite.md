@@ -94,6 +94,7 @@ SQL work to the calling thread's counters
 
  Session::hold_lane() -> LaneHold (!Send)
    writable? else ReadOnly; admission turn (nested -> Integrity);
+   quarantined, or a writer still held? -> Unknown (before the wait);
    Writer::acquire; turn.hold(): holder = this thread
    inside: run(true, ..) is nested: no flock, BEGIN IMMEDIATE only
 ```
@@ -142,6 +143,21 @@ transaction still open, the lane would stay with the connection until the
 session drops, as before
 ([`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs)).
 A read that quarantines holds no lane and closes nothing.
+
+A panic is a quarantine too (#776 S3). A body that panics inside a write
+transaction is caught there: the session is quarantined, its connection is
+closed under the job's own writer and that writer released (nested, the
+held `LaneHold` closes it before the lane goes), and then the panic
+resumes. A thread that panics anywhere else while holding the state mutex
+poisons it; every later lock recovers that state as quarantined, so a held
+lane still closes the connection before it lets go, and a later write
+releases a writer the state kept. Before, a caller that catches panics
+(the daemon does) kept a poisoned session whose writer held the lane, or
+whose nested write transaction stayed open after the lane was released, so
+other processes' writers waited forever or failed `Busy`. `hold_lane`
+refuses a quarantined session, or one that still holds its writer, with
+`Unknown` before the blocking wait: that writer is the very lock it would
+wait for (#776 S4).
 
 ## Checkpoints
 
