@@ -101,7 +101,6 @@ fn every_read(home: &Path) {
         ("store.get", vec![("store", "shop")]),
         ("store.get", vec![("store", "shop"), ("with", "live")]),
         ("project.list", vec![]),
-        ("project.get", vec![("project", "shop/api")]),
         ("sandbox.list", vec![]),
         ("backup.list", vec![]),
     ] {

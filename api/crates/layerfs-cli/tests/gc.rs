@@ -34,6 +34,11 @@ const CALLS: &[(&[&str], &str, &str)] = &[
         "layerfs store compact <store>",
         "reclaim dead bytes",
     ),
+    (
+        &["store", "repair-mount-holders"],
+        "layerfs store repair-mount-holders <name> <project> <branch> <action>",
+        "list, settle, release, audit or archive mount holders (operator)",
+    ),
 ];
 
 #[test]
@@ -106,6 +111,26 @@ fn wrong_arity_and_options_are_usage_errors() {
         &["store", "compact"],
         &["store", "compact", "shop", "extra"],
         &["store", "compact", "shop", "--force"],
+        &["store", "repair-mount-holders"],
+        &["store", "repair-mount-holders", "shop", "app", "main"],
+        &[
+            "store",
+            "repair-mount-holders",
+            "shop",
+            "app",
+            "main",
+            "preview",
+            "extra",
+        ],
+        &[
+            "store",
+            "repair-mount-holders",
+            "shop",
+            "app",
+            "main",
+            "preview",
+            "--force",
+        ],
     ];
     for words in wrong {
         let (code, out, err) = run_code(&home, words);
@@ -126,6 +151,14 @@ fn well_formed_lines_reach_the_library() {
         &["project", "delete", "shop/api"],
         &["project", "hide-path", "shop/api", "/a"],
         &["store", "compact", "shop"],
+        &[
+            "store",
+            "repair-mount-holders",
+            "shop",
+            "app",
+            "main",
+            "preview",
+        ],
     ];
     for words in well_formed {
         let (code, out, err) = run_code(&home, words);

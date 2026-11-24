@@ -16,6 +16,7 @@ mod list;
 mod r#move;
 mod remove;
 mod remove_auth;
+mod repair_mount_holders;
 mod save_auth;
 mod update;
 
@@ -36,6 +37,6 @@ pub(crate) fn calls() -> Calls {
         r#move::CALL,
         remove::CALL,
         compact::CALL,
-        doctor::CALL,
+        repair_mount_holders::CALL,
     ]
 }
