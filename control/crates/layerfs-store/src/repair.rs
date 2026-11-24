@@ -150,7 +150,21 @@ fn audit(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
         )
         .map_err(failed)?;
         let items = read.items.iter().map(admission::done_value).collect();
-        let next = match read.has_more {
+        // a full page names a next one only when a row follows it: the read
+        // of one row at the next page's offset (with a limit of one, the
+        // page number is the offset)
+        let more = read.has_more
+            && !admission::done_intents_branch(
+                service.store.history(),
+                &request.project,
+                &request.branch,
+                (page + 1).saturating_mul(read.limit),
+                1,
+            )
+            .map_err(failed)?
+            .items
+            .is_empty();
+        let next = match more {
             true => SdkValue::Int(i64::from(page) + 1),
             false => SdkValue::Null,
         };
