@@ -9,7 +9,9 @@
 //! attach to a Store (`layerfs-control`'s `store.attach`) and dial both.
 use super::address::{self, with_login};
 pub use super::address::{holds_login, refuse_login, shown, target, HIDDEN};
+use super::check;
 use super::login;
+use crate::diagnostic::ConnectionStep;
 use crate::open_args::{OpenArgs, PgSelection};
 use crate::project::listing;
 use crate::project::record::ProjectRecord;
@@ -18,7 +20,7 @@ use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
-use layerfs_home::home::{self, paths};
+use layerfs_home::home::{self, paths, with_field};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use std::path::Path;
@@ -61,6 +63,8 @@ pub struct StoreConnect {
     pub password: Option<String>,
     /// `synchronous_commit`; `local` for a new Store, else the saved one.
     pub synchronous_commit: Option<String>,
+    /// Check as the connect would, save nothing and answer `tested`.
+    pub dry_run: bool,
 }
 
 /// [`refuse_login`]'s refusal for `store connect <store> <url>`, with its
@@ -185,13 +189,13 @@ fn given<'a>(value: Option<&'a str>, what: &str) -> Result<Option<&'a str>> {
     }
 }
 
-/// `store.connect`: a new Store ([`connect`]), or a connected one's
-/// address, login or setting ([`update`]). A sqlite Store of the name is
-/// `Exists`.
-pub fn run(home_dir: &Path, request: &StoreConnect) -> Outcome {
+/// `store.connect` of a connected Store, checked from this computer
+/// ([`Update`]), or `None` when no Store of the name exists (a first
+/// connect, [`connect`]). A sqlite Store of the name is `Exists`.
+pub fn prepare(home_dir: &Path, request: &StoreConnect) -> Result<Option<Update>> {
     let name = request.store.as_str();
     let Some(record) = StoreRecord::read(home_dir, name)? else {
-        return connect(home_dir, request);
+        return Ok(None);
     };
     if record.kind()? != StoreKind::Postgresql {
         return Err(refused(
@@ -199,18 +203,21 @@ pub fn run(home_dir: &Path, request: &StoreConnect) -> Outcome {
             format!("a sqlite Store named {name} exists"),
         ));
     }
-    update(home_dir, request)
+    update(home_dir, request).map(Some)
 }
 
 /// `store.connect` of a new Store: records a PostgreSQL database as Store
 /// `request.store`, its user and password required. Every refusal of its
-/// input comes before any effect. The connection is made from this
-/// process with the given login, which gives an empty database the schema
-/// and a new id or reads the id the schema holds, and lists its projects,
-/// before the home lock; the lock covers the re-checks and the writes
-/// only: the record, then the password. A database whose id another
-/// Store of this home holds is `Exists`. Once saved, the check's reach is
-/// this computer's (`here`); a refused connect records nothing.
+/// input comes before any effect. The connection is checked from this
+/// process with the given login ([`check::first`], each refusal naming
+/// its step); an empty database is then given the schema and a new id, or
+/// the id the schema holds is kept, and its projects are listed, before
+/// the home lock; the lock covers the re-checks and the writes only: the
+/// record, then the password. A database whose id another Store of this
+/// home holds is `Exists`. Once saved, the check's reach is this
+/// computer's (`here`); a refused connect records nothing. A dry run stops
+/// after the check, before any schema is made, and answers [`tested`]:
+/// `here.empty` says the database has no Store schema yet.
 pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let given_url = request.url.as_str();
@@ -232,6 +239,21 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     }
     let record = StoreRecord::connected(name, given_url, user, SCHEMA, sync).in_home(home_dir);
     let probe = selection_at(&record, with_login(given_url, user, password)?);
+    let checked = check::first(&probe);
+    if request.dry_run {
+        let here = match checked {
+            Ok((answer, Some(binding))) => {
+                unclaimed_by_others(home_dir, name, &binding)?;
+                check::tested(&Ok(answer))
+            }
+            Ok((answer, None)) => {
+                with_field(check::tested(&Ok(answer)), "empty", SdkValue::Bool(true))
+            }
+            Err(refusal) => check::tested(&Err(refusal)),
+        };
+        return Ok(tested(name, given_url, here, Vec::new()));
+    }
+    let (checked, found) = checked?;
     // an empty database gets the schema, with a new binding (#533 step
     // 10b); an existing LayerFS schema keeps its binding, read once. The
     // cursor key is this home's own either way.
@@ -243,13 +265,19 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
         binding: layerfs_home::helpers::random()?.to_vec(),
         cursor_key: layerfs_home::helpers::random()?,
     };
-    let started = std::time::Instant::now();
-    let binding = if crate::project::postgres_init::create_schema(&probe, &fresh)? {
-        fresh.binding
-    } else {
-        crate::postgresql::open::read_binding(&probe)?
+    let binding = match found {
+        Some(binding) => binding,
+        None => {
+            let made = crate::project::postgres_init::create_schema(&probe, &fresh)
+                .map_err(|refusal| check::at_step(refusal, ConnectionStep::Schema))?;
+            match made {
+                true => fresh.binding.clone(),
+                false => crate::postgresql::open::read_binding(&probe)
+                    .map_err(|refusal| check::at_step(refusal, ConnectionStep::Identity))?,
+            }
+        }
     };
-    let reach = measured(started);
+    let reach = crate::observed::Reach::of(&Ok(checked));
     unclaimed_by_others(home_dir, name, &binding)?;
     let record = record.with("binding", SdkValue::Bytes(binding.clone()));
     let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
@@ -277,27 +305,50 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     Ok(answer(&record, "connected", Some(&projects)))
 }
 
-/// This computer's reach from a connect's own check, begun at `started`:
-/// reached, with how long the check took. It is recorded only once the
-/// connect is saved, as `store.doctor` records its check (`here`).
-fn measured(started: std::time::Instant) -> crate::observed::Reach {
-    crate::observed::Reach {
-        ok: true,
-        latency_ms: Some(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)),
-        ..crate::observed::Reach::default()
-    }
+/// A dry run's answer: `{ ok, outcome: tested, store, url, here, machines
+/// }`, `here` this computer's check ([`check::tested`]) and `machines`
+/// each attached machine's, with its `machine`; `ok` when every check
+/// passed. Nothing was saved or recorded.
+pub fn tested(store: &str, url: &str, here: SdkValue, machines: Vec<SdkValue>) -> SdkValue {
+    let passed = |row: &SdkValue| row.get("ok") == Some(&SdkValue::Bool(true));
+    let ok = passed(&here) && machines.iter().all(passed);
+    SdkValue::map([
+        ("ok", SdkValue::Bool(ok)),
+        ("outcome", SdkValue::text("tested")),
+        ("store", SdkValue::text(store)),
+        ("url", SdkValue::text(url)),
+        ("here", here),
+        ("machines", SdkValue::List(machines)),
+    ])
 }
 
-/// `store.connect` of a connected Store: its address `request.url`, and
-/// any of a new user, password and `synchronous_commit` (those not given
-/// are kept). The new values are dialled once from this process and must
-/// read this Store's id (`Unavailable` otherwise) before anything is
-/// saved. The record (and a new password) are written under
-/// the home lock and the Store's, `Conflict` when it was disconnected or
-/// connected to another database meanwhile; this process's open sessions
-/// on it are closed. A running Sandbox keeps the connection it started
-/// with. Once saved, the check's reach is this computer's (`here`).
-pub fn update(home_dir: &Path, request: &StoreConnect) -> Outcome {
+/// `store.connect` of a connected Store, checked from this computer and
+/// not yet saved: its address, and any of a new user, password and
+/// `synchronous_commit` (those not given are kept). No `Debug`: it holds
+/// the password.
+pub struct Update {
+    /// The record as it was read.
+    record: StoreRecord,
+    /// The record with the new values, its attachments as they were.
+    trial: StoreRecord,
+    /// The new address with the new login: what this computer dialled and
+    /// each attached machine dials.
+    dial: String,
+    /// A new password, saved with the record.
+    new_password: Option<String>,
+    /// Whether the address, user or password changes.
+    redials: bool,
+    /// This computer's check of the new values ([`check::same_store`]):
+    /// `{ at, server_version, latency_ms }`, or its refusal naming its
+    /// step.
+    pub here: Result<SdkValue>,
+}
+
+/// Validates a `store.connect` of a connected Store and dials the new
+/// values once from this process, where they must read this Store's id
+/// (`Unavailable` otherwise, naming the step); nothing is saved
+/// ([`Update::save`]).
+fn update(home_dir: &Path, request: &StoreConnect) -> Result<Update> {
     let name = request.store.as_str();
     let record = super::check::postgresql_record(home_dir, name)?;
     refuse_url(name, &request.url, false)?;
@@ -327,44 +378,89 @@ pub fn update(home_dir: &Path, request: &StoreConnect) -> Outcome {
     if let Some(sync) = &request.synchronous_commit {
         synchronous_commit(sync)?;
     }
-    let changed = |record: StoreRecord| {
-        let record = record
-            .with("url", SdkValue::text(&request.url))
-            .with("user", SdkValue::text(&user));
-        match &request.synchronous_commit {
-            Some(sync) => record.with("synchronous_commit", SdkValue::text(sync)),
-            None => record,
-        }
-    };
-    let trial = changed(record.clone());
-    let probe = selection_at(&trial, with_login(&request.url, &user, &password)?);
-    let started = std::time::Instant::now();
-    super::check::same_store(&trial, &probe).map_err(|refusal| {
-        refused(
-            &refusal.code,
-            format!("PostgreSQL Store {name}: {}", refusal.message),
-        )
-    })?;
-    let reach = measured(started);
-    let home_lock = home::lock::take(home_dir)?;
-    let store_lock = crate::record::lock(home_dir, name)?;
-    let current = StoreRecord::read(home_dir, name)?.filter(|r| r.binding() == record.binding());
-    let Some(current) = current else {
-        return Err(refused(
-            "Conflict",
-            format!("Store {name} changed while its connection was checked; connect it again"),
-        ));
-    };
-    current.unblocked()?;
-    crate::open::close(&current.postgresql_key(home_dir, name))?;
-    let current = changed(current);
-    current.write(home_dir)?;
-    if let Some(password) = new_password {
-        login::save(home_dir, name, password)?;
+    let redials = record.text("url") != Some(request.url.as_str())
+        || record.text("user") != Some(user.as_str())
+        || saved.as_ref().map(login::Saved::password) != Some(password.as_str());
+    let trial = changed(record.clone(), request, &user);
+    let dial = with_login(&request.url, &user, &password)?;
+    let probe = selection_at(&trial, dial.clone());
+    let here = super::check::same_store(&trial, &probe).map_err(|refusal| SdkRefusal {
+        message: format!("PostgreSQL Store {name}: {}", refusal.message),
+        ..refusal
+    });
+    Ok(Update {
+        record,
+        trial,
+        dial,
+        new_password: new_password.map(str::to_owned),
+        redials,
+        here,
+    })
+}
+
+/// `record` with a connect's new address, user and setting.
+fn changed(record: StoreRecord, request: &StoreConnect, user: &str) -> StoreRecord {
+    let record = record
+        .with("url", SdkValue::text(&request.url))
+        .with("user", SdkValue::text(user));
+    match &request.synchronous_commit {
+        Some(sync) => record.with("synchronous_commit", SdkValue::text(sync)),
+        None => record,
     }
-    drop((store_lock, home_lock));
-    crate::observed::record(home_dir, name, None, &reach);
-    Ok(answer(&current, "updated", None))
+}
+
+impl Update {
+    /// The record with the new values, its attachments as they were.
+    pub fn trial(&self) -> &StoreRecord {
+        &self.trial
+    }
+
+    /// The new address with the new login, as each machine dials it.
+    pub fn dial(&self) -> &str {
+        &self.dial
+    }
+
+    /// Whether the address, user or password changes (machines dial
+    /// them); a change of `synchronous_commit` alone does not.
+    pub fn redials(&self) -> bool {
+        self.redials
+    }
+
+    /// Saves the checked change `request`, refused as this computer's
+    /// check was. The record (and a new password) are written under the
+    /// home lock and the Store's, `Conflict` when it was disconnected or
+    /// connected to another database meanwhile; this process's open
+    /// sessions on it are closed. A running Sandbox keeps the connection
+    /// it started with. Once saved, the check's reach is this computer's
+    /// (`here`).
+    pub fn save(self, home_dir: &Path, request: &StoreConnect) -> Outcome {
+        let name = request.store.as_str();
+        let reach = crate::observed::Reach::of(&Ok(self.here?));
+        let home_lock = home::lock::take(home_dir)?;
+        let store_lock = crate::record::lock(home_dir, name)?;
+        let binding = self.record.binding();
+        let current = StoreRecord::read(home_dir, name)?.filter(|r| r.binding() == binding);
+        let Some(current) = current else {
+            return Err(refused(
+                "Conflict",
+                format!("Store {name} changed while its connection was checked; connect it again"),
+            ));
+        };
+        current.unblocked()?;
+        crate::open::close(&current.postgresql_key(home_dir, name))?;
+        let current = changed(
+            current,
+            request,
+            self.trial.text("user").unwrap_or_default(),
+        );
+        current.write(home_dir)?;
+        if let Some(password) = &self.new_password {
+            login::save(home_dir, name, password)?;
+        }
+        drop((store_lock, home_lock));
+        crate::observed::record(home_dir, name, None, &reach);
+        Ok(answer(&current, "updated", None))
+    }
 }
 
 /// `store.disconnect`: forgets a PostgreSQL Store, its saved password and

@@ -106,20 +106,22 @@ pub fn reached(
     machine: &str,
     record: &StoreRecord,
 ) -> Result<(PgSelection, Option<String>)> {
-    dialled(home, machine, record)?
+    dialled(home, machine, record, layerfs_store::record::url(record)?)?
 }
 
-/// [`reached`], with the refusal of a URL the machine cannot dial
-/// (`layerfs_machine::platform::reach`: a loopback or socket of this host
-/// it does not share, or a URL it cannot read to check) kept apart, as
-/// `Ok(Err(refusal))`, from every other failure (a missing saved login,
-/// a record with no URL, an unreadable machine record), which is `Err`.
-fn dialled(
+/// [`reached`] dialling `url`, the Store's address with a login in it
+/// (`store.connect` checks a new address or login from each attached
+/// machine before it saves them), with the refusal of a URL the machine
+/// cannot dial (`layerfs_machine::platform::reach`: a loopback or socket
+/// of this host it does not share, or a URL it cannot read to check) kept
+/// apart, as `Ok(Err(refusal))`, from every other failure (an
+/// unreadable machine record), which is `Err`.
+pub fn dialled(
     home: &Path,
     machine: &str,
     record: &StoreRecord,
+    url: String,
 ) -> Result<Result<(PgSelection, Option<String>)>> {
-    let url = layerfs_store::record::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
@@ -351,7 +353,8 @@ fn host_op(
             (Some(value), hint)
         }
         (StoreKind::Postgresql, StoreUrl::Cleanup) => {
-            match dialled(&home, machine, &target.record)? {
+            let url = layerfs_store::record::url(&target.record)?;
+            match dialled(&home, machine, &target.record, url)? {
                 Ok((value, hint)) => (Some(value), hint),
                 Err(_cannot_dial) => (None, None),
             }

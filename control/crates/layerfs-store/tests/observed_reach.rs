@@ -302,7 +302,8 @@ fn only_a_dial_no_server_answered_is_not_connected() {
         // a database the server does not hold
         failed_check(&database),
     ] {
-        assert!(answered.contains("db error"), "{answered}");
+        // in the server's own words, which name what it refused
+        assert!(answered.contains("no_such"), "{answered}");
         assert!(!not_connected(&answered), "{answered}");
     }
 }

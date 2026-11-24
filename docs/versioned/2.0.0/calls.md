@@ -1563,6 +1563,17 @@ first connect, needs no privilege beyond what a Sandbox's reads and writes
 need: what only `store compact` needs (`pg_read_all_stats`, `CREATE` on
 the database) is checked when a compaction starts.
 
+Every refused reach check, from this computer or a machine, names the
+connection `step` it stopped at, flat beside `error` and `message`, with the
+doctor's words (`configuration`, `transport`, `tls`, `authentication`,
+`database`, `schema`, `identity`); one from a machine also names the
+`machine`. `store attach --dry-run` makes attach's check and records
+nothing (`outcome: "tested"`). `store connect` of a new address, user or
+password is checked from each attached machine before anything is saved,
+refused `Conflict` (with `machines` and a detach as its fix) when one does
+not reach it; `--dry-run` makes the checks and answers `{ ok, outcome:
+"tested", store, url, here, machines }`.
+
 See [Stores](machines-and-stores.md#stores).
 
 ### `backup` (6)

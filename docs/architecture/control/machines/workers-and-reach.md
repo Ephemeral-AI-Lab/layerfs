@@ -200,7 +200,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the root, holding the Store's lease there |
 | `store.compact` | one sqlite Store's compaction on `store/<name>/store.sqlite` under the root, holding the Store's lease there; `{ store, store_record }`, each phase sent as a `progress` event; an event that cannot be written does not end the run (spec S6, #42 D5) |
 | `store.file` | one step of a `store.move` (either direction), `store.remove`, stat or backup, with `progress` events for hashing steps |
-| `store.reach` | the check of this machine's connection to a PostgreSQL Store with the address and login the host saved, for `store.attach` |
+| `store.reach` | the check of this machine's connection to a PostgreSQL Store with the address and login the host saved (or a new one `store.connect` checks before saving it), for `store.attach`, `store.connect` and `store.doctor`; a refusal names its connection `step` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
 | `network.inspect` | doctor's read-only observation of the machine's Sandbox network for `machine.network`: `{ table, forwarding, links: [{ link, addresses, sandbox }] }`, `sandbox` the recorded Sandbox the link is named for, or null |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |

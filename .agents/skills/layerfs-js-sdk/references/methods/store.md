@@ -13,9 +13,9 @@
 store.list({ machine, with: ["stats"] })
 store.get(store, { with: ["live", "stats"] })
 store.create(name, { machine })
-store.connect(store, url, { user, password, synchronous_commit })
+store.connect(store, url, { user, password, synchronous_commit, dry_run })
 store.disconnect(store)
-store.attach(store, { machine })
+store.attach(store, { machine, dry_run })
 store.detach(store, { machine })
 store.move(store, machine, { on_progress })
 store.remove(store)
@@ -78,9 +78,9 @@ $ layerfs store get shop --with live,stats                                     #
 | Call | What it does | Notes |
 | --- | --- | --- |
 | `create(name)` | An empty sqlite Store | `{"ok":true}` (seen). A taken name is `Exists` (seen: `a Store named shop exists`). `machine` makes it on that running machine through its worker |
-| `connect(store, url, …)` | Connects a PostgreSQL database as a Store (`user` and `password` required the first time, checked before anything is saved; `synchronous_commit` defaults to `local`); on a connected Store, changes its address, user, password or `synchronous_commit` (an omitted user or password keeps the saved one; the same Store must be reached) | The URL holds host, port, database and TLS settings only: one naming a user, password or `passfile` is `InvalidInput` with the `fix` `layerfs store connect <store> <url> --user <user> --password-stdin`. Shell: `--user U --password-stdin`; the password is never answered, logged or traced. Short `{ projects, projects_count? }`, or `{"ok":true}`; long `outcome` `connected` or `updated` |
+| `connect(store, url, …)` | Connects a PostgreSQL database as a Store (`user` and `password` required the first time, checked before anything is saved; `synchronous_commit` defaults to `local`); on a connected Store, changes its address, user, password or `synchronous_commit` (an omitted user or password keeps the saved one; the same Store must be reached) | The URL holds host, port, database and TLS settings only: one naming a user, password or `passfile` is `InvalidInput` with the `fix` `layerfs store connect <store> <url> --user <user> --password-stdin`. Shell: `--user U --password-stdin`; the password is never answered, logged or traced. Short `{ projects, projects_count? }`, or `{"ok":true}`; long `outcome` `connected` or `updated`. A new address, user or password is checked from each attached machine first: one that fails refuses `Conflict` with `machines` and a detach `fix`, nothing saved. `dry_run: true` checks and saves nothing: `{ ok, outcome: "tested", here, machines }`. A refused check names its `step` |
 | `disconnect(store)` | Forgets a PostgreSQL Store with its saved password and attachments, its data staying | `InUse` while a Sandbox or Workspace uses it |
-| `attach(store, { machine })` | Lets a machine run Sandboxes of a PostgreSQL Store, checked from that machine with the saved URL and login first | Short `{ ok, outcome, latency_ms? }`; `outcome` `attached`, or `checked` when already attached. A sqlite Store is `InvalidInput`; machine native is attached like any other. `sandbox.create` on a machine not attached is refused with `layerfs store attach <store> --machine <machine>` as its `fix` |
+| `attach(store, { machine })` | Lets a machine run Sandboxes of a PostgreSQL Store, checked from that machine with the saved URL and login first | Short `{ ok, outcome, latency_ms? }`; `outcome` `attached`, or `checked` when already attached, or `tested` for `dry_run: true` (records nothing). A refused check names its `step` and `machine`. A sqlite Store is `InvalidInput`; machine native is attached like any other. `sandbox.create` on a machine not attached is refused with `layerfs store attach <store> --machine <machine>` as its `fix` |
 | `detach(store, { machine })` | Stops a machine running Sandboxes of a PostgreSQL Store | `InUse` while a Sandbox of the Store's projects is on it; `NotFound` when not attached |
 | `move(store, machine)` | Moves a sqlite Store between this computer and a machine | To or from `native` only (seen when already there: `store move, check: Store shop is already on native`, `InvalidInput`; moving off a machine whose record lacks `vm_name` is `Unavailable` with `blocked_by`). Progress `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`. Short `{ moved_bytes }`. A sqlite Store's Sandboxes run only on its machine |
 | `remove(store)` | Deletes a sqlite Store with every project in it | `{"ok":true}`. `NotFound` for an unknown name (seen). A PostgreSQL Store is disconnected instead. A record this build does not read, or a Store on a machine whose record has no 2.0 name, goes by its records alone, with `left` saying what may remain |

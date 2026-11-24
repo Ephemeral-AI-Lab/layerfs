@@ -271,7 +271,8 @@ fn connect_read_and_disconnect() {
 }
 
 /// A database the server does not have is a session the server refused,
-/// not a server that took no connection (#535 terminal pass, lane K3).
+/// not a server that took no connection (#535 terminal pass, lane K3): it
+/// is refused at the connection step `database`, in the server's words.
 #[test]
 fn a_missing_database_is_a_refused_session() {
     let (Ok(url), Ok(_)) = (
@@ -288,12 +289,18 @@ fn a_missing_database_is_a_refused_session() {
     let missing = format!("{server}/lfs_no_such_database");
     let mut args = vec![("store", t("gone")), ("url", t(&missing))];
     args.extend(login);
-    let (code, message) = call(&home, "store.connect", &args).unwrap_err();
-    assert_eq!(code, "Unavailable", "{message}");
-    assert!(
-        message.contains("the server refused the session"),
-        "{message}"
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
     );
+    let refusal = layerfs_api::call(Some(&home), "store.connect", args, &mut |_| {}).unwrap_err();
+    let message = &refusal.message;
+    assert_eq!(refusal.code, "Unavailable", "{message}");
+    assert!(message.contains("refused the connection"), "{message}");
+    assert!(message.contains("lfs_no_such_database"), "{message}");
+    let next = refusal.detail.get("next").cloned().unwrap_or_default();
+    assert_eq!(next.get_text("step"), Some("database"), "{refusal:?}");
     assert!(!paths::store_dir(&home, "gone").exists());
     std::fs::remove_dir_all(&home).unwrap();
 }

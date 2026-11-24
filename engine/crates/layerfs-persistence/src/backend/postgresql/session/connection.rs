@@ -160,16 +160,28 @@ impl Connector {
         })
     }
     /// One new client for a status read: a refused login or a database that
-    /// does not exist is `Denied`, anything else `Unreachable`.
+    /// does not exist is `Denied`, anything else `Unreachable`, each with
+    /// the step the doctor's connection check gives it. An error the server
+    /// sent is said in the server's words (the driver's own text says only
+    /// `db error`).
     pub(crate) fn connect_status(&self) -> Result<Client, PostgresStatusError> {
+        use crate::diagnostic::ConnectionStep;
         self.connect_raw().map_err(|dial| match dial {
-            Dial::Driver(error) => match error.code() {
-                Some(code) if code.code().starts_with("28") || code.code() == "3D000" => {
-                    PostgresStatusError::Denied(error.to_string())
+            Dial::Driver(error) => {
+                let why = match error.as_db_error() {
+                    Some(db) => db.message().to_owned(),
+                    None => error.to_string(),
+                };
+                match ConnectionStep::of_refused_connection(error.code().map(|c| c.code())) {
+                    ConnectionStep::Transport => {
+                        PostgresStatusError::Unreachable(ConnectionStep::Transport, why)
+                    }
+                    step => PostgresStatusError::Denied(step, why),
                 }
-                _ => PostgresStatusError::Unreachable(error.to_string()),
-            },
-            Dial::Silent(_) => PostgresStatusError::Unreachable(dial.to_string()),
+            }
+            Dial::Silent(_) => {
+                PostgresStatusError::Unreachable(ConnectionStep::Transport, dial.to_string())
+            }
         })
     }
 }
