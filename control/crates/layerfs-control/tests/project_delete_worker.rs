@@ -490,13 +490,6 @@ fn refused(code: &str, detail: SdkValue) -> SdkValue {
 /// records `stack`, with the fake worker's address.
 fn caller_home(tag: &str, address: &str, stack: LayerStackId) -> PathBuf {
     let home = tempdir(tag);
-    // The machine-feature route resolves the owning machine from this record;
-    // the worker frame itself still runs on the fake worker's Store.
-    home::write_record(
-        &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", text("box")), ("platform", text("lima"))]),
-    )
-    .unwrap();
     home::write_record(
         &paths::store_record(&home, "shop"),
         &SdkValue::map([

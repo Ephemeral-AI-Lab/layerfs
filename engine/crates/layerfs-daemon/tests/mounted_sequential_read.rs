@@ -27,11 +27,8 @@ const CACHE: usize = 64 * 1024 * 1024;
 /// `cat`'s buffer.
 const BUFFER: usize = 128 * 1024;
 /// Store demands per 64 MiB above which the read was not read ahead: one
-/// kernel read is 128 KiB, so without read-ahead it is about 512. The engine
-/// reads objects ahead in 512 KiB windows (`objects/edges.rs` `BATCH_BYTES`),
-/// about 141 demands for 64 MiB; the mounted lane measured 141 on SQLite and
-/// 140 on PostgreSQL at `a0ef644d`.
-const MOST_DEMANDS: u64 = 192;
+/// kernel read is 128 KiB, so without read-ahead it is about 512.
+const MOST_DEMANDS: u64 = 64;
 
 /// `length` non-repeating bytes from a fixed xorshift64* stream.
 fn random(length: usize) -> Vec<u8> {
