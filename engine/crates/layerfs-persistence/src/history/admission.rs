@@ -873,7 +873,10 @@ pub(crate) fn done_intents(
 /// oldest first by `(updated_ms, op_id)`: the rows strictly after `after`.
 /// It reads one row more than `limit` to know whether a page follows, so no
 /// second read can disagree with the first. The operator audit is scoped to
-/// the Branch it names.
+/// the Branch it names. Paging never repeats a row, and never skips a row
+/// of the Branch identity it was retained under; a row of a Branch created
+/// again under the same names can sort below rows of the earlier identity
+/// (the guarantee is spelled out in `gc_intent_done_branch.sql`).
 pub(crate) fn done_intents_branch(
     provider: &HistoryProvider,
     project: &str,

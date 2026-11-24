@@ -541,7 +541,19 @@ malformed one decodes as no token: missing evidence is no proof, never death
   ordered by `updated_ms, op_id`, paged) exposes them. A release that retains
   a row deletes the oldest done rows of the same Branch beyond the newest 100
   in its transaction, with no schema change (the existing unique index finds
-  the Branch's rows). A second release of one op answers `NotFound` on both
+  the Branch's rows). The row is stamped `max(now, the Branch's newest done
+  time + 1)`, and releases are serialized (SQLite's single writer;
+  PostgreSQL's Store lane row, locked at every write's `BEGIN` under READ
+  COMMITTED), so one Branch's stamps follow commit order. The keyset pages
+  therefore never repeat a row and never skip a row of the Branch identity it
+  was retained under; a row the cap deletes before the reader reaches it is
+  not returned. The pages select by name, the stamp floor by Branch identity:
+  after a Branch (or its project) is removed and created again under the same
+  names, the new Branch's release is stamped below the earlier Branch's rows
+  when those were stamped at or after the releasing host's clock, sorts among
+  them, and is missed by a cursor already past them; a read from the first
+  page returns it. Flooring by the names would scan every retained row inside
+  the write transaction (no index covers them), so it is not done. A second release of one op answers `NotFound` on both
   Store kinds, and PostgreSQL compaction never reads or deletes a done row.
   `list`, `preview` and `audit` write nothing.
 - **Operator repair reachability and the typed holder view.**

@@ -544,3 +544,50 @@ fn a_release_stamped_behind_the_newest_row_is_kept_and_listed_last() {
         "the oldest row went instead"
     );
 }
+
+/// #787 review: the audit reads by the recorded project and Branch names,
+/// while a release is floored only by its own Branch identity's rows. A
+/// Branch removed and created again under the same names keeps the earlier
+/// identity's rows readable; here they are stamped an hour ahead of the
+/// releasing host's clock, so the new identity's first release ranks before
+/// them by its own stamp. A read from the first page returns every row once,
+/// in stamp order. A cursor already past the earlier rows does not return
+/// the new row: the documented limit of the audit's guarantee.
+#[test]
+fn a_recreated_branch_is_paged_by_its_own_stamps() {
+    let temp = Temp::new("gc-done-audit-recreated");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    let path = temp.join("store.sqlite");
+    // the removed identity's rows: same names, another Branch id
+    let earlier = branch_id(9);
+    let ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + 3_600_000;
+    for body in 1..=3u8 {
+        done_row(&path, earlier, body, "release", ahead + i64::from(body));
+    }
+    let read = audit_page(&history, None, 10);
+    assert_eq!(read.items.len(), 3);
+    assert!(read.next.is_none());
+    let last = read.items.last().unwrap();
+    let cursor = layerfs_history::GcAuditAfter {
+        updated_ms: last.updated_ms,
+        op_id: last.op_id,
+    };
+
+    release_one(&history, branch, 200);
+    let all = audit_page(&history, None, 10);
+    let order: Vec<[u8; 16]> = all.items.iter().map(|row| row.op_id).collect();
+    assert_eq!(order, vec![op(200), op(1), op(2), op(3)], "stamp order");
+    assert!(
+        all.items[0].updated_ms < ahead,
+        "floored by its own identity"
+    );
+    assert!(
+        audit_page(&history, Some(cursor), 10).items.is_empty(),
+        "a cursor past the earlier identity's rows does not return it"
+    );
+}

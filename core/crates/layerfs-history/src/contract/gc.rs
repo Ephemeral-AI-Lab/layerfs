@@ -265,9 +265,14 @@ pub struct GcAuditPage {
 }
 
 /// Where one Branch's audit page ends: the last row's `(updated_ms, op_id)`.
-/// The next page reads the rows strictly after it, so a release that deletes
-/// an older row, or retains a newer one, between two reads neither skips nor
-/// repeats a row.
+/// The next page reads the rows strictly after it. A release between two
+/// reads deletes only older rows and stamps its own row after every row of
+/// its Branch identity, so paging never repeats a row and never skips one of
+/// that identity. The audit selects by project and Branch name: after a
+/// Branch (or its project) is removed and created again under the same
+/// names, the new Branch's rows are stamped from its own rows only and can
+/// sort below the earlier Branch's, so a cursor already past them misses
+/// them; a read from the first page returns every retained row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GcAuditAfter {
     /// The last row's retained time, in Unix milliseconds.

@@ -138,7 +138,9 @@ pub fn repair_at(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
 
 /// One keyset page of the Branch's retained `done` rows, oldest first by
 /// `(updated_ms, op)`; the last row's place travels in the cursor, so a
-/// release between two pages neither skips nor repeats a row.
+/// release between two pages repeats no row and skips none of the Branch's
+/// own; only a row of a Branch created again under the same names can sort
+/// below rows already paged (see `GcAuditAfter`).
 fn audit(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
     let after = audit_after(request.after.as_ref())?;
     with_service(open, |service| {

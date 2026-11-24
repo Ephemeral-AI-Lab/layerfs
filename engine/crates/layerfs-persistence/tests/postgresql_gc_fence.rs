@@ -1092,3 +1092,76 @@ fn a_repeated_release_unlocks_its_op_once() {
     owner.history.gc_release(&op(71)).unwrap();
     assert!(key_free(&mut admin, key));
 }
+
+/// #787 review: two operator releases in one Branch never stamp out of
+/// commit order on PostgreSQL. Every write transaction locks the Store's
+/// lane row at its `BEGIN` (READ COMMITTED), so a release that meets a
+/// concurrent writer waits for its commit and only then reads the Branch's
+/// newest done time. Here the concurrent writer retains a row stamped an
+/// hour ahead (a host whose clock is ahead) and commits after the release
+/// started: the release is stamped after that row, so a reader whose cursor
+/// is already at that row still gets the release on its next page.
+#[test]
+fn a_release_behind_a_concurrent_writer_is_stamped_after_its_row() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "done_order");
+    let binding = binding("done_order");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&handles.history, 1);
+    for tag in [80, 81] {
+        handles
+            .history
+            .gc_register(&mount(project_id, branch, tag))
+            .unwrap();
+    }
+    let ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + 3_600_000;
+    let mut admin = schema.admin();
+    let mut writer = admin.transaction().unwrap();
+    writer
+        .batch_execute("SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE")
+        .unwrap();
+    writer
+        .execute(
+            "UPDATE gc_intent SET state = 'done', uncertain = FALSE, owner_runtime = NULL, \
+             owner_boot = NULL, evidence = 'writer', updated_ms = $1 WHERE op_id = $2",
+            &[&ahead, &op(80).as_slice()],
+        )
+        .unwrap();
+
+    let (sent, finished) = std::sync::mpsc::channel();
+    let (waited, released) = std::thread::scope(|scope| {
+        let release = scope.spawn(|| {
+            let released = handles.history.gc_release_done(&op(81), "operator");
+            let _ = sent.send(());
+            released
+        });
+        let waited = finished
+            .recv_timeout(std::time::Duration::from_millis(500))
+            .is_err();
+        writer.commit().unwrap();
+        (waited, release.join().unwrap())
+    });
+    assert!(released.unwrap(), "the release retains its row");
+
+    let first = handles
+        .history
+        .gc_done_intents_branch("proj", "work", None, 1)
+        .unwrap();
+    assert_eq!(first.items.len(), 1);
+    assert_eq!(first.items[0].op_id, op(80), "the writer's row ranks first");
+    let next = first.next.expect("a page follows the writer's row");
+    assert_eq!(next.updated_ms, ahead);
+    let second = handles
+        .history
+        .gc_done_intents_branch("proj", "work", Some(next), 10)
+        .unwrap();
+    assert_eq!(second.items.len(), 1, "{second:?}");
+    assert_eq!(second.items[0].op_id, op(81), "the release follows it");
+    assert_eq!(second.items[0].updated_ms, ahead + 1);
+    assert!(second.next.is_none());
+    assert!(waited, "the release waited for the writer's lane row");
+}
