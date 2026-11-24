@@ -454,9 +454,7 @@ impl BoundWorkspace {
                         })?;
                         self.store.note_save(&step_saved);
                         if let Some(saved) = retained.saved.as_mut() {
-                            saved.canonical_bytes += step_saved.canonical_bytes;
-                            saved.stored_bytes += step_saved.stored_bytes;
-                            saved.metadata_bytes += step_saved.metadata_bytes;
+                            super::commit_fused::add_saved(saved, &step_saved);
                         }
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         let logical = phase(timing, "logical.lane", || {

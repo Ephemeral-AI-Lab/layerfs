@@ -49,6 +49,19 @@ pub(super) struct Reread {
     pub(super) changed: Vec<u64>,
 }
 
+/// Adds a merge Save's counts to the Commit's: its objects, records, packs
+/// and bytes.
+pub(super) fn add_saved(total: &mut WriteOutcome, saved: &WriteOutcome) {
+    total.inserted += saved.inserted;
+    total.reused += saved.reused;
+    total.full_records += saved.full_records;
+    total.prefix_records += saved.prefix_records;
+    total.packs += saved.packs;
+    total.canonical_bytes += saved.canonical_bytes;
+    total.stored_bytes += saved.stored_bytes;
+    total.metadata_bytes += saved.metadata_bytes;
+}
+
 /// Fused Commits made, and fused attempts a race sent on the separate path.
 #[derive(Default)]
 pub(crate) struct FusedCounts {
@@ -191,15 +204,7 @@ impl BoundWorkspace {
         })?;
         self.store.note_save(&saved);
         if let Some(total) = retained.saved.as_mut() {
-            // Every count of the merge's Save joins the Commit's.
-            total.inserted += saved.inserted;
-            total.reused += saved.reused;
-            total.full_records += saved.full_records;
-            total.prefix_records += saved.prefix_records;
-            total.packs += saved.packs;
-            total.canonical_bytes += saved.canonical_bytes;
-            total.stored_bytes += saved.stored_bytes;
-            total.metadata_bytes += saved.metadata_bytes;
+            add_saved(total, &saved);
         }
         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
         let logical = phase(timing, "logical.count", || {

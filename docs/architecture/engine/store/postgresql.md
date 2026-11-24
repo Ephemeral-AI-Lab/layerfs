@@ -863,14 +863,21 @@ Storage handle serves the held publication whole, from the batch itself
 ([`read/held.rs`](../../../../core/crates/layerfs-storage/src/read/held.rs)):
 its locations, pack bodies of either domain and inode values are consulted
 before the bounded read caches and the Store, and a held location found is
-kept in the locator cache as a Store answer would be. The batch is in memory
-already and bounded by the publication's row and byte bounds. It is released
+kept in the locator cache as a Store answer would be. A held row may name a
+pack an earlier batch of the same finish published (the last publication
+split at a transaction bound inside that pack, as happens with files that
+compress well): its descriptor comes from the finish's sealed packs and
+only its location is served, its body being the Store's already. The batch
+is in memory already and bounded by the publication's row and byte bounds. It is released
 when it is published (fused or on its own: a lost location's winner is then
 read from the Store) or dropped. Before this, the held entries lived only in
 the bounded caches (4,096 locators, 2 MiB of metadata bodies, about 7,000
 values) and an evicted one was looked up in the Store and missed: one new
 directory of 4,000 or more small files, or 400 rewrites over a 20,000-file
-tree, could never Commit unforced (`commit_fused_held.rs`).
+tree, could never Commit unforced (`commit_fused_held.rs`), and a first
+index of the held batch refused one whose rows named an earlier batch's
+pack (`Integrity("held pack missing")`: 40 compressible files of 120 KiB
+beside 300 small ones, or 200 of them).
 
 Behaviour that differs from the separate path:
 

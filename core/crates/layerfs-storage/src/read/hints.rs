@@ -524,7 +524,9 @@ impl Fetch {
             let mut trial: Vec<Planned> = Vec::new();
             let mut keep = BTreeMap::new();
             for (info, group, own) in needs {
-                if self.serve_published.get() && self.published_has(info.pack_id) {
+                // A held body is served to every read; a published one
+                // only while serving published bodies (`published_has`).
+                if self.published_has(info.pack_id) {
                     continue;
                 }
                 if packs.group(self, info.pack_id, group)?.is_some() {

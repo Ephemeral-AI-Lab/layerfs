@@ -12,6 +12,11 @@
 //!   locator cache keeps (`READ_OBJECT_LIMIT`, 4,096).
 //! * A 20,000-file seed, then 400 files rewritten across it: held inode
 //!   values and metadata packs spread over many leaves.
+//! * New files of 120 KiB that compress well (40 of them beside 300 small
+//!   files, and 200 alone): many canonical bytes per pack, so the last
+//!   publication splits at the transaction byte bound and the held batch
+//!   names objects whose pack an earlier batch of the same finish already
+//!   published.
 //!
 //! The PostgreSQL halves need `LAYERFS_TEST_POSTGRES_URL` and report
 //! NOT_RUN without it.
@@ -159,4 +164,51 @@ fn spread_rewrites_over_a_large_tree_commit_fused() {
         }
         assert_eq!(counts, vec![1_000; 20], "{:?}", store.kind);
     }
+}
+
+/// `length` bytes naming `n` in their first eight, zeros after: distinct
+/// files that compress to almost nothing.
+fn padded(n: usize, length: usize) -> Vec<u8> {
+    let mut bytes = vec![0; length];
+    bytes[..8].copy_from_slice(&(n as u64).to_le_bytes());
+    bytes
+}
+
+/// `large` new files of 120 KiB and `small` new files of 40 bytes in one
+/// new directory, Committed fused and read back.
+fn large_files(label: &str, large: usize, small_files: usize) {
+    const LARGE: usize = 120 * 1024;
+    for store in TestStore::both(label, &[("/seed", b"seed\n")]) {
+        let mut ops = vec![Op::Mkdir("/big".into())];
+        ops.extend((0..large).map(|n| Op::Write(format!("/big/l{n:04}"), padded(n, LARGE))));
+        ops.extend((0..small_files).map(|n| Op::Write(format!("/big/s{n:04}"), small(n, 3))));
+        let branch = commit_fused(&store, &ops);
+        let mut checked: Vec<(String, Vec<u8>)> = [0, large / 2, large - 1]
+            .into_iter()
+            .map(|n| (format!("/big/l{n:04}"), padded(n, LARGE)))
+            .collect();
+        if small_files > 0 {
+            checked.extend(
+                [0, small_files - 1]
+                    .into_iter()
+                    .map(|n| (format!("/big/s{n:04}"), small(n, 3))),
+            );
+        }
+        let files: Vec<&str> = checked.iter().map(|(path, _)| path.as_str()).collect();
+        let (bytes, counts) = read_back(&store, branch, &files, &["/big"]);
+        assert_eq!(counts, [large + small_files], "{:?}", store.kind);
+        for ((path, expected), bytes) in checked.iter().zip(bytes) {
+            assert!(bytes == *expected, "{:?}: {path} differs", store.kind);
+        }
+    }
+}
+
+#[test]
+fn large_files_beside_small_ones_commit_fused() {
+    large_files("held-large-mixed", 40, 300);
+}
+
+#[test]
+fn many_large_files_commit_fused() {
+    large_files("held-large", 200, 0);
 }

@@ -31,7 +31,15 @@ pub(super) struct Held {
 
 impl Fetch {
     /// Serves `batch` to this handle's reads until [`Self::release_held`].
-    pub(crate) fn hold(&self, batch: &Publication) -> StorageResult<()> {
+    /// A row may name a pack an earlier batch of the same finish published
+    /// (the batch split at a transaction bound inside that pack): its
+    /// descriptor comes from `sealed`, the finish's sealed packs, and only
+    /// its location is served here; its body is the Store's already.
+    pub(crate) fn hold(
+        &self,
+        batch: &Publication,
+        sealed: &BTreeMap<i64, PackInfo>,
+    ) -> StorageResult<()> {
         let mut held = Held::default();
         for pack in &batch.packs {
             let info = pack.info();
@@ -41,11 +49,16 @@ impl Fetch {
         }
         let mut absent = self.absent.borrow_mut();
         for row in &batch.objects {
-            let pack = held
-                .bodies
-                .get(&row.pack_id)
-                .map(|(info, _)| *info)
-                .ok_or(crate::error::StorageError::Integrity("held pack missing"))?;
+            let pack = match held.bodies.get(&row.pack_id) {
+                Some((info, _)) => *info,
+                None => {
+                    let info = *sealed
+                        .get(&row.pack_id)
+                        .ok_or(crate::error::StorageError::Integrity("held pack missing"))?;
+                    super::fetch::check_info(info)?;
+                    info
+                }
+            };
             absent.remove(&row.object_id);
             held.locations.insert(
                 row.object_id,

@@ -245,7 +245,13 @@ impl State<'_> {
             if hold {
                 // Served whole to this handle's reads until it is published
                 // or dropped (`read/held.rs`): the Store does not have it.
-                self.storage.source.hold(&batch)?;
+                let sealed = self
+                    .packer
+                    .ready
+                    .iter()
+                    .map(|ready| (ready.pack.info().pack_id, ready.pack.info()))
+                    .collect();
+                self.storage.source.hold(&batch, &sealed)?;
                 held = Some(Held { batch, members });
             } else {
                 self.acknowledge(&mut batch, &members)?;
