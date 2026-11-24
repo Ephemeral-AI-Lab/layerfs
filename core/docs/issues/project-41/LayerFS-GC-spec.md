@@ -458,12 +458,15 @@ Admission is one Store-DB table and two `BEGIN IMMEDIATE` transactions
 
 `gc_intent(op_id PRIMARY KEY, kind, scope_kind, scope_id, workspace, sandbox,
 machine, project, branch, owner_runtime, owner_boot, state, uncertain, phase,
-generation, artifact, high_water, evidence, updated_ms)`, `STRICT`, with
-`UNIQUE(scope_kind, scope_id, owner_boot)`; `kind` is `mount`, `init`,
-`merge`, `removal` or `compaction`, `state` is `live`, `uncertain` or `done`,
-`scope_kind` is `store`/`project`/`branch`, and the ids are typed per kind
-(17-byte project/Branch, 33-byte commit/layer, 32-byte catalog id). The
-migration step that adds it is the same additive step as §4.1.
+generation, artifact, high_water, evidence, updated_ms,
+machine_incarnation, sandbox_generation, lease_expires_ms, fence_token)`,
+`STRICT`, with `UNIQUE(scope_kind, scope_id, owner_boot)`; `kind` is
+`mount`, `init`, `merge`, `removal` or `compaction`, `state` is `live`,
+`uncertain` or `done`, `scope_kind` is `store`/`project`/`branch`, and the ids
+are typed per kind (17-byte project/Branch, 33-byte commit/layer, 32-byte
+catalog id). The migration step that adds it is the same additive step as
+§4.1; the four authority columns were appended after `updated_ms` by a later
+additive step.
 
 - A **mount** transaction checks that no operation op is running at every
   scope it names (Store, project, Branch), inserts its intent and commits. A
@@ -471,6 +474,52 @@ migration step that adds it is the same additive step as §4.1.
   its marker or op row, and commits. A live mount → `MountsActive`; a live
   operation → `Busy`; a provably dead, uncertain op → `Unresolved`; a
   provably dead, certain op is adopted or ignored per its `kind`.
+- **Place authority.** An intent that records a machine incarnation or a
+  Sandbox generation is classified from the control-built bounded `PlaceView`
+  (the current `MachineRecord.incarnation`, `SandboxRecord.generation`, and the
+  machine-level `machine/<machine>/sandbox-retired/<name>.json` tombstone): a
+  current place newer than the recorded one is dead even with a live lease, a
+  current place older (a home restore/rollback) is `Unresolved`, equal is live,
+  and a missing place proves nothing. A live place with an expired lease is
+  `Unresolved`, never adopted. The caller's `owner_runtime`/`owner_boot`
+  evidence is the fallback for a private or place-null intent only, and a
+  presented stale fencing token may not release the row (`Conflict`).
+- **Place writers.** A machine worker records its ordered `incarnation` in the
+  home `MachineRecord` before it serves, and on start settles only the intents
+  that incarnation (or a Sandbox generation/tombstone) proves dead; an
+  uncertain owner, an expired lease and another machine's rows are never
+  settled. There is no separate audit table: a settle keeps the intent as a
+  `done` row (see Audit). A Sandbox close or forced remove writes the
+  generation's durable tombstone under `machine/<machine>/sandbox-retired/`
+  once the runtime is stopped, before its home record goes, so a Sandbox
+  recreated under the same name is not retired by the old generation.
+- **Lease renewal.** The owner of an intent renews its `lease_expires_ms`
+  with a fenced heartbeat: the Store keeps the later of the recorded and the
+  requested deadline, so a delayed heartbeat never shortens a lease, and a
+  presented stale token may not renew the row (`Conflict`). An absent row
+  reports no renewal, and the owner stops instead of resurrecting a settled
+  mount. Expiry stays `Unresolved`, never adopted.
+- **Audit.** A settle or release keeps the intent as a `gc_intent` `done` row
+  instead of deleting it: the action, the operator/client label, the op and a
+  bounded evidence detail are in `evidence`, the owner columns are cleared so
+  the unique key does not block a remount, admission keeps filtering
+  `state <> 'done'`, and `store.compact` preserves done rows (`Copy::Done`).
+  A separate read (`WHERE state = 'done'`, ordered by `updated_ms, op_id`,
+  paged) exposes them. Preview retains a `done` row too: every preview call
+  writes one retained `gc_intent` `done` row (`action="preview"`, `op=null`,
+  the operator label in `evidence`, owner columns null) while changing no
+  live intent. Admission keeps filtering `state <> 'done'`, so the row
+  never admits, and the CLI call log stays secondary to the retained row.
+- **Operator repair reachability and the typed holder view.**
+  `store.repair_mount_holders` runs where the Store's calls run: a SQLite
+  Store on another machine repairs through that machine's worker
+  (`store.repair`), and a PostgreSQL Store repairs in the calling process.
+  Preview answers the same typed holder view (`MountHolderView`: owner, place,
+  generation, lease and state) on every route, and the doctor's read-only
+  `store.diagnose` forwards those authority fields from a worker. The
+  Store-wide compact barrier is retained: a live or uncertain holder still
+  refuses `store.compact`, while a place the authority proves dead is adopted
+  with an `adopt` audit row and the rebuild proceeds.
 - Compaction writes its `gc_intent` operation row **before** its first
   checkpoint; the row lives in `<store>.compact` during build/verify, moves
   to the live Store after install, and is cleared at settle. `none` writes

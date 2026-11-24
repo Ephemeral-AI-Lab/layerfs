@@ -475,9 +475,7 @@ def component_violations(path, source):
     # layerfs-control to layerfs-api, which alone speaks the SDK. `home` is a
     # call family again (home.init, home.get), so it is no retired folder.
     moved = {
-        "layerfs-api": tuple(
-            f"/src/{part}/" for part in ("host", "family", "worker", "fs", "base", "operator")
-        ),
+        "layerfs-api": tuple(f"/src/{part}/" for part in ("host", "family", "worker", "fs", "base", "operator")),
         "layerfs-control": ("/src/host/", "/src/operator/", "/src/calls/"),
         "layerfs-store-service": ("/src/remote/",),
     }

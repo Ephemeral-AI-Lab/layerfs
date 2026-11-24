@@ -41,6 +41,7 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
 | [`store.update`](#storeupdate) | PostgreSQL | `{ ok }` | `admin` |
 | [`store.move`](#storemove) | sqlite | `{ moved_bytes }` | `admin` |
 | [`store.remove`](#storeremove) | sqlite | `{ ok }`, or `{ left }` | `admin` |
+| [`store.repair_mount_holders`](#storerepair_mount_holders) | both | holders, one settled/released op, or a bounded done-audit page | `admin` |
 | [`store.compact`](#storecompact) | both | `{ freed_bytes }` | `admin` |
 | [`store.doctor`](#storedoctor) | both | the doctor report | `admin` |
 
@@ -602,6 +603,47 @@ FAIL 1).
 $ layerfs store remove nope
 {"error":"NotFound","message":"no Store named nope"}
 ```
+
+### store.repair_mount_holders
+
+Explicit, operator-only repair of the mount admissions held at one Branch.
+Nothing is automatic: preview and audit change no live intent, the doctor only
+reports the same rows without releasing them, and a prune happens only when the
+operator asks for it.
+
+```text
+CLI     layerfs store repair-mount-holders <name> <project> <branch> <action> [--op HEX] [--legacy] [--operator NAME] [--page N] [--limit N] [--prune]
+```
+
+The action is one of:
+
+| Action | Effect |
+| --- | --- |
+| `preview` | lists the typed holder view (op, project, Branch, Workspace, Sandbox, machine, place authority, lease, state, legacy) and writes one retained `done` row with `action=preview;operator=NAME` in `evidence`, `op` null, the operator label and no owner or place columns; it changes no live intent |
+| `settle` | marks exactly `--op` uncertain; a later call reports `Unresolved`, never `Busy` |
+| `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` and clears the owner columns, so the unique owner key cannot block a remount |
+| `settle_legacy` | marks only rows with missing owner or place evidence |
+| `audit` | one bounded page of the Store's retained `done` rows, oldest first (`--page`, `--limit`, clamped to 1000); changes nothing, and the project/Branch names are not needed to read it |
+| `archive` | exports the retained `done` rows to `<home>/log/gc-audit.jsonl`, one JSON line each, reading bounded pages (`--page` starts, `--limit` is clamped to 1000) and appending to the file; export-only by default |
+
+`archive --prune` also deletes exactly the rows it exported, after their
+lines were written; a row must still be in state `done`, so a live intent is
+never pruned. A refused or interrupted export deletes nothing it did not
+export, and there is no automatic prune. Release answers
+`{ action: "release", op, audit: "gc_intent" }`; preview answers the holders
+plus `{ action: "preview", op: null, audit: "gc_intent" }`; settle and
+`settle_legacy` are in the home's `trace/calls.jsonl` call log only.
+`--operator` is the local name the caller gives (at most 128 characters, no
+control characters; empty is `local`): it is not an authenticated principal.
+On a SQLite Store the call runs on the machine that holds the file through its
+worker; a PostgreSQL Store runs in the calling process.
+
+| Error | When |
+| --- | --- |
+| `InvalidInput` | an unknown action; a missing or malformed `--op`; a bad operator label; an archive without the caller's home |
+| `NotFound` | no mount holder with that op at the Branch (for a release: already released) |
+| `Conflict` | release before settle |
+| `Unavailable`, `Unknown` | the owning worker is not reachable or its answer was lost |
 
 ### store.compact
 
