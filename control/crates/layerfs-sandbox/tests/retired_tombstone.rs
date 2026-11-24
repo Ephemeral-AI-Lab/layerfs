@@ -125,6 +125,42 @@ fn docker_daemon() -> SdkValue {
     ])
 }
 
+/// Store `shop` with project `api` on machine `native`, whose daemon and
+/// image archive are never run here; `false` (the home removed) where the
+/// Store's filesystem is unsupported.
+fn native_store(home: &Path) -> bool {
+    use layerfs_store::project::add::{add_project, ProjectAdd};
+    match layerfs_store::sqlite::create::create(home, "shop", None) {
+        Ok(_) => {}
+        Err(refusal) if refusal.code == "Unsupported" => {
+            eprintln!("NOT_RUN: unsupported Store filesystem: {refusal:?}");
+            let _ = std::fs::remove_dir_all(home);
+            return false;
+        }
+        Err(refusal) => panic!("create: {refusal:?}"),
+    }
+    let source = home.join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("a.txt"), b"hello\n").unwrap();
+    add_project(&ProjectAdd {
+        home: home.to_path_buf(),
+        store: layerfs_home::names::StoreName::parse("shop").unwrap(),
+        name: "api".to_owned(),
+        source,
+        timeout_ms: Some(60_000),
+        store_record: None,
+    })
+    .unwrap();
+    layerfs_store::open::close_idle(std::time::Duration::ZERO);
+    let machine = paths::machine_record(home, "native");
+    let record = read_record(&machine).unwrap().unwrap_or(SdkValue::Null);
+    let record = home::with_field(record, "daemon", t("/bin/sh"));
+    let record = home::with_field(record, "image_archive", t("/bin/sh"));
+    let record = home::with_field(record, "platform", t("native"));
+    write_record(&machine, &record).unwrap();
+    true
+}
+
 /// A local record this build does not read is forgotten by its records
 /// alone, no signal sent: its daemon may still run, so no tombstone.
 #[test]
@@ -140,6 +176,39 @@ fn an_unread_record_is_forgotten_without_a_tombstone() {
     assert!(
         !tombstoned(&home, "native", "s1"),
         "a tombstone proves a daemon that may still run dead"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A native record this build reads whose daemon keys are gone: its close
+/// answers `NoSuchSandbox` without inspecting the runtime, so the record
+/// goes and no tombstone is written (only a daemon its side found gone or
+/// stopped, `containerGone`, proves its mounts dead).
+#[cfg(target_os = "macos")]
+#[test]
+fn a_sandbox_without_daemon_keys_is_removed_without_a_tombstone() {
+    let home = new_home("nokeys");
+    if !native_store(&home) {
+        return;
+    }
+    let SdkValue::Map(mut daemon) = unread_daemon(&home, "s1") else {
+        unreachable!()
+    };
+    let dir = paths::sandbox_dir(&home, "s1");
+    daemon.retain(|(name, _)| name != "directory");
+    daemon.extend([
+        ("directory".to_owned(), t(&dir.display().to_string())),
+        ("pid".to_owned(), SdkValue::Int(i64::from(i32::MAX))),
+        ("start".to_owned(), t("1")),
+        ("boot".to_owned(), t(&"0".repeat(32))),
+        ("port".to_owned(), SdkValue::Int(1)),
+    ]);
+    sandbox(&home, "s1", "native", SdkValue::Map(daemon), &[]);
+    gone_left(removed(&home, "s1", false));
+    assert!(!dir.exists());
+    assert!(
+        !tombstoned(&home, "native", "s1"),
+        "no runtime was inspected, so nothing proves its mounts dead"
     );
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -266,36 +335,10 @@ fn started_here(host: Host, call: layerfs_sandbox::host::Call) -> layerfs_home::
 /// stand-in (`create_on`): nothing runs a daemon.
 #[test]
 fn a_recreate_drops_the_older_tombstone() {
-    use layerfs_store::project::add::{add_project, ProjectAdd};
     let home = new_home("recreate");
-    match layerfs_store::sqlite::create::create(&home, "shop", None) {
-        Ok(_) => {}
-        Err(refusal) if refusal.code == "Unsupported" => {
-            eprintln!("NOT_RUN: unsupported Store filesystem: {refusal:?}");
-            let _ = std::fs::remove_dir_all(&home);
-            return;
-        }
-        Err(refusal) => panic!("create: {refusal:?}"),
+    if !native_store(&home) {
+        return;
     }
-    let source = home.join("source");
-    std::fs::create_dir_all(&source).unwrap();
-    std::fs::write(source.join("a.txt"), b"hello\n").unwrap();
-    add_project(&ProjectAdd {
-        home: home.clone(),
-        store: layerfs_home::names::StoreName::parse("shop").unwrap(),
-        name: "api".to_owned(),
-        source,
-        timeout_ms: Some(60_000),
-        store_record: None,
-    })
-    .unwrap();
-    layerfs_store::open::close_idle(std::time::Duration::ZERO);
-    // the machine's daemon and image archive are never run here
-    let machine = paths::machine_record(&home, "native");
-    let record = read_record(&machine).unwrap().unwrap_or(SdkValue::Null);
-    let record = home::with_field(record, "daemon", t("/bin/sh"));
-    let record = home::with_field(record, "image_archive", t("/bin/sh"));
-    write_record(&machine, &record).unwrap();
 
     let id = home::opened(&home).unwrap().id;
     let old = format!("p1:{id}.sandbox:0000000000000010:aa");

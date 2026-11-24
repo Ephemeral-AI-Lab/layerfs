@@ -501,11 +501,13 @@ malformed one decodes as no token: missing evidence is no proof, never death
   nothing. A removal writes the generation's tombstone under
   `machine/<machine>/sandbox-retired/` before the home record goes only when
   the runtime is confirmed stopped (a close or force close, a reclaim of a
-  runtime that ended by itself), confirmed gone (its side answers
-  `NoSuchSandbox`, or its machine is confirmed gone or recorded stopped) or
-  never started. A forget that sent no signal (a record this build does not
-  read, a retired docker record, a foreign record, a worker that refused or
-  could not be reached and keeps its record) writes none: a tombstone for a
+  runtime that ended by itself), confirmed gone (its side found its daemon
+  gone or stopped, `NoSuchSandbox` with `containerGone`, or its machine is
+  confirmed gone or recorded stopped) or never started. A forget that sent no
+  signal (a record this build does not read, a retired docker record, a
+  foreign record, a worker that refused or could not be reached and keeps its
+  record) writes none, and so does a `NoSuchSandbox` that inspected no
+  runtime (no started record, no daemon keys): a tombstone for a
   daemon that may still run would prove its live mounts dead. A failed
   tombstone write does not stop the removal (a missing tombstone is only no
   proof) and is reported in `left`. A worker's

@@ -281,7 +281,10 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
             Ok(Removed::Stopped { unmounted, left })
         }
         // a Sandbox already gone loses its record too; its side's reclaim
-        // names a tombstone it could not write in its `left` detail
+        // names a tombstone it could not write in its `left` detail. Only a
+        // daemon its side found gone or stopped (`containerGone`) proves its
+        // mounts dead: any other `NoSuchSandbox` (no started record, no
+        // daemon keys) inspected no runtime, so no tombstone is written
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
             phase(events, "delete", None);
             direct::release(&home, &record);
@@ -289,7 +292,10 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                 Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
                 _ => Vec::new(),
             };
-            let unretired = retire_home(&home, &record, &dir);
+            let unretired = match refusal.detail.get_bool("containerGone") {
+                true => retire_home(&home, &record, &dir),
+                false => None,
+            };
             let left = reclaimed.into_iter().chain(unretired).collect();
             remove_folder(&dir)?;
             done(events);
