@@ -72,7 +72,13 @@ impl Session {
                 let error = rows::error(&e);
                 if error != BackendError::Unknown {
                     self.lane_work.add(0, 1);
-                    if connection.client.batch_execute("ROLLBACK").is_ok() {
+                    let rollback = format!(
+                        "ROLLBACK{}",
+                        crate::backend::postgresql::session::profile::barrier_leftover(
+                            &self.settings.schema
+                        )
+                    );
+                    if connection.client.batch_execute(&rollback).is_ok() {
                         return Err(error);
                     }
                 }

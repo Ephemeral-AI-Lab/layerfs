@@ -380,7 +380,9 @@ database ([`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backe
 
 ```text
  every writer, right after it locks store_lane (same round trip, same
- lock_timeout):  pg_advisory_lock(class, key); pg_advisory_unlock(class, key)
+ lock_timeout):  one statement:
+   SELECT pg_advisory_unlock(class, key)
+     FROM (SELECT pg_advisory_lock(class, key) OFFSET 0) AS barrier
  every nested Write/Publish: BEGIN ...; pg_advisory_xact_lock_shared(class, key)
    body
    lane check, one round trip on the lane connection:
@@ -397,6 +399,17 @@ has ended; a nested write that starts after that point fails its lane
 check, rolls back and answers `Closed` (`OwnershipUnavailable` in history
 terms): nothing of it was kept. Its own holder never takes the key
 exclusively while its lane is held, so its nested writes never wait for it.
+
+The take and the release are one statement, so an error cannot fall between
+them. A session-level advisory lock survives `ROLLBACK`, and before #776 P6
+they were two statements: a failure after the first left the key held
+exclusively on a pooled connection, and every later nested write's shared
+key waited for it. A statement cancelled after its lock and before its
+release can still leave it, so the `ROLLBACK` of every non-nested `Write` or
+`Publish`, and of a failed `hold_lane`, also releases a granted exclusive
+barrier of its own backend (no barrier is held past its statement, so such a
+lock is always a leftover). No test injects that cancellation; the suites
+run the rollback statement on every definite failure.
 
 | `SynchronousCommit` | Write acknowledged after |
 | --- | --- |

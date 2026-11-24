@@ -301,6 +301,16 @@ impl BoundWorkspace {
                     )
                 })?;
                 drop(reader);
+                // Rows written since the capture are checked first here,
+                // before the lane and unheld: an overlap already present
+                // refuses without taking the lane. The held check before the
+                // install repeats it for rows written since (#776 R3).
+                if !changed.is_empty() {
+                    let overlap = phase(timing, "live.early", || self.live_overlap(&changed))?;
+                    if !overlap.is_empty() {
+                        return Err(self.live_conflict(snapshot.scope, candidate, root, &overlap));
+                    }
+                }
                 // The candidate is validated and its install prepared before
                 // the lane: they read only immutable published objects. Only
                 // an in-lane merge step, which changes the candidate, is
@@ -529,6 +539,10 @@ impl BoundWorkspace {
                 })
                 .map_err(CommitError::Owner)
             })?;
+            // Mutations resume before the daemon invalidates the kernel's
+            // caches: a held FUSE mutation keeps its directory's inode lock
+            // or its locked pages in the kernel, which the invalidation waits
+            // for, so a hold kept through it would deadlock (#776 R4).
             drop(held);
             *self
                 .snapshot
