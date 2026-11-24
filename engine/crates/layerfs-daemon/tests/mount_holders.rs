@@ -9,6 +9,7 @@ mod fixture;
 mod support;
 
 use layerfs_bridge::control::{MountPlace, Reply, Request, SdkValue, WorkspaceToken};
+use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_store_service::history::{lookup, removal};
 
@@ -100,14 +101,33 @@ fn stack(f: &fixture::Fixture) -> layerfs_history::LayerStackRecord {
 #[test]
 fn a_placed_daemon_mount_registers_sandbox_machine_and_workspace() {
     let f = fixture::Fixture::new("g4-mount-place");
-    work(&f);
-    let token = bind_named_placed(&f, 7, MountPlace::new(Some("g4sbx"), Some("docker")));
+    let (_, branch) = work(&f);
+    let incarnation = "p1:worker:10:aa";
+    let generation = "p1:sandbox:10:aa";
+    let token = bind_named_placed(
+        &f,
+        7,
+        MountPlace::new(Some("g4sbx"), Some("docker"))
+            .with_generation(Some(generation))
+            .with_machine_incarnation(Some(incarnation)),
+    );
     let holder = holder(&f, &stack(&f));
     assert_eq!(holder.get_text("kind"), Some("mount"));
     assert_eq!(holder.get_text("sandbox"), Some("g4sbx"));
     assert_eq!(holder.get_text("machine"), Some("docker"));
     let workspace = layerfs_bridge::sdk_values::hex(&[7; 32]);
     assert_eq!(holder.get_text("workspace"), Some(workspace.as_str()));
+    // the intent records the generation the request place carried
+    let intents = f
+        .installed
+        .opened
+        .store
+        .history()
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(intents.len(), 1);
+    assert_eq!(intents[0].machine_incarnation.as_deref(), Some(incarnation));
+    assert_eq!(intents[0].sandbox_generation.as_deref(), Some(generation));
     unmount(&f, token);
     f.cleanup();
 }

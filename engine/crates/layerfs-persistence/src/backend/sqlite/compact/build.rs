@@ -178,6 +178,10 @@ enum Copy {
     All,
     /// The rows a filter keeps; the filter reads `src` and the mark scratch.
     Where(&'static str),
+    /// This run's own admission row, and the retained `done` operator-audit
+    /// rows: the live admission queries filter the done rows out, and the
+    /// rebuild must not delete the durable audit.
+    Done,
     /// The table's DDL is created, the table itself stays empty: transient
     /// working rows and the dead set are never carried across a rebuild.
     Empty,
@@ -189,8 +193,9 @@ enum Copy {
 /// checked at COMMIT.
 ///
 /// `history_meta` and `store_totals` are copied whole and then brought to the
-/// rebuild's values in the same transaction. `gc_intent` keeps only this run's
-/// admission intent, so the installed Store carries the row the settle clears.
+/// rebuild's values in the same transaction. `gc_intent` keeps this run's
+/// admission intent, so the installed Store carries the row the settle clears,
+/// and the retained `done` operator-audit rows the live queries filter out.
 fn copy_rule(table: &str) -> Copy {
     match table {
         // A pack with any live object is copied whole, unless `repack::plan`
@@ -240,7 +245,8 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
         "kept_node" | "scope_allocator" | "store_policy" | "store_totals" | "history_meta" => {
             Copy::All
         }
-        "gc_intent" => Copy::Empty,
+
+        "gc_intent" => Copy::Done,
         "gc_op" | "gc_dead" | "merge_operation" | "merge_record" | "init_operation"
         | "init_entry" | "init_host_file" | "binding_hint_block" => Copy::Empty,
         _ => Copy::All,
@@ -491,11 +497,6 @@ fn copy_rows(
             let statement = if table == "object_location" {
                 locator_columns(connection)?;
                 KEPT_LOCATORS.to_owned()
-            } else if table == "gc_intent" {
-                format!(
-                    "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE op_id=x'{}'",
-                    hex(&op.op_id)
-                )
             } else if table == "store_policy" {
                 format!(
                     "INSERT INTO main.{name} ({STORE_POLICY_COLUMNS}) SELECT {STORE_POLICY_COLUMNS} FROM src.{name}"
@@ -506,6 +507,10 @@ fn copy_rows(
                     Copy::Where(filter) => {
                         format!("INSERT INTO main.{name} SELECT * FROM src.{name} WHERE {filter}")
                     }
+                    Copy::Done => format!(
+                        "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE op_id=x'{}' OR state='done'",
+                        hex(&op.op_id)
+                    ),
                     Copy::Empty => continue,
                 }
             };
@@ -517,8 +522,9 @@ fn copy_rows(
                 add_pack_sums(&mut sums, (i64::MIN, i64::MAX), &mut pack_totals)?;
             }
         }
-        // `sqlite_sequence` is the acquisition operation counter: the copy
-        // keeps every row the source had, so the counter never falls (§4.1).
+        // `sqlite_sequence` holds the never-reused AUTOINCREMENT counter of
+        // Init's operation identity: the copy keeps every row the source had,
+        // so no counter falls (§4.1).
         if target_tables.contains("sqlite_sequence") {
             let source_sequence: i64 = connection
                 .query_row(
@@ -529,10 +535,14 @@ WHERE type='table' AND name='sqlite_sequence'",
                 )
                 .map_err(db_error)?;
             if source_sequence == 1 {
+                // A table whose rows were copied already advanced its counter
+                // (Init's operation identity); inserting the source row again
+                // would leave a duplicate sequence row.
                 connection
                     .execute_batch(
                         "INSERT INTO main.sqlite_sequence(name,seq) \
-SELECT name,seq FROM src.sqlite_sequence",
+SELECT name,seq FROM src.sqlite_sequence \
+WHERE name NOT IN (SELECT name FROM main.sqlite_sequence)",
                     )
                     .map_err(db_error)?;
             }

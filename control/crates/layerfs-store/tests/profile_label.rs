@@ -24,7 +24,7 @@ fn record(label: Option<&str>) -> StoreRecord {
 #[test]
 fn new_records_are_written_normal() {
     assert_eq!(PROFILE, "normal");
-    let restored = StoreRecord::restored("shop", &[7; 16], &[9; 32]);
+    let restored = StoreRecord::restored("shop", "native", &[7; 16], &[9; 32]);
     assert_eq!(restored.text("profile"), Some("normal"));
     assert_eq!(profile(&restored), Some("normal"));
 }

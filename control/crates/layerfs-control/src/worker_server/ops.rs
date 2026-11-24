@@ -91,6 +91,9 @@ pub(super) fn run(
                 ("kind", SdkValue::text("worker")),
                 ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
                 ("pid", SdkValue::Int(i64::from(std::process::id()))),
+                // the incarnation the host's start reconcile records, so a
+                // mount this worker places is not mistaken for an old one
+                ("incarnation", SdkValue::text(&server.incarnation)),
             ];
             if args.get("capacity") == Some(&SdkValue::Bool(true)) {
                 let available = layerfs_home::home::filesystem_available(root)
@@ -135,7 +138,85 @@ pub(super) fn run(
                 store_path: Some(file.display().to_string()),
                 ..call.open()
             };
-            layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                call.fields.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
+            })
+        }
+        // settles the intents a previous worker incarnation left in a Store
+        // under this worker's root (2.1, worker start): `{ store,
+        // store_record, machine, incarnation }`. The host recorded the
+        // ordered incarnation in the home MachineRecord before sending this;
+        // an uncertain owner is never settled.
+        "store.reconcile" => {
+            let store = args
+                .get_text("store")
+                .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its Store"))?
+                .to_owned();
+            layerfs_home::names::StoreName::parse(&store)?;
+            let machine = args
+                .get_text("machine")
+                .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its machine"))?
+                .to_owned();
+            let incarnation = args
+                .get_text("incarnation")
+                .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its incarnation"))?
+                .to_owned();
+            let file = layerfs_home::home::paths::store_file(root, &store);
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store),
+                project: None,
+                store_path: Some(file.display().to_string()),
+                store_record: args.get("store_record").cloned(),
+                postgresql: None,
+            };
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                layerfs_store::service::with_service(&open, |service| {
+                    layerfs_store_service::history::admission::reconcile_machine(
+                        service.store.history(),
+                        &machine,
+                        &incarnation,
+                    )
+                    .map(|reconcile| {
+                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                    })
+                    .map_err(layerfs_store_service::history::lookup::history)
+                })
+            })
+        }
+        // the operator's repair of one Branch's mount holders on the Store
+        // under this worker's root: `{ store, store_record, place_view?,
+        // <layerfs_store::repair::Repair fields> }`. `list`, `preview` and
+        // `settle` judge each holder with the caller's place view, installed
+        // here as a Store call's is; the rest is `layerfs_store::repair`.
+        "store.repair" => {
+            let store = args
+                .get_text("store")
+                .ok_or_else(|| refused("InvalidInput", "a Store repair names its Store"))?
+                .to_owned();
+            layerfs_home::names::StoreName::parse(&store)?;
+            let request = layerfs_store::repair::Repair::read(&args)?;
+            let file = layerfs_home::home::paths::store_file(root, &store);
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store),
+                project: None,
+                store_path: Some(file.display().to_string()),
+                store_record: args.get("store_record").cloned(),
+                postgresql: None,
+            };
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                layerfs_store::repair::repair_at(&open, &request)
+            })
         }
         // one step of a Store move, remove or create, or a live read's, on
         // this machine
@@ -180,19 +261,34 @@ pub(super) fn run(
         // deleted_ms?, project?, op_id?, pending_retry?, store_record? }`
         "project.delete" => {
             let root = home_of(Some(root))?;
-            delete_project(&root, &DeleteFrame::decode(&args)?)
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                delete_project(&root, &DeleteFrame::decode(&args)?)
+            })
         }
         // registers the caller's project-scope admission before its sidecar
         // and marker (2.0, T4.6): `{ store, stack_id, op_id, store_record? }`
         "project.delete.admit" => {
             let root = home_of(Some(root))?;
-            admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+            })
         }
         // releases the caller's project-scope admission after the marker
         // (2.0, T4.6): `{ store, op_id, store_record? }`
         "project.delete.release" => {
             let root = home_of(Some(root))?;
-            release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+            let place = layerfs_store_service::history::admission::decode_place_view(
+                args.get("place_view"),
+            );
+            layerfs_store_service::history::admission::with_place_view(place, || {
+                release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+            })
         }
         // removes only the worker's own entry for a `marked` sidecar whose
         // marker is already durable (2.0, T4.5b): `{ store, stack_id,

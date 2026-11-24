@@ -7,16 +7,26 @@ use layerfs_home::home::paths;
 use layerfs_home::names::StoreName;
 use std::path::{Path, PathBuf};
 
-fn scratch(parent: &Path, label: &str) -> PathBuf {
+fn scratch(parent: &Path, label: &str) -> Option<PathBuf> {
     use std::os::unix::fs::DirBuilderExt;
-    let directory = parent.join(format!("layerfs-create-{label}-{}", std::process::id()));
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let directory = parent.join(format!(
+        "layerfs-create-{label}-{}-{unique}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&directory);
-    std::fs::DirBuilder::new()
+    match std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(&directory)
-        .unwrap();
-    directory
+    {
+        Ok(()) => Some(directory),
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => None,
+        Err(error) => panic!("create scratch directory: {error:?}"),
+    }
 }
 
 /// A `mkdir` that fails removes nothing: the Store's directory name is taken
@@ -27,7 +37,9 @@ fn scratch(parent: &Path, label: &str) -> PathBuf {
 #[cfg(unix)]
 #[test]
 fn a_mkdir_failure_removes_nothing() {
-    let home = scratch(&std::env::temp_dir(), "taken-name");
+    let Some(home) = scratch(&std::env::temp_dir(), "taken-name") else {
+        return;
+    };
     layerfs_home::home::layout::create(&home).unwrap();
     let name = StoreName::parse("taken").unwrap();
     let directory = paths::store_dir(&home, &name);
@@ -57,7 +69,10 @@ fn a_refused_create_removes_only_the_directory_this_call_made() {
     use std::os::unix::fs::DirBuilderExt;
     // a home on tmpfs: `make_empty`'s own `0700` mkdir succeeds and the kernel
     // guard then refuses the filesystem
-    let home = scratch(Path::new("/dev/shm"), "tmpfs-home");
+    let Some(home) = scratch(Path::new("/dev/shm"), "tmpfs-home") else {
+        eprintln!("skipping: /dev/shm is not writable for this test");
+        return;
+    };
     layerfs_home::home::layout::create(&home).unwrap();
     let name = StoreName::parse("tmp").unwrap();
     let refusal = layerfs_store::sqlite::create::create(&home, &name, None).unwrap_err();

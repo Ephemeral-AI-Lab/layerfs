@@ -101,7 +101,7 @@ fi
 LAYERFS_WORKER_LOG="$3"
 {}
 {CGROUP_LEAF}
-LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret setsid nohup "$2/layerfs" worker >> "$LAYERFS_WORKER_LOG" 2>&1 < /dev/null &
+LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret LAYERFS_WORKER_INCARNATION="$4" setsid nohup "$2/layerfs" worker >> "$LAYERFS_WORKER_LOG" 2>&1 < /dev/null &
 echo $! > $s/worker.pid"#,
         log_start()
     )
@@ -165,7 +165,8 @@ pub(crate) fn launch(
     guest.write_file(tools, &format!("{STATE}/secret"), &secret)?;
     let listen = format!("{bind}:{WORKER_PORT}");
     let script = launch_script();
-    let args = [listen.as_str(), BUNDLE, WORKER_LOG];
+    let incarnation = spec.incarnation.as_deref().unwrap_or("");
+    let args = [listen.as_str(), BUNDLE, WORKER_LOG, incarnation];
     guest.script(tools, "starting the worker", &script, &args)?;
     ready(spec, guest, WORKER_PORT, address, &|| None)?;
     Ok(Endpoint { address, secret })

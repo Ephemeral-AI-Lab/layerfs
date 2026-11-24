@@ -304,6 +304,8 @@ fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
     write_entity(&path, &SdkValue::map([("platform", t("lima"))])).unwrap();
     let done = Arc::new(AtomicBool::new(false));
     let flag = done.clone();
+    let started = Arc::new(AtomicBool::new(false));
+    let first = started.clone();
     let writer = std::thread::spawn(move || {
         let mut epoch = 0;
         while !flag.load(Ordering::Relaxed) {
@@ -316,10 +318,14 @@ fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
                 ]),
             )
             .unwrap();
+            first.store(true, Ordering::Relaxed);
             std::thread::yield_now();
         }
         epoch
     });
+    while !started.load(Ordering::Relaxed) {
+        std::thread::yield_now();
+    }
     let report = run(&home);
     done.store(true, Ordering::Relaxed);
     assert!(writer.join().unwrap() > 0);

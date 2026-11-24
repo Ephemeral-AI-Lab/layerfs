@@ -56,6 +56,18 @@ pub fn worker_record(home: &Path, machine: &str) -> PathBuf {
     machine_dir(home, machine).join("worker.json")
 }
 
+/// `machine/<machine>/sandbox-retired/`: one tombstone per closed Sandbox,
+/// outside `sandbox/` so a Sandbox listing never mistakes it for one.
+pub fn sandbox_retired_dir(home: &Path, machine: &str) -> PathBuf {
+    machine_dir(home, machine).join("sandbox-retired")
+}
+
+/// `machine/<machine>/sandbox-retired/<name>.json`: a closed Sandbox's
+/// name, generation and retired time, written before its record is removed.
+pub fn sandbox_tombstone(home: &Path, machine: &str, sandbox: &str) -> PathBuf {
+    sandbox_retired_dir(home, machine).join(format!("{sandbox}.json"))
+}
+
 /// `sandbox/<name>/`: a Sandbox's record, daemon keys and Workspaces.
 pub fn sandbox_dir(home: &Path, sandbox: &str) -> PathBuf {
     home.join("sandbox").join(sandbox)

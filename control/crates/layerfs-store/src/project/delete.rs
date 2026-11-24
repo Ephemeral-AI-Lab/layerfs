@@ -600,20 +600,25 @@ struct Local {
 impl Effects for Local {
     fn admit(&mut self, stack: LayerStackId, op: [u8; 16], project: &str) -> Result<Admission> {
         let intent = store_admission::project_removal_at(stack, op, Some(project));
-        service::with_service(&self.open, |service| {
-            match service.store.history().gc_register(&intent) {
-                Ok(()) => Ok(Admission::new(stack, op)),
-                // A provider without admission cannot exclude a removal; the
-                // marker's own admission still runs, as it did before T6.
-                Err(HistoryError::Unsupported(_)) => Ok(Admission::new(stack, op)),
-                Err(error) => Err(lookup::history_in(
-                    error,
-                    GcScopeKind::Project,
-                    project,
-                    None,
-                    Some(&op),
-                )),
-            }
+        // the removal's admission compares placed mount intents with the
+        // caller's place view, as `Remote` sends it
+        let open = &self.open;
+        crate::place_view::scoped(open, || {
+            service::with_service(open, |service| {
+                match service.store.history().gc_register(&intent) {
+                    Ok(()) => Ok(Admission::new(stack, op)),
+                    // A provider without admission cannot exclude a removal; the
+                    // marker's own admission still runs, as it did before T6.
+                    Err(HistoryError::Unsupported(_)) => Ok(Admission::new(stack, op)),
+                    Err(error) => Err(lookup::history_in(
+                        error,
+                        GcScopeKind::Project,
+                        project,
+                        None,
+                        Some(&op),
+                    )),
+                }
+            })
         })
     }
 
@@ -646,8 +651,11 @@ impl Effects for Local {
             admission.op,
             Some(self.project.as_str()),
         );
-        service::with_service(&self.open, |service| {
-            delete_stack_with(&service.store, admission.stack, deleted_ms, &intent)
+        let open = &self.open;
+        crate::place_view::scoped(open, || {
+            service::with_service(open, |service| {
+                delete_stack_with(&service.store, admission.stack, deleted_ms, &intent)
+            })
         })
     }
 
@@ -719,6 +727,7 @@ pub fn delete(
                         store: store.to_owned(),
                         project: name.to_owned(),
                         store_record: record.to_record().clone(),
+                        place: crate::place_view::encoded_from_home(&home),
                     };
                     delete_with(&home, store, name, stack, &mut effects)
                 }

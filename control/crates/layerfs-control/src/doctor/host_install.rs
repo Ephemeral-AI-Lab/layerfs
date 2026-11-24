@@ -58,15 +58,17 @@ pub(super) fn prerequisites(checks: &mut Checks) {
 }
 
 /// `home.bundle`: the Linux bundle is present and complete, made only
-/// when a recorded machine other than `native` needs it.
-pub(super) fn bundle(records: &Scanned, checks: &mut Checks) {
+/// when a recorded machine needs it: one whose calls run in its worker
+/// (its platform's executor on this host), or one whose record cannot say.
+pub(super) fn bundle(home: &Path, records: &Scanned, checks: &mut Checks) {
     const ID: &str = "home.bundle";
-    let remote = records.machines.iter().any(|m| m.name() != "native")
-        || records.sandboxes.iter().any(|s| s.machine() != "native")
+    let worker = |machine: &str| !layerfs_machine::runs_here(home, machine).unwrap_or(false);
+    let remote = records.machines.iter().any(|m| worker(m.name()))
+        || records.sandboxes.iter().any(|s| worker(s.machine()))
         || records
             .stores
             .iter()
-            .any(|s| s.machine().is_ok_and(|m| m != "native"));
+            .any(|s| s.machine().is_ok_and(|m| worker(&m)));
     if !remote {
         return;
     }

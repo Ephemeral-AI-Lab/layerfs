@@ -35,6 +35,7 @@ pub(crate) use rows::{
 };
 
 use bindings::params;
+pub(crate) use bindings::{place_evidence, place_tokens};
 use layerfs_history::query;
 pub use objects::{Sequence, Spans};
 pub(crate) mod facts;

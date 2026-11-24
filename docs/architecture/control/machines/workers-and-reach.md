@@ -34,6 +34,7 @@ request carries what its operation needs. Which calls take a worker is the
             0600 via stdin; end an earlier worker; start detached as root:
             LAYERFS_WORKER_LISTEN=<bind>:7070
             LAYERFS_WORKER_SECRET=/layerfs/state/secret
+            LAYERFS_WORKER_INCARNATION=<the start's ordered token>
             >> /layerfs/data/log/worker.log   (rotated first, see below)
  4 ready    guest /proc/net/tcp listens on the port AND host 127.0.0.1:<port>
             accepts; every 200 ms, at most 60 s
@@ -51,6 +52,31 @@ mounted read-only, entry script makes the folders and the log and writes
 `/layerfs/state/worker.pid`; its one sysctl write is `ip_forward` on Docker
 Desktop, never on a Linux Engine, whose namespace is the host's);
 step 4 is shared ([Platforms](platforms.md#docker-platformsdocker)).
+
+### The start order and the ordered incarnation
+
+`machine.start` holds the machine's `start.lock` and, before launching a
+worker, stops the one it recorded and confirms both the provider state and
+the recorded endpoint say it is gone. Only then does it mint the ordered
+`p1:<home id>.worker:<milliseconds>:<nonce>` incarnation (one past the
+previous incarnation's milliseconds when the clock stepped back), write it
+into the home `MachineRecord.incarnation`, and pass it to the launched worker
+as `LAYERFS_WORKER_INCARNATION`; `machine.create` writes the same field
+before its provider creates the worker. The worker records the value in
+`worker-incarnation.json` under its root before it serves; a mount intent
+carries the incarnation its control caller read from the home record, never
+a process-wide value. Values of different homes never order, so on a Store
+two homes share another home's `box` never proves this home's `box` mount
+dead. After the worker answers, the host reconciles
+the Stores on **that machine** with the value only when `worker.ping`
+reports the same value; a start that cannot stop the old worker, record the
+token or read it back fails before any intent is settled. A home restore
+that brings back an older `MachineRecord` therefore stays uncertain: the
+reported value differs and the reconcile is skipped, so no live owner is
+marked dead. An old worker started without the setting mints its own token
+with no home id, which orders against nothing and never matches the record,
+so its start skips the reconcile; a record without `incarnation` is no place
+proof, never death.
 
 ### The worker's log
 

@@ -207,7 +207,7 @@ pub fn compact_status(
            LEFT JOIN {table}.gc_op o ON o.id=1 \
            LEFT JOIN LATERAL (SELECT op_id,owner_runtime,owner_boot,state,\
                                      phase,generation,artifact,updated_ms \
-                                FROM {table}.gc_intent WHERE kind='compaction' \
+                                FROM {table}.gc_intent WHERE kind='compaction' AND state <> 'done' \
                                ORDER BY updated_ms LIMIT 1) i ON TRUE"
     );
     let rows = match client.query(&sql, &[]) {

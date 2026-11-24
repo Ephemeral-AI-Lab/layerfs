@@ -10,7 +10,8 @@
 //! sentence behind it in `error`. In order: a live owner's `op` is `busy`;
 //! a gone owner's uncertain `op` is `broken` `unresolved`; a gone owner's
 //! certain `op` is ignored (a read writes nothing); a platform removed in
-//! 2.0 is `broken` `unsupported`; `native` is always `ready`; a record
+//! 2.0 is `broken` `unsupported`; a machine whose platform has no provider
+//! (`native`) is always `ready`; a record
 //! with no `vm_name` (an earlier build's) is `broken` `outdated` with the
 //! fix `machine remove`, after the removes of what is recorded on it
 //! ([`MachineRecord::status_held`]); a recorded `reason` is `broken` with it; then
@@ -129,7 +130,7 @@ impl MachineRecord {
     /// Sandbox recorded on it then goes by its records alone, and its fix
     /// removes those first, then the machine.
     pub fn gone(&self) -> bool {
-        self.nameless() || (self.name() != "native" && self.reason() == Some(Reason::Missing))
+        self.nameless() || (self.provided() && self.reason() == Some(Reason::Missing))
     }
 
     /// Refuses a call that needs the VM of a machine a live read found
@@ -184,7 +185,8 @@ impl MachineRecord {
             let fix = fix(name, Reason::Unsupported, true, sandboxes);
             return State::broken(Reason::Unsupported, fix.as_deref());
         }
-        if name == "native" {
+        // a machine no provider holds runs on the host's own OS: never stopped
+        if !self.provided() {
             return State::Ready;
         }
         // a record an earlier build made, with no provider name: only its
@@ -278,14 +280,15 @@ impl MachineRecord {
     }
 }
 
-/// The state of machine `name` when it has no record: `native` and
-/// `docker` exist with or without one (ready, and never started); any other
-/// machine a Store or Sandbox still names is `broken` `missing`.
+/// The state of machine `name` when it has no record: a built-in machine
+/// exists with or without one, ready when its platform (which has its
+/// name) has no provider (`native`), else never started (`docker`); any
+/// other machine a Store or Sandbox still names is `broken` `missing`.
 pub fn unrecorded(name: &str) -> State {
-    match name {
-        "native" => State::Ready,
-        "docker" => State::Stopped,
-        _ => State::broken(Reason::Missing, None),
+    match layerfs_home::names::BUILT_IN.contains(&name) {
+        true if !crate::local::provided(name) => State::Ready,
+        true => State::Stopped,
+        false => State::broken(Reason::Missing, None),
     }
 }
 

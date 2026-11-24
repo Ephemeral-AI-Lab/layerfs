@@ -1,6 +1,6 @@
 //! A sqlite Store's file on the machine that holds it (H §7.3): the steps a
 //! `store move`, a `store remove` and a `store create --machine` take on each side. They run in the
-//! caller's process for `native` (under the home) and in a machine's worker
+//! caller's process for a machine whose calls run there (under the home) and in a machine's worker
 //! for every other machine (under the worker's root). Paths come from the
 //! root and the Store's name only, never from the caller. The steps that
 //! read, replace or delete the file close this process's open copy first

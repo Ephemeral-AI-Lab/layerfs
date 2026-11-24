@@ -3,6 +3,12 @@
 //! refusal per call plus the three removal results and the §11 report.
 use layerfs_api::Kind;
 use layerfs_bridge::control::SdkValue;
+use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
+use layerfs_history::PlaceAuthority;
+use layerfs_store::open_args::OpenArgs;
+use layerfs_store::record::StoreRecord;
+use layerfs_store::service::with_service;
+use layerfs_store_service::history::lookup;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -387,14 +393,17 @@ fn plant_mount(home: &Path, sandbox: &str) {
 /// A live-owned mount intent of a Sandbox this home no longer records (one
 /// `sandbox remove` forgot without stopping its daemon) is not ended by
 /// anything that cannot prove its owner gone (RV5 FAIL-1): `store compact`
-/// and `branch remove` stay `InUse` (mounts active), and `store
-/// doctor` adds no leftover check (V20-4).
+/// and `branch remove` stay `InUse` (mounts active). The Store doctor reports
+/// it as the `store.mount_holders` warning of the lean doctor, never as a
+/// leftover it releases itself (V20-4).
 #[test]
 fn a_live_mount_intent_of_a_forgotten_sandbox_keeps_holding_the_store() {
     let (home, folder) = project();
     plant_mount(&home, "gone");
     let doctor = ok(&home, "store.doctor", &[("store", t("shop"))]);
-    assert!(!format!("{doctor:?}").contains("gone"), "{doctor:?}");
+    let reported = format!("{doctor:?}");
+    assert!(reported.contains("store.mount_holders"), "{doctor:?}");
+    assert!(!reported.contains("leftovers"), "{doctor:?}");
     for _ in 0..2 {
         let (code, message) = refused(&home, "store.compact", &[("store", t("shop"))]);
         assert_eq!(code, "InUse", "{message}");
@@ -795,4 +804,290 @@ fn a_bare_project_name_is_refused_by_every_project_call() {
     assert_eq!(code, "InvalidInput", "{message}");
     assert!(message.contains("store name"), "{message}");
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// `store.repair_mount_holders` is the explicit two-step operator repair:
+/// preview answers the typed holder view and writes nothing; release needs
+/// a preceding settle; `settle_legacy` marks only rows with no owner or place
+/// evidence; release retains the row as the durable done audit, and the audit
+/// action reads it back in bounded pages.
+#[test]
+fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
+    let (home, folder) = project();
+    let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
+    let open = OpenArgs::of_record(&home, "shop", &record).unwrap();
+    // The fixture's main Branch is the Branch the project recorded, read from
+    // the name index. `store.repair_mount_holders` is what must resolve the
+    // name `main` through `project.list_branches` (spec 4.4: a listing names
+    // the recorded Branch, not a null main id).
+    let (stack, branch) = with_service(&open, |service| {
+        let stack = lookup::project(&service.store, "api")?;
+        let main = layerfs_history::HistoryName::new("main").expect("a valid Branch name");
+        let branch = service
+            .store
+            .history()
+            .branch_named(stack.id, &main)
+            .map_err(lookup::history)?
+            .expect("the project records its main Branch")
+            .id;
+        Ok((stack.id, branch))
+    })
+    .unwrap();
+    let live = GcIntent::shared(
+        [0x21; 16],
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack.as_slice())
+    .named(Some("api"), Some("main"))
+    .placed(Some([0x22; 32]), Some("box"), Some("box"))
+    .owned(Some("pid:1@0"), Some("boot:1"))
+    .authorized(PlaceAuthority {
+        machine_incarnation: Some("worker:1".to_owned()),
+        sandbox_generation: Some("generation:1".to_owned()),
+    });
+    let legacy = GcIntent::shared(
+        [0x31; 16],
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack.as_slice())
+    .named(Some("api"), Some("main"));
+    with_service(&open, |service| {
+        service.store.history().gc_register(&live).unwrap();
+        service.store.history().gc_register(&legacy).unwrap();
+        Ok(())
+    })
+    .unwrap();
+
+    let live_op = "21".repeat(16);
+    let legacy_op = "31".repeat(16);
+    let repair = |action: &str, op: Option<&str>, legacy: bool| {
+        let mut fields = vec![
+            ("project", t("shop/api")),
+            ("branch", t("main")),
+            ("action", t(action)),
+        ];
+        if let Some(op) = op {
+            fields.push(("op", t(op)));
+        }
+        if legacy {
+            fields.push(("legacy", SdkValue::Bool(true)));
+        }
+        fields.push(("operator", t("alice")));
+        fields
+    };
+
+    // Preview answers the typed view, settle is a separate step, and release
+    // needs the settled state.
+    let preview = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("preview", None, false),
+    );
+    let Some(SdkValue::List(holders)) = preview.get("items") else {
+        panic!("preview holders: {preview:?}");
+    };
+    assert_eq!(holders.len(), 2, "{preview:?}");
+    assert_eq!(preview.get_text("action"), Some("preview"));
+    assert_eq!(preview.get("next_cursor"), Some(&SdkValue::Null));
+    // Preview is read-only: the Branch's intents are as registered, and no
+    // retained row was written.
+    let intents = with_service(&open, |service| {
+        (service.store.history())
+            .gc_intents(GcScopeKind::Branch, branch.as_slice())
+            .map_err(lookup::history)
+    })
+    .unwrap();
+    assert_eq!(intents.len(), 2, "{intents:?}");
+    assert!(
+        intents.iter().all(|intent| !intent.uncertain),
+        "{intents:?}"
+    );
+    let audit = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("audit", None, false),
+    );
+    assert!(
+        matches!(audit.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
+        "preview wrote a row: {audit:?}"
+    );
+    let live_row = holders
+        .iter()
+        .find(|row| row.get_text("op") == Some(live_op.as_str()))
+        .expect("the live holder");
+    assert_eq!(live_row.get_text("state"), Some("live"));
+    assert_eq!(live_row.get_text("machine_incarnation"), Some("worker:1"));
+    assert_eq!(
+        live_row.get_text("sandbox_generation"),
+        Some("generation:1")
+    );
+    assert_eq!(live_row.get("legacy"), Some(&SdkValue::Bool(false)));
+    // nothing proves its owner gone: the row still looks live
+    assert_eq!(live_row.get_text("liveness"), Some("live"));
+    assert_eq!(live_row.get("safe"), Some(&SdkValue::Bool(false)));
+    assert!(live_row.get("reason").is_none(), "state words, no prose");
+    let legacy_row = holders
+        .iter()
+        .find(|row| row.get_text("op") == Some(legacy_op.as_str()))
+        .expect("the legacy holder");
+    assert_eq!(legacy_row.get("legacy"), Some(&SdkValue::Bool(true)));
+
+    let (code, message) = refused(
+        &home,
+        "store.repair_mount_holders",
+        &repair("release", Some(&live_op), false),
+    );
+    assert_eq!(code, "Conflict", "{message}");
+    // `legacy` may not touch a row with owner and place evidence.
+    let (code, message) = refused(
+        &home,
+        "store.repair_mount_holders",
+        &repair("settle", Some(&live_op), true),
+    );
+    assert_eq!(code, "InvalidInput", "{message}");
+
+    // a holder that still looks live is settled only when forced
+    let (code, message) = refused(
+        &home,
+        "store.repair_mount_holders",
+        &repair("settle", Some(&live_op), false),
+    );
+    assert_eq!(code, "InUse", "{message}");
+    let mut forced = repair("settle", Some(&live_op), false);
+    forced.push(("force", SdkValue::Bool(true)));
+    let settled = ok(&home, "store.repair_mount_holders", &forced);
+    assert_eq!(settled.get_text("state"), Some("uncertain"), "{settled:?}");
+    let preview = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("preview", None, false),
+    );
+    let Some(SdkValue::List(holders)) = preview.get("items") else {
+        panic!("preview holders: {preview:?}");
+    };
+    let settled_row = holders
+        .iter()
+        .find(|row| row.get_text("op") == Some(live_op.as_str()))
+        .expect("the settled holder");
+    assert_eq!(settled_row.get_text("state"), Some("uncertain"));
+    ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("release", Some(&live_op), false),
+    );
+
+    let settled = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("settle_legacy", None, false),
+    );
+    assert_eq!(settled.get_int("settled"), Some(1));
+    ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("release", Some(&legacy_op), false),
+    );
+    let preview = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("preview", None, false),
+    );
+    assert!(
+        matches!(preview.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
+        "{preview:?}"
+    );
+
+    // Both releases retained their row as the durable operator audit, and
+    // the three previews wrote none. Admission still filters every done row.
+    let audit = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("audit", None, false),
+    );
+    let Some(SdkValue::List(rows)) = audit.get("items") else {
+        panic!("audit items: {audit:?}");
+    };
+    let released: Vec<_> = rows
+        .iter()
+        .filter(|row| {
+            row.get_text("evidence")
+                .is_some_and(|evidence| evidence.starts_with("action=release;"))
+        })
+        .collect();
+    assert_eq!(released.len(), 2, "{audit:?}");
+    assert_eq!(rows.len(), 2, "only the releases are retained: {audit:?}");
+    let released = released
+        .iter()
+        .find(|row| row.get_text("op") == Some(live_op.as_str()))
+        .expect("the released live op");
+    assert_eq!(released.get_text("kind"), Some("mount"));
+    assert_eq!(released.get_text("project"), Some("api"));
+    assert_eq!(released.get_text("branch"), Some("main"));
+    assert_eq!(released.get_text("machine"), Some("box"));
+    assert_eq!(released.get_text("sandbox"), Some("box"));
+    let evidence = released.get_text("evidence").expect("evidence");
+    assert!(
+        evidence.contains(&format!("action=release;operator=alice;op={live_op}")),
+        "{evidence}"
+    );
+    assert_eq!(audit.get("next_cursor"), Some(&SdkValue::Null), "{audit:?}");
+
+    // Paging is by `limit` and `cursor`: one row a page, the cursor carries
+    // the project, Branch and action, and another action's cursor is refused.
+    let mut first = repair("audit", None, false);
+    first.push(("limit", SdkValue::Int(1)));
+    let first = ok(&home, "store.repair_mount_holders", &first);
+    let Some(cursor) = first.get_text("next_cursor").map(str::to_owned) else {
+        panic!("a first page of one names the next: {first:?}");
+    };
+    let mut second = repair("audit", None, false);
+    second.push(("limit", SdkValue::Int(1)));
+    second.push(("cursor", t(&cursor)));
+    let second = ok(&home, "store.repair_mount_holders", &second);
+    let op_of = |page: &SdkValue| match page.get("items") {
+        Some(SdkValue::List(rows)) if rows.len() == 1 => rows[0].get_text("op").map(str::to_owned),
+        other => panic!("one row: {other:?}"),
+    };
+    assert_ne!(op_of(&first), op_of(&second), "the second page moves on");
+    assert_eq!(
+        second.get("next_cursor"),
+        Some(&SdkValue::Null),
+        "{second:?}"
+    );
+    let mut crossed = repair("preview", None, false);
+    crossed.push(("cursor", t(&cursor)));
+    let (code, message) = refused(&home, "store.repair_mount_holders", &crossed);
+    assert_eq!(code, "InvalidInput", "{message}");
+    let mut too_many = repair("audit", None, false);
+    too_many.push(("limit", SdkValue::Int(i64::from(u32::MAX))));
+    let (code, message) = refused(&home, "store.repair_mount_holders", &too_many);
+    assert_eq!(code, "InvalidInput", "{message}");
+
+    // A refused call changes nothing.
+    let (code, message) = refused(
+        &home,
+        "store.repair_mount_holders",
+        &repair("inspect", None, false),
+    );
+    assert_eq!(code, "InvalidInput", "{message}");
+    let (code, message) = refused(
+        &home,
+        "store.repair_mount_holders",
+        &repair("settle", None, false),
+    );
+    assert_eq!(code, "InvalidInput", "{message}");
+    let unknown = "99".repeat(16);
+    let (code, message) = refused(
+        &home,
+        "store.repair_mount_holders",
+        &repair("release", Some(&unknown), false),
+    );
+    assert_eq!(code, "NotFound", "{message}");
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
 }

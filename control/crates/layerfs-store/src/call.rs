@@ -1,6 +1,6 @@
 //! The route of one Store call, chosen from records (H §7.7): a PostgreSQL
-//! Store and a sqlite Store on `native` run in this process, under its
-//! lease; a sqlite Store
+//! Store and a sqlite Store on a machine whose calls run here (`native` on
+//! macOS and Linux) run in this process, under its lease; a sqlite Store
 //! on any other machine runs in that machine's worker, started first if it
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file
@@ -49,7 +49,11 @@ pub fn store_call(
         Executor::Worker(mut worker) => {
             // the host process holds the lease while it sends the call
             let _lease = lease;
-            let request = frame(method, with_project(args, target), target, &record);
+            // only an admitting call carries the caller's place view
+            let place = (crate::place_view::admits(method))
+                .then(|| crate::place_view::encoded_from_home(&home))
+                .flatten();
+            let request = frame(method, with_project(args, target), target, &record, place);
             worker.call("store.call", request, &mut |event| events.event(event))
         }
     }
@@ -62,11 +66,15 @@ fn frame(
     mut fields: Vec<(String, SdkValue)>,
     target: &Target,
     record: &StoreRecord,
+    place: Option<SdkValue>,
 ) -> SdkValue {
     fields.extend([
         ("store".to_owned(), SdkValue::text(&target.store)),
         ("store_record".to_owned(), record.to_record().clone()),
     ]);
+    if let Some(place) = place {
+        fields.push(("place_view".to_owned(), place));
+    }
     SdkValue::map([
         ("op", SdkValue::text(method)),
         ("args", SdkValue::Map(fields)),

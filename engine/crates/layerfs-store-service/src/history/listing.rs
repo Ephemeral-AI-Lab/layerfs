@@ -135,14 +135,22 @@ fn branch_item(store: &Arc<Store>, branch: &BranchRecord) -> Result<SdkValue> {
     ]))
 }
 
-/// The project's main line as a list shows it: its head Layer.
+/// The project's main line as a list shows it: its head Layer. `main` is the
+/// stack's head Layer, but `init` and `add_project` also fork a Branch named
+/// `main` at that head; when it exists, the row carries its id so
+/// `service::branch_named` resolves the main mount scope. The name index is
+/// read directly: `args::branch` names `main` as the line and never a Branch,
+/// refusing it (spec 4.4).
 fn main_item(store: &Arc<Store>, stack: &LayerStackRecord) -> Result<SdkValue> {
     let head = NodeId::Layer(stack.head_layer);
+    let id = recorded_main(store, stack).map_or(SdkValue::Null, |branch| {
+        SdkValue::text(hex(branch.id.as_slice()))
+    });
     Ok(SdkValue::map([
         ("branch", SdkValue::text(MAIN)),
         ("commit", SdkValue::text(node_text(head))),
         ("forkedFrom", SdkValue::Null),
-        ("id", SdkValue::Null),
+        ("id", id),
         ("base", SdkValue::text(node_text(head))),
         (
             "root",
@@ -150,6 +158,16 @@ fn main_item(store: &Arc<Store>, stack: &LayerStackRecord) -> Result<SdkValue> {
         ),
         ("head", SdkValue::Null),
     ]))
+}
+
+/// The Branch `stack` records for its main line, when it records one:
+/// `init` and `add_project` fork a Branch named `main` at the stack's head.
+fn recorded_main(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+) -> Option<layerfs_history::BranchRecord> {
+    let name = layerfs_history::HistoryName::new(MAIN).ok()?;
+    store.history().branch_named(stack.id, &name).ok().flatten()
 }
 
 /// The one Branch `name`, or main, from the name index: a list of one, or

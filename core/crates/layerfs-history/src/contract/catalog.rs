@@ -20,10 +20,10 @@ use crate::error::HistoryResult;
 use crate::identity::{BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId};
 use crate::records::{
     AddLayerOutcome, AddLayerRequest, BranchMergeRequest, BranchRecord, BranchSnapshot,
-    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest, GcDeletion,
-    GcIntent, GcScopeKind, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult,
-    PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest, Reservation, ReserveRequest,
-    StackInitialization,
+    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest, GcAuditPage,
+    GcDeletion, GcIntent, GcReconcile, GcScopeKind, LayerHistoryRequest, LayerRecord,
+    LayerStackRecord, Page, PageResult, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
+    Reservation, ReserveRequest, StackInitialization,
 };
 /// Checked inputs that establish one catalog binding.
 #[derive(Clone, Eq, PartialEq)]
@@ -499,6 +499,40 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported("GC admission"))
     }
 
+    /// Retains one released admission intent as the durable `done` audit row:
+    /// its state becomes `done`, its owner columns are cleared so it cannot
+    /// block a later mount, and `evidence` names the operator action, the
+    /// operator and the operation. Returns `false` when no intent has
+    /// `op_id` (already released or adopted), so a concurrent repair does not
+    /// invent an audit row. The default refuses: a provider that keeps no
+    /// `done` rows cannot promise the operator audit.
+    ///
+    /// # Errors
+    ///
+    /// The default returns [`crate::error::HistoryError::Unsupported`]; an
+    /// implementation returns its own error when the row cannot be retained.
+    fn gc_release_done(&self, _op_id: &[u8; 16], _evidence: &str) -> HistoryResult<bool> {
+        Err(crate::error::HistoryError::Unsupported("GC done audit"))
+    }
+
+    /// Records `incarnation` as the current place of `machine` and settles
+    /// the intents that value proves dead.
+    ///
+    /// One write transaction: the intents recorded at that machine are
+    /// classified against the new ordered incarnation. Only a dead intent
+    /// that is not uncertain is settled; an expired lease or an uncertain
+    /// owner is kept, and another machine's rows are never read. The default
+    /// refuses.
+    fn gc_reconcile_machine(
+        &self,
+        _machine: &str,
+        _incarnation: &str,
+    ) -> HistoryResult<GcReconcile> {
+        Err(crate::error::HistoryError::Unsupported(
+            "GC place authority",
+        ))
+    }
+
     /// `branch.remove`: admits at Branch scope and writes the marker in one
     /// write transaction.
     fn gc_remove_branch(
@@ -550,6 +584,38 @@ pub trait HistoryCatalog: Send + Sync {
         _scope_id: &[u8],
     ) -> HistoryResult<Vec<GcIntent>> {
         Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// What admission would say of each of `intents` now, in order: the
+    /// owner evidence first, then the place view the caller installed for
+    /// this thread, exactly as an admitting removal judges a conflicting
+    /// intent. A read; it changes nothing. The operator repair's `list` and
+    /// `preview` report it and its `settle` refuses a holder still `Live`
+    /// unless forced. The default refuses.
+    fn gc_liveness(&self, _intents: &[GcIntent]) -> HistoryResult<Vec<crate::Liveness>> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// One bounded page of retained `done` admission rows, oldest first, for
+    /// the operator audit. `page` is zero-based and `limit` is clamped to
+    /// [`crate::records::MAXIMUM_AUDIT_PAGE`]. The live admission queries
+    /// filter `state <> 'done'`; this read is the only one that sees them.
+    fn gc_done_intents(&self, _page: u32, _limit: u32) -> HistoryResult<GcAuditPage> {
+        Err(crate::error::HistoryError::Unsupported("GC audit"))
+    }
+
+    /// One bounded page of the retained `done` rows of one Branch, oldest
+    /// first. The operator `audit` action is scoped to the Branch it names.
+    ///
+    /// The default refuses: a provider that keeps no `done` rows has none.
+    fn gc_done_intents_branch(
+        &self,
+        _project: &str,
+        _branch: &str,
+        _page: u32,
+        _limit: u32,
+    ) -> HistoryResult<GcAuditPage> {
+        Err(crate::error::HistoryError::Unsupported("GC done audit"))
     }
 }
 

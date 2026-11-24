@@ -56,6 +56,16 @@ fn sandbox_modules_never_import_workspace() {
             assert!(!code(&file).contains("crate::workspace"));
             continue;
         }
+        if file == src.join("lifecycle.rs") {
+            // A forced close drains the Workspaces it is about to kill through
+            // the crate workspace service before stopping the daemon; the 7ab
+            // own-intent end follows the stop. This is the one sanctioned
+            // Sandbox-to-workspace edge: exactly one unmount call, no import.
+            let text = code(&file);
+            assert_eq!(text.matches("crate::workspace::serve::unmount").count(), 1);
+            assert!(!text.contains("use crate::workspace"));
+            continue;
+        }
         let depth = file.strip_prefix(&src).unwrap().components().count() - 1;
         assert!(
             !reaches(&code(&file), depth),

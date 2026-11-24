@@ -7,6 +7,92 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_machine::worker::{self, Endpoint};
 use std::net::TcpListener;
 
+/// One ping of `endpoint`, or why it did not answer yet.
+fn ping(endpoint: &Endpoint) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+    worker::call(
+        endpoint,
+        "worker.ping",
+        SdkValue::Map(Vec::new()),
+        &mut |_| {},
+    )
+}
+
+#[test]
+fn a_worker_serves_with_the_incarnation_the_host_persisted() {
+    let root = std::env::temp_dir().join(format!(
+        "layerfs-worker-start-supplied-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let served = root.clone();
+    let token = "p1:worker:0000000000000001:aa";
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve_with_incarnation(
+            listener,
+            "s".to_owned(),
+            served,
+            Some(token.to_owned()),
+        )
+    });
+    let endpoint = Endpoint {
+        address,
+        secret: "s".to_owned(),
+    };
+    let mut answered = None;
+    for _ in 0..200 {
+        if let Ok(answer) = ping(&endpoint) {
+            answered = Some(answer);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let answered = answered.expect("the worker answers");
+    assert_eq!(answered.get_text("incarnation"), Some(token));
+    // the same value was durable before the first request was served
+    let recorded = layerfs_home::home::read_record(&root.join("worker-incarnation.json"))
+        .expect("the worker's incarnation record is readable")
+        .expect("the worker recorded its incarnation");
+    assert_eq!(recorded.get_text("incarnation"), Some(token));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_worker_without_a_supplied_incarnation_mints_and_records_one() {
+    let root = std::env::temp_dir().join(format!(
+        "layerfs-worker-start-minted-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let served = root.clone();
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "s".to_owned(), served)
+    });
+    let endpoint = Endpoint {
+        address,
+        secret: "s".to_owned(),
+    };
+    let mut answered = None;
+    for _ in 0..200 {
+        if let Ok(answer) = ping(&endpoint) {
+            answered = Some(answer);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let answered = answered.expect("the worker answers");
+    let reported = answered.get_text("incarnation").expect("an incarnation");
+    assert!(reported.starts_with("p1:worker:"), "{reported}");
+    let recorded = layerfs_home::home::read_record(&root.join("worker-incarnation.json"))
+        .expect("the worker's incarnation record is readable")
+        .expect("the worker recorded its incarnation");
+    assert_eq!(recorded.get_text("incarnation"), Some(reported));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn a_worker_with_no_requests_keeps_serving() {
     let root = std::env::temp_dir().join(format!("layerfs-worker-life-{}", std::process::id()));

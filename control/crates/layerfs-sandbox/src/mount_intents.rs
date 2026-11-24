@@ -167,23 +167,33 @@ pub fn remedy(home: &Path, record: &SandboxRecord) -> String {
     let adopts =
         format!("`layerfs store compact {store}` adopts it unless the Store marked it uncertain");
     let machine = record.machine();
+    // a built-in machine with no record yet has the platform of its name
     let platform = layerfs_machine::record::MachineRecord::read(home, machine)
         .ok()
         .flatten()
-        .and_then(|found| found.platform_name().map(str::to_owned));
-    match (kind, machine, platform.as_deref()) {
+        .and_then(|found| found.platform_name().map(str::to_owned))
+        .or_else(|| {
+            layerfs_home::names::BUILT_IN
+                .contains(&machine)
+                .then(|| machine.to_owned())
+        });
+    // a platform no provider holds runs Sandboxes on this computer's own kernel
+    let own_os = platform
+        .as_deref()
+        .is_some_and(|p| !layerfs_machine::provided(p));
+    match (kind, own_os, platform.as_deref()) {
         (StoreKind::Postgresql, ..) => {
             "its PostgreSQL Store is shared, so nothing can prove its owner gone and it stays"
                 .to_owned()
         }
-        (_, "native", _) if cfg!(target_os = "macos") => {
+        (_, true, _) if cfg!(target_os = "macos") => {
             "nothing on this computer can prove its owner gone, so it stays".to_owned()
         }
-        (_, "native", _) => format!("once this computer restarts, {adopts}"),
+        (_, true, _) => format!("once this computer restarts, {adopts}"),
         (_, _, Some("docker")) => {
             format!("once the kernel Docker runs on restarts, {adopts}")
         }
-        (_, machine, _) => {
+        _ => {
             let machine = shell_word(machine);
             format!(
                 "`layerfs machine stop {machine} && layerfs machine start {machine}` restarts its \

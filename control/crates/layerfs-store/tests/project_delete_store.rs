@@ -15,7 +15,7 @@ use layerfs_store::project::add::{add_project, ProjectAdd};
 use layerfs_store::project::delete::{admit_project, delete, Intent};
 use layerfs_store::project::frame::DeleteAdmitFrame;
 use layerfs_store::record::StoreRecord;
-use layerfs_store::service::with_service;
+use layerfs_store::service::{branch_named, with_service};
 use layerfs_store::sqlite::create::create;
 use layerfs_store::Related;
 use layerfs_store_service::history::lookup;
@@ -165,6 +165,51 @@ fn release(open: &OpenArgs, op: [u8; 16]) {
         Ok(())
     })
     .unwrap();
+}
+
+/// `branch_named` resolves `main` to the Branch `add_project` recorded, and
+/// the listing names that same Branch: the main mount scope is a real Branch,
+/// not the stack line's null id.
+#[test]
+fn main_resolves_to_the_branch_add_project_recorded() {
+    let Some((home, open, _stack)) = shop("main-named") else {
+        return;
+    };
+    // The oracle `mount_main` uses: `lookup::branch` refuses `main` by design,
+    // so the snapshot lookup names it.
+    let recorded = with_service(&open, |service| {
+        let project = HistoryName::new("app").unwrap();
+        let main = HistoryName::new("main").unwrap();
+        Ok(
+            match service
+                .store
+                .published(|history| history.branch_snapshot_named(&project, &main))
+                .unwrap()
+            {
+                NamedSnapshot::Found(snapshot) => snapshot.branch.id,
+                other => panic!("no main Branch: {other:?}"),
+            },
+        )
+    })
+    .unwrap();
+    assert_eq!(branch_named(&open, "app", "main").unwrap(), recorded);
+
+    let asked = SdkValue::map([
+        ("project", SdkValue::text("app")),
+        ("name", SdkValue::text("main")),
+    ]);
+    let listed = with_service(&open, |_| {
+        layerfs_store::service::call("project.list_branches", &open, asked)
+    })
+    .unwrap();
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("no items: {listed:?}");
+    };
+    assert_eq!(items.len(), 1, "{listed:?}");
+    assert_eq!(items[0].get_text("branch"), Some("main"));
+    let wanted = recorded.to_string();
+    assert_eq!(items[0].get_text("id"), Some(wanted.as_str()), "{listed:?}");
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]

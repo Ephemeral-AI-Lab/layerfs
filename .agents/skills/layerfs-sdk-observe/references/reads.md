@@ -36,7 +36,9 @@ Names of the earlier 2.0 surface, removed with no alias: `branch.commits`,
 
 `branch.list(project)`: every Branch, `main` included, as
 `{ branch, commit }` (the head); the long form adds `forked_from`, `id`,
-`base` and `root`.
+`base` and `root`. `main`'s `id` is the Branch the project records for its
+main line, the Branch a mount on `main` is scoped to; it is null only when
+the project records no such Branch.
 
 `commit.list(project, branch)`: newest first; on `main`, its publications
 (with `source_branch`). One long row:

@@ -1,4 +1,5 @@
-//! `native`'s adapter: the host itself; nothing is made, started or stopped.
+//! `native`'s adapter: Sandboxes on the host's own OS; nothing is made,
+//! started or stopped.
 use super::{start, status};
 use crate::adapter::{refused, Adapter};
 use crate::error::MachineError;

@@ -59,6 +59,12 @@ operation `store.diagnose`
 | Saved schema text and every actual schema object are compared with the shipped format in the same transaction, so rewriting the saved definition after dropping a trigger does not pass. | [`sqlite/schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/schema_diagnostic.rs) |
 | `quick_check` excludes uniqueness and index/table equivalence; engine output is capped at 100 messages, and reaching the cap is `Unknown` coverage. | [`sqlite.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/sqlite.rs) |
 
+Beside the audit, the doctor reads two bounded admission views on the same
+diagnostic open, each in its own read transaction: `diagnostic_mounts` (the
+live mount holders, `state <> 'done'`) and `diagnostic_done_audit` (one
+page of the retained operator-audit rows, oldest first). Neither changes an
+intent; a failed read is `Unknown`, never a release.
+
 ## Structural fallback
 
 When read-only admission or the logical audit fails, `sqlite_structure`

@@ -109,16 +109,17 @@ pub fn missing_daemon(machine: &str, path: &str) -> String {
 }
 
 /// The daemon a Sandbox runs, on `side`: in a worker, the one beside its
-/// own executable (the bundle's); here (`native`), the machine record's
-/// `daemon` (`machine update --daemon` writes it), else
-/// this host's bundle's. A recorded daemon that is not there is refused
+/// own executable (the bundle's); here, the record of the machine whose
+/// calls run in this process (`native`) names it (`daemon`, which
+/// `machine update --daemon` writes), else this host's bundle's. A recorded daemon that is not there is refused
 /// before any launch, naming the call that records another.
 fn daemon(side: &Side<'_>) -> Result<String> {
-    let machine = "native";
     let home = match side {
         Side::Worker(_) => return Ok(beside_self("layerfs-daemon")?.display().to_string()),
         Side::Home(home) => home,
     };
+    let machine = layerfs_machine::in_process()
+        .ok_or_else(|| layerfs_machine::none_in_process("a Sandbox in this process"))?;
     let record = MachineRecord::read(home, machine)?;
     if let Some(path) = record.as_ref().and_then(MachineRecord::daemon) {
         if !Path::new(path).is_file() {

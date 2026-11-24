@@ -1,10 +1,11 @@
 //! `store.move` (#536 §7.3, H1; call surface 2.0): a sqlite Store's file
-//! between this computer (`native`) and a machine, one phase at a time
-//! (check, snapshot, send, verify, install, record, retire). It goes to or
-//! from this computer only (C13): to a machine's worker from `native`, or
-//! from its machine's worker to `native`; the phases are the same, only
-//! the sides swap. Between two other machines it is refused, naming the
-//! move to `native` that comes first.
+//! between the machine whose calls run in this process (`native` on macOS
+//! and Linux) and another machine, one phase at a time (check, snapshot,
+//! send, verify, install, record, retire). One end is always that machine
+//! (C13): to a machine's worker from it, or from its machine's worker to
+//! it; the phases are the same, only the sides swap. Between two other
+//! machines it is refused, naming the move to that machine that comes
+//! first; a host with no such machine refuses every move.
 use crate::intent;
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
@@ -63,7 +64,8 @@ fn transfer(
         // named that machine: the record keeps the machine instead, so the
         // doctor reports the copy and `store.remove` deletes it there (§7.3, P6)
         if !uncertain && matches!(*phase, "send" | "verify" | "install") {
-            if let Some(to) = op.args().get_text("to").filter(|to| *to != "native") {
+            let here = layerfs_machine::in_process();
+            if let Some(to) = op.args().get_text("to").filter(|to| Some(*to) != here) {
                 let _ = note_incoming(&home, name, to);
             }
         }
@@ -397,8 +399,8 @@ fn phases(
             record.with(op::FIELD, retiring.clone()).write(&home)
         })(),
     )?;
-    // retire the source's copy: `native`'s file (its folder holds the
-    // home's records), or the Store's whole folder under a worker's root,
+    // retire the source's copy: the file in this process's home, on a
+    // machine whose calls run here (its folder holds the home's records), or the Store's whole folder under a worker's root,
     // with the project entries a worker keeps there
     progress(events, "retire", None);
     let retire = match source {

@@ -39,6 +39,7 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
 | [`store.detach`](#storedetach) | PostgreSQL | `{ ok }` | `admin` |
 | [`store.move`](#storemove) | sqlite | `{ moved_bytes }` | `admin` |
 | [`store.remove`](#storeremove) | sqlite | `{ ok }`, or `{ left }` | `admin` |
+| [`store.repair_mount_holders`](#storerepair_mount_holders) | both | a page of holders or done rows (`items`, `next_cursor`), or one settled/released op | `admin` |
 | [`store.compact`](#storecompact) | both | `{ freed_bytes }` | `admin` |
 | [`store.doctor`](#storedoctor) | both | the doctor report | `admin` |
 
@@ -554,6 +555,59 @@ FAIL 1).
 $ layerfs store remove nope
 {"error":"NotFound","message":"no Store named nope"}
 ```
+
+### store.repair_mount_holders
+
+Explicit, operator-only repair of the mount admissions held at one Branch.
+Nothing is automatic: list, preview and audit write nothing, the doctor only
+reports the same rows without releasing them, and no action deletes a live
+row.
+
+```text
+CLI     layerfs store repair-mount-holders <project> <branch> <action> [--op HEX] [--legacy] [--force] [--operator NAME] [--limit 100] [--cursor C]
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `project` | project | `<store>/<project>` |
+| `branch` | name | the Branch whose holders are repaired; `audit` reads the rows recorded under this name, so a removed Branch's rows stay readable |
+| `action` | name | `list`, `preview`, `settle`, `release`, `settle_legacy` or `audit` |
+| `op` option | text | the holder `settle` and `release` act on: 16 bytes of hex |
+| `legacy` option | bool | `settle` only a row without owner or place evidence |
+| `force` option | bool | `settle` a holder that still looks `live` |
+| `operator` option | text | the label a release records: at most 128 characters, no control characters; empty is `local`; not an authenticated principal |
+| `limit` option | int | rows of one page (`list`, `preview`, `audit`): 1 to 1000, default 100 |
+| `cursor` option | text | the `next_cursor` of the page before; it carries the project, Branch and action |
+
+| Action | Effect |
+| --- | --- |
+| `list` | one page of holders by op, read-only |
+| `preview` | the same page (what `settle` and `release` would act on), read-only |
+| `settle` | marks exactly `--op` uncertain, answering `{ action, op, state: "uncertain" }`; a holder whose `liveness` is `live` is refused `InUse` unless `--force` (or `--legacy` for a row without evidence); a later call reports `Unresolved`, never `Busy` |
+| `release` | needs the preceding settle; retains the row in state `done` with `action=release;operator=NAME;op=HEX` in `evidence` (replacing the `place:v1;...` place tokens a live row keeps there) and clears the owner columns, so the unique owner key cannot block a remount, answering `{ action, op, state: "done" }`. A Branch keeps its newest 100 done rows: a release deletes the oldest beyond them |
+| `settle_legacy` | marks only rows with missing owner or place evidence: `{ action, settled }` |
+| `audit` | one page of the Branch's retained `done` rows, oldest first; changes nothing |
+
+A page answers `{ action, items, next_cursor }`. Each holder row carries the
+typed view (`op`, `project`, `branch`, `workspace`, `sandbox`, `machine`,
+`owner_runtime`, `owner_boot`, `machine_incarnation`, `sandbox_generation`,
+`legacy`) and three state words: `state`, the row's own state (`live`, or
+`uncertain` once settled); `liveness`, what admission would say of it now
+from the owner check and this home's place view (`live`, `uncertain` or
+`dead`; a shared PostgreSQL Store proves no death from a place, so its rows
+are at most `uncertain` there); and `safe`, true unless it still looks
+`live`. A worker's call is sent the place view of the calling home. Every
+call is in the home's `trace/calls.jsonl` call log. On a SQLite Store the call
+runs on the machine that holds the file through its worker; a PostgreSQL Store
+runs in the calling process.
+
+| Error | When |
+| --- | --- |
+| `InvalidInput` | an unknown action; a missing or malformed `--op`; a bad operator label; a `limit` out of range; a cursor of another action, project or Branch |
+| `NotFound` | no mount holder with that op at the Branch (for a release: already released, on either Store kind) |
+| `InUse` | `settle` of a holder that still looks `live`; `fix: … settle --op HEX --force` |
+| `Conflict` | release before settle |
+| `Unavailable`, `Unknown` | the owning worker is not reachable or its answer was lost |
 
 ### store.compact
 

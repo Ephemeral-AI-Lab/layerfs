@@ -131,13 +131,16 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
     );
 
     // a create that ended while it claimed the name started nothing: its
-    // records go, as before
+    // records go, as before, and the home keeps the tombstone of the
+    // generation it minted (#783 gap 2: every removal path writes it)
+    let generation = "p1:aa11.sandbox:0000000000000010:aa";
     write_record(
         &paths::sandbox_record(&home, "s2"),
         &SdkValue::map([
             ("name", t("s2")),
             ("project", t("shop/api")),
             ("machine", t("dev")),
+            ("generation", t(generation)),
             ("op", ended_create("claim")),
         ]),
     )
@@ -147,6 +150,10 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
         Ok(Removed::AlreadyGone { .. })
     ));
     assert!(!paths::sandbox_dir(&home, "s2").exists());
+    let tombstone = read_record(&paths::sandbox_tombstone(&home, "dev", "s2"))
+        .unwrap()
+        .expect("the removal's tombstone");
+    assert_eq!(tombstone.get_text("generation"), Some(generation));
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -157,7 +164,7 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
 fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
     use layerfs_bridge::process::LocalProcess;
     use layerfs_sandbox::record::{DaemonRecord, Local};
-    let host = layerfs_sandbox::force::native_host(home, name).unwrap();
+    let host = layerfs_sandbox::force::local_host(home, name).unwrap();
     let given = layerfs_sandbox::lifecycle::sandbox_name(host.deploy(), name).unwrap();
     let folder = paths::run_root(home).join(&given);
     std::fs::create_dir_all(folder.join("workspaces")).unwrap();
@@ -245,5 +252,50 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     assert!(!daemon.alive(), "its daemon still runs");
     assert!(!folder.exists(), "its run folder stays");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The retired tombstone is best effort: a forced remove whose tombstone
+/// cannot be written (here its `sandbox-retired` folder is a file) still
+/// stops the daemon, ends what it holds and removes the record, and reports
+/// the unwritten tombstone in `left`. A missing tombstone is only "no proof
+/// of death".
+#[cfg(target_os = "macos")]
+#[test]
+fn a_forced_remove_goes_on_when_its_tombstone_cannot_be_written() {
+    use layerfs_bridge::process::LocalProcess;
+    let home = new_home("unretired");
+    let mut kept = stand_in();
+    let folder = half_created(&home, "s1", kept.id());
+    let record = read_record(&paths::sandbox_record(&home, "s1"))
+        .unwrap()
+        .unwrap();
+    let record = home::with_field(record, "generation", t("p1:sandbox:0000000000000001:00"));
+    write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
+    let retired = paths::sandbox_retired_dir(&home, "native");
+    std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
+    std::fs::write(&retired, b"not a folder").unwrap();
+    let daemon = LocalProcess::observe(kept.id()).unwrap();
+
+    match removed(&home, "s1", true) {
+        Ok(Removed::Stopped { unmounted, left }) => {
+            assert!(unmounted.is_empty(), "{unmounted:?}");
+            assert_eq!(left.len(), 1, "{left:?}");
+            assert!(
+                left[0].contains("retired tombstone was not written"),
+                "{left:?}"
+            );
+        }
+        Ok(Removed::AlreadyGone { left }) => panic!("taken as gone: {left:?}"),
+        Err(refusal) => panic!("the unwritten tombstone aborted the remove: {refusal:?}"),
+    }
+    let _ = kept.wait();
+    assert!(!daemon.alive(), "its daemon still runs");
+    assert!(!folder.exists(), "its run folder stays");
+    assert!(
+        !paths::sandbox_dir(&home, "s1").exists(),
+        "its record stays"
+    );
+    assert!(retired.is_file());
     std::fs::remove_dir_all(home).unwrap();
 }

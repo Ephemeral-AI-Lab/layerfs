@@ -52,7 +52,8 @@ for this manual.
 | A machine, Sandbox or Store call on a removed platform's record (`firecracker`, `ssh`, `microsandbox`) | ``platform `<name>` was removed in LayerFS 2.0``; only `machine list`, `machine get` and `machine remove` (forgets the record) answer |
 | A Sandbox on a platform and Store kind the support table refuses (`layerfs home get --with platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
-| `backup restore` over a Store that is not on `native` | `store move <store> native` first |
+| `backup restore` over a Store that is not on the machine whose calls run in this process (`native` on macOS and Linux) | `store move <store> native` first |
+| `store create` without `--machine`, `store move` or `backup restore` on a host where no machine's calls run in this process (Windows) | `Unsupported`; no other machine is chosen |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
 | A machine kind whose tool is missing | `detail.missing`, such as `tool:limactl` |

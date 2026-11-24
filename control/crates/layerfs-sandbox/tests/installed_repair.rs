@@ -84,7 +84,7 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
     };
     // the repair happens before launch; a host that can launch a daemon
     // starts one, which is removed again
-    match lifecycle::create(&host, None) {
+    match lifecycle::create(&host, None, None) {
         Ok(_) => {
             lifecycle::close(&host, true, &[]).expect("the started Sandbox is removed");
         }

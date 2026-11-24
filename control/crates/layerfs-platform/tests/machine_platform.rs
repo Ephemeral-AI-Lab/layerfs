@@ -77,6 +77,15 @@ fn built_in_created_and_tools() {
 }
 
 #[test]
+fn only_native_runs_on_the_hosts_own_os() {
+    let own_os: Vec<Platform> = Platform::ALL
+        .into_iter()
+        .filter(|k| !k.provided())
+        .collect();
+    assert_eq!(own_os, [Platform::Native]);
+}
+
+#[test]
 fn the_current_host_is_named() {
     let expected = if cfg!(target_os = "linux") {
         HostOs::Linux

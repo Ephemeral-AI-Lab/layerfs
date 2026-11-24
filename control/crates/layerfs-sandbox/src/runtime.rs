@@ -21,12 +21,13 @@ use layerfs_sandbox_backend::{CommandIdentity, ExecSlot, Sandbox};
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
-/// The image a native Sandbox records and reports, and the `runtime` of a
+/// The image a host-process Sandbox records and reports, and the `runtime` of a
 /// record from the former `local` runtime, which is never used (a record of
 /// the retired docker backend has no `runtime`).
 pub const LOCAL: &str = "local";
-/// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
-/// daemon serving loopback NFS on macOS.
+/// A host-process Sandbox record's `runtime` (LAYERFS_SANDBOX=native; the
+/// `host_process` backend stores this word, G6): a local daemon serving
+/// loopback NFS on macOS. A runtime's name, not the machine `native`.
 pub const NATIVE: &str = "native";
 /// Why a native Sandbox does not start on Linux: its host-process pairing is
 /// removed (#533 O27), and a Linux host runs local Sandboxes in namespaces.

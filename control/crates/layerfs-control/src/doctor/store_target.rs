@@ -37,6 +37,8 @@ const CONNECTION: &str = "store.connection";
 const IDENTITY: &str = "store.identity";
 const SCHEMA: &str = "store.schema";
 const BACKUPS: &str = "store.backups";
+const MOUNT_HOLDERS: &str = "store.mount_holders";
+const GC_AUDIT: &str = "store.gc_audit";
 
 /// A Store's checks, in the frozen order.
 pub(super) const CHECKS: &[CheckId] = &[
@@ -46,6 +48,8 @@ pub(super) const CHECKS: &[CheckId] = &[
     CheckId::own(IDENTITY),
     CheckId::own(SCHEMA),
     CheckId::own(BACKUPS),
+    CheckId::own(MOUNT_HOLDERS),
+    CheckId::own(GC_AUDIT),
 ];
 
 /// The worker's shallow cut, the one `cut` its `store.diagnose` takes.
@@ -282,6 +286,20 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     }
     checks.pass(IDENTITY, "the id in its file is the id in its record");
     checks.pass(SCHEMA, "its schema is the one this build reads");
+    // the live mount admissions and one bounded page of the retained done
+    // audit: reported as evidence, never released or settled by a doctor
+    match found.get("mount_holders") {
+        Some(rows) => {
+            super::mount_holders::report(probe.home, name, false, MOUNT_HOLDERS, Some(rows), checks)
+        }
+        None => checks.unknown(MOUNT_HOLDERS, "the diagnostic did not report mount holders"),
+    }
+    match found.get("gc_audit") {
+        Some(page) if page.get("items").is_some() => {
+            super::mount_holders::audit_result(Ok(page.clone()), checks)
+        }
+        _ => checks.unknown(GC_AUDIT, "the diagnostic did not report the done audit"),
+    }
     if heads {
         backups(record, text("heads"), text("heads_error"), checks);
     }
@@ -350,6 +368,22 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
         },
         Ok(()) => {}
     }
+    // the read-only mount holder view and the retained done audit: the
+    // doctor reports them beside the schema, and changes no row
+    fields.push((
+        "mount_holders",
+        match diagnostic::mount_holders(path, identity) {
+            Ok(rows) => rows,
+            Err(error) => SdkValue::map([("error", SdkValue::text(error.message))]),
+        },
+    ));
+    fields.push((
+        "gc_audit",
+        match diagnostic::done_audit(path, identity, 0, 16) {
+            Ok(page) => page,
+            Err(error) => SdkValue::map([("error", SdkValue::text(error.message))]),
+        },
+    ));
     map_of(fields)
 }
 

@@ -226,3 +226,52 @@ pub fn end_mount(
         Ok(ended)
     })
 }
+
+/// Settles the intents at `machine` the ordered `incarnation` proves dead,
+/// where that Store's calls run: this process when the Store lives here, else
+/// the machine's worker. The home recorded the incarnation in the
+/// `MachineRecord` before this call. One bounded call per Store; a failure is
+/// reported, never retried.
+pub fn reconcile_machine(
+    home: &Path,
+    store: &str,
+    machine: &str,
+    incarnation: &str,
+) -> Result<SdkValue, SdkRefusal> {
+    // The host holds the Store's lease while it sends the call, as
+    // `store_call` does; a Store an operation is moving is left, never retried.
+    let (_lease, record) = crate::lease::claim(home, store)?;
+    let store_ref = record.store_ref()?;
+    match crate::place::plan(home, store_ref)? {
+        crate::place::Executor::Local => {
+            let args = OpenArgs::of_record(home, store, &record)?;
+            // the reconcile compares placed mount intents: it reads the view
+            crate::place_view::scoped(&args, || {
+                with_service(&args, |service| {
+                    layerfs_store_service::history::admission::reconcile_machine(
+                        service.store.history(),
+                        machine,
+                        incarnation,
+                    )
+                    .map(|reconcile| {
+                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                    })
+                    .map_err(layerfs_store_service::history::lookup::history)
+                })
+            })
+        }
+        crate::place::Executor::Worker(mut worker) => {
+            let mut fields = vec![
+                ("store".to_owned(), SdkValue::text(store)),
+                ("store_record".to_owned(), record.to_record().clone()),
+                ("machine".to_owned(), SdkValue::text(machine)),
+                ("incarnation".to_owned(), SdkValue::text(incarnation)),
+            ];
+            if let Some(place) = crate::place_view::encoded_from_home(home) {
+                fields.push(("place_view".to_owned(), place));
+            }
+            let request = SdkValue::Map(fields);
+            worker.call("store.reconcile", request, &mut |_: SdkValue| {})
+        }
+    }
+}

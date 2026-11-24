@@ -30,12 +30,14 @@ pub mod open;
 pub mod open_args;
 #[doc(hidden)]
 pub mod place;
+pub mod place_view;
 pub mod postgresql;
 #[doc(hidden)]
 pub mod project;
 #[doc(hidden)]
 pub mod record;
 mod related;
+pub mod repair;
 pub mod report;
 #[doc(hidden)]
 pub mod resolve;

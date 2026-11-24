@@ -18,12 +18,13 @@
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
 use crate::host::Started;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::{MountPlace, SdkRefusal, SdkValue};
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, with_fix, with_next};
+use layerfs_machine::record::MachineRecord;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -42,6 +43,35 @@ pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
     entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
 
+/// One fresh, ordered Sandbox generation of `home`'s Sandbox `name` on
+/// `machine`: it is minted past the generation of a record still under the
+/// name and the generation the name's tombstone retired, so a recreated
+/// Sandbox compares greater than every earlier one even after the wall clock
+/// stepped backwards, and admission can tell a retired generation from the
+/// current one. A tombstone names this value, so retiring an old generation
+/// never retires a Sandbox recreated under the same name. The floor is best
+/// effort: an unreadable earlier record or tombstone adds no floor rather
+/// than refusing the create (a tombstone newer than the live record is
+/// uncertain, never dead, in admission).
+fn generation(home: &Path, name: &str, machine: &str) -> Result<String> {
+    let id = home::opened(home)?.id;
+    let previous = SandboxRecord::read(home, name)
+        .ok()
+        .flatten()
+        .and_then(|record| record.generation().map(str::to_owned))
+        .unwrap_or_default();
+    let retired = super::tombstone::SandboxTombstone::read(home, machine, name)
+        .ok()
+        .flatten()
+        .map(|tombstone| tombstone.generation)
+        .unwrap_or_default();
+    Ok(layerfs_home::helpers::ordered_token(
+        &id,
+        "sandbox",
+        &[&previous, &retired],
+    ))
+}
+
 /// The fields a Sandbox record knows.
 #[derive(Clone, Debug, PartialEq)]
 enum Field {
@@ -50,6 +80,7 @@ enum Field {
     Project(String),
     Machine(String),
     Created(i64),
+    Generation(String),
     Op(Op),
     Id(String),
     Platform(String),
@@ -76,6 +107,7 @@ impl fields::Field for Field {
             "project" => Self::Project(text()?),
             "machine" => Self::Machine(text()?),
             "created" => Self::Created(fields::int(value)?),
+            "generation" => Self::Generation(text()?),
             op::FIELD => Self::Op(Op::decode(value)?),
             "id" => Self::Id(text()?),
             "platform" => Self::Platform(text()?),
@@ -107,6 +139,7 @@ impl fields::Field for Field {
             Self::Project(_) => "project",
             Self::Machine(_) => "machine",
             Self::Created(_) => "created",
+            Self::Generation(_) => "generation",
             Self::Op(_) => op::FIELD,
             Self::Id(_) => "id",
             Self::Platform(_) => "platform",
@@ -133,6 +166,7 @@ impl fields::Field for Field {
             Self::Name(text)
             | Self::Project(text)
             | Self::Machine(text)
+            | Self::Generation(text)
             | Self::Id(text)
             | Self::Platform(text)
             | Self::Runtime(text)
@@ -175,20 +209,27 @@ impl SandboxRecord {
         Ok(read_record(&path)?.map(|value| Self::from_record(name, value)))
     }
 
-    /// The record a create claims the name with: the project, the machine,
-    /// now and the create's intent `op`.
-    pub fn creating(name: &str, project: &str, machine: &str, op: &Op) -> Self {
+    /// The record a create claims the name with in `home`: the project, the
+    /// machine, now, this create's generation and its intent `op`.
+    pub fn creating(
+        home: &Path,
+        name: &str,
+        project: &str,
+        machine: &str,
+        op: &Op,
+    ) -> Result<Self> {
         let fields = Fields::of([
             Field::Name(name.to_owned()),
             Field::Project(project.to_owned()),
             Field::Machine(machine.to_owned()),
             Field::Created(home::now_ms()),
+            Field::Generation(generation(home, name, machine)?),
             Field::Op(op.clone()),
         ]);
-        Self {
+        Ok(Self {
             name: name.to_owned(),
             fields,
-        }
+        })
     }
 
     /// The record of a started Sandbox: what its create answered
@@ -228,6 +269,14 @@ impl SandboxRecord {
         ] {
             self.fields.set(field);
         }
+        self
+    }
+
+    /// The record naming the machine it runs on and the generation its
+    /// caller's home minted: what a worker's own record of it keeps.
+    pub fn with_place(mut self, machine: &str, generation: &str) -> Self {
+        self.fields.set(Field::Machine(machine.to_owned()));
+        self.fields.set(Field::Generation(generation.to_owned()));
         self
     }
 
@@ -316,6 +365,16 @@ impl SandboxRecord {
             _ => None,
         })
         .unwrap_or("")
+    }
+
+    /// The generation its create assigned: a Sandbox tombstone names this
+    /// value, so a Sandbox recreated under the same name is not retired by
+    /// the old generation's tombstone.
+    pub fn generation(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Generation(text) => Some(text),
+            _ => None,
+        })
     }
 
     /// Its project, `<store>/<project>`, as recorded.
@@ -486,6 +545,31 @@ impl SandboxRecord {
     pub fn to_record(&self) -> SdkValue {
         self.fields.encode()
     }
+}
+
+/// The place a mount of Sandbox `name` records: the record in `directory`
+/// names the machine it runs on and the generation its create minted (a
+/// worker's own record keeps the values its caller sent with the create),
+/// and the machine record under the same `home` names that machine's current
+/// ordered incarnation (a worker's root keeps no machine record, so its
+/// mounts carry no incarnation). A record this side cannot read supplies no
+/// authority (no proof, never death): the names alone, and admission falls
+/// back to the owner evidence.
+pub fn mount_place(home: &Path, directory: &Path, name: &str) -> Result<MountPlace> {
+    let record = SandboxRecord::read_in(directory, name)?;
+    let machine = record.as_ref().map(|record| record.machine().to_owned());
+    let generation = record
+        .as_ref()
+        .and_then(|record| record.generation().map(str::to_owned));
+    let incarnation = machine.as_deref().and_then(|machine| {
+        MachineRecord::read(home, machine)
+            .ok()
+            .flatten()
+            .and_then(|record| record.incarnation().map(str::to_owned))
+    });
+    Ok(MountPlace::new(Some(name), machine.as_deref())
+        .with_generation(generation.as_deref())
+        .with_machine_incarnation(incarnation.as_deref()))
 }
 
 /// Every Sandbox record, by name.

@@ -1,13 +1,98 @@
 //! Store-service side of GC admission: operation ids, intent builders and the
 //! short-lived guard a shared Init/merge holds.
 use crate::history::lookup;
-use layerfs_bridge::control::SdkRefusal;
-use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
-use layerfs_history::{BranchRecord, HistoryCatalog, LayerStackId, LayerStackRecord};
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_history::records::{
+    GcAuditPage, GcIntent, GcIntentDone, GcIntentKind, GcReconcile, GcScopeKind,
+};
+use layerfs_history::{
+    BranchRecord, HistoryCatalog, HistoryResult, LayerStackId, LayerStackRecord, PlaceAuthority,
+    PlaceView,
+};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static NEXT_OP: AtomicU64 = AtomicU64::new(0);
+
+/// Installs the bounded place view the control layer built from its home for
+/// the duration of one Store call. The engine reads only this value; it never
+/// opens a home record. A call that supplies \`None\` keeps the admission the
+/// caller has always had.
+pub use layerfs_persistence::{has_place_view, with_place_view};
+
+/// The bounded place view as the worker frame carries it. One entry per
+/// machine and Sandbox the control home could see; a name it could not read is
+/// absent, and absence is no proof.
+#[must_use]
+pub fn encode_place_view(view: &PlaceView) -> SdkValue {
+    let machines = view
+        .machines()
+        .iter()
+        .map(|(machine, incarnation)| {
+            SdkValue::map([
+                ("machine", SdkValue::text(machine)),
+                ("incarnation", SdkValue::text(incarnation)),
+            ])
+        })
+        .collect();
+    let sandboxes = view
+        .sandboxes()
+        .iter()
+        .map(|((machine, sandbox), place)| {
+            SdkValue::map([
+                ("machine", SdkValue::text(machine)),
+                ("sandbox", SdkValue::text(sandbox)),
+                (
+                    "generation",
+                    SdkValue::opt_text(place.generation.as_deref()),
+                ),
+                ("retired", SdkValue::opt_text(place.retired.as_deref())),
+            ])
+        })
+        .collect();
+    SdkValue::map([
+        ("machines", SdkValue::List(machines)),
+        ("sandboxes", SdkValue::List(sandboxes)),
+    ])
+}
+
+/// The bounded place view a worker frame carries, when it carries one. An
+/// absent or empty value is \`None\`: the admission falls back to the
+/// caller's own recorded place, never to a guess.
+#[must_use]
+pub fn decode_place_view(value: Option<&SdkValue>) -> Option<PlaceView> {
+    let value = value?;
+    let mut view = PlaceView::new();
+    if let Some(SdkValue::List(items)) = value.get("machines") {
+        for item in items {
+            if let (Some(machine), Some(incarnation)) =
+                (item.get_text("machine"), item.get_text("incarnation"))
+            {
+                view.set_machine(machine, incarnation);
+            }
+        }
+    }
+    if let Some(SdkValue::List(items)) = value.get("sandboxes") {
+        for item in items {
+            let (Some(machine), Some(sandbox)) =
+                (item.get_text("machine"), item.get_text("sandbox"))
+            else {
+                continue;
+            };
+            if let Some(generation) = item.get_text("generation") {
+                view.set_sandbox_generation(machine, sandbox, generation);
+            }
+            if let Some(retired) = item.get_text("retired") {
+                view.set_sandbox_retired(machine, sandbox, retired);
+            }
+        }
+    }
+    if view.is_empty() {
+        None
+    } else {
+        Some(view)
+    }
+}
 
 /// One fresh 16-byte operation identity.
 pub fn op_id() -> [u8; 16] {
@@ -157,14 +242,25 @@ fn owned(mut intent: GcIntent, op: [u8; 16]) -> GcIntent {
 }
 
 /// A mount intent at Branch scope, naming its project identity for the
-/// PostgreSQL key derivation. The Workspace is always placed; the Sandbox
-/// and machine are placed only when the caller that mounted knows them
-/// (a daemon mount does; a private Store-call Workspace does not). The owner
-/// evidence is always recorded, so a gone mount can be told from a live one.
+/// PostgreSQL key derivation and its project name for the operator audit (a
+/// released row is found by project and Branch name). The Workspace is always
+/// placed; the Sandbox and machine are placed only when the caller that
+/// mounted knows them (a daemon mount does; a private Store-call Workspace
+/// does not).
+///
+/// `authority` is the place evidence the caller read from its own home
+/// records: a machine incarnation and Sandbox generation. A caller with none
+/// (a private Store-call Workspace) passes [`PlaceAuthority::default`], and
+/// the intent records only the owner tokens: admission then falls back to
+/// this process's namespace and boot, never to a place it does not have. No
+/// process-wide value is filled in: a place the caller did not state is not
+/// recorded.
 pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
+    project: Option<&str>,
     place: &layerfs_bridge::control::MountPlace,
+    authority: PlaceAuthority,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
     let (runtime, boot) = owner_tokens(&format!("ws:{}", hex16(&body)));
@@ -175,13 +271,14 @@ pub fn mount_intent(
         snapshot.branch.id.as_slice(),
     )
     .in_project(snapshot.branch.stack.as_slice())
-    .named(None, Some(snapshot.branch.name.as_str()))
+    .named(project, Some(snapshot.branch.name.as_str()))
     .placed(
         Some(body),
         place.sandbox.as_deref(),
         place.machine.as_deref(),
     )
     .owned(Some(&runtime), Some(&boot))
+    .authorized(authority)
 }
 
 /// Releases one intent. When the Store refuses the delete, the owner has gone
@@ -281,4 +378,91 @@ impl Drop for SharedIntent<'_> {
             let _ = release_or_mark(self.catalog, &self.op_id);
         }
     }
+}
+
+/// Settles the intents at `machine` the ordered `incarnation` proves dead,
+/// never an uncertain one.
+pub fn reconcile_machine(
+    catalog: &dyn HistoryCatalog,
+    machine: &str,
+    incarnation: &str,
+) -> HistoryResult<GcReconcile> {
+    catalog.gc_reconcile_machine(machine, incarnation)
+}
+
+/// What admission would say of each of `intents` now (owner evidence, then
+/// the place view installed on this thread), in order. Changes nothing.
+pub fn liveness(
+    catalog: &dyn HistoryCatalog,
+    intents: &[GcIntent],
+) -> HistoryResult<Vec<layerfs_history::Liveness>> {
+    catalog.gc_liveness(intents)
+}
+
+/// One bounded page of retained `done` admission rows, for the operator
+/// audit. This is the only read that sees a done row; admission and preview
+/// keep filtering them out.
+pub fn done_intents(
+    catalog: &dyn HistoryCatalog,
+    page: u32,
+    limit: u32,
+) -> HistoryResult<GcAuditPage> {
+    catalog.gc_done_intents(page, limit)
+}
+
+/// One bounded page of one Branch's retained `done` rows, for the operator
+/// audit. It is the same page shape as [`done_intents`], scoped to the
+/// Branch the call names.
+pub fn done_intents_branch(
+    catalog: &dyn HistoryCatalog,
+    project: &str,
+    branch: &str,
+    page: u32,
+    limit: u32,
+) -> HistoryResult<GcAuditPage> {
+    catalog.gc_done_intents_branch(project, branch, page, limit)
+}
+
+/// The wire answer of one retained `done` row of the operator audit.
+pub fn done_value(row: &GcIntentDone) -> SdkValue {
+    SdkValue::map([
+        ("op", SdkValue::text(hex16(&row.op_id))),
+        ("kind", SdkValue::text(row.kind.as_str())),
+        ("scope_kind", SdkValue::text(row.scope_kind.as_str())),
+        ("scope_id", SdkValue::text(hex16(&row.scope_id))),
+        ("project", SdkValue::opt_text(row.project.as_deref())),
+        ("branch", SdkValue::opt_text(row.branch.as_deref())),
+        ("machine", SdkValue::opt_text(row.machine.as_deref())),
+        ("sandbox", SdkValue::opt_text(row.sandbox.as_deref())),
+        ("phase", SdkValue::opt_text(row.phase.as_deref())),
+        ("evidence", SdkValue::opt_text(row.evidence.as_deref())),
+        ("updated_ms", SdkValue::Int(row.updated_ms)),
+    ])
+}
+
+/// The wire answer of one reconcile: the authority recorded, the settled
+/// operations and the owners it kept.
+pub fn reconcile_value(reconcile: &GcReconcile) -> SdkValue {
+    SdkValue::map([
+        ("machine", SdkValue::text(&reconcile.machine)),
+        ("incarnation", SdkValue::text(&reconcile.incarnation)),
+        (
+            "settled",
+            SdkValue::List(
+                reconcile
+                    .settled
+                    .iter()
+                    .map(|op| SdkValue::text(hex16(op)))
+                    .collect(),
+            ),
+        ),
+        (
+            "held",
+            SdkValue::Int(i64::try_from(reconcile.held).unwrap_or(i64::MAX)),
+        ),
+        (
+            "uncertain",
+            SdkValue::Int(i64::try_from(reconcile.uncertain).unwrap_or(i64::MAX)),
+        ),
+    ])
 }

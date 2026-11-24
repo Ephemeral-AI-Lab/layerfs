@@ -23,6 +23,15 @@ pub struct MountPlace {
     pub sandbox: Option<String>,
     /// The machine that Sandbox runs on, when known.
     pub machine: Option<String>,
+    /// The generation the Sandbox record named when the caller read it, when
+    /// known. A mount intent records it, so a later tombstone retiring that
+    /// generation proves the mount dead without an operator.
+    pub generation: Option<String>,
+    /// The machine record's current ordered incarnation when the caller read
+    /// it, when known. A mount intent records it, so a later machine
+    /// incarnation proves the mount dead even though the daemon process is
+    /// not the worker that recorded the value.
+    pub machine_incarnation: Option<String>,
 }
 
 impl MountPlace {
@@ -34,6 +43,32 @@ impl MountPlace {
         Self {
             sandbox: known(sandbox),
             machine: known(machine),
+            generation: None,
+            machine_incarnation: None,
+        }
+    }
+
+    /// The same place with the Sandbox `generation` its record named, when the
+    /// caller read one. An empty generation is no generation.
+    #[must_use]
+    pub fn with_generation(self, generation: Option<&str>) -> Self {
+        Self {
+            generation: generation
+                .filter(|generation| !generation.is_empty())
+                .map(str::to_owned),
+            ..self
+        }
+    }
+
+    /// The same place with the machine record's current `incarnation`, when
+    /// the caller read one. An empty incarnation is no incarnation.
+    #[must_use]
+    pub fn with_machine_incarnation(self, incarnation: Option<&str>) -> Self {
+        Self {
+            machine_incarnation: incarnation
+                .filter(|incarnation| !incarnation.is_empty())
+                .map(str::to_owned),
+            ..self
         }
     }
 

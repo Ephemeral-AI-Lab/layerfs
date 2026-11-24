@@ -23,7 +23,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
-use layerfs_sandbox::force::native_host;
+use layerfs_sandbox::force::local_host;
 use layerfs_sandbox::host::Host;
 use layerfs_sandbox::lifecycle::sandbox_name;
 use layerfs_sandbox::record::{DaemonRecord, Local};
@@ -146,7 +146,7 @@ fn a_record_holds_the_one_name_exactly() {
     let (home, id8) = new_home("exact");
     let run = paths::run_root(&home);
     let me = std::process::id();
-    let host = native_host(&home, "s1").unwrap();
+    let host = local_host(&home, "s1").unwrap();
     let (new, old) = (format!("layerfs-{id8}-s1"), format!("lfs-{id8}-s1"));
     assert_eq!(sandbox_name(host.deploy(), "s1").unwrap(), new);
 
@@ -197,7 +197,7 @@ fn a_record_with_a_name_this_home_does_not_give_is_removed_by_its_records() {
     let (home, id8) = new_home("foreign");
     let run = paths::run_root(&home);
     let me = std::process::id();
-    let host = native_host(&home, "s1").unwrap();
+    let host = local_host(&home, "s1").unwrap();
     let old = format!("lfs-{id8}-s1");
     let folder = run.join(&old);
     let daemon = record(&home, "s1", &old, &folder, me);
@@ -257,7 +257,7 @@ fn a_record_this_build_does_not_read_is_removed_by_its_records_without_a_signal(
     for force in [false, true] {
         let (home, id8) = new_home(&format!("unread-{force}"));
         let me = std::process::id();
-        let host = native_host(&home, "s1").unwrap();
+        let host = local_host(&home, "s1").unwrap();
         let new = format!("layerfs-{id8}-s1");
         let folder = paths::run_root(&home).join(&new);
         let daemon = record(&home, "s1", &new, &folder, me);

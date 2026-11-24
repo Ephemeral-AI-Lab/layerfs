@@ -241,8 +241,9 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 
 ### Routes
 
-- Calls on a sqlite Store on `native`, and calls on a PostgreSQL Store, run
-  in the caller's process.
+- Calls on a sqlite Store on a machine whose calls run in the caller's
+  process (`native` on macOS and Linux; on Windows `native` has a worker),
+  and calls on a PostgreSQL Store, run in the caller's process.
 - Calls on a sqlite Store on any other machine go to that machine's worker,
   behind a secret, over a forwarded loopback port. The caller sends the
   Store's record and the home id with the call; the worker never reads the
@@ -287,7 +288,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   refused `Unsupported` with a message to recreate it; `sandbox remove`
   removes its records (`already_gone`) and leaves its container, which
   `left` names for `docker rm` when its record keeps the name.
-- Every machine other than `native` is reached through its worker, `docker`
+- Every other machine is reached through its worker, `docker`
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.
 - Workspace calls skip the worker where the caller reaches the Sandbox's
@@ -333,17 +334,20 @@ $ layerfs store move shop native
 run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
 `apple-container`, before the two became `store move`; not rerun.)
 
-- `store create <store>` makes an empty sqlite Store on `native`, at
+- `store create <store>` makes an empty sqlite Store on the machine whose
+  calls run in this process (`native` on macOS and Linux), at
   `store/<store>/store.sqlite`; `--machine M` makes it on a running machine
-  directly, through its worker. `store get` and `store list` answer its
+  directly, through its worker. On a host with no such machine (Windows) a
+  create without `--machine` is `Unsupported`. `store get` and `store list` answer its
   `engine`, `state`, `machine` and `projects`, and never the Store's keys.
-- `store move <store> <machine>` moves the file between this computer and a
+- `store move <store> <machine>` moves the file between the machine whose
+  calls run in this process (`native` on macOS and Linux) and another
   machine: from `native` to a machine, or from its machine back to `native`
   (#536 H1). A Store on a machine moves to another machine by `store move
   <store> native` first; asked directly it is `InvalidInput`, naming that
-  call. The phases are `check`, `snapshot`, `send`, `verify`, `install`,
+  call. On a host with no such machine every move is `Unsupported`. The phases are `check`, `snapshot`, `send`, `verify`, `install`,
   `record` and `retire`, once each. The bytes pass through the calling
-  process in pieces. Retire deletes the source's copy: on `native` the file
+  process in pieces. Retire deletes the source's copy: on `native` (in this process) the file
   with its `-wal`, `-shm` and any partial copy (the folder keeps the home's
   records); on another machine the Store's whole folder under its worker's
   root (a symlink in it is removed, never followed). Short: `{moved_bytes}`.
@@ -603,8 +607,10 @@ layerfs backup doctor lab --full
   before the upload. Progress: `check`, `snapshot`, `send` (from a
   machine), `hash`, `upload`. Short: `{file, size}`.
 - **`backup restore <bucket> <file> <store>`.** It downloads the file,
-  verifies it and installs it as the sqlite Store `store` on `native`: a new
-  Store, or one that replaces an idle Store on `native`. Replacing a Store
+  verifies it and installs it as the sqlite Store `store` on the machine
+  whose calls run in this process (`native` on macOS and Linux;
+  `Unsupported` on a host with none): a new Store, or one that replaces an
+  idle Store there. Replacing a Store
   that changed since its last backup or restore through that bucket is
   `Conflict`; one that a process holds open, or one of whose projects has a
   running Sandbox, is `InUse`. A Store on another machine is `Unsupported`

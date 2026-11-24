@@ -11,6 +11,7 @@ use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome, FIX};
 use layerfs_machine::worker::Unreached;
+use layerfs_store::open_args::OpenArgs;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::postgresql::check;
 use layerfs_store::postgresql::connect::{self, StoreConnect};
@@ -39,7 +40,8 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
         let machine = || {
             let record = StoreRecord::read(home, store).ok().flatten()?;
             let machine = record.machine().ok()?;
-            (record.kind().ok()? == StoreKind::Sqlite && machine != "native").then_some(machine)
+            let worker = !layerfs_machine::runs_here(home, &machine).unwrap_or(false);
+            (record.kind().ok()? == StoreKind::Sqlite && worker).then_some(machine)
         };
         let fix = match refusal.code.as_str() {
             "Unavailable" => match machine() {
@@ -64,6 +66,120 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
             None => refusal,
         }
     })
+}
+
+/// `store.repair_mount_holders(project, branch, action, { op, legacy,
+/// force, operator, limit, cursor })` as the call surface takes it.
+#[derive(Clone, Debug, Default)]
+pub struct RepairRequest {
+    /// The project, `<store>/<project>`.
+    pub project: String,
+    /// The Branch whose mount holders it repairs.
+    pub branch: String,
+    /// `list`, `preview`, `settle`, `release`, `settle_legacy` or `audit`.
+    pub action: String,
+    /// The holder `settle` and `release` act on, as hex.
+    pub op: Option<String>,
+    /// `settle` only a row without owner or place evidence.
+    pub legacy: bool,
+    /// `settle` a holder that still looks live.
+    pub force: bool,
+    /// The operator label a release records.
+    pub operator: Option<String>,
+    /// The rows of one page (`list`, `preview`, `audit`).
+    pub limit: Option<i64>,
+    /// The `next_cursor` of the page before.
+    pub cursor: Option<String>,
+}
+
+/// The call a repair cursor belongs to.
+const REPAIR: &str = "store.repair_mount_holders";
+
+/// `store.repair_mount_holders`: first-class explicit operator repair of
+/// one Branch's mount intents ([`layerfs_store::repair`]). `list` and
+/// `preview` page the holders, each with its row `state` and the
+/// `liveness` admission would give it now; `settle` refuses a holder still
+/// `live` unless forced; `release` retains a settled row as the durable done
+/// audit; `audit` pages the Branch's retained rows. The cursor carries the
+/// project, Branch and action. Nothing is automatic. A SQLite Store on
+/// another machine is repaired by that machine's worker (`store.repair`),
+/// sent this home's place view; a PostgreSQL Store runs here, as its calls
+/// do.
+pub fn repair(home: &Path, request: &RepairRequest) -> Outcome {
+    let limit = layerfs_home::cursor::limit(REPAIR, request.limit, 100)?;
+    let filters = [
+        ("project", SdkValue::text(&request.project)),
+        ("branch", SdkValue::text(&request.branch)),
+        ("action", SdkValue::text(&request.action)),
+    ];
+    let carried = (request.cursor.as_deref())
+        .map(|made| layerfs_home::cursor::resume(REPAIR, made, &filters))
+        .transpose()?;
+    let target = layerfs_store::resolve::target(home, &request.project)?;
+    let sent = layerfs_store::repair::Repair {
+        project: target.project.clone(),
+        branch: request.branch.clone(),
+        action: request.action.clone(),
+        op: layerfs_store::repair::op_of(request.op.as_deref())?,
+        legacy: request.legacy,
+        force: request.force,
+        operator: request.operator.clone().unwrap_or_default(),
+        after: carried.as_ref().map(|carried| carried.place().clone()),
+        limit: limit as u32,
+    };
+    // The host holds the Store's lease while it repairs or sends the call,
+    // as `store_call` does: a Store an operation is moving is left.
+    let (_lease, record) = layerfs_store::lease::claim(home, &target.store)?;
+    let answer = match place::plan(home, record.store_ref()?)? {
+        Executor::Local => {
+            let open = OpenArgs::of_record(home, &target.store, &record)?;
+            layerfs_store::repair::repair_at(&open, &sent)
+        }
+        Executor::Worker(mut worker) => {
+            let mut fields = vec![
+                ("store".to_owned(), SdkValue::text(&target.store)),
+                ("store_record".to_owned(), record.to_record().clone()),
+            ];
+            fields.extend(sent.to_fields());
+            // list, preview and settle judge holders with this home's places
+            if let Some(view) = layerfs_store::place_view::encoded_from_home(home) {
+                fields.push(("place_view".to_owned(), view));
+            }
+            worker.call("store.repair", SdkValue::Map(fields), &mut |_: SdkValue| {})
+        }
+    };
+    let answer = answer.map_err(|refusal| match refusal.code.as_str() {
+        "InUse" => with_fix(
+            refusal,
+            format!(
+                "layerfs store repair-mount-holders {} {} settle --op {} --force",
+                shell_word(&request.project),
+                shell_word(&request.branch),
+                request.op.as_deref().unwrap_or_default()
+            ),
+        ),
+        _ => refusal,
+    })?;
+    Ok(paged(answer, &filters))
+}
+
+/// A repair answer with its `next` place made the `next_cursor` the caller
+/// takes back; an answer that is no page is as the Store side gave it.
+fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
+    let SdkValue::Map(fields) = answer else {
+        return answer;
+    };
+    let fields = (fields.into_iter())
+        .map(|(name, value)| match (name.as_str(), value) {
+            ("next", SdkValue::Null) => ("next_cursor".to_owned(), SdkValue::Null),
+            ("next", place) => (
+                "next_cursor".to_owned(),
+                SdkValue::Text(layerfs_home::cursor::make(REPAIR, place, filters)),
+            ),
+            (_, value) => (name, value),
+        })
+        .collect();
+    SdkValue::Map(fields)
 }
 
 /// Who uses a Store or a project, read from the Sandbox records.

@@ -1,8 +1,9 @@
-//! The forced close of a `native` Sandbox, which bypasses Store and daemon
+//! The forced close of a Sandbox on a machine whose calls run in this
+//! process (`native` on macOS and Linux), which bypasses Store and daemon
 //! discovery and live unmount admission: only its runtime stops; the
-//! machine, its Stores and saved history stay. A forced `machine.stop` on
-//! `native` stops each Sandbox's runtime the same way ([`native_host`],
-//! `Recorded::stop_now`).
+//! machine, its Stores and saved history stay. A forced `machine.stop` of
+//! a machine no provider holds stops each Sandbox's runtime the same way
+//! ([`local_host`], `Recorded::stop_now`).
 use crate::host::{Deploy, Host, Message};
 use crate::mount_intents::{Bound, Branch};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -10,9 +11,10 @@ use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::path::Path;
 
-/// The host operation's view of `native` Sandbox `sandbox` from its own
-/// records alone: no Store, project or daemon is resolved.
-pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
+/// The host operation's view, in this process, of Sandbox `sandbox` on a
+/// machine whose calls run here, from its own records alone: no Store,
+/// project or daemon is resolved.
+pub fn local_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
     let id = home::opened(home)?.id;
     Ok(Host {
         home: home.to_path_buf(),
@@ -36,11 +38,11 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
 /// The refusal detail field a forced close sets once its runtime stopped.
 pub const RUNTIME_STOPPED: &str = "runtime_stopped";
 
-/// Refuses while a live process holds `native` (a forced `machine.stop` in
-/// progress, for one). An unresolved intent does not stop a forced close,
-/// whether an ended process left it or this process did.
-pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
-    let Some(machine) = layerfs_machine::record::MachineRecord::read(home, "native")? else {
+/// Refuses while a live process holds machine `machine` (a forced
+/// `machine.stop` in progress, for one). An unresolved intent does not stop
+/// a forced close, whether an ended process left it or this process did.
+pub fn machine_free(home: &Path, machine: &str) -> Result<(), SdkRefusal> {
+    let Some(machine) = layerfs_machine::record::MachineRecord::read(home, machine)? else {
         return Ok(());
     };
     match machine.op() {
@@ -101,7 +103,14 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         Some(record) => crate::mount_intents::store_of(&host.home, record),
         None => Err(format!("no Sandbox {id} is recorded")),
     };
-    let left = crate::mount_intents::end(open.as_ref().map_err(String::as_str), &bound);
+    // the runtime is confirmed stopped: write the durable home tombstone
+    // before the record (the folder) goes, best effort as a close does
+    // (`crate::lifecycle::not_retired`): a failed write is reported in `left`
+    let unretired = (record.as_ref())
+        .and_then(|record| crate::record::retire(&host.home, record).err())
+        .map(|refusal| crate::lifecycle::not_retired(&id, &refusal.message));
+    let mut left = crate::mount_intents::end(open.as_ref().map_err(String::as_str), &bound);
+    left.extend(unretired);
     // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()

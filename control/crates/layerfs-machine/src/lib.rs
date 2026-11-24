@@ -46,7 +46,7 @@ pub use bundle::{bundle_dir, bundle_place, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
 pub use create::{create, MachineCreate, STOCK};
 #[cfg(feature = "machine")]
-pub use endpoint::running;
+pub use endpoint::{recorded as worker_endpoint, running};
 #[cfg(feature = "machine")]
 pub use image::docker_default;
 /// The platform driver, for the Sandbox code that reaches a machine's
@@ -55,7 +55,7 @@ pub use image::docker_default;
 pub use layerfs_platform as platform;
 #[cfg(feature = "machine")]
 pub use list::{get, list};
-pub use local::runs_here;
+pub use local::{in_process, none_in_process, provided, runs_here};
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
 #[cfg(feature = "machine")]

@@ -132,7 +132,8 @@ impl ProjectRecord {
     /// What every project answer says of the project, from its Store's
     /// record `store` (call surface 2.0): `project` (`<store>/<name>`),
     /// `store`, `engine` (none for a kind LayerFS does not read), `machine`
-    /// (a sqlite Store's, `native` when its record names none; none for a
+    /// (a sqlite Store's, the machine whose calls run in this process when
+    /// its record names none; none for a
     /// PostgreSQL Store, which is on no machine) and `created_at`.
     pub fn answer(&self, store: &StoreRecord) -> Vec<(&'static str, SdkValue)> {
         let engine = store.kind().ok().map(|kind| kind.as_str().to_owned());

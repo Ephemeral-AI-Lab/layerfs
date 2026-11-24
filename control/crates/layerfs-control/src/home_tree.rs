@@ -118,8 +118,10 @@ fn workspaces(home: &Path, sandbox: &str) -> Option<Vec<SdkValue>> {
 fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> SdkValue {
     let name = record.name();
     let state = record.status(machine);
-    // only `native` and a Sandbox reached directly record them here
-    let recorded = record.machine() == "native" || layerfs_sandbox::direct::forwarded(record);
+    // only a machine whose calls run in this process and a Sandbox reached
+    // directly record them here
+    let recorded = layerfs_machine::runs_here(home, record.machine()).unwrap_or(false)
+        || layerfs_sandbox::direct::forwarded(record);
     let (listed, not_listed) = match state {
         State::Blocked(_) => (SdkValue::Null, false),
         _ if !recorded => (SdkValue::Null, true),
@@ -201,7 +203,9 @@ fn machine(
     stores: &[StoreRecord],
     sandboxes: &[SandboxRecord],
 ) -> SdkValue {
-    let built_in = matches!(name, "native" | "docker").then_some(name);
+    let built_in = layerfs_home::names::BUILT_IN
+        .contains(&name)
+        .then_some(name);
     let held_stores = (stores.iter())
         .filter(|record| placed(record).as_deref() == Some(name))
         .map(|record| store(home, record, Some((name, &state))))

@@ -310,8 +310,16 @@ impl HistoryCatalog for HistoryProvider {
         super::admission::release(self, op_id)
     }
 
+    fn gc_release_done(&self, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
+        super::admission::release_done(self, op_id, evidence)
+    }
+
     fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
         super::admission::mark_uncertain(self, op_id)
+    }
+
+    fn gc_liveness(&self, intents: &[GcIntent]) -> HistoryResult<Vec<layerfs_history::Liveness>> {
+        super::admission::liveness(self, intents)
     }
 
     fn gc_remove_branch(
@@ -342,5 +350,23 @@ impl HistoryCatalog for HistoryProvider {
 
     fn gc_intents(&self, scope_kind: GcScopeKind, scope_id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
         super::admission::intents(self, scope_kind, scope_id)
+    }
+
+    fn gc_done_intents(&self, page: u32, limit: u32) -> HistoryResult<GcAuditPage> {
+        super::admission::done_intents(self, page, limit)
+    }
+
+    fn gc_done_intents_branch(
+        &self,
+        project: &str,
+        branch: &str,
+        page: u32,
+        limit: u32,
+    ) -> HistoryResult<GcAuditPage> {
+        super::admission::done_intents_branch(self, project, branch, page, limit)
+    }
+
+    fn gc_reconcile_machine(&self, machine: &str, incarnation: &str) -> HistoryResult<GcReconcile> {
+        super::admission::reconcile_machine(self, machine, incarnation)
     }
 }

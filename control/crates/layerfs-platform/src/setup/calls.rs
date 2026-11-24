@@ -156,6 +156,15 @@ pub fn status(spec: &Spec) -> Result<Status, MachineError> {
     adapter(spec.kind).status(spec)
 }
 
+/// The provider's own runtime state now, without contacting its worker or
+/// running a guest command (`running`, `stopped`, `failed`, `missing`). A
+/// start that must replace its worker confirms through this that the old one
+/// no longer runs.
+pub fn provider_state(spec: &Spec) -> Result<State, MachineError> {
+    spec.validate()?;
+    adapter(spec.kind).provider_state(spec)
+}
+
 /// [`status`], with every command it runs ending by `deadline`: one still
 /// running then is killed with its process group and reaped, and the answer
 /// is that command's `Unknown`. For callers that wait for a probe a bounded

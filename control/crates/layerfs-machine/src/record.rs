@@ -117,9 +117,10 @@ impl MachineRecord {
     }
 
     /// A built-in machine's first record, in the home with id `home_id`:
-    /// its name, platform and now, and for `docker` the name of its worker
-    /// container (`vm_name`), recorded like every created machine's
-    /// (layerfs-project#180). `native` has no provider name.
+    /// its name, platform (a built-in machine's has its name) and now, and
+    /// where a provider holds it (`docker`'s worker container) its provider
+    /// name (`vm_name`), recorded like every created machine's
+    /// (layerfs-project#180). `native`'s platform has no provider.
     pub fn built_in(name: &str, home_id: &str) -> Self {
         let record = Self::from_record(
             name,
@@ -129,9 +130,9 @@ impl MachineRecord {
                 ("created", SdkValue::Int(home::now_ms())),
             ]),
         );
-        match name {
-            "native" => record,
-            _ => record.with("vm_name", SdkValue::text(vm_name(home_id, name))),
+        match crate::local::provided(name) {
+            false => record,
+            true => record.with("vm_name", SdkValue::text(vm_name(home_id, name))),
         }
     }
 
@@ -151,9 +152,17 @@ impl MachineRecord {
     /// Whether the record is one an earlier build made, with no provider
     /// name (`vm_name`): this build reaches nothing of it, so a remove of
     /// the machine, or of a Store or Sandbox recorded on it, takes records
-    /// alone. `native` has no provider name and is never nameless.
+    /// alone. A machine whose platform has no provider (`native`) has no
+    /// provider name and is never nameless.
     pub fn nameless(&self) -> bool {
-        self.name != "native" && self.text("vm_name").is_none()
+        self.provided() && self.text("vm_name").is_none()
+    }
+
+    /// Whether a provider holds the machine, as its platform says
+    /// ([`crate::provided`]); a record that names no platform is one an
+    /// earlier build made, which had one.
+    pub fn provided(&self) -> bool {
+        self.platform_name().is_none_or(crate::local::provided)
     }
 
     /// The machine's name (its folder's).
@@ -194,6 +203,19 @@ impl MachineRecord {
     /// The platform's name, as written (`platform()` parses it).
     pub fn platform_name(&self) -> Option<&str> {
         self.fields.get_text("platform")
+    }
+
+    /// The ordered incarnation the machine's last start recorded: a newer
+    /// worker start mints a greater value, which admission compares with the
+    /// incarnation a mount intent recorded. A record written before the field
+    /// existed has none (no place proof, never death).
+    pub fn incarnation(&self) -> Option<&str> {
+        self.text("incarnation")
+    }
+
+    /// The record with the ordered `incarnation` its start minted.
+    pub fn with_incarnation(self, incarnation: &str) -> Self {
+        self.with("incarnation", SdkValue::text(incarnation))
     }
 
     /// The state a create, start or stop recorded (`running`,

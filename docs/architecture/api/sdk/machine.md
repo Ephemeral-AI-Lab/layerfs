@@ -567,10 +567,20 @@ the manifest last ([`power.rs`](../../../../control/crates/layerfs-machine/src/p
 Progress phases: `bundle`, `image` (the docker machine loading the bundle's
 image), `boot`, `worker`.
 
+Before it launches a worker, a start stops the one it recorded and confirms
+both the provider state and the recorded endpoint say it is gone. Only then
+does it mint the ordered `p1:<home id>.worker:<milliseconds>:<nonce>` incarnation,
+write it into the machine's record and pass it to the launched worker as
+`LAYERFS_WORKER_INCARNATION`; after the new worker answers, the Stores on
+that machine are reconciled with the token only when `worker.ping` reports
+the same value. A start that cannot confirm the old worker is refused
+`Failed` before any token is minted, and settles no intent.
+
 | Refusal | When | Next |
 | --- | --- | --- |
 | `Unavailable` | the worker is of another build: the machine runs and is recorded `broken` `outdated` ([`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs)) | `fix: layerfs machine stop <machine> && layerfs machine start <machine>`, `--force` on the stop when Sandboxes are recorded on it |
 | `Unavailable` | a worker is recorded, its hello failed and the provider reports the machine running: a start would end that worker and every Sandbox on it, so nothing is started and the machine is recorded `broken` `not_answering`; the message names how many Sandboxes are on it and `layerfs machine doctor <machine>`. A provider that cannot say whether it runs is refused too, `fix: layerfs machine doctor <machine>` ([`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs)) | `fix: layerfs machine stop <machine> && layerfs machine start <machine>`, `--force` on the stop when Sandboxes are recorded on it |
+| `Failed` | the old worker did not stop (the provider still reports it running, or broken where the provider cannot replace it, or its recorded endpoint still answers): no ordered incarnation is minted and no intent is settled | |
 | `Busy` | another operation on the machine runs; it names the `op` | |
 | `Unsupported` | no sealed Linux bundle (`detail.missing`); `docker` with no image ([`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs)) | |
 | `Unknown` | a provider command timed out or its reply was lost: the machine is `broken` `unresolved` | `fix: layerfs machine get <machine> --with live`, which settles it by observing |

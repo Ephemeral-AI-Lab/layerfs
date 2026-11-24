@@ -141,9 +141,14 @@ pub(super) fn placed(
     name: &str,
 ) -> Result<Placed, layerfs_bridge::control::SdkRefusal> {
     let record = MachineRecord::read(home, name)?;
+    // a built-in machine with no record yet has the platform of its name
+    let built_in = layerfs_home::names::BUILT_IN
+        .contains(&name)
+        .then_some(name);
     let platform = (record.as_ref())
         .and_then(MachineRecord::platform_name)
-        .unwrap_or(if name == "native" { "native" } else { "" })
+        .or(built_in)
+        .unwrap_or("")
         .to_owned();
     let stores = (layerfs_store::record::stores(home)?.iter())
         .filter(|store| store.machine().ok().as_deref() == Some(name))
@@ -167,7 +172,7 @@ pub(super) fn placed(
 ///
 /// | platform | resources | data disk |
 /// | --- | --- | --- |
-/// | `native` | `host` | `host_fs`: the home's filesystem |
+/// | no provider (`native`) | `host` | `host_fs`: the home's filesystem |
 /// | `lima`, `apple-container` | `vm` | `volume`: the machine's own disk |
 /// | `docker` | `engine_host` | `vm_disk` on a macOS or Windows host, where the Engine is in a VM whose one disk every volume and image shares; `host_fs` on a Linux host, where a volume is a folder of the host's filesystem |
 ///
@@ -176,7 +181,8 @@ pub(super) fn placed(
 /// also runs a VM, reads as `host_fs`.
 pub(super) fn scopes(platform: &str) -> (&'static str, &'static str) {
     match platform {
-        "native" => ("host", "host_fs"),
+        // no provider holds it: Sandboxes run on the host's own OS
+        own_os if !layerfs_machine::provided(own_os) => ("host", "host_fs"),
         "docker" if cfg!(target_os = "linux") => ("engine_host", "host_fs"),
         "docker" => ("engine_host", "vm_disk"),
         _ => ("vm", "volume"),

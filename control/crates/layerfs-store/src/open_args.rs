@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The args-map keys that route a call and never reach the engine.
-pub const ROUTING: [&str; 8] = [
+pub const ROUTING: [&str; 9] = [
     "storePath",
     "sandbox",
     "deploy",
@@ -23,6 +23,7 @@ pub const ROUTING: [&str; 8] = [
     "postgresql",
     "store_record",
     "project_record",
+    "place_view",
 ];
 
 /// The Store a call opens and how. Each field is named for the frame field

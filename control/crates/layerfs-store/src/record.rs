@@ -41,7 +41,8 @@ pub struct PgServer {
 /// One Store, decided once from `store/<name>/record.json`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StoreRef {
-    /// A sqlite Store on `machine` (`native` when the record names none).
+    /// A sqlite Store on `machine` (the machine whose calls run in this
+    /// process when the record names none).
     Sqlite {
         name: String,
         machine: String,
@@ -68,8 +69,16 @@ impl StoreRef {
         let name = name.to_owned();
         Ok(match kind {
             StoreKind::Sqlite => Self::Sqlite {
+                // none: the Store's file is in this process's home, on the
+                // machine whose calls run here (refused on a host with none)
                 machine: match record.get("machine") {
-                    None => "native".to_owned(),
+                    None => layerfs_machine::in_process()
+                        .ok_or_else(|| {
+                            unread(layerfs_machine::none_in_process(
+                                "a sqlite Store record that names no machine",
+                            ))
+                        })?
+                        .to_owned(),
                     Some(SdkValue::Text(machine)) => machine.clone(),
                     Some(_) => return Err(unread(refused("InvalidInput", "Store record machine"))),
                 },
@@ -410,14 +419,15 @@ impl StoreRecord {
         record
     }
 
-    /// A sqlite Store restored from a bucket as a new Store on `native`.
-    pub fn restored(name: &str, binding: &[u8], cursor: &[u8; 32]) -> Self {
+    /// A sqlite Store restored from a bucket as a new Store on `machine`,
+    /// one whose calls run in this process.
+    pub fn restored(name: &str, machine: &str, binding: &[u8], cursor: &[u8; 32]) -> Self {
         let fields = SdkValue::map([
             ("name", SdkValue::text(name)),
             ("kind", SdkValue::text("sqlite")),
             ("binding", SdkValue::Bytes(binding.to_vec())),
             ("cursor", SdkValue::Bytes(cursor.to_vec())),
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(machine)),
             ("profile", SdkValue::text(PROFILE)),
             ("created", SdkValue::Int(home::now_ms())),
         ]);
