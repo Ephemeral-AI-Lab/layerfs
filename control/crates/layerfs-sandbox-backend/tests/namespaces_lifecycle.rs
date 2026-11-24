@@ -906,11 +906,17 @@ fn a_cancelled_command_whose_child_ends_after_it_leaves_no_group() {
     let provider = fixture.provider().unwrap();
     let sandbox = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
     let sandbox_group = Path::new("/sys/fs/cgroup/layerfs").join(sandbox.identity().as_str());
-    // the foreground child ends at once on SIGTERM; the background one,
-    // whose streams are not the command's (so the run does not wait for
-    // them), traps it and ends half a second later: the run that waited for
-    // the command finds its group still populated
-    let script = r#"/bin/sh -c 'trap "/bin/sleep 0.5; exit 0" TERM; /bin/sleep 600 & echo > /var/tmp/armed; wait' >/dev/null 2>&1 & /bin/sleep 600"#;
+    // the command itself (its shell, then its `sleep`) ends at once on
+    // SIGTERM; the background child, whose streams are not the command's (so
+    // the run does not wait for them), traps it and ends half a second later:
+    // the run that waited for the command finds its group still populated.
+    // Every process the cancel's one SIGTERM must end exists, and takes it,
+    // before the marker: the command execs its sleep (it forks nothing after
+    // the child, so nothing starts between the cancel's listing and its
+    // signal), and the trapped shell waits until its own `sleep 600` runs
+    // `sleep` (until that exec the forked shell still has the trap's handler,
+    // which would take the SIGTERM and lose it at the exec).
+    let script = r#"/bin/sh -c 'trap "/bin/sleep 0.5; exit 0" TERM; /bin/sleep 600 & p=$!; until read c < /proc/$p/comm && [ "$c" = sleep ]; do /bin/sleep 0.01; done; echo > /var/tmp/armed; wait' >/dev/null 2>&1 & exec /bin/sleep 600"#;
     let (stop, thread) = started(&sandbox, "e6", script);
     let group = sandbox_group.join("ws-ws1").join("exec-e6");
     assert_eq!(
@@ -919,7 +925,8 @@ fn a_cancelled_command_whose_child_ends_after_it_leaves_no_group() {
             path: group.clone()
         }
     );
-    // the trap is set before the cancel comes (a bounded wait)
+    // the trap is set and the trapped shell's child runs `sleep` before the
+    // cancel comes (a bounded wait)
     let armed = fixture
         .directory("sandbox-1")
         .join("overlay/upper/var/tmp/armed");
