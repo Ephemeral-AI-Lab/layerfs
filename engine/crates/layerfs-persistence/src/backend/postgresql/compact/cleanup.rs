@@ -222,7 +222,7 @@ pub(crate) fn compaction_intent(
     stage(session, |tx| {
         let rows = tx.query(
             &format!(
-                "SELECT op_id FROM {schema}.gc_intent WHERE kind='compaction' ORDER BY updated_ms LIMIT 1"
+                "SELECT op_id FROM {schema}.gc_intent WHERE kind='compaction' AND state <> 'done' ORDER BY updated_ms LIMIT 1"
             ),
             Vec::new(),
         )?;
@@ -304,7 +304,7 @@ pub(crate) fn settle_leftover(
         clear_round(session, schema)?;
         stage(session, |tx| {
             tx.batch(&format!(
-                "DELETE FROM {schema}.gc_intent WHERE kind='compaction'"
+                "DELETE FROM {schema}.gc_intent WHERE kind='compaction' AND state <> 'done'"
             ))?;
             Ok(())
         })?;
@@ -711,7 +711,7 @@ pub(crate) fn cleanup(
     } else {
         stage(session, |tx| {
             tx.batch(&format!(
-                "DELETE FROM {schema}.gc_intent WHERE kind='compaction'"
+                "DELETE FROM {schema}.gc_intent WHERE kind='compaction' AND state <> 'done'"
             ))?;
             Ok(())
         })?;

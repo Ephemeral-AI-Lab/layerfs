@@ -126,10 +126,7 @@ fn a_placed_daemon_mount_registers_sandbox_machine_and_workspace() {
         .gc_intents(GcScopeKind::Branch, branch.as_slice())
         .expect("intents");
     assert_eq!(intents.len(), 1);
-    assert_eq!(
-        intents[0].machine_incarnation.as_deref(),
-        Some(incarnation)
-    );
+    assert_eq!(intents[0].machine_incarnation.as_deref(), Some(incarnation));
     assert_eq!(intents[0].sandbox_generation.as_deref(), Some(generation));
     unmount(&f, token);
     f.cleanup();

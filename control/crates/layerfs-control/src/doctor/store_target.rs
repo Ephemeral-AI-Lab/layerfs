@@ -316,27 +316,16 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     // the live mount admissions and one bounded page of the retained done
     // audit: reported as evidence, never released or settled by a doctor
     match found.get("mount_holders") {
-        Some(rows) => super::mount_holders::report(
-            probe.home,
-            name,
-            false,
-            MOUNT_HOLDERS,
-            Some(rows),
-            checks,
-        ),
-        None => checks.unknown(
-            MOUNT_HOLDERS,
-            "the diagnostic did not report mount holders",
-        ),
+        Some(rows) => {
+            super::mount_holders::report(probe.home, name, false, MOUNT_HOLDERS, Some(rows), checks)
+        }
+        None => checks.unknown(MOUNT_HOLDERS, "the diagnostic did not report mount holders"),
     }
     match found.get("gc_audit") {
         Some(page) if page.get("items").is_some() => {
             super::mount_holders::audit_result(Ok(page.clone()), checks)
         }
-        _ => checks.unknown(
-            GC_AUDIT,
-            "the diagnostic did not report the done audit",
-        ),
+        _ => checks.unknown(GC_AUDIT, "the diagnostic did not report the done audit"),
     }
     if heads {
         backups(record, text("heads"), text("heads_error"), checks);

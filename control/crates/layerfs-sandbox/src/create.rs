@@ -140,8 +140,8 @@ pub fn create(
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
+    let record = SandboxRecord::creating(&home, name, project, machine, &op)?;
     home::private_dir(&dir)?;
-    let record = SandboxRecord::creating(name, project, machine, &op);
     let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
     if let Err(refusal) = claimed {
         // the folder this call made holds no record: the name stays free
@@ -154,8 +154,14 @@ pub fn create(
         let _sandbox = record::lock(&home, name)?;
         record.clone().with_op(&op).write(&home)?;
     }
+    // a worker keeps its own record of the Sandbox: it is sent the machine
+    // and generation minted here, which the mounts it places then carry
+    let place = (record.generation()).map(|g| (machine.to_owned(), g.to_owned()));
     let asked = Asked {
-        call: Call::Create { platform: None },
+        call: Call::Create {
+            platform: None,
+            place,
+        },
         message: Message::Absent,
         image: request.image.clone(),
         start: Some((0, total(request.mount))),
@@ -176,6 +182,9 @@ pub fn create(
                 record = direct::save(&home, record, opened)?;
             }
             record.write(&home)?;
+            // the started record's newer generation proves the retired one's
+            // mounts dead by itself: the name's older tombstone goes
+            record::drop_retired(&home, &record);
             if !request.mount {
                 events.phase("start", Some(1), Some(1), Vec::new());
             }

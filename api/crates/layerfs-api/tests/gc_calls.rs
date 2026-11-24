@@ -7,7 +7,7 @@ use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::record::StoreRecord;
-use layerfs_store::service::{branch_named, with_service};
+use layerfs_store::service::with_service;
 use layerfs_store_service::history::lookup;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -810,16 +810,8 @@ fn a_bare_project_name_is_refused_by_every_project_call() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
 /// `store.repair_mount_holders` is the explicit two-step operator repair:
-/// preview answers the typed holder view and changes no intent; release needs
+/// preview answers the typed holder view and writes nothing; release needs
 /// a preceding settle; `settle_legacy` marks only rows with no owner or place
 /// evidence; release retains the row as the durable done audit, and the audit
 /// action reads it back in bounded pages.
@@ -878,8 +870,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     let legacy_op = "31".repeat(16);
     let repair = |action: &str, op: Option<&str>, legacy: bool| {
         let mut fields = vec![
-            ("name", t("shop")),
-            ("project", t("api")),
+            ("project", t("shop/api")),
             ("branch", t("main")),
             ("action", t(action)),
         ];
@@ -900,13 +891,34 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         "store.repair_mount_holders",
         &repair("preview", None, false),
     );
-    let Some(SdkValue::List(holders)) = preview.get("holders") else {
+    let Some(SdkValue::List(holders)) = preview.get("items") else {
         panic!("preview holders: {preview:?}");
     };
     assert_eq!(holders.len(), 2, "{preview:?}");
     assert_eq!(preview.get_text("action"), Some("preview"));
-    assert_eq!(preview.get("op"), Some(&SdkValue::Null));
-    assert_eq!(preview.get_text("audit"), Some("gc_intent"));
+    assert_eq!(preview.get("next_cursor"), Some(&SdkValue::Null));
+    // Preview is read-only: the Branch's intents are as registered, and no
+    // retained row was written.
+    let intents = with_service(&open, |service| {
+        (service.store.history())
+            .gc_intents(GcScopeKind::Branch, branch.as_slice())
+            .map_err(lookup::history)
+    })
+    .unwrap();
+    assert_eq!(intents.len(), 2, "{intents:?}");
+    assert!(
+        intents.iter().all(|intent| !intent.uncertain),
+        "{intents:?}"
+    );
+    let audit = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("audit", None, false),
+    );
+    assert!(
+        matches!(audit.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
+        "preview wrote a row: {audit:?}"
+    );
     let live_row = holders
         .iter()
         .find(|row| row.get_text("op") == Some(live_op.as_str()))
@@ -918,6 +930,10 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         Some("generation:1")
     );
     assert_eq!(live_row.get("legacy"), Some(&SdkValue::Bool(false)));
+    // nothing proves its owner gone: the row still looks live
+    assert_eq!(live_row.get_text("liveness"), Some("live"));
+    assert_eq!(live_row.get("safe"), Some(&SdkValue::Bool(false)));
+    assert!(live_row.get("reason").is_none(), "state words, no prose");
     let legacy_row = holders
         .iter()
         .find(|row| row.get_text("op") == Some(legacy_op.as_str()))
@@ -938,17 +954,23 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     );
     assert_eq!(code, "InvalidInput", "{message}");
 
-    ok(
+    // a holder that still looks live is settled only when forced
+    let (code, message) = refused(
         &home,
         "store.repair_mount_holders",
         &repair("settle", Some(&live_op), false),
     );
+    assert_eq!(code, "InUse", "{message}");
+    let mut forced = repair("settle", Some(&live_op), false);
+    forced.push(("force", SdkValue::Bool(true)));
+    let settled = ok(&home, "store.repair_mount_holders", &forced);
+    assert_eq!(settled.get_text("state"), Some("uncertain"), "{settled:?}");
     let preview = ok(
         &home,
         "store.repair_mount_holders",
         &repair("preview", None, false),
     );
-    let Some(SdkValue::List(holders)) = preview.get("holders") else {
+    let Some(SdkValue::List(holders)) = preview.get("items") else {
         panic!("preview holders: {preview:?}");
     };
     let settled_row = holders
@@ -979,14 +1001,12 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         &repair("preview", None, false),
     );
     assert!(
-        matches!(preview.get("holders"), Some(SdkValue::List(rows)) if rows.is_empty()),
+        matches!(preview.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
         "{preview:?}"
     );
 
     // Both releases retained their row as the durable operator audit, and
-    // every preview retained its own done row: the release rows keep the op,
-    // the preview rows are the operator action with no op. Admission still
-    // filters every done row.
+    // the three previews wrote none. Admission still filters every done row.
     let audit = ok(
         &home,
         "store.repair_mount_holders",
@@ -1003,17 +1023,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         })
         .collect();
     assert_eq!(released.len(), 2, "{audit:?}");
-    let previews: Vec<_> = rows
-        .iter()
-        .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-        .collect();
-    assert_eq!(previews.len(), 3, "{audit:?}");
-    for row in &previews {
-        assert_eq!(row.get("phase"), Some(&SdkValue::Null));
-        assert_eq!(row.get_text("op").map(str::len), Some(32));
-        assert_eq!(row.get_text("kind"), Some("mount"));
-        assert_eq!(row.get_text("scope_kind"), Some("branch"));
-    }
+    assert_eq!(rows.len(), 2, "only the releases are retained: {audit:?}");
     let released = released
         .iter()
         .find(|row| row.get_text("op") == Some(live_op.as_str()))
@@ -1028,16 +1038,38 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         evidence.contains(&format!("action=release;operator=alice;op={live_op}")),
         "{evidence}"
     );
-    assert!(matches!(audit.get("has_more"), Some(SdkValue::Bool(false))));
+    assert_eq!(audit.get("next_cursor"), Some(&SdkValue::Null), "{audit:?}");
 
-    // Paging is bounded by the call, not by the caller.
-    let mut paged = repair("audit", None, false);
-    paged.push(("limit", SdkValue::Int(i64::from(u32::MAX))));
-    let paged = ok(&home, "store.repair_mount_holders", &paged);
-    assert!(
-        matches!(paged.get("limit"), Some(SdkValue::Int(limit)) if *limit == i64::from(layerfs_history::MAXIMUM_AUDIT_PAGE)),
-        "{paged:?}"
+    // Paging is by `limit` and `cursor`: one row a page, the cursor carries
+    // the project, Branch and action, and another action's cursor is refused.
+    let mut first = repair("audit", None, false);
+    first.push(("limit", SdkValue::Int(1)));
+    let first = ok(&home, "store.repair_mount_holders", &first);
+    let Some(cursor) = first.get_text("next_cursor").map(str::to_owned) else {
+        panic!("a first page of one names the next: {first:?}");
+    };
+    let mut second = repair("audit", None, false);
+    second.push(("limit", SdkValue::Int(1)));
+    second.push(("cursor", t(&cursor)));
+    let second = ok(&home, "store.repair_mount_holders", &second);
+    let op_of = |page: &SdkValue| match page.get("items") {
+        Some(SdkValue::List(rows)) if rows.len() == 1 => rows[0].get_text("op").map(str::to_owned),
+        other => panic!("one row: {other:?}"),
+    };
+    assert_ne!(op_of(&first), op_of(&second), "the second page moves on");
+    assert_eq!(
+        second.get("next_cursor"),
+        Some(&SdkValue::Null),
+        "{second:?}"
     );
+    let mut crossed = repair("preview", None, false);
+    crossed.push(("cursor", t(&cursor)));
+    let (code, message) = refused(&home, "store.repair_mount_holders", &crossed);
+    assert_eq!(code, "InvalidInput", "{message}");
+    let mut too_many = repair("audit", None, false);
+    too_many.push(("limit", SdkValue::Int(i64::from(u32::MAX))));
+    let (code, message) = refused(&home, "store.repair_mount_holders", &too_many);
+    assert_eq!(code, "InvalidInput", "{message}");
 
     // A refused call changes nothing.
     let (code, message) = refused(
@@ -1063,23 +1095,3 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
-
-/// The bounded read of the Store's retained done rows, as the audit action
-/// answers it.
-fn audit_items(home: &Path) -> Vec<SdkValue> {
-    let audit = ok(
-        home,
-        "store.repair_mount_holders",
-        &[
-            ("name", t("shop")),
-            ("project", t("api")),
-            ("branch", t("main")),
-            ("action", t("audit")),
-        ],
-    );
-    match audit.get("items") {
-        Some(SdkValue::List(items)) => items.clone(),
-        other => panic!("audit items: {other:?}"),
-    }
-}
-

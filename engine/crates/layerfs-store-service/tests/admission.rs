@@ -19,18 +19,9 @@ fn text(value: &str) -> SdkValue {
     SdkValue::text(value)
 }
 
-/// The Store's clock plus a minute, for a lease that has not expired.
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
 /// An ordered place value in the format the records mint.
 fn token(milliseconds: u64, nonce: &str) -> String {
-    format!("p1:worker:{milliseconds:016}:{nonce}")
+    format!("p1:aa11.worker:{milliseconds:016}:{nonce}")
 }
 
 /// Finding 5: a mount intent records who owns it (pid/start, boot, machine,
@@ -56,6 +47,7 @@ fn a_mount_intent_records_owner_evidence_and_settles_unresolved() {
     let intent = admission::mount_intent(
         workspace,
         &snapshot,
+        Some("installed"),
         &place,
         layerfs_history::PlaceAuthority::default(),
     );
@@ -119,9 +111,16 @@ fn a_mount_intent_records_the_callers_place_authority() {
         machine_incarnation: Some("worker:2".to_owned()),
         sandbox_generation: Some("generation:2".to_owned()),
     };
-    let intent = admission::mount_intent(workspace, &snapshot, &place, authority.clone());
+    let intent = admission::mount_intent(
+        workspace,
+        &snapshot,
+        Some("installed"),
+        &place,
+        authority.clone(),
+    );
     assert_eq!(intent.machine_incarnation, authority.machine_incarnation);
     assert_eq!(intent.sandbox_generation, authority.sandbox_generation);
+    assert_eq!(intent.project.as_deref(), Some("installed"));
 
     history.gc_register(&intent).expect("admit the mount");
     let stored = history
@@ -141,11 +140,12 @@ fn a_mount_intent_records_the_callers_place_authority() {
     fixture.cleanup();
 }
 
-/// Admitting a mount with a newer ordered machine incarnation settles the
-/// older placement at the same Branch even while its lease is live; the newer
-/// place still holds.
+/// A mount registration settles no other mount row, as before place
+/// evidence: the older placement at the same machine stays until a removal's
+/// admission, given the machine's newer ordered incarnation, proves it dead
+/// even while its owner process lives; the newer place still holds.
 #[test]
-fn a_newer_incarnation_settles_the_older_mount_through_the_service() {
+fn a_newer_incarnation_settles_the_older_mount_at_removal_not_at_mount() {
     let fixture = Fixture::new("admission-place-dead", |source| {
         fs::write(source.join("a.txt"), b"a\n").unwrap();
         1
@@ -162,6 +162,7 @@ fn a_newer_incarnation_settles_the_older_mount_through_the_service() {
         admission::mount_intent(
             WorkspaceId::from_authority([tag; 32]).expect("workspace"),
             &snapshot,
+            Some("installed"),
             &layerfs_bridge::control::MountPlace::new(Some("sandbox-9"), Some("machine-9")),
             PlaceAuthority {
                 machine_incarnation: Some(incarnation.to_owned()),
@@ -176,19 +177,38 @@ fn a_newer_incarnation_settles_the_older_mount_through_the_service() {
         .gc_register(&current)
         .expect("admit the current mount");
 
+    // The registration scanned no other mount: both rows stay.
     let listed = history
         .gc_intents(GcScopeKind::Branch, work.id.as_slice())
         .expect("intents");
-    assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].op_id, current.op_id);
+    assert_eq!(listed.len(), 2);
 
-    let refused = removal::remove(&fixture.service.store, &stack, "work")
-        .expect_err("the current incarnation holds");
+    let view = || {
+        let mut view = PlaceView::new();
+        view.set_machine("machine-9", token(20, "b"));
+        Some(view)
+    };
+    let refused = admission::with_place_view(view(), || {
+        removal::remove(&fixture.service.store, &stack, "work")
+    })
+    .expect_err("the current incarnation holds");
     assert_eq!(refused.code, "MountsActive", "{refused:?}");
     history
         .gc_release(&current.op_id)
         .expect("release the current mount");
-    removal::remove(&fixture.service.store, &stack, "work").expect("removal after release");
+    // Without the machine's current incarnation the older row's live owner
+    // still holds; with it, the removal settles the older placement.
+    let refused = removal::remove(&fixture.service.store, &stack, "work")
+        .expect_err("no place evidence: the live owner holds");
+    assert_eq!(refused.code, "MountsActive", "{refused:?}");
+    admission::with_place_view(view(), || {
+        removal::remove(&fixture.service.store, &stack, "work")
+    })
+    .expect("the newer incarnation proves the older mount dead");
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, work.id.as_slice())
+        .expect("intents")
+        .is_empty());
     fixture.cleanup();
 }
 
@@ -270,6 +290,7 @@ fn a_mount_sees_a_live_init_or_merge_but_shares_with_another_mount() {
         admission::mount_intent(
             WorkspaceId::from_authority([tag; 32]).expect("workspace"),
             &snapshot,
+            Some("installed"),
             &place,
             layerfs_history::PlaceAuthority::default(),
         )
@@ -333,8 +354,8 @@ fn a_placed_bind_records_the_sandbox_generation() {
     let stack = lookup::project(&fixture.service.store, "installed").expect("project");
     let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
     let history = fixture.service.store.history();
-    let incarnation = "p1:worker:10:aa";
-    let generation = "p1:sandbox:10:aa";
+    let incarnation = "p1:aa11.worker:10:aa";
+    let generation = "p1:aa11.sandbox:10:aa";
     let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-21"), Some("machine-21"))
         .with_generation(Some(generation))
         .with_machine_incarnation(Some(incarnation));
@@ -358,6 +379,9 @@ fn a_placed_bind_records_the_sandbox_generation() {
     assert_eq!(intents[0].machine.as_deref(), Some("machine-21"));
     assert_eq!(intents[0].machine_incarnation.as_deref(), Some(incarnation));
     assert_eq!(intents[0].sandbox_generation.as_deref(), Some(generation));
+    // A bind by Branch id names the project, so the audit finds the row.
+    assert_eq!(intents[0].project.as_deref(), Some("installed"));
+    assert_eq!(intents[0].branch.as_deref(), Some("work"));
     bound.workspace.close().expect("close the Workspace");
     assert!(history
         .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
@@ -379,8 +403,8 @@ fn a_tombstoned_sandbox_generation_settles_its_mount() {
     let stack = lookup::project(&fixture.service.store, "installed").expect("project");
     let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
     let history = fixture.service.store.history();
-    let incarnation = "p1:worker:10:aa";
-    let generation = "p1:sandbox:10:aa";
+    let incarnation = "p1:aa11.worker:10:aa";
+    let generation = "p1:aa11.sandbox:10:aa";
     let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-22"), Some("machine-22"))
         .with_generation(Some(generation))
         .with_machine_incarnation(Some(incarnation));
@@ -461,7 +485,10 @@ fn a_private_bind_records_no_place_authority() {
     let refused = removal::remove(&fixture.service.store, &stack, "work")
         .expect_err("the private mount holds by its owner tokens");
     assert_eq!(refused.code, "MountsActive", "{refused:?}");
-    bound.workspace.close().expect("close the private Workspace");
+    bound
+        .workspace
+        .close()
+        .expect("close the private Workspace");
     removal::remove(&fixture.service.store, &stack, "work").expect("remove after release");
     fixture.cleanup();
 }
@@ -599,9 +626,9 @@ fn the_service_reconcile_settles_the_dead_mount() {
     let authority = PlaceAuthority {
         machine_incarnation: Some(token(10, "a")),
         sandbox_generation: Some(token(10, "g")),
-        ..PlaceAuthority::default()
     };
-    let intent = admission::mount_intent(workspace, &snapshot, &place, authority);
+    let intent =
+        admission::mount_intent(workspace, &snapshot, Some("installed"), &place, authority);
     history.gc_register(&intent).expect("admit the mount");
 
     let newer = token(20, "b");

@@ -9,20 +9,20 @@
 //! `Busy`; a dead, uncertain owner is `Unresolved`, while a dead, certain one
 //! is adopted.
 //!
-//! The place is the first authority: an intent that records a machine
+//! The place adds a second authority: an intent that records a machine
 //! incarnation or a Sandbox generation is classified from the bounded
 //! `PlaceView` the control layer supplies (and, for a name the view does not
 //! carry, from the current records the admitted call itself carries). The
 //! control layer reads its home once for the call; this engine opens no home
-//! file. A recorded value older than the current one is dead even with a live
-//! lease; a recorded value newer than the current one (a home restore) is
-//! uncertain, never dead; an expired lease is uncertain. The caller's
-//! namespace/boot evidence is the fallback when the caller cannot see the
-//! place, never a second opinion about a place it can see. Admission also
-//! settles the rows at the admitted call's own machine that an ordered value
-//! proves older, so a restarted worker does not leave its predecessor's mount
-//! behind when its successor registers; a live or uncertain row stays for its
-//! owner or the worker-start reconcile.
+//! file. A recorded value older than the current one is dead; a recorded
+//! value newer than the current one (a home restore) is uncertain, never
+//! dead; a value another home minted is no evidence. The
+//! owner's namespace/boot evidence always applies as it did before place
+//! evidence existed: an owner it proves gone is dead, and place evidence only
+//! adds proofs of death. A mount registration settles only the conflicting
+//! intents its own scope scan finds, as before; the rows a restarted worker's
+//! predecessor left are settled by the worker-start reconcile or by a later
+//! removal's or compaction's admission.
 //!
 //! PostgreSQL adds transaction-scoped advisory keys to a removal's marker
 //! transaction and session-scoped shared keys to a mount, so a removal on one
@@ -31,7 +31,7 @@
 
 use super::rows::{cell, one, unsigned};
 use super::transaction::Transaction;
-use super::{branch, layerstack, params, paths, position};
+use super::{branch, layerstack, params, paths, place_evidence, place_tokens, position};
 use crate::backend::records::Param;
 use crate::backend::Engine;
 use crate::history::provider::HistoryProvider;
@@ -52,7 +52,7 @@ mod authority;
 mod place;
 mod removal;
 mod session;
-pub(crate) use authority::{reconcile_machine, release, release_done};
+pub(crate) use authority::{liveness, reconcile_machine, release, release_done};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
@@ -73,17 +73,12 @@ const ALL_STORE: &str = "gc_intent_all_store";
 const MACHINE_INTENTS: &str = "gc_intent_list_machine";
 const DONE: &str = "gc_intent_done";
 const DONE_BRANCH: &str = "gc_intent_done_branch";
-const DONE_INSERT: &str = "gc_intent_done_insert";
-const DONE_DELETE: &str = "gc_intent_done_delete";
+const DONE_CAP: &str = "gc_intent_done_cap";
 
 const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
 const LOCK_XACT_EXCLUSIVE: &str = "gc_lock_xact_exclusive";
-const LOCK_SESSION_SHARED: &str = "gc_lock_session_shared";
-const LOCK_SESSION_EXCLUSIVE: &str = "gc_lock_session_exclusive";
-const UNLOCK_SESSION_SHARED: &str = "gc_unlock_session_shared";
-const UNLOCK_SESSION_EXCLUSIVE: &str = "gc_unlock_session_exclusive";
 
 /// True when this provider is backed by PostgreSQL.
 fn postgres(provider: &HistoryProvider) -> bool {
@@ -149,10 +144,9 @@ fn workspace_of(text: Option<String>) -> HistoryResult<Option<[u8; 32]>> {
     Ok(Some(body))
 }
 
-/// Decodes the sixteen columns every intent query returns, in order:
-/// op_id, kind, scope_kind, scope_id, workspace, sandbox, machine, project,
-/// branch, owner_runtime, owner_boot, state, uncertain, phase,
-/// machine_incarnation, sandbox_generation.
+/// Decodes the fifteen columns every intent query returns, in order: op_id,
+/// kind, scope_kind, scope_id, workspace, sandbox, machine, project, branch,
+/// owner_runtime, owner_boot, state, uncertain, phase, evidence (place tokens).
 fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> {
     let op_id: Vec<u8> = cell(row, 0)?;
     let op_id: [u8; 16] = op_id
@@ -161,6 +155,7 @@ fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> 
         .map_err(|_| HistoryError::Integrity("gc intent op_id"))?;
     let state: String = cell(row, 11)?;
     let uncertain_flag: i64 = cell(row, 12)?;
+    let (machine_incarnation, sandbox_generation) = place_tokens(cell(row, 14)?);
     Ok(GcIntent {
         op_id,
         kind: kind_of(&cell::<String>(row, 1)?)?,
@@ -175,8 +170,8 @@ fn intent_row(row: &crate::backend::records::Record) -> HistoryResult<GcIntent> 
         owner_boot: cell(row, 10)?,
         project_id: None,
         phase: cell(row, 13)?,
-        machine_incarnation: cell(row, 14)?,
-        sandbox_generation: cell(row, 15)?,
+        machine_incarnation,
+        sandbox_generation,
         uncertain: state == "uncertain" || uncertain_flag != 0,
     })
 }
@@ -383,7 +378,7 @@ impl OwnerView {
 
 /// Adopts the rows whose place authority proves them dead and that are not
 /// uncertain: their operation cannot still be running, so their intent is
-/// deleted and does not hold the scope. A live place with an expired lease is
+/// deleted and does not hold the scope. A place the view finds uncertain is
 /// kept and reported `Unresolved`; an uncertain row stays until its owner
 /// settles it.
 fn settle_dead(
@@ -405,41 +400,6 @@ fn settle_dead(
         }
     }
     Ok(live)
-}
-
-/// Settles the intents at the admitted call's own machine that its current
-/// place proves dead, before the registration writes the new place.
-///
-/// A newer ordered `machine_incarnation` or `sandbox_generation` at a machine
-/// means every older placement there belongs to a worker generation that no
-/// longer serves it: admitting the newer mount settles the older row instead
-/// of leaving two rows for one place (and the schema's
-/// `UNIQUE(scope_kind, scope_id, owner_boot)` cannot then refuse the insert).
-/// Only a dead, certain row is released; a live row, an uncertain one (an
-/// expired lease or a restored newer record) and every other machine's rows
-/// stay for their owner or the worker-start reconcile.
-fn settle_place(
-    tx: &Transaction<'_>,
-    intent: &GcIntent,
-    shared_store: bool,
-    owners: &OwnerView,
-    place: &mut PlaceView,
-) -> HistoryResult<()> {
-    if intent.machine_incarnation.is_none() && intent.sandbox_generation.is_none() {
-        return Ok(());
-    }
-    let Some(machine) = intent.machine.as_deref() else {
-        return Ok(());
-    };
-    for existing in query(tx, MACHINE_INTENTS, params![machine])? {
-        if existing.op_id == intent.op_id {
-            continue;
-        }
-        if place.settleable(tx, &existing, shared_store, owners)? {
-            release_in(tx, &existing.op_id)?;
-        }
-    }
-    Ok(())
 }
 
 /// The refusal a non-empty conflict set reports: an uncertain owner is
@@ -538,7 +498,6 @@ pub(super) fn register_in(
     // The admitted call carries the current records it read, so admission
     // compares a conflicting intent's recorded place with those values.
     let mut place = PlaceView::for_intent(intent);
-    settle_place(tx, intent, postgres, &owners, &mut place)?;
     let found = settle_dead(
         tx,
         conflicts_for(tx, intent)?,
@@ -555,7 +514,7 @@ pub(super) fn register_in(
         "live"
     };
     let uncertain = i64::from(intent.uncertain);
-    tx.execute(
+    let written = tx.execute(
         INSERT,
         params![
             intent.op_id.to_vec(),
@@ -572,12 +531,13 @@ pub(super) fn register_in(
             state,
             uncertain,
             intent.phase.clone(),
-            intent.machine_incarnation.clone(),
-            intent.sandbox_generation.clone(),
+            place_evidence(intent),
             now_ms(),
         ],
     )?;
-    Ok(())
+    (written > 0)
+        .then_some(())
+        .ok_or(HistoryError::Conflict("gc intent op released as done"))
 }
 
 /// The advisory keys a PostgreSQL intent names, Store key first, each with the
@@ -875,53 +835,6 @@ impl HistoryProvider {
     }
 }
 
-/// Writes one retained `done` row directly: the release/done path without a
-/// live intent. The owner and place columns stay NULL, so the row never
-/// blocks a mount, and admission filters `state <> 'done'`.
-fn record_done_in(tx: &Transaction<'_>, intent: &GcIntent, evidence: &str) -> HistoryResult<bool> {
-    let rows = tx.query(
-        DONE_INSERT,
-        params![
-            intent.op_id.to_vec(),
-            intent.kind.as_str(),
-            intent.scope_kind.as_str(),
-            intent.scope_id.clone(),
-            intent.project.clone(),
-            intent.branch.clone(),
-            intent.phase.clone(),
-            evidence,
-            now_ms(),
-        ],
-    )?;
-    Ok(!rows.is_empty())
-}
-
-/// [`record_done_in`] for one Store write transaction: the durable preview
-/// audit row.
-pub(crate) fn record_done(
-    provider: &HistoryProvider,
-    intent: &GcIntent,
-    evidence: &str,
-) -> HistoryResult<bool> {
-    provider.write(|tx| record_done_in(tx, intent, evidence))
-}
-
-/// Deletes the retained `done` rows the operator exported, and only those:
-/// each delete names one op and keeps filtering `state = 'done'`, so a live
-/// intent is never removed by a prune. Answers how many rows went.
-pub(crate) fn prune_done(provider: &HistoryProvider, op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
-    provider.write(|tx| {
-        let mut removed = 0u64;
-        for op_id in op_ids {
-            let rows = tx.query(DONE_DELETE, [op_id.as_slice()])?;
-            if !rows.is_empty() {
-                removed += 1;
-            }
-        }
-        Ok(removed)
-    })
-}
-
 /// One bounded page of retained `done` audit rows, oldest first. The live
 /// admission queries filter `state <> 'done'`; this read is the only one that
 /// sees them, and it never changes a row.
@@ -996,4 +909,3 @@ pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> History
         }
     }
 }
-

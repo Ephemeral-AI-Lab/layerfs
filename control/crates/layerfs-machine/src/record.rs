@@ -321,4 +321,3 @@ impl MachineRecord {
         self.status_held(self.removed().is_some(), held)
     }
 }
-

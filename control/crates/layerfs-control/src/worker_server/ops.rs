@@ -191,45 +191,17 @@ pub(super) fn run(
             })
         }
         // the operator's repair of one Branch's mount holders on the Store
-        // under this worker's root: `{ store, store_record, project, branch,
-        // action, op?, legacy, operator? }`. Preview changes no intent: it
-        // lists the typed holders and the call log records the read.
-        // settle/release/settle_legacy act on one explicit op or the legacy
-        // rows; release retains the row as the durable done audit, and the
-        // call log records every action.
+        // under this worker's root: `{ store, store_record, place_view?,
+        // <layerfs_store::repair::Repair fields> }`. `list`, `preview` and
+        // `settle` judge each holder with the caller's place view, installed
+        // here as a Store call's is; the rest is `layerfs_store::repair`.
         "store.repair" => {
             let store = args
                 .get_text("store")
                 .ok_or_else(|| refused("InvalidInput", "a Store repair names its Store"))?
                 .to_owned();
             layerfs_home::names::StoreName::parse(&store)?;
-            let project = args
-                .get_text("project")
-                .ok_or_else(|| refused("InvalidInput", "a Store repair names its project"))?;
-            let branch = args
-                .get_text("branch")
-                .ok_or_else(|| refused("InvalidInput", "a Store repair names its Branch"))?;
-            let action = args
-                .get_text("action")
-                .ok_or_else(|| refused("InvalidInput", "a Store repair names its action"))?;
-            let op = match args.get_text("op") {
-                None | Some("") => None,
-                Some(text) => Some(
-                    layerfs_bridge::sdk_values::unhex(text)
-                        .and_then(|bytes| bytes.try_into().ok())
-                        .ok_or_else(|| refused("InvalidInput", "op must be 16 bytes of hex"))?,
-                ),
-            };
-            let legacy = matches!(args.get("legacy"), Some(SdkValue::Bool(true)));
-            let operator = args.get_text("operator").unwrap_or("");
-            let page = args
-                .get_int("page")
-                .and_then(|page| u32::try_from(page).ok())
-                .unwrap_or(0);
-            let limit = args
-                .get_int("limit")
-                .and_then(|limit| u32::try_from(limit).ok())
-                .unwrap_or(100);
+            let request = layerfs_store::repair::Repair::read(&args)?;
             let file = layerfs_home::home::paths::store_file(root, &store);
             let open = layerfs_store::open_args::OpenArgs {
                 home: Some(root.to_path_buf()),
@@ -243,9 +215,7 @@ pub(super) fn run(
                 args.get("place_view"),
             );
             layerfs_store_service::history::admission::with_place_view(place, || {
-                layerfs_store::service::repair_mount_holders_at(
-                    &open, project, branch, action, op, legacy, operator, page, limit,
-                )
+                layerfs_store::repair::repair_at(&open, &request)
             })
         }
         // one step of a Store move, remove or create, or a live read's, on

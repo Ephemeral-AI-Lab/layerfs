@@ -1,6 +1,7 @@
-//! The worker process records its incarnation once at start; every mount
-//! intent it places on a machine carries it, so the host's next start can
-//! prove the mount old. A private, place-null mount records none.
+//! A mount intent records only the place its caller states: there is no
+//! process-wide incarnation a worker fills in, so a row naming one machine
+//! never carries another machine's value. A private, place-null mount
+//! records none. Every mount row names its project for the operator audit.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
@@ -14,7 +15,7 @@ use std::fs;
 use support::Fixture;
 
 #[test]
-fn a_placed_mount_carries_the_serving_workers_incarnation() {
+fn a_mount_records_only_the_place_its_caller_states() {
     let fixture = Fixture::new("place-incarnation", |source| {
         fs::write(source.join("a.txt"), b"a\n").unwrap();
         1
@@ -29,18 +30,24 @@ fn a_placed_mount_carries_the_serving_workers_incarnation() {
         .expect("the Branch");
     let workspace = WorkspaceId::from_authority([11; 32]).expect("workspace");
 
-    // the worker records its incarnation before it serves a mount
-    admission::set_machine_incarnation("worker:2".to_owned());
-    assert_eq!(admission::machine_incarnation(), Some("worker:2"));
-
+    // a placed mount whose caller states no incarnation records none
     let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-11"), Some("machine-11"));
-    let placed = admission::mount_intent(workspace, &snapshot, &place, PlaceAuthority::default());
-    assert_eq!(placed.machine_incarnation.as_deref(), Some("worker:2"));
+    let placed = admission::mount_intent(
+        workspace,
+        &snapshot,
+        Some("installed"),
+        &place,
+        PlaceAuthority::default(),
+    );
+    assert_eq!(placed.machine_incarnation, None);
+    assert_eq!(placed.project.as_deref(), Some("installed"));
+    assert_eq!(placed.branch.as_deref(), Some("work"));
 
     // an authority the caller states is kept, never replaced
     let stated = admission::mount_intent(
         WorkspaceId::from_authority([12; 32]).expect("workspace"),
         &snapshot,
+        Some("installed"),
         &place,
         PlaceAuthority {
             machine_incarnation: Some("worker:stale".to_owned()),
@@ -53,6 +60,7 @@ fn a_placed_mount_carries_the_serving_workers_incarnation() {
     let private = admission::mount_intent(
         WorkspaceId::from_authority([13; 32]).expect("workspace"),
         &snapshot,
+        None,
         &layerfs_bridge::control::MountPlace::default(),
         PlaceAuthority::default(),
     );

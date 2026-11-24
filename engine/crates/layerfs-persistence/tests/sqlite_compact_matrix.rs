@@ -2363,20 +2363,12 @@ fn the_sqlite_half_of_the_acceptance_matrix_is_executed_and_reported() {
     );
 }
 
-// ---- the compact barrier under the place/lease authority ------------------
+// ---- the compact barrier under the place authority ------------------
 
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
-/// The §5 Store-wide compact barrier, retained: a live place or a live lease
-/// refuses the rebuild with `MountsActive`; an uncertain owner (an expired
-/// lease, or an operator's settle) refuses it with `Unresolved`. Neither
-/// writes a staged Store or an op record.
+/// The §5 Store-wide compact barrier, retained: a live place refuses the
+/// rebuild with `MountsActive`; an uncertain owner (an operator's settle)
+/// refuses it with `Unresolved`. Neither writes a staged Store or an op
+/// record. (Lease expiry is deferred, #775.)
 #[test]
 fn a_live_or_uncertain_authority_keeps_the_compact_barrier() {
     let (_temp, handles, path, stack, branch) = mounted_store();
@@ -2416,34 +2408,15 @@ fn a_live_or_uncertain_authority_keeps_the_compact_barrier() {
     ));
     assert!(!compact_path(&path).exists());
     reopened.history.gc_release(&live.op_id).unwrap();
-
-    // An expired lease is uncertain too: a slow owner is not a dead owner.
-    let expired = mount_intent(
-        stack,
-        branch,
-        0x94,
-        [0x94; 32],
-        "sandbox-expired",
-        "machine-live",
-    )
-    .authorized(PlaceAuthority {
-        machine_incarnation: Some("worker:1".to_owned()),
-        sandbox_generation: None,
-    });
-    reopened.history.gc_register(&expired).unwrap();
-    assert!(matches!(
-        reopen(&path).compact(&request(0x95)).unwrap_err(),
-        HistoryError::Unresolved(_)
-    ));
-    assert!(!compact_path(&path).exists());
-    reopened.history.gc_release(&expired.op_id).unwrap();
 }
 
 /// The barrier adopts what the caller's boot evidence proves dead: an owner
 /// from another boot of a local SQLite Store is adopted inside the
 /// compaction's admission transaction, and the rebuild proceeds. The lean
 /// schema keeps no Store-side place table for the compaction to read, so a
-/// place-only holder stays conservative here.
+/// place-only holder stays conservative here. Linux only: the boot id comes
+/// from `/proc`, so no other platform can prove an owner's boot is gone.
+#[cfg(target_os = "linux")]
 #[test]
 fn a_dead_owner_is_adopted_before_the_compaction_runs() {
     let (_temp, handles, path, stack, branch) = mounted_store();

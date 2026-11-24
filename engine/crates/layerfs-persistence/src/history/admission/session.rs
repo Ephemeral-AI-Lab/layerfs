@@ -4,6 +4,11 @@
 
 use super::*;
 
+const LOCK_SESSION_SHARED: &str = "gc_lock_session_shared";
+const LOCK_SESSION_EXCLUSIVE: &str = "gc_lock_session_exclusive";
+const UNLOCK_SESSION_SHARED: &str = "gc_unlock_session_shared";
+const UNLOCK_SESSION_EXCLUSIVE: &str = "gc_unlock_session_exclusive";
+
 /// The refusal a transaction-pooled connection gets for a session lock.
 const POOLED: &str = "transaction-pooled PostgreSQL connection";
 pub(super) fn session_lock(

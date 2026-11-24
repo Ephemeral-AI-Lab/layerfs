@@ -11,7 +11,6 @@ pub(crate) fn bind(p: Param) -> SqlValue {
         Param::Bytes(v) => SqlValue::Blob(v),
         Param::OptionalBytes(v) => v.map(SqlValue::Blob).unwrap_or(SqlValue::Null),
         Param::OptionalText(v) => v.map(SqlValue::Text).unwrap_or(SqlValue::Null),
-        Param::OptionalI64(v) => v.map(SqlValue::Integer).unwrap_or(SqlValue::Null),
     }
 }
 pub(crate) fn blob<'a>(row: &'a Row<'_>, index: usize) -> Result<&'a [u8], BackendError> {

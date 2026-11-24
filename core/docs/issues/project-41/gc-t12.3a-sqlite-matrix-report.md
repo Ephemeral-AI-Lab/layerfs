@@ -264,7 +264,7 @@ AC-51 does not depend on the projection alone.
   (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.
 - Verified here: `sqlite_compact_matrix` (1 test); the persistence suites
   `sqlite_compact` (39), `sqlite_compact_crash` (24),
-  `sqlite_compact_fixtures` (1), `admission` (10), `path_removal` (4),
+  `sqlite_compact_fixtures` (1), `admission` (14), `path_removal` (4),
   `branch_removal` (4), `project_delete` (4), `epoch_fence` (7),
   `gc_backfill` (5), `kept_objects` (11); the Store-service path suites
   `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),

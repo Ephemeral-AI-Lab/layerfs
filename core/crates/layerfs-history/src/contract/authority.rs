@@ -5,15 +5,18 @@
 //! dead. The adapter owns the records; this crate only names the rule.
 //!
 //! Place values are ordered. A value minted by this release is
-//! `p1:<label>:<zero-padded Unix milliseconds>:<nonce>`, so a newer start
-//! compares greater than every younger one without a Store-side counter. A
-//! value written before the ordering cannot be ordered: equal is live and a
-//! difference is uncertain, never dead, because a home restore can bring an
-//! older record back.
+//! `p1:<home id>.<kind>:<zero-padded Unix milliseconds>:<nonce>`, so a newer
+//! start compares greater than every younger one without a Store-side
+//! counter. Only two values minted by the same home (the same label) are
+//! ordered: every home names its own `box` machine and its own Sandboxes, so
+//! on a Store two homes share, another home's newer value says nothing about
+//! this home's place. A value written before the ordering, or without a home
+//! id, cannot be ordered: equal is live and a difference is uncertain, never
+//! dead, because a home restore can bring an older record back.
 
 use std::collections::BTreeMap;
 
-/// The durable place and lease evidence carried beside a mount intent.
+/// The durable place evidence carried beside a mount intent.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PlaceAuthority {
     /// The worker generation that placed the mount.
@@ -156,71 +159,88 @@ pub enum PlaceOrder {
     RecordedOlder,
     /// The recorded value is newer than the current one (a restore).
     RecordedNewer,
-    /// At least one value is unordered (written before the ordering), or the
-    /// two name the same millisecond with different nonces, and the two
-    /// differ.
+    /// Two values of the same home name the same millisecond with different
+    /// nonces: no order between them.
     Unordered,
+    /// The values differ and cannot be related: at least one predates the
+    /// ordering or names no home, or the two were minted by different homes.
+    /// This is no evidence either way; admission ignores the comparison.
+    Foreign,
 }
 
 /// The prefix of an ordered place value minted by this release.
 pub const ORDERED_TOKEN_PREFIX: &str = "p1:";
 
-/// The `(milliseconds, nonce)` an ordered place value names, or `None` when
-/// the value predates the ordering.
+/// The `(label, milliseconds, nonce)` an ordered place value names, or
+/// `None` when the value predates the ordering or names no minting home. The
+/// label is `<home id>.<kind>`: a value whose label has no home id before its
+/// first `.` is not ordered.
 #[must_use]
-pub fn ordered_token_parts(text: &str) -> Option<(u64, &str)> {
+pub fn ordered_token_parts(text: &str) -> Option<(&str, u64, &str)> {
     let rest = text.strip_prefix(ORDERED_TOKEN_PREFIX)?;
-    let (_label, rest) = rest.split_once(':')?;
+    let (label, rest) = rest.split_once(':')?;
+    let (home, kind) = label.split_once('.')?;
+    if home.is_empty() || kind.is_empty() {
+        return None;
+    }
     let (milliseconds, nonce) = rest.split_once(':')?;
     if nonce.is_empty() {
         return None;
     }
-    Some((milliseconds.parse().ok()?, nonce))
+    Some((label, milliseconds.parse().ok()?, nonce))
 }
 
 /// Compares a recorded ordered place value with the current one.
 ///
 /// Equal values are the same place. A recorded value older than the current
-/// one is a place replaced by a newer start (dead); a recorded value newer
-/// than the current one can only come from a restore or rollback (uncertain,
-/// never dead). A value written before the ordering compares equal only to
-/// itself; any difference is uncertain.
+/// one, minted by the same home, is a place replaced by a newer start (dead);
+/// a recorded value newer than the current one can only come from a restore
+/// or rollback (uncertain, never dead). Values minted by different homes are
+/// [`PlaceOrder::Foreign`]: a machine or Sandbox name is a home's own, so
+/// another home's start proves nothing about this home's place. A value
+/// written before the ordering compares equal only to itself; any other
+/// comparison with it is foreign too.
 #[must_use]
 pub fn compare_place(recorded: &str, current: &str) -> PlaceOrder {
     if recorded == current {
         return PlaceOrder::Equal;
     }
     match (ordered_token_parts(recorded), ordered_token_parts(current)) {
-        // Only the millisecond orders two tokens. Two values minted in the
-        // same millisecond have different nonces and no order between them:
-        // calling one newer would settle a live owner on a coin flip.
-        (Some((recorded_ms, _)), Some((current_ms, _))) => match recorded_ms.cmp(&current_ms) {
-            std::cmp::Ordering::Less => PlaceOrder::RecordedOlder,
-            std::cmp::Ordering::Greater => PlaceOrder::RecordedNewer,
-            std::cmp::Ordering::Equal => PlaceOrder::Unordered,
-        },
-        _ => PlaceOrder::Unordered,
+        // Only the millisecond of one home's values orders them. Two values
+        // minted in the same millisecond have different nonces and no order
+        // between them: calling one newer would settle a live owner on a coin
+        // flip.
+        (Some((recorded_label, recorded_ms, _)), Some((current_label, current_ms, _)))
+            if recorded_label == current_label =>
+        {
+            match recorded_ms.cmp(&current_ms) {
+                std::cmp::Ordering::Less => PlaceOrder::RecordedOlder,
+                std::cmp::Ordering::Greater => PlaceOrder::RecordedNewer,
+                std::cmp::Ordering::Equal => PlaceOrder::Unordered,
+            }
+        }
+        _ => PlaceOrder::Foreign,
     }
 }
 
 impl PlaceAuthority {
-    /// Classifies the owner for `now_ms` against the current place values
-    /// `place`, when the adapter can see any.
+    /// Classifies the owner against the current place values `place`, when
+    /// the adapter can see any.
     ///
-    /// Place death wins over lease state: a machine incarnation or Sandbox
-    /// generation the current record proves older than itself is
-    /// [`Liveness::Dead`] even if the lease is stale. An expired lease
-    /// without place death is [`Liveness::Uncertain`], never
-    /// [`Liveness::Dead`], because a slow owner is not a dead owner. Missing
-    /// place evidence is no proof: only the lease decides.
-    pub fn liveness(&self, _now_ms: i64, place: Option<&PlaceRecord>) -> Liveness {
+    /// A machine incarnation or Sandbox generation the current record proves
+    /// older than the recorded one is [`Liveness::Dead`]; a recorded value
+    /// newer than the current one (a restore) or unordered against it is
+    /// [`Liveness::Uncertain`]. Missing place evidence, or another home's
+    /// value, is no proof: [`Liveness::Live`].
+    pub fn liveness(&self, place: Option<&PlaceRecord>) -> Liveness {
         if let Some(place) = place {
             if let (Some(recorded), Some(current)) = (
                 self.machine_incarnation.as_deref(),
                 place.machine_incarnation.as_deref(),
             ) {
                 match compare_place(recorded, current) {
-                    PlaceOrder::Equal => {}
+                    // Another home's (or an unordered) value is no evidence.
+                    PlaceOrder::Equal | PlaceOrder::Foreign => {}
                     PlaceOrder::RecordedOlder => return Liveness::Dead,
                     PlaceOrder::RecordedNewer | PlaceOrder::Unordered => {
                         return Liveness::Uncertain
@@ -235,16 +255,19 @@ impl PlaceAuthority {
                     Some(current) => match compare_place(recorded, current) {
                         PlaceOrder::Equal => {
                             // The record can remain beside the tombstone its
-                            // close wrote: a tombstone at or after this
-                            // generation still retires it, an older one names
-                            // an earlier Sandbox of the same name.
+                            // close wrote: only a tombstone naming this very
+                            // generation retires it, and an older one names an
+                            // earlier Sandbox of the same name. A tombstone
+                            // newer than the live record cannot come from this
+                            // record's close (a clock step or a restore), so
+                            // it is uncertain, never dead.
                             if let Some(retired) = place.sandbox_retired.as_deref() {
                                 match compare_place(recorded, retired) {
-                                    PlaceOrder::Equal | PlaceOrder::RecordedOlder => {
-                                        return Liveness::Dead
+                                    PlaceOrder::Equal => return Liveness::Dead,
+                                    PlaceOrder::RecordedNewer | PlaceOrder::Foreign => {}
+                                    PlaceOrder::RecordedOlder | PlaceOrder::Unordered => {
+                                        return Liveness::Uncertain
                                     }
-                                    PlaceOrder::RecordedNewer => {}
-                                    PlaceOrder::Unordered => return Liveness::Uncertain,
                                 }
                             }
                         }
@@ -252,6 +275,7 @@ impl PlaceAuthority {
                         PlaceOrder::RecordedNewer | PlaceOrder::Unordered => {
                             return Liveness::Uncertain
                         }
+                        PlaceOrder::Foreign => {}
                     },
                     // The record is gone: only its tombstone can prove it
                     // retired. A newer recorded generation is a restore and is
@@ -265,6 +289,7 @@ impl PlaceAuthority {
                                 PlaceOrder::RecordedNewer | PlaceOrder::Unordered => {
                                     return Liveness::Uncertain
                                 }
+                                PlaceOrder::Foreign => {}
                             }
                         }
                     }
@@ -274,4 +299,3 @@ impl PlaceAuthority {
         Liveness::Live
     }
 }
-

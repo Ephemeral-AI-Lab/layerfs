@@ -10,8 +10,11 @@ use layerfs_history::records::{
 };
 use layerfs_history::{
     BranchId, CatalogId, HistoryCatalog, HistoryCatalogConfig, LayerStackId, PlaceAuthority,
+    PlaceView,
 };
-use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    with_place_view, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
+};
 use support::{branch_id, name, root, stack, Temp};
 
 const BINDING: &[u8] = b"gc-admission";
@@ -375,17 +378,20 @@ fn an_intent_round_trips_its_place_authority() {
     assert_eq!(listed[0].machine_incarnation, authority.machine_incarnation);
     assert_eq!(listed[0].sandbox_generation, authority.sandbox_generation);
 
-    // The registration writes the two place columns, not just the memory value.
+    // The registration writes the tokens into the row's `evidence` column,
+    // not just the memory value: the base Store format has no place columns.
     let connection = rusqlite::Connection::open(&path).unwrap();
-    let row: (Option<String>, Option<String>) = connection
+    let evidence: Option<String> = connection
         .query_row(
-            "SELECT machine_incarnation, sandbox_generation FROM gc_intent WHERE op_id = ?1",
+            "SELECT evidence FROM gc_intent WHERE op_id = ?1",
             [op(30).as_slice()],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(row.0.as_deref(), Some("worker:7"));
-    assert_eq!(row.1.as_deref(), Some("sandbox:3"));
+    assert_eq!(
+        evidence.as_deref(),
+        Some("place:v1;inc=worker:7;gen=sandbox:3")
+    );
     history.gc_release(&op(30)).unwrap();
 }
 
@@ -444,6 +450,38 @@ fn a_dead_mount_owner_is_settled_and_does_not_hold_the_scope() {
     history
         .gc_remove_branch(branch, 2_000, &removal(project_id, 26))
         .unwrap();
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
+}
+
+/// Place evidence only adds proofs of death: an owner the namespace/boot
+/// evidence proves gone is dead even when its recorded place is still
+/// current, exactly as admission decided before place evidence existed.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_dead_owner_with_a_current_place_is_still_settled() {
+    let temp = Temp::new("admission-dead-owner-place");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    let incarnation = token("worker", 10, "a");
+    history
+        .gc_register(
+            &dead_mount(project_id, branch, 90).authorized(PlaceAuthority {
+                machine_incarnation: Some(incarnation.clone()),
+                sandbox_generation: None,
+            }),
+        )
+        .unwrap();
+    // The machine's current incarnation equals the recorded one: the place
+    // alone would keep the row, but its owner is provably gone.
+    let mut view = PlaceView::new();
+    view.set_machine("machine", incarnation);
+    with_place_view(Some(view), || {
+        history.gc_remove_branch(branch, 1_000, &removal(project_id, 91))
+    })
+    .expect("the dead owner does not hold the Branch");
     assert!(history
         .gc_intents(GcScopeKind::Branch, branch.as_slice())
         .unwrap()
@@ -660,18 +698,10 @@ fn a_retried_live_op_replaces_its_dead_predecessors_evidence() {
     history.gc_release(&op(35)).expect("release");
 }
 
-/// The Store's clock plus a minute, for a lease that has not expired.
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
-/// An ordered place value in the format the records mint.
+/// An ordered place value in the format the records mint, minted by home
+/// `aa11`.
 fn token(label: &str, milliseconds: u64, nonce: &str) -> String {
-    format!("p1:{label}:{milliseconds:016}:{nonce}")
+    format!("p1:aa11.{label}:{milliseconds:016}:{nonce}")
 }
 
 /// A mount placed at `machine`/`sandbox` carrying `authority`.
@@ -696,11 +726,13 @@ fn authority_mount(
     .authorized(authority)
 }
 
-/// A newer machine incarnation proves the older placement dead while its lease
-/// is still live: admitting the newer mount settles the older one. Place death
-/// wins over lease state, and the newer place still holds the Branch.
+/// A newer machine incarnation proves the older placement dead while its
+/// owner evidence is inconclusive: a removal's admission given the machine's
+/// current incarnation settles the older row, and the newer place still holds
+/// the Branch. Admitting the newer mount itself settles nothing, as before
+/// place evidence.
 #[test]
-fn a_newer_machine_incarnation_settles_the_older_mount_at_admission() {
+fn a_newer_machine_incarnation_settles_the_older_mount_at_removal() {
     let temp = Temp::new("admission-machine-incarnation");
     let history = catalog(&temp);
     let (project_id, branch) = project(&history);
@@ -731,16 +763,21 @@ fn a_newer_machine_incarnation_settles_the_older_mount_at_admission() {
         ))
         .expect("admit the current mount");
 
-    // Admitting the newer place settles the older row in the same transaction.
+    // The registration scans only conflicting operations: both rows stay.
     let listed = history
         .gc_intents(GcScopeKind::Branch, branch.as_slice())
         .expect("intents");
-    assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].op_id, op(81));
+    assert_eq!(listed.len(), 2);
 
-    let refusal = history
-        .gc_remove_branch(branch, 1_000, &removal(project_id, 82))
-        .expect_err("the current incarnation holds the Branch");
+    let view = || {
+        let mut view = PlaceView::new();
+        view.set_machine("machine-80", token("worker", 20, "b"));
+        Some(view)
+    };
+    let refusal = with_place_view(view(), || {
+        history.gc_remove_branch(branch, 1_000, &removal(project_id, 82))
+    })
+    .expect_err("the current incarnation holds the Branch");
     let HistoryError::MountsActive(state) = &refusal else {
         panic!("{refusal:?}");
     };
@@ -749,20 +786,22 @@ fn a_newer_machine_incarnation_settles_the_older_mount_at_admission() {
     history
         .gc_release(&op(81))
         .expect("release the current place");
-    history
-        .gc_remove_branch(branch, 2_000, &removal(project_id, 83))
-        .expect("the stale place no longer holds");
+    with_place_view(view(), || {
+        history.gc_remove_branch(branch, 2_000, &removal(project_id, 83))
+    })
+    .expect("the stale place no longer holds");
     assert!(history
         .gc_intents(GcScopeKind::Branch, branch.as_slice())
         .expect("intents")
         .is_empty());
 }
 
-/// A newer Sandbox generation proves the older generation dead even when the
-/// machine incarnation still matches: a recreated Sandbox cannot revive the
-/// old intent. The newer generation still holds the Branch.
+/// A newer Sandbox generation proves the older generation dead: a recreated
+/// Sandbox cannot revive the old intent. A removal's admission given the
+/// Sandbox's current generation settles it; the newer generation still holds
+/// the Branch.
 #[test]
-fn a_newer_sandbox_generation_settles_the_older_mount_at_admission() {
+fn a_newer_sandbox_generation_settles_the_older_mount_at_removal() {
     let temp = Temp::new("admission-sandbox-generation");
     let history = catalog(&temp);
     let (project_id, branch) = project(&history);
@@ -796,12 +835,17 @@ fn a_newer_sandbox_generation_settles_the_older_mount_at_admission() {
     let listed = history
         .gc_intents(GcScopeKind::Branch, branch.as_slice())
         .expect("intents");
-    assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].op_id, op(85));
+    assert_eq!(listed.len(), 2);
 
-    let refusal = history
-        .gc_remove_branch(branch, 1_000, &removal(project_id, 86))
-        .expect_err("the live generation holds the Branch");
+    let view = || {
+        let mut view = PlaceView::new();
+        view.set_sandbox_generation("machine-84", "sandbox-84", token("sandbox", 20, "b"));
+        Some(view)
+    };
+    let refusal = with_place_view(view(), || {
+        history.gc_remove_branch(branch, 1_000, &removal(project_id, 86))
+    })
+    .expect_err("the live generation holds the Branch");
     let HistoryError::MountsActive(state) = &refusal else {
         panic!("{refusal:?}");
     };
@@ -810,18 +854,13 @@ fn a_newer_sandbox_generation_settles_the_older_mount_at_admission() {
     history
         .gc_release(&op(85))
         .expect("release the live Sandbox");
-    history
-        .gc_remove_branch(branch, 2_000, &removal(project_id, 87))
-        .expect("the retired generation no longer holds");
+    with_place_view(view(), || {
+        history.gc_remove_branch(branch, 2_000, &removal(project_id, 87))
+    })
+    .expect("the retired generation no longer holds");
 }
 
-/// An expired lease on a place-null (private) intent is uncertain, never
-/// dead: the call reports `Unresolved`, the stored row is not rewritten, and
-/// the owner settles it. A stale fencing token may not settle it.
-
-/// A lease that has not expired keeps a place-null mount a holder.
-
-/// A live place with an expired lease is uncertain, never dead: the Store
+/// An operation id as the holder report prints it.
 fn hex16(bytes: &[u8; 16]) -> String {
     let mut out = String::with_capacity(32);
     for byte in bytes {

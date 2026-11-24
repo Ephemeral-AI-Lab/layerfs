@@ -1,10 +1,18 @@
 //! The bounded place view the control layer builds from its home.
 //!
 //! Admission on the engine side never reads a home file. The control layer
-//! reads the place records it can see once per Store call and hands the engine
-//! a bounded map: each machine's current `MachineRecord.incarnation`, each
-//! Sandbox's current generation, and every machine-level `sandbox-retired`
+//! reads the place records it can see once per admitting Store call and hands
+//! the engine a bounded map: each machine's current `MachineRecord.incarnation`,
+//! each Sandbox's current generation, and every machine-level `sandbox-retired`
 //! tombstone. A name missing from the view is no proof, never death.
+//!
+//! Only a call whose admission compares placed mount intents reads it: the
+//! exclusive removals named by [`admits`] (a Branch removal, a project's file
+//! removal), and a project delete and a machine's start reconcile, which
+//! install it through [`scoped`] directly.
+//! Every other Store call (reads, listings, file writes, merges) builds and
+//! sends none: their admission meets only operation intents, which carry no
+//! place, so a view could not change it.
 //!
 //! The view is bounded by the places the home actually records; it never
 //! scans a Store, a Workspace or a content pack.
@@ -14,6 +22,28 @@ use layerfs_history::PlaceView;
 use layerfs_home::home::{paths, read_record};
 use layerfs_machine::record::MachineRecord;
 use std::path::Path;
+
+/// The public Store methods whose engine admission compares placed mount
+/// intents with the view: the exclusive removals. A shared intent (a file
+/// write's private Workspace, a merge) conflicts only with operation intents,
+/// which record no place.
+pub const ADMITTING: [&str; 2] = ["branch.remove", "project.remove_file"];
+
+/// Whether Store method `method` reads the place view ([`ADMITTING`]).
+#[must_use]
+pub fn admits(method: &str) -> bool {
+    ADMITTING.contains(&method)
+}
+
+/// Runs `work` with the place view of `open`'s home installed, unless a
+/// caller (a worker frame) installed one already: one admitting call's read.
+pub fn scoped<R>(open: &OpenArgs, work: impl FnOnce() -> R) -> R {
+    let place = match layerfs_store_service::history::admission::has_place_view() {
+        true => None,
+        false => from_open(open),
+    };
+    layerfs_store_service::history::admission::with_place_view(place, work)
+}
 
 /// Builds the bounded place view from the caller's home alone.
 ///
@@ -63,12 +93,6 @@ pub fn from_open(open: &OpenArgs) -> Option<PlaceView> {
 #[must_use]
 pub fn encoded_from_home(home: &Path) -> Option<SdkValue> {
     from_home(home).map(|view| layerfs_store_service::history::admission::encode_place_view(&view))
-}
-
-/// [`encoded_from_home`] for a Store call's [`OpenArgs`].
-#[must_use]
-pub fn encoded_from_open(open: &OpenArgs) -> Option<SdkValue> {
-    from_open(open).map(|view| layerfs_store_service::history::admission::encode_place_view(&view))
 }
 
 /// The tombstones dir holds, as (Sandbox name, retired generation). A

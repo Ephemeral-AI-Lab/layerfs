@@ -244,7 +244,7 @@ pub fn create(
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &id, kind, name)?;
-        let incarnation = layerfs_home::helpers::ordered_token("worker");
+        let incarnation = layerfs_home::helpers::ordered_token(&id, "worker", &[]);
         let record = record.with_incarnation(&incarnation);
         record.write(&home)?;
         record::spec(&home, &record).map(|mut spec| {

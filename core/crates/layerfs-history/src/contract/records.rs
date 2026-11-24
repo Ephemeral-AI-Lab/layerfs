@@ -691,4 +691,3 @@ pub struct PathRemovalOutcome {
     /// The stored `removed_ms`.
     pub removed_ms: i64,
 }
-

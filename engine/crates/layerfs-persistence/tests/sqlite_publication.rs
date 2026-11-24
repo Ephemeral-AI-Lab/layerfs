@@ -96,9 +96,7 @@ fn wal_full_settings_are_explicit() {
     // #353 added layer_lineage, commit_lineage, absorbed and reach; #355
     // added merge_operation and merge_record; #364 added file_digest;
     // the GC work added the markers, project_epoch, gc_intent, gc_op, gc_dead
-    // and kept_node; the lean phase 3 schema keeps no authority or audit
-    // table, and without the acquisition tables no AUTOINCREMENT identity
-    // creates sqlite_sequence.
+    // and kept_node.
     assert_eq!(names, 28);
 }
 #[test]

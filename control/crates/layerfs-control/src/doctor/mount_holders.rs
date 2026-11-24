@@ -6,58 +6,7 @@ use layerfs_home::{home::paths, names::SandboxName, outcome::refused};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use std::path::Path;
 
-pub(super) const STORE: &str = "store.mount_holders";
-pub(super) const PROJECT: &str = "project.mount_holders";
 pub(super) const AUDIT: &str = "store.gc_audit";
-
-pub(super) fn result(
-    home: &Path,
-    store: &str,
-    shared: bool,
-    check: &str,
-    result: Result<SdkValue, SdkRefusal>,
-    checks: &mut Checks,
-) {
-    match result {
-        Ok(rows) => report(home, store, shared, check, Some(&rows), checks),
-        Err(error) => checks.unknown(check, error.message),
-    }
-}
-
-/// The local SQLite path: read the rows and report them against this home.
-pub(super) fn local(
-    home: &Path,
-    store: &str,
-    name: &str,
-    identity: &layerfs_store::identity::Identity,
-    checks: &mut Checks,
-) {
-    let path = paths::store_file(home, name);
-    result(
-        home,
-        store,
-        false,
-        STORE,
-        layerfs_store::diagnostic::mount_holders(&path, identity),
-        checks,
-    );
-}
-
-/// The local SQLite path: one bounded page of the retained `done`
-/// operator-audit rows, read on a diagnostic open. The doctor only reports
-/// them; it never releases or settles one.
-pub(super) fn audit(
-    home: &Path,
-    name: &str,
-    identity: &layerfs_store::identity::Identity,
-    checks: &mut Checks,
-) {
-    let path = paths::store_file(home, name);
-    audit_result(
-        layerfs_store::diagnostic::done_audit(&path, identity, 0, 16),
-        checks,
-    );
-}
 
 /// The worker's forwarded `store.gc_audit` event, or the local result: a
 /// read that answers is evidence, never a warning; a read that fails is
@@ -153,4 +102,3 @@ pub(super) fn report(
         );
     }
 }
-

@@ -7,7 +7,6 @@
 //! reaches it as a Sandbox call would.
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::hex;
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::shell_word;
@@ -69,62 +68,118 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
     })
 }
 
+/// `store.repair_mount_holders(project, branch, action, { op, legacy,
+/// force, operator, limit, cursor })` as the call surface takes it.
+#[derive(Clone, Debug, Default)]
+pub struct RepairRequest {
+    /// The project, `<store>/<project>`.
+    pub project: String,
+    /// The Branch whose mount holders it repairs.
+    pub branch: String,
+    /// `list`, `preview`, `settle`, `release`, `settle_legacy` or `audit`.
+    pub action: String,
+    /// The holder `settle` and `release` act on, as hex.
+    pub op: Option<String>,
+    /// `settle` only a row without owner or place evidence.
+    pub legacy: bool,
+    /// `settle` a holder that still looks live.
+    pub force: bool,
+    /// The operator label a release records.
+    pub operator: Option<String>,
+    /// The rows of one page (`list`, `preview`, `audit`).
+    pub limit: Option<i64>,
+    /// The `next_cursor` of the page before.
+    pub cursor: Option<String>,
+}
+
+/// The call a repair cursor belongs to.
+const REPAIR: &str = "store.repair_mount_holders";
+
 /// `store.repair_mount_holders`: first-class explicit operator repair of
-/// one Branch's mount intents. Preview lists them and writes its own retained
-/// done row; settle/release act on one explicit op; release retains the row as
-/// the durable done audit; `audit` reads the retained rows of that Branch.
-/// Nothing is automatic. A SQLite
-/// Store on another machine is repaired by that machine's worker
-/// (`store.repair`), so the live Docker Store is reachable; a PostgreSQL
-/// Store runs here, as its calls do.
-#[allow(clippy::too_many_arguments)]
-pub fn repair(
-    home: &Path,
-    name: &StoreName,
-    project: &str,
-    branch: &str,
-    action: &str,
-    op: Option<[u8; 16]>,
-    legacy: bool,
-    operator: &str,
-    page: u32,
-    limit: u32,
-) -> Outcome {
+/// one Branch's mount intents ([`layerfs_store::repair`]). `list` and
+/// `preview` page the holders, each with its row `state` and the
+/// `liveness` admission would give it now; `settle` refuses a holder still
+/// `live` unless forced; `release` retains a settled row as the durable done
+/// audit; `audit` pages the Branch's retained rows. The cursor carries the
+/// project, Branch and action. Nothing is automatic. A SQLite Store on
+/// another machine is repaired by that machine's worker (`store.repair`),
+/// sent this home's place view; a PostgreSQL Store runs here, as its calls
+/// do.
+pub fn repair(home: &Path, request: &RepairRequest) -> Outcome {
+    let limit = layerfs_home::cursor::limit(REPAIR, request.limit, 100)?;
+    let filters = [
+        ("project", SdkValue::text(&request.project)),
+        ("branch", SdkValue::text(&request.branch)),
+        ("action", SdkValue::text(&request.action)),
+    ];
+    let carried = (request.cursor.as_deref())
+        .map(|made| layerfs_home::cursor::resume(REPAIR, made, &filters))
+        .transpose()?;
+    let target = layerfs_store::resolve::target(home, &request.project)?;
+    let sent = layerfs_store::repair::Repair {
+        project: target.project.clone(),
+        branch: request.branch.clone(),
+        action: request.action.clone(),
+        op: layerfs_store::repair::op_of(request.op.as_deref())?,
+        legacy: request.legacy,
+        force: request.force,
+        operator: request.operator.clone().unwrap_or_default(),
+        after: carried.as_ref().map(|carried| carried.place().clone()),
+        limit: limit as u32,
+    };
     // The host holds the Store's lease while it repairs or sends the call,
     // as `store_call` does: a Store an operation is moving is left.
-    let (_lease, record) = layerfs_store::lease::claim(home, name.as_str())?;
-    let store_ref = record.store_ref()?;
-    let executor = place::plan(home, store_ref)?;
-    match executor {
+    let (_lease, record) = layerfs_store::lease::claim(home, &target.store)?;
+    let answer = match place::plan(home, record.store_ref()?)? {
         Executor::Local => {
-            let open = OpenArgs::of_record(home, name.as_str(), &record)?;
-            layerfs_store::service::repair_mount_holders_at(
-                &open, project, branch, action, op, legacy, operator, page, limit,
-            )
+            let open = OpenArgs::of_record(home, &target.store, &record)?;
+            layerfs_store::repair::repair_at(&open, &sent)
         }
         Executor::Worker(mut worker) => {
             let mut fields = vec![
-                ("store".to_owned(), SdkValue::text(name.as_str())),
+                ("store".to_owned(), SdkValue::text(&target.store)),
                 ("store_record".to_owned(), record.to_record().clone()),
-                ("project".to_owned(), SdkValue::text(project)),
-                ("branch".to_owned(), SdkValue::text(branch)),
-                ("action".to_owned(), SdkValue::text(action)),
-                (
-                    "op".to_owned(),
-                    op.map_or(SdkValue::Null, |op| SdkValue::text(hex(&op))),
-                ),
-                ("legacy".to_owned(), SdkValue::Bool(legacy)),
-                ("operator".to_owned(), SdkValue::text(operator)),
-                ("page".to_owned(), SdkValue::Int(i64::from(page))),
-                ("limit".to_owned(), SdkValue::Int(i64::from(limit))),
             ];
-            if let Some(place) = layerfs_store::place_view::encoded_from_home(home) {
-                fields.push(("place_view".to_owned(), place));
+            fields.extend(sent.to_fields());
+            // list, preview and settle judge holders with this home's places
+            if let Some(view) = layerfs_store::place_view::encoded_from_home(home) {
+                fields.push(("place_view".to_owned(), view));
             }
-            let request = SdkValue::Map(fields);
-            worker.call("store.repair", request, &mut |_: SdkValue| {})
+            worker.call("store.repair", SdkValue::Map(fields), &mut |_: SdkValue| {})
         }
-    }
+    };
+    let answer = answer.map_err(|refusal| match refusal.code.as_str() {
+        "InUse" => with_fix(
+            refusal,
+            format!(
+                "layerfs store repair-mount-holders {} {} settle --op {} --force",
+                shell_word(&request.project),
+                shell_word(&request.branch),
+                request.op.as_deref().unwrap_or_default()
+            ),
+        ),
+        _ => refusal,
+    })?;
+    Ok(paged(answer, &filters))
+}
+
+/// A repair answer with its `next` place made the `next_cursor` the caller
+/// takes back; an answer that is no page is as the Store side gave it.
+fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
+    let SdkValue::Map(fields) = answer else {
+        return answer;
+    };
+    let fields = (fields.into_iter())
+        .map(|(name, value)| match (name.as_str(), value) {
+            ("next", SdkValue::Null) => ("next_cursor".to_owned(), SdkValue::Null),
+            ("next", place) => (
+                "next_cursor".to_owned(),
+                SdkValue::Text(layerfs_home::cursor::make(REPAIR, place, filters)),
+            ),
+            (_, value) => (name, value),
+        })
+        .collect();
+    SdkValue::Map(fields)
 }
 
 /// Who uses a Store or a project, read from the Sandbox records.

@@ -28,14 +28,26 @@ pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryRe
     }
 }
 
+/// The retained `done` rows one scope (a mount's Branch) keeps: retaining a
+/// new one deletes the oldest beyond this many, in the same transaction, so
+/// the audit stays bounded without a schema change.
+pub const DONE_RETAINED: i64 = 100;
+
 /// Retains one released intent as the durable `done` audit row. The owner
 /// columns are cleared so the unique owner key cannot block a later mount;
 /// admission queries filter `state <> 'done'`, and `gc_intent_done` is the
-/// only read that sees the row. Returns `false` when the op has no intent, so
-/// a concurrent repair does not invent one.
+/// only read that sees the row. The scope's oldest done rows beyond
+/// [`DONE_RETAINED`] go. Returns `false` when the op has no live intent (none,
+/// or one already retained), so a concurrent or repeated repair invents none.
 fn retain_done_in(tx: &Transaction<'_>, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
     let rows = tx.query(RELEASE_DONE, params![evidence, now_ms(), op_id.as_slice()])?;
-    Ok(!rows.is_empty())
+    let Some(row) = rows.first() else {
+        return Ok(false);
+    };
+    let scope_kind: String = cell(row, 0)?;
+    let scope_id: Option<Vec<u8>> = cell(row, 1)?;
+    tx.query(DONE_CAP, params![scope_kind, scope_id, DONE_RETAINED])?;
+    Ok(true)
 }
 
 /// [`release`] for the operator repair: it keeps the released row as the
@@ -49,13 +61,15 @@ pub(crate) fn release_done(
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| retain_done_in(tx, op_id, evidence)),
         Engine::Postgres(session) => {
+            // a second release finds no live intent and answers `false`
+            // (`NotFound` to the caller), as SQLite does; only a row this
+            // release retained has its session keys released
             let found = provider.write(|tx| {
                 let Some(intent) = get_in(tx, op_id)? else {
                     return Ok(None);
                 };
                 let keys = keys_for_release(tx, provider.catalog_id, &intent)?;
-                retain_done_in(tx, op_id, evidence)?;
-                Ok(Some(keys))
+                Ok(retain_done_in(tx, op_id, evidence)?.then_some(keys))
             })?;
             let retained = found.is_some();
             if let Some(ReleaseKeys { keys }) = found {
@@ -66,12 +80,29 @@ pub(crate) fn release_done(
     }
 }
 
+/// What admission would say of each of `intents` now: the owner evidence,
+/// then the place view scoped on this thread merged with each intent's own
+/// place, as [`PlaceView::liveness`] judges a conflict. One read transaction;
+/// nothing is written.
+pub(crate) fn liveness(
+    provider: &HistoryProvider,
+    intents: &[GcIntent],
+) -> HistoryResult<Vec<Liveness>> {
+    let postgres = postgres(provider);
+    provider.read(|tx| {
+        let owners = OwnerView::now();
+        (intents.iter())
+            .map(|intent| PlaceView::for_intent(intent).liveness(tx, intent, postgres, &owners))
+            .collect()
+    })
+}
+
 /// Settles the intents at `machine` its new ordered incarnation proves dead.
 ///
 /// One write transaction: no other machine's rows are read, and only a dead
-/// intent that is not uncertain is released. An expired lease is uncertain,
-/// never dead, and a recorded incarnation newer than `incarnation` (a home
-/// restore) is kept uncertain like an unordered value that differs.
+/// intent that is not uncertain is released. A recorded incarnation newer
+/// than `incarnation` (a home restore) is kept uncertain like an unordered
+/// value that differs.
 pub(crate) fn reconcile_machine(
     provider: &HistoryProvider,
     machine: &str,
