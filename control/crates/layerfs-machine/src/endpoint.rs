@@ -393,15 +393,18 @@ fn stop_old(home: &Path, name: &str, spec: &adapters::Spec) -> Result<()> {
 }
 
 /// Mints the ordered incarnation for the worker this start launches and
-/// records it in the home `MachineRecord` before the provider starts. The
-/// write is read back: a start that cannot make its token durable never
-/// serves, rather than mixing this start's intents with the previous one's.
+/// records it in the home `MachineRecord` before the provider starts. It is
+/// this home's value and is minted past the previous incarnation, so a clock
+/// stepped backwards never makes the new start look older. The write is read
+/// back: a start that cannot make its token durable never serves, rather than
+/// mixing this start's intents with the previous one's.
 fn mint_incarnation(home: &Path, name: &str) -> Result<String> {
-    let incarnation = layerfs_home::helpers::ordered_token("worker");
+    let id = layerfs_home::home::opened(home)?.id;
     let _lock = layerfs_home::home::lock::take(home)?;
-    MachineRecord::of(home, name)?
-        .with_incarnation(&incarnation)
-        .write(home)?;
+    let record = MachineRecord::of(home, name)?;
+    let previous = record.incarnation().unwrap_or_default();
+    let incarnation = layerfs_home::helpers::ordered_token(&id, "worker", &[previous]);
+    record.with_incarnation(&incarnation).write(home)?;
     let saved = MachineRecord::of(home, name)?;
     if saved.incarnation() != Some(incarnation.as_str()) {
         return Err(refused(

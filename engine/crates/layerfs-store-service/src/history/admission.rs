@@ -10,26 +10,9 @@ use layerfs_history::{
     PlaceView,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static NEXT_OP: AtomicU64 = AtomicU64::new(0);
-
-/// The incarnation of the worker process serving this Store's mounts, when
-/// this process is one. A worker records it once at its start, and every
-/// mount intent that worker places carries it; a process that is not a worker
-/// has none, and its intents record only their owner tokens.
-static MACHINE_INCARNATION: OnceLock<String> = OnceLock::new();
-
-/// Records the incarnation of this process's worker, once, at its start.
-pub fn set_machine_incarnation(incarnation: String) {
-    let _ = MACHINE_INCARNATION.set(incarnation);
-}
-
-/// This process's worker incarnation, when it has one.
-pub fn machine_incarnation() -> Option<&'static str> {
-    MACHINE_INCARNATION.get().map(String::as_str)
-}
 
 /// Installs the bounded place view the control layer built from its home for
 /// the duration of one Store call. The engine reads only this value; it never
@@ -259,29 +242,26 @@ fn owned(mut intent: GcIntent, op: [u8; 16]) -> GcIntent {
 }
 
 /// A mount intent at Branch scope, naming its project identity for the
-/// PostgreSQL key derivation. The Workspace is always placed; the Sandbox
-/// and machine are placed only when the caller that mounted knows them
-/// (a daemon mount does; a private Store-call Workspace does not).
+/// PostgreSQL key derivation and its project name for the operator audit (a
+/// released row is found by project and Branch name). The Workspace is always
+/// placed; the Sandbox and machine are placed only when the caller that
+/// mounted knows them (a daemon mount does; a private Store-call Workspace
+/// does not).
 ///
-/// `authority` is the place and lease evidence the caller's place knows: a
-/// machine incarnation and Sandbox generation, a lease deadline and a fencing
-/// token. A caller with none (a private Store-call Workspace) passes
-/// [`PlaceAuthority::default`], and the intent records only the owner tokens:
-/// admission then falls back to this process's namespace and boot, never to a
-/// place it does not have.
+/// `authority` is the place evidence the caller read from its own home
+/// records: a machine incarnation and Sandbox generation. A caller with none
+/// (a private Store-call Workspace) passes [`PlaceAuthority::default`], and
+/// the intent records only the owner tokens: admission then falls back to
+/// this process's namespace and boot, never to a place it does not have. No
+/// process-wide value is filled in: a place the caller did not state is not
+/// recorded.
 pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
+    project: Option<&str>,
     place: &layerfs_bridge::control::MountPlace,
-    mut authority: PlaceAuthority,
+    authority: PlaceAuthority,
 ) -> GcIntent {
-    // The place the mount records is the worker that serves the Store: its
-    // incarnation is the one this process recorded at start, so a later
-    // worker start can prove this mount old. A caller that already states one
-    // (a test, or a later producer) keeps it.
-    if place.machine.is_some() && authority.machine_incarnation.is_none() {
-        authority.machine_incarnation = machine_incarnation().map(str::to_owned);
-    }
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
     let (runtime, boot) = owner_tokens(&format!("ws:{}", hex16(&body)));
     GcIntent::shared(
@@ -291,7 +271,7 @@ pub fn mount_intent(
         snapshot.branch.id.as_slice(),
     )
     .in_project(snapshot.branch.stack.as_slice())
-    .named(None, Some(snapshot.branch.name.as_str()))
+    .named(project, Some(snapshot.branch.name.as_str()))
     .placed(
         Some(body),
         place.sandbox.as_deref(),
@@ -300,8 +280,6 @@ pub fn mount_intent(
     .owned(Some(&runtime), Some(&boot))
     .authorized(authority)
 }
-
-
 
 /// Releases one intent. When the Store refuses the delete, the owner has gone
 /// (a failed unmount or a lost bind): the row is marked uncertain instead of
@@ -507,4 +485,3 @@ pub fn reconcile_value(reconcile: &GcReconcile) -> SdkValue {
         ),
     ])
 }
-

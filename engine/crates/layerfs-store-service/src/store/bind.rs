@@ -127,12 +127,11 @@ impl Store {
             // A placed mount records the place values its control caller
             // read from the home records, so admission proves it dead later:
             // the machine record's current incarnation and the Sandbox
-            // record's generation. The daemon is not the worker that
-            // records the process-global incarnation, so the caller supplies
-            // it. A private or place-unknown bind keeps today's behavior:
-            // the intent records only the owner tokens, and admission falls
-            // back to this process's namespace and boot. The daemon holds
-            // no lease or fence of its own, so neither is invented here.
+            // record's generation. A private or place-unknown bind keeps
+            // today's behavior: the intent records only the owner tokens, and
+            // admission falls back to this process's namespace and boot. The
+            // daemon holds no lease or fence of its own, so neither is
+            // invented here.
             let mut authority = layerfs_history::PlaceAuthority::default();
             if place.machine.is_some() {
                 authority.machine_incarnation = place.machine_incarnation.clone();
@@ -140,9 +139,21 @@ impl Store {
             if place.machine.is_some() && place.sandbox.is_some() {
                 authority.sandbox_generation = place.generation.clone();
             }
+            // The row names its project, so the operator audit finds the
+            // released row by project and Branch name: a named bind knows
+            // it, a bind by Branch id reads the stack's name once.
+            let project = match &request {
+                BindIntent::Named(request) => Some(request.project.clone()),
+                BindIntent::Id(_) => self
+                    .history()
+                    .layer_stack(captured.branch.stack)
+                    .map_err(BindError::History)?
+                    .map(|stack| stack.name.as_str().to_owned()),
+            };
             let intent = crate::history::admission::mount_intent(
                 workspace,
                 &captured,
+                project.as_deref(),
                 &place,
                 authority,
             );

@@ -12,7 +12,6 @@
 mod worker_store;
 
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
-use layerfs_history::error::HistoryError;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_home::events::Events;
@@ -52,16 +51,6 @@ fn source(tag: &str) -> PathBuf {
     std::fs::create_dir_all(&directory).unwrap();
     std::fs::write(directory.join("a.txt"), b"a\n").unwrap();
     directory
-}
-
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    // An hour: seeding the 331 retired Branches must never let a lease the
-    // test calls live expire underneath it.
-    i64::try_from(now).expect("the clock fits an i64") + 3_600_000
 }
 
 fn text(value: &str) -> SdkValue {
@@ -183,7 +172,6 @@ fn seed(home: &Path) {
                 .named(Some("app"), Some(&name)),
             };
             history.gc_register(&intent).unwrap();
-
         }
 
         // The 331 already retired behind the six: fork, a wholly dead pack,
@@ -402,8 +390,8 @@ fn seed_reconcile(home: &Path) {
     // admission consults its caller's home, so the mounts must exist before
     // the new incarnation does for the worker start to be the first caller
     // that can settle the older placement.
-    let current = "p1:worker:0000000000000020:aa";
-    let retired = "p1:sandbox:0000000000000010:aa";
+    let current = "p1:aa11.worker:0000000000000020:aa";
+    let retired = "p1:aa11.sandbox:0000000000000010:aa";
     let record = StoreRecord::read(home, "shop").unwrap().unwrap();
     let open = OpenArgs::of_record(home, "shop", &record).unwrap();
     with_service(&open, |service| {
@@ -445,8 +433,8 @@ fn seed_reconcile(home: &Path) {
             .gc_register(&mount(
                 0x82,
                 "live",
-                "p1:worker:0000000000000030:aa",
-                "p1:sandbox:0000000000000020:aa",
+                "p1:aa11.worker:0000000000000030:aa",
+                "p1:aa11.sandbox:0000000000000020:aa",
                 "boot:82",
             ))
             .unwrap();
@@ -457,8 +445,8 @@ fn seed_reconcile(home: &Path) {
             .gc_register(&mount(
                 0x81,
                 "live",
-                "p1:worker:0000000000000010:aa",
-                "p1:sandbox:0000000000000020:aa",
+                "p1:aa11.worker:0000000000000010:aa",
+                "p1:aa11.sandbox:0000000000000020:aa",
                 "boot:81",
             ))
             .unwrap();
@@ -494,13 +482,13 @@ fn a_worker_start_reconciles_the_incarnations_its_home_records() {
         &placed.home,
         "shop",
         "box",
-        "p1:worker:0000000000000020:aa",
+        "p1:aa11.worker:0000000000000020:aa",
     )
     .expect("the start reconciles the worker's Store");
     assert_eq!(outcome.get_text("machine"), Some("box"), "{outcome:?}");
     assert_eq!(
         outcome.get_text("incarnation"),
-        Some("p1:worker:0000000000000020:aa"),
+        Some("p1:aa11.worker:0000000000000020:aa"),
         "{outcome:?}"
     );
     let mut settled = Vec::new();
@@ -720,7 +708,11 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
     let Some(SdkValue::List(rows)) = audit.get("items") else {
         panic!("audit items: {audit:?}");
     };
-    assert_eq!(rows.len(), 1, "main's audit is the preview it wrote: {audit:?}");
+    assert_eq!(
+        rows.len(),
+        1,
+        "main's audit is the preview it wrote: {audit:?}"
+    );
     assert_eq!(
         rows[0].get_text("evidence"),
         Some("action=preview;operator=alice")
@@ -742,8 +734,14 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
             .iter()
             .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
             .count();
-        assert_eq!(releases, 1, "the compaction kept {name}'s release: {audit:?}");
-        assert_eq!(previews, 2, "the compaction kept {name}'s previews: {audit:?}");
+        assert_eq!(
+            releases, 1,
+            "the compaction kept {name}'s release: {audit:?}"
+        );
+        assert_eq!(
+            previews, 2,
+            "the compaction kept {name}'s previews: {audit:?}"
+        );
     }
 
     placed.remove();

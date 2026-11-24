@@ -140,8 +140,8 @@ pub fn create(
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
+    let record = SandboxRecord::creating(&home, name, project, machine, &op)?;
     home::private_dir(&dir)?;
-    let record = SandboxRecord::creating(name, project, machine, &op);
     let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
     if let Err(refusal) = claimed {
         // the folder this call made holds no record: the name stays free

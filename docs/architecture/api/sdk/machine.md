@@ -564,7 +564,7 @@ image), `boot`, `worker`.
 
 Before it launches a worker, a start stops the one it recorded and confirms
 both the provider state and the recorded endpoint say it is gone. Only then
-does it mint the ordered `p1:worker:<milliseconds>:<nonce>` incarnation,
+does it mint the ordered `p1:<home id>.worker:<milliseconds>:<nonce>` incarnation,
 write it into the machine's record and pass it to the launched worker as
 `LAYERFS_WORKER_INCARNATION`; after the new worker answers, the Stores on
 that machine are reconciled with the token only when `worker.ping` reports

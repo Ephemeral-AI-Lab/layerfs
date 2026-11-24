@@ -12,6 +12,14 @@ fn value(text: &str) -> SdkValue {
     parse(text).unwrap()
 }
 
+/// A fresh, opened home of its own under the temp directory.
+fn scratch_home(tag: &str) -> std::path::PathBuf {
+    let home = std::env::temp_dir().join(format!("lfs-codec-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    layerfs_home::home::layout::open(&home).expect("a new home");
+    home
+}
+
 #[test]
 fn a_sandbox_record_reads_and_writes_back_the_same_json() {
     for text in [
@@ -223,14 +231,16 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
 /// record from before generations has none.
 #[test]
 fn a_created_sandbox_records_one_generation_that_round_trips() {
+    let home = scratch_home("codec");
     let op = Op::begin("sandbox.create", "create", SdkValue::Null).expect("intent");
-    let record = SandboxRecord::creating("t1", "shop/api", "native", &op);
+    let record = SandboxRecord::creating(&home, "t1", "shop/api", "native", &op).expect("record");
     let generation = record.generation().expect("a generation").to_owned();
     assert!(!generation.is_empty());
-    assert!(
-        layerfs_history::ordered_token_parts(&generation).is_some(),
-        "a new generation is ordered"
-    );
+    let id = layerfs_home::home::opened(&home).expect("home").id;
+    let (label, _, _) =
+        layerfs_history::ordered_token_parts(&generation).expect("a new generation is ordered");
+    assert_eq!(label, format!("{id}.sandbox"), "it names the minting home");
+    let _ = std::fs::remove_dir_all(&home);
     assert!(record.to_record().get("generation").is_some());
 
     let read = SandboxRecord::from_record("t1", record.to_record().clone());
@@ -243,4 +253,32 @@ fn a_created_sandbox_records_one_generation_that_round_trips() {
         print(&old.to_record()),
         r#"{"name":"t1","machine":"native"}"#
     );
+}
+
+/// A wall clock stepped backwards never mints a generation older than the
+/// one the name's tombstone retired: the new value is past the floor.
+#[test]
+fn a_generation_is_minted_past_the_retired_one_after_a_backwards_clock() {
+    use layerfs_sandbox::record::SandboxTombstone;
+    let home = scratch_home("floor");
+    let id = layerfs_home::home::opened(&home).expect("home").id;
+    // A retirement minted far in the future, as a clock stepped back after.
+    let future = format!("p1:{id}.sandbox:{:016}:aa", u64::MAX / 4);
+    SandboxTombstone {
+        name: "t1".to_owned(),
+        machine: "native".to_owned(),
+        generation: future.clone(),
+        retired_ms: 0,
+    }
+    .write(&home)
+    .expect("tombstone");
+    let op = Op::begin("sandbox.create", "create", SdkValue::Null).expect("intent");
+    let record = SandboxRecord::creating(&home, "t1", "shop/api", "native", &op).expect("record");
+    let generation = record.generation().expect("a generation");
+    assert_eq!(
+        layerfs_history::compare_place(&future, generation),
+        layerfs_history::PlaceOrder::RecordedOlder,
+        "{generation} follows {future}"
+    );
+    let _ = std::fs::remove_dir_all(&home);
 }

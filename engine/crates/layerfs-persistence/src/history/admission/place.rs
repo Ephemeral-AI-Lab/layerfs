@@ -5,10 +5,10 @@
 //! control layer installs a bounded `PlaceView` for one admission (its
 //! machines' `incarnation`, its Sandboxes' `generation` and the machine-level
 //! `sandbox-retired` tombstone). Admission compares a conflicting intent's
-//! recorded place with that view. A name the view does not carry has no
-//! evidence: it falls back to the owner's namespace/boot record the intent
-//! itself carries (a place-null/private mount), never to a guess. Missing
-//! evidence is not death.
+//! recorded place with that view. The owner's namespace/boot record the
+//! intent itself carries always applies first; a name the view does not
+//! carry adds no evidence beside it, never a guess. Missing evidence is not
+//! death.
 //!
 //! The view is cached once per admission, so every conflicting intent costs
 //! one comparison and no read. A caller that could not read a home supplies
@@ -148,12 +148,15 @@ impl PlaceView {
 
     /// What the place authority proves about `intent`.
     ///
-    /// A placed intent whose current place this admission can see is decided
-    /// by that place: an older recorded value is dead, a newer recorded value
-    /// (a restore) is uncertain, and a live place with an expired lease is
-    /// uncertain, never dead. A placed intent whose place the caller cannot
-    /// see falls back to the caller's namespace/boot evidence, as a
-    /// private/place-null intent always does. Missing evidence is never death.
+    /// The owner evidence always applies first, exactly as admission without
+    /// place evidence decides: an owner this process proves gone (another
+    /// boot of a local Store, a vanished or reused pid in this namespace) is
+    /// dead whatever the place says. Otherwise a placed intent whose current
+    /// place this admission can see is decided by that place: an older
+    /// recorded value of the same home is dead, a newer recorded value (a
+    /// restore) or another home's value is uncertain. Place evidence only
+    /// adds proofs of death; it never hides the owner's. Missing evidence is
+    /// never death.
     pub(crate) fn liveness(
         &mut self,
         _tx: &Transaction<'_>,
@@ -161,16 +164,16 @@ impl PlaceView {
         shared_store: bool,
         owners: &OwnerView,
     ) -> HistoryResult<Liveness> {
-        let authority = intent.authority();
-        if intent.machine_incarnation.is_some() || intent.sandbox_generation.is_some() {
-            if let Some(place) = self.record(intent) {
-                return Ok(authority.liveness(self.now_ms, Some(&place)));
-            }
-        }
         if owners.dead(intent, shared_store) {
             return Ok(Liveness::Dead);
         }
-        Ok(authority.liveness(self.now_ms, None))
+        let authority = intent.authority();
+        let place =
+            match intent.machine_incarnation.is_some() || intent.sandbox_generation.is_some() {
+                true => self.record(intent),
+                false => None,
+            };
+        Ok(authority.liveness(self.now_ms, place.as_ref()))
     }
 
     /// True only when the place authority (or, for a place-null intent, the

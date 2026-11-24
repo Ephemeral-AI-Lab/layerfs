@@ -55,8 +55,13 @@ fn op(body: u8) -> [u8; 16] {
     [body; 16]
 }
 
+/// An ordered place value minted by home `aa11`.
 fn token(label: &str, milliseconds: u64, nonce: &str) -> String {
-    format!("p1:{label}:{milliseconds:016}:{nonce}")
+    homed("aa11", label, milliseconds, nonce)
+}
+
+fn homed(home: &str, label: &str, milliseconds: u64, nonce: &str) -> String {
+    format!("p1:{home}.{label}:{milliseconds:016}:{nonce}")
 }
 
 fn mount(branch: BranchId, body: u8, generation: &str) -> GcIntent {
@@ -73,7 +78,6 @@ fn mount(branch: BranchId, body: u8, generation: &str) -> GcIntent {
     .authorized(PlaceAuthority {
         machine_incarnation: Some(token("worker", 20, "a")),
         sandbox_generation: Some(generation.to_owned()),
-        ..PlaceAuthority::default()
     })
 }
 
@@ -189,4 +193,36 @@ fn the_view_ends_with_its_admission() {
         .gc_reconcile_machine("box", &token("worker", 20, "a"))
         .unwrap();
     assert!(again.settled.is_empty());
+}
+
+/// Two homes share this Store and each has a `box` machine and a `box-1`
+/// Sandbox: the other home's newer incarnation, newer generation and
+/// tombstone say nothing about this home's mount, which stays held
+/// (uncertain at worst), never settled.
+#[test]
+fn another_homes_place_of_the_same_name_is_never_dead() {
+    let temp = Temp::new("gc-place-view-home");
+    let history = catalog(&temp);
+    let (_, branch) = project(&history);
+    history
+        .gc_register(&mount(branch, 6, &token("sandbox", 10, "a")))
+        .unwrap();
+
+    let mut other = PlaceView::new();
+    other.set_machine("box", homed("bb22", "worker", 30, "b"));
+    other.set_sandbox_generation("box", "box-1", homed("bb22", "sandbox", 30, "b"));
+    other.set_sandbox_retired("box", "box-1", homed("bb22", "sandbox", 25, "b"));
+    let held = with_place_view(Some(other), || {
+        history.gc_reconcile_machine("box", &homed("bb22", "worker", 30, "b"))
+    })
+    .unwrap();
+    assert!(held.settled.is_empty());
+    assert_eq!((held.held, held.uncertain), (1, 1));
+    assert_eq!(
+        history
+            .gc_intents(GcScopeKind::Branch, branch.as_slice())
+            .unwrap()
+            .len(),
+        1
+    );
 }
