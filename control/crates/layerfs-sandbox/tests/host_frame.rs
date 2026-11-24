@@ -72,7 +72,11 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
 #[test]
 fn a_frame_reads_back_to_its_request() {
     let calls = [
-        Call::Create { platform: None },
+        // a worker's create carries the caller's machine and generation
+        Call::Create {
+            platform: None,
+            place: Some(("box".to_owned(), "p1:aa11.sandbox:10:aa".to_owned())),
+        },
         Call::Close {
             force: true,
             held: None,

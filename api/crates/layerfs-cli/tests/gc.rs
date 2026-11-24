@@ -36,7 +36,7 @@ const CALLS: &[(&[&str], &str, &str)] = &[
     ),
     (
         &["store", "repair-mount-holders"],
-        "layerfs store repair-mount-holders <name> <project> <branch> <action>",
+        "layerfs store repair-mount-holders <project> <branch> <action>",
         "list, preview, settle, release or audit mount holders (operator)",
     ),
 ];
@@ -112,12 +112,11 @@ fn wrong_arity_and_options_are_usage_errors() {
         &["store", "compact", "shop", "extra"],
         &["store", "compact", "shop", "--force"],
         &["store", "repair-mount-holders"],
-        &["store", "repair-mount-holders", "shop", "app", "main"],
+        &["store", "repair-mount-holders", "shop/app", "main"],
         &[
             "store",
             "repair-mount-holders",
-            "shop",
-            "app",
+            "shop/app",
             "main",
             "preview",
             "extra",
@@ -125,11 +124,10 @@ fn wrong_arity_and_options_are_usage_errors() {
         &[
             "store",
             "repair-mount-holders",
-            "shop",
-            "app",
+            "shop/app",
             "main",
             "preview",
-            "--force",
+            "--prune",
         ],
     ];
     for words in wrong {
@@ -154,8 +152,7 @@ fn well_formed_lines_reach_the_library() {
         &[
             "store",
             "repair-mount-holders",
-            "shop",
-            "app",
+            "shop/app",
             "main",
             "preview",
         ],

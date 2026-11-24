@@ -36,11 +36,6 @@ impl From<Option<String>> for Param {
         Self::OptionalText(v)
     }
 }
-impl From<Option<i64>> for Param {
-    fn from(v: Option<i64>) -> Self {
-        Self::OptionalI64(v)
-    }
-}
 impl From<&str> for Param {
     fn from(v: &str) -> Self {
         Self::Text(v.to_owned())

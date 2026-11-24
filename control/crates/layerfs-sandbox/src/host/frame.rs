@@ -68,8 +68,12 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
     let mut fields = Vec::new();
     let mut said = false;
     match call {
-        Call::Create { platform } => {
-            fields.extend(platform.as_deref().map(|p| ("platform", text(p))))
+        Call::Create { platform, place } => {
+            fields.extend(platform.as_deref().map(|p| ("platform", text(p))));
+            if let Some((machine, generation)) = place {
+                fields.push(("place_machine", text(machine)));
+                fields.push(("generation", text(generation)));
+            }
         }
         Call::Close { force, held } => {
             fields.push(("force", SdkValue::Bool(*force)));
@@ -245,6 +249,7 @@ fn call(op: Op, more: &SdkValue) -> Call {
     match op {
         Op::SandboxCreate => Call::Create {
             platform: text("platform"),
+            place: text("place_machine").zip(text("generation")),
         },
         Op::SandboxClose => Call::Close {
             force: more.get_bool("force"),

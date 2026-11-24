@@ -14,9 +14,9 @@
 //! `PlaceView` the control layer supplies (and, for a name the view does not
 //! carry, from the current records the admitted call itself carries). The
 //! control layer reads its home once for the call; this engine opens no home
-//! file. A recorded value older than the current one is dead even with a live
-//! lease; a recorded value newer than the current one (a home restore) is
-//! uncertain, never dead; a value another home minted is uncertain. The
+//! file. A recorded value older than the current one is dead; a recorded
+//! value newer than the current one (a home restore) is uncertain, never
+//! dead; a value another home minted is no evidence. The
 //! owner's namespace/boot evidence always applies as it did before place
 //! evidence existed: an owner it proves gone is dead, and place evidence only
 //! adds proofs of death. A mount registration settles only the conflicting
@@ -52,7 +52,7 @@ mod authority;
 mod place;
 mod removal;
 mod session;
-pub(crate) use authority::{reconcile_machine, release, release_done};
+pub(crate) use authority::{liveness, reconcile_machine, release, release_done};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
@@ -73,8 +73,7 @@ const ALL_STORE: &str = "gc_intent_all_store";
 const MACHINE_INTENTS: &str = "gc_intent_list_machine";
 const DONE: &str = "gc_intent_done";
 const DONE_BRANCH: &str = "gc_intent_done_branch";
-const DONE_INSERT: &str = "gc_intent_done_insert";
-const DONE_DELETE: &str = "gc_intent_done_delete";
+const DONE_CAP: &str = "gc_intent_done_cap";
 
 const BRANCH_STACK: &str = "gc_branch_stack_any";
 const EPOCH_LOCK: &str = "gc_epoch_lock";
@@ -379,7 +378,7 @@ impl OwnerView {
 
 /// Adopts the rows whose place authority proves them dead and that are not
 /// uncertain: their operation cannot still be running, so their intent is
-/// deleted and does not hold the scope. A live place with an expired lease is
+/// deleted and does not hold the scope. A place the view finds uncertain is
 /// kept and reported `Unresolved`; an uncertain row stays until its owner
 /// settles it.
 fn settle_dead(
@@ -834,53 +833,6 @@ impl HistoryProvider {
             Ok(held != 0)
         })
     }
-}
-
-/// Writes one retained `done` row directly: the release/done path without a
-/// live intent. The owner and place columns stay NULL, so the row never
-/// blocks a mount, and admission filters `state <> 'done'`.
-fn record_done_in(tx: &Transaction<'_>, intent: &GcIntent, evidence: &str) -> HistoryResult<bool> {
-    let rows = tx.query(
-        DONE_INSERT,
-        params![
-            intent.op_id.to_vec(),
-            intent.kind.as_str(),
-            intent.scope_kind.as_str(),
-            intent.scope_id.clone(),
-            intent.project.clone(),
-            intent.branch.clone(),
-            intent.phase.clone(),
-            evidence,
-            now_ms(),
-        ],
-    )?;
-    Ok(!rows.is_empty())
-}
-
-/// [`record_done_in`] for one Store write transaction: the durable preview
-/// audit row.
-pub(crate) fn record_done(
-    provider: &HistoryProvider,
-    intent: &GcIntent,
-    evidence: &str,
-) -> HistoryResult<bool> {
-    provider.write(|tx| record_done_in(tx, intent, evidence))
-}
-
-/// Deletes the retained `done` rows the operator exported, and only those:
-/// each delete names one op and keeps filtering `state = 'done'`, so a live
-/// intent is never removed by a prune. Answers how many rows went.
-pub(crate) fn prune_done(provider: &HistoryProvider, op_ids: &[[u8; 16]]) -> HistoryResult<u64> {
-    provider.write(|tx| {
-        let mut removed = 0u64;
-        for op_id in op_ids {
-            let rows = tx.query(DONE_DELETE, [op_id.as_slice()])?;
-            if !rows.is_empty() {
-                removed += 1;
-            }
-        }
-        Ok(removed)
-    })
 }
 
 /// One bounded page of retained `done` audit rows, oldest first. The live

@@ -229,17 +229,20 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
         Ok(value) if value.get_text("kind") == Some("Forgotten") && value.get("left").is_some() => {
             phase(events, "delete", None);
             direct::release(&home, &record);
+            let unretired = retire_home(&home, &record, &dir);
             remove_folder(&dir)?;
             done(events);
             let left = match value.get("left") {
                 Some(SdkValue::List(items)) => texts(items).map(str::to_owned).collect(),
                 _ => Vec::new(),
             };
+            let left = left.into_iter().chain(unretired).collect();
             Ok(Removed::AlreadyGone { left })
         }
         Ok(value) => {
             phase(events, "delete", None);
             direct::release(&home, &record);
+            let unretired = retire_home(&home, &record, &dir);
             remove_folder(&dir)?;
             let unmounted = match value.get("unknown") {
                 Some(SdkValue::List(paths)) => texts(paths).map(&handle_of).collect(),
@@ -256,6 +259,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                 }
                 _ => Vec::new(),
             };
+            let left = left.into_iter().chain(unretired).collect();
             done(events);
             Ok(Removed::Stopped { unmounted, left })
         }
@@ -263,9 +267,10 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
             phase(events, "delete", None);
             direct::release(&home, &record);
+            let left = retire_home(&home, &record, &dir).into_iter().collect();
             remove_folder(&dir)?;
             done(events);
-            Ok(Removed::AlreadyGone { left: Vec::new() })
+            Ok(Removed::AlreadyGone { left })
         }
         // its outcome is not known: the record stays with the intent,
         // uncertain, until another `sandbox.remove` clears it
@@ -415,6 +420,7 @@ fn forget(
         let _sandbox = record::lock(home, name)?;
         direct::release(home, &record);
     }
+    let unretired = retire_home(home, &record, &dir);
     remove_folder(&dir)?;
     done(events);
     let kept = left.map(|left| {
@@ -424,7 +430,10 @@ fn forget(
         )
     });
     Ok(Removed::AlreadyGone {
-        left: std::iter::once(first).chain(kept).collect(),
+        left: std::iter::once(first)
+            .chain(kept)
+            .chain(unretired)
+            .collect(),
     })
 }
 
@@ -510,10 +519,25 @@ fn may_run(record: &SandboxRecord) -> bool {
 /// live create.
 fn remove_unstarted(home: &Path, record: &SandboxRecord) -> Result<Removed> {
     let unresolved = (record.op()).is_some_and(|op| op.standing() == Standing::Unresolved);
-    remove_folder(&record.dir(home))?;
+    let dir = record.dir(home);
+    let unretired = retire_home(home, record, &dir);
+    remove_folder(&dir)?;
     let mut left = Vec::new();
     if unresolved {
         left.push("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here".to_owned());
     }
+    left.extend(unretired);
     Ok(Removed::AlreadyGone { left })
+}
+
+/// Writes the home's retirement tombstone of Sandbox `record` before its home
+/// record (folder `dir`) goes: best effort, its failure a sentence of `left`.
+/// This is the tombstone of a worker's Sandbox, whose worker writes none. A
+/// folder already gone was removed by the Sandbox's own side on `native`,
+/// which wrote the tombstone first.
+fn retire_home(home: &Path, record: &SandboxRecord, dir: &Path) -> Option<String> {
+    match dir.exists() {
+        true => record::retire_reported(home, record),
+        false => None,
+    }
 }

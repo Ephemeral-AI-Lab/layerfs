@@ -12,13 +12,14 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryCatalogConfig, PlaceAuthority};
 use layerfs_home::home;
-use layerfs_home::names::StoreName;
+use layerfs_home::names::ProjectRef;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::StoragePolicy;
 use layerfs_store::open_args::OpenArgs;
-use layerfs_store::project::add::{add_project, ProjectAdd};
+use layerfs_store::project::family::{init, ProjectInit};
 use layerfs_store::record::StoreRecord;
-use layerfs_store::service::{branch_named, repair_mount_holders_at, with_service};
+use layerfs_store::repair::{repair_at, Repair};
+use layerfs_store::service::{branch_named, with_service};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -129,7 +130,7 @@ fn mount(branch: &[u8], stack: &[u8], op: u8) -> GcIntent {
 }
 
 fn holders(value: &SdkValue) -> &[SdkValue] {
-    match value.get("holders") {
+    match value.get("items") {
         Some(SdkValue::List(rows)) => rows,
         other => panic!("no holder list: {other:?}"),
     }
@@ -158,19 +159,42 @@ fn operator_repair_round_trips_on_postgresql() {
 
     let home = tempdir("home");
     home::ensure(&home).unwrap();
-    let record = StoreRecord::connected("pgs", &url, "layerfs", "local", None)
+    // `store.connect`'s record shape with its saved login, which
+    // `project.init` dials with: the address alone in the record (the URL
+    // after its user part), the user and password saved (a trust-auth server
+    // takes any password)
+    let read: postgres::Config = url.parse().expect("LAYERFS_TEST_POSTGRES_URL is a URL");
+    let user = read.get_user().unwrap_or("postgres");
+    let password = read.get_password().map_or("unused".to_owned(), |password| {
+        String::from_utf8(password.to_vec()).expect("a UTF-8 password")
+    });
+    layerfs_store::postgresql::login::save(&home, "pg", user, &password).unwrap();
+    let address = match layerfs_store::postgresql::connect::holds_login(&url) {
+        false => url.clone(),
+        true => {
+            let (scheme, after) = url.split_once("://").expect("a postgres:// URL");
+            format!(
+                "{scheme}://{}",
+                after.split_once('@').map_or(after, |(_, at)| at)
+            )
+        }
+    };
+    let record = StoreRecord::connected("pgs", &address, "layerfs", "local", Some("pg"))
         .with("binding", SdkValue::Bytes(BINDING.to_vec()))
         .with("cursor", SdkValue::Bytes(vec![71; 32]));
     record.write(&home).unwrap();
-    add_project(&ProjectAdd {
-        home: home.clone(),
-        store: StoreName::parse("pgs").unwrap(),
-        name: "app".to_owned(),
-        source: folder("app"),
-        timeout_ms: Some(60_000),
-        store_record: None,
-    })
-    .unwrap();
+    let mut sink = |_| {};
+    let mut events = layerfs_home::events::Events::new(&mut sink);
+    init(
+        &home,
+        &mut events,
+        &ProjectInit {
+            project: ProjectRef::parse("pgs/app").unwrap(),
+            folder: folder("app").display().to_string(),
+            timeout: Some(60_000),
+        },
+    )
+    .expect("project.init on the PostgreSQL Store");
     let record = StoreRecord::read(&home, "pgs").unwrap().unwrap();
     let open = OpenArgs::of_record(&home, "pgs", &record).unwrap();
     let branch = branch_named(&open, "app", "main").unwrap();
@@ -194,11 +218,22 @@ fn operator_repair_round_trips_on_postgresql() {
     })
     .unwrap();
 
-    let preview = repair_mount_holders_at(
-        &open, "app", "main", "preview", None, false, "alice", 0, 100,
-    )
-    .expect("preview");
-    assert_eq!(preview.get("audit"), Some(&SdkValue::Null), "{preview:?}");
+    let repair = |action: &str, op: Option<u8>, force: bool| {
+        repair_at(
+            &open,
+            &Repair {
+                project: "app".to_owned(),
+                branch: "main".to_owned(),
+                action: action.to_owned(),
+                op: op.map(|op| [op; 16]),
+                force,
+                operator: "alice".to_owned(),
+                limit: 100,
+                ..Repair::default()
+            },
+        )
+    };
+    let preview = repair("preview", None, false).expect("preview");
     let rows = holders(&preview);
     assert_eq!(rows.len(), 2, "{rows:?}");
     let row = rows
@@ -206,82 +241,30 @@ fn operator_repair_round_trips_on_postgresql() {
         .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
         .expect("the live holder");
     assert_eq!(row.get_text("state"), Some("live"));
+    // a shared Store proves no owner gone from here: it still looks live
+    assert_eq!(row.get_text("liveness"), Some("live"));
+    assert_eq!(row.get("safe"), Some(&SdkValue::Bool(false)));
     assert_eq!(row.get_text("machine_incarnation"), Some("worker:1"));
     assert_eq!(row.get_text("sandbox_generation"), Some("generation:1"));
     assert_eq!(row.get("legacy"), Some(&SdkValue::Bool(false)));
 
-    let refused = repair_mount_holders_at(
-        &open,
-        "app",
-        "main",
-        "release",
-        Some([0x21; 16]),
-        false,
-        "alice",
-        0,
-        100,
-    )
-    .unwrap_err();
+    let refused = repair("release", Some(0x21), false).unwrap_err();
     assert_eq!(refused.code, "Conflict", "{refused:?}");
-    repair_mount_holders_at(
-        &open,
-        "app",
-        "main",
-        "settle",
-        Some([0x21; 16]),
-        false,
-        "alice",
-        0,
-        100,
-    )
-    .expect("settle");
-    repair_mount_holders_at(
-        &open,
-        "app",
-        "main",
-        "release",
-        Some([0x21; 16]),
-        false,
-        "alice",
-        0,
-        100,
-    )
-    .expect("release");
-    let settled = repair_mount_holders_at(
-        &open,
-        "app",
-        "main",
-        "settle_legacy",
-        None,
-        false,
-        "alice",
-        0,
-        100,
-    )
-    .expect("settle_legacy");
+    let refused = repair("settle", Some(0x21), false).unwrap_err();
+    assert_eq!(refused.code, "InUse", "a live-looking holder: {refused:?}");
+    repair("settle", Some(0x21), true).expect("a forced settle");
+    repair("release", Some(0x21), false).expect("release");
+    // a second release answers NotFound, as on SQLite (#783 gap 5)
+    let again = repair("release", Some(0x21), false).unwrap_err();
+    assert_eq!(again.code, "NotFound", "{again:?}");
+    let settled = repair("settle_legacy", None, false).expect("settle_legacy");
     assert_eq!(settled.get_int("settled"), Some(1));
-    repair_mount_holders_at(
-        &open,
-        "app",
-        "main",
-        "release",
-        Some([0x31; 16]),
-        false,
-        "alice",
-        0,
-        100,
-    )
-    .expect("release the legacy holder");
-    let preview = repair_mount_holders_at(
-        &open, "app", "main", "preview", None, false, "alice", 0, 100,
-    )
-    .expect("preview");
+    repair("release", Some(0x31), false).expect("release the legacy holder");
+    let preview = repair("preview", None, false).expect("preview");
     assert!(holders(&preview).is_empty());
     // The two releases retained their rows as the PostgreSQL Store's durable
     // operator audit; the audit read does not resolve a Branch first.
-    let audit =
-        repair_mount_holders_at(&open, "app", "main", "audit", None, false, "alice", 0, 100)
-            .expect("audit");
+    let audit = repair("audit", None, false).expect("audit");
     let Some(SdkValue::List(items)) = audit.get("items") else {
         panic!("audit items: {audit:?}");
     };

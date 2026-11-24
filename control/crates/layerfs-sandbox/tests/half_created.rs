@@ -131,13 +131,16 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
     );
 
     // a create that ended while it claimed the name started nothing: its
-    // records go, as before
+    // records go, as before, and the home keeps the tombstone of the
+    // generation it minted (#783 gap 2: every removal path writes it)
+    let generation = "p1:aa11.sandbox:0000000000000010:aa";
     write_record(
         &paths::sandbox_record(&home, "s2"),
         &SdkValue::map([
             ("name", t("s2")),
             ("project", t("shop/api")),
             ("machine", t("dev")),
+            ("generation", t(generation)),
             ("op", ended_create("claim")),
         ]),
     )
@@ -147,6 +150,10 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
         Ok(Removed::AlreadyGone { .. })
     ));
     assert!(!paths::sandbox_dir(&home, "s2").exists());
+    let tombstone = read_record(&paths::sandbox_tombstone(&home, "dev", "s2"))
+        .unwrap()
+        .expect("the removal's tombstone");
+    assert_eq!(tombstone.get_text("generation"), Some(generation));
     std::fs::remove_dir_all(home).unwrap();
 }
 
