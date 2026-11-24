@@ -5,9 +5,9 @@ use super::position;
 use super::rows::{cell, many, one, unsigned};
 use super::transaction::Transaction;
 use super::{layerstack, params};
-use crate::backend::records::Record as Row;
+use crate::backend::records::{Record as Row, Value};
 use layerfs_history::error::{HistoryError, HistoryResult, Missing};
-use layerfs_history::identity::LayerStackId;
+use layerfs_history::identity::{LayerStackId, NodeId};
 use layerfs_history::path::trace_key;
 use layerfs_history::records::{
     PathRemovalKind, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
@@ -16,6 +16,8 @@ use layerfs_history::records::{
 const MARKER: &str = "paths_marker";
 
 const MARKERS: &str = "paths_markers";
+
+const NODE_MARKERS: &str = "paths_node_markers";
 
 const UPSERT: &str = "paths_upsert";
 
@@ -119,4 +121,37 @@ pub(crate) fn markers(
     stack: LayerStackId,
 ) -> HistoryResult<Vec<PathRemovalRecord>> {
     many(tx, MARKERS, [stack.as_slice()], marker)
+}
+
+/// The `history_serial` of `node` with every marker of `stack`, in one
+/// statement: one row per marker, or one row without a marker, each
+/// carrying the serial; no row when the node does not exist.
+pub(crate) fn node_markers(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    node: NodeId,
+) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
+    let rows = tx.query(NODE_MARKERS, [node.as_slice(), stack.as_slice()])?;
+    let Some(first) = rows.first() else {
+        return Ok(None);
+    };
+    let serial = unsigned(first, 0)?;
+    let mut markers = Vec::with_capacity(rows.len());
+    for row in &rows {
+        if unsigned(row, 0)? != serial {
+            return Err(HistoryError::Integrity("node position"));
+        }
+        if matches!(row.cells.get(1), Some(Value::Null)) {
+            if rows.len() != 1 {
+                return Err(HistoryError::Integrity("path marker"));
+            }
+            continue;
+        }
+        markers.push(PathRemovalRecord {
+            path: cell(row, 1)?,
+            frontier_serial: unsigned(row, 2)?,
+            removed_ms: cell::<i64>(row, 3)?,
+        });
+    }
+    Ok(Some((serial, markers)))
 }

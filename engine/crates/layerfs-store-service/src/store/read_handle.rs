@@ -186,11 +186,15 @@ impl ReadSession {
         }
         result.map_err(PortError::Storage)
     }
-    pub fn snapshot(&self, branch: BranchId) -> Result<Option<BranchSnapshot>, Arc<PortError>> {
+    /// One Branch's snapshot with its project's name, in one read (#768).
+    pub fn snapshot(
+        &self,
+        branch: BranchId,
+    ) -> Result<Option<(BranchSnapshot, layerfs_history::HistoryName)>, Arc<PortError>> {
         self.attempt(|handle, _, _| {
             handle
                 .history
-                .branch_snapshot(branch)
+                .branch_snapshot_with_stack_name(branch)
                 .map_err(PortError::History)
         })
     }

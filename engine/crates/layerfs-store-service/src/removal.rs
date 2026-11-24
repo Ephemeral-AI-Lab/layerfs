@@ -102,29 +102,16 @@ pub fn node_of(snapshot: &BranchSnapshot) -> NodeId {
         .unwrap_or(NodeId::Layer(snapshot.branch.base_layer))
 }
 
-/// The markers of `stack`, or none for a provider that keeps no markers.
-fn markers(
-    store: &Arc<Store>,
-    stack: LayerStackId,
-) -> Result<Vec<PathRemovalRecord>, RemovalError> {
-    match store.published(|history| history.path_removals(stack)) {
-        Ok(markers) => Ok(markers),
-        Err(error)
-            if matches!(
-                error.as_ref(),
-                PortError::History(HistoryError::Unsupported(_))
-            ) =>
-        {
-            Ok(Vec::new())
-        }
-        Err(error) => Err(RemovalError::Ports(error)),
-    }
-}
+/// A node's `history_serial` with its stack's markers
+/// ([`layerfs_history::HistoryCatalog::node_path_removals`]), read in one
+/// statement; none for an absent node or a provider that keeps no markers.
+type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
 
-/// The `history_serial` of `node`, or none for a provider that keeps none.
-fn node_serial(store: &Arc<Store>, node: NodeId) -> Result<Option<u64>, RemovalError> {
-    match store.published(|history| history.node_history_serial(node)) {
-        Ok(serial) => Ok(serial),
+/// The answer of one [`NodeRemovals`] read: a provider without the marker
+/// reads sees none; any other failure refuses.
+fn removals(read: Result<NodeRemovals, Arc<PortError>>) -> Result<NodeRemovals, RemovalError> {
+    match read {
+        Ok(found) => Ok(found),
         Err(error)
             if matches!(
                 error.as_ref(),
@@ -172,10 +159,19 @@ pub fn hidden_paths(
     root: FilesystemRootId,
     node: NodeId,
 ) -> Result<Vec<RemovedPath>, RemovalError> {
-    let Some(serial) = node_serial(store, node)? else {
+    let found = removals(store.published(|history| history.node_path_removals(stack, node)))?;
+    hidden_in(found, reader, root)
+}
+
+/// [`hidden_paths`] over an already read node position and markers.
+fn hidden_in(
+    found: NodeRemovals,
+    reader: &dyn AuthenticatedObjects,
+    root: FilesystemRootId,
+) -> Result<Vec<RemovedPath>, RemovalError> {
+    let Some((serial, markers)) = found else {
         return Ok(Vec::new());
     };
-    let markers = markers(store, stack)?;
     if markers.is_empty() {
         return Ok(Vec::new());
     }
@@ -419,18 +415,17 @@ impl BoundWorkspace {
     /// Writes one whiteout into this Workspace's overlay for every path the
     /// markers hide at its bound node, so a mounted view hides it and the
     /// next Commit records a real deletion. A path already re-created in the
-    /// overlay is absent from the base view lookup and is left alone.
+    /// overlay is absent from the base view lookup and is left alone. The
+    /// bound node's serial and the markers are one statement, and the tree
+    /// lookups are demands, all on this Workspace's own reader (#768).
     pub fn materialize_removals(&self) -> Result<(), SdkRefusal> {
         let snapshot = self.snapshot().map_err(crate::write::mutation::failure)?;
-        let reader = self.store.ports(snapshot.scope);
-        let paths = hidden_paths(
-            &self.store,
-            snapshot.branch.stack,
-            &*reader,
-            FilesystemRootId(snapshot.effective_root),
-            node_of(&snapshot),
-        )
-        .map_err(refusal)?;
+        let (stack, node) = (snapshot.branch.stack, node_of(&snapshot));
+        let found = removals(self.published(|history| history.node_path_removals(stack, node)))
+            .map_err(refusal)?;
+        let reader = self.store.ports_for(snapshot.scope, self.identity());
+        let paths = hidden_in(found, &*reader, FilesystemRootId(snapshot.effective_root))
+            .map_err(refusal)?;
         if paths.is_empty() {
             return Ok(());
         }

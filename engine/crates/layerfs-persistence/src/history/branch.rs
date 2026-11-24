@@ -178,6 +178,14 @@ pub(crate) fn branch_snapshot(
     tx: &Transaction<'_>,
     id: BranchId,
 ) -> HistoryResult<Option<BranchSnapshot>> {
+    Ok(branch_snapshot_with_stack_name(tx, id)?.map(|(snapshot, _)| snapshot))
+}
+
+/// [`branch_snapshot`] with the stack name its statement already reads.
+pub(crate) fn branch_snapshot_with_stack_name(
+    tx: &Transaction<'_>,
+    id: BranchId,
+) -> HistoryResult<Option<(BranchSnapshot, HistoryName)>> {
     snapshot_rows(tx, id)?.map(resolve).transpose()
 }
 
@@ -196,11 +204,11 @@ pub(crate) fn branch_snapshot_named(
         Some(_) => {}
     }
     let rows = snapshot_of(rows)?.ok_or(HistoryError::Integrity("catalog row"))?;
-    resolve(rows).map(|snapshot| NamedSnapshot::Found(Box::new(snapshot)))
+    resolve(rows).map(|(snapshot, _)| NamedSnapshot::Found(Box::new(snapshot)))
 }
 
-/// The snapshot one Branch's rows resolve to, checked.
-fn resolve(rows: SnapshotRows) -> HistoryResult<BranchSnapshot> {
+/// The snapshot one Branch's rows resolve to, checked, with its stack's name.
+fn resolve(rows: SnapshotRows) -> HistoryResult<(BranchSnapshot, HistoryName)> {
     let stack = rows
         .stack()?
         .ok_or(HistoryError::Integrity("Branch LayerStack"))?;
@@ -220,14 +228,15 @@ fn resolve(rows: SnapshotRows) -> HistoryResult<BranchSnapshot> {
         }
         None => None,
     };
-    Ok(BranchSnapshot {
+    let snapshot = BranchSnapshot {
         branch: record,
         head_root,
         base_root,
         effective_root: head_root.unwrap_or(base_root),
         scope: stack.scope,
         profile: stack.profile,
-    })
+    };
+    Ok((snapshot, stack.name))
 }
 
 /// Reads one stack's Branches in name order, one bounded page at a time.

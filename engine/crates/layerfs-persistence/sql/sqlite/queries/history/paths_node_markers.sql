@@ -1,0 +1,1 @@
+SELECT n.history_serial,m.path,m.frontier_serial,m.removed_ms FROM (SELECT history_serial FROM "commit" WHERE commit_id=$1 UNION ALL SELECT history_serial FROM layer WHERE layer_id=$1 LIMIT 1) n LEFT JOIN path_removed m ON m.layer_stack_id=$2 ORDER BY m.path;

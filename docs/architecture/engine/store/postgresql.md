@@ -390,6 +390,34 @@ Chosen per Store in `PostgresSelection` and applied with `SET LOCAL` to every
 `Write`, `Stage` and `Publish` transaction
 ([`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs)).
 
+### Mount reads
+
+A Workspace mount reads only on its own Workspace reader and writes only
+its admission on the writer; it never opens or uses the control reader
+(#768, [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs)):
+
+```text
+ Workspace reader  branch_snapshot or branch_snapshot_named     1 autocommit statement
+                   (a bind by Branch id takes the project name for the
+                   intent from the same row)
+ writer            gc_register: the mount intent                 admission (history/admission.rs)
+ Workspace reader  paths_node_markers: the bound node's serial   1 autocommit statement
+                   and every path_removed marker of its project
+```
+
+The markers are read after the intent commits, never with the snapshot. A
+path removal takes the project key exclusively in its marker transaction and
+scans the project's live intents, while the mount holds that key shared from
+before its registration (on SQLite the single writer orders the two
+transactions instead): a removal that committed before the intent is seen
+by the marker read, and one after it is refused `MountsActive`. A marker read
+before the registration would miss a removal that commits in between. Both
+reads are fenced autocommit statements (`read_statement`).
+
+| Test | Command | Checks |
+| --- | --- | --- |
+| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched |
+
 ## Delta chains
 
 \#758. A read of a delta record used to locate each base level by level,
