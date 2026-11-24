@@ -38,6 +38,8 @@ pub const LAYER_STACK_BYTES: usize = 17;
 pub const LAYER_BYTES: usize = 33;
 /// Encoded width of a Workspace incarnation.
 pub const WORKSPACE_BYTES: usize = 32;
+/// Encoded width of a Commit attempt identity.
+pub const COMMIT_ATTEMPT_BYTES: usize = 16;
 /// Largest bytes of one authority-local history name.
 pub const NAME_MAX_BYTES: usize = 63;
 /// Identity format version frozen by this implementation.
@@ -163,6 +165,49 @@ impl std::fmt::Debug for WorkspaceId {
     }
 }
 
+/// One Commit attempt: a fresh value the publisher draws for one publication
+/// and records with the Commit it publishes (#776 R1).
+///
+/// The value participates in the Commit's identity, so two attempts of the
+/// same content publish distinct Commits, and the catalog finds the Commit an
+/// attempt published by this value alone: a publisher whose reply was lost
+/// learns whether its one publication landed without a history walk. Like
+/// every other identity, it is supplied by the caller; this crate draws none.
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct CommitAttempt([u8; COMMIT_ATTEMPT_BYTES]);
+
+impl CommitAttempt {
+    /// Wraps one caller-drawn value.
+    pub const fn from_bytes(bytes: [u8; COMMIT_ATTEMPT_BYTES]) -> Self {
+        Self(bytes)
+    }
+
+    /// Wraps one raw slice of the exact width.
+    pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+        Ok(Self(bytes.try_into().map_err(|_| {
+            HistoryError::Integrity("Commit attempt width")
+        })?))
+    }
+
+    /// The encoded value.
+    pub const fn to_bytes(self) -> [u8; COMMIT_ATTEMPT_BYTES] {
+        self.0
+    }
+
+    /// The encoded value as a slice.
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for CommitAttempt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("CommitAttempt(")?;
+        write_hex(&self.0, formatter)?;
+        formatter.write_str(")")
+    }
+}
+
 /// Identity of one history catalog binding.
 ///
 /// It is derived from the configured authority binding key, so it is stable
@@ -280,11 +325,12 @@ authority_identity!(LayerStackId, LAYER_STACK_BYTES, LAYER_STACK_TAG);
 
 impl CommitId {
     /// Derives the Commit identity of one `(root, parent, base Layer)` triple,
-    /// extended by a merge's second parent. A Commit without a second parent
-    /// keeps the identity it had before second parents existed.
+    /// extended by a merge's second parent and by the publisher's attempt.
+    /// A Commit without a second parent, or without an attempt, keeps the
+    /// identity it had before either existed.
     ///
-    /// The metadata's Branch, kind, attribution and merge origin are part of
-    /// the identity; its time is not.
+    /// The metadata's Branch, kind, attribution, merge origin, displaced head
+    /// and attempt are part of the identity; its time is not.
     pub fn derive(
         root: ObjectId,
         parent: Option<Self>,
@@ -309,6 +355,10 @@ impl CommitId {
         update_optional(&mut hasher, bytes);
         update_optional(&mut hasher, meta.merged_from.as_ref().map(NodeId::as_slice));
         update_optional(&mut hasher, meta.displaced.as_ref().map(Self::as_slice));
+        if let Some(attempt) = meta.attempt {
+            hasher.update(b"\0attempt\0");
+            hasher.update(attempt.as_slice());
+        }
         Self(tagged_hash(COMMIT_TAG, hasher.finalize()))
     }
 }

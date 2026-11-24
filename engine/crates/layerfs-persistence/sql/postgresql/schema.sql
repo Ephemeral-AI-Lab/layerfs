@@ -4,7 +4,7 @@ CREATE TABLE store_lane (
 INSERT INTO store_lane (id) VALUES (1);
 CREATE TABLE store_policy (
  id bigint PRIMARY KEY CHECK (id = 1),
- schema_version bigint NOT NULL CHECK (schema_version = 3),
+ schema_version bigint NOT NULL CHECK (schema_version = 4),
  format_profile bigint NOT NULL CHECK (format_profile = 1),
  small_file_threshold_bytes bigint NOT NULL CHECK (small_file_threshold_bytes BETWEEN 131072 AND 1048576),
  whole_file_delta_max_depth bigint NOT NULL CHECK (whole_file_delta_max_depth BETWEEN 0 AND 50),
@@ -120,7 +120,7 @@ CREATE TABLE history_meta (
  catalog_incarnation bigint NOT NULL CHECK (catalog_incarnation BETWEEN 1 AND 9223372036854775807),
  binding_key bytea NOT NULL CHECK (octet_length(binding_key) BETWEEN 1 AND 128),
  identity_format bigint NOT NULL CHECK (identity_format = 3),
- schema_version bigint NOT NULL CHECK (schema_version = 3),
+ schema_version bigint NOT NULL CHECK (schema_version = 4),
  next_history_serial bigint NOT NULL DEFAULT 1,
  schema_source text NOT NULL,
  schema_definition text NOT NULL
@@ -179,6 +179,7 @@ CREATE TABLE "commit" (
  new_metadata bigint NOT NULL DEFAULT 0 CHECK (new_metadata >= 0),
  lww bytea NOT NULL,
  displaced_id bytea CHECK (displaced_id IS NULL OR octet_length(displaced_id) = 33),
+ attempt bytea CHECK (attempt IS NULL OR octet_length(attempt) = 16),
  history_serial bigint NOT NULL DEFAULT 0,
  UNIQUE (layer_stack_id, commit_id)
 );
@@ -233,6 +234,7 @@ CREATE UNIQUE INDEX layers_child ON layer (layer_stack_id, parent_layer_id)
  WHERE parent_layer_id IS NOT NULL;
 CREATE UNIQUE INDEX layers_source ON layer (source_branch_id, source_commit_id)
  WHERE source_branch_id IS NOT NULL;
+CREATE UNIQUE INDEX commit_attempt ON "commit" (attempt) WHERE attempt IS NOT NULL;
 CREATE FUNCTION add_logical() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN UPDATE store_totals SET logical = logical + NEW.logical WHERE id = 1; RETURN NULL; END $$;
 CREATE TRIGGER commit_logical AFTER INSERT ON "commit" FOR EACH ROW EXECUTE FUNCTION add_logical();

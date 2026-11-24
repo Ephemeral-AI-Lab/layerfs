@@ -32,8 +32,11 @@ const ROUNDS: usize = 4;
 #[derive(Clone, Debug)]
 pub enum KernelInput {
     Named(Operation),
+    /// `Position::End` is an `O_APPEND` write: its bytes land at the file's
+    /// end as the job finds it, not where the kernel's cached size put them.
+    /// A `cached` (mapped) store always names its offset.
     Write {
-        offset: u64,
+        position: Position,
         data: WriteData,
         cached: bool,
     },
@@ -50,26 +53,24 @@ impl KernelInput {
             (Self::Named(operation), None) => operation.clone(),
             (
                 Self::Write {
-                    offset,
+                    position,
                     data,
                     cached,
                 },
                 Some(file),
-            ) => {
-                if *cached {
-                    Operation::StoreOpen {
-                        file,
-                        offset: *offset,
-                        data: data.clone(),
-                    }
-                } else {
-                    Operation::WriteOpen {
-                        file,
-                        position: Position::At(*offset),
-                        data: data.clone(),
-                    }
-                }
-            }
+            ) => match (cached, position) {
+                (true, Position::At(offset)) => Operation::StoreOpen {
+                    file,
+                    offset: *offset,
+                    data: data.clone(),
+                },
+                (true, Position::End) => return None,
+                (false, position) => Operation::WriteOpen {
+                    file,
+                    position: *position,
+                    data: data.clone(),
+                },
+            },
             (Self::Attributes { mode, mtime, size }, Some(file)) => Operation::SetOpenAttributes {
                 file,
                 mode: *mode,

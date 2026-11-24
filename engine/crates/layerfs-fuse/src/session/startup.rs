@@ -62,6 +62,7 @@ impl KernelSession {
             return Err(unmounted(AttachPhase::Mount, errno.into(), true, &queue));
         }
         let negotiated = filesystem.negotiation();
+        let deferred = filesystem.deferred();
         let mut session = Self {
             mount: queue.identity(),
             directory: config.directory.clone(),
@@ -93,11 +94,17 @@ impl KernelSession {
             Err(cause) => return Err(session.abandon(AttachPhase::Handshake, cause)),
         };
         session.negotiation = negotiated.get().copied();
-        session.invalidator = Some(super::Invalidator::new(kernel.notifier(), identity));
+        let invalidator = super::Invalidator::new(kernel.notifier(), identity);
+        session.invalidator = Some(invalidator.clone());
+        let owner_id = session.mount.owner_id();
+        // Started before any request is served; it ends with the callbacks.
+        if let Err(cause) = deferred.serve(invalidator, format!("layerfs-pages-{owner_id}")) {
+            drop(kernel);
+            return Err(session.abandon(AttachPhase::Spawn, cause));
+        }
         let runner = kernel.into_runner();
         let monitor = runner.monitor();
         session.monitor = Some(monitor.clone());
-        let owner_id = session.mount.owner_id();
         match thread::Builder::new()
             .name(format!("layerfs-mount-{owner_id}"))
             .spawn(move || runner.run())

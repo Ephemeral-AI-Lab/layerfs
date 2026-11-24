@@ -6,8 +6,8 @@ use super::{
 use crate::telemetry::phase;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
-    error::MovedState, BranchSnapshot, CommitMeta, CommitOutcome, CommitRequest, CommitVia,
-    HistoryError, NodeId,
+    error::MovedState, BranchSnapshot, CommitAttempt, CommitMeta, CommitOutcome, CommitRequest,
+    CommitVia, HistoryError, NodeId,
 };
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
@@ -22,6 +22,17 @@ fn answered(snapshot: &BranchSnapshot) -> NodeId {
         .branch
         .head_commit
         .map_or(NodeId::Layer(snapshot.branch.base_layer), NodeId::Commit)
+}
+
+/// A fresh Commit attempt (#776 R1): 16 bytes from the kernel's random
+/// source. A failed read fails the Commit before anything is published.
+fn fresh_attempt() -> Result<CommitAttempt, CommitError> {
+    use std::io::Read;
+    let mut bytes = [0; 16];
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut source| source.read_exact(&mut bytes))
+        .map_err(|_| CommitError::Context("Commit attempt: /dev/urandom read failed"))?;
+    Ok(CommitAttempt::from_bytes(bytes))
 }
 
 /// `HeadMoved` for a Branch whose head is not the `expected` one.
@@ -182,6 +193,9 @@ impl BoundWorkspace {
                     return Ok(());
                 }
             }
+            // The attempt this Commit publishes under, drawn before anything
+            // is captured: a failed draw leaves nothing to fold back.
+            let attempt = fresh_attempt()?;
             retained.phase = CommitPhase::Capture;
             let capture = phase(timing, "capture", || {
                 self.job(|job_client: &crate::OwnerClient, job_route| job_client.capture(job_route))
@@ -457,6 +471,9 @@ impl BoundWorkspace {
                         lww: merge
                             .as_ref()
                             .map_or_else(Vec::new, |report| report.lww.clone()),
+                        // The retained intent holds it: a lost reply is
+                        // settled by looking it up, never by publishing again.
+                        attempt: Some(attempt),
                         ..CommitMeta::new(via)
                     },
                     // The transaction reads the head in the lane: forced

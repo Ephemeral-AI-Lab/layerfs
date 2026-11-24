@@ -428,18 +428,19 @@ pub(crate) fn settle_leftover(
 /// already refuses a live Init/merge intent; this catches the leftover rows
 /// of an operation whose intent was lost, which a rebuild must not wipe
 /// without refusing (§5).
-pub(crate) fn unfinished_work(store: &Path) -> HistoryResult<bool> {
-    if std::fs::symlink_metadata(store).is_err() {
+pub(crate) fn unfinished_work(
+    session: &crate::backend::sqlite::session::connection::Session,
+) -> HistoryResult<bool> {
+    if std::fs::symlink_metadata(&session.path).is_err() {
         return Ok(false);
     }
-    let connection = Connection::open_with_flags(
-        store,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(db_error)?;
-    connection
-        .busy_timeout(std::time::Duration::ZERO)
-        .map_err(db_error)?;
+    // The Store open rule (#776): the caller's Session holds the Store, so
+    // its `-shm` is there and no lane is taken; the connection must reach
+    // the file that Session opened.
+    let (connection, writer) = session.admitted_read_only()?;
+    if let Some(writer) = writer {
+        writer.release().map_err(|_| HistoryError::UnknownOutcome)?;
+    }
     let _ = connection.execute_batch("PRAGMA query_only=ON");
     let mut found = false;
     for table in [

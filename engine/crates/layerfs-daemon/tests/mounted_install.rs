@@ -1362,3 +1362,85 @@ fn a_directory_of_more_than_one_name_window_is_listed() {
     rig.unmount(&ready);
     rig.finish();
 }
+
+/// Bytes `read` returns once they equal `expected`, or the last bytes it
+/// returned when they never did within the bounded observation.
+fn settled(expected: &[u8], mut read: impl FnMut() -> Vec<u8>) -> Vec<u8> {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let bytes = read();
+        if bytes == expected || Instant::now() >= deadline {
+            return bytes;
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
+/// #776 R4. A merged install expires the kernel's attributes of a changed
+/// file but leaves its cached size, and the kernel resolves `O_APPEND`
+/// against that size, not the daemon's: with writeback off it asks for no
+/// attributes before a write. A's descriptor was opened, and the file's size
+/// cached, before A's Commit merged B's appended line. Its write, and an
+/// appending open by path afterwards, still land at the Workspace's end, and
+/// a read inside the size the kernel holds does not show its own copy of a
+/// write at its stale end.
+#[test]
+fn an_open_append_descriptor_writes_at_the_merged_end() {
+    let rig = Rig::built("r4-append", |source| {
+        fs::write(source.join("log"), b"L1\n").unwrap();
+    });
+    let a = rig.mount(1);
+    let b = rig.mount(2);
+    let log = root(&a).join("log");
+    passed(
+        &bash_in(COMMAND, root(&a), "printf alpha > from-a"),
+        "A changes another file, so its Commit merges",
+    );
+    let mut appender = OpenOptions::new().append(true).open(&log).unwrap();
+    let reader = File::open(&log).unwrap();
+    same_bytes(&whole(&reader), b"L1\n", "A before the install");
+    passed(
+        &bash_in(COMMAND, root(&b), "printf 'L2\\n' >> log"),
+        "B appends L2",
+    );
+    rig.committed(b.token, "B publishes L2");
+    let done = rig.commit(a.token).expect("A commits");
+    assert!(
+        matches!(done.reply, Reply::MergeCommitted(_)),
+        "A's Commit merges: {:?}",
+        done.reply
+    );
+    // Inside the size the kernel still holds: page 0 is read again from the
+    // daemon (merged bytes) and no attributes are asked for.
+    let mut first = [0_u8; 3];
+    reader.read_exact_at(&mut first, 0).unwrap();
+    same_bytes(&first, b"L1\n", "A after the install, inside the old size");
+    io::Write::write_all(&mut appender, b"L3\n").unwrap();
+    // Inside the size the kernel holds after the write.
+    let window = settled(b"L1\nL2\n", || {
+        let mut bytes = [0_u8; 6];
+        reader.read_exact_at(&mut bytes, 0).unwrap();
+        bytes.to_vec()
+    });
+    passed(
+        &bash_in(COMMAND, root(&a), "printf 'L4\\n' >> log"),
+        "A appends L4 by path",
+    );
+    let live = fs::read(&log).unwrap();
+    drop((appender, reader));
+    let record = rig.committed(a.token, "A publishes its appends");
+    let published = file(&rig.published(record.root), "log").to_vec();
+    rig.unmount(&a);
+    rig.unmount(&b);
+    rig.finish();
+    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+    assert_eq!(
+        (text(&window), text(&live), text(&published)),
+        (
+            "L1\nL2\n".to_owned(),
+            "L1\nL2\nL3\nL4\n".to_owned(),
+            "L1\nL2\nL3\nL4\n".to_owned()
+        ),
+        "(cached window, live file, published file)"
+    );
+}

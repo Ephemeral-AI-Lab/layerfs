@@ -9,6 +9,7 @@ use super::{
 use crate::{
     attributes::{declined, Identity},
     coherence::{attributes::published, pages, reply_order},
+    session::Deferred,
     RequestDisposition, RequestOwner,
 };
 use fuser::{
@@ -32,9 +33,16 @@ pub(super) enum MutationReply {
     Created(ReplyCreate),
     /// SETATTR of this serial.
     Attr(ReplyAttr, u64),
-    /// WRITE of this many request bytes.
-    Written(ReplyWrite, usize),
+    /// WRITE of this many request bytes; an `O_APPEND` write also carries
+    /// the offset the kernel copied its bytes to.
+    Written(ReplyWrite, usize, Option<Appended>),
     Done(ReplyEmpty),
+}
+/// An `O_APPEND` WRITE: the kernel's offset (its cached size) and the page
+/// invalidations its reply may owe.
+pub(super) struct Appended {
+    pub offset: u64,
+    pub pages: Deferred,
 }
 /// The values one successful reply carries, composed before it is consumed.
 enum Composed {
@@ -52,7 +60,7 @@ impl MutationReply {
             Self::Entry(reply, _) => reply.error(error),
             Self::Created(reply) => reply.error(error),
             Self::Attr(reply, _) => reply.error(error),
-            Self::Written(reply, _) => reply.error(error),
+            Self::Written(reply, ..) => reply.error(error),
             Self::Done(reply) => reply.error(error),
         }
     }
@@ -68,7 +76,7 @@ impl MutationReply {
         };
         Ok(match self {
             Self::Done(_) => Composed::Nothing,
-            Self::Written(_, requested) => Composed::Count(
+            Self::Written(_, requested, _) => Composed::Count(
                 pages::written(*requested).map_err(|_| io::Error::other("kernel write count"))?,
             ),
             Self::Attr(_, serial) => Composed::Attributes(attributes(Some(*serial))?),
@@ -89,6 +97,7 @@ impl MutationReply {
         identity: Identity,
     ) -> RequestDisposition {
         let generation = Generation(request.mount.owner_id());
+        let serial = request.protected;
         let mutation = match KernelMutation::perform(services, request).await {
             Ok(mutation) => mutation,
             Err(failure) => {
@@ -110,7 +119,25 @@ impl MutationReply {
                 return reply_order::retained(mutation.retain(reason));
             }
             (Self::Done(reply), Ok(_)) => reply.ok(),
-            (Self::Written(reply, _), Ok(Composed::Count(count))) => reply.written(count),
+            (Self::Written(reply, requested, appended), Ok(Composed::Count(count))) => {
+                reply.written(count);
+                // The daemon placed an appending write at the Workspace's end.
+                // The kernel copied it into its cached pages at the end it
+                // caches, which a merged install can leave behind; if the two
+                // differ, those pages are wrong and are dropped after this
+                // reply. The kernel's size follows its next attribute read.
+                if let (
+                    Some(appended),
+                    Ok(Published {
+                        stat: Some(stat), ..
+                    }),
+                ) = (appended, mutation.value())
+                {
+                    if Some(stat.logical_len) != appended.offset.checked_add(requested as u64) {
+                        appended.pages.pages(serial);
+                    }
+                }
+            }
             (Self::Attr(reply, _), Ok(Composed::Attributes(attributes))) => {
                 reply.attr(&TTL, &attributes)
             }

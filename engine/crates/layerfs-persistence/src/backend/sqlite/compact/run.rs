@@ -136,7 +136,7 @@ impl SqliteHandles {
 
             // §5: an unfinished Init or merge holds the Store; its working
             // rows are not wiped by a compaction that was never admitted.
-            if unfinished_work(&store)? {
+            if unfinished_work(&session)? {
                 return Err(HistoryError::Busy);
             }
 

@@ -68,7 +68,10 @@ intent; a failed read is `Unknown`, never a release.
 ## Structural fallback
 
 When read-only admission or the logical audit fails, `sqlite_structure`
-opens the file `READ_ONLY` with `query_only`, `busy_timeout=0` and runs
+opens the file `READ_ONLY` under the Store open rule (with no `-shm` beside
+it, it waits for the Store's lane and holds it through its first read, then
+releases it; see [SQLite: Session](sqlite.md#session)), with `query_only`,
+`busy_timeout=0`, and runs
 `integrity_check(100)` or `quick_check(100)` in one transaction. It is a
 separate observation, not the logical audit's snapshot, and it clears
 nothing. Only `SQLITE_CORRUPT`, `SQLITE_NOTADB` or non-`ok` check rows

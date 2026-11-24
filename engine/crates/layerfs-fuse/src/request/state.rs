@@ -3,8 +3,8 @@ use super::accounting::{Accounting, Disposal, Opcode};
 use super::failure::{failed, KernelInput};
 use super::reply::ReadReply;
 use crate::{
-    attributes::Identity, mount::Negotiation, DispatchError, MountRequests, RequestFuture,
-    RequestOwner,
+    attributes::Identity, mount::Negotiation, session::Deferred, DispatchError, MountRequests,
+    RequestFuture, RequestOwner,
 };
 use fuser::{Errno, INodeNo};
 use layerfs_mount_ports::ports::{Fence, MountServices};
@@ -22,6 +22,8 @@ pub struct KernelFilesystem {
     pub(super) identity: Identity,
     pub(super) negotiation: Arc<OnceLock<Negotiation>>,
     pub(super) accounting: Arc<Accounting>,
+    /// Page invalidations a WRITE reply owes, sent after it.
+    pub(super) deferred: Deferred,
 }
 impl KernelFilesystem {
     pub fn new(
@@ -39,10 +41,14 @@ impl KernelFilesystem {
             identity,
             negotiation: Arc::new(OnceLock::new()),
             accounting: Arc::new(Accounting::default()),
+            deferred: Deferred::default(),
         })
     }
     pub fn negotiation(&self) -> Arc<OnceLock<Negotiation>> {
         self.negotiation.clone()
+    }
+    pub(crate) fn deferred(&self) -> Deferred {
+        self.deferred.clone()
     }
     pub fn accounting(&self) -> Arc<Accounting> {
         self.accounting.clone()

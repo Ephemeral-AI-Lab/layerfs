@@ -101,14 +101,14 @@ fn init(stack: LayerStackId, tag: u8) -> GcIntent {
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
 
-fn merge(stack: LayerStackId, tag: u8) -> GcIntent {
+fn merge(stack: LayerStackId, branch: &str, tag: u8) -> GcIntent {
     GcIntent::shared(
         op(tag),
         GcIntentKind::Merge,
         GcScopeKind::Project,
         stack.as_slice(),
     )
-    .named(Some("proj"), Some("merged"))
+    .named(Some("proj"), Some(branch))
     .with_phase(Some("merge"))
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
@@ -217,7 +217,9 @@ fn init_and_merge_are_project_holders() {
     assert_eq!(state.phase.as_deref(), Some("init"));
     history.gc_release(&op(5)).unwrap();
 
-    history.gc_register(&merge(project_id, 7)).unwrap();
+    history
+        .gc_register(&merge(project_id, "merged", 7))
+        .unwrap();
     let refusal = history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
         .unwrap_err();
@@ -231,6 +233,41 @@ fn init_and_merge_are_project_holders() {
     history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
         .unwrap();
+}
+
+/// #776 G3: a merge holds the project against mounts, Inits, removals and
+/// compaction, but two merges conflict only when they target the same
+/// Branch; each publishes under a compare-and-set on its own target.
+#[test]
+fn merges_into_different_branches_share_the_project() {
+    let temp = Temp::new("admission-merges");
+    let history = catalog(&temp);
+    let (project_id, _branch) = project(&history);
+
+    history.gc_register(&merge(project_id, "a", 9)).unwrap();
+    history
+        .gc_register(&merge(project_id, "b", 10))
+        .expect("a merge into another Branch shares the project");
+
+    let refusal = history
+        .gc_register(&merge(project_id, "a", 11))
+        .unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("a second merge into the same Branch is Busy: {refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Merge);
+    assert_eq!(state.phase.as_deref(), Some("merge"));
+
+    let refusal = history.gc_register(&init(project_id, 12)).unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("an Init during a live merge is Busy: {refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Merge);
+
+    history.gc_release(&op(9)).unwrap();
+    history.gc_release(&op(10)).unwrap();
+    history.gc_register(&merge(project_id, "a", 11)).unwrap();
+    history.gc_release(&op(11)).unwrap();
 }
 
 #[test]

@@ -6,6 +6,7 @@ mod startup;
 mod state;
 
 pub use drain::Detach;
+pub(crate) use invalidate::Deferred;
 pub use invalidate::Invalidator;
 pub use state::{
     AttachFailure, AttachPhase, AttachRemainder, DetachAttempt, DrainStage, Drained, ForceRefusal,

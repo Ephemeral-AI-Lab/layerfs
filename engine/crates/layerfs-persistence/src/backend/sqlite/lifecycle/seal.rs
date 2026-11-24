@@ -209,9 +209,13 @@ impl Session {
         // SQLite has checked-closed before advisory ownership is released.
         // Earlier error exits close State.connection before handing back its
         // retained owner. The sidecar check below runs while the lane is still
-        // held: an opener waiting on it takes the same lane before it may
-        // create `-wal`, so releasing first would let one land between the
-        // close and this check and turn a sealed Store into a refused one.
+        // held: writable openers, and read-only openers that find no `-shm`
+        // (`open_admitted_read_only`), wait on this lane before their first
+        // read creates the sidecars, so releasing first would let them land
+        // between the close and this check and turn a sealed Store into a
+        // refused one. A read-only opener that saw `-shm` just before this
+        // close removed it can still create empty sidecars without the lane;
+        // the compaction's re-check before its rename catches those.
         for suffix in ["-wal", "-shm", "-journal"] {
             let mut sidecar = self.path.as_os_str().to_os_string();
             sidecar.push(suffix);

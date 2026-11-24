@@ -139,7 +139,7 @@ impl SnapshotRows {
     }
     /// The Branch's head Commit, when it has one and its row exists.
     pub(crate) fn head(&self) -> HistoryResult<Option<CommitRecord>> {
-        self.part(12..29).as_ref().map(commit_row).transpose()
+        self.part(12..30).as_ref().map(commit_row).transpose()
     }
 }
 
@@ -163,7 +163,7 @@ fn snapshot_of(mut rows: Vec<Row>) -> HistoryResult<Option<SnapshotRows>> {
     let Some(row) = rows.pop() else {
         return Ok(None);
     };
-    if row.cells.len() != 29 {
+    if row.cells.len() != 30 {
         return Err(HistoryError::Integrity("catalog row"));
     }
     Ok(Some(SnapshotRows {

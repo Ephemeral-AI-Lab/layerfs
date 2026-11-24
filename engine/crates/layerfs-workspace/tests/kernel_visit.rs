@@ -19,8 +19,8 @@ use layerfs_overlay::{
 };
 use layerfs_workspace::{
     CanonicalCache, CanonicalClient, FileLengths, JobOutcome, KernelInput, KernelMutationOutcome,
-    KernelReadDecision, KernelReadOperation, KernelVisitRequest, Need, Operation, Refusal, Time,
-    VisitFacts, WorkspaceError,
+    KernelReadDecision, KernelReadOperation, KernelVisitRequest, Need, Operation, Position,
+    Refusal, Time, VisitFacts, WorkspaceError,
 };
 use std::sync::Arc;
 
@@ -775,7 +775,7 @@ fn a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source() 
         facts: Arc::new(VisitFacts::default()),
     };
     let write = || KernelInput::Write {
-        offset: 0,
+        position: Position::At(0),
         data: b"visited".as_slice().into(),
         cached: false,
     };
@@ -791,12 +791,42 @@ fn a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source() 
     b.overlay.reply_attempted(publication).unwrap();
     assert_eq!(b.content(serial), b"visited");
 
+    // An O_APPEND write lands at the file's end as the job finds it, not at
+    // an offset the kernel took from its cached size (#776 R4).
+    let appended = KernelInput::Write {
+        position: Position::End,
+        data: b" twice".as_slice().into(),
+        cached: false,
+    };
+    let outcome = mutate(
+        &b,
+        resident(&b),
+        through(18, Some(file.owner_id()), appended, None),
+    );
+    let Ok(JobOutcome::Applied {
+        publication,
+        inode: Some(inode),
+    }) = outcome.result
+    else {
+        panic!("the appending write was not published: {outcome:?}")
+    };
+    assert_eq!(inode.size, 13);
+    b.overlay.reply_attempted(publication).unwrap();
+    assert_eq!(b.content(serial), b"visited twice");
+
     // An input and a descriptor that do not agree are refused with no effect:
     // a write without its handle, and a named operation through one.
     let before = snapshot(&b);
     let other = b.workspace.next_serial(&b.allocator).unwrap();
+    // A mapped store names its offset: it has no end position.
+    let store_at_end = KernelInput::Write {
+        position: Position::End,
+        data: b"never".as_slice().into(),
+        cached: true,
+    };
     for request in [
         through(11, None, write(), None),
+        through(19, Some(file.owner_id()), store_at_end, None),
         through(
             12,
             Some(file.owner_id()),
@@ -918,12 +948,12 @@ fn a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing() {
     let before = snapshot(&b);
     for input in [
         KernelInput::Write {
-            offset: 0,
+            position: Position::At(0),
             data: b"refused".as_slice().into(),
             cached: false,
         },
         KernelInput::Write {
-            offset: 0,
+            position: Position::At(0),
             data: b"refused".as_slice().into(),
             cached: true,
         },

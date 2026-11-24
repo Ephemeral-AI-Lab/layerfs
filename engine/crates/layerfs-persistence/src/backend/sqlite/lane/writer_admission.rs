@@ -39,10 +39,12 @@ impl Writer {
             {
                 return Err(BackendError::Integrity);
             }
-            // One blocking kernel wait, taken after the Session's FIFO turn,
-            // so at most one thread per Session waits here. Its exits: the lock
-            // (a holder process that exits releases it); `Cancelled` when a
-            // signal interrupts the wait. No BEGIN/body has been attempted.
+            // One blocking kernel wait. A Session's writers wait here without
+            // its FIFO turn (`Session::admit_writer`), so its reads are served
+            // meanwhile; several of its threads may wait, and they resume in
+            // the kernel's order. Its exits: the lock (a holder process that
+            // exits releases it); `Cancelled` when a signal interrupts the
+            // wait. No BEGIN/body has been attempted.
             match Flock::lock(file, FlockArg::LockExclusive) {
                 Ok(lock) => Ok(Self { lock }),
                 Err((_, Errno::EINTR)) => Err(BackendError::Cancelled),
@@ -134,5 +136,39 @@ impl crate::backend::sqlite::session::connection::State {
             return Err(BackendError::Unknown);
         }
         Ok(())
+    }
+}
+
+impl crate::backend::sqlite::session::connection::Session {
+    /// The cross-process writer lane for a writer that holds this Session's
+    /// FIFO turn, without the turn ever waiting on it. `refuse` checks the
+    /// state under the turn (quarantine, a writer this Session retains) before
+    /// the lane is sought. One non-blocking attempt is a readiness probe, not
+    /// a retry: when another Session or process holds the lane, the turn is
+    /// given up, the lane is waited for in the kernel, and the turn is entered
+    /// again, so the Session's reads are served while a writer waits on a
+    /// foreign lane (a compaction's mark can hold it for tens of seconds).
+    /// `refuse` runs again under the new turn, since another of the Session's
+    /// callers may have quarantined it meanwhile; an exit after the lane is
+    /// held drops the writer, which releases it. Nothing is attempted under
+    /// the lane before this returns.
+    pub(crate) fn admit_writer<'a>(
+        &'a self,
+        turn: crate::backend::admission::Turn<'a>,
+        refuse: impl Fn(
+            &mut crate::backend::sqlite::session::connection::State,
+        ) -> Result<(), BackendError>,
+    ) -> Result<(crate::backend::admission::Turn<'a>, Writer), BackendError> {
+        refuse(&mut self.state())?;
+        if let Some(writer) = Writer::try_acquire(&self.path)? {
+            return Ok((turn, writer));
+        }
+        drop(turn);
+        let writer = Writer::acquire(&self.path)?;
+        let turn = self
+            .admission
+            .enter(layerfs_telemetry::timer::waits::Wait::Writer)?;
+        refuse(&mut self.state())?;
+        Ok((turn, writer))
     }
 }

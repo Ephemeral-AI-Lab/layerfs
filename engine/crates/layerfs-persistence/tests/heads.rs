@@ -278,3 +278,41 @@ fn a_read_only_open_of_an_unheld_store_waits_for_the_lane() {
         .expect("the read-only open takes the lane once it is free")
         .unwrap();
 }
+
+/// #776: the doctor's structure probe (`sqlite_structure`, the fallback when a
+/// diagnostic open fails) opens the Store raw. On a Store nobody holds its
+/// first read creates the sidecars and runs SQLite's WAL recovery, so it
+/// follows the open rule and waits for the lane, as a read-only open does.
+#[test]
+fn the_structure_probe_of_an_unheld_store_waits_for_the_lane() {
+    use layerfs_persistence::diagnostic::{sqlite_structure, Options, Outcome};
+    let temp = Temp::new("heads-structure-lane");
+    let unheld = temp.join("a");
+    drop(create(&unheld));
+    let mut shm = unheld.as_os_str().to_os_string();
+    shm.push("-shm");
+    assert!(
+        !std::path::Path::new(&shm).exists(),
+        "the closed Store keeps no -shm"
+    );
+    let other = create(&temp.join("b"));
+    let lane = other.history.publish_lane().unwrap();
+    let probing = unheld.clone();
+    let finished = started(move || {
+        let mut failed = false;
+        let result = sqlite_structure(&probing, Options::default(), &mut |o| {
+            failed |= o.outcome == Outcome::Fail;
+        });
+        (result, failed)
+    });
+    assert!(
+        finished.recv_timeout(STILL_WAITING).is_err(),
+        "the structure probe created the sidecars while another holder had the lane"
+    );
+    drop(lane);
+    let (result, failed) = finished
+        .recv_timeout(BOUND)
+        .expect("the structure probe takes the lane once it is free");
+    result.unwrap();
+    assert!(!failed, "a sound Store has no structural failure");
+}

@@ -114,6 +114,9 @@ fn decode_commit(row: &Row, check_identity: bool) -> HistoryResult<CommitRecord>
             lww_truncated: false,
             units,
             displaced: commit_column(row, 16)?,
+            attempt: cell::<Option<Vec<u8>>>(row, 17)?
+                .map(|bytes| layerfs_history::CommitAttempt::from_slice(&bytes))
+                .transpose()?,
         },
     };
     record.meta.check()?;
