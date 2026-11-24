@@ -414,9 +414,18 @@ by the marker read, and one after it is refused `MountsActive`. A marker read
 before the registration would miss a removal that commits in between. Both
 reads are fenced autocommit statements (`read_statement`).
 
+A provider with admission (`HistoryCatalog::gc_admission`) refuses the mount
+when `gc_register` refuses, `Unsupported` included: on a transaction-pooled
+connection the session key cannot mean presence, so the mount is
+`Unsupported` (GC spec §5.2). Only a provider without admission (a test
+double) mounts without an intent. Init, merge and Branch removal still
+proceed without an intent there: they are one-shot calls the spec lets run
+through a pooler.
+
 | Test | Command | Checks |
 | --- | --- | --- |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched |
+| [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller; a provider without admission still mounts |
 
 ## Delta chains
 

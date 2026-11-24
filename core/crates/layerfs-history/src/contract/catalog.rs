@@ -510,6 +510,14 @@ pub trait HistoryCatalog: Send + Sync {
         ))
     }
 
+    /// True when this provider keeps admission intents (§5): every refusal
+    /// of [`Self::gc_register`], `Unsupported` included, is then a refusal
+    /// of the call that registers. The default is false, for a provider
+    /// without admission, whose [`Self::gc_register`] is the default refusal.
+    fn gc_admission(&self) -> bool {
+        false
+    }
+
     /// Registers one admission intent (§5) in its own write transaction.
     ///
     /// The default refuses: a provider without admission cannot make the

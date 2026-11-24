@@ -317,6 +317,10 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| super::kept::remove_unreachable(tx, stack, dry_run))
     }
 
+    fn gc_admission(&self) -> bool {
+        true
+    }
+
     fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {
         super::admission::register(self, intent)
     }
