@@ -503,12 +503,21 @@ malformed one decodes as no token: missing evidence is no proof, never death
   the runtime is confirmed stopped (a close or force close, a reclaim of a
   runtime that ended by itself), confirmed gone (its side found its daemon
   gone or stopped, `NoSuchSandbox` with `containerGone`, or its machine is
-  confirmed gone or recorded stopped) or never started. A forget that sent no
-  signal (a record this build does not read, a retired docker record, a
-  foreign record, a worker that refused or could not be reached and keeps its
-  record) writes none, and so does a `NoSuchSandbox` that inspected no
-  runtime (no started record, no daemon keys): a tombstone for a
-  daemon that may still run would prove its live mounts dead. A failed
+  recorded stopped by a confirmed stop or a provider that reported the VM
+  stopped) or never started. A forget that sent no signal (a record this
+  build does not read, a retired docker record, a foreign record, a worker
+  that refused or could not be reached and keeps its record, a machine whose
+  record has no 2.0 name, or one whose VM a live read found `missing`)
+  writes none, and so does a `NoSuchSandbox` that inspected no runtime (no
+  started record, no daemon keys): a tombstone for a daemon that may still
+  run would prove its live mounts dead. A recorded `missing` is absence of
+  evidence, not death: a provider listing can miss a VM that comes back with
+  its daemon running, and a live read mends the record then. Its removal's
+  `left` names `store.repair_mount_holders`, which settles such an intent
+  once the operator knows the VM gone. Open gap (#787 review): a docker live
+  read also records a `paused` worker container stopped, whose frozen daemon
+  resumes on `docker unpause`, so a forced remove there writes a tombstone
+  that proves nothing. A failed
   tombstone write does not stop the removal (a missing tombstone is only no
   proof) and is reported in `left`. A worker's
   root is no home and gets no tombstone. Once a recreated Sandbox's started

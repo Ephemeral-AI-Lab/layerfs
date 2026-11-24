@@ -13,12 +13,13 @@
 //!
 //! The home's retired tombstone of the Sandbox is written before its record
 //! goes only when its runtime is confirmed stopped (a close answered
-//! `Closed`), confirmed gone (its side answered `NoSuchSandbox`, its VM is
-//! gone or its machine is stopped) or never started (a create that ended
-//! claiming the name). A removal that leaves a runtime it did not stop (a
-//! record this build does not read or reopen, or a worker that keeps its
-//! record) writes none: no evidence is the safe outcome, a tombstone would
-//! prove a live mount dead.
+//! `Closed`), confirmed gone (its side answered `NoSuchSandbox` with
+//! `containerGone`, or its machine is recorded stopped) or never started (a
+//! create that ended claiming the name). A removal that leaves a runtime it
+//! did not stop (a record this build does not read or reopen, a worker that
+//! keeps its record, a machine whose record has no 2.0 name or whose VM a
+//! live read found missing, which may come back) writes none: no evidence
+//! is the safe outcome, a tombstone would prove a live mount dead.
 use super::create::remove_folder;
 use super::direct;
 use super::family::named;
@@ -105,8 +106,9 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
         );
         return forget(&home, events, name, container, Worker::Ask);
     }
-    // a Sandbox on a machine whose record has no 2.0 name (RV3 FAIL 1):
-    // nothing on that machine is reached, its worker included
+    // a Sandbox on a machine whose record has no 2.0 name (RV3 FAIL 1), or
+    // whose VM a live read found missing: nothing on that machine is
+    // reached, its worker included, and neither proves its runtime gone
     let machine = found.machine();
     let on = layerfs_machine::record::MachineRecord::read(&home, machine)?;
     if let Some(on) = on.filter(|record| record.gone()) {
@@ -116,16 +118,9 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
                  Sandbox's daemon and run folder there, if any, stay in the VM or container an \
                  earlier build made, which no call reaches"
             ),
-            false => format!(
-                "machine {machine}'s VM is gone, so only the Sandbox's records were removed: \
-                 its daemon and run folder were in that VM, which its provider no longer holds"
-            ),
+            false => missing_vm(machine, found.project()),
         };
-        let worker = match on.nameless() {
-            true => Worker::Skip,
-            false => Worker::Gone,
-        };
-        return forget(&home, events, name, first, worker);
+        return forget(&home, events, name, first, Worker::Skip);
     }
     if let Some(unnamed) = foreign(&home, &found)? {
         return forget(&home, events, name, unnamed, Worker::Ask);
@@ -404,7 +399,8 @@ fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
 /// Removes the record of Sandbox `name` that this build does not reopen:
 /// one recorded under the retired docker backend (D-8,
 /// layerfs-project#111), one whose daemon's name this home does not give
-/// ([`foreign`]), or one on a machine whose record has no 2.0 name. Its
+/// ([`foreign`]), one on a machine whose record has no 2.0 name or whose VM
+/// a live read found missing, or one on a machine recorded stopped. Its
 /// machine's worker is asked once to drop its own record of it (a worker
 /// that cannot be reached or refuses leaves that record, and `left` says
 /// so), unless `worker` skips it, then the home's record goes. Nothing it
@@ -516,6 +512,24 @@ fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option
     )))
 }
 
+/// What a remove of a Sandbox of project `project` on machine `machine`,
+/// whose VM a live read found missing, leaves: its records went and nothing
+/// on the machine was reached. The VM may come back (a provider listing can
+/// miss it, and a live read mends the record then), so its daemon is not
+/// proved stopped: no tombstone is written, and a mount intent it held stays
+/// until the operator's repair settles it.
+fn missing_vm(machine: &str, project: Option<&str>) -> String {
+    let project = project.map_or_else(|| "<project>".to_owned(), shell_word);
+    format!(
+        "machine {machine}'s VM was found missing, so only the Sandbox's records were removed \
+         and nothing on the machine was reached: its daemon and run folder were in that VM. A \
+         provider that lists no such VM does not prove it gone, so no retired tombstone was \
+         written and a mount intent the Sandbox held is not proven dead: `layerfs store \
+         repair-mount-holders {project} <branch> list` shows it, and `settle --op <op> --force` \
+         ends it once the VM is known gone"
+    )
+}
+
 /// Whether [`forget`] asks the Sandbox's machine's worker to drop its own
 /// record of it, and whether its runtime is confirmed gone.
 #[derive(Clone, Copy)]
@@ -523,11 +537,11 @@ enum Worker {
     /// Asked once; a refusal is a sentence of `left`. Nothing was stopped.
     Ask,
     /// Not reached at all: the machine's record has no 2.0 name, so what
-    /// runs on it is not known.
+    /// runs on it is not known, or a live read found its VM missing, which
+    /// does not prove its runtime gone (the VM may come back).
     Skip,
-    /// Not reached: its runtime is confirmed gone with its machine (a VM
-    /// its provider no longer holds, or a machine recorded stopped), so the
-    /// home's retired tombstone is written.
+    /// Not reached: its runtime ended with its machine, recorded stopped
+    /// ([`stopped_on`]), so the home's retired tombstone is written.
     Gone,
 }
 
