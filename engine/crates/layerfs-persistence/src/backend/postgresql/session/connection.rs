@@ -50,8 +50,11 @@ impl State {
     pub(crate) fn quarantine(&mut self) {
         self.quarantined = true;
         if matches!(self.client, super::driver::Driver::Ordinary(_)) {
-            self.statements.clear();
+            // Close first: a cached statement holds only a weak reference to
+            // the client, so once it is closed dropping the cache queues no
+            // `Close` for a silent server to leave unanswered.
             let _ = std::mem::replace(&mut self.client, super::driver::Driver::Closed).close();
+            self.statements.clear();
         }
     }
 

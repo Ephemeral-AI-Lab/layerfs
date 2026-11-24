@@ -186,7 +186,7 @@ keeps its Store open across Saves.
 | `inode_values` | ≤ 4,096 ascending ordinals in one statement |
 | `signatures` | ≤ 8,192 signature-ring rows in insertion order |
 | `reserve` | one block of pack ids and/or ordinals |
-| `publish` | one atomic `Publication` (packs, locators insert-if-absent, inode values, signatures, released ordinals (since #768 the tail past the 256 a handle keeps)); each locator carries its record's logical delta `base`, which a provider may store in any form or ignore; returns `Published { lost }` |
+| `publish` | one atomic `Publication` (packs, locators insert-if-absent, inode values, signatures, released ordinals (since #768 the tail past the `KEPT_ORDINALS` (128) a handle keeps)); each locator carries its record's logical delta `base`, which a provider may store in any form or ignore; returns `Published { lost }` |
 
 [`port/persistence.rs`](../../../../core/crates/layerfs-storage/src/port/persistence.rs)
 also has `whole_pack_bytes`, `batched_chain_reads` (default false; a provider
