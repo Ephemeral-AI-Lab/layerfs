@@ -217,17 +217,31 @@ pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
 }
 
 /// The PostgreSQL Store URL a Sandbox daemon on `spec`'s machine dials for
-/// `url` (#535 §7.3): `native` uses it as given; a loopback host becomes the
-/// machine's host alias (`docker`: on Docker Desktop the address its running
-/// worker container resolves `host.docker.internal` to, on a Linux Engine
-/// the URL as given; `lima`: `192.168.5.2`, `apple-container`: its
-/// network's gateway;
-/// G7 receipts); a rewrite is refused when the URL asks for
-/// `sslmode=verify-full`. Every other host is used as given. Starts nothing;
-/// no message holds any part of the URL.
-pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
+/// `url`, a URL of Store `store` (#535 §7.3): always `url` itself, never
+/// rewritten (owner, 2026-11-24). A machine that does not share the
+/// caller's loopback (`docker` on Docker Desktop, `lima`,
+/// `apple-container`) refuses a loopback host `Unsupported`, naming what it
+/// calls this host (`host.docker.internal`, `host.lima.internal`, the
+/// network's gateway) and `layerfs store connect <store> <url> --machine
+/// <machine>`; `native` and `docker` on a Linux Engine share it. Starts
+/// nothing; no message holds any part of the URL but a loopback host.
+pub fn reach(spec: &Spec, store: &str, url: &str) -> Result<String, MachineError> {
     spec.validate()?;
-    adapter(spec.kind).reach(spec, url)
+    crate::reach::dial(spec, (store, url), adapter(spec.kind).loopback(spec))
+}
+
+/// What a failed connection to Store `store` at `url` from `spec`'s machine
+/// adds for its user, where it may be a loopback the machine does not
+/// share: `Some` only on such a machine and only when the URL names a host
+/// by name (an address is never resolved, and [`reach`] refused every
+/// loopback one). A name that resolves to a loopback address there (a
+/// hosts entry) is not refused up front, since nothing resolves a name to
+/// check it, so the failure of its one dial carries the same advice as the
+/// refusal. The caller adds it only when no connection was made, not when
+/// the server answered (a refused login, say). Reads nothing from the
+/// machine.
+pub fn loopback_hint(spec: &Spec, store: &str, url: &str) -> Option<String> {
+    crate::reach::hint(spec, (store, url), adapter(spec.kind).loopback(spec))
 }
 
 /// The host loopback address at which this process reaches a Sandbox

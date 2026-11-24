@@ -114,11 +114,33 @@ pub fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<Sdk
         return None;
     };
     let message = match status.as_str() {
-        "Closed" => "no connection to the server was made (it refused the connection, did not answer, or closed it)",
+        "Closed" => NO_CONNECTION,
         "Rejected" => "the server refused the session: the database does not exist, or the user or password is wrong",
         _ => return None,
     };
     Some(refused("Unavailable", message))
+}
+
+/// How [`no_session`] says that no connection was made.
+const NO_CONNECTION: &str = "no connection to the server was made (it refused the connection, did not answer, or closed it)";
+
+/// Whether a PostgreSQL refusal's `message` says that no connection to
+/// the server was made at all: the name did not resolve, nothing listened
+/// or nothing answered in time (the client's `error connecting to server`
+/// and `timeout waiting for server`, a silent dial's limit, or
+/// [`no_session`]'s words). A server that answered (a refused login, a
+/// missing database, any other error it sent) was reached: `false`. The
+/// one case where a machine's loopback hint can help.
+pub fn not_connected(message: &str) -> bool {
+    [
+        NO_CONNECTION,
+        "error connecting to server",
+        "timeout waiting for server",
+        "the server did not answer within",
+        "the dial could not be started",
+    ]
+    .iter()
+    .any(|said| message.contains(said))
 }
 
 /// The binding key the LayerFS schema `schema` records.

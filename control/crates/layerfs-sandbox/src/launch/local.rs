@@ -148,8 +148,8 @@ fn start_named(
     let options = launch_options(backend, identity, host)?;
     let pg_host = match &setup.store {
         DaemonStore::Postgres { url, .. } => Some(
-            layerfs_sandbox_backend::PostgresUrl::parse(url)
-                .map(|parsed| parsed.host().to_owned())
+            layerfs_sandbox_backend::url_hosts(url)
+                .map(|hosts| hosts.join(","))
                 .unwrap_or_default(),
         ),
         DaemonStore::Sqlite { .. } => None,
@@ -180,13 +180,7 @@ fn start_named(
         let pg = pg_host
             .as_deref()
             .filter(|_| failure.phase == crate::SandboxPhase::Listener)
-            .map(|pg_host| {
-                (
-                    pg_host,
-                    host.store.as_str(),
-                    backend == crate::runtime::Backend::Namespaces,
-                )
-            });
+            .map(|pg_host| (pg_host, host.store.as_str(), host.reach_hint.as_deref()));
         abandon(
             id,
             format!(
@@ -446,7 +440,10 @@ pub fn owned(host: &Host, id: &str, own: &Path) -> Result<(), SdkRefusal> {
 /// daemon's last log lines are read once (the message quotes the last one,
 /// the detail's `log` keeps them all), then it is stopped and its
 /// directory deleted, each once (`Failed`). If that cleanup fails, the
-/// outcome is `Unknown`, saying what is left. The detail's `daemon` is the
+/// outcome is `Unknown`, saying what is left. A daemon that made no
+/// connection to its PostgreSQL Store's server (`pg`: the hosts it dials,
+/// the Store and the caller's loopback hint) is `Unavailable`, naming them
+/// and adding the hint when there is one. The detail's `daemon` is the
 /// program that was started, which the call layer compares with this
 /// build's.
 fn abandon(
@@ -454,7 +451,7 @@ fn abandon(
     mut cause: String,
     sandbox: Option<Box<Sandbox>>,
     daemon: &Path,
-    pg: Option<(&str, &str, bool)>,
+    pg: Option<(&str, &str, Option<&str>)>,
 ) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;
@@ -487,25 +484,7 @@ fn abandon(
                 || line.contains("Store open: physical Store I/O: pack persistence: Refused { status: \"Closed\" }")
         });
     let (code, message, removed) = match (left, pg_unreachable, pg) {
-        (None, true, Some((pg_host, store_name, namespaces))) => {
-            let message = if pg_host.is_empty() {
-                format!(
-                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server"
-                )
-            } else if namespaces
-                && !pg_host.eq_ignore_ascii_case("localhost")
-                && pg_host.parse::<std::net::IpAddr>().is_err()
-            {
-                format!(
-                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server at {pg_host} (the Sandbox root has no /etc/hosts or /etc/resolv.conf, so a hostname may not resolve there; use an IP address)"
-                )
-            } else {
-                format!(
-                    "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store_name}'s server at {pg_host}"
-                )
-            };
-            ("Unavailable", message, container.is_some())
-        }
+        (None, true, Some(pg)) => ("Unavailable", unreached(id, pg), container.is_some()),
         (None, _, _) => ("Failed", cause, container.is_some()),
         (Some(left), _, _) => (
             "Unknown",
@@ -522,5 +501,46 @@ fn abandon(
             ("log", SdkValue::opt_text(log)),
             ("daemon", SdkValue::text(daemon.display().to_string())),
         ]),
+    }
+}
+
+/// Why Sandbox `id` did not start when its daemon made no connection to
+/// its PostgreSQL Store's server (the daemon's own words, from a dial no
+/// server answered): the hosts it dials and the Store, with the caller's
+/// loopback hint when it has one (a name there may be a loopback address
+/// the machine does not share).
+fn unreached(id: &str, (pg_host, store, hint): (&str, &str, Option<&str>)) -> String {
+    let at = match pg_host {
+        "" => String::new(),
+        host => format!(" at {host}"),
+    };
+    let message = format!(
+        "Sandbox {id} did not start: its daemon cannot reach PostgreSQL Store {store}'s server{at}"
+    );
+    match hint {
+        Some(hint) => format!("{message}; {hint}"),
+        None => message,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// A daemon that made no connection says so, naming the hosts it dials,
+    /// and adds the caller's loopback hint only when the caller gave one.
+    #[test]
+    fn a_daemon_that_made_no_connection_carries_the_caller_s_hint() {
+        let hint = "if its host is a loopback address on the lima machine dev (a hosts entry can make a name one), the machine does not share this host's loopback; give the Store a host the machine reaches (host.lima.internal), or give the machine its own URL with `layerfs store connect pg <url> --machine dev`";
+        let with = super::unreached("s1", ("db.example", "pg", Some(hint)));
+        assert_eq!(
+            with,
+            format!("Sandbox s1 did not start: its daemon cannot reach PostgreSQL Store pg's server at db.example; {hint}")
+        );
+        let without = super::unreached("s1", ("10.0.0.5", "pg", None));
+        assert_eq!(
+            without,
+            "Sandbox s1 did not start: its daemon cannot reach PostgreSQL Store pg's server at 10.0.0.5"
+        );
+        let socket = super::unreached("s1", ("", "pg", None));
+        assert!(socket.ends_with("Store pg's server"), "{socket}");
     }
 }

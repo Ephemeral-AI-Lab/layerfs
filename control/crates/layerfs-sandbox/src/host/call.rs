@@ -71,6 +71,39 @@ impl Op {
     pub fn asks_daemon_only(self) -> bool {
         matches!(self, Self::ListWorkspaces | Self::Capacity)
     }
+
+    /// What it does with a PostgreSQL Store's URL on the side that runs it.
+    /// A create starts a daemon that dials it (after the reach check), a
+    /// Commit reads its Branch's head and `expected` there and a status its
+    /// head: [`StoreUrl::Dialled`]. A close dials it only to end the mount
+    /// intents a forced unmount left, which it reports when it cannot:
+    /// [`StoreUrl::Cleanup`]. Every other operation asks only the
+    /// Sandbox's daemon, which dials the URL its create gave it:
+    /// [`StoreUrl::Unused`].
+    pub fn store_url(self) -> StoreUrl {
+        match self {
+            Self::SandboxCreate | Self::Commit | Self::Status => StoreUrl::Dialled,
+            Self::SandboxClose => StoreUrl::Cleanup,
+            Self::ListWorkspaces
+            | Self::Capacity
+            | Self::Mount
+            | Self::Exec
+            | Self::ExecCancel
+            | Self::Unmount => StoreUrl::Unused,
+        }
+    }
+}
+
+/// What a host operation does with a PostgreSQL Store's URL ([`Op::store_url`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoreUrl {
+    /// Dialled for its answer: a URL the machine cannot dial refuses it.
+    Dialled,
+    /// Dialled for a cleanup it reports when it cannot: the operation runs
+    /// without a URL the machine cannot dial.
+    Cleanup,
+    /// Never dialled: the operation runs without it.
+    Unused,
 }
 
 /// A Commit `message` as a request carries it. The untyped request checked
@@ -267,6 +300,10 @@ pub struct Host {
     /// command started (`{ exec_started: { stop } }`): the caller that keeps
     /// its record records the stop handle then (layerfs-project#113).
     pub started: Option<std::sync::mpsc::Sender<SdkValue>>,
+    /// What a create's daemon adds when it cannot connect to its
+    /// PostgreSQL Store's server (`layerfs_machine::platform::loopback_hint`,
+    /// from the caller), never written.
+    pub reach_hint: Option<String>,
 }
 
 impl Host {

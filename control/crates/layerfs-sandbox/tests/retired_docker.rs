@@ -59,6 +59,7 @@ fn host(root: &Path) -> Host {
         postgresql: None,
         message: Message::Absent,
         started: None,
+        reach_hint: None,
     }
 }
 

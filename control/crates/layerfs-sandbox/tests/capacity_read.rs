@@ -314,6 +314,7 @@ fn the_worker_s_side_reads_the_capacity_model() {
         postgresql: None,
         message: Message::Absent,
         started: None,
+        reach_hint: None,
     };
     let answer = layerfs_sandbox::dispatch::call(host, HostCall::Capacity);
     // the call left its Sandbox live in this process's table: it goes,

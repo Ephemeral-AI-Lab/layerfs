@@ -37,7 +37,7 @@ fn native_and_docker_dial_every_url_as_given() {
     for kind in [Platform::Native, Platform::Docker] {
         let spec = scratch.spec(kind);
         for url in urls() {
-            let outcome = machine::reach(&spec, &url);
+            let outcome = machine::reach(&spec, "pg", &url);
             if outcome.as_deref() != Ok(url.as_str()) {
                 changed.push(format!("{kind:?} {url} -> {outcome:?}"));
             }

@@ -35,10 +35,6 @@ pub(crate) fn load_image(spec: &Spec, _archive: &std::path::Path) -> Result<Stri
     Err(unsupported(spec))
 }
 
-pub(crate) fn host_address(spec: &Spec) -> Result<String, MachineError> {
-    Err(unsupported(spec))
-}
-
 /// Provider observation on unsupported native Windows.
 pub(crate) fn provider_state(spec: &Spec) -> Result<crate::setup::State, MachineError> {
     status(spec).map(|value| value.state)

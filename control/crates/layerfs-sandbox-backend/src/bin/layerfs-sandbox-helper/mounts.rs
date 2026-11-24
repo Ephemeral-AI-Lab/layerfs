@@ -6,7 +6,10 @@
 //! path keeps one meaning on both sides of the pivot, and a
 //! private `/proc`, `/dev` and `/tmp` are mounted over the image's own.
 //! The Sandbox's copy of the bundle's runtime layer, when its spec names one,
-//! is bound read-only, nosuid and nodev at `/.layerfs/runtime` (R5).
+//! is bound read-only, nosuid and nodev at `/.layerfs/runtime` (R5). This
+//! host's `/etc/resolv.conf` and `/etc/hosts` are bound read-only over the
+//! image's, so the Sandbox, which shares this host's network, resolves names
+//! as this host does.
 //! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
 //! this mount namespace private first.
 use layerfs_sandbox_backend::HelperSpec;
@@ -67,7 +70,63 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
     if let Some(runtime) = &spec.runtime {
         bind_runtime(runtime, &spec.root)?;
     }
+    resolver(spec)
+}
+
+/// This host's [`RESOLVER_FILES`], each bound read-only at its own path in
+/// the root, over the image's file. A mount point the image lacks (its copy
+/// leaves both files out) is made empty, 0644, in the Sandbox's own
+/// writable layer, and one that is a link or another non-file is replaced
+/// there. An image whose `/etc` is not a plain directory keeps its own
+/// files (a bind through a link would leave the root before the pivot); so
+/// does one whose entry is a directory. A file this host lacks is not bound.
+///
+/// [`RESOLVER_FILES`]: layerfs_sandbox_backend::RESOLVER_FILES
+fn resolver(spec: &HelperSpec) -> Result<(), String> {
+    let targets = spec.resolver_targets()?;
+    let etc = spec.root.join("etc");
+    match fs::symlink_metadata(&etc) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Ok(_) => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => directory(&etc, 0o755)?,
+        Err(error) => return Err(format!("{}: {error}", etc.display())),
+    }
+    for source in targets {
+        if !fs::metadata(&source).is_ok_and(|metadata| metadata.is_file()) {
+            continue;
+        }
+        let target = inside_file(&spec.root, &source);
+        match fs::symlink_metadata(&target) {
+            Ok(metadata) if metadata.is_file() => {}
+            Ok(metadata) if metadata.is_dir() => continue,
+            Ok(_) => {
+                fs::remove_file(&target)
+                    .map_err(|error| format!("{}: {error}", target.display()))?;
+                empty_file(&target)?;
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => empty_file(&target)?,
+            Err(error) => return Err(format!("{}: {error}", target.display())),
+        }
+        bind(&source, &target, true)?;
+    }
     Ok(())
+}
+
+/// `path`'s place inside `root`, not made: `/a/b` becomes `<root>/a/b`.
+fn inside_file(root: &Path, path: &Path) -> PathBuf {
+    root.join(path.strip_prefix("/").unwrap_or(path))
+}
+
+/// An empty 0644 file at `path`, a bind's mount point.
+fn empty_file(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o644)
+        .open(path)
+        .map(drop)
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// The runtime layer at `source`, bound read-only, nosuid and nodev at

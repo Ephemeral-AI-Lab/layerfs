@@ -66,6 +66,15 @@ its commands use the network of the kernel that runs it:
 | `docker` on macOS (Docker Desktop) | Docker Desktop's VM | the worker container's own bridge network |
 | `lima`, `apple-container` | the VM's | the VM's |
 
+A `namespaces` Sandbox also resolves names as the kernel that runs it does:
+the init stage binds that machine's `/etc/resolv.conf` and `/etc/hosts`
+read-only over the image's, so Docker Desktop's `host.docker.internal`, a
+lima guest's `host.lima.internal`, a Linux Engine's `--add-host` entry and
+any DNS name the machine resolves resolve in the Sandbox too. The image
+copy leaves both files out: the binds are the Sandbox's only resolver
+files. What a PostgreSQL Store's URL may name on each machine is
+[Reach](../machines/workers-and-reach.md#reach-reachrs).
+
 On a Linux host, then, a `namespaces` Sandbox on `native` or `docker` shares
 the host's kernel and network: its separation is its namespaces, cgroup,
 seccomp filter and command identity (uid 501), not a VM. No call option,
@@ -242,7 +251,8 @@ environment
             overlay(lower = image, upper/work = the Sandbox's), /proc,
             /dev (fuse null zero full random urandom tty, pts, shm), /tmp,
             Sandbox directory and each Bind at their own paths, the
-            runtime layer read-only at /.layerfs/runtime; pivot
+            runtime layer read-only at /.layerfs/runtime, this host's
+            /etc/resolv.conf and /etc/hosts read-only over the root's; pivot
             v
           /.layerfs/runtime/lib/ld-linux-<arch> --inhibit-cache
             --library-path /.layerfs/runtime/lib layerfs-daemon --config
@@ -258,6 +268,7 @@ environment
 | Image | `sha256:<64 hex>`, the archive's config digest; a `docker save` archive with uncompressed layers (gzip or zstd layers refused); unpacked once per digest under `<root>/images` and shared read-only. A reopen unpacks nothing: an image gone is refused. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs), [`types/image.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/image.rs), [`namespaces/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs) |
 | Helper | `LAYERFS_SANDBOX_HELPER`, else beside the daemon or this executable; copied into the Sandbox's `bin/`, which a reopen uses. | `namespaces/provider.rs` |
 | Runtime layer | `runtime/` beside the daemon (the sealed bundle's, R5), when it holds this architecture's loader; else none, and the daemon runs on the image's own loader and libraries as before. Copied into the Sandbox's `runtime/` (regular files of `lib/` and `bin/` only; anything else refused; the loader and programs 0755, the libraries 0644), so a bundle replaced under a running Sandbox changes nothing. The init stage binds it read-only, nosuid and nodev at `/.layerfs/runtime`, refusing an image whose `/.layerfs` or `/.layerfs/runtime` is not a plain directory, and starts the daemon through its loader (`--inhibit-cache --library-path /.layerfs/runtime/lib`) with `LAYERFS_SANDBOX_RUNTIME=/.layerfs/runtime` and no `LD_*` variable: the image's loader, libraries and `/etc/ld.so.cache` are never used, so an image with an older glibc, musl or no libc starts it. The image's `/etc/ld.so.preload` is still read by the loader. Its files are unmodified Debian binaries (glibc's loader and libraries, `libgcc_s`, OpenSSL, `getent`, `bash-static`, `busybox-static`), several GPL or LGPL: the bundle's `licenses/` holds each package's copyright file and `SOURCES`, the written source offer naming every file's Debian source package, version and snapshot.debian.org page (`sandbox_runtime.sources` in `bundle.json`); `tools/linux_bundle.py sources` downloads exactly those sources to publish beside a release. | `namespaces/provider.rs`, `namespaces/create.rs`, [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs), [`helper init.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs), [`sandbox_runtime.rs`](../../../../engine/crates/layerfs-bridge/src/sandbox_runtime.rs) |
+| Resolver files | `RESOLVER_FILES` (`/etc/resolv.conf`, `/etc/hosts`) of the launcher's root, each bound read-only at its own path in the Sandbox root, so the Sandbox, which shares the launcher's network namespace, resolves names as the launcher does. A mount point the image lacks is made empty, 0644, in the Sandbox's own writable layer, and one that is a link or another non-file is replaced there; an image whose `/etc` is not a plain directory (a bind through a link would leave the root before the pivot), or whose entry is a directory, keeps its own; a file the launcher lacks is not bound. They are never in a Workspace, a diff or a Commit: they land on the root's `/etc` (the image and the Sandbox's upper layer), Workspaces are mounted under the Sandbox directory, and `HelperSpec::resolver_targets` refuses the start when the Sandbox directory or a bind would hold one | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs), [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs) `resolver` |
 | Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: forks itself into the Sandbox's leaf group `<id>/init`, the only group a command helper uses (`clone3` with `CLONE_INTO_CGROUP`; the parent, outside it, waits and ends as its child did, a signal included), the child enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
 | Command cgroup | With an exec slot, the command (never the helper) is created inside `ws-<workspace>/exec-<exec>` (`clone3` with `CLONE_INTO_CGROUP`), without one inside the helper's (the leaf); once its exec succeeded the helper writes one byte on a socket it was given as stdin, and only then is the stop handle told. A command that cannot be created there never runs. No exec moves a process between groups: a write to `cgroup.procs` waits for an RCU grace period (5–28 ms after an idle spell), which every command paid before. Only the init stage joins its group, once per Sandbox. | `namespaces/exec.rs`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs) |
 | Sandbox group layout | The Sandbox's group `<id>` holds no process: its init stages, daemon, command helpers and commands with no exec slot are in its leaf `<id>/init`, commands with one in `ws-<workspace>/exec-<exec>`. cgroup v2's no-internal-process rule allows only such a group to enable controllers for its children, so `create` splits it before any process joins and gives `init` and each `ws-<workspace>` the memory and pids controllers it has: a Workspace's memory, processes and OOM kills can be read ([`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) `workspaces[].usage`), and `<id>`'s own files still count everything. `ws-<workspace>` enables nothing for its command groups. No limit is ever written. | `namespaces/cgroup.rs` `create`, `split`, `leaf` |
@@ -279,7 +290,9 @@ has `/dev/fuse` and a writable cgroup v2 tree, and the Sandbox root is the
 bundle's image archive. The bundle is bound into the container, so its
 `runtime/` is there beside the daemon. Its worker never sets `user.max_user_namespaces`
 (that would change the whole Docker host), so the command filter alone blocks
-user namespaces. Docker publishes ports only when a container starts, so the
+user namespaces. Its Sandboxes resolve names with the worker's resolver
+files (above): `host.docker.internal` names this host on Docker Desktop.
+Docker publishes ports only when a container starts, so the
 machine refuses a forward and every call goes through the worker
 ([Machines: platforms](../machines/platforms.md)).
 
@@ -312,7 +325,7 @@ here times a command out
 | --- | --- | --- |
 | `types/` | `LaunchRequest`, `ProviderLaunchOptions`, `LocalRecord`, `NamespaceRecord`, `SandboxRecord`, `ExecRequest`, `ExecExit`, `SandboxInspection`, `CommandIdentity`, `Bind`, `Image`, `ContainerId` (a random 64-hex id per Sandbox), `RuntimeError` (`Io`, `Protocol`, `Unsupported`), `WireFailure` (whether attempted). They compile on Windows too. | [`types/`](../../../../control/crates/layerfs-sandbox-backend/src/types) |
 | `steps.rs` | Step times of a traced command (`exec.*`, and the helper's `helper.*` via `--trace <file>`). | [`steps.rs`](../../../../control/crates/layerfs-sandbox-backend/src/steps.rs) |
-| `postgres_url.rs` | Splits a PostgreSQL URL at its host so a daemon gets the same URL under another host name; no `Debug`, never in a message. | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
+| `postgres_url.rs` | Reads every server host a `postgres://` URL names, as its client (tokio-postgres) reads them (`url_hosts`: the host list and `host`/`hostaddr` parameters, percent-decoded), and says which name this host's loopback (`loopback`, with `ip` reading every IPv4 form `inet_aton` reads and IPv6 zone ids), so a machine that does not share it can refuse it; the URL is never rewritten and never in a message. | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
 | `platform_policy.rs` | Platforms removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): a record naming one is refused, never run. | [`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs) |
 | `json.rs` | A small streaming JSON reader (image manifests) and the quoting `SUPPORT.json` is written with. | [`json.rs`](../../../../control/crates/layerfs-sandbox-backend/src/json.rs) |
 

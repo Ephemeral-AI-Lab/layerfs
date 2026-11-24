@@ -103,3 +103,35 @@ fn a_saved_login_goes_into_the_dialled_url() {
     );
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// Every URL a machine's Sandbox dials (`url_on`, which the route's reach
+/// check reads) is a `postgres://` or `postgresql://` URL: libpq's
+/// key=value words, as a Store's address or a machine's own, are refused
+/// `InvalidInput` when the login is put in, before anything reads or dials
+/// them.
+#[test]
+fn a_key_value_address_is_refused_before_anything_dials_it() {
+    let home = std::env::temp_dir().join(format!("layerfs-pg-words-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    layerfs_home::home::ensure(&home).unwrap();
+    layerfs_store::postgresql::login::save(&home, "pg-app", "alice", "s3 cret").unwrap();
+    for words in [
+        "host=localhost dbname=layerfs_db",
+        "host=db.example port=5432 dbname=layerfs_db",
+    ] {
+        let record =
+            StoreRecord::connected("pg", words, "layerfs", "local", Some("pg-app")).in_home(&home);
+        for refusal in [
+            url(&record).unwrap_err(),
+            url_on(&record, "lab").unwrap_err(),
+        ] {
+            assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+            assert!(
+                refusal.message.contains("postgresql:// or postgres://"),
+                "{}",
+                refusal.message
+            );
+        }
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}

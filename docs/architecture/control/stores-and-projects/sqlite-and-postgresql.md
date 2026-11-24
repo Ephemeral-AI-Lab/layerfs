@@ -97,7 +97,7 @@ another operation holds the Store
 
 | Call | Does | Refusals | Source |
 | --- | --- | --- | --- |
-| `store.connect` | records the database as a Store in the fixed `layerfs` schema: URL with no user or password, schema, `synchronous_commit`, its saved login `auth`, binding, a cursor key of this home's own, no machine. On a connected Store the URL becomes the address every machine dials (`readdress`); with `--machine <m>` it is that machine's own, `machines.<m>: {url}`, checked from the side that dials (this process, or the worker's `store.reach`), and the machine's platform must run PostgreSQL Sandboxes. Both refuse `--auth` and `--synchronous-commit` | `InvalidInput`, `Exists`, `NotFound` (no such saved login), `Unavailable`, `Unsupported` (`--machine` on a platform that runs no PostgreSQL Sandbox), `Denied`, `Conflict` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `connect` |
+| `store.connect` | records the database as a Store in the fixed `layerfs` schema: URL with no user or password, schema, `synchronous_commit`, its saved login `auth`, binding, a cursor key of this home's own, no machine. On a connected Store the URL becomes the address every machine dials (`readdress`); with `--machine <m>` it is that machine's own, `machines.<m>: {url}`, checked from the side that dials (this process, or the worker's `store.reach`): the server answers, its schema holds this Store, and the role has what a Sandbox's reads and writes need (the schema's `USAGE` and `CREATE`, the database's `TEMP`, each table's and sequence's privileges; never what only a compaction needs, which `store compact` checks itself), and the machine's platform must run PostgreSQL Sandboxes. Both refuse `--auth` and `--synchronous-commit` | `InvalidInput`, `Exists`, `NotFound` (no such saved login), `Unavailable`, `Unsupported` (`--machine` on a platform that runs no PostgreSQL Sandbox), `Denied`, `Conflict` | [`connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) `connect` |
 | `store.disconnect` | forgets the Store; its data stays. With `--machine <m>`, removes that machine's own address, which then dials the Store's, and forgets its reach | `InvalidInput` for sqlite (`store remove`); `InUse` while leased or a Sandbox uses it; `NotFound` when the machine has neither an address of its own nor a reach | same |
 | `store.update <s> {auth, synchronous_commit}` | another saved login or `synchronous_commit` (one is required); a new login is checked once from this process on the Store's address, which must hold this Store, and saved again under the home lock; the write is clean (`StoreRecord::cleaned`) | `InvalidInput`; `Unavailable` (not reached, or another Store's schema); `Conflict` if the record changed meanwhile | [`update.rs`](../../../../control/crates/layerfs-store/src/postgresql/update.rs) |
 | Store calls | open the schema in this process with the URL resolved now | — | [`open.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
@@ -174,13 +174,13 @@ update as its fix
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 
-How the URL is rewritten for a machine is
+The URL is never rewritten for a machine; which URLs a machine refuses is
 [Reach](../machines/workers-and-reach.md#reach-reachrs).
 
 ## Related
 
 - [Stores and projects](README.md): records, routes and leases.
-- [Machines: workers and reach](../machines/workers-and-reach.md): `store.file`, `store.reach` and URL rewriting.
+- [Machines: workers and reach](../machines/workers-and-reach.md): `store.file`, `store.reach` and the loopback refusal.
 - [Backups](../backups/README.md): `Stage` and `Unstage` for `backup.create`.
 - [Store: SQLite](../../engine/store/sqlite.md), [Store: PostgreSQL](../../engine/store/postgresql.md): what the engine opens.
 - [API: store](../../api/sdk/store.md).

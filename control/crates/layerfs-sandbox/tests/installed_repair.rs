@@ -80,6 +80,7 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
         postgresql: None,
         message: Message::Absent,
         started: None,
+        reach_hint: None,
     };
     // the repair happens before launch; a host that can launch a daemon
     // starts one, which is removed again

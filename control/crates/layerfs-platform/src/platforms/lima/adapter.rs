@@ -4,17 +4,16 @@ use crate::adapter::Adapter;
 use crate::error::MachineError;
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, tool_version};
-use crate::reach::{dial, Loopback};
+use crate::reach::Loopback;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
-/// The address a lima guest reaches the host's loopback at (#535 §7.3): the
-/// gateway of Lima's default user-mode network, which the guest's
-/// `/etc/hosts` names `host.lima.internal`. The address, not the name: a
-/// Sandbox daemon runs in the Sandbox image's root, which has no such
-/// hosts entry (G7 live receipt, `receipts/g7-live/`).
-const HOST_ALIAS: &str = "192.168.5.2";
+/// What a lima guest calls this host (#535 §7.3): the guest's `/etc/hosts`
+/// names `host.lima.internal`, the gateway of Lima's default user-mode
+/// network (192.168.5.2, G7 live receipt). A Sandbox resolves it with its
+/// machine's hosts file, bound into its root at start.
+const HOST_NAME: &str = "host.lima.internal names this host there";
 
 pub(crate) struct Lima;
 pub(crate) static ADAPTER: Lima = Lima;
@@ -51,8 +50,8 @@ impl Adapter for Lima {
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }
-    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(spec, url, Loopback::Alias(HOST_ALIAS))
+    fn loopback(&self, _spec: &Spec) -> Loopback {
+        Loopback::Apart(HOST_NAME.to_owned())
     }
     fn forward(&self, spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
         daemon_forward(spec, guest_port)

@@ -124,7 +124,8 @@ replays. A cancel at spawn may end the command under SIGTERM (143) or SIGKILL
 ```text
  caller: on_machine / reach(record, Call)
    resolve project -> Store kind; PostgreSQL URL resolved here (password
-   included, loopback host rewritten to the machine's alias), never written
+   included, never rewritten; a loopback host the machine does not share
+   refused, no machine asked), never written
    place::on_machine(machine)
      |                                 |
  Executor::Local                  Executor::Worker

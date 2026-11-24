@@ -4,7 +4,7 @@
 //! layerfs-project#108), and spooled output streamed back as events.
 use super::deploy::{self, Side};
 use super::record::SandboxRecord;
-use crate::host::{Call, Deploy, Host, Message, Op, Sent};
+use crate::host::{Call, Deploy, Host, Message, Op, Sent, StoreUrl};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
@@ -75,6 +75,7 @@ fn host_args(
         postgresql,
         message,
         started: None,
+        reach_hint: None,
     })
 }
 
@@ -89,18 +90,22 @@ enum RunRoot {
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
 /// (#535 §7.4): the URL the machine's own connection names, else the record's,
-/// with its password, resolved here in the caller, with a loopback host
-/// rewritten to the machine's alias or refused
-/// (`layerfs_machine::platform::reach`). It travels only in the one request that runs
-/// the call and is never written to a record.
-/// With it, what a failed reach check tells a user to check on that
-/// machine's platform, if anything. `store.update` and `store.status` build their check's
-/// argument here too.
+/// with its password, resolved here in the caller and dialled as it is: a
+/// loopback host the machine does not share is refused, nothing is
+/// rewritten and no machine is asked (`layerfs_machine::platform::reach`).
+/// It travels only in the one request that runs the call and is never
+/// written to a record.
+/// With it, what a dial from that machine that made no connection adds
+/// when the machine does not share this host's loopback and the URL names
+/// a host by name (`layerfs_machine::platform::loopback_hint`): a name
+/// resolving to a loopback address there fails its one dial, never
+/// resolved here to be refused up front. `store.update` and `store.status`
+/// build their check's argument here too.
 pub fn reached(
     home: &Path,
     machine: &str,
     record: &StoreRecord,
-) -> Result<(PgSelection, Option<&'static str>)> {
+) -> Result<(PgSelection, Option<String>)> {
     let url = layerfs_store::record::url_on(record, machine)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
@@ -108,10 +113,9 @@ pub fn reached(
     let (url, hint) = {
         let spec =
             layerfs_machine::machine_spec(home, &layerfs_machine::machine_of(home, machine)?)?;
-        let hint = (spec.kind == layerfs_machine::platform::Platform::AppleContainer).then_some(
-            "an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
-        );
-        let url = layerfs_machine::platform::reach(&spec, &url)
+        let store = record.name();
+        let hint = layerfs_machine::platform::loopback_hint(&spec, store, &url);
+        let url = layerfs_machine::platform::reach(&spec, store, &url)
             .map_err(layerfs_machine::machine_refusal)?;
         (url, hint)
     };
@@ -131,9 +135,11 @@ pub fn reached(
 /// process's held host session for the Store at `key`, #65) reads the
 /// LayerFS schema's binding, which must be the Store record's, and finds
 /// `project` there. It proves the server is reached and is the same Store;
-/// a failure names the machine and the host it tried, never the URL, and
-/// adds `hint`. A build without the PostgreSQL engine says so, not that it
-/// cannot reach. A project the schema does not hold is `NoSuchProject`.
+/// a failure names the machine and the hosts it tried, never the URL, and
+/// adds `hint` when no connection was made (not when the server answered,
+/// a refused login say). A build without the PostgreSQL engine says so,
+/// not that it cannot reach. A project the schema does not hold is
+/// `NoSuchProject`.
 fn reach_check(
     who: &str,
     (store, key, project): (&StoreRecord, &Path, &str),
@@ -141,8 +147,8 @@ fn reach_check(
     hint: Option<&str>,
 ) -> Result<()> {
     let url = postgresql.url.as_deref().unwrap_or("");
-    let host = layerfs_sandbox_backend::PostgresUrl::parse(url)
-        .map(|url| url.host().to_owned())
+    let host = layerfs_sandbox_backend::url_hosts(url)
+        .map(|hosts| hosts.join(","))
         .unwrap_or_default();
     let reached = layerfs_store::postgresql::reader::reach(key, store, postgresql, project)
         .map_err(|refusal| {
@@ -157,8 +163,12 @@ fn reach_check(
                         ),
                     )
                 }
-                (_, Some(hint)) => format!("{}; {hint}", refusal.message),
-                (_, None) => refusal.message,
+                (_, Some(hint))
+                    if layerfs_store::postgresql::open::not_connected(&refusal.message) =>
+                {
+                    format!("{}; {hint}", refusal.message)
+                }
+                _ => refusal.message,
             };
             refused(
                 "Unavailable",
@@ -304,12 +314,22 @@ fn host_op(
             .map(str::to_owned),
     };
     let kind = target.store_ref.kind();
-    let (postgresql, hint) = match kind {
-        StoreKind::Postgresql => {
+    // a PostgreSQL Store's URL is resolved (and a URL the machine cannot
+    // dial refused) only for an operation that dials it; a close runs
+    // without one, reporting the mount intents it then cannot end, so a
+    // Sandbox can always be read and removed
+    let (postgresql, hint) = match (kind, op.store_url()) {
+        (StoreKind::Postgresql, StoreUrl::Dialled) => {
             let (value, hint) = reached(&home, machine, &target.record)?;
             (Some(value), hint)
         }
-        StoreKind::Sqlite => (None, None),
+        (StoreKind::Postgresql, StoreUrl::Cleanup) => {
+            match reached(&home, machine, &target.record) {
+                Ok((value, hint)) => (Some(value), hint),
+                Err(_) => (None, None),
+            }
+        }
+        _ => (None, None),
     };
     // a Sandbox's host operations run where its machine runs them, for
     // either Store kind (#535 §7.4)
@@ -362,10 +382,10 @@ fn host_op(
                     &format!("machine {machine}"),
                     (&target.record, &key, &target.project),
                     postgresql,
-                    hint,
+                    hint.as_deref(),
                 )?;
             }
-            let held = postgresql.is_some();
+            let held = kind == StoreKind::Postgresql;
             let how = deploy::resolve(&Side::Home(&home), &choice)?;
             // `sandbox.get`'s reads ask only the Sandbox's daemon
             // (layerfs-project#181): no run root is made, no Store lease
@@ -382,14 +402,17 @@ fn host_op(
                 )?;
                 return local(host, call);
             }
-            let host = host_args(
-                &home,
-                (&target.store, &target.project, &target.record),
-                (kind, postgresql),
-                how,
-                (sandbox, message),
-                RunRoot::Made,
-            )?;
+            let host = Host {
+                reach_hint: hint,
+                ..host_args(
+                    &home,
+                    (&target.store, &target.project, &target.record),
+                    (kind, postgresql),
+                    how,
+                    (sandbox, message),
+                    RunRoot::Made,
+                )?
+            };
             // the host code reads the project's Branches through its open
             // Store, which this process leases. A PostgreSQL Store opens no
             // Store service (#65): the lease covers this call, and a read
@@ -432,7 +455,7 @@ fn host_op(
                 project_record,
                 choice,
                 machine: postgresql.as_ref().map(|_| machine.to_owned()),
-                reach_hint: postgresql.as_ref().and(hint).map(str::to_owned),
+                reach_hint: postgresql.as_ref().and(hint),
                 postgresql,
             };
             let request = crate::host::encode(&sent)?;
@@ -526,15 +549,16 @@ pub fn in_worker(
     }
     layerfs_home::trace::step("records");
     let how = deploy::resolve(&Side::Worker(root), &choice)?;
-    let postgresql = match kind {
-        StoreKind::Postgresql => Some(postgresql.ok_or_else(|| {
-            refused(
-                "InvalidInput",
-                "a PostgreSQL Sandbox call carries its server's resolved postgresql value",
-            )
-        })?),
-        StoreKind::Sqlite => None,
-    };
+    // the operations that dial a PostgreSQL Store's URL carry it; the
+    // others carry none, or one for a close's cleanup ([`Op::store_url`])
+    if kind == StoreKind::Postgresql && op.store_url() == StoreUrl::Dialled && postgresql.is_none()
+    {
+        return Err(refused(
+            "InvalidInput",
+            "a PostgreSQL Sandbox call carries its server's resolved postgresql value",
+        ));
+    }
+    let postgresql = postgresql.filter(|_| kind == StoreKind::Postgresql);
     let key = store_path(root, store, &record, kind);
     if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
         let who = match &machine {
@@ -548,15 +572,18 @@ pub fn in_worker(
             reach_hint.as_deref(),
         )?;
     }
-    let held = postgresql.is_some();
-    let host = host_args(
-        root,
-        (store, project, &record),
-        (kind, postgresql),
-        how,
-        (sandbox, message),
-        RunRoot::Made,
-    )?;
+    let held = kind == StoreKind::Postgresql;
+    let host = Host {
+        reach_hint,
+        ..host_args(
+            root,
+            (store, project, &record),
+            (kind, postgresql),
+            how,
+            (sandbox, message),
+            RunRoot::Made,
+        )?
+    };
     layerfs_home::trace::step("host_args");
     // a PostgreSQL Store opens no Store service here (#65); its reads run
     // on the held read session

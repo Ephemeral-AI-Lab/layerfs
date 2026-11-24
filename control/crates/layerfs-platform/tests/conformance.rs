@@ -11,9 +11,10 @@
 //!   runs through the
 //!   platform's provider tool (here, its stand-in) or is refused before any
 //!   effect with the fixed refusal its `How` declares;
-//! - `reach` against the §7.3 rules: a loopback host is shared or rewritten
-//!   to the platform's alias; a rewrite is refused for
-//!   `sslmode=verify-full`; every other host is dialled as given; no error
+//! - `reach` against the §7.3 rules (owner, 2026-11-24): every URL is
+//!   dialled exactly as given, never rewritten, and no provider tool runs;
+//!   a loopback host the machine does not share is refused, naming the
+//!   machine's name for this host and `store connect --machine`; no error
 //!   text or `Debug` holds the password;
 //! - `forward` (#535 G4): a daemon's port is used as it is, carried by a
 //!   detached `ssh -L 127.0.0.1:<free port>:127.0.0.1:<guest port>` that
@@ -353,20 +354,21 @@ const SECRET: &str = "kit-s3cr3t";
 enum Loopback {
     /// The daemon shares it: the URL is used as given.
     Shared,
-    /// A loopback host becomes this host name or address.
-    Alias(String),
+    /// The daemon does not: a loopback URL is refused, naming this, what
+    /// the machine calls this host.
+    Apart(&'static str),
 }
 
 fn loopback(spec: &Spec) -> Loopback {
     match spec.kind {
         Platform::Native => Loopback::Shared,
         // a Linux Engine's worker shares the host's network; Docker
-        // Desktop's resolves `host.docker.internal` (`reach_spec`; D-8)
+        // Desktop's resolves `host.docker.internal` (D-8)
         Platform::Docker if cfg!(target_os = "linux") => Loopback::Shared,
-        Platform::Docker => Loopback::Alias("192.168.65.254".into()),
-        Platform::Lima => Loopback::Alias("192.168.5.2".into()),
-        // the gateway the stand-in `container inspect` reports (`reach_spec`)
-        Platform::AppleContainer => Loopback::Alias("192.168.64.1".into()),
+        Platform::Docker => Loopback::Apart("host.docker.internal"),
+        Platform::Lima => Loopback::Apart("host.lima.internal"),
+        // no name: the gateway its start recorded, else vmnet's default
+        Platform::AppleContainer => Loopback::Apart("192.168.64.1"),
     }
 }
 
@@ -380,11 +382,13 @@ fn with_host(host: &str, query: &str) -> [String; 3] {
 }
 
 /// The same three URLs with each loopback host spelled differently.
-fn loopback_urls(query: &str) -> [String; 3] {
+fn loopback_urls(query: &str) -> [String; 5] {
     let [a, _, _] = with_host("127.0.0.1", query);
     let [_, b, _] = with_host("localhost", query);
     let [_, _, c] = with_host("[::1]", query);
-    [a, b, c]
+    let [d, _, _] = with_host("127.0.0.2", query);
+    let [_, e, _] = with_host("[::ffff:127.0.0.1]", query);
+    [a, b, c, d, e]
 }
 
 /// A refusal: its code and message; no part of the password in either its
@@ -402,19 +406,11 @@ fn refused(platform: Platform, outcome: Result<String, MachineError>) -> (Code, 
     (error.code, error.message)
 }
 
-/// Each platform's spec for `reach`, its stand-in tools answering.
+/// Each platform's spec for `reach`; every provider tool is a stand-in
+/// that logs its call and fails, so a call shows in the log.
 fn reach_spec(scratch: &Scratch, platform: Platform) -> Spec {
-    if platform == Platform::AppleContainer {
-        scratch.tool(
-            "container",
-            r#"echo '[{"status":{"state":"running","networks":[{"ipv4Gateway":"192.168.64.1"}]}}]'"#,
-        );
-    }
-    if platform == Platform::Docker {
-        scratch.tool(
-            "docker",
-            r#"printf '192.168.65.254  host.docker.internal\n'"#,
-        );
+    for tool in ["docker", "container", "limactl"] {
+        scratch.tool(tool, "exit 1");
     }
     valid_spec(scratch, platform)
 }
@@ -428,82 +424,111 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
             "the {} machine dev cannot reach the PostgreSQL Store's server: ",
             platform.name()
         );
-        for query in ["", "?sslmode=disable", "?sslmode=verify-ca"] {
-            for (i, url) in loopback_urls(query).iter().enumerate() {
-                let outcome = machine::reach(&spec, url);
+        for query in [
+            "",
+            "?sslmode=disable",
+            "?sslmode=verify-ca",
+            "?sslmode=verify-full",
+        ] {
+            for url in loopback_urls(query) {
+                let outcome = machine::reach(&spec, "pg", &url);
                 match loopback(&spec) {
-                    Loopback::Shared => assert_eq!(outcome.as_ref(), Ok(url)),
-                    Loopback::Alias(alias) => assert_eq!(
-                        outcome,
-                        Ok(with_host(&alias, query)[i].clone()),
-                        "{platform:?}"
-                    ),
-                }
-            }
-        }
-        // the server's certificate names the loopback host, not an alias
-        for url in loopback_urls("?sslmode=verify-full") {
-            let outcome = machine::reach(&spec, &url);
-            match loopback(&spec) {
-                Loopback::Shared => assert_eq!(outcome, Ok(url)),
-                Loopback::Alias(_) => {
-                    let (code, message) = refused(platform, outcome);
-                    assert_eq!(code, Code::Unsupported, "{message}");
-                    assert!(message.starts_with(&prefix), "{message}");
-                    assert!(message.contains("sslmode=verify-full"), "{message}");
+                    Loopback::Shared => assert_eq!(outcome, Ok(url)),
+                    Loopback::Apart(name) => {
+                        let (code, message) = refused(platform, outcome);
+                        assert_eq!(code, Code::Unsupported, "{message}");
+                        assert!(message.starts_with(&prefix), "{message}");
+                        assert!(message.contains("loopback"), "{message}");
+                        assert!(message.contains(name), "{message}");
+                        assert!(
+                            message.contains("layerfs store connect pg <url> --machine dev"),
+                            "{message}"
+                        );
+                    }
                 }
             }
         }
     }
+    assert_eq!(scratch.log(), "", "reach runs no provider tool");
 }
 
 #[test]
 fn every_other_server_is_dialled_as_given_on_every_platform() {
     let scratch = Scratch::new("kit-reach-remote");
     let urls = [
+        // nothing is rewritten, so a certificate's name is never lost
         format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs?sslmode=verify-full"),
+        format!("postgres://lfs:{SECRET}@host.docker.internal:5432/layerfs?sslmode=verify-full"),
+        format!("postgresql://lfs:{SECRET}@host.lima.internal/layerfs"),
         format!("postgresql://lfs:{SECRET}@10.0.0.5/layerfs"),
         "postgres://[2001:db8::1]:5432/layerfs".to_owned(),
-        // only the three loopback names are rewritten
-        "postgres://u@127.0.0.2/db".to_owned(),
+        format!("postgres://lfs:{SECRET}@h1:5432,h2:5433/db"),
+        format!("postgres://lfs:{SECRET}@db/layerfs?hostaddr=10.0.0.5"),
+        format!("postgres://lfs:{SECRET}@h1:5432,h2/db"),
     ];
     for platform in Platform::ALL {
         let spec = reach_spec(&scratch, platform);
         for url in &urls {
-            assert_eq!(machine::reach(&spec, url).as_ref(), Ok(url), "{platform:?}");
+            assert_eq!(
+                machine::reach(&spec, "pg", url).as_ref(),
+                Ok(url),
+                "{platform:?}"
+            );
         }
     }
+    assert_eq!(scratch.log(), "", "reach runs no provider tool");
 }
 
 #[test]
-fn a_url_reach_cannot_rewrite_is_refused_unless_the_loopback_is_shared() {
+fn a_url_reach_cannot_check_is_refused_unless_the_loopback_is_shared() {
     let scratch = Scratch::new("kit-reach-unread");
     let cases = [
+        // libpq's key=value words are no Store URL (`secrets::parts`
+        // refuses them before reach): not read
         (
             format!("host=localhost user=lfs password={SECRET}"),
             Code::InvalidInput,
         ),
-        (
-            format!("postgres://lfs:{SECRET}@h1:5432,h2:5433/db"),
-            Code::InvalidInput,
-        ),
+        (format!("localhost {SECRET}"), Code::InvalidInput),
         (
             format!("postgres://lfs:{SECRET}@/layerfs"),
             Code::Unsupported,
         ),
         (
+            format!("dbname=layerfs password={SECRET}"),
+            Code::InvalidInput,
+        ),
+        (
             format!("postgres:///layerfs?host=/var/run/postgresql&password={SECRET}"),
             Code::Unsupported,
         ),
+        // a loopback host in a parameter or a host list is refused too
         (
             format!("postgres://lfs:{SECRET}@db/layerfs?hostaddr=127.0.0.1"),
+            Code::Unsupported,
+        ),
+        (
+            format!("postgres://lfs:{SECRET}@h1:5432,localhost:5433/db"),
+            Code::Unsupported,
+        ),
+        // read as the client reads it: percent-decoded, the list split first
+        (
+            format!("postgres://lfs:{SECRET}@%6Cocalhost/db"),
+            Code::Unsupported,
+        ),
+        (
+            format!("postgres://lfs:{SECRET}@[::1]:5432,h2/db"),
+            Code::Unsupported,
+        ),
+        (
+            format!("postgres://lfs:{SECRET}@db/x?h%6Fst=127.1"),
             Code::Unsupported,
         ),
     ];
     for platform in Platform::ALL {
         let spec = reach_spec(&scratch, platform);
         for (url, code) in &cases {
-            let outcome = machine::reach(&spec, url);
+            let outcome = machine::reach(&spec, "pg", url);
             if matches!(loopback(&spec), Loopback::Shared) {
                 assert_eq!(outcome.as_ref(), Ok(url), "{platform:?}");
             } else {
@@ -512,6 +537,7 @@ fn a_url_reach_cannot_rewrite_is_refused_unless_the_loopback_is_shared() {
             }
         }
     }
+    assert_eq!(scratch.log(), "", "reach runs no provider tool");
 }
 
 // ---------------------------------------------------------------------------

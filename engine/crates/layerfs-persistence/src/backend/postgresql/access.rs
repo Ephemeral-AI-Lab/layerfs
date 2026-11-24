@@ -1,8 +1,10 @@
 //! What a role may do in a Store's schema, for the check of a
 //! machine's connection and for a PostgreSQL compaction's preflight: the
 //! server's version, one round trip's latency, the role, and each privilege
-//! the Store's writes and compaction need that it lacks. One connection
-//! opened for the call and closed after it, read-only queries only, no retry.
+//! it lacks that a Sandbox's reads and writes need ([`access`]) or that a
+//! compaction needs ([`compaction_missing`], which a compaction checks for
+//! itself). One connection opened for the call and closed after it,
+//! read-only queries only, no retry.
 use crate::backend::postgresql::session::connection::{Connector, Session};
 use crate::backend::postgresql::status::PostgresStatusError;
 use crate::backend::records::{BackendError, Param};
@@ -21,27 +23,24 @@ pub struct PostgresAccess {
     pub role: String,
     /// Whether the database has the schema.
     pub schema: bool,
-    /// Each privilege the role lacks, as `<privilege> on <object>`, in a
-    /// fixed order: the schema's `USAGE` and `CREATE`, the database's
-    /// `CREATE` and `TEMP`, `pg_read_all_stats`, then each table's `SELECT`,
-    /// `INSERT`, `UPDATE`, `DELETE` and each sequence's `USAGE`. Empty when
-    /// the role has them all (or there is no schema).
+    /// Each privilege a Sandbox's reads and writes need that the role
+    /// lacks, as `<privilege> on <object>`, in a fixed order: the schema's
+    /// `USAGE` and `CREATE`, the database's `TEMP`, then each table's
+    /// `SELECT`, `INSERT`, `UPDATE`, `DELETE` and each sequence's `USAGE`.
+    /// Empty when the role has them all (or there is no schema). What only
+    /// a compaction needs (`CREATE` on the database, `pg_read_all_stats`)
+    /// is not asked here: a compaction checks it before it starts.
     pub missing: Vec<String>,
 }
 
-/// The role, the schema's `USAGE` and `CREATE` (NULL without the schema), the
-/// database's `CREATE` (a compaction creates the `lfs_gc_<hex>` scratch
-/// schema) and `TEMP` (a merge stages in temporary tables, and a compaction
-/// reads its visited set from them), and `pg_read_all_stats` (a compaction
-/// reads another backend's `pg_stat_activity` row).
+/// The role, the schema's `USAGE` and `CREATE` (NULL without the schema) and
+/// the database's `TEMP` (a merge stages in temporary tables).
 const ROLE: &str = "SELECT current_user::text, \
      CASE WHEN EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = $1::text) \
      THEN has_schema_privilege($1::text, 'USAGE') END, \
      CASE WHEN EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = $1::text) \
      THEN has_schema_privilege($1::text, 'CREATE') END, \
-     has_database_privilege(current_database(), 'CREATE'), \
-     has_database_privilege(current_database(), 'TEMP'), \
-     pg_has_role('pg_read_all_stats', 'MEMBER')";
+     has_database_privilege(current_database(), 'TEMP')";
 
 /// Each table and sequence privilege of the schema the role lacks.
 const MISSING: &str = "SELECT p.privilege || ' on ' || $1::text || '.' || c.relname \
@@ -129,9 +128,7 @@ pub fn access(url: &str, schema: &str) -> Result<PostgresAccess, PostgresStatusE
     let role: String = row.try_get(0).map_err(failed)?;
     let usage: Option<bool> = row.try_get(1).map_err(failed)?;
     let create_schema: Option<bool> = row.try_get(2).map_err(failed)?;
-    let create_database: bool = row.try_get(3).map_err(failed)?;
-    let temp: bool = row.try_get(4).map_err(failed)?;
-    let read_all_stats: bool = row.try_get(5).map_err(failed)?;
+    let temp: bool = row.try_get(3).map_err(failed)?;
     let mut missing = Vec::new();
     if usage == Some(false) {
         missing.push(format!("USAGE on schema {schema}"));
@@ -139,14 +136,8 @@ pub fn access(url: &str, schema: &str) -> Result<PostgresAccess, PostgresStatusE
     if create_schema == Some(false) {
         missing.push(format!("CREATE on schema {schema}"));
     }
-    if !create_database {
-        missing.push("CREATE on the database".to_owned());
-    }
     if !temp {
         missing.push("TEMP on the database".to_owned());
-    }
-    if !read_all_stats {
-        missing.push("pg_read_all_stats".to_owned());
     }
     if usage == Some(true) {
         for row in client.query(MISSING, &[&schema]).map_err(failed)? {

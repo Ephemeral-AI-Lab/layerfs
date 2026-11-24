@@ -1,11 +1,10 @@
 //! `apple-container`'s adapter.
-use super::observe::gateway;
 use super::{create, guest, remove, start, status, stop};
 use crate::adapter::Adapter;
 use crate::error::{Code, MachineError};
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, tool_version};
-use crate::reach::{dial, Loopback};
+use crate::reach::Loopback;
 use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
@@ -54,16 +53,19 @@ impl Adapter for AppleContainer {
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }
-    /// A loopback URL becomes the container network's gateway (G7 receipt):
-    /// the one its last start recorded (#66), else read from the machine
-    /// (a record from before #66, or a start that could not read it). A
-    /// recorded gateway that went stale is dialled as recorded and fails
-    /// there, explicitly; nothing looks it up again.
-    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        match spec.state.gateway {
-            Some(recorded) => dial(spec, url, Loopback::Alias(&recorded.to_string())),
-            None => dial(spec, url, Loopback::Lookup(&|| gateway(spec))),
-        }
+    /// The guest has no name for this host: it reaches it at the container
+    /// network's gateway (G7 receipt), the one its last start recorded
+    /// (#66) when there is one, on which the server must listen (0.0.0.0,
+    /// as Docker Desktop publishes a port), not on 127.0.0.1 alone.
+    fn loopback(&self, spec: &Spec) -> Loopback {
+        let gateway = match spec.state.gateway {
+            Some(recorded) => recorded.to_string(),
+            None => "the container network's gateway, 192.168.64.1 on vmnet's default network"
+                .to_owned(),
+        };
+        Loopback::Apart(format!(
+            "{gateway}, on which the server must listen, not on 127.0.0.1 alone; the machine has no name for this host"
+        ))
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
         Err(refuse(spec, Code::Unsupported, FORWARD))

@@ -5,7 +5,9 @@
 //! machine's entry is forgotten; `connections` lists every side that
 //! connects; an old record reads `outdated` and a clean write drops its old
 //! fields; a missing login reads `missing`; `store auths` lists a login
-//! file it cannot read as a broken row.
+//! file it cannot read as a broken row. A failed check is `not_connected`
+//! (the one case a machine's loopback hint is added) only when no server
+//! answered.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, observed, paths, write_entity};
 use layerfs_home::state::{Reason, State};
@@ -313,4 +315,59 @@ fn a_login_file_that_cannot_be_read_is_a_broken_row() {
         Some("layerfs store save-auth bad --user <user> --password-stdin")
     );
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The words of a check that failed `url`.
+fn failed_check(url: &str) -> String {
+    match layerfs_persistence::postgresql_access(url, "layerfs") {
+        Ok(_) => panic!("the check of {url} passed"),
+        Err(error) => error.to_string(),
+    }
+}
+
+/// `not_connected` holds for what a dial no server answered says: nothing
+/// listening, a name that does not resolve, the session's own words for
+/// both. A server that answered (a missing database, a setting it refused)
+/// was reached, so no loopback hint applies.
+#[test]
+fn only_a_dial_no_server_answered_is_not_connected() {
+    use layerfs_store::postgresql::open::not_connected;
+    let refused = failed_check("postgres://lfs@127.0.0.1:1/db?connect_timeout=5");
+    assert!(not_connected(&refused), "{refused}");
+    let unresolved =
+        failed_check("postgres://lfs@layerfs-no-such-host.invalid/db?connect_timeout=5");
+    assert!(not_connected(&unresolved), "{unresolved}");
+    assert!(not_connected(
+        "no connection to the server was made (it refused the connection, did not answer, or closed it)"
+    ));
+    assert!(!not_connected(
+        "the server refused the session: the database does not exist, or the user or password is wrong"
+    ));
+    let Some(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL").ok() else {
+        eprintln!("NOT_RUN (server half): LAYERFS_TEST_POSTGRES_URL is unset");
+        return;
+    };
+    // the test URL is a postgres:// URL or key=value words
+    let (setting, database) = match url.split_once("://") {
+        Some(_) => {
+            let and = if url.contains('?') { "&" } else { "?" };
+            (
+                format!("{url}{and}options=-c%20no_such_setting%3D1"),
+                format!("{url}{and}dbname=layerfs_no_such_db"),
+            )
+        }
+        None => (
+            format!("{url} options='-c no_such_setting=1'"),
+            format!("{url} dbname=layerfs_no_such_db"),
+        ),
+    };
+    for answered in [
+        // a setting the server refuses at login
+        failed_check(&setting),
+        // a database the server does not hold
+        failed_check(&database),
+    ] {
+        assert!(answered.contains("db error"), "{answered}");
+        assert!(!not_connected(&answered), "{answered}");
+    }
 }
