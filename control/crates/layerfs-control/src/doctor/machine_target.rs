@@ -24,6 +24,7 @@
 //! is blocked), else what blocks the things on it (the frame's `blocked_by`
 //! reason), or `Err(None)` when a check gave no verdict.
 use super::target::{Budget, Checks};
+use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::shell_word;
 use std::path::Path;
@@ -39,16 +40,31 @@ pub(super) fn diagnose(
         Ok(Some(_)) => checks.pass("machine.record", "its record reads"),
         Ok(None) => {
             checks.fail("machine.record", "it has no record");
+            // no fix: the platform to create it with is a choice
+            checks.evidence(
+                "machine.record",
+                SdkValue::map([("record", SdkValue::text("absent"))]),
+            );
             return Err(Some("missing"));
         }
         Err(refusal) => {
             checks.fail("machine.record", refusal.message);
+            // no fix: see the build with adapters
+            checks.evidence(
+                "machine.record",
+                SdkValue::map([("code", SdkValue::text(&refusal.code))]),
+            );
             return Err(Some("failed"));
         }
     }
     checks.fail(
         "machine.configuration",
         "this build has no machine adapters: no request can be made to its provider",
+    );
+    // no fix: another build is needed
+    checks.evidence(
+        "machine.configuration",
+        SdkValue::map([("adapters", SdkValue::Bool(false))]),
     );
     Err(None)
 }
@@ -116,6 +132,7 @@ fn record(
     use layerfs_home::home;
     use layerfs_machine::record::MachineRecord;
     const ID: &str = "machine.record";
+    let file = home::paths::machine_record(home, name);
     // a built-in machine with no record yet is the one its first write makes
     let mut written = true;
     let record = match MachineRecord::read(home, name) {
@@ -127,15 +144,34 @@ fn record(
             }
             Err(refusal) => {
                 checks.fail(ID, refusal.message);
+                // no fix: the home's own file is the problem (`home.layout`)
+                checks.evidence(ID, SdkValue::map([("code", SdkValue::text(&refusal.code))]));
                 return Err("failed");
             }
         },
         Ok(None) => {
             checks.fail(ID, "it has no record");
+            // no fix: `machine create` needs a platform
+            checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("record", SdkValue::text("absent")),
+                    ("built_in", SdkValue::Bool(false)),
+                ]),
+            );
             return Err("missing");
         }
         Err(refusal) => {
             checks.fail(ID, refusal.message);
+            // no fix: `machine remove` reads the record too and refuses the
+            // same error
+            checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("code", SdkValue::text(&refusal.code)),
+                    ("path", SdkValue::text(file.display().to_string())),
+                ]),
+            );
             return Err("failed");
         }
     };
@@ -148,6 +184,17 @@ fn record(
             ID,
             "its record is not valid: its version, name, state, operation or sizes",
         );
+        checks.fix(
+            ID,
+            format!("layerfs machine remove {name}", name = shell_word(name)),
+        );
+        checks.evidence(
+            ID,
+            SdkValue::map([
+                ("problem", SdkValue::text("invalid")),
+                ("path", SdkValue::text(file.display().to_string())),
+            ]),
+        );
         return Err("failed");
     }
     let kind = match record.platform() {
@@ -158,10 +205,19 @@ fn record(
                 ID,
                 format!("layerfs machine remove {name}", name = shell_word(name)),
             );
+            checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("platform", SdkValue::opt_text(record.text("platform"))),
+                    ("code", SdkValue::text(&refusal.code)),
+                ]),
+            );
             return Err("unsupported");
         }
         Err(refusal) => {
             checks.fail(ID, refusal.message);
+            // no fix: `machine remove` refuses a platform it does not know
+            checks.evidence(ID, SdkValue::map([("code", SdkValue::text(&refusal.code))]));
             return Err("failed");
         }
     };
@@ -299,9 +355,17 @@ impl Machine<'_> {
                     }
                 }
                 self.checks.fail(ID, refusal.message);
+                // no fix when its refusal names none
                 if let Some(fix) = fix {
                     self.checks.fix(ID, fix);
                 }
+                self.checks.evidence(
+                    ID,
+                    SdkValue::map([
+                        ("code", SdkValue::text(&refusal.code)),
+                        ("nameless", SdkValue::Bool(record.nameless())),
+                    ]),
+                );
                 // what is on it is blocked for the reason its state says
                 match record.nameless() {
                     true => Err(Some("outdated")),
@@ -338,6 +402,8 @@ impl Machine<'_> {
             Ok(status) => status,
             Err(error) if error.code == Code::Unsupported => {
                 self.checks.fail(ID, error.message);
+                // no fix: the platform runs on another host
+                self.checks.evidence(ID, provider_failed(error.code, &spec));
                 return Err(Some("unsupported"));
             }
             Err(error) if self.budget.expired() || error.code == Code::Unknown => {
@@ -349,6 +415,8 @@ impl Machine<'_> {
             }
             Err(error) => {
                 self.checks.fail(ID, error.message);
+                // no fix: no single cause; the provider's words are the message
+                self.checks.evidence(ID, provider_failed(error.code, &spec));
                 return Err(Some("failed"));
             }
         };
@@ -456,6 +524,13 @@ impl Machine<'_> {
                     name = shell_word(name)
                 ),
             );
+            self.checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("recorded", SdkValue::text(said)),
+                    ("observed", SdkValue::text(seen)),
+                ]),
+            );
         }
     }
 
@@ -485,6 +560,7 @@ impl Machine<'_> {
                     "machine.worker.endpoint",
                     "it runs, and no worker endpoint and secret are saved for it",
                     &start,
+                    saved("absent"),
                 );
                 return Err(Some("not_answering"));
             }
@@ -493,6 +569,7 @@ impl Machine<'_> {
                     "machine.worker.endpoint",
                     "its saved worker endpoint does not read",
                     &start,
+                    saved("unreadable"),
                 );
                 return Err(Some("not_answering"));
             }
@@ -515,10 +592,12 @@ impl Machine<'_> {
                 if matches!(error.code.as_str(), "Timeout" | "Unavailable") {
                     // a start is refused over a running machine's silent worker
                     let message = format!("its worker does not answer: {}", error.message);
-                    self.failed("machine.worker.auth", &message, &replace);
+                    let evidence = code_of(&error.code);
+                    self.failed("machine.worker.auth", &message, &replace, evidence);
                 } else {
                     let message = format!("its worker refused the saved secret ({})", error.code);
-                    self.failed("machine.worker.auth", &message, &replace);
+                    let evidence = code_of(&error.code);
+                    self.failed("machine.worker.auth", &message, &replace, evidence);
                 }
                 return Err(Some("not_answering"));
             }
@@ -535,9 +614,8 @@ impl Machine<'_> {
                 1 => "worker is from another build; 1 Sandbox is on it".to_owned(),
                 n => format!("worker is from another build; {n} Sandboxes are on it"),
             };
-            self.failed("machine.worker.compatibility", &message, &replace);
-            self.checks
-                .evidence("machine.worker.compatibility", worker.hello.to_sdk());
+            let evidence = worker.hello.to_sdk();
+            self.failed("machine.worker.compatibility", &message, &replace, evidence);
             return Err(Some("outdated"));
         }
         self.checks.pass(
@@ -607,11 +685,18 @@ impl Machine<'_> {
                 self.checks.evidence(ID, value);
                 Ok(free.or(pinged))
             }
-            Ok(_) => {
+            Ok(value) => {
+                let said = |key| {
+                    let text = value.get_text(key);
+                    SdkValue::opt_text(text.map(|t| t.chars().take(64).collect::<String>()))
+                };
+                let evidence =
+                    SdkValue::map([("kind", said("kind")), ("version", said("version"))]);
                 self.failed(
                     ID,
                     "its worker's answer names another process or build",
                     replace,
+                    evidence,
                 );
                 Err(Some("outdated"))
             }
@@ -624,7 +709,7 @@ impl Machine<'_> {
             }
             Err(error) => {
                 let message = format!("its worker refused a request ({})", error.code);
-                self.failed(ID, &message, start);
+                self.failed(ID, &message, start, code_of(&error.code));
                 Err(Some("not_answering"))
             }
         }
@@ -660,11 +745,40 @@ impl Machine<'_> {
         }
     }
 
-    /// An error on check `id` with `fix`.
-    fn failed(&mut self, id: &str, message: &str, fix: &str) {
+    /// An error on check `id` with `fix` and `evidence`.
+    fn failed(&mut self, id: &str, message: &str, fix: &str, evidence: SdkValue) {
         self.checks.fail(id, message);
         self.checks.fix(id, fix);
+        self.checks.evidence(id, evidence);
     }
+}
+
+/// The evidence of a worker endpoint that cannot be used: it is `absent` or
+/// `unreadable`.
+#[cfg(feature = "machine")]
+fn saved(word: &str) -> SdkValue {
+    SdkValue::map([("saved", SdkValue::text(word))])
+}
+
+/// The evidence of a worker's answer that names `code`, a word of the
+/// worker protocol.
+#[cfg(feature = "machine")]
+fn code_of(code: &str) -> SdkValue {
+    let code: String = code.chars().take(64).collect();
+    SdkValue::map([("code", SdkValue::text(code))])
+}
+
+/// The evidence of a provider that failed: its error code and the VM or
+/// container asked.
+#[cfg(feature = "machine")]
+fn provider_failed(
+    code: layerfs_machine::platform::Code,
+    spec: &layerfs_machine::platform::Spec,
+) -> SdkValue {
+    SdkValue::map([
+        ("code", SdkValue::text(code.as_str())),
+        ("runtime", SdkValue::text(&spec.vm_name)),
+    ])
 }
 
 #[cfg(feature = "machine")]
