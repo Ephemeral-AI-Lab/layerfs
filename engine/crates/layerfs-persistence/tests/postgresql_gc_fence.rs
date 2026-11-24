@@ -71,14 +71,14 @@ fn init(stack: layerfs_history::LayerStackId, tag: u8) -> GcIntent {
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
 
-fn merge(stack: layerfs_history::LayerStackId, tag: u8) -> GcIntent {
+fn merge(stack: layerfs_history::LayerStackId, branch: &str, tag: u8) -> GcIntent {
     GcIntent::shared(
         op(tag),
         GcIntentKind::Merge,
         GcScopeKind::Project,
         stack.as_slice(),
     )
-    .named(Some("proj"), Some("merged"))
+    .named(Some("proj"), Some(branch))
     .with_phase(Some("merge"))
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
@@ -436,7 +436,10 @@ fn init_and_merge_are_project_holders() {
     assert_eq!(state.phase.as_deref(), Some("init"));
     handles.history.gc_release(&op(5)).unwrap();
 
-    handles.history.gc_register(&merge(project_id, 7)).unwrap();
+    handles
+        .history
+        .gc_register(&merge(project_id, "merged", 7))
+        .unwrap();
     let refusal = handles
         .history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
@@ -452,6 +455,37 @@ fn init_and_merge_are_project_holders() {
         .history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
         .unwrap();
+}
+
+/// #776 G3 on PostgreSQL: merges into different Branches share the project;
+/// a second merge into the same Branch and an Init stay `Busy`.
+#[test]
+fn merges_into_different_branches_share_the_project() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "admission_merges");
+    let binding = binding("admission_merges");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, _branch, _genesis) = project(&handles.history, 1);
+    let history = &handles.history;
+
+    history.gc_register(&merge(project_id, "a", 9)).unwrap();
+    history
+        .gc_register(&merge(project_id, "b", 10))
+        .expect("a merge into another Branch shares the project");
+    let refusal = history
+        .gc_register(&merge(project_id, "a", 11))
+        .unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("a second merge into the same Branch is Busy: {refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Merge);
+    let refusal = history.gc_register(&init(project_id, 12)).unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("an Init during a live merge is Busy: {refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Merge);
+    history.gc_release(&op(9)).unwrap();
+    history.gc_release(&op(10)).unwrap();
 }
 
 #[test]

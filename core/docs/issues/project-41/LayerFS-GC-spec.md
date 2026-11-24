@@ -477,6 +477,13 @@ malformed one decodes as no token: missing evidence is no proof, never death
   its marker or op row, and commits. A live mount → `MountsActive`; a live
   operation → `Busy`; a provably dead, uncertain op → `Unresolved`; a
   provably dead, certain op is adopted or ignored per its `kind`.
+- A merge registers at project scope so mounts, removals and compaction in
+  the project see it. Two merges conflict only when they name the same target
+  Branch; merges into different Branches share the project, since each
+  publishes under the epoch fence with a compare-and-set on its target head
+  (`HeadMoved`) or name (`NameTaken`) (#776 G3). A merge registration leaves
+  another Branch's merge row out before settling, so a dead one is settled by
+  the next mount, removal or compaction.
 - **Place authority.** The owner evidence applies first, exactly as without
   place evidence: an owner this process proves gone (another boot of a local
   Store, a vanished or reused pid in this namespace) is dead. Evidence the
