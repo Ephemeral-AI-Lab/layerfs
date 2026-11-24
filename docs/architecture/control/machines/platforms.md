@@ -43,8 +43,21 @@ prepared one exists and records none
 
 ## native (`platforms/native/`)
 
-The host itself: one per home, never created or removed. On macOS and
-Linux, Store calls run in the caller's process and there is no worker.
+Sandboxes on the host's own OS, with no VM: one per home, never created or
+removed. `native` is a machine, not the host: this computer is the control
+process (the home, records, secrets and the near end of a transfer), and
+nothing about it is written as `native`. What is special about `native`
+comes from its platform on the host, never from its name: its executor is
+`Local` on macOS and Linux (Store calls in the caller's process, no worker)
+and `Worker` on Windows; its loopback is shared (`Loopback::Shared`); no
+provider holds it (`Platform::provided` is false: no tool, no `vm_name`,
+never stopped or missing, always `ready`). Behaviour asks those facts
+(`layerfs_machine::runs_here`, `in_process`, `provided`); the name maps to
+the platform only in [`local.rs`](../../../../control/crates/layerfs-machine/src/local.rs)
+and the built-in names. On a host where no machine's calls run in this
+process (Windows), the rules that need one (a sqlite Store's default
+machine, `store move`, `backup restore`) refuse `Unsupported` and choose no
+other machine.
 
 | Call | Answer |
 | --- | --- |

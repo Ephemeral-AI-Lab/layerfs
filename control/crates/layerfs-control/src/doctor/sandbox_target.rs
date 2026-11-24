@@ -37,8 +37,8 @@ pub(crate) use remote::worker_diagnose;
 enum Route {
     /// No live check was made.
     None,
-    /// Directly, on this computer.
-    Native,
+    /// Directly from this process: its machine's calls run here.
+    Local,
     /// Through its saved forward.
     Forward,
     /// Through its machine's worker, which makes the live checks.
@@ -234,13 +234,13 @@ fn diagnose(
             local(home, &record, probe.budget, checks, true, seen);
         }
         Route::Forward
-    } else if record.machine() == "native" {
+    } else if layerfs_machine::runs_here(home, record.machine()).unwrap_or(false) {
         checks.pass(
             "sandbox.route",
             "its daemon runs on this computer and is dialled directly",
         );
         local(home, &record, probe.budget, checks, false, seen);
-        Route::Native
+        Route::Local
     } else {
         remote::remote(home, &record, probe.budget, checks, seen);
         Route::Worker
@@ -298,7 +298,7 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
             MACHINE,
             format!("its machine `{machine}` is not a machine name"),
         );
-    } else if matches!(machine, "native" | "docker") {
+    } else if layerfs_home::names::BUILT_IN.contains(&machine) {
         checks.pass(MACHINE, "its machine is built in");
     } else if readable(&paths::machine_record(home, machine)).is_some() {
         checks.pass(MACHINE, format!("its machine {machine} has a record"));

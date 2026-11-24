@@ -86,7 +86,8 @@ pub fn leftover(record: &StoreRecord) -> Option<Leftover> {
         // written its first piece there: a push whose process died certain at
         // `send` or `verify` left that partial copy with nothing else naming
         // its machine
-        let staged = op.uncertain() || (from == NATIVE && matches!(op.phase(), "send" | "verify"));
+        let push = here() == Some(from.as_str());
+        let staged = op.uncertain() || (push && matches!(op.phase(), "send" | "verify"));
         let on = match machine {
             _ if machine == to => Some(from.clone()),
             _ if machine == from && staged => Some(to.clone()),
@@ -121,16 +122,17 @@ fn unretired(record: &StoreRecord, machine: &str) -> Option<Leftover> {
 /// partial copy on its target and dropped the intent that named it
 /// ([`note_incoming`] kept the machine in the record).
 fn partial(record: &StoreRecord, machine: &str) -> Option<Leftover> {
-    let on = partial_on(record)?;
+    let (on, from) = (partial_on(record)?, here()?);
     (on != machine).then(|| Leftover {
         call: intent::MOVE.to_owned(),
-        from: NATIVE.to_owned(),
+        from: from.to_owned(),
         to: on.clone(),
         on,
     })
 }
 
-/// The machine a move from `native` may have left a partial copy
+/// The machine a move from the machine whose calls run in this process
+/// ([`here`]) may have left a partial copy
 /// (`store.sqlite.incoming`) on: its target, read from the move's intent while
 /// the record holds one (from `send` on the target has a piece; `install` and
 /// later leave a whole file, which `stat` reports no partial copy of), else
@@ -139,7 +141,7 @@ pub fn partial_on(record: &StoreRecord) -> Option<String> {
     let sent = record
         .op()
         .filter(|op| intent::is_move(op.name()))
-        .filter(|op| op.args().get_text("from") == Some(NATIVE))
+        .filter(|op| here().is_some_and(|here| op.args().get_text("from") == Some(here)))
         .filter(|op| !matches!(op.phase(), "check" | "snapshot"))
         .and_then(|op| op.args().get_text("to").map(str::to_owned));
     if sent.is_some() {
@@ -163,8 +165,9 @@ pub fn note_incoming(home: &Path, name: &str, to: &str) -> Result<()> {
 }
 
 /// Deletes Store `name`'s leftover copy, if its record names one (see
-/// [`leftover`]): `native`'s file (with its write-ahead log and any partial
-/// copy), or a machine's whole Store folder under its worker's root.
+/// [`leftover`]): the file in this process's home, for a machine whose
+/// calls run here (with its write-ahead log and any partial copy), or a
+/// machine's whole Store folder under its worker's root.
 /// An unresolved move is cleared only by the move its refusal names, to
 /// the same machine `to`; a move to another machine is refused `Unresolved`
 /// without deleting either copy, and so is a move while another call's
@@ -240,15 +243,20 @@ pub fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
     now.write(home)
 }
 
-/// The machine that is this host.
-const NATIVE: &str = "native";
+/// The machine whose calls run in this process (`native` on macOS and
+/// Linux), one end of every move (C13); none on a host where every
+/// machine has a worker.
+fn here() -> Option<&'static str> {
+    layerfs_machine::in_process()
+}
 
 /// `store.move`: the machine sqlite Store `record` is on, from which it
 /// goes to `to`. Refused `InvalidInput` when it is on `to` already, or
-/// when neither is this computer (C13: a Store goes to or from `native`
-/// only), with the move to `native` as its fix; `NotFound` for an unknown
-/// `to`. Its in-use half, `Related::store_idle`, runs under the Store's
-/// lock.
+/// when neither is the machine whose calls run in this process (C13: a
+/// Store moves through this process, so one end is that machine), with
+/// the move to that machine as its fix; `Unsupported` on a host with no
+/// such machine; `NotFound` for an unknown `to`. Its in-use half,
+/// `Related::store_idle`, runs under the Store's lock.
 pub fn can_move(home: &Path, record: &StoreRecord, to: &str) -> Result<String> {
     let name = record.name();
     let on = sqlite_machine(record)?;
@@ -258,22 +266,21 @@ pub fn can_move(home: &Path, record: &StoreRecord, to: &str) -> Result<String> {
             format!("Store {name} is already on {to}"),
         ));
     }
-    if on != NATIVE && to != NATIVE {
+    let here = here().ok_or_else(|| layerfs_machine::none_in_process("store.move"))?;
+    if on != here && to != here {
         return Err(with_fix(
             refused(
                 "InvalidInput",
                 format!(
-                    "Store {name} is on machine {on}: a Store moves to or from this computer \
-                     only; `layerfs store move {name} {NATIVE}` brings it here first"
+                    "Store {name} is on machine {on}: a Store moves only to or from machine \
+                     {here}, whose calls run in this process; `layerfs store move {name} {here}` \
+                     brings it there first"
                 ),
             ),
-            format!(
-                "layerfs store move {name} {NATIVE}",
-                name = shell_word(name)
-            ),
+            format!("layerfs store move {name} {here}", name = shell_word(name)),
         ));
     }
-    if to != NATIVE && MachineRecord::read(home, to)?.is_none() {
+    if to != here && MachineRecord::read(home, to)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {to}")));
     }
     Ok(on)

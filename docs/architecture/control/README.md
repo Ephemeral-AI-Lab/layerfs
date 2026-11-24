@@ -90,6 +90,15 @@ machine's worker, or in a Sandbox's daemon.
 | `apple-container` | worker / — / — | no: ports publish only at create | [`apple_container/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | `lima` | worker / — / — | yes: an `ssh -L` forward | [`lima/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/lima/adapter.rs) |
 
+The machine whose calls run in this process
+([`layerfs_machine::in_process`](../../../control/crates/layerfs-machine/src/local.rs):
+the built-in machine whose platform's executor is `Local` here, `native` on
+macOS and Linux, none on Windows) is where a sqlite Store goes when
+`store create` names no machine, one end of every `store move`, and the
+machine a `backup restore` installs on; on a host with none those refuse
+`Unsupported`. This computer is never a machine: see
+[Platforms](machines/platforms.md#native-platformsnative).
+
 `plan` reads no worker record and dials nothing; the first worker call
 dials `machine/<m>/worker.json` and a worker not recorded or not answering
 is `Unavailable`, naming `layerfs machine start`. A build without the

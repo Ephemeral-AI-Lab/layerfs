@@ -1,7 +1,8 @@
-//! `store.create`: an empty sqlite Store on this computer, or made on a
-//! machine directly.
+//! `store.create`: an empty sqlite Store on a machine whose calls run in
+//! this process (its file on this computer), or made on a machine through
+//! its worker.
 //!
-//! On this computer the Store's file is made under the home lock and its
+//! In this process the Store's file is made under the home lock and its
 //! record written after it. On a machine the name is taken first: under
 //! the home lock the record is written with the operation (`op`, name
 //! `store.create`, uncertain: a crash from here leaves the file's fate
@@ -25,9 +26,6 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The machine a Store is made on when the call names none.
-const NATIVE: &str = "native";
-
 /// A new Store's identity: its binding and cursor key, made here and kept
 /// in the home's record.
 fn new_identity() -> Result<Identity> {
@@ -47,7 +45,10 @@ fn created(record: &StoreRecord) -> SdkValue {
         ("store", SdkValue::text(record.name())),
         ("engine", SdkValue::text("sqlite")),
         ("machine", SdkValue::opt_text(record.text("machine"))),
-        ("profile", SdkValue::opt_text(crate::record::profile(record))),
+        (
+            "profile",
+            SdkValue::opt_text(crate::record::profile(record)),
+        ),
         ("sqlite_version", SdkValue::opt_text(record.text("sqlite"))),
         (
             "created_at",
@@ -56,14 +57,23 @@ fn created(record: &StoreRecord) -> SdkValue {
     ])
 }
 
-/// `store.create`: an empty sqlite Store named `name` on `machine`, this
-/// computer (`native`) when none is named. A name a Store has is `Exists`;
-/// a machine the home does not record is `NotFound`; one that is not
-/// running is `Unavailable`, naming `layerfs machine start`: nothing is
-/// started.
+/// `store.create`: an empty sqlite Store named `name` on `machine`; when
+/// none is named, on the machine whose calls run in this process (`native`
+/// on macOS and Linux), and `Unsupported` on a host with none: no other
+/// machine is chosen. A name a Store has is `Exists`; a machine the home
+/// does not record (a built-in one exists without a record) is `NotFound`;
+/// one that is not running is `Unavailable`, naming `layerfs machine
+/// start`: nothing is started.
 pub fn create(home: &Path, name: &str, machine: Option<&str>) -> Outcome {
-    let machine = machine.unwrap_or(NATIVE);
-    if machine != NATIVE && MachineRecord::read(home, machine)?.is_none() {
+    let machine = match machine {
+        Some(machine) => machine,
+        None => layerfs_machine::in_process().ok_or_else(|| {
+            layerfs_machine::none_in_process("a sqlite Store made without --machine")
+        })?,
+    };
+    if !layerfs_home::names::BUILT_IN.contains(&machine)
+        && MachineRecord::read(home, machine)?.is_none()
+    {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
     if paths::store_record(home, name).exists() {

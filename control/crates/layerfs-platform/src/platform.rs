@@ -177,6 +177,15 @@ impl Platform {
         self.profile().tool
     }
 
+    /// Whether a provider holds a machine of this kind: a VM or worker
+    /// container its tool makes, starts and stops, named by the record's
+    /// `vm_name`. A kind with none (`native`) runs Sandboxes on the host's
+    /// own OS: such a machine is never stopped, never missing and has no
+    /// provider name.
+    pub fn provided(self) -> bool {
+        self.tool().is_some()
+    }
+
     /// The Sandbox backend on this kind of machine, or none (`native` on
     /// Windows holds only records, §13 O5).
     pub fn backend(self, host: HostOs) -> Option<Backend> {

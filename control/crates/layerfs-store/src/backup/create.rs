@@ -50,7 +50,7 @@ pub struct BackupCreate {
 
 /// `backup.create(store, bucket, file?)`: the Store's machine stages a
 /// consistent snapshot beside the Store (`store.file` `stage`, in this
-/// process for `native`); this process uploads it with its sha256, heads,
+/// process for a machine whose calls run here); this process uploads it with its sha256, heads,
 /// binding and `layerfs-exported-from`. A worker's snapshot comes here in
 /// pieces first: the worker never sees the key. The backup is the Store's
 /// `op` (`backup`) from its check to its end ([`intent`]); phases `check`,
@@ -97,7 +97,8 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         };
         crate::sqlite::family::step(&home, &mut executor.borrow_mut(), &frame)
     };
-    // `native` stages beside the Store; a worker's copy comes here
+    // a machine whose calls run here stages beside the Store; a worker's
+    // copy comes here
     let local = match local_steps {
         true => {
             let mut name = paths::store_file(&home, store).into_os_string();
@@ -210,12 +211,13 @@ fn stale_staging(home: &Path, (store, machine): (&str, &str), local: &Path, step
     }
 }
 
-/// What a killed create left of Store `store` on `native`, removed by a
+/// What a killed create left of Store `store` in this process's home (on
+/// the machine whose calls run here), removed by a
 /// restore that replaces it (spec v20): its two staged snapshots in the
 /// home, under the create lock taken without waiting. The caller holds the
 /// Store's lease. A create that runs keeps them; nothing here fails the
 /// restore, and each removal is a line of `log/sweep.jsonl`.
-pub(crate) fn stale_on_native(home: &Path, store: &str) {
+pub(crate) fn stale_here(home: &Path, store: &str) {
     let Ok(_creating) = Creating::take(home, store) else {
         return;
     };

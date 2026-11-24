@@ -140,10 +140,11 @@ pub fn provider_spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
     Ok(Spec {
         name: name.to_owned(),
         kind,
-        // `native` has no provider name: its record keeps none
-        vm_name: match kind {
-            Platform::Native => String::new(),
-            _ => record.provider_name()?.to_owned(),
+        // a platform with no provider (`native`) has no provider name: its
+        // record keeps none
+        vm_name: match kind.provided() {
+            false => String::new(),
+            true => record.provider_name()?.to_owned(),
         },
         cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,

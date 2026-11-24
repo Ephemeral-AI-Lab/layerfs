@@ -41,7 +41,8 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
         let machine = || {
             let record = StoreRecord::read(home, store).ok().flatten()?;
             let machine = record.machine().ok()?;
-            (record.kind().ok()? == StoreKind::Sqlite && machine != "native").then_some(machine)
+            let worker = !layerfs_machine::runs_here(home, &machine).unwrap_or(false);
+            (record.kind().ok()? == StoreKind::Sqlite && worker).then_some(machine)
         };
         let fix = match refusal.code.as_str() {
             "Unavailable" => match machine() {

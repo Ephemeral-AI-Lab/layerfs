@@ -1,4 +1,5 @@
-//! `backup.restore`: a backup as a sqlite Store on `native`.
+//! `backup.restore`: a backup as a sqlite Store on the machine whose calls
+//! run in this process (`native` on macOS and Linux).
 use super::family::write_link;
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
@@ -28,8 +29,9 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub type BackupRestore = super::create::BackupCreate;
 
 /// `backup.restore(bucket, file, store)`: the backup as a sqlite Store on
-/// `native`: a new Store when `store` does not exist (outcome `created`),
-/// else it replaces an idle Store on `native` unchanged since its last
+/// the machine whose calls run in this process ([`here`]): a new Store when
+/// `store` does not exist (outcome `created`), else it replaces an idle
+/// Store on that machine unchanged since its last
 /// backup or restore (outcome `replaced`; `Conflict` otherwise; `InUse`
 /// while a process holds it or a Sandbox of its projects runs). A replace
 /// is the Store's `op` (`restore`) from its check to its end, uncertain
@@ -47,6 +49,7 @@ pub fn restore(
     let home = home.to_path_buf();
     let store = request.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
+    here()?;
     // the Store's own directory, before this call writes anything (its
     // staging folder included): a restore installs into the folder a daemon
     // opens, so an existing one must be the same private directory
@@ -87,7 +90,7 @@ pub fn restore(
             }
             _lease = Some(lease::hold(&home, store)?);
             // what a killed `backup create` of it left goes (spec v20)
-            super::create::stale_on_native(&home, store);
+            super::create::stale_here(&home, store);
             let args = SdkValue::map([
                 ("bucket", SdkValue::text(bucket)),
                 ("file", SdkValue::text(&file)),
@@ -191,7 +194,7 @@ fn run(
             }
             record.clone()
         }
-        _ => StoreRecord::restored(store, &loaded.binding, &cursor),
+        _ => StoreRecord::restored(store, here()?, &loaded.binding, &cursor),
     };
     let found = projects_in(home, store, &record, &staged)?;
     // the restored Store's own authority and the file it is installed as, as
@@ -385,9 +388,17 @@ fn sweep(parent: &Path) {
     }
 }
 
+/// The machine a restore's Store is on: the one whose calls run in this
+/// process, which downloads and installs it; `Unsupported` on a host with
+/// none, and no other machine is chosen.
+fn here() -> Result<&'static str> {
+    layerfs_machine::in_process().ok_or_else(|| layerfs_machine::none_in_process("backup.restore"))
+}
+
 /// Refuses replacing Store `store` unless it is an idle sqlite Store on
-/// `native`, unchanged since its last backup or restore through `bucket`.
-/// Under the home lock and the Store's lock.
+/// the machine whose calls run in this process ([`here`]), unchanged since
+/// its last backup or restore through `bucket`. Under the home lock and
+/// the Store's lock.
 fn replaceable(
     home: &Path,
     store: &str,
@@ -395,9 +406,9 @@ fn replaceable(
     record: &StoreRecord,
     related: Related,
 ) -> Result<()> {
-    let machine = record.machine()?;
-    if machine != "native" {
-        return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
+    let (machine, here) = (record.machine()?, here()?);
+    if machine != here {
+        return Err(refused("Unsupported", format!("Store {store} is on machine {machine}; a restore replaces a Store on machine {here}, whose calls run in this process: move it there first")));
     }
     // a replace's own `op` (this process's restore) holds nothing here
     if !record.op().is_some_and(|op| op.mine()) {

@@ -278,7 +278,7 @@ fn locate(home: &Path, thing: &Thing) -> Result<Located, SdkRefusal> {
     // it is not there, and the record that names it reports the reference
     let recorded = |node: &&SdkValue| {
         let name = node.get_text("machine").unwrap_or("");
-        matches!(name, "native" | "docker") || paths::machine_record(home, name).exists()
+        layerfs_home::names::BUILT_IN.contains(&name) || paths::machine_record(home, name).exists()
     };
     // a record the tree could not place (unreadable) is still there:
     // its own `.record` check names it

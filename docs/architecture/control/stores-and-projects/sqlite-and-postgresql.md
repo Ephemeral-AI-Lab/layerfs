@@ -19,15 +19,18 @@ chooses by `StoreKind`. Every sqlite Store opens with the Normal profile
 
 | Call | Does | Refusals |
 | --- | --- | --- |
-| `store.create <s>` | an empty Store at `store/<s>/store.sqlite` on `native` | `Exists` |
+| `store.create <s>` | an empty Store at `store/<s>/store.sqlite` on the machine whose calls run in this process (`layerfs_machine::in_process`, `native` on macOS and Linux) when no `--machine` is named | `Exists`; `Unsupported` on a host with no such machine |
 | `store.remove <s>` | deletes the file wherever it is (here or a worker `store.file remove`), its projects, and any copy an ended move left on the other machine (`op.args.leftover`, so a second remove finishes an interrupted one); clears a gone process's unresolved `op` | `InvalidInput` for PostgreSQL (`store disconnect` keeps its data); `InUse`; `Conflict` if the Store moved meanwhile; a live `op` `Busy` |
 
 ## Transfer (`sqlite/transfer/`)
 
-`store.move <s> <machine>` moves a sqlite Store's file from `native` to a
-machine's worker; `store.move <s> native` brings it back. One side is always `native`: between two
-machines the caller moves the Store to `native`, then on; each half is its
-own operation
+`store.move <s> <machine>` moves a sqlite Store's file from the machine
+whose calls run in this process (`native` on macOS and Linux) to a
+machine's worker; `store.move <s> native` brings it back. One side is
+always that machine, since the bytes pass through this process: between
+two other machines the caller moves the Store to it, then on; each half is
+its own operation; on a host with no such machine every move is
+`Unsupported`
 ([`phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)).
 
 ```text
