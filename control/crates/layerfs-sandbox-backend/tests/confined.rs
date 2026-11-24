@@ -7,7 +7,7 @@
 //! last name is never followed, and an open ends only in a mount its
 //! caller allowed by id, with the mount table given as text.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_sandbox_backend::local::confined::{self, Base, Kind, Refused, View};
+use layerfs_sandbox_backend::shared::confined::{self, Base, Kind, Refused, View};
 use std::ffi::OsStr;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};

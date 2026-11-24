@@ -65,7 +65,7 @@ pub fn machine_state_with(name: &str, record: Option<&MachineRecord>, held: Hold
         return layerfs_machine::state::unrecorded(name);
     };
     let platform = record.platform_name().unwrap_or("");
-    let removed = layerfs_sandbox_backend::platform_policy::removed_reason(platform).is_some();
+    let removed = layerfs_sandbox_backend::removed_platforms::removed_reason(platform).is_some();
     record.status_held(removed, held)
 }
 

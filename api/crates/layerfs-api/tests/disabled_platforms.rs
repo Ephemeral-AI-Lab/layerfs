@@ -3,7 +3,7 @@
 //! records may remain in a home.
 use layerfs_api::{call, json};
 use layerfs_bridge::control::SdkValue;
-use layerfs_sandbox_backend::platform_policy::removed_reason;
+use layerfs_sandbox_backend::removed_platforms::removed_reason;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::path::Path;

@@ -17,7 +17,7 @@ impl ExecId {
     /// `text` as an exec id: 1 to 64 ASCII letters, digits, `.`, `_` or
     /// `-`, not starting with `.` or `-`; refused `InvalidInput` otherwise.
     pub fn parse(text: &str) -> Result<Self, SdkRefusal> {
-        if text.len() > MAX || !layerfs_sandbox_backend::stop::component(text) {
+        if text.len() > MAX || !layerfs_sandbox_backend::cancel::component(text) {
             return Err(refused(
                 "InvalidInput",
                 format!(

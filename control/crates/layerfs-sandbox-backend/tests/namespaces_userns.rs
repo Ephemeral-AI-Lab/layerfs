@@ -1,6 +1,6 @@
 //! The user-namespace block of a namespaces Sandbox's commands (D-8,
 //! layerfs-project#111): every command runs under the filter
-//! `local::deny_user_namespaces` installs, so it cannot create a user
+//! `namespaces::deny_user_namespaces` installs, so it cannot create a user
 //! namespace and keep its own copy of a Workspace mount, whatever the host's
 //! `user.max_user_namespaces` says. Nothing here needs root or a Sandbox:
 //! the test runs its own binary again as the filtered command (whose test
@@ -93,7 +93,7 @@ mod linux {
                 "--test-threads=1",
             ])
             .env(CHILD, "1");
-        layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
+        layerfs_sandbox_backend::namespaces::deny_user_namespaces(&mut command);
         let out = command.output().unwrap();
         let said = String::from_utf8_lossy(&out.stdout);
         assert!(out.status.success(), "{out:?}");

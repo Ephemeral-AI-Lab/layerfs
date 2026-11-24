@@ -1,4 +1,4 @@
-//! The local runtime root on Linux (`layerfs_sandbox_backend::local`), which
+//! The local runtime root on Linux (`layerfs_sandbox_backend::shared`), which
 //! the namespaces backend builds on: where a root may be, how its Sandboxes
 //! are named and where their parts go, and the process identity a record
 //! keeps (`LocalProcess`: id, start time and boot). The native
@@ -7,7 +7,7 @@
 //! here needs root.
 #![cfg(target_os = "linux")]
 use layerfs_bridge::process::LocalProcess;
-use layerfs_sandbox_backend::{local::Local, RuntimeError};
+use layerfs_sandbox_backend::{shared::Local, RuntimeError};
 use std::{
     fs,
     os::unix::fs::PermissionsExt,

@@ -19,7 +19,7 @@ use crate::record::{DaemonRecord, SandboxRecord};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_sandbox_backend::local::confined::{Base, Kind, View};
+use layerfs_sandbox_backend::shared::confined::{Base, Kind, View};
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 

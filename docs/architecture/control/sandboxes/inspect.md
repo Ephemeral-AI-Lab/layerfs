@@ -8,7 +8,7 @@ one worker operation, `inspect`, with bounded admission and deadlines, within
 
 | | |
 | --- | --- |
-| Source | [`layerfs-sandbox/src/inspect`](../../../../control/crates/layerfs-sandbox/src/inspect), [`layerfs-sandbox-backend/src/local/confined.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/confined.rs) with `os/{linux,macos}/confined.rs` (`root_of`: a process's root), [`layerfs-home/src/tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [`layerfs-store/src/place.rs`](../../../../control/crates/layerfs-store/src/place.rs) `on_machine_read`, `Worker::read`, [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_within`, [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
+| Source | [`layerfs-sandbox/src/inspect`](../../../../control/crates/layerfs-sandbox/src/inspect), [`layerfs-sandbox-backend/src/shared/confined.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/confined.rs) with `os/{linux,macos}/confined.rs` (`root_of`: a process's root), [`layerfs-home/src/tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [`layerfs-store/src/place.rs`](../../../../control/crates/layerfs-store/src/place.rs) `on_machine_read`, `Worker::read`, [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_within`, [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
 | Used by | [API: `machine.log`](../../api/sdk/machine.md#machinelog), [`sandbox.log`](../../api/sdk/sandbox.md#sandboxlog), [`sandbox.files`](../../api/sdk/sandbox.md#sandboxfiles), [`machine.files`](../../api/sdk/machine.md#machinefiles), [`machine.stats`](../../api/sdk/machine.md#machinestats) (and with `--with space`), [`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) of a forwarded Sandbox |
 
 ## Picture
@@ -256,7 +256,7 @@ of the path and of each folder above it, a listing of each entry.
 ### The platform split
 
 Only three things differ by platform, in
-[`layerfs-sandbox-backend/src/local/confined.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/confined.rs)
+[`layerfs-sandbox-backend/src/shared/confined.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/confined.rs)
 and its `os/` files: the confined open, the `stat`, and the mount table.
 
 | | Linux | macOS |

@@ -1,4 +1,4 @@
-//! A command's stop handle on `host_process` (layerfs-project#113,
+//! A command's stop handle on `native` (layerfs-project#113,
 //! compute-plane 2.0 §5.3): a cancel ends the command's process group,
 //! background children included, with SIGTERM within the grace and SIGKILL
 //! after it, and a group with nothing left is `Ended` and not signalled.
@@ -7,9 +7,9 @@
 //! (macOS, where the native runtime runs).
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_bridge::process::LocalProcess;
-use layerfs_sandbox_backend::stop::{cancel, component, Cancelled, Stop};
+use layerfs_sandbox_backend::cancel::{cancel, component, Cancelled, Stop};
 #[cfg(target_os = "macos")]
-use layerfs_sandbox_backend::{local::Local, stop::ExecSlot, CommandIdentity, ExecRequest};
+use layerfs_sandbox_backend::{cancel::ExecSlot, shared::Local, CommandIdentity, ExecRequest};
 use nix::sys::signal::Signal;
 #[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;

@@ -497,7 +497,7 @@ fn a_sandbox_s_root_is_read_through_its_init_with_what_layerfs_keeps_restricted(
 
     // a mount that is not entered, where this host has one at the top of `/`
     let crossed = ["ext4", "xfs", "btrfs", "zfs", "f2fs", "overlay", "tmpfs"];
-    let table = layerfs_sandbox_backend::local::confined::mounts().unwrap();
+    let table = layerfs_sandbox_backend::shared::confined::mounts().unwrap();
     let mut tops = std::collections::BTreeMap::new();
     for mount in &table {
         tops.insert(mount.point.clone(), mount.fs.clone());

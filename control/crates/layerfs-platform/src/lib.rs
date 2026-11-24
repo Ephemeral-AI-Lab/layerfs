@@ -29,7 +29,7 @@ pub use docker_socket::{
     DEFAULT_DOCKER_SOCKET, SOCKET_ANSWER,
 };
 pub use error::{Code, MachineError};
-pub use layerfs_sandbox_backend::platform_policy;
+pub use layerfs_sandbox_backend::removed_platforms;
 pub use layerfs_sandbox_backend::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};

@@ -17,8 +17,8 @@ mod support {
     pub mod image;
 }
 use layerfs_sandbox_backend::{
+    cancel::{cancel, Cancelled, ExecSlot, Stop},
     namespaces::{NamespaceProvider, Sandbox},
-    stop::{cancel, Cancelled, ExecSlot, Stop},
     Bind, CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
     SandboxRecord,
 };
@@ -1332,7 +1332,7 @@ fn each_sandbox_s_commands_have_a_network_of_their_own() {
         let links = layerfs_sandbox_backend::network::inspect().unwrap();
         assert!(links.table, "the firewall table is missing");
         let (_, addresses) = links.links.iter().find(|(name, _)| *name == link).unwrap();
-        let guest = layerfs_sandbox_backend::network::plan::Ipv4Net::parse(guest).unwrap();
+        let guest = layerfs_sandbox_backend::network::pool::Ipv4Net::parse(guest).unwrap();
         assert!(
             addresses
                 .iter()
@@ -1564,7 +1564,7 @@ fn a_command_never_runs_where_its_network_cannot_be_joined() {
 /// start `Unavailable` from (spec §3.2), not as a stage that failed.
 #[test]
 fn an_init_stage_whose_pool_changed_says_unavailable() {
-    use layerfs_sandbox_backend::network::plan::{unavailable_in, Ipv4Net, CANDIDATES};
+    use layerfs_sandbox_backend::network::pool::{unavailable_in, Ipv4Net, CANDIDATES};
     use layerfs_sandbox_backend::{HelperSpec, SpecNetwork};
     if let Some(reason) = unavailable() {
         eprintln!("SKIPPED namespaces init pool change: {reason}");

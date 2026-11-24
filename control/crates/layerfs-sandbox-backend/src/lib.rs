@@ -1,59 +1,57 @@
 //! Ordinary runtime operations, separate from filesystem admission and data ownership.
 //!
-//! `backend/` holds one folder per Sandbox backend (`host_process`,
-//! `namespaces`), named as `LAYERFS_SANDBOX` names them; the docker backend
-//! and its Engine client are retired (D-8, layerfs-project#111: the docker
-//! machine runs namespaces Sandboxes). `runtime.rs` matches over the backends'
-//! providers and Sandboxes; `backend/adapter.rs` is the one match for what is
-//! fixed per backend (G2); `types/` holds what they share; `json/`,
-//! `helper_spec.rs` and `postgres_url.rs` are the shared formats;
-//! `steps.rs` times a traced command's steps. The
-//! kernels Sandboxes run on live in the
-//! `layerfs-platform` crate (host only).
-// unsafe only in local/os/linux/seccomp.rs (the namespaces command filter's
-// two prctl calls and the helper's clone3 into a cgroup); the macOS process facts (proc_pidinfo) moved with
-// LocalProcess to layerfs_bridge::process (layerfs-project#112)
+//! The crate is grouped by owner:
+//! - `runtime/`: the backend-neutral surface: `dispatch.rs` matches over the
+//!   backends' providers and Sandboxes, `cancel.rs` stops one command,
+//!   `trace.rs` times a traced command's steps, `types/` holds what the
+//!   backends share.
+//! - `shared/`: the process lifecycle both backends use (daemon start, its
+//!   listener, search path, streams, confined reads).
+//! - `backend/`: one folder per Sandbox backend, named as records store it
+//!   (`native`, `namespaces`), holding everything only that backend uses,
+//!   its operating-system facts included (macOS runs only `native`, Linux
+//!   only `namespaces`); `backend/adapter.rs` is the one match for what is
+//!   fixed per backend (G2). The docker backend and its Engine client are
+//!   retired (D-8, layerfs-project#111: the docker machine runs namespaces
+//!   Sandboxes).
+//! - `support/`: small formats other crates read (`json/`, `postgres_url.rs`,
+//!   `removed_platforms.rs`).
+//!
+//! The kernels Sandboxes run on live in the `layerfs-platform` crate (host
+//! only).
+// unsafe only in backend/namespaces/seccomp.rs (the namespaces command
+// filter's two prctl calls and the helper's clone3 into a cgroup); the macOS
+// process facts (proc_pidinfo) moved with LocalProcess to
+// layerfs_bridge::process (layerfs-project#112)
 #![deny(unsafe_code)]
 #[cfg(unix)]
 mod backend;
-#[cfg(unix)]
-pub use backend::namespaces::rootfs;
-#[cfg(unix)]
-pub use backend::Backend;
-#[cfg(unix)]
-mod helper_spec;
-#[cfg(unix)]
-pub mod json;
-#[cfg(unix)]
-pub mod network;
-pub mod platform_policy;
-#[cfg(unix)]
-mod postgres_url;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
-pub mod steps;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod stop;
-mod types;
-#[cfg(target_os = "macos")]
-pub use backend::host_process;
+pub mod shared;
+mod support;
+
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod local;
+#[cfg(unix)]
+pub use backend::namespaces::{network, rootfs, HelperSpec, SpecNetwork, RESOLVER_FILES};
 #[cfg(target_os = "macos")]
-pub use backend::host_process::HostProcessProvider;
+pub use backend::native::{self, NativeProvider};
 #[cfg(unix)]
-pub use helper_spec::{HelperSpec, SpecNetwork, RESOLVER_FILES};
-#[cfg(unix)]
-pub use postgres_url::{ip, loopback, socket, url_hostaddr, url_hosts};
+pub use backend::Backend;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use runtime::{LaunchFailure, Runtime, Sandbox};
+pub use runtime::cancel::{self, Cancelled, ExecSlot, Stop};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use stop::{Cancelled, ExecSlot, Stop};
-pub use types::{
+pub use runtime::dispatch::{LaunchFailure, Runtime, Sandbox};
+pub use runtime::trace;
+pub use runtime::types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,
     ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection, SandboxRecord,
     SearchPathPolicy, WireFailure, OUTCOME_UNKNOWN,
 };
+#[cfg(unix)]
+pub use support::json;
+#[cfg(unix)]
+pub use support::postgres_url::{ip, loopback, socket, url_hostaddr, url_hosts};
+pub use support::removed_platforms;

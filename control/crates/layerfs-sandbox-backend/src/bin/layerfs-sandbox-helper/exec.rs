@@ -1,7 +1,7 @@
 //! The exec stage: one command inside a running Sandbox. The helper opens
 //! the group `--cgroup` names, the leaf of the Sandbox's cgroup, and the
 //! command's, below, then forks itself into the first (`clone3` with
-//! `CLONE_INTO_CGROUP`, `local::OneThread`): the child does the work, inside the group, so the
+//! `CLONE_INTO_CGROUP`, `namespaces::OneThread`): the child does the work, inside the group, so the
 //! Sandbox's `cgroup.kill` ends it and its stop finds the group empty only
 //! once it is gone; the parent, outside it, only waits and ends as the child
 //! did. No process ever moves between groups: a move (a pid written to
@@ -13,7 +13,7 @@
 //! child, the command, is created inside the Sandbox's PID namespace, runs
 //! as the requested uid:gid and inherits no-new-privs, so file capabilities
 //! and setuid bits cannot raise it again. Just before exec it installs the
-//! filter that refuses it a user namespace (`local::deny_user_namespaces`,
+//! filter that refuses it a user namespace (`namespaces::deny_user_namespaces`,
 //! D-8); a command whose filter cannot be installed never starts.
 //!
 //! With `--command-cgroup <group>` (a command with its own group,
@@ -42,7 +42,7 @@
 //! `PATH` inside the Sandbox, so an image's own `bash` wins, and an image with
 //! none (alpine, distroless) runs the runtime's static `bash` instead of
 //! failing.
-use layerfs_sandbox_backend::local::OneThread;
+use layerfs_sandbox_backend::namespaces::OneThread;
 use nix::{
     sched::{setns, CloneFlags},
     sys::{
@@ -126,7 +126,7 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         let path = layerfs_bridge::sandbox_runtime::search_path(&path, runtime);
         command.env("PATH", path);
     }
-    layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
+    layerfs_sandbox_backend::namespaces::deny_user_namespaces(&mut command);
     let child = match start(&process, &mut command, command_group.as_ref()) {
         Ok(child) => child,
         // the command never started: this stage's own failure, which must

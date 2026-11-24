@@ -241,7 +241,7 @@ pub(crate) fn create_exec(directory: &Path) -> io::Result<()> {
 /// waited for the command can find its group still counted (before 6.19 it
 /// left before `exit_notify`, as 650828a686 assumed). A child signalled with
 /// the command may also exit after the command did. The cancel removes the
-/// group once it reports it empty (`crate::stop`), which needs no ordering.
+/// group once it reports it empty (`crate::runtime::cancel`), which needs no ordering.
 /// A group something still runs in (nothing cancelled it) stays, and ends
 /// with its Sandbox.
 ///
@@ -265,10 +265,10 @@ pub(crate) fn remove_exec(directory: &Path) {
     }
 }
 
-/// One command's group as its stop handle names it (`crate::stop`).
+/// One command's group as its stop handle names it (`crate::runtime::cancel`).
 pub(crate) struct ExecGroup<'a>(pub(crate) &'a Path);
 
-impl crate::stop::Stoppable for ExecGroup<'_> {
+impl crate::runtime::cancel::Stoppable for ExecGroup<'_> {
     fn running(&self) -> io::Result<bool> {
         match populated(self.0) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),

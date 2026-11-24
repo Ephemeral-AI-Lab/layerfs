@@ -18,7 +18,7 @@
 //!   included, else the command never runs), becomes the requested
 //!   nonroot identity with no-new-privs and runs one command under the
 //!   filter that refuses it a user namespace (the library's audited
-//!   `local/os/linux/seccomp.rs`).
+//!   `backend/namespaces/seccomp.rs`).
 #![deny(unsafe_code)]
 
 #[cfg(target_os = "linux")]
@@ -26,9 +26,9 @@ mod exec;
 #[cfg(target_os = "linux")]
 mod init;
 #[cfg(target_os = "linux")]
-mod mounts;
+mod netns;
 #[cfg(target_os = "linux")]
-mod network;
+mod root;
 
 #[cfg(target_os = "linux")]
 fn main() {

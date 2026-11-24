@@ -4,10 +4,10 @@
 //! namespaces as a nonroot identity with no capabilities and no-new-privs,
 //! and `cgroup.kill` ends everything the Sandbox started.
 //!
-//! The lifecycle is the local one, imported from `crate::local`
+//! The lifecycle is the local one, imported from `crate::shared`
 //! (namespaces is the local process with namespaces added: its
-//! `Local`, `LocalPaths`, `LocalPhase`, `search`, `listener`, `streams` and
-//! Linux `mounts`, with `LocalProcess` from `layerfs_bridge::process`): a
+//! `Local`, `LocalPaths`, `LocalPhase`, `search_path`, `listener`, `streams`,
+//! and its own Linux `mounts` in `linux/`, with `LocalProcess` from `layerfs_bridge::process`): a
 //! private directory per Sandbox, one daemon start and one listener wait, a
 //! record of the daemon's exact process and its port. What this backend
 //! adds is outside that daemon: the helper that builds the private root, the
@@ -24,7 +24,10 @@ mod create;
 #[cfg(target_os = "linux")]
 mod exec;
 #[cfg(target_os = "linux")]
-mod host;
+mod host_checks;
+#[cfg(target_os = "linux")]
+pub(crate) mod linux;
+pub mod network;
 #[cfg(target_os = "linux")]
 mod paths;
 #[cfg(target_os = "linux")]
@@ -32,6 +35,9 @@ mod provider;
 pub mod rootfs;
 #[cfg(target_os = "linux")]
 mod sandbox;
+#[cfg(target_os = "linux")]
+pub(crate) mod seccomp;
+mod spec;
 
 pub(crate) use adapter::ADAPTER;
 
@@ -47,3 +53,6 @@ pub use provider::NamespaceProvider;
 pub use rootfs::ImageRoot;
 #[cfg(target_os = "linux")]
 pub use sandbox::Sandbox;
+#[cfg(target_os = "linux")]
+pub use seccomp::{deny_user_namespaces, OneThread};
+pub use spec::{HelperSpec, SpecNetwork, RESOLVER_FILES};

@@ -208,7 +208,7 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sandbox_active_edges_and_unsafe_boundary(self):
-        path = Path("control/crates/layerfs-sandbox-backend/src/runtime.rs")
+        path = Path("control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
         self.assertFalse(
             unsafe_violations(Path("control/crates/layerfs-sandbox-backend/src/lib.rs"), "#![deny(unsafe_code)]")
@@ -220,7 +220,7 @@ class ProductBoundaryTests(unittest.TestCase):
         # the driver's remaining darwin.rs (mount facts) is no allowance.
         darwin = Path("engine/crates/layerfs-bridge/src/process/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
-        left = Path("control/crates/layerfs-sandbox-backend/src/local/os/macos/darwin.rs")
+        left = Path("control/crates/layerfs-sandbox-backend/src/backend/native/macos/darwin.rs")
         self.assertTrue(unsafe_violations(left, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         for sibling in ("process/identity.rs", "process/linux.rs", "process/mod.rs", "control.rs"):
             with self.subTest(sibling=sibling):
@@ -230,18 +230,23 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(bridge_root, "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(bridge_root, "mod process;"))
         # the second audited file: the namespaces command filter (D-8)
-        seccomp = Path("control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs")
+        seccomp = Path("control/crates/layerfs-sandbox-backend/src/backend/namespaces/seccomp.rs")
         self.assertFalse(unsafe_violations(seccomp, "fn f() { unsafe { libc::prctl(22, 2, p); } }"))
-        for sibling in ("local/os/linux/mounts.rs", "local/groups.rs", "bin/layerfs-sandbox-helper/exec.rs"):
+        for sibling in (
+            "backend/namespaces/linux/mounts.rs",
+            "backend/namespaces/network/setup.rs",
+            "backend/native/groups.rs",
+            "bin/layerfs-sandbox-helper/exec.rs",
+        ):
             with self.subTest(sibling=sibling):
                 path = Path("control/crates/layerfs-sandbox-backend/src") / sibling
                 self.assertTrue(unsafe_violations(path, "fn f() { unsafe { libc::prctl(22, 2, p); } }"))
         # the audited file of one crate is no allowance in another
-        other = Path("control/crates/layerfs-sandbox/src/local/os/linux/seccomp.rs")
+        other = Path("control/crates/layerfs-sandbox/src/backend/namespaces/seccomp.rs")
         self.assertTrue(unsafe_violations(other, "fn f() { unsafe { call(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("control/crates/layerfs-sandbox-backend/src/backend/os/macos/mounts.rs"),
+                Path("control/crates/layerfs-sandbox-backend/src/backend/native/macos/mounts.rs"),
                 "fn f() { unsafe { call(); } }",
             )
         )

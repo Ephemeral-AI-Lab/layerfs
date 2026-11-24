@@ -14,7 +14,7 @@
 //! from its cursor whatever was added or removed meanwhile. A file window
 //! is read with one `pread` of at most `length` bytes.
 //!
-//! Every open and `stat` is `layerfs_sandbox_backend::local::confined`'s:
+//! Every open and `stat` is `layerfs_sandbox_backend::shared::confined`'s:
 //! no link leads out of the base, no mount is entered but one the view
 //! crosses, no special file is read. A mount point is told from the mount
 //! table and what LayerFS keeps private from `roots::kept`, both before
@@ -25,7 +25,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::tail;
-use layerfs_sandbox_backend::local::confined::{
+use layerfs_sandbox_backend::shared::confined::{
     self, Base, Kind, Mount, Opened, Refused, Stat, View,
 };
 use std::cell::OnceCell;

@@ -17,7 +17,7 @@ binding code rules are in [AGENTS.md](AGENTS.md).
 | `layerfs-store` | Store and project records, placement, leases, Store calls, sqlite transfer, PostgreSQL, backups | [Stores and projects](../docs/architecture/control/stores-and-projects/README.md), [Backups](../docs/architecture/control/backups/README.md) |
 | `layerfs-bucket` | driver: *how* a Store is backed up to a bucket (`local_folder`, `minio`, `r2`) | [Buckets](../docs/architecture/control/backups/buckets.md) |
 | `layerfs-sandbox` | Sandbox records and lifecycle, Workspace calls, exec, the daemon channel | [Sandboxes](../docs/architecture/control/sandboxes/README.md) |
-| `layerfs-sandbox-backend` | driver: *how* a Sandbox runs on a kernel (`host_process`, stored as `native`; `namespaces`), and `layerfs-sandbox-helper` | [Backends](../docs/architecture/control/sandboxes/backends.md) |
+| `layerfs-sandbox-backend` | driver: *how* a Sandbox runs on a kernel (`native`, macOS; `namespaces`, Linux), and `layerfs-sandbox-helper` | [Backends](../docs/architecture/control/sandboxes/backends.md) |
 | `layerfs-control` | what spans entities: the worker server, inventory, doctor, and the machine, Store, project and backup calls with their checks | [Doctor](../docs/architecture/control/doctor/README.md), [Home](../docs/architecture/control/home/README.md#inventory) |
 
 `SUPPORT.json` is generated from `layerfs-platform/src/support.rs`; never

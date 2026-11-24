@@ -8,12 +8,12 @@
 //! the launcher wrote the Sandbox a resolver file (the spec's `resolver`),
 //! the daemon still resolves through the machine's own, and the outer stage
 //! also holds the commands' own mount view with the written one
-//! (`mounts::commands_view`): the inner stage, once its root is built and
+//! (`root::commands_view`): the inner stage, once its root is built and
 //! shared, says so on its standard input, a socket to the outer one, and
 //! starts the daemon only once the outer one answers that the view is made.
 //! Neither stage retries anything: a failure ends the stage and is written
 //! to the Sandbox's daemon log, which the start's error keeps.
-use super::{mounts, network};
+use super::{netns, root};
 use layerfs_sandbox_backend::HelperSpec;
 use nix::{
     sched::{setns, unshare, CloneFlags},
@@ -36,7 +36,7 @@ const VIEW: u8 = b'v';
 
 /// The outer init stage: joins the Sandbox's cgroup, becomes the first
 /// process of its mount, PID and IPC namespaces, wires the Sandbox's network
-/// (`network::wire`), starts the inner stage on the machine's network and
+/// (`netns::wire`), starts the inner stage on the machine's network and
 /// then holds the Sandbox's. Its exit code is the daemon's, so the Sandbox
 /// ends when the daemon does, and its network with it.
 pub(super) fn outer(spec_path: &Path) -> Result<i32, String> {
@@ -56,7 +56,7 @@ pub(super) fn outer(spec_path: &Path) -> Result<i32, String> {
     .map_err(|error| format!("making the Sandbox's mount tree private: {error}"))?;
     let executable =
         std::env::current_exe().map_err(|error| format!("this helper's own path: {error}"))?;
-    let (machine, sandbox) = network::wire(&spec)?;
+    let (machine, sandbox) = netns::wire(&spec)?;
     // the inner stage, and the daemon it starts, keep the machine's network
     setns(&machine, CloneFlags::CLONE_NEWNET)
         .map_err(|error| format!("returning to the machine's network: {error}"))?;
@@ -108,10 +108,10 @@ pub(super) fn outer(spec_path: &Path) -> Result<i32, String> {
 /// process of the Sandbox is left a zombie.
 pub(super) fn inner(spec_path: &Path) -> Result<i32, String> {
     let spec = read(spec_path)?;
-    mounts::build(&spec)?;
-    mounts::pivot(&spec.root)?;
+    root::build(&spec)?;
+    root::pivot(&spec.root)?;
     if spec.resolver.is_some() {
-        mounts::share()?;
+        root::share()?;
         built()?;
     }
     let daemon = daemon(&spec)?
@@ -156,7 +156,7 @@ fn view(mut gate: UnixStream, written: &Path) -> Result<(), String> {
         }
         Err(error) => return Err(format!("reading the init stages' gate: {error}")),
     }
-    mounts::commands_view(written)?;
+    root::commands_view(written)?;
     gate.write_all(&[VIEW])
         .map_err(|error| format!("answering the init stages' gate: {error}"))
 }

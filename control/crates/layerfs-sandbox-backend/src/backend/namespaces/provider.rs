@@ -6,12 +6,12 @@
 use super::{
     cgroup,
     create::{self, CreateFailure, Options},
-    host,
+    host_checks,
     paths::Paths,
     rootfs,
     sandbox::Sandbox,
 };
-use crate::local::{Local, LocalPaths};
+use crate::shared::{Local, LocalPaths};
 use crate::{Bind, ContainerId, RuntimeError, WireFailure};
 use crate::{LaunchFailure, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord};
 use std::{
@@ -38,11 +38,11 @@ impl NamespaceProvider {
     /// user namespaces not blocked, no cgroup v2, or no `/dev/fuse`.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         let local = Local::new(&root)?;
-        host::require_root()?;
-        host::require_user_namespaces_blocked()?;
-        host::require_cgroup_v2()?;
-        host::require_fuse()?;
-        host::require_overlay_upper(root.as_ref())?;
+        host_checks::require_root()?;
+        host_checks::require_user_namespaces_blocked()?;
+        host_checks::require_cgroup_v2()?;
+        host_checks::require_fuse()?;
+        host_checks::require_overlay_upper(root.as_ref())?;
         Ok(Self { local })
     }
 
@@ -91,10 +91,10 @@ impl NamespaceProvider {
             } = *failure;
             Box::new(LaunchFailure {
                 phase: match phase {
-                    crate::local::LocalPhase::Validate => LaunchPhase::Validate,
-                    crate::local::LocalPhase::Create => LaunchPhase::Create,
-                    crate::local::LocalPhase::Start => LaunchPhase::Start,
-                    crate::local::LocalPhase::Listener => LaunchPhase::Listener,
+                    crate::shared::LocalPhase::Validate => LaunchPhase::Validate,
+                    crate::shared::LocalPhase::Create => LaunchPhase::Create,
+                    crate::shared::LocalPhase::Start => LaunchPhase::Start,
+                    crate::shared::LocalPhase::Listener => LaunchPhase::Listener,
                 },
                 instance: sandbox
                     .map(|sandbox| Box::new(crate::Sandbox::Namespaces(Box::new(sandbox)))),

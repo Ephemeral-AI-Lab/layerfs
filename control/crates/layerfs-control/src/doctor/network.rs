@@ -36,7 +36,7 @@ pub(crate) fn inspect_in_worker(root: &Path) -> Outcome {
 /// whichever machine it is on.
 #[cfg(any(target_os = "linux", feature = "machine", test))]
 pub(super) fn owned_links(records: &[SandboxRecord]) -> Vec<(String, String)> {
-    use layerfs_sandbox_backend::network::plan::link_name;
+    use layerfs_sandbox_backend::network::pool::link_name;
     let mut owned = Vec::new();
     for record in records {
         let daemon = record.daemon();
@@ -229,7 +229,7 @@ pub(super) fn machine(
 #[cfg(target_os = "linux")]
 pub(super) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
     use layerfs_sandbox::state::remove_fix;
-    use layerfs_sandbox_backend::network::{inspect, plan::link_name, private};
+    use layerfs_sandbox_backend::network::{inspect, pool::link_name, private};
     let Some(daemon) = record.daemon() else {
         return;
     };
@@ -284,7 +284,7 @@ pub(super) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
         .as_deref()
         .and_then(|line| line.split_once(' '))
         .is_some_and(|(name, guest)| {
-            let guest = layerfs_sandbox_backend::network::plan::Ipv4Net::parse(guest);
+            let guest = layerfs_sandbox_backend::network::pool::Ipv4Net::parse(guest);
             name == link
                 && guest
                     .is_some_and(|guest| addresses.iter().any(|host| host.base() == guest.base()))

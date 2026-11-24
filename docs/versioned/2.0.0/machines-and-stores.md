@@ -16,7 +16,7 @@ a copy of a sqlite Store in a bucket.
 
 Firecracker, Microsandbox and SSH machines were removed in 2.0; see
 [removed platforms](#removed-platforms-firecracker-microsandbox-and-ssh) and
-the [contract](../../architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
+the [contract](../../architecture/control/machines/platforms.md#removed-platforms-removed_platformsrs).
 
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |

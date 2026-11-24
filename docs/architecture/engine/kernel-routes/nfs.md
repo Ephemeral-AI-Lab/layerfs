@@ -342,7 +342,7 @@ the variable is exactly `1`, is read once per process, and changes no state;
 the lines are written under the lock the request already holds.
 
 On the `native` route the daemon is started with `env_clear` and an empty
-environment (`control/crates/layerfs-sandbox-backend/src/local/create.rs`), so
+environment (`control/crates/layerfs-sandbox-backend/src/shared/daemon.rs`), so
 it does not inherit `LAYERFS_NFS_TRACE=1` from the shell that created the
 Sandbox: a trace run there needs `machine update native --daemon` pointed at a
 wrapper that exports the variable and `exec`s the real daemon (measured on

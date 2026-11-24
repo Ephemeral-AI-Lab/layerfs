@@ -5,10 +5,10 @@
 //! search path reaches it. Its standard input is the request's bytes, given
 //! whole once it runs, or `/dev/null` with none.
 use super::{cgroup, sandbox::Sandbox};
-use crate::local::search::search_path;
-use crate::local::streams;
-use crate::steps;
-use crate::stop::{self, ExecSlot, Stop};
+use crate::runtime::cancel::{self, ExecSlot, Stop};
+use crate::runtime::trace;
+use crate::shared::search_path::search_path;
+use crate::shared::streams;
 use crate::ExecExit;
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use std::{
@@ -61,18 +61,18 @@ impl Sandbox {
             .init
             .ok_or_else(|| self.invalid("running command admission"))?;
         self.endpoint()?;
-        steps::mark("exec.endpoint");
+        trace::mark("exec.endpoint");
         let group = match &slot {
             Some(slot) => Some(self.exec_group(slot)?),
             None => None,
         };
-        steps::mark("exec.cgroup_create");
+        trace::mark("exec.cgroup_create");
         let told = group.as_deref().zip(slot);
         let outcome = self.spawn_in(request, init.pid, told, stdout, stderr);
         if let Some(group) = &group {
             cgroup::remove_exec(group);
         }
-        steps::mark("exec.cgroup_remove");
+        trace::mark("exec.cgroup_remove");
         outcome
     }
 
@@ -80,7 +80,7 @@ impl Sandbox {
     /// group follows from this Sandbox's and the two ids, so whoever holds
     /// the command keeps no table of them.
     pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
-        (stop::component(workspace) && stop::component(exec)).then(|| Stop::Cgroup {
+        (cancel::component(workspace) && cancel::component(exec)).then(|| Stop::Cgroup {
             path: cgroup::exec_path(&self.cgroup, workspace, exec),
         })
     }
@@ -88,7 +88,7 @@ impl Sandbox {
     /// The group of the command `slot` names, made new. The slot is told
     /// it only once the command is in it ([`Sandbox::spawn_in`]).
     fn exec_group(&self, slot: &ExecSlot<'_>) -> Result<PathBuf, Box<WireFailure>> {
-        if !stop::component(slot.workspace) || !stop::component(slot.exec) {
+        if !cancel::component(slot.workspace) || !cancel::component(slot.exec) {
             return Err(self.failure(RuntimeError::Protocol("exec group names")));
         }
         let group = cgroup::exec_path(&self.cgroup, slot.workspace, slot.exec);
@@ -99,7 +99,7 @@ impl Sandbox {
     /// Spawns the helper for `request` and waits for it; with `group`, the
     /// command's own group and the slot to tell once the command is in it.
     /// While this thread's steps are timed, the helper writes its stages'
-    /// times to a file of its own (`--trace`, [`steps::helper_file`]).
+    /// times to a file of its own (`--trace`, [`trace::helper_file`]).
     fn spawn_in(
         &self,
         request: &ExecRequest,
@@ -146,7 +146,7 @@ impl Sandbox {
         if request.stdin.is_some() {
             command.arg("--stdin").arg("inherit");
         }
-        let traced = steps::helper_file();
+        let traced = trace::helper_file();
         if let Some(file) = &traced {
             command.arg("--trace").arg(file);
         }
@@ -179,7 +179,7 @@ impl Sandbox {
         }
         let spawned = traced.is_some().then(std::time::SystemTime::now);
         let child = command.spawn();
-        steps::mark("exec.helper_spawn");
+        trace::mark("exec.helper_spawn");
         let mut child = child.map_err(|error| {
             if let Some(file) = &traced {
                 let _ = std::fs::remove_file(file);
@@ -221,9 +221,9 @@ impl Sandbox {
         });
         // the pipes are closed here either way; the exit is still waited for
         let status = child.wait();
-        steps::mark("exec.helper_wait");
+        trace::mark("exec.helper_wait");
         if let (Some(file), Some(spawned)) = (&traced, spawned) {
-            steps::helper(file, spawned);
+            trace::helper(file, spawned);
         }
         let (out_bytes, err_bytes) = copied.map_err(|error| self.io(error))?;
         let status = status.map_err(|error| self.io(error))?;
@@ -277,7 +277,7 @@ fn told(ready: &mut UnixStream, path: &Path, slot: ExecSlot<'_>) -> (Option<io::
     };
     // the cancel was answered as SIGKILL: no SIGTERM first, which a
     // default disposition makes fatal at once and reports as 143
-    let _ = stop::kill(&handle);
+    let _ = cancel::kill(&handle);
     (
         (error.kind() != io::ErrorKind::Interrupted).then_some(error),
         true,

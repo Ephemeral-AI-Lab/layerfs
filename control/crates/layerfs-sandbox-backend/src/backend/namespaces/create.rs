@@ -6,14 +6,14 @@
 //! the Sandbox reaches). Nothing is retried, and a failure returns what it
 //! made so the caller can end and delete it once.
 use super::{
-    cgroup, host,
+    cgroup, host_checks,
     paths::Paths,
     rootfs::{self, ImageRoot},
     sandbox::Sandbox,
 };
-use crate::local::listener;
-use crate::local::{search::search_path, Local, LocalPhase};
-use crate::network::{self, plan::Ipv4Net, resolver::Resolver};
+use crate::network::{self, pool::Ipv4Net, resolver::Resolver};
+use crate::shared::listener;
+use crate::shared::{search_path::search_path, Local, LocalPhase};
 use crate::{Bind, CommandIdentity, Image, RuntimeError};
 use crate::{HelperSpec, SpecNetwork};
 use layerfs_bridge::process::LocalProcess;
@@ -185,7 +185,7 @@ fn unavailable(log: &Path) -> Option<String> {
     let mut bytes = Vec::new();
     let file = File::open(log).ok()?;
     file.take(64 * 1024).read_to_end(&mut bytes).ok()?;
-    network::plan::unavailable_in(&String::from_utf8_lossy(&bytes))
+    network::pool::unavailable_in(&String::from_utf8_lossy(&bytes))
 }
 
 /// Everything a start refuses before it makes anything: the request's own
@@ -204,13 +204,13 @@ fn start_request(
         let named = local.clone().naming(&request.name)?;
         Paths::of(named.paths()?)?
     };
-    host::require_root()?;
-    host::require_user_namespaces_blocked()?;
-    host::require_cgroup_v2()?;
-    host::require_fuse()?;
+    host_checks::require_root()?;
+    host_checks::require_user_namespaces_blocked()?;
+    host_checks::require_cgroup_v2()?;
+    host_checks::require_fuse()?;
     let root = (paths.local.directory.parent())
         .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
-    host::require_overlay_upper(root)?;
+    host_checks::require_overlay_upper(root)?;
     let plan = network_plan()?;
     options.command_identity.check()?;
     let executable = &request.daemon_executable;
@@ -386,7 +386,7 @@ fn prepare(
         runtime: options.runtime.as_ref().map(|_| paths.runtime.clone()),
         network: Some(SpecNetwork {
             pool: plan.pool,
-            link: network::plan::link_name(id.as_str()),
+            link: network::pool::link_name(id.as_str()),
         }),
         resolver,
     };
