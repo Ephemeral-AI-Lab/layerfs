@@ -196,6 +196,19 @@ impl MachineRecord {
         self.fields.get_text("platform")
     }
 
+    /// The ordered incarnation the machine's last start recorded: a newer
+    /// worker start mints a greater value, which admission compares with the
+    /// incarnation a mount intent recorded. A record written before the field
+    /// existed has none (no place proof, never death).
+    pub fn incarnation(&self) -> Option<&str> {
+        self.text("incarnation")
+    }
+
+    /// The record with the ordered `incarnation` its start minted.
+    pub fn with_incarnation(self, incarnation: &str) -> Self {
+        self.with("incarnation", SdkValue::text(incarnation))
+    }
+
     /// The state a create, start or stop recorded (`running`,
     /// `stopped`, `failed`).
     pub fn recorded_state(&self) -> Option<&str> {
@@ -308,3 +321,4 @@ impl MachineRecord {
         self.status_held(self.removed().is_some(), held)
     }
 }
+

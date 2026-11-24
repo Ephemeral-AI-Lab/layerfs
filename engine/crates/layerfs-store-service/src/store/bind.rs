@@ -124,9 +124,32 @@ impl Store {
             // Admission before any root demand: a live removal is `Busy`, an
             // uncertain owner `Unresolved`, and the intent lives until this
             // Workspace's unmount deletes it.
-            let intent = crate::history::admission::mount_intent(workspace, &captured, &place);
+            // A placed mount records the place values its control caller
+            // read from the home records, so admission proves it dead later:
+            // the machine record's current incarnation and the Sandbox
+            // record's generation. The daemon is not the worker that
+            // records the process-global incarnation, so the caller supplies
+            // it. A private or place-unknown bind keeps today's behavior:
+            // the intent records only the owner tokens, and admission falls
+            // back to this process's namespace and boot. The daemon holds
+            // no lease or fence of its own, so neither is invented here.
+            let mut authority = layerfs_history::PlaceAuthority::default();
+            if place.machine.is_some() {
+                authority.machine_incarnation = place.machine_incarnation.clone();
+            }
+            if place.machine.is_some() && place.sandbox.is_some() {
+                authority.sandbox_generation = place.generation.clone();
+            }
+            let intent = crate::history::admission::mount_intent(
+                workspace,
+                &captured,
+                &place,
+                authority,
+            );
             match self.history().gc_register(&intent) {
-                Ok(()) => gc_op = Some(intent.op_id),
+                Ok(()) => {
+                    gc_op = Some(intent.op_id);
+                }
                 // A provider without admission cannot exclude a removal; it
                 // is a test double or a legacy wrapper, never this service's
                 // real Store provider.

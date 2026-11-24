@@ -168,6 +168,7 @@ pub fn provider_spec(home: &Path, record: &MachineRecord) -> Result<Spec> {
                 .and_then(|g| g.parse().ok()),
         },
         worker: None,
+        incarnation: None,
         work_dir: paths::machine_dir(home, name),
         tools: tools(home)?,
     })

@@ -10,6 +10,7 @@ pub use crate::backend::postgresql::compact::{
 pub use crate::backend::postgresql::probe::{
     reads as postgresql_reads, Outcome as PostgresReadOutcome, Read as PostgresRead,
 };
+pub use crate::backend::postgresql::schema::TABLES as POSTGRESQL_TABLES;
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{

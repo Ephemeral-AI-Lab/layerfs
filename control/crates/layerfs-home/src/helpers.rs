@@ -29,6 +29,20 @@ pub fn required<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str, SdkRe
     value.ok_or_else(|| refused("InvalidInput", format!("missing text argument `{name}`")))
 }
 
+/// One ordered place value, `p1:<label>:<zero-padded Unix milliseconds>:<nonce>`:
+/// a newer mint compares greater than every younger one without a Store
+/// counter, and a home restore that brings an older one back compares lower
+/// (admission calls that uncertain, never dead). A value written before this
+/// release does not parse and compares equal only to itself.
+pub fn ordered_token(label: &str) -> String {
+    let milliseconds = crate::home::now_ms().max(0) as u64;
+    let nonce = match random() {
+        Ok(bytes) => layerfs_bridge::sdk_values::hex(&bytes[..8]),
+        Err(_) => format!("{:016x}", milliseconds),
+    };
+    format!("p1:{label}:{milliseconds:016}:{nonce}")
+}
+
 /// 32 fresh random bytes from the transport's key generator.
 pub fn random() -> Result<[u8; 32], SdkRefusal> {
     layerfs_bridge::duplex::generate_keypair()

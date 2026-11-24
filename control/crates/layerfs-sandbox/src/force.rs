@@ -101,6 +101,11 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         Some(record) => crate::mount_intents::store_of(&host.home, record),
         None => Err(format!("no Sandbox {id} is recorded")),
     };
+    // the runtime is confirmed stopped: write the durable home tombstone
+    // before the record (the folder) goes; a failed write keeps the record
+    if let Some(record) = &record {
+        crate::record::retire(&host.home, record).map_err(after_stop)?;
+    }
     let left = crate::mount_intents::end(open.as_ref().map_err(String::as_str), &bound);
     // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES

@@ -179,6 +179,8 @@ Under a machine that is not ready only `store.record` is made: the rest are
 | `store.identity` | The id in its file is the one in its record; when it is not, `store.schema` is not made | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `store.schema` | Its schema is the one this build reads | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/diagnostic.rs) |
 | `store.backups` | sqlite only: each bucket link's backup heads against the Store's; one behind is a notice, `fix: layerfs backup create <store> <bucket>` | [`store_target.rs`](../../../../control/crates/layerfs-control/src/doctor/store_target.rs) |
+| `store.mount_holders` | The live mount admissions of a SQLite Store (read locally, or forwarded by its worker), compared with this home's Sandbox/Workspace records; a missing record is a warning with the unmount/offline-recovery fix, never a release | [`mount_holders.rs`](../../../../control/crates/layerfs-control/src/doctor/mount_holders.rs) |
+| `store.gc_audit` | One bounded page (16) of the retained `done` operator-audit rows of a SQLite Store (read locally, or forwarded by its worker), returned as evidence; an unreadable page is `unknown`. The doctor changes no row and never releases or settles one | [`mount_holders.rs`](../../../../control/crates/layerfs-control/src/doctor/mount_holders.rs) |
 
 ### Project
 

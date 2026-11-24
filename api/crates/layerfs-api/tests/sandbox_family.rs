@@ -424,6 +424,19 @@ fn named_sandboxes_on_native() {
     );
     ok(&home, "sandbox.remove", &[("sandbox", t("t1"))]);
     assert!(!paths::sandbox_dir(&home, "t1").exists());
+    // RV5 FAIL-2: its stop ended both Workspaces' mount intents, so
+    // nothing it says is left, and their Branch and the Store are free
+    assert!(
+        matches!(closed.get("left"), None | Some(SdkValue::Null))
+            || closed.get("left") == Some(&SdkValue::List(Vec::new())),
+        "{closed:?}"
+    );
+    ok(
+        &home,
+        "branch.remove",
+        &[("project", t("shop/api")), ("branch", t("dev"))],
+    );
+    ok(&home, "store.compact", &[("store", t("shop"))]);
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(folder);
 }

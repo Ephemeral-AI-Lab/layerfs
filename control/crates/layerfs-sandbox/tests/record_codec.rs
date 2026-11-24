@@ -4,6 +4,7 @@
 //! last, as the untyped records did.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::json::{parse, print};
+use layerfs_home::op::Op;
 use layerfs_sandbox::host::Started;
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 
@@ -215,4 +216,31 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
         .recv_timeout(Duration::from_secs(5))
         .expect("bounded test timed out");
     worker.join().unwrap();
+}
+
+/// §3.1: a create assigns an ordered generation the durable tombstone names.
+/// It is a record field only: it does not appear in a call result, and a
+/// record from before generations has none.
+#[test]
+fn a_created_sandbox_records_one_generation_that_round_trips() {
+    let op = Op::begin("sandbox.create", "create", SdkValue::Null).expect("intent");
+    let record = SandboxRecord::creating("t1", "shop/api", "native", &op);
+    let generation = record.generation().expect("a generation").to_owned();
+    assert!(!generation.is_empty());
+    assert!(
+        layerfs_history::ordered_token_parts(&generation).is_some(),
+        "a new generation is ordered"
+    );
+    assert!(record.to_record().get("generation").is_some());
+
+    let read = SandboxRecord::from_record("t1", record.to_record().clone());
+    assert_eq!(read.generation(), Some(generation.as_str()));
+
+    // a Sandbox recorded before generations has none, and a write keeps it so
+    let old = SandboxRecord::from_record("t1", value(r#"{"name":"t1","machine":"native"}"#));
+    assert_eq!(old.generation(), None);
+    assert_eq!(
+        print(&old.to_record()),
+        r#"{"name":"t1","machine":"native"}"#
+    );
 }

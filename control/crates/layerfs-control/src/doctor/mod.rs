@@ -10,6 +10,7 @@
 mod capacity;
 mod checks;
 mod records;
+mod mount_holders;
 mod scan;
 
 mod check_report;

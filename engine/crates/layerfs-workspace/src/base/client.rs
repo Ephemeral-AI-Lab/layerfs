@@ -79,7 +79,18 @@ impl Streams {
             .0
             .iter()
             .position(|last| last.root == root && last.next == start);
-        let until = found.map(|index| self.0.remove(index).until);
+        let until = match found {
+            Some(index) => Some(self.0.remove(index).until),
+            // A concurrent request may continue inside a window another
+            // request already fetched: follow that window instead of opening
+            // a new one, so its tail is not demanded again.
+            None => self
+                .0
+                .iter()
+                .filter(|stream| stream.root == root && stream.until > start)
+                .map(|stream| stream.until)
+                .max(),
+        };
         self.0.push(Ahead {
             root,
             next: end,

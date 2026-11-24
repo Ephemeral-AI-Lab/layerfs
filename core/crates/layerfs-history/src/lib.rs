@@ -18,8 +18,13 @@
 #![deny(missing_docs)]
 
 mod contract;
+pub use contract::authority::{
+    compare_place, ordered_token_parts, Liveness, PlaceAuthority, PlaceOrder, PlaceRecord,
+    PlaceView, SandboxPlace, ORDERED_TOKEN_PREFIX,
+};
 pub use contract::catalog;
 pub use contract::error;
+pub use contract::holder::MountHolderView;
 pub use contract::identity;
 pub use contract::path;
 pub use contract::query;
@@ -35,10 +40,10 @@ pub use identity::{
 pub use records::{
     AddLayerOutcome, AddLayerRequest, BindingHint, BranchMergeRequest, BranchRecord,
     BranchSnapshot, CommitHistoryRequest, CommitMeta, CommitOutcome, CommitRecord, CommitRequest,
-    CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, GcDeletion, GcIntent,
-    GcIntentKind, GcScopeKind, InitStatistics, LayerHistoryRequest, LayerRecord, LayerStackRecord,
-    MergeCommit, MergeHead, MergeSide, Page, PageResult, PathRemovalKind, PathRemovalOutcome,
-    PathRemovalRecord, PathRemovalRequest, RecordKind, Reservation, ReserveRequest,
-    StackInitialization, StoreStatistics, FILE_DIGEST_WINDOW, MAXIMUM_MESSAGE_BYTES,
-    MAXIMUM_PAGE_RECORDS,
+    CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, GcAuditPage, GcDeletion,
+    GcIntent, GcIntentDone, GcIntentKind, GcReconcile, GcScopeKind, InitStatistics,
+    LayerHistoryRequest, LayerRecord, LayerStackRecord, MergeCommit, MergeHead, MergeSide, Page,
+    PageResult, PathRemovalKind, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
+    RecordKind, Reservation, ReserveRequest, StackInitialization, StoreStatistics,
+    FILE_DIGEST_WINDOW, MAXIMUM_AUDIT_PAGE, MAXIMUM_MESSAGE_BYTES, MAXIMUM_PAGE_RECORDS,
 };

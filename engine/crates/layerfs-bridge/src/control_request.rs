@@ -258,9 +258,12 @@ impl Call {
         Ok(Self { id, request })
     }
 }
-/// Writes the known Sandbox and machine names of one placed mount.
+/// Writes the known names and place values of one placed mount.
 fn put_place(out: &mut Writer, place: &MountPlace) -> Result<(), ControlError> {
-    let flags = u8::from(place.sandbox.is_some()) | (u8::from(place.machine.is_some()) << 1);
+    let flags = u8::from(place.sandbox.is_some())
+        | (u8::from(place.machine.is_some()) << 1)
+        | (u8::from(place.generation.is_some()) << 2)
+        | (u8::from(place.machine_incarnation.is_some()) << 3);
     out.byte(flags)?;
     if let Some(sandbox) = &place.sandbox {
         out.blob(sandbox.as_bytes())?;
@@ -268,13 +271,19 @@ fn put_place(out: &mut Writer, place: &MountPlace) -> Result<(), ControlError> {
     if let Some(machine) = &place.machine {
         out.blob(machine.as_bytes())?;
     }
+    if let Some(generation) = &place.generation {
+        out.blob(generation.as_bytes())?;
+    }
+    if let Some(incarnation) = &place.machine_incarnation {
+        out.blob(incarnation.as_bytes())?;
+    }
     Ok(())
 }
 
-/// Reads the known Sandbox and machine names of one placed mount.
+/// Reads the known names and place values of one placed mount.
 fn place(input: &mut Reader<'_>) -> Result<MountPlace, ControlError> {
     let flags = input.byte()?;
-    if flags & !0b11 != 0 {
+    if flags & !0b1111 != 0 {
         return Err(ControlError("mount place"));
     }
     let sandbox = if flags & 1 != 0 {
@@ -287,7 +296,22 @@ fn place(input: &mut Reader<'_>) -> Result<MountPlace, ControlError> {
     } else {
         None
     };
-    Ok(MountPlace { sandbox, machine })
+    let generation = if flags & 4 != 0 {
+        Some(input.text(NAME_FIELD)?)
+    } else {
+        None
+    };
+    let machine_incarnation = if flags & 8 != 0 {
+        Some(input.text(NAME_FIELD)?)
+    } else {
+        None
+    };
+    Ok(MountPlace {
+        sandbox,
+        machine,
+        generation,
+        machine_incarnation,
+    })
 }
 
 fn window(limit: u16) -> Result<(), ControlError> {

@@ -21,6 +21,7 @@ Modes:
             writers plus a checkpoint loop.  Measures whether the backlog
             drains while writers continue.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -70,9 +71,7 @@ def _seed(path: str, seed_mb: int) -> None:
     conn.execute("PRAGMA cache_size=-65536")
     conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, body BLOB NOT NULL, w INTEGER NOT NULL)")
     conn.execute("BEGIN")
-    conn.executemany(
-        "INSERT INTO t(body, w) VALUES(zeroblob(?), 0)", [(MIB,)] * seed_mb
-    )
+    conn.executemany("INSERT INTO t(body, w) VALUES(zeroblob(?), 0)", [(MIB,)] * seed_mb)
     conn.execute("COMMIT")
     conn.close()
 
@@ -112,8 +111,7 @@ def _checkpointer(path, stop, results, mode="truncate"):
         started = time.perf_counter()
         try:
             row = conn.execute(f"PRAGMA wal_checkpoint({mode.upper()})").fetchone()
-            results.append({"result": list(row), "secs": time.perf_counter() - started,
-                            "wal": wal_bytes(path)})
+            results.append({"result": list(row), "secs": time.perf_counter() - started, "wal": wal_bytes(path)})
         except Exception as error:  # noqa: BLE001 - reported, not raised
             results.append({"error": str(error), "secs": time.perf_counter() - started})
             time.sleep(0.002)
@@ -122,9 +120,16 @@ def _checkpointer(path, stop, results, mode="truncate"):
     conn.close()
 
 
-def probe(path: str, seed_mb: int, seconds: float, cap_mb: int | None = None,
-          drain: bool = False, preset_mb: int = 0, writers: int = 2,
-          preset_from_reader: bool = True) -> dict:
+def probe(
+    path: str,
+    seed_mb: int,
+    seconds: float,
+    cap_mb: int | None = None,
+    drain: bool = False,
+    preset_mb: int = 0,
+    writers: int = 2,
+    preset_from_reader: bool = True,
+) -> dict:
     reset(path)
     _seed(path, seed_mb)
     stop = threading.Event()
@@ -192,11 +197,14 @@ def probe(path: str, seed_mb: int, seconds: float, cap_mb: int | None = None,
     backlog = wal_bytes(path)
 
     # WAL mode is set by the seed; a writer connection is opened per thread.
-    check_thread = threading.Thread(target=_checkpointer, args=(path, stop, checkpoints)) if drain or preset_mb else None
+    check_thread = (
+        threading.Thread(target=_checkpointer, args=(path, stop, checkpoints)) if drain or preset_mb else None
+    )
     sample_thread = start_sampler()
     threads = [
-        threading.Thread(target=_writer,
-                         args=(path, stop, deadline, latencies, errors, committed, cap_mb, stalls, salt))
+        threading.Thread(
+            target=_writer, args=(path, stop, deadline, latencies, errors, committed, cap_mb, stalls, salt)
+        )
         for salt in range(writers)
     ]
     for thread in threads:
@@ -220,8 +228,11 @@ def probe(path: str, seed_mb: int, seconds: float, cap_mb: int | None = None,
         attempt = connect(path)
         attempt.execute("PRAGMA busy_timeout=5000")
         attempt_started = time.perf_counter()
-        held_checkpoint = {"result": list(attempt.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()),
-                           "secs": time.perf_counter() - attempt_started, "wal": wal_bytes(path)}
+        held_checkpoint = {
+            "result": list(attempt.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()),
+            "secs": time.perf_counter() - attempt_started,
+            "wal": wal_bytes(path),
+        }
         attempt.close()
     if reader is not None:
         reader.execute("COMMIT")
@@ -266,7 +277,9 @@ def probe(path: str, seed_mb: int, seconds: float, cap_mb: int | None = None,
         "committed_bytes": committed[0] * MIB,
         "write_rate_mib_s": round(committed[0] / elapsed, 2) if elapsed else 0,
         "commit_ms_p50": round((statistics.median(ordered) * 1000), 3) if ordered else 0.0,
-        "commit_ms_p99": round((ordered[min(len(ordered) - 1, int(len(ordered) * 0.99))] * 1000), 3) if ordered else 0.0,
+        "commit_ms_p99": round((ordered[min(len(ordered) - 1, int(len(ordered) * 0.99))] * 1000), 3)
+        if ordered
+        else 0.0,
         "commit_ms_max": round((ordered[-1] * 1000), 3) if ordered else 0.0,
         "writer_errors": errors,
         "cap_stalls": len(stalls),
@@ -314,11 +327,11 @@ def main() -> None:
     elif args.mode == "cap":
         result = probe(path, args.seed_mb, args.seconds, cap_mb=args.cap_mb, writers=args.writers)
     elif args.mode == "cap_drain":
-        result = probe(path, args.seed_mb, args.seconds, cap_mb=args.cap_mb, drain=True,
-                       writers=args.writers)
+        result = probe(path, args.seed_mb, args.seconds, cap_mb=args.cap_mb, drain=True, writers=args.writers)
     else:
-        result = probe(path, args.seed_mb, args.seconds, preset_mb=args.preset_mb,
-                       writers=args.writers, preset_from_reader=False)
+        result = probe(
+            path, args.seed_mb, args.seconds, preset_mb=args.preset_mb, writers=args.writers, preset_from_reader=False
+        )
     text = json.dumps(result, indent=2, sort_keys=True)
     if args.out:
         with open(args.out, "w", encoding="ascii") as handle:

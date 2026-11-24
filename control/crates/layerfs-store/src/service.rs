@@ -17,6 +17,8 @@
 //! again.
 use crate::open_args::{OpenArgs, ROUTING};
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
+use layerfs_history::MountHolderView;
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
@@ -124,7 +126,13 @@ pub fn with_service<T>(
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
     acquire(args)?;
-    let result = service(args).and_then(|service| work(&service));
+    let result = service(args).and_then(|service| {
+        let place = match layerfs_store_service::history::admission::has_place_view() {
+            true => None,
+            false => crate::place_view::from_open(args),
+        };
+        layerfs_store_service::history::admission::with_place_view(place, || work(&service))
+    });
     let released = release(args);
     let value = result?;
     released?;
@@ -225,4 +233,324 @@ pub fn end_mount(
         }
         Ok(ended)
     })
+}
+
+/// Settles the intents at `machine` the ordered `incarnation` proves dead,
+/// where that Store's calls run: this process when the Store lives here, else
+/// the machine's worker. The home recorded the incarnation in the
+/// `MachineRecord` before this call. One bounded call per Store; a failure is
+/// reported, never retried.
+pub fn reconcile_machine(
+    home: &Path,
+    store: &str,
+    machine: &str,
+    incarnation: &str,
+) -> Result<SdkValue, SdkRefusal> {
+    // The host holds the Store's lease while it sends the call, as
+    // `store_call` does; a Store an operation is moving is left, never retried.
+    let (_lease, record) = crate::lease::claim(home, store)?;
+    let store_ref = record.store_ref()?;
+    match crate::place::plan(home, store_ref)? {
+        crate::place::Executor::Local => {
+            let args = OpenArgs::of_record(home, store, &record)?;
+            with_service(&args, |service| {
+                layerfs_store_service::history::admission::reconcile_machine(
+                    service.store.history(),
+                    machine,
+                    incarnation,
+                )
+                .map(|reconcile| {
+                    layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                })
+                .map_err(layerfs_store_service::history::lookup::history)
+            })
+        }
+        crate::place::Executor::Worker(mut worker) => {
+            let mut fields = vec![
+                ("store".to_owned(), SdkValue::text(store)),
+                ("store_record".to_owned(), record.to_record().clone()),
+                ("machine".to_owned(), SdkValue::text(machine)),
+                ("incarnation".to_owned(), SdkValue::text(incarnation)),
+            ];
+            if let Some(place) = crate::place_view::encoded_from_home(home) {
+                fields.push(("place_view".to_owned(), place));
+            }
+            let request = SdkValue::Map(fields);
+            worker.call("store.reconcile", request, &mut |_: SdkValue| {})
+        }
+    }
+}
+
+/// Resolves Branch `branch` of `project` in the Store `open` names, then runs
+/// [`repair_mount_holders`] on it: the one implementation behind a local call
+/// and a worker's `store.repair` operation.
+/// The operator options travel as the call's own fields; keeping them
+/// explicit is the call surface, not a bundle of unrelated state.
+#[allow(clippy::too_many_arguments)]
+pub fn repair_mount_holders_at(
+    open: &OpenArgs,
+    project: &str,
+    branch: &str,
+    action: &str,
+    op: Option<[u8; 16]>,
+    legacy: bool,
+    operator: &str,
+    page: u32,
+    limit: u32,
+) -> Result<SdkValue, SdkRefusal> {
+    if action == "audit" {
+        return done_audit(open, project, branch, page, limit);
+    }
+    let resolved = branch_named(open, project, branch)?;
+    repair_mount_holders(
+        open, resolved, project, branch, action, op, legacy, operator, page, limit,
+    )
+}
+
+/// One bounded page of the retained `done` audit of one Branch, oldest
+/// first. The live holder queries filter done rows; this is the only repair
+/// action that reads them, and it reads only the Branch it names. It changes
+/// no intent.
+pub fn done_audit(
+    args: &OpenArgs,
+    project: &str,
+    branch: &str,
+    page: u32,
+    limit: u32,
+) -> Result<SdkValue, SdkRefusal> {
+    with_service(args, |service| {
+        let page = layerfs_store_service::history::admission::done_intents_branch(
+            service.store.history(),
+            project,
+            branch,
+            page,
+            limit,
+        )
+        .map_err(failed)?;
+        Ok(layerfs_store_service::history::admission::audit_value(
+            &page,
+        ))
+    })
+}
+
+/// First-class operator repair of the mount intents held at one Branch.
+/// `preview` lists them; `settle`/`release` act on one explicit `op`;
+/// `settle_legacy` marks only rows without owner or place evidence. The call
+/// runs through the Store catalog, so a PostgreSQL Store and a worker-hosted
+/// SQLite Store behave the same way. Never automatic; a live-looking holder
+/// is never released by preview.
+///
+/// Release retains the `gc_intent` row in state `done` with the action,
+/// operator label and op in `evidence`, and clears the owner columns. Preview
+/// writes its own retained `done` row the same way, with `action=preview`,
+/// the operator label and no operation; it changes no live intent. Settle
+/// changes the row to uncertain and is in the home's `trace/calls.jsonl` call
+/// log only. The `audit` action reads the Branch's retained done rows in
+/// bounded pages.
+#[allow(clippy::too_many_arguments)]
+pub fn repair_mount_holders(
+    args: &OpenArgs,
+    branch: layerfs_history::BranchId,
+    project: &str,
+    branch_name: &str,
+    action: &str,
+    op: Option<[u8; 16]>,
+    legacy: bool,
+    operator: &str,
+    page: u32,
+    limit: u32,
+) -> Result<SdkValue, SdkRefusal> {
+    with_service(args, |service| {
+        let catalog = service.store.history();
+        let scoped = catalog
+            .gc_intents(layerfs_history::GcScopeKind::Branch, branch.as_slice())
+            .map_err(failed)?;
+        let mounts: Vec<layerfs_history::GcIntent> = scoped
+            .into_iter()
+            .filter(|intent| intent.kind == layerfs_history::GcIntentKind::Mount)
+            .collect();
+        // The typed, read-only view every branch below reports: it carries
+        // the place and lease authority the row recorded, and building it
+        // changes nothing.
+        let holders: Vec<MountHolderView> = mounts.iter().map(MountHolderView::of).collect();
+        let holder = |op: &[u8; 16]| mounts.iter().find(|intent| &intent.op_id == op);
+        match action {
+            "list" => Ok(SdkValue::map([
+                ("holders", holder_rows(&holders)),
+                ("legacy", SdkValue::Bool(legacy)),
+                ("action", SdkValue::text("list")),
+                ("op", SdkValue::Null),
+                ("audit", SdkValue::Null),
+            ])),
+            "preview" => {
+                // Preview changes no live intent, but the operator action is
+                // durable: it writes a retained `done` row through the same
+                // release/done columns, with the operator label and no
+                // operation (`evidence` has no `op=`). The row never admits
+                // (admission filters `state <> 'done'`) and the bounded
+                // `gc_intent_done` read reports it.
+                let operator = operator_label(operator)?;
+                let mut op = [0u8; 16];
+                op.copy_from_slice(&layerfs_home::helpers::random()?[..16]);
+                let evidence = format!("action=preview;operator={operator}");
+                let intent = layerfs_history::GcIntent::shared(
+                    op,
+                    layerfs_history::GcIntentKind::Mount,
+                    layerfs_history::GcScopeKind::Branch,
+                    branch.as_slice(),
+                )
+                .named(Some(project), Some(branch_name));
+                catalog.gc_record_done(&intent, &evidence).map_err(failed)?;
+                Ok(SdkValue::map([
+                    ("holders", holder_rows(&holders)),
+                    ("legacy", SdkValue::Bool(legacy)),
+                    ("action", SdkValue::text("preview")),
+                    ("op", SdkValue::Null),
+                    ("audit", SdkValue::text("gc_intent")),
+                ]))
+            }
+            "settle" | "release" => {
+                let op = op.ok_or_else(|| {
+                    refused("InvalidInput", format!("{action} needs the holder op"))
+                })?;
+                let found = holder(&op).ok_or_else(|| {
+                    refused(
+                        "NotFound",
+                        format!("no mount holder {} at this Branch", hex(&op)),
+                    )
+                })?;
+                if legacy && !MountHolderView::of(found).legacy() {
+                    return Err(refused(
+                        "InvalidInput",
+                        "this holder has owner or place evidence; --legacy settles only legacy rows",
+                    ));
+                }
+                if action == "settle" {
+                    catalog.gc_mark_uncertain(&op).map_err(failed)?;
+                    return Ok(SdkValue::map([
+                        ("action", SdkValue::text(action)),
+                        ("op", SdkValue::text(hex(&op))),
+                        ("audit", SdkValue::text("call-log")),
+                    ]));
+                }
+                if !found.uncertain {
+                    return Err(refused(
+                        "Conflict",
+                        "settle the holder before release; preview and settle are the two explicit steps",
+                    ));
+                }
+                // The operator audit is the retained row itself: release
+                // keeps it in `done` with the action, operator and op in
+                // `evidence`, and clears the owner columns. The call log
+                // still records the call.
+                let operator = operator_label(operator)?;
+                let evidence = format!("action=release;operator={operator};op={}", hex(&op));
+                if !catalog.gc_release_done(&op, &evidence).map_err(failed)? {
+                    return Err(refused(
+                        "NotFound",
+                        format!("the mount holder {} was already released", hex(&op)),
+                    ));
+                }
+                Ok(SdkValue::map([
+                    ("action", SdkValue::text("release")),
+                    ("op", SdkValue::text(hex(&op))),
+                    ("audit", SdkValue::text("gc_intent")),
+                ]))
+            }
+            "audit" => {
+                let page = layerfs_store_service::history::admission::done_intents_branch(
+                    catalog,
+                    project,
+                    branch_name,
+                    page,
+                    limit,
+                )
+                .map_err(failed)?;
+                Ok(layerfs_store_service::history::admission::audit_value(
+                    &page,
+                ))
+            }
+            "settle_legacy" => {
+                let mut settled = 0u64;
+                for holder in &holders {
+                    if holder.legacy() {
+                        catalog.gc_mark_uncertain(&holder.op).map_err(failed)?;
+                        settled += 1;
+                    }
+                }
+                Ok(SdkValue::map([
+                    ("action", SdkValue::text("settle_legacy")),
+                    ("settled", SdkValue::Int(settled as i64)),
+                    ("audit", SdkValue::text("call-log")),
+                ]))
+            }
+            _ => Err(refused(
+                "InvalidInput",
+                "action must be preview, settle, release, settle_legacy or audit",
+            )),
+        }
+    })
+}
+
+/// The operator label a release records. An absent label is the local
+/// operator; a label is at most 128 characters without control characters.
+/// It is not an authenticated principal, only the name the caller gives.
+fn operator_label(operator: &str) -> Result<&str, SdkRefusal> {
+    let operator = operator.trim();
+    if operator.is_empty() {
+        return Ok("local");
+    }
+    if operator.len() > 128 || operator.chars().any(char::is_control) {
+        return Err(refused(
+            "InvalidInput",
+            "operator must be at most 128 characters without control characters",
+        ));
+    }
+    Ok(operator)
+}
+
+fn holder_rows(holders: &[MountHolderView]) -> SdkValue {
+    SdkValue::List(
+        holders
+            .iter()
+            .map(|holder| {
+                let workspace = holder.workspace.map(|ws| hex(&ws));
+                SdkValue::map([
+                    ("op", SdkValue::text(hex(&holder.op))),
+                    ("branch", SdkValue::opt_text(holder.branch.as_deref())),
+                    ("project", SdkValue::opt_text(holder.project.as_deref())),
+                    ("workspace", SdkValue::opt_text(workspace.as_deref())),
+                    ("sandbox", SdkValue::opt_text(holder.sandbox.as_deref())),
+                    ("machine", SdkValue::opt_text(holder.machine.as_deref())),
+                    (
+                        "owner_runtime",
+                        SdkValue::opt_text(holder.owner_runtime.as_deref()),
+                    ),
+                    (
+                        "owner_boot",
+                        SdkValue::opt_text(holder.owner_boot.as_deref()),
+                    ),
+                    (
+                        "machine_incarnation",
+                        SdkValue::opt_text(holder.machine_incarnation.as_deref()),
+                    ),
+                    (
+                        "sandbox_generation",
+                        SdkValue::opt_text(holder.sandbox_generation.as_deref()),
+                    ),
+                    ("state", SdkValue::text(holder.state())),
+                    ("legacy", SdkValue::Bool(holder.legacy())),
+                    ("safe", SdkValue::Bool(holder.uncertain)),
+                    (
+                        "reason",
+                        SdkValue::text(if holder.uncertain {
+                            "uncertain: the owner is already settled; release is available"
+                        } else {
+                            "live: the owner still holds the admission; settle it first"
+                        }),
+                    ),
+                ])
+            })
+            .collect(),
+    )
 }

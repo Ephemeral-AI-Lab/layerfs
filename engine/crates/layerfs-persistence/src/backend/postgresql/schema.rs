@@ -47,6 +47,7 @@ const TRACE_SALT: &str = ",\n trace_salt bytea NOT NULL DEFAULT decode(repeat('0
 /// The GC marker, position and admission tables; a Store written before them
 /// gains them at open ([`add_gc`]).
 const GC: &str = include_str!("../../../sql/postgresql/gc.sql");
+
 /// Init's acquisition tables, created after [`SCHEMA`] in a new schema.
 const ACQUISITION: &str = include_str!("../../../sql/postgresql/acquisition.sql");
 /// The acquisition tables, in name order.
@@ -64,7 +65,7 @@ pub(crate) const SCHEMA_VERSION: i64 = 3;
 /// [`SCHEMA_VERSION`] 3.
 const PRE_2_0_VERSION: i64 = 2;
 /// Every table of one Store schema, in name order.
-pub(crate) const TABLES: [&str; 27] = [
+pub const TABLES: [&str; 27] = [
     "absorbed",
     "binding_hint_block",
     "branch",
@@ -229,18 +230,21 @@ fn kept_node_table() -> &'static str {
     &GC[start..end]
 }
 
-/// The recorded source of a Store written before [`kept_node_table`]: the
-/// current source with that one statement removed.
-fn pre_kept_node_source(acquisition: bool) -> String {
-    source(acquisition).replacen(kept_node_table(), "", 1)
+/// The recorded sources of a Store written before [`kept_node_table`]: the
+/// current source with that one statement removed, and the current source
+/// itself (a step of the same open may have recorded it before this table is
+/// added).
+fn pre_kept_node_sources(acquisition: bool) -> Vec<String> {
+    let without = source(acquisition).replacen(kept_node_table(), "", 1);
+    vec![without, source(acquisition)]
 }
 
 /// One additive migration of an existing Store schema. `probe` is the
 /// `information_schema` relation and condition that finds what the migration
 /// adds; a schema that already has it is left alone, first in one statement
 /// with no transaction and no lane wait, then again under the lane, because
-/// another process may have migrated first. `earlier` gives the source a Store
-/// recorded before the migration, without and with the acquisition tables.
+/// another process may have migrated first. `earlier` gives, for each
+/// acquisition choice, the sources a Store recorded before the migration.
 /// A recorded source that is not a revision of one of those
 /// ([`is_earlier_source`]), or a recorded definition that is not the live one,
 /// is refused with `Integrity`, never migrated. Otherwise `apply` runs and the
@@ -248,7 +252,7 @@ fn pre_kept_node_source(acquisition: bool) -> String {
 fn migrate(
     session: &Session,
     probe: &str,
-    earlier: fn(bool) -> String,
+    earlier: impl Fn(bool) -> Vec<String>,
     apply: impl FnOnce(&Transaction<'_>, bool) -> Result<(), PersistenceError>,
 ) -> Result<(), PersistenceError> {
     let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
@@ -275,10 +279,11 @@ fn migrate(
             return Err(BackendError::Integrity.into());
         };
         let recorded: String = row.get(0)?;
-        let Some(acquisition) = [false, true]
-            .into_iter()
-            .find(|&acquisition| is_earlier_source(&recorded, earlier(acquisition)))
-        else {
+        let Some(acquisition) = [false, true].into_iter().find(|&acquisition| {
+            earlier(acquisition)
+                .iter()
+                .any(|previous| is_earlier_source(&recorded, previous.clone()))
+        }) else {
             return Err(BackendError::Integrity.into());
         };
         if row.get::<String>(1)? != definition(tx)? {
@@ -300,7 +305,7 @@ pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
     migrate(
         session,
         "tables WHERE table_name='kept_node' AND table_type='BASE TABLE'",
-        pre_kept_node_source,
+        pre_kept_node_sources,
         |tx, _| Ok(tx.batch(kept_node_table())?),
     )
 }
@@ -311,7 +316,7 @@ pub(crate) fn add_gc(session: &Session) -> Result<(), PersistenceError> {
     migrate(
         session,
         "tables WHERE table_name='gc_intent' AND table_type='BASE TABLE'",
-        pre_gc_source,
+        |acquisition| vec![pre_gc_source(acquisition)],
         |tx, acquisition| {
             let tables = tx.query(TABLE_NAMES, vec![])?;
             let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
@@ -336,7 +341,7 @@ pub(crate) fn add_position_state(session: &Session) -> Result<(), PersistenceErr
     migrate(
         session,
         "columns WHERE table_name='history_meta' AND column_name='next_history_serial'",
-        source,
+        |acquisition| vec![source(acquisition)],
         |tx, _| {
             tx.batch("ALTER TABLE history_meta ADD COLUMN next_history_serial bigint NOT NULL DEFAULT 1;")?;
             Ok(tx.batch(
@@ -369,7 +374,7 @@ pub(crate) fn add_position_columns(session: &Session) -> Result<(), PersistenceE
     migrate(
         session,
         "columns WHERE table_name='commit' AND column_name='history_serial'",
-        source,
+        |acquisition| vec![source(acquisition)],
         |tx, _| {
             tx.batch(POSITION_COLUMNS)?;
             Ok(backfill_position_serials(tx)?)

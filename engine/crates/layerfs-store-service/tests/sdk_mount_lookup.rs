@@ -60,3 +60,33 @@ fn a_branch_is_listed_by_name_with_the_same_work_at_any_branch_count() {
     assert!(items(&named(&fixture, "no-such-lane")).is_empty());
     fixture.cleanup();
 }
+
+/// `main` is a Branch row too: `init` and `add_project` record one, so the
+/// exact name lookup and the whole listing both answer its id, the Branch a
+/// Workspace mounted on `main` is scoped to.
+#[test]
+fn main_is_listed_with_the_branch_the_project_records_for_it() {
+    let fixture = Fixture::new("sdk-main-branch", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let recorded = fixture.host.branch.to_string();
+    let named_main = named(&fixture, "main");
+    assert_eq!(items(&named_main).len(), 1, "{named_main:?}");
+    assert_eq!(items(&named_main)[0].get_text("name"), Some("main"));
+    assert_eq!(
+        items(&named_main)[0].get_text("id"),
+        Some(recorded.as_str()),
+        "{named_main:?}"
+    );
+    let all = fixture.call(
+        "project.list_branches",
+        vec![("pageSize", SdkValue::Int(1000))],
+    );
+    let listed = items(&all)
+        .iter()
+        .find(|item| item.get_text("name") == Some("main"))
+        .unwrap_or_else(|| panic!("no main item: {all:?}"));
+    assert_eq!(listed.get_text("id"), Some(recorded.as_str()), "{all:?}");
+    fixture.cleanup();
+}

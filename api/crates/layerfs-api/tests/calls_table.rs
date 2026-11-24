@@ -753,10 +753,10 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "project.list",
         "project.get",
         "project.stats",
+        "project.doctor",
         "project.export",
         "project.delete",
         "project.hide_path",
-        "project.doctor",
     ];
     let sandbox = [
         "sandbox.create",

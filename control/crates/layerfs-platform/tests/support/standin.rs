@@ -100,6 +100,7 @@ impl Scratch {
                 gateway: None,
             },
             worker: None,
+            incarnation: None,
             work_dir: self.dir.join("work"),
             tools: self.tools(),
         }

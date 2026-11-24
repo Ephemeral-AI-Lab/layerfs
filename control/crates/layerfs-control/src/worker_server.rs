@@ -92,16 +92,47 @@ struct Server {
     ready: SdkValue,
     /// When it began to serve, in milliseconds since the epoch.
     started: i64,
+    /// This worker process's incarnation: one fresh token per start, which
+    /// the mounts it places carry and the host's start reconcile records.
+    incarnation: String,
     waits: Waits,
     #[cfg(feature = "worker-fault")]
     faults: Arc<fault::Faults>,
+}
+
+/// One fresh, ordered incarnation for a worker starting now: a newer start
+/// compares greater than every younger one across restarts and pid reuse, so
+/// admission can tell an old placement from the current one.
+fn incarnation() -> String {
+    layerfs_home::helpers::ordered_token("worker")
 }
 
 /// Serves `listener` until it fails or the process is ended (`machine.stop`;
 /// there is no idle stop, #535 D11). `root` is the worker's own state root.
 /// It returns only when the listener itself is unusable.
 pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::Result<Served> {
-    Server::new(secret, root).run(&listener)
+    serve_with_incarnation(listener, secret, root, None)
+}
+
+/// Serves with the ordered incarnation the host's machine start persisted
+/// before launching this process, or mints one when the caller supplies none
+/// (an older host, or a test). Either way the value is durable under `root`
+/// before the first request is served: every mount intent this worker places
+/// carries it, and the host's reconcile writes the same value into each Store
+/// and settles what the previous one left. A write that fails ends the start;
+/// it never serves with an incarnation it cannot record.
+pub fn serve_with_incarnation(
+    listener: TcpListener,
+    secret: String,
+    root: PathBuf,
+    supplied: Option<String>,
+) -> std::io::Result<Served> {
+    let server = Server::new(secret, root, supplied);
+    // Recorded before any request is served: every mount intent this worker
+    // places carries this incarnation, and the host's start reconcile writes
+    // the same value into each Store and settles what the previous one left.
+    layerfs_store_service::history::admission::set_machine_incarnation(server.incarnation.clone());
+    server.run(&listener)
 }
 
 /// Prepares this machine for its Sandboxes' own networks as its worker
@@ -136,7 +167,7 @@ pub fn serve_with(
     root: PathBuf,
     faults: Arc<fault::Faults>,
 ) -> std::io::Result<Served> {
-    let mut server = Server::new(secret, root);
+    let mut server = Server::new(secret, root, None);
     server.waits = faults.waits();
     server.faults = faults;
     server.run(&listener)
@@ -189,12 +220,15 @@ impl Limited {
 }
 
 impl Server {
-    fn new(secret: String, root: PathBuf) -> Self {
+    fn new(secret: String, root: PathBuf, supplied: Option<String>) -> Self {
         Self {
             secret,
             root,
             ready: Hello::own().to_frame(),
             started: layerfs_home::home::now_ms(),
+            incarnation: supplied
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(incarnation),
             waits: Waits::SHIPPED,
             #[cfg(feature = "worker-fault")]
             faults: Arc::default(),
@@ -244,6 +278,18 @@ impl Server {
                 .create(&self.root)?;
             std::fs::set_permissions(&self.root, std::fs::Permissions::from_mode(0o701))?;
         }
+        // Before the first request: an incarnation the worker cannot record
+        // is a start that never serves.
+        layerfs_home::home::write_entity(
+            &self.root.join("worker-incarnation.json"),
+            &SdkValue::map([("incarnation", SdkValue::text(&self.incarnation))]),
+        )
+        .map_err(|refusal| {
+            std::io::Error::other(format!(
+                "the worker cannot record its incarnation: {}",
+                refusal.message
+            ))
+        })?;
         layerfs_home::home::guest::serve_root(&self.root);
         // what earlier Sandbox starts and removals left in this machine's
         // run root goes before the first request (spec v20), inside its

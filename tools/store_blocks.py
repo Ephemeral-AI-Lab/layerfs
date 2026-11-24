@@ -347,6 +347,7 @@ TRACE_SALT = (
     "CHECK(length(trace_salt)=32)"
 )
 
+
 def _without_position_columns(source):
     """`source` as it read before T1.2a/T1.4 appended the position columns."""
     return source.replace(HISTORY_SERIAL, "").replace(TRACE_SALT, "", 1).replace(NEXT_SERIAL, "")

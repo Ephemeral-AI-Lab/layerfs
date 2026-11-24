@@ -65,6 +65,8 @@ gc_intent artifact text YES
 gc_intent high_water bigint YES
 gc_intent evidence text YES
 gc_intent updated_ms bigint NO
+gc_intent machine_incarnation text YES
+gc_intent sandbox_generation text YES
 gc_op id bigint NO
 gc_op generation bigint NO
 gc_op phase text NO

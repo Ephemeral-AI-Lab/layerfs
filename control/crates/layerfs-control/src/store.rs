@@ -7,11 +7,13 @@
 //! reaches it as a Sandbox call would.
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::hex;
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome, FIX};
 use layerfs_machine::worker::Unreached;
+use layerfs_store::open_args::OpenArgs;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::postgresql::check;
 use layerfs_store::postgresql::connect::{self, StoreConnect};
@@ -65,6 +67,64 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
             None => refusal,
         }
     })
+}
+
+/// `store.repair_mount_holders`: first-class explicit operator repair of
+/// one Branch's mount intents. Preview lists them and writes its own retained
+/// done row; settle/release act on one explicit op; release retains the row as
+/// the durable done audit; `audit` reads the retained rows of that Branch.
+/// Nothing is automatic. A SQLite
+/// Store on another machine is repaired by that machine's worker
+/// (`store.repair`), so the live Docker Store is reachable; a PostgreSQL
+/// Store runs here, as its calls do.
+#[allow(clippy::too_many_arguments)]
+pub fn repair(
+    home: &Path,
+    name: &StoreName,
+    project: &str,
+    branch: &str,
+    action: &str,
+    op: Option<[u8; 16]>,
+    legacy: bool,
+    operator: &str,
+    page: u32,
+    limit: u32,
+) -> Outcome {
+    // The host holds the Store's lease while it repairs or sends the call,
+    // as `store_call` does: a Store an operation is moving is left.
+    let (_lease, record) = layerfs_store::lease::claim(home, name.as_str())?;
+    let store_ref = record.store_ref()?;
+    let executor = place::plan(home, store_ref)?;
+    match executor {
+        Executor::Local => {
+            let open = OpenArgs::of_record(home, name.as_str(), &record)?;
+            layerfs_store::service::repair_mount_holders_at(
+                &open, project, branch, action, op, legacy, operator, page, limit,
+            )
+        }
+        Executor::Worker(mut worker) => {
+            let mut fields = vec![
+                ("store".to_owned(), SdkValue::text(name.as_str())),
+                ("store_record".to_owned(), record.to_record().clone()),
+                ("project".to_owned(), SdkValue::text(project)),
+                ("branch".to_owned(), SdkValue::text(branch)),
+                ("action".to_owned(), SdkValue::text(action)),
+                (
+                    "op".to_owned(),
+                    op.map_or(SdkValue::Null, |op| SdkValue::text(hex(&op))),
+                ),
+                ("legacy".to_owned(), SdkValue::Bool(legacy)),
+                ("operator".to_owned(), SdkValue::text(operator)),
+                ("page".to_owned(), SdkValue::Int(i64::from(page))),
+                ("limit".to_owned(), SdkValue::Int(i64::from(limit))),
+            ];
+            if let Some(place) = layerfs_store::place_view::encoded_from_home(home) {
+                fields.push(("place_view".to_owned(), place));
+            }
+            let request = SdkValue::Map(fields);
+            worker.call("store.repair", request, &mut |_: SdkValue| {})
+        }
+    }
 }
 
 /// Who uses a Store or a project, read from the Sandbox records.

@@ -30,11 +30,12 @@ impl DerefMut for InternalWorkspaceApi<'_> {
     }
 }
 impl InternalWorkspaceApi<'_> {
-    /// Names the Sandbox and machine a mount through this channel belongs
-    /// to; a mount then registers them beside its Workspace.
+    /// Gives a mount through this channel the place it belongs to (its
+    /// Sandbox, machine and the generation its record named, when known); a
+    /// mount then registers them beside its Workspace.
     #[must_use]
-    pub fn placed(mut self, sandbox: Option<&str>, machine: Option<&str>) -> Self {
-        self.0.place = MountPlace::new(sandbox, machine);
+    pub fn placed(mut self, place: MountPlace) -> Self {
+        self.0.place = place;
         self
     }
     /// Original logical bind for component proofs; kernel mount still uses both steps.

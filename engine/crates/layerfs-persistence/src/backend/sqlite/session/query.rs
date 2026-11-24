@@ -234,6 +234,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_intent_release" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_release.sql"
         )),
+        "gc_intent_release_done" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_release_done.sql"
+        )),
         "gc_intent_uncertain" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_uncertain.sql"
         )),
@@ -258,6 +261,22 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_intent_all_store" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_all_store.sql"
         )),
+        "gc_intent_list_machine" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_list_machine.sql"
+        )),
+        "gc_intent_done" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_done.sql"
+        )),
+        "gc_intent_done_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_done_branch.sql"
+        )),
+        "gc_intent_done_insert" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_done_insert.sql"
+        )),
+        "gc_intent_done_delete" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_done_delete.sql"
+        )),
+
         "gc_branch_stack_any" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_branch_stack_any.sql"
         )),

@@ -30,6 +30,7 @@ pub mod open;
 pub mod open_args;
 #[doc(hidden)]
 pub mod place;
+pub mod place_view;
 pub mod postgresql;
 #[doc(hidden)]
 pub mod project;

@@ -122,6 +122,17 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   and frees no bytes; objects reachable only via the path are retained (§6.2, decisions 16/35).
 - **No path-level physical reclaim:** path-aware walk and per-entry page pruning are follow-ups; `keptWaste` has no page component (§6.2).
 - 1.0 Stores convert offline (§4.1); no online migration.
+- **2.0 Stores convert per machine.** The lean 2.0 GC has no Store-side authority,
+  tombstone or audit tables: the proof is the home `MachineRecord.incarnation`, the
+  `SandboxRecord.generation`, the machine-level
+  `machine/<machine>/sandbox-retired/*.json` tombstone and the retained
+  `gc_intent` `done` rows. `tools/store_gc_convert.py convert` copies each owner
+  home's incarnation and tombstones into the new closed Store, exports any old
+  audit rows to `<home>/log/gc-audit.jsonl`, and drops the three old tables only
+  after every machine with rows is copied, named `--converted`, or declared
+  `--gone` (the missing-machine policy). The source file is never changed: it is
+  the backup. The tool converts SQLite Stores; a PostgreSQL Store's per-machine
+  copy and the final `DROP TABLE` remain an explicit operator step.
 - **Four SQLite deviations from the frozen text remain** (D1, D3, D4, D5),
   plus the settled D2 build decision; all are recorded in
   [`gc-42-decisions.md`](gc-42-decisions.md) and the frozen spec text is
@@ -143,7 +154,7 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
    re-run `layerfs store compact <store>` to adopt. For a lost PG swap reply, use §2 on a second connection.
 3. Before manual steps, back up (`backup.create` on SQLite; server backup on PG) and record generation `G`, op id, artifact name.
 4. Compare artifact/schema with the op; leave anything a record names to the next compact (`G` removes, `G+1` records).
-5. Never hand-edit `gc_intent`, `gc_dead`, markers or `project_epoch`; never unlink `-wal`/`-shm`; never drop a schema `gc_op` names.
+5. Never hand-edit `gc_intent`, `gc_dead`, markers or `project_epoch`; never unlink `-wal`/`-shm`; never drop a schema `gc_op` names. The retained `done` audit rows are read with `layerfs store repair-mount-holders <store> <project> <branch> audit` (scoped to that Branch); the jsonl `archive`/`--prune` export is deferred (#775), and nothing deletes a done row automatically.
 6. To re-use a name after a removal, re-create after the frontier (or after a rebuild frees it); don't delete markers. Escalate if old content must be restored.
 
 ## 7. Branch retirement (`branch.remove`, live since 2026-11-15)

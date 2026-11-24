@@ -24,6 +24,7 @@ pub(crate) fn bind(param: Param, ty: &Type) -> Result<(Bound, u64), BackendError
         Param::Bytes(v) => (v.len() as u64, v).into_bound(),
         Param::OptionalBytes(v) => (v.as_ref().map_or(0, Vec::len) as u64, v).into_bound(),
         Param::OptionalText(v) => (v.as_ref().map_or(0, String::len) as u64, v).into_bound(),
+        Param::OptionalI64(v) => (if v.is_some() { 8u64 } else { 0 }, v).into_bound(),
     })
 }
 

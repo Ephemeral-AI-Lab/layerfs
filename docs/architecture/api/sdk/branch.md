@@ -86,7 +86,10 @@ Python  layerfs.branch.list(project, *, prefix=None, exclude_prefix=None, limit=
 | `items[]` long | `branch, commit, forked_from, id, base, root` |
 | call | pages by `limit` and `cursor`; writes one call-log line; MCP `admin` |
 
-`main` is a row; its `commit` is `main`'s head. Any other row's `commit` is
+`main` is a row; its `commit` is `main`'s head. Its `id` (long form) is the
+Branch the project records for its main line, the Branch a mount on `main` is
+scoped to; it is null only when the project records no such Branch. Any other
+row's `commit` is
 the Branch's head, or the Commit it was forked at while it has none of its
 own; `forked_from` (long form) is the Commit it was forked at. A Branch
 record has no time, so there is no `created_at`. `--prefix` keeps only the

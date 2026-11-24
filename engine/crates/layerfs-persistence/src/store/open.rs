@@ -104,6 +104,8 @@ impl SqliteHandles {
             config.sqlite_pack_layout,
             config.sqlite_acquisition,
         )?);
+        // An existing Store keeps the layout and acquisition schema it was
+        // written with; the creation-only config selection does not name it.
         if writable {
             // A Store at the released 2.0 table set recorded its schema
             // without the position columns; it gains them before any table

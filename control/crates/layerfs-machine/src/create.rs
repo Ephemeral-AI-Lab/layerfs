@@ -236,11 +236,21 @@ pub fn create(
     let op = Op::begin(CREATE, "bundle", SdkValue::Null)?;
     let record = MachineRecord::from_record(name, SdkValue::Map(fields.collect())).with_op(&op);
     // claim the name under the lock; the VM is made outside it
+    // Claim the name under the lock; the VM is made outside it. The ordered
+    // incarnation is minted and made durable in the record before the
+    // provider creates or starts the worker, which serves with it: the same
+    // order a later `machine.start` uses, so a created machine's first
+    // mounts are never left without a place proof.
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &id, kind, name)?;
+        let incarnation = layerfs_home::helpers::ordered_token("worker");
+        let record = record.with_incarnation(&incarnation);
         record.write(&home)?;
-        record::spec(&home, &record)
+        record::spec(&home, &record).map(|mut spec| {
+            spec.incarnation = Some(incarnation);
+            spec
+        })
     };
     let spec = match spec {
         Ok(spec) => spec,

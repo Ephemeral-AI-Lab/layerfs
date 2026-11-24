@@ -483,8 +483,8 @@ fn schema_version_1_store_is_refused_before_prepare_and_keeps_destination() {
     let store_file = paths::store_file(&home, "shop");
     let current = read_user_version(&store_file);
     assert!(
-        (36..=44).contains(&current),
-        "expected a schema version 2 Store, read user_version {current}"
+        (39..=47).contains(&current),
+        "expected a schema version 3 Store, read user_version {current}"
     );
     write_user_version(&store_file, 22);
     assert_eq!(read_user_version(&store_file), 22);

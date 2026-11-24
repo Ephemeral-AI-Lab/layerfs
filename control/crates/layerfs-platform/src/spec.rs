@@ -35,6 +35,11 @@ pub struct Spec {
     pub state: Lasting,
     /// The endpoint last returned for this machine (its `worker.json`), if any.
     pub worker: Option<Endpoint>,
+    /// The ordered incarnation the machine's start persists for the worker
+    /// it launches: the worker serves with it, and every mount it places
+    /// carries it. `None` for a stop or status spec, and for a worker an
+    /// older host started (that worker mints its own).
+    pub incarnation: Option<String>,
     /// A folder of the caller's for this machine: its logs.
     pub work_dir: PathBuf,
     pub tools: Tools,

@@ -18,7 +18,8 @@
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
 use crate::host::Started;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::{MountPlace, SdkRefusal, SdkValue};
+use layerfs_machine::record::MachineRecord;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
@@ -42,6 +43,15 @@ pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
     entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
 
+/// One fresh, ordered Sandbox generation: a newer create compares greater
+/// than every earlier generation of the same name, so admission can tell a
+/// retired generation from the current one. A tombstone names this value, so
+/// retiring an old generation never retires a Sandbox recreated under the
+/// same name.
+fn generation() -> String {
+    layerfs_home::helpers::ordered_token("sandbox")
+}
+
 /// The fields a Sandbox record knows.
 #[derive(Clone, Debug, PartialEq)]
 enum Field {
@@ -50,6 +60,7 @@ enum Field {
     Project(String),
     Machine(String),
     Created(i64),
+    Generation(String),
     Op(Op),
     Id(String),
     Platform(String),
@@ -76,6 +87,7 @@ impl fields::Field for Field {
             "project" => Self::Project(text()?),
             "machine" => Self::Machine(text()?),
             "created" => Self::Created(fields::int(value)?),
+            "generation" => Self::Generation(text()?),
             op::FIELD => Self::Op(Op::decode(value)?),
             "id" => Self::Id(text()?),
             "platform" => Self::Platform(text()?),
@@ -107,6 +119,7 @@ impl fields::Field for Field {
             Self::Project(_) => "project",
             Self::Machine(_) => "machine",
             Self::Created(_) => "created",
+            Self::Generation(_) => "generation",
             Self::Op(_) => op::FIELD,
             Self::Id(_) => "id",
             Self::Platform(_) => "platform",
@@ -133,6 +146,7 @@ impl fields::Field for Field {
             Self::Name(text)
             | Self::Project(text)
             | Self::Machine(text)
+            | Self::Generation(text)
             | Self::Id(text)
             | Self::Platform(text)
             | Self::Runtime(text)
@@ -176,13 +190,14 @@ impl SandboxRecord {
     }
 
     /// The record a create claims the name with: the project, the machine,
-    /// now and the create's intent `op`.
+    /// now, this create's generation and its intent `op`.
     pub fn creating(name: &str, project: &str, machine: &str, op: &Op) -> Self {
         let fields = Fields::of([
             Field::Name(name.to_owned()),
             Field::Project(project.to_owned()),
             Field::Machine(machine.to_owned()),
             Field::Created(home::now_ms()),
+            Field::Generation(generation()),
             Field::Op(op.clone()),
         ]);
         Self {
@@ -316,6 +331,16 @@ impl SandboxRecord {
             _ => None,
         })
         .unwrap_or("")
+    }
+
+    /// The generation its create assigned: a Sandbox tombstone names this
+    /// value, so a Sandbox recreated under the same name is not retired by
+    /// the old generation's tombstone.
+    pub fn generation(&self) -> Option<&str> {
+        self.text(|f| match f {
+            Field::Generation(text) => Some(text),
+            _ => None,
+        })
     }
 
     /// Its project, `<store>/<project>`, as recorded.
@@ -486,6 +511,29 @@ impl SandboxRecord {
     pub fn to_record(&self) -> SdkValue {
         self.fields.encode()
     }
+}
+
+/// The place a mount of Sandbox `name` records: the record in `directory`
+/// names the machine it runs on and the generation its create minted, and the
+/// machine record under the same `home` names that machine's current ordered
+/// incarnation. A record this side cannot read supplies no authority (no
+/// proof, never death): the names alone, and admission falls back to the
+/// owner evidence.
+pub fn mount_place(home: &Path, directory: &Path, name: &str) -> Result<MountPlace> {
+    let record = SandboxRecord::read_in(directory, name)?;
+    let machine = record.as_ref().map(|record| record.machine().to_owned());
+    let generation = record
+        .as_ref()
+        .and_then(|record| record.generation().map(str::to_owned));
+    let incarnation = machine.as_deref().and_then(|machine| {
+        MachineRecord::read(home, machine)
+            .ok()
+            .flatten()
+            .and_then(|record| record.incarnation().map(str::to_owned))
+    });
+    Ok(MountPlace::new(Some(name), machine.as_deref())
+        .with_generation(generation.as_deref())
+        .with_machine_incarnation(incarnation.as_deref()))
 }
 
 /// Every Sandbox record, by name.

@@ -278,6 +278,15 @@ fn start(
             let image = super::image::docker_default(home).map_err(Ended::Before)?;
             spec.os_image = Some(image);
         }
+        // A new worker must replace a stopped one: its fresh incarnation
+        // would mark every intent the old worker still serves dead. Stop it
+        // and confirm the provider and its endpoint are gone; a start that
+        // cannot confirm mints no token and settles nothing.
+        stop_old(home, name, &spec).map_err(Ended::Before)?;
+        // Persist the ordered token before the worker exists, so the worker
+        // serves with a value that is already durable in the home record.
+        let incarnation = mint_incarnation(home, name).map_err(Ended::Before)?;
+        spec.incarnation = Some(incarnation);
         op = enter(home, name, op.clone(), "boot", &mut phases).map_err(Ended::Before)?;
         let Some(running) = adapters::start(&spec, &bundle).map_err(Ended::Provider)? else {
             return Ok(None);
@@ -347,6 +356,62 @@ fn start(
     }
 }
 
+/// Stops the machine's worker (and VM where it has one) and confirms it no
+/// longer runs before a new ordered incarnation is minted. The provider state
+/// and the recorded endpoint must both say the old worker is gone; a stop that
+/// cannot confirm one of them aborts the start, so no live mount is settled
+/// by a token minted over its owner.
+fn stop_old(home: &Path, name: &str, spec: &adapters::Spec) -> Result<()> {
+    adapters::stop(spec).map_err(refusal)?;
+    let state = adapters::provider_state(spec).map_err(refusal)?;
+    // A running provider is never replaced. A broken one is not replaced
+    // either, except on `docker`, where the start itself `docker rm -f`s the
+    // container before making the new one; its endpoint still has to say the
+    // old worker is gone below.
+    if state == adapters::State::Running
+        || (state == adapters::State::Failed && spec.kind != Platform::Docker)
+    {
+        return Err(refused(
+            "Failed",
+            format!(
+                "the old worker of machine {name} did not stop (provider state {}); no new incarnation is minted and no intent is settled",
+                state.as_str()
+            ),
+        ));
+    }
+    if let Some(endpoint) = recorded(home, name)? {
+        if crate::worker::hello(&endpoint).is_ok() {
+            return Err(refused(
+                "Failed",
+                format!(
+                    "the old worker of machine {name} still answers after it was stopped; no new incarnation is minted and no intent is settled"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Mints the ordered incarnation for the worker this start launches and
+/// records it in the home `MachineRecord` before the provider starts. The
+/// write is read back: a start that cannot make its token durable never
+/// serves, rather than mixing this start's intents with the previous one's.
+fn mint_incarnation(home: &Path, name: &str) -> Result<String> {
+    let incarnation = layerfs_home::helpers::ordered_token("worker");
+    let _lock = layerfs_home::home::lock::take(home)?;
+    MachineRecord::of(home, name)?
+        .with_incarnation(&incarnation)
+        .write(home)?;
+    let saved = MachineRecord::of(home, name)?;
+    if saved.incarnation() != Some(incarnation.as_str()) {
+        return Err(refused(
+            "Failed",
+            format!("machine {name}'s ordered incarnation could not be recorded; the worker did not start"),
+        ));
+    }
+    Ok(incarnation)
+}
+
 /// The docker machine's first start records the socket it starts on: once
 /// the Engine answers, before anything is made in it, and again once the
 /// provider started (a start that reached it without a ping), so it never
@@ -371,6 +436,16 @@ pub fn start_lock(home: &Path, name: &str) -> Result<StartLock> {
     let path = layerfs_home::home::paths::machine_dir(home, name).join("start.lock");
     let held = format!("machine {name} was being started, made or removed by another process");
     layerfs_home::home::entity_lock::take(&path, START_WAIT, &held)
+}
+
+/// The worker endpoint `machine/<name>/worker.json` records, as the client
+/// dials it: the recorded address and secret, never a start and never a
+/// dial. `None` when the machine records none.
+pub fn recorded(home: &Path, name: &str) -> Result<Option<Endpoint>> {
+    match record::worker(home, name)? {
+        Some(endpoint) => Ok(Some(endpoint_of(&endpoint))),
+        None => Ok(None),
+    }
 }
 
 pub(super) fn endpoint_of(endpoint: &adapters::Endpoint) -> Endpoint {
