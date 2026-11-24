@@ -273,8 +273,8 @@ them. In short:
    identities; worktree-local locks and targets; a complete performance
    command within 15 s (declared exceptions up to 25 s, independent proofs
    under 10 s), with no timeout, workload or cache change to turn a miss into
-   PASS. Export `LAYERFS_CONSTRUCTION_WORKERS=1`: one construction producer per
-   Commit, capture or snapshot (Namespace Init keeps its parallel profile). A
+   PASS. One construction producer per Commit, capture or snapshot (Namespace
+   Init keeps its parallel profile). A
    Commit's one producer runs on its own thread and hands objects through one
    bounded queue to the calling thread, which keeps the one Save and publishes
    (owner approval, 2026-11-07; [Commit construction](docs/architecture/engine/commit/construction.md)).

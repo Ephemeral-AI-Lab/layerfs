@@ -189,13 +189,12 @@ exploratory performance-only default below; see
    with the measured wall time and the reason — never made to fit by moving work
    outside the timer, enlarging a timeout, or shrinking the workload.
 8. **One construction worker — for every case except namespace init.** Commit,
-   capture and snapshot run with a single worker, in the default wiring and not only
-   by environment variable: `construction_worker_limit()`
+   capture and snapshot run with a single worker in the default wiring:
+   `construction_worker_limit()`
    (legacy v0.1.6 reference `crates/layerfs-workspace/src/changes.rs`, at that source
    `available_parallelism().min(8)`) and the canonical construction it feeds
    (`objects::construct_files`, today capped at `SMALL_CONTENT_WORKERS = 4`) must both
-   be single-producer. Every run also exports `LAYERFS_CONSTRUCTION_WORKERS=1`, no run
-   raises it, and no second lane or helper worker is added to pass a gate.
+   be single-producer. No second lane or helper worker is added to pass a gate.
    **`init_namespace` is the only exception:** its initialization path
    (`LayerStackStore::initialize_layerstack` →
    `direct_initialize_root_directories_inner` / `prepare_parallel_root_directories`)

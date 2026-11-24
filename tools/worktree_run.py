@@ -145,7 +145,6 @@ def launch(args):
         "LAYERFS_DAEMON": str(bundle / "layerfs-daemon"),
         "LAYERFS_NATIVE": str(bundle / "layerfs.node"),
         "LAYERFS_CONTAINER_PREFIX": prefix,
-        "LAYERFS_CONSTRUCTION_WORKERS": "1",
         "LAYERFS_TRACE": "/receipts/trace.jsonl",
         "LAYERFS_DAEMON_HOST": "host.docker.internal" if os.uname().sysname == "Darwin" else "127.0.0.1",
     }

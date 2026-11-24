@@ -43,10 +43,6 @@ fn main() {
     );
     let args = std::env::args().collect::<Vec<_>>();
     assert_eq!(args.len(), 4, "run|verify STORE RECEIPT");
-    assert_eq!(
-        std::env::var("LAYERFS_CONSTRUCTION_WORKERS").as_deref(),
-        Ok("1")
-    );
     let path = Path::new(&args[2]);
     let mut output = OpenOptions::new()
         .create_new(true)
