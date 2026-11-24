@@ -65,6 +65,9 @@ pub struct Refusal {
     pub error: BackendError,
     /// The server's SQLSTATE, when the server answered with an error.
     pub code: Option<SqlState>,
+    /// Whether the request went out: an unsent one (unencodable, or after
+    /// one that was) never reached the server.
+    pub sent: bool,
 }
 
 /// What one driver flight sent and what came back.
@@ -253,17 +256,23 @@ impl Session {
             }
         }
         let mut lost_reply = false;
+        let sent = flight.sent;
         let replies: Vec<_> = flight
             .replies
             .into_iter()
-            .map(|reply| {
+            .enumerate()
+            .map(|(index, reply)| {
                 reply.map_err(|e| {
                     let code = e.code().cloned();
                     let error = e.backend();
                     // No SQLSTATE and no definite client refusal
                     // (`rows::error`): the reply went with the connection.
                     lost_reply |= code.is_none() && error == BackendError::Unknown;
-                    Refusal { error, code }
+                    Refusal {
+                        error,
+                        code,
+                        sent: index < sent,
+                    }
                 })
             })
             .collect();
@@ -306,6 +315,12 @@ impl Session {
         } else {
             work.rollbacks += 1;
         }
+    }
+
+    /// Whether the session is quarantined: after a flight, its `ROLLBACK`
+    /// of a partly sent flight failed or a reply was lost.
+    pub(crate) fn quarantined(&self) -> bool {
+        self.state.lock().map_or(true, |state| state.quarantined)
     }
 
     /// Quarantines the session after a flight whose outcome is unknown

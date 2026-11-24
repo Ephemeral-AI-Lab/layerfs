@@ -44,7 +44,9 @@ step `merge.lane.changed`, and a fused Commit `publish.fused`).
 A Commit over its bound head is fused (#768 stage 2,
 [`commit_fused.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_fused.rs)):
 step 3 reads no head and `Save::finish_prepared` holds the Save's last
-publication; after validation, that publication, the binding hints and
+publication (the Commit's own reads until then, the logical count and the
+binding hints, see it whole: the Save's Storage handle serves it from the
+batch itself, `read/held.rs`); after validation, that publication, the binding hints and
 `commit_branch` are one write transaction (`layerfs_persistence::Committer`:
 one `BEGIN IMMEDIATE` on SQLite, one pipelined message on PostgreSQL, see
 [Fused Commit](../store/postgresql.md#fused-commit)), which asserts the

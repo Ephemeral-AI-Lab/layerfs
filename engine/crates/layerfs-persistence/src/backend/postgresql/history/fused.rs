@@ -267,7 +267,9 @@ pub(crate) fn commit(
     let replies = session
         .pipeline_unnested(&requests)
         .map_err(|error| Fused::History(error.into()))?;
-    let outcome = decide(steps, &replies);
+    // A request the client never sent is definite only when what was sent
+    // before it was rolled back: the session is not quarantined.
+    let outcome = decide(steps, &replies, !session.quarantined());
     session.count_fused(matches!(outcome, Ok(())));
     match outcome {
         Ok(()) => Ok(CommitOutcome::Committed {
@@ -452,6 +454,7 @@ enum Decision {
 fn decide(
     steps: &[Step],
     replies: &[Result<Reply, crate::backend::postgresql::session::pipeline::Refusal>],
+    rolled_back: bool,
 ) -> Result<(), Decision> {
     if replies.len() != steps.len() {
         return Err(Decision::Unknown);
@@ -459,9 +462,17 @@ fn decide(
     for (step, reply) in steps.iter().zip(replies) {
         let Err(refusal) = reply else { continue };
         let Some(code) = refusal.code.as_ref() else {
-            // No SQLSTATE: a lost reply (the session is quarantined) or a
-            // request the client never sent; never a definite outcome here.
-            return Err(Decision::Unknown);
+            // No SQLSTATE: a lost reply (`Unknown`; the session is
+            // quarantined), or a request the client never sent (a definite
+            // client refusal: unencodable, or after one that was). Nothing
+            // after it went out, and the pipeline rolled back what did; only
+            // if that ROLLBACK failed is the outcome unknown.
+            return Err(match refusal.error {
+                error if !refusal.sent && error != BackendError::Unknown && rolled_back => {
+                    Decision::Refused(error.into())
+                }
+                _ => Decision::Unknown,
+            });
         };
         let division = *code == SqlState::DIVISION_BY_ZERO;
         let range = *code == SqlState::NUMERIC_VALUE_OUT_OF_RANGE;

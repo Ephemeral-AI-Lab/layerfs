@@ -524,12 +524,16 @@ impl Session {
                         Err(e) => {
                             // A COMMIT whose reply was lost is uncertain; one
                             // the server refused (a deferred constraint) rolled
-                            // back. A nested write's batch may have stopped
-                            // before its COMMIT, so it is rolled back too.
+                            // back. The statement before it in the same text
+                            // (the guard `SELECT`, or a nested write's lane
+                            // check) may have failed with another definite
+                            // error (a `statement_timeout`, a cancel): the
+                            // server then skipped the COMMIT and left the
+                            // transaction aborted, so it is rolled back
+                            // (after a refused COMMIT the ROLLBACK finds no
+                            // transaction and only warns).
                             let error = e.backend();
-                            if error == BackendError::Unknown
-                                || (in_lane && rollback(state).is_err())
-                            {
+                            if error == BackendError::Unknown || rollback(state).is_err() {
                                 state.quarantine();
                                 return Err(BackendError::Unknown.into());
                             }

@@ -488,8 +488,14 @@ lane), with no fallback. Before the transaction the tail is checked against
 SQLite's publication bound (`TRANSACTION_CANONICAL_BYTES_LIMIT`, 4 MiB − 1),
 the unit layout and the file system's headroom, as a publication on its own
 is; one that does not fit is `Fused::Overflow`, and the tail and the hints
-are published first. An identical Commit identity follows `commit_branch`'s
-own rule on both paths. `mount_round_trips.rs` pins the second one-file
+are published first. The held publication is served to the Commit's own
+reads from the batch itself, as on PostgreSQL
+([Fused Commit](postgresql.md#fused-commit)). An identical Commit identity
+follows `commit_branch`'s own rule on both paths (it reuses the verified
+row; PostgreSQL's message refuses it as a race and the separate path makes
+the Commit at a new time), and a retired or missing bound Branch is
+`Missing(Branch)` (on PostgreSQL a race, then `Context("bound Branch is
+absent")`); neither is reachable while the Workspace is mounted. `mount_round_trips.rs` pins the second one-file
 Commit of a mounted Workspace at 16 statements in 1 transaction (28 in 5
 before) and the first at 35 in 5 (46 in 9); `fused_commit.rs` checks one
 transaction per Commit and that each race and the epoch refusal wrote

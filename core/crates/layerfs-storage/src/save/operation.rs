@@ -66,9 +66,10 @@ impl<'a> Save<'a> {
     /// transaction of its own (a fused Commit, #768), or to publish as
     /// `finish` would ([`PreparedTail::publish`]). Earlier batches that
     /// reached a publication bound are published here, as `finish` would.
-    /// While the tail lives, readers continuing this Save
-    /// ([`crate::Storage::reader_after_save`]) see the held batch's
-    /// locations, metadata bodies and values.
+    /// While the tail lives, every read of the handle (readers continuing
+    /// this Save, [`crate::Storage::reader_after_save`], included) sees the
+    /// held batch's locations, pack bodies and values whole, from the batch
+    /// itself (`read/held.rs`), not from the bounded caches.
     pub fn finish_prepared(self) -> StorageResult<PreparedTail<'a>> {
         let held = self.seal(true)?;
         Ok(PreparedTail {
@@ -215,6 +216,8 @@ impl PreparedTail<'_> {
     pub fn acknowledged(mut self) -> StorageResult<WriteOutcome> {
         if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_ref()) {
             let mut state = save.state.borrow_mut();
+            // The Store has the batch now.
+            state.storage.source.release_held();
             state.storage.source.note(|c| c.publish += 1);
             state.settle(&held.batch, &held.members, &[])?;
         }
@@ -229,6 +232,9 @@ impl PreparedTail<'_> {
             let mut state = save.state.borrow_mut();
             let storage = state.storage;
             let _published = storage.source.serving_published();
+            // A lost location's winner must be read from the Store, not
+            // from the held batch.
+            storage.source.release_held();
             state.acknowledge(&mut held.batch, &held.members)?;
         }
         self.held = None;
@@ -241,7 +247,9 @@ impl Drop for PreparedTail<'_> {
         // Not acknowledged: the held locations were never the Store's.
         if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_ref()) {
             let ids: Vec<_> = held.batch.objects.iter().map(|row| row.object_id).collect();
-            save.state.borrow().storage.source.invalidate(&ids);
+            let state = save.state.borrow();
+            state.storage.source.release_held();
+            state.storage.source.invalidate(&ids);
         }
     }
 }

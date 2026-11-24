@@ -243,7 +243,9 @@ impl State<'_> {
             || batch.release_ordinals.is_some()
         {
             if hold {
-                self.storage.source.published(&batch, &BTreeSet::new())?;
+                // Served whole to this handle's reads until it is published
+                // or dropped (`read/held.rs`): the Store does not have it.
+                self.storage.source.hold(&batch)?;
                 held = Some(Held { batch, members });
             } else {
                 self.acknowledge(&mut batch, &members)?;

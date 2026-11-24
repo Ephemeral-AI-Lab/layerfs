@@ -102,6 +102,9 @@ SLOW = {
     ("layerfs-store-service", "commit_lane_kill"): 15.4,
     ("layerfs-store-service", "commit_random_model"): 8.4,
     ("layerfs-store-service", "commit_stress"): 6.7,
+    # Fused Commits of 8,000 new files and of 400 rewrites over a 20,000-file
+    # seed on both backends (#768 stage 2b review), macOS host, 2026-11-25.
+    ("layerfs-store-service", "commit_fused_held"): 45.1,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

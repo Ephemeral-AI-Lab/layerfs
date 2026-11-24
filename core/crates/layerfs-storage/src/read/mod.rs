@@ -2,6 +2,7 @@
 
 mod counters;
 mod fetch;
+mod held;
 mod hints;
 mod length;
 mod locator_cache;

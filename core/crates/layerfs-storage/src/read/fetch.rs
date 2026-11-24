@@ -85,6 +85,9 @@ pub(crate) struct Fetch {
     pub(super) descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     signatures: RefCell<Option<Vec<SignatureRow>>>,
     published: RefCell<Published>,
+    /// A Save's last publication held for its caller's transaction
+    /// (`held.rs`), served to every read before the caches and the Store.
+    pub(super) held: RefCell<Option<super::held::Held>>,
     /// Set while a Save, or a reader that continues one, reads.
     pub(super) serve_published: Cell<bool>,
     counters: Cell<Diagnostics>,
@@ -114,6 +117,7 @@ impl Fetch {
             descriptors: RefCell::new(BTreeMap::new()),
             signatures: RefCell::new(None),
             published: RefCell::new(Published::default()),
+            held: RefCell::new(None),
             serve_published: Cell::new(false),
             counters: Cell::new(Diagnostics::default()),
             hints: RefCell::default(),
@@ -183,10 +187,11 @@ impl Fetch {
         }
         Ok(())
     }
-    /// Forgets every published body and value: a Save on this handle did
-    /// not finish.
+    /// Forgets every published body and value, and a held publication: a
+    /// Save on this handle did not finish.
     pub(crate) fn forget_published(&self) {
         *self.published.borrow_mut() = Published::default();
+        self.release_held();
     }
     /// Serves the published bodies and values until the guard drops.
     pub(crate) fn serving_published(&self) -> Restore<'_> {
@@ -208,11 +213,13 @@ impl Fetch {
     }
     /// A body a Save of this handle published, to a Save or a reader that
     /// continues one, validated as a fetched one would be.
+    /// A held body (`held.rs`) is served to every read.
     fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
-        if !self.serve_published.get() {
-            return Ok(None);
-        }
-        let found = self.published.borrow().get(id).cloned();
+        let found = match self.held_body(id) {
+            Some(held) => Some(held),
+            None if self.serve_published.get() => self.published.borrow().get(id).cloned(),
+            None => None,
+        };
         let Some((info, body)) = found else {
             return Ok(None);
         };
@@ -261,8 +268,10 @@ impl Fetch {
         }
         cache.insert_as(row.location.object_id, row, hinted);
     }
+    /// Whether [`Self::published_body`] would serve pack `id`.
     pub(super) fn published_has(&self, id: i64) -> bool {
-        self.published.borrow().get(id).is_some()
+        self.held_body(id).is_some()
+            || self.serve_published.get() && self.published.borrow().get(id).is_some()
     }
     pub(crate) fn locate(&self, ids: &[ObjectId]) -> StorageResult<()> {
         let mut missing = BTreeSet::new();
@@ -274,12 +283,32 @@ impl Fetch {
                 missing.insert(*id);
             }
         }
+        // Held locations answer as the Store will once they are published.
+        let held = self.held_locations(&mut missing);
         let missing: Vec<_> = missing.into_iter().collect();
         // The whole demand is protected from eviction, searched sorted.
         let mut protected = Vec::new();
-        if !missing.is_empty() {
+        if !missing.is_empty() || !held.is_empty() {
             protected = ids.to_vec();
             protected.sort_unstable();
+        }
+        for page in held.chunks(READ_OBJECT_LIMIT) {
+            {
+                let mut cache = self.locators.borrow_mut();
+                if cache.len().saturating_add(page.len()) > READ_OBJECT_LIMIT {
+                    let work = cache.make_room(page.len(), &protected);
+                    self.note(|c| {
+                        c.locator_evictions += work.removed;
+                        c.locator_eviction_probes += work.probes;
+                        c.locator_second_chances += work.second_chances;
+                    });
+                }
+            }
+            for row in page {
+                self.remember_pack(row.pack)?;
+                let mut cache = self.locators.borrow_mut();
+                self.insert_locator(&mut cache, *row, false);
+            }
         }
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
@@ -483,6 +512,14 @@ impl Fetch {
         self.metadata_packs(&wanted, packs)
     }
     fn payload(&self, info: PackInfo) -> StorageResult<Vec<u8>> {
+        if let Some((held, body)) = self.held_body(info.pack_id) {
+            if held != info {
+                return Err(StorageError::Integrity("payload descriptor"));
+            }
+            validate_frame(info, &body)?;
+            self.note(|c| c.pack_hits += 1);
+            return Ok(body.as_ref().clone());
+        }
         self.note(|c| {
             c.payload_reads += 1;
             c.pack_misses += 1;
@@ -653,6 +690,17 @@ impl Source for Fetch {
             .into_iter()
             .collect();
         let mut found = BTreeMap::new();
+        // Held values first: the Store does not have them yet.
+        let wanted: Vec<u32> = wanted
+            .into_iter()
+            .filter(|ordinal| match self.held_value(*ordinal) {
+                Some(value) => {
+                    found.insert(*ordinal, value);
+                    false
+                }
+                None => true,
+            })
+            .collect();
         let wanted: Vec<u32> = if self.serve_published.get() {
             let published = self.published.borrow();
             wanted

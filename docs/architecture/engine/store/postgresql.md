@@ -128,7 +128,8 @@ compaction holds one already and never retains the URL.
 | Lost reply inside a transaction, or a SQLSTATE without a definite rule (class 58, class XX, ...) | `Unknown`; session quarantined and its connection closed (below) | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs), [`rows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/rows.rs) |
 | A statement refused with a reply in class 21, 22, 23, 42, P0 (PL/pgSQL, such as the `pack_immutable` trigger's `P0001`) or 54 outside the capacity codes | `Integrity`, definite; the transaction is rolled back | [`rows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/rows.rs) |
 | `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
-| A body that ignored a statement's refusal and returned success (#768) | The transaction ends with `SELECT 1; COMMIT`: in an aborted transaction the `SELECT` answers `25P02` and the `COMMIT` never runs, so the session sends `ROLLBACK` and answers the first refusal it saw in that transaction (else `Integrity`), definite and counted as a rollback. A bare `COMMIT` there would be answered with the tag `ROLLBACK` and no error, which reads as success. A failed `ROLLBACK` quarantines: `Unknown` | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| A body that ignored a statement's refusal and returned success (#768) | The transaction ends with `SELECT 1; COMMIT`: in an aborted transaction the `SELECT` answers `25P02` and the `COMMIT` never runs, so the session sends `ROLLBACK` and answers the first refusal it saw in that transaction (else `Integrity`), definite and counted as a rollback. That holds when the body sent nothing after the refused statement: a statement it sends after it answers `25P02`, which has no definite rule, so the transaction is `Unknown` and the session quarantined. A bare `COMMIT` there would be answered with the tag `ROLLBACK` and no error, which reads as success. A failed `ROLLBACK` quarantines: `Unknown` |
+| The guard `SELECT` itself refused with another definite error (a `statement_timeout`, a cancel) | The server skipped the `COMMIT` and left the transaction aborted: the session sends `ROLLBACK` and answers that error, definite. After a refused `COMMIT` (a deferred constraint) the same `ROLLBACK` finds no transaction and only warns. A failed `ROLLBACK` quarantines. Not covered by a test: neither error can be made to hit the instant `SELECT 1` deterministically | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `round_trips` | each exchange that waits for the server; the handshake is not one | same |
 | `prepares`, `connects` | statement-cache misses and COPY statements; new connections (session and lane) | same |
 
@@ -840,7 +841,8 @@ first refusal decides:
 | 8, 9 | `22012` (no parent line; the Branch moved) | race |
 | 10 | `22012` (the epoch moved or its row went) | `Conflict("project epoch")` |
 | any | another SQLSTATE with a definite rule (`rows::sqlstate`) | that refusal |
-| any | a SQLSTATE without one, `25P02` first, or no reply | `UnknownOutcome`, session quarantined |
+| any | a request the client never sent (unencodable, or after one that was), the pipeline's `ROLLBACK` of what it sent acknowledged | that client refusal, definite |
+| any | a SQLSTATE without one, `25P02` first, no reply, or an unsent request whose `ROLLBACK` failed | `UnknownOutcome`, session quarantined |
 
 The fence statement holds `AccessShareLock` on `history_meta` until
 `COMMIT`; the lane row and the barrier are taken by the transaction itself,
@@ -854,6 +856,43 @@ merged with before the lane, in a Save of its own), then
 `Conflict` has no fallback, and an unknown outcome never continues: custody
 is kept. The pack ids the attempt carried are published unchanged; the
 rolled-back transaction wrote nothing and they stay reserved to the handle.
+
+While the tail is held, the Commit's own reads (the logical count's file
+lengths, the binding hints) must see what the Store does not have yet. The
+Storage handle serves the held publication whole, from the batch itself
+([`read/held.rs`](../../../../core/crates/layerfs-storage/src/read/held.rs)):
+its locations, pack bodies of either domain and inode values are consulted
+before the bounded read caches and the Store, and a held location found is
+kept in the locator cache as a Store answer would be. The batch is in memory
+already and bounded by the publication's row and byte bounds. It is released
+when it is published (fused or on its own: a lost location's winner is then
+read from the Store) or dropped. Before this, the held entries lived only in
+the bounded caches (4,096 locators, 2 MiB of metadata bodies, about 7,000
+values) and an evicted one was looked up in the Store and missed: one new
+directory of 4,000 or more small files, or 400 rewrites over a 20,000-file
+tree, could never Commit unforced (`commit_fused_held.rs`).
+
+Behaviour that differs from the separate path:
+
+- The epoch re-check (step 10, `FOR SHARE`) runs under the publication's
+  `lock_timeout`: a removal marker holding `project_epoch` makes the fused
+  Commit `Busy`, where the separate path's `commit_branch` waited for it
+  under its own transaction's settings.
+- An existing Commit identity (the same request at the same millisecond) is
+  a race here, and the separate path then makes the Commit at a new time;
+  SQLite's fused transaction runs `commit_branch`, which reuses the verified
+  row.
+- A retired or missing bound Branch is a race here (step 4), after which the
+  separate path's head read answers `Context("bound Branch is absent")`;
+  SQLite answers `Missing(Branch)` from `commit_branch`. Neither is reachable
+  while the Workspace's mount registration holds the Branch.
+- Step 4 does not check the LayerStack's profile and scope as
+  `commit_branch` does: the request's profile and scope come from a real
+  Branch snapshot, so a mismatch is not reachable from a Workspace Commit.
+- `Store::fused_counts` counts as a fallback every `Fused::Race`, including
+  those decided before anything is sent: a request the committer does not
+  fuse (a second parent, an unchanged root, another required head) and a
+  session whose generation fence is not yet set (`incarnation` 0).
 
 Only a Commit whose construction kept its whole built set is fused
 (`ConstructedObjects::covers`): its validation reads its own objects from

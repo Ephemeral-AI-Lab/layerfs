@@ -8,7 +8,11 @@
 //! construction kept its whole built set is fused: its validation reads its
 //! own objects from those bytes, never from the Store, which does not hold
 //! the held publication yet. Any other Commit (one without a built set, an
-//! oversized one, one whose removals rebuilt the root) is not fused. A definite race refusal
+//! oversized one, one whose removals rebuilt the root) is not fused. The
+//! Commit's own reads before the transaction (the logical count, the
+//! binding hints) go through the Save's Storage handle, which serves the
+//! held publication whole from the batch itself (`layerfs_storage`
+//! `read/held.rs`). A definite race refusal
 //! (the head moved, another writer stored one of the publication's objects,
 //! the Commit's identity exists; nothing written) continues on the separate
 //! path in the same call, once: the held publication is published on its
@@ -187,6 +191,12 @@ impl BoundWorkspace {
         })?;
         self.store.note_save(&saved);
         if let Some(total) = retained.saved.as_mut() {
+            // Every count of the merge's Save joins the Commit's.
+            total.inserted += saved.inserted;
+            total.reused += saved.reused;
+            total.full_records += saved.full_records;
+            total.prefix_records += saved.prefix_records;
+            total.packs += saved.packs;
             total.canonical_bytes += saved.canonical_bytes;
             total.stored_bytes += saved.stored_bytes;
             total.metadata_bytes += saved.metadata_bytes;
