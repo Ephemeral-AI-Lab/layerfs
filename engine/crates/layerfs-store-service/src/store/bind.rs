@@ -124,14 +124,27 @@ impl Store {
             // Admission before any root demand: a live removal is `Busy`, an
             // uncertain owner `Unresolved`, and the intent lives until this
             // Workspace's unmount deletes it.
-            // A private bind knows no place authority: the intent records the
-            // owner tokens, and admission falls back to this process's
-            // namespace and boot.
+            // A placed mount records the place values its control caller
+            // read from the home records, so admission proves it dead later:
+            // the machine record's current incarnation and the Sandbox
+            // record's generation. The daemon is not the worker that
+            // records the process-global incarnation, so the caller supplies
+            // it. A private or place-unknown bind keeps today's behavior:
+            // the intent records only the owner tokens, and admission falls
+            // back to this process's namespace and boot. The daemon holds
+            // no lease or fence of its own, so neither is invented here.
+            let mut authority = layerfs_history::PlaceAuthority::default();
+            if place.machine.is_some() {
+                authority.machine_incarnation = place.machine_incarnation.clone();
+            }
+            if place.machine.is_some() && place.sandbox.is_some() {
+                authority.sandbox_generation = place.generation.clone();
+            }
             let intent = crate::history::admission::mount_intent(
                 workspace,
                 &captured,
                 &place,
-                layerfs_history::PlaceAuthority::default(),
+                authority,
             );
             match self.history().gc_register(&intent) {
                 Ok(()) => {

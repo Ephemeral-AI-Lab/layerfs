@@ -27,11 +27,12 @@ impl<'a> WorkspaceApi<'a> {
             place: MountPlace::default(),
         }
     }
-    /// Names the Sandbox and machine a mount through this channel belongs
-    /// to; a mount then registers them beside its Workspace.
+    /// Gives a mount through this channel the place it belongs to (its
+    /// Sandbox, machine and the generation its record named, when known); a
+    /// mount then registers them beside its Workspace.
     #[must_use]
-    pub fn placed(mut self, sandbox: Option<&str>, machine: Option<&str>) -> Self {
-        self.place = MountPlace::new(sandbox, machine);
+    pub fn placed(mut self, place: MountPlace) -> Self {
+        self.place = place;
         self
     }
     pub fn exchange(&mut self, request: Request) -> Result<Reply, Box<crate::OperationFailure>> {

@@ -12,6 +12,6 @@ mod tombstone;
 mod workspace;
 
 pub use daemon::{Carrier, DaemonRecord, Forward, Local};
-pub use sandbox::{lock, lock_in, sandbox, sandboxes, SandboxRecord};
+pub use sandbox::{lock, lock_in, mount_place, sandbox, sandboxes, SandboxRecord};
 pub use tombstone::{retire, retire_in, SandboxTombstone};
 pub use workspace::WorkspaceRecord;

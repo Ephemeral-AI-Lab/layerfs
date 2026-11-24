@@ -18,7 +18,8 @@
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
 use crate::host::Started;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::{MountPlace, SdkRefusal, SdkValue};
+use layerfs_machine::record::MachineRecord;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
@@ -510,6 +511,29 @@ impl SandboxRecord {
     pub fn to_record(&self) -> SdkValue {
         self.fields.encode()
     }
+}
+
+/// The place a mount of Sandbox `name` records: the record in `directory`
+/// names the machine it runs on and the generation its create minted, and the
+/// machine record under the same `home` names that machine's current ordered
+/// incarnation. A record this side cannot read supplies no authority (no
+/// proof, never death): the names alone, and admission falls back to the
+/// owner evidence.
+pub fn mount_place(home: &Path, directory: &Path, name: &str) -> Result<MountPlace> {
+    let record = SandboxRecord::read_in(directory, name)?;
+    let machine = record.as_ref().map(|record| record.machine().to_owned());
+    let generation = record
+        .as_ref()
+        .and_then(|record| record.generation().map(str::to_owned));
+    let incarnation = machine.as_deref().and_then(|machine| {
+        MachineRecord::read(home, machine)
+            .ok()
+            .flatten()
+            .and_then(|record| record.incarnation().map(str::to_owned))
+    });
+    Ok(MountPlace::new(Some(name), machine.as_deref())
+        .with_generation(generation.as_deref())
+        .with_machine_incarnation(incarnation.as_deref()))
 }
 
 /// Every Sandbox record, by name.
