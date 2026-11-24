@@ -29,45 +29,13 @@ pub fn kind_of(record: &SdkValue) -> Result<StoreKind> {
 }
 
 /// A PostgreSQL Store's server, as its record names it (no password: the
-/// record names its saved login, `auth`, put into the URL per call). A
-/// field the record lacks is refused only by the step that needs it.
+/// record names its user, and the password is a secret of the home,
+/// `postgresql::login`, put into the URL per call). A field the record
+/// lacks is refused only by the step that needs it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PgServer {
     pub schema: Option<String>,
     pub synchronous_commit: Option<String>,
-}
-
-/// A machine's own address of a PostgreSQL Store, its record's
-/// `machines.<machine>`: the URL (no user, no password) that machine dials
-/// in place of the Store's (`store.connect --machine`), with the Store's
-/// saved login. A machine without one dials the Store's address.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct OwnConnection {
-    /// The URL the machine dials, when not the Store's.
-    pub url: Option<String>,
-}
-
-impl OwnConnection {
-    fn from_record(value: &SdkValue) -> Self {
-        Self {
-            url: value.get_text("url").map(str::to_owned),
-        }
-    }
-
-    /// Whether it names no URL: the Store's connection, which no record
-    /// entry is kept for.
-    pub fn is_empty(&self) -> bool {
-        self.url.is_none()
-    }
-
-    /// The connection as its record holds it: only the fields it has.
-    pub fn to_record(&self) -> SdkValue {
-        let mut fields = Vec::new();
-        if let Some(url) = &self.url {
-            fields.push(("url".to_owned(), SdkValue::text(url)));
-        }
-        SdkValue::Map(fields)
-    }
 }
 
 /// One Store, decided once from `store/<name>/record.json`.
@@ -160,8 +128,8 @@ pub struct StoreRecord {
     name: String,
     parsed: Result<StoreRef>,
     fields: SdkValue,
-    /// The home it was read from, where a PostgreSQL Store's saved login
-    /// is; none for a record a worker was sent.
+    /// The home it was read from, where a PostgreSQL Store's password is
+    /// saved; none for a record a worker was sent.
     home: Option<std::path::PathBuf>,
 }
 
@@ -177,6 +145,9 @@ pub fn lock(home: &Path, name: &str) -> Result<EntityLock> {
     let held = format!("Store {name}'s lock was held");
     entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
+
+/// The record field listing the machines attached to a PostgreSQL Store.
+pub const ATTACHED: &str = "attached";
 
 /// The profile label a new sqlite Store's record is written with: the WAL
 /// Store opened with NORMAL synchronization (owner, 2026-11-23).
@@ -209,7 +180,7 @@ impl StoreRecord {
         Ok(read.map(|v| Self::from_record(name, v).in_home(home)))
     }
 
-    /// This record, as one of `home`'s: its saved login is read there.
+    /// This record, as one of `home`'s: its password is read there.
     pub fn in_home(self, home: &Path) -> Self {
         Self {
             home: Some(home.to_path_buf()),
@@ -272,7 +243,7 @@ impl StoreRecord {
         self.fields.get(field)
     }
 
-    /// The text field `field` (a PostgreSQL Store's `url`, `auth`,
+    /// The text field `field` (a PostgreSQL Store's `url`, `user`,
     /// `synchronous_commit`).
     pub fn text(&self, field: &str) -> Option<&str> {
         self.fields.get_text(field)
@@ -354,106 +325,41 @@ impl StoreRecord {
             })
     }
 
-    /// The machines with their own address of a PostgreSQL Store, in
-    /// record order. An entry that names none is none.
-    pub fn own_connections(&self) -> Vec<(String, OwnConnection)> {
-        match self.fields.get("machines") {
-            Some(SdkValue::Map(machines)) => machines
-                .iter()
-                .map(|(machine, value)| (machine.clone(), OwnConnection::from_record(value)))
-                .filter(|(_, own)| !own.is_empty())
+    /// The machines attached to a PostgreSQL Store (its record's
+    /// `attached`), in record order: the machines its Sandboxes may run on
+    /// besides this computer, each dialling the Store's URL with its login.
+    pub fn attached(&self) -> Vec<String> {
+        match self.fields.get(ATTACHED) {
+            Some(SdkValue::List(machines)) => (machines.iter())
+                .filter_map(|machine| match machine {
+                    SdkValue::Text(machine) => Some(machine.clone()),
+                    _ => None,
+                })
                 .collect(),
             _ => Vec::new(),
         }
     }
 
-    /// `machine`'s own connection, if it has one.
-    pub fn own_connection(&self, machine: &str) -> Option<OwnConnection> {
-        let mut found = self.own_connections().into_iter();
-        found.find(|(m, _)| m == machine).map(|(_, own)| own)
+    /// Whether `machine` is attached to the Store.
+    pub fn is_attached(&self, machine: &str) -> bool {
+        self.attached().iter().any(|m| m == machine)
     }
 
-    /// The record with `machine`'s own connection set to `own`; an empty
-    /// one removes it. Every other machine's entry is kept byte for byte: a
-    /// URL is never rewritten, and only `store update` drops old fields
-    /// ([`Self::without_old_fields`]).
-    pub fn with_own_connection(self, machine: &str, own: &OwnConnection) -> Self {
-        let mut machines = match self.fields.get("machines") {
-            Some(SdkValue::Map(machines)) => machines.clone(),
-            _ => Vec::new(),
-        };
-        let at = machines.iter().position(|(m, _)| m == machine);
-        match (at, own.is_empty()) {
-            (None, true) => return self,
-            (None, false) => machines.push((machine.to_owned(), own.to_record())),
-            (Some(at), true) => {
-                machines.remove(at);
-            }
-            (Some(at), false) => machines[at].1 = own.to_record(),
+    /// The record with `machine` attached (`attach`) or not; no
+    /// `attached` field when none is.
+    pub fn with_attached(self, machine: &str, attach: bool) -> Self {
+        let mut machines: Vec<String> = self.attached();
+        machines.retain(|m| m != machine);
+        if attach {
+            machines.push(machine.to_owned());
         }
         match machines.is_empty() {
-            true => self.without("machines"),
-            false => self.with("machines", SdkValue::Map(machines)),
+            true => self.without(ATTACHED),
+            false => {
+                let machines = machines.into_iter().map(SdkValue::Text).collect();
+                self.with(ATTACHED, SdkValue::List(machines))
+            }
         }
-    }
-
-    /// The record without an own connection for `machine`.
-    pub fn without_own_connection(self, machine: &str) -> Self {
-        self.with_own_connection(machine, &OwnConnection::default())
-    }
-
-    /// The record with `machines` holding exactly these own connections,
-    /// and no `machines` field when there are none.
-    fn with_machines(self, machines: Vec<(String, OwnConnection)>) -> Self {
-        if machines.is_empty() {
-            return self.without("machines");
-        }
-        let machines = machines.into_iter().map(|(m, own)| (m, own.to_record()));
-        self.with("machines", SdkValue::Map(machines.collect()))
-    }
-
-    /// Whether a PostgreSQL Store's record holds what 2.0 no longer writes
-    /// (spec v23 V23-6): a `password`, a URL that is not an address alone
-    /// (`refuse_login`), or a `machines.<machine>` entry with anything but a `url`
-    /// (an old `checked`). Such a record reads `broken` `outdated` with the
-    /// fix the user runs (`postgresql::login`); no write cleans a URL.
-    pub fn outdated_fields(&self) -> bool {
-        let machines = match self.fields.get("machines") {
-            Some(SdkValue::Map(machines)) => machines.as_slice(),
-            _ => &[],
-        };
-        self.fields.get("password").is_some()
-            || self.refused_urls()
-            || machines.iter().any(|(_, entry)| match entry {
-                SdkValue::Map(fields) => fields.iter().any(|(key, _)| key != "url"),
-                _ => true,
-            })
-            || !matches!(self.fields.get("machines"), None | Some(SdkValue::Map(_)))
-    }
-
-    /// Whether the Store's address or a machine's own is not an address
-    /// alone (`refuse_login`): it may hold a login, or a `#`. Such a URL is
-    /// never dialled and never rewritten; only a connect of an address
-    /// alone replaces it.
-    pub fn refused_urls(&self) -> bool {
-        let refused = |url: &str| crate::postgresql::connect::refuse_login(url).is_err();
-        let machines = match self.fields.get("machines") {
-            Some(SdkValue::Map(machines)) => machines.as_slice(),
-            _ => &[],
-        };
-        self.text("url").is_some_and(refused)
-            || (machines.iter()).any(|(_, entry)| entry.get_text("url").is_some_and(refused))
-    }
-
-    /// The record as `store update` writes it (V23-6): no `password`, and
-    /// each machine entry its `url` alone (none without one). Its URLs are
-    /// kept as they are: `store update` refuses a record holding a URL that
-    /// is not an address alone ([`Self::refused_urls`]), and no write
-    /// rewrites one.
-    pub fn without_old_fields(self) -> Self {
-        let record = self.without("password");
-        let machines = record.own_connections();
-        record.with_machines(machines)
     }
 
     fn raw_links(&self) -> &[(String, SdkValue)] {
@@ -529,34 +435,30 @@ impl StoreRecord {
     }
 
     /// A PostgreSQL Store `store.connect` records: its URL without a user
-    /// or password, the schema, `synchronous_commit` and the name of its
-    /// saved login (`auth`), if any (its binding and cursor key are added
-    /// once read).
+    /// or password, its user, the schema and `synchronous_commit` (its
+    /// binding and cursor key are added once read).
     pub fn connected(
         name: &str,
         url: &str,
+        user: &str,
         schema: &str,
         synchronous_commit: &str,
-        auth: Option<&str>,
     ) -> Self {
         let fields = SdkValue::map([
             ("name", SdkValue::text(name)),
             ("kind", SdkValue::text("postgresql")),
             ("url", SdkValue::text(url)),
+            ("user", SdkValue::text(user)),
             ("schema", SdkValue::text(schema)),
             ("synchronous_commit", SdkValue::text(synchronous_commit)),
             ("created", SdkValue::Int(home::now_ms())),
         ]);
-        let record = Self::from_record(name, fields);
-        match auth {
-            Some(auth) => record.with("auth", SdkValue::text(auth)),
-            None => record,
-        }
+        Self::from_record(name, fields)
     }
 }
 
-/// The full URL of a PostgreSQL Store's record, with its saved login put
-/// in now.
+/// The full URL of a PostgreSQL Store's record, with its login put in
+/// now: what this computer and every attached machine dial.
 pub fn url(record: &StoreRecord) -> Result<String> {
     let url = record.text("url").ok_or_else(|| {
         refused(
@@ -565,26 +467,6 @@ pub fn url(record: &StoreRecord) -> Result<String> {
         )
     })?;
     crate::postgresql::login::dial(record, url)
-}
-
-/// The full URL machine `machine` dials for PostgreSQL Store `record`, with
-/// the Store's saved login put in now: its own address where it has one,
-/// else the Store's.
-pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
-    let url = address_on(record, machine).ok_or_else(|| {
-        refused(
-            "Failed",
-            format!("PostgreSQL Store {}'s record has no url", record.name()),
-        )
-    })?;
-    crate::postgresql::login::dial(record, &url)
-}
-
-/// The address machine `machine` dials for PostgreSQL Store `record`, with
-/// no login: its own where it has one, else the Store's.
-pub fn address_on(record: &StoreRecord, machine: &str) -> Option<String> {
-    let own = record.own_connection(machine).and_then(|own| own.url);
-    own.or_else(|| record.text("url").map(str::to_owned))
 }
 
 /// Every Store record, by name.

@@ -233,12 +233,10 @@ Every call of the table, its shell line and what it was:
 | `store.list` | `layerfs store list [--machine M] [--with stats]` | same name |
 | `store.get` | `layerfs store get <store> [--with live,stats]` | `store.get`, `store.status`, `store.stats` |
 | `store.create` | `layerfs store create <name> [--machine M]` | same name |
-| `store.connect` | `layerfs store connect <store> <url> [--auth A] [--machine M] [--synchronous-commit local]` | same name |
-| `store.disconnect` | `layerfs store disconnect <store> [--machine M]` | same name |
-| `store.save_auth` | `layerfs store save-auth <auth> --user U --password-stdin` | new |
-| `store.auths` | `layerfs store auths` | new |
-| `store.remove_auth` | `layerfs store remove-auth <auth>` | new |
-| `store.update` | `layerfs store update <store> [--auth A] [--synchronous-commit S]` | same name |
+| `store.connect` | `layerfs store connect <store> <url> [--user U] [--password-stdin] [--synchronous-commit local]` | same name, and `store.update` |
+| `store.disconnect` | `layerfs store disconnect <store>` | same name |
+| `store.attach` | `layerfs store attach <store> --machine M` | new |
+| `store.detach` | `layerfs store detach <store> --machine M` | new |
 | `store.move` | `layerfs store move <store> <machine>` | `store.push`, `store.pull` |
 | `store.remove` | `layerfs store remove <store>` | same name |
 | `store.compact` | `layerfs store compact <store>` | same name |
@@ -354,13 +352,13 @@ Every argument the table renamed or dropped, from the frozen rows
 | `store.get` | `<name> (store.get, store.status, store.stats)` | `<store>` | an existing thing is named by its own word, never `name` |
 | `store.get` | `--machine (store.status)` | `store doctor <store> --machine M` | whether one machine reaches a Store is a check, and the doctor makes it |
 | `store.connect` | `<name>` | `<store>` | an existing thing is named by its own word, never `name` |
-| `store.connect` | `--password` | `--auth` | a login is saved once in the home and named by any number of Stores |
+| `store.connect` | `--password` | `--user · --password-stdin` | secrets come only on stdin; this computer is the one place a Store's login is saved (owner, 2026-11-24) |
 | `store.disconnect` | `<name>` | `<store>` | an existing thing is named by its own word, never `name` |
-| `store.update` | `<name>` | `<store>` | an existing thing is named by its own word, never `name` |
+| `store.update` | `<name>` | `store connect <store> <url>` | a connected Store's address, login or setting changes with a connect, checked like one |
 | `store.update` | `--url` | `store connect <store> <url>` | an address change is a connect, checked like one |
-| `store.update` | `--machine` | `store connect <store> <url> --machine M` | a machine's own address is a connect; the login is the Store's |
-| `store.update` | `--password` | `--auth, or store save-auth to rotate` | the login is saved once and named |
-| `store.update` | `--clear` | `store disconnect <store> --machine M` | removing an address is a disconnect |
+| `store.update` | `--machine` | `store attach <store> --machine M` | no machine has an address of its own; an attached machine dials the Store's address and login (owner, 2026-11-24) |
+| `store.update` | `--password` | `store connect <store> <url> --password-stdin` | the login is saved once, on this computer |
+| `store.update` | `--clear` | `store detach <store> --machine M` | a machine stops running Sandboxes of the Store |
 | `store.move` | `<name> (store.push, store.pull)` | `<store>` | an existing thing is named by its own word, never `name` |
 | `store.remove` | `<name>` | `<store>` | an existing thing is named by its own word, never `name` |
 | `store.compact` | `<name>` | `<store>` | an existing thing is named by its own word, never `name` |

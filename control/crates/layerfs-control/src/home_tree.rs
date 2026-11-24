@@ -22,7 +22,7 @@ use layerfs_home::outcome::{failed, Outcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
-use layerfs_store::record::{StoreRecord, StoreRef};
+use layerfs_store::record::{StoreKind, StoreRecord, StoreRef};
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -42,32 +42,27 @@ fn unreadable() -> State {
     State::broken(Reason::Failed, None)
 }
 
-/// One Store: `{ store, engine, projects, connections, state.. }`. `under`
+/// One Store: `{ store, engine, projects, machines, state.. }`. `under`
 /// is its machine's name and state, for a sqlite Store; a PostgreSQL
-/// Store's `connections` are every side that connects to it, as `store
-/// get` answers them (`layerfs_store::postgresql::connect::connections`,
-/// spec v23), with `sandboxes` the machines with a Sandbox of it; a
-/// sqlite Store has none (null). No URL holds a login. Its state is the
-/// Store's one records-only derivation; `engine` is null for a kind it
-/// does not read.
-fn store(
-    home: &Path,
-    record: &StoreRecord,
-    under: Option<(&str, &State)>,
-    sandboxes: &[String],
-) -> SdkValue {
+/// Store's `machines` are the names of the machines attached to it
+/// (`layerfs_store::postgresql::connect::machines`; `store get` answers
+/// each with its reach); a sqlite Store has none (null). Its state is the Store's one records-only derivation;
+/// `engine` is null for a kind it does not read.
+fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> SdkValue {
     let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))
         .unwrap_or_else(|_| unreadable());
-    let connections = match under {
-        Some(_) => SdkValue::Null,
-        None => layerfs_store::postgresql::connect::connections(record, sandboxes),
+    let machines = match (under, record.kind()) {
+        (None, Ok(StoreKind::Postgresql)) => {
+            layerfs_store::postgresql::connect::machines(record, false)
+        }
+        _ => SdkValue::Null,
     };
     let engine = record.kind().ok().map(|kind| kind.as_str().to_owned());
     state.write(SdkValue::map([
         ("store", SdkValue::text(record.name())),
         ("engine", SdkValue::opt_text(engine)),
         ("projects", projects(home, record.name())),
-        ("connections", connections),
+        ("machines", machines),
     ]))
 }
 
@@ -77,7 +72,7 @@ fn unreadable_store(home: &Path, name: &str) -> SdkValue {
         ("store", SdkValue::text(name)),
         ("engine", SdkValue::Null),
         ("projects", projects(home, name)),
-        ("connections", SdkValue::Null),
+        ("machines", SdkValue::Null),
     ]))
 }
 
@@ -213,7 +208,7 @@ fn machine(
         .then_some(name);
     let held_stores = (stores.iter())
         .filter(|record| placed(record).as_deref() == Some(name))
-        .map(|record| store(home, record, Some((name, &state)), &[]))
+        .map(|record| store(home, record, Some((name, &state))))
         .collect();
     let run = (sandboxes.iter())
         .filter(|s| s.machine() == name)
@@ -290,18 +285,7 @@ pub fn tree(home: &Path) -> Outcome {
     // a Store on no machine: PostgreSQL, or one whose placement is not read
     let mut elsewhere: Vec<SdkValue> = (stores.iter())
         .filter(|record| !matches!(record.store_ref(), Ok(StoreRef::Sqlite { .. })))
-        .map(|record| {
-            let on = (sandboxes.iter())
-                .filter(|s| {
-                    let of = s
-                        .project()
-                        .and_then(|p| p.split_once('/'))
-                        .map(|(st, _)| st);
-                    of == Some(record.name())
-                })
-                .map(|s| s.machine().to_owned());
-            store(home, record, None, &on.collect::<Vec<_>>())
-        })
+        .map(|record| store(home, record, None))
         .collect();
     elsewhere.extend(
         (unread_stores.into_iter()).filter_map(|read| Some(unreadable_store(home, &read.err()?))),

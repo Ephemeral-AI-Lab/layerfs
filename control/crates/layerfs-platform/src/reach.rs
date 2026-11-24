@@ -3,8 +3,8 @@
 //! machine: LayerFS rewrites no part of it and inspects no port (owner,
 //! 2026-11-24). A machine that does not share the caller's loopback
 //! refuses a URL naming that loopback, or a Unix socket of the caller,
-//! naming what the machine calls this host and the per-machine URL
-//! instead. Each platform's adapter declares its [`Loopback`].
+//! naming what the machine calls this host, with which the Store is
+//! connected again (every machine dials the one URL this computer saved). Each platform's adapter declares its [`Loopback`].
 //!
 //! The URL may hold the Store's password: no message here holds any part
 //! of it but a loopback host.
@@ -41,7 +41,7 @@ pub(crate) fn dial(
             "its URL is not one postgres://[user@]host[:port][,host[:port]...]/... URL its client reads, so the machine cannot check that it does not name this host's loopback",
         )
     })?;
-    let advice = advice(spec, store, &this_host);
+    let advice = advice(store, &this_host);
     if hosts
         .iter()
         .any(|host| layerfs_sandbox_backend::socket(host))
@@ -86,15 +86,16 @@ pub(crate) fn hint(spec: &Spec, (store, url): (&str, &str), loopback: Loopback) 
         "if its host is a loopback address on the {} machine {} (a hosts entry can make a name one), the machine does not share this host's loopback; {}",
         spec.kind.name(),
         spec.name,
-        advice(spec, store, &this_host)
+        advice(store, &this_host)
     ))
 }
 
-/// What to give a machine that does not share the caller's loopback.
-fn advice(spec: &Spec, store: &str, this_host: &str) -> String {
+/// What to do for a machine that does not share the caller's loopback:
+/// every machine dials the URL this computer saved, so the Store is
+/// connected again with an address the machine reaches.
+fn advice(store: &str, this_host: &str) -> String {
     format!(
-        "give the Store a host the machine reaches ({this_host}), or give the machine its own URL with `layerfs store connect {store} <url> --machine {}`",
-        spec.name
+        "connect the Store again with an address the machine reaches ({this_host}): `layerfs store connect {store} <url>`"
     )
 }
 

@@ -3,7 +3,6 @@
 //! in the home.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form, Part, Section};
-use crate::store::get::CONNECTION;
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::home::{Build, With};
 use layerfs_home::outcome::Outcome;
@@ -55,7 +54,7 @@ const STORE: Form = Form::of(
     &["store", "engine"],
     &[
         "projects",
-        "connections",
+        "machines",
         "state",
         "op",
         "blocked_by",
@@ -66,7 +65,7 @@ const STORE: Form = Form::of(
         "store",
         "engine",
         "projects",
-        "connections",
+        "machines",
         "state",
         "op",
         "blocked_by",
@@ -76,7 +75,7 @@ const STORE: Form = Form::of(
 )
 .parts(&[
     ("projects", Part::Scalars("project")),
-    ("connections", Part::Rows(&CONNECTION)),
+    ("machines", Part::Scalars("machine")),
 ]);
 const WORKSPACE: Form = Form::of(&["workspace", "branch"], &[], &["workspace", "branch"]);
 const SANDBOX: Form = Form::of(

@@ -10,9 +10,10 @@
 //!   LAYERFS_TEST_PG_PASSWORD, LAYERFS_TEST_DAEMON (a host daemon built with
 //!   `postgresql`); the docker half also LAYERFS_TEST_IMAGE (a local image
 //!   digest, the worker container's) and LAYERFS_BUNDLE (a sealed Linux
-//!   bundle whose daemon has `postgresql`). The URL is never rewritten: on
-//!   Docker Desktop a loopback URL is refused for the docker machine, which
-//!   is then given its own URL naming `host.docker.internal`, which its
+//!   bundle whose daemon has `postgresql`). `native` and the docker machine
+//!   are each attached to the Store first, like any machine. The URL is never rewritten: on Docker Desktop a
+//!   loopback URL is refused for the docker machine, and the Store is then
+//!   connected again with a URL naming `host.docker.internal`, which its
 //!   Sandboxes resolve with the worker's resolver files; their Workspace
 //!   and Commit never show those files.
 //! - a sqlite Store pushed to the docker machine and its Sandbox, through the
@@ -61,23 +62,24 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     call(home, name, args).unwrap_or_else(|e| panic!("{name}: {e:?}"))
 }
 
-/// PostgreSQL Store `pg` as a 2.0 home records it: its address and the
-/// saved login it names (a test login; nothing is dialled with it here).
-fn pg_record(home: &Path) {
-    let login = [
-        ("auth", t("pg")),
+/// PostgreSQL Store `pg` as a 2.0 home records it: its address, its user
+/// and the machines attached to it, its password saved in the home (a
+/// test login; nothing is dialled with it here).
+fn pg_record(home: &Path, attached: &[&str]) {
+    layerfs_store::postgresql::login::save(home, "pg", "not-a-real-password").unwrap();
+    let mut fields = vec![
+        ("name", t("pg")),
+        ("kind", t("postgresql")),
+        ("url", t("postgres://127.0.0.1:1/db")),
         ("user", t("u")),
-        ("password", t("not-a-real-password")),
     ];
-    ok(home, "store.save_auth", &login);
+    if !attached.is_empty() {
+        let names = attached.iter().map(|m| t(m)).collect();
+        fields.push(("attached", SdkValue::List(names)));
+    }
     home::write_record(
         &paths::store_record(home, "pg"),
-        &SdkValue::map([
-            ("name", t("pg")),
-            ("kind", t("postgresql")),
-            ("url", t("postgres://127.0.0.1:1/db")),
-            ("auth", t("pg")),
-        ]),
+        &SdkValue::Map(fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()),
     )
     .unwrap();
 }
@@ -172,7 +174,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     ok(&home, "machine.list", &[]);
     // a PostgreSQL Store and a sqlite Store on native, written as records:
     // the refusals come before any connection
-    pg_record(&home);
+    pg_record(&home, &[]);
     home::write_record(
         &paths::store_record(&home, "shop"),
         &SdkValue::map([("name", t("shop")), ("kind", t("sqlite"))]),
@@ -225,12 +227,32 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         layerfs_platform::StoreKind::Postgresql,
     ) {
         Ok(()) => {
+            // a machine not attached to the Store is refused first, with
+            // the attach as its fix
+            assert_eq!(code, "InvalidInput", "{message}");
+            assert_eq!(
+                message, "machine dev is not attached to PostgreSQL Store pg",
+                "{message}"
+            );
+            let args = SdkValue::map([
+                ("project", t("pg/app")),
+                ("name", t("t")),
+                ("machine", t("dev")),
+            ]);
+            let refusal =
+                layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+            assert_eq!(
+                refusal.detail.get_text("fix"),
+                Some("layerfs store attach pg --machine dev")
+            );
+            pg_record(&home, &["dev"]);
+            let (code, message) = create("dev");
             // a loopback URL is refused before the machine is asked: lima
             // does not share this host's loopback, and nothing rewrites it
             assert_eq!(code, "Unsupported", "{message}");
             assert!(message.contains("host.lima.internal"), "{message}");
             assert!(
-                message.contains("`layerfs store connect pg <url> --machine dev`"),
+                message.contains("`layerfs store connect pg <url>`"),
                 "{message}"
             );
             // a Sandbox already on the machine is still read and removed:
@@ -257,7 +279,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
             let (code, message) = create("dev");
             assert_eq!(code, "Unavailable", "{message}");
             assert!(message.contains("layerfs machine start dev"), "{message}");
-            pg_record(&home);
+            pg_record(&home, &[]);
         }
         Err(reason) => {
             assert_eq!(code, "Unsupported", "{message}");
@@ -295,8 +317,8 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
 /// A close runs without a PostgreSQL Store URL its machine cannot dial (a
 /// loopback lima does not share), so a Sandbox can always be removed; any
 /// other reason the URL cannot be made refuses the remove, forced or not,
-/// with that reason's own words and fix: the saved login the Store names
-/// is gone, or it names none. Nothing is removed then.
+/// with that reason's own words and fix: the Store's password is not saved
+/// in this home, or its record names no user. Nothing is removed then.
 #[test]
 fn a_forced_remove_says_why_its_store_s_url_cannot_be_made() {
     let home = tempdir("lost-login");
@@ -317,47 +339,38 @@ fn a_forced_remove_says_why_its_store_s_url_cannot_be_made() {
     )
     .unwrap();
     sandbox_on(&home, "dev");
-    let store = |auth: Option<&str>| {
-        let mut fields = vec![
+    let store = |field: (&str, &str)| {
+        let fields = vec![
             ("name".to_owned(), t("pg")),
             ("kind".to_owned(), t("postgresql")),
             ("url".to_owned(), t("postgres://127.0.0.1:1/db")),
+            (field.0.to_owned(), t(field.1)),
         ];
-        fields.extend(auth.map(|auth| ("auth".to_owned(), t(auth))));
         home::write_record(&paths::store_record(&home, "pg"), &SdkValue::Map(fields)).unwrap();
     };
     let remove = || {
         let args = SdkValue::map([("sandbox", t("s1")), ("force", SdkValue::Bool(true))]);
         layerfs_api::call(Some(&home), "sandbox.remove", args, &mut |_| {}).unwrap_err()
     };
-    // the saved login the Store names is gone
-    store(Some("gone"));
-    let refusal = remove();
-    assert_eq!(refusal.code, "NotFound", "{}", refusal.message);
-    assert!(
-        refusal.message.contains("no saved login named gone")
-            && refusal
-                .message
-                .contains("`layerfs store save-auth gone --user <user> --password-stdin`"),
-        "{}",
-        refusal.message
-    );
-    // the Store names none: the fix saves one and names it
-    store(None);
+    // the Store's password is not saved: the fix connects it with one
+    store(("user", "u"));
     let refusal = remove();
     assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
     assert_eq!(
         refusal.detail.get_text("fix"),
-        Some(
-            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update pg --auth <auth>"
-        ),
+        Some("layerfs store connect pg <url> --password-stdin"),
         "{}",
         refusal.message
     );
+    // a record naming no user
+    store(("schema", "layerfs"));
+    let refusal = remove();
+    assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+    assert!(refusal.message.contains("user"), "{}", refusal.message);
     assert!(paths::sandbox_record(&home, "s1").exists());
     // with its login saved, the loopback URL lima does not share refuses
     // nothing: the remove reaches the machine (here stopped)
-    pg_record(&home);
+    pg_record(&home, &["dev"]);
     let refusal = remove();
     assert!(!refusal.message.contains("loopback"), "{}", refusal.message);
     assert!(
@@ -377,7 +390,7 @@ fn every_platform_refusal_is_the_support_table_s() {
     let home = tempdir("support");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);
-    pg_record(&home);
+    pg_record(&home, &[]);
     home::write_record(
         &paths::project_record(&home, "pg", "app"),
         &SdkValue::map([("name", t("app"))]),
@@ -467,23 +480,21 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     let (scheme, rest) = url.split_once("://").unwrap();
     let (user, address) = rest.split_once('@').unwrap();
     let password = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();
-    ok(
-        &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(user)),
-            ("password", t(&password)),
-        ],
-    );
-    ok(
-        &home,
-        "store.connect",
-        &[
+    let login = [("user", t(user)), ("password", t(&password))];
+    let connect = |address: &str| {
+        let mut args = vec![
             ("store", t("pg")),
             ("url", t(&format!("{scheme}://{address}"))),
-            ("auth", t("pg")),
-        ],
+        ];
+        args.extend(login.iter().cloned());
+        ok(&home, "store.connect", &args)
+    };
+    connect(address);
+    // `native` is attached like any machine, checked from it
+    ok(
+        &home,
+        "store.attach",
+        &[("store", t("pg")), ("machine", t("native"))],
     );
     ok(
         &home,
@@ -502,18 +513,18 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
             ("machine", t("native")),
         ],
     );
-    // the create proved this computer reaches the Store: `native` with no
-    // address of its own is this computer's row (spec v23 V23-2)
+    // the create proved `native` reaches the Store: its own row's reach
     let got = ok(
         &home,
         "store.get",
         &[("store", t("pg")), ("detail", SdkValue::Bool(true))],
     );
-    let Some(SdkValue::List(rows)) = got.get("connections") else {
+    let Some(SdkValue::List(rows)) = got.get("machines") else {
         panic!("{got:?}");
     };
-    assert_eq!(rows.len(), 1, "{rows:?}");
-    assert_eq!(rows[0].get_text("reached"), Some("ok"), "{rows:?}");
+    assert_eq!(rows.len(), 1, "{got:?}");
+    assert_eq!(rows[0].get_text("machine"), Some("native"), "{got:?}");
+    assert_eq!(rows[0].get_text("reached"), Some("ok"), "{got:?}");
     work(&home, "pg/app", "n", "on-native", "native.txt");
     ok(&home, "sandbox.remove", &[("sandbox", t("n"))]);
     if let (Some(image), Some(_)) = (env("LAYERFS_TEST_IMAGE"), env("LAYERFS_BUNDLE")) {
@@ -536,28 +547,35 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
                     ],
                 )
             };
+            // not attached yet: refused with the attach as its fix
+            let (code, message) = create().unwrap_err();
+            assert_eq!(code, "InvalidInput", "{message}");
+            let attach = || {
+                call(
+                    &home,
+                    "store.attach",
+                    &[("store", t("pg")), ("machine", t("docker"))],
+                )
+            };
             // Docker Desktop's worker does not share this host's loopback:
             // a loopback URL is refused, naming the host's name there, and
-            // the machine gets its own URL (nothing is rewritten)
+            // the Store is connected again with that name (nothing is
+            // rewritten; this computer dials it too)
             let loopback = ["127.0.0.1", "localhost", "[::1]"]
                 .iter()
                 .find(|host| address.starts_with(*host));
             if let (Some(host), false) = (loopback, cfg!(target_os = "linux")) {
-                let (code, message) = create().unwrap_err();
+                let (code, message) = attach().unwrap_err();
                 assert_eq!(code, "Unsupported", "{message}");
                 assert!(message.contains("host.docker.internal"), "{message}");
-                assert!(message.contains("--machine docker"), "{message}");
-                let own = address.replacen(host, "host.docker.internal", 1);
-                ok(
-                    &home,
-                    "store.connect",
-                    &[
-                        ("store", t("pg")),
-                        ("url", t(&format!("{scheme}://{own}"))),
-                        ("machine", t("docker")),
-                    ],
+                assert!(
+                    message.contains("`layerfs store connect pg <url>`"),
+                    "{message}"
                 );
+                connect(&address.replacen(host, "host.docker.internal", 1));
             }
+            let attached = attach().unwrap();
+            assert_eq!(attached.get_text("outcome"), Some("attached"));
             // the create's reach check dials from the worker container
             create().unwrap();
             resolves_as_the_worker(&home, "pg/app", "d");
@@ -804,8 +822,9 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
 
 /// With no machine named, `sandbox.create` runs where the Store's calls
 /// run (#536 §10): a sqlite Store's machine (here a docker machine with no worker,
-/// so the create is refused naming its start), and `native` for a
-/// PostgreSQL Store (refused here by the reach check, which runs there).
+/// so the create is refused naming its start), and the one machine attached
+/// to a PostgreSQL Store (none or several are refused; with machine native
+/// attached, the reach check runs there).
 #[test]
 fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     let home = tempdir("default");
@@ -848,12 +867,62 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         "a refused create leaves no claim"
     );
 
-    pg_record(&home);
+    pg_record(&home, &[]);
     home::write_record(
         &paths::project_record(&home, "pg", "app"),
         &SdkValue::map([("name", t("app"))]),
     )
     .unwrap();
+    // a machine not attached to the Store is refused before any dial,
+    // with the attach as its fix
+    let args = SdkValue::map([
+        ("project", t("pg/app")),
+        ("name", t("t3")),
+        ("machine", t("box")),
+    ]);
+    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput", "{refusal:?}");
+    assert_eq!(
+        refusal.message,
+        "machine box is not attached to PostgreSQL Store pg"
+    );
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs store attach pg --machine box")
+    );
+    assert!(!paths::sandbox_dir(&home, "t3").exists());
+    // with no machine named, a Store with no machine attached is refused
+    // with the attach as its fix: there is no default machine
+    let args = SdkValue::map([("project", t("pg/app")), ("name", t("t2"))]);
+    let none =
+        layerfs_api::call(Some(&home), "sandbox.create", args.clone(), &mut |_| {}).unwrap_err();
+    assert_eq!(none.code, "InvalidInput", "{none:?}");
+    assert_eq!(
+        none.message,
+        "no machine is attached to PostgreSQL Store pg to run a Sandbox on"
+    );
+    assert_eq!(
+        none.detail.get_text("fix"),
+        Some("layerfs store attach pg --machine <machine>")
+    );
+    // several attached: the call names one
+    pg_record(&home, &["box", "native"]);
+    let several = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    assert_eq!(several.code, "InvalidInput", "{several:?}");
+    assert!(
+        several.message.contains("name one with --machine"),
+        "{several:?}"
+    );
+    assert_eq!(
+        several
+            .detail
+            .get("next")
+            .and_then(|next| next.get("machines")),
+        Some(&SdkValue::List(vec![t("box"), t("native")])),
+        "{several:?}"
+    );
+    // one attached (machine native, here): the Sandbox runs there
+    pg_record(&home, &["native"]);
     let refused = call(
         &home,
         "sandbox.create",

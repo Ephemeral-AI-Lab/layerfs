@@ -60,7 +60,7 @@ against the built table.
 | [`sandbox`](sandbox.md) (7) | [`create`](sandbox.md#sandboxcreate), [`list`](sandbox.md#sandboxlist), [`get`](sandbox.md#sandboxget), [`remove`](sandbox.md#sandboxremove), [`files`](sandbox.md#sandboxfiles), [`log`](sandbox.md#sandboxlog), [`doctor`](sandbox.md#sandboxdoctor) | records here; start and stop on the Sandbox's machine; `files`, `log`: where the Sandbox's run folder is | [`sandbox/`](../../../../api/crates/layerfs-api/src/sandbox) |
 | [`workspace`](workspace.md) (7) | [`list`](workspace.md#workspacelist), [`mount`](workspace.md#workspacemount), [`exec`](workspace.md#workspaceexec), [`cancel`](workspace.md#workspacecancel), [`commit`](workspace.md#workspacecommit), [`unmount`](workspace.md#workspaceunmount), [`status`](workspace.md#workspacestatus) | the Sandbox's daemon; `exec` and `cancel` in the Sandbox's runtime; `list` from Workspace records | [`workspace/`](../../../../api/crates/layerfs-api/src/workspace) |
 | [`machine`](machine.md) (14) | [`list`](machine.md#machinelist), [`get`](machine.md#machineget), [`images`](machine.md#machineimages), [`load_image`](machine.md#machineload_image), [`prune`](machine.md#machineprune), [`stats`](machine.md#machinestats), [`files`](machine.md#machinefiles), [`log`](machine.md#machinelog), [`start`](machine.md#machinestart), [`stop`](machine.md#machinestop), [`create`](machine.md#machinecreate), [`remove`](machine.md#machineremove), [`update`](machine.md#machineupdate), [`doctor`](machine.md#machinedoctor) | the caller's process, through the platform adapter; `stats`, `files`, `log`: where the machine's data is | [`machine/`](../../../../api/crates/layerfs-api/src/machine) |
-| [`store`](store.md) (13) | [`list`](store.md#storelist), [`get`](store.md#storeget), [`create`](store.md#storecreate), [`connect`](store.md#storeconnect), [`disconnect`](store.md#storedisconnect), [`save_auth`](store.md#storesave_auth), [`auths`](store.md#storeauths), [`remove_auth`](store.md#storeremove_auth), [`update`](store.md#storeupdate), [`move`](store.md#storemove), [`remove`](store.md#storeremove), [`compact`](store.md#storecompact), [`doctor`](store.md#storedoctor) | the caller's process; sqlite file steps in the Store machine's worker | [`store/`](../../../../api/crates/layerfs-api/src/store) |
+| [`store`](store.md) (11) | [`list`](store.md#storelist), [`get`](store.md#storeget), [`create`](store.md#storecreate), [`connect`](store.md#storeconnect), [`disconnect`](store.md#storedisconnect), [`attach`](store.md#storeattach), [`detach`](store.md#storedetach), [`move`](store.md#storemove), [`remove`](store.md#storeremove), [`compact`](store.md#storecompact), [`doctor`](store.md#storedoctor) | the caller's process; sqlite file steps in the Store machine's worker | [`store/`](../../../../api/crates/layerfs-api/src/store) |
 | [`backup`](backup.md) (6) | [`connect`](backup.md#backupconnect), [`disconnect`](backup.md#backupdisconnect), [`list`](backup.md#backuplist), [`create`](backup.md#backupcreate), [`restore`](backup.md#backuprestore), [`doctor`](backup.md#backupdoctor) | the caller's process; `create` stages on the Store's machine | [`backup/`](../../../../api/crates/layerfs-api/src/backup) |
 
 "Where the Store's calls run" is the caller's process for a PostgreSQL Store
@@ -82,7 +82,7 @@ progress, the refusals the call names with their `fix`, and its MCP profile
 | To get | You first need | Made by |
 | --- | --- | --- |
 | a sqlite Store | nothing (`native` is built in) | [`store.create`](store.md#storecreate) |
-| a PostgreSQL Store | a saved login | [`store.save_auth`](store.md#storesave_auth), [`store.connect`](store.md#storeconnect) |
+| a PostgreSQL Store | a database and its login | [`store.connect`](store.md#storeconnect); [`store.attach`](store.md#storeattach) for each machine that runs its Sandboxes, machine native too |
 | a project | a Store | [`project.init`](project.md#projectinit) |
 | a Branch to work on | a project (`main` is its published line) | [`branch.fork`](branch.md#branchfork) |
 | a Sandbox | a project and a machine | [`sandbox.create`](sandbox.md#sandboxcreate) |
@@ -149,5 +149,5 @@ The 1.x names below are gone in 2.0; nothing answers to them.
 | [sandbox](sandbox.md) | Sandboxes: create, list, get, remove, files, log, doctor |
 | [workspace](workspace.md) | list, mount, exec, cancel, commit, unmount, status |
 | [machine](machine.md) | built-in and VM machines, their images, stats, files and logs |
-| [store](store.md) | sqlite and PostgreSQL Stores, saved logins, moves, compaction |
+| [store](store.md) | sqlite and PostgreSQL Stores, attached machines, moves, compaction |
 | [backup](backup.md) | buckets, Store backups and restores |

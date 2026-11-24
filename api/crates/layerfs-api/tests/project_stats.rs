@@ -200,20 +200,12 @@ fn postgresql_counts_the_same_saved_tree_definition() {
     let (user, address) = rest.split_once('@').unwrap();
     call(
         &home,
-        "store.save_auth",
-        &[
-            ("auth", t("pg")),
-            ("user", t(user)),
-            ("password", t("unused")),
-        ],
-    );
-    call(
-        &home,
         "store.connect",
         &[
             ("store", t("trees")),
             ("url", t(&format!("{scheme}://{address}"))),
-            ("auth", t("pg")),
+            ("user", t(user)),
+            ("password", t("unused")),
             ("synchronous_commit", t("off")),
         ],
     );

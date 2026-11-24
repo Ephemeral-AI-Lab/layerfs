@@ -231,12 +231,23 @@ pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
 /// caller's loopback (`docker` on Docker Desktop, `lima`,
 /// `apple-container`) refuses a loopback host `Unsupported`, naming what it
 /// calls this host (`host.docker.internal`, `host.lima.internal`, the
-/// network's gateway) and `layerfs store connect <store> <url> --machine
-/// <machine>`; `native` and `docker` on a Linux Engine share it. Starts
+/// network's gateway), with which `layerfs store connect <store> <url>`
+/// connects the Store again; `native` and `docker` on a Linux Engine share
+/// it. Starts
 /// nothing; no message holds any part of the URL but a loopback host.
 pub fn reach(spec: &Spec, store: &str, url: &str) -> Result<String, MachineError> {
     spec.validate()?;
     crate::reach::dial(spec, (store, url), adapter(spec.kind).loopback(spec))
+}
+
+/// Whether `spec`'s machine shares this computer's loopback, as its
+/// platform's adapter declares it ([`crate::reach::Loopback`]): a URL
+/// naming that loopback is then dialled as given there.
+pub fn shares_loopback(spec: &Spec) -> bool {
+    matches!(
+        adapter(spec.kind).loopback(spec),
+        crate::reach::Loopback::Shared
+    )
 }
 
 /// What a failed connection to Store `store` at `url` from `spec`'s machine

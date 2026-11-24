@@ -248,14 +248,7 @@ fn status(home: &Path) -> SdkValue {
         live: true,
         stats: false,
     };
-    layerfs_store::get::get(
-        home,
-        &mut Events::new(&mut sink),
-        "pgs",
-        with,
-        (&machines, &|_: &std::path::Path| Vec::new()),
-    )
-    .unwrap()
+    layerfs_store::get::get(home, &mut Events::new(&mut sink), "pgs", with, &machines).unwrap()
 }
 
 /// The `live` section's `phases`.
@@ -283,15 +276,15 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
 
     let home = tempdir("home");
     home::ensure(&home).unwrap();
-    // `store.connect` records exactly this shape, with its saved login
-    // (`store.save_auth`); `store.status` reads it. The login is the one
+    // `store.connect` records exactly this shape, its user in the record
+    // and its password a secret of the home; `store.status` reads it. The login is the one
     // the client reads in the URL (a trust-auth server takes any password).
     let read: postgres::Config = url.parse().expect("LAYERFS_TEST_POSTGRES_URL is a URL");
     let user = read.get_user().unwrap_or("postgres");
     let password = read.get_password().map_or("unused".to_owned(), |password| {
         String::from_utf8(password.to_vec()).expect("a UTF-8 password")
     });
-    layerfs_store::postgresql::login::save(&home, "pg", user, &password).unwrap();
+    layerfs_store::postgresql::login::save(&home, "pgs", &password).unwrap();
     // the record keeps the address alone: the URL as given when it holds no
     // login, else (the test server's URL names its user) the URL after the
     // user part the client reads (its first `@`), which must then be an
@@ -310,7 +303,7 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
     };
     layerfs_store::postgresql::connect::refuse_login(&address)
         .expect("LAYERFS_TEST_POSTGRES_URL is an address with its login in its user part");
-    StoreRecord::connected("pgs", &address, "layerfs", "off", Some("pg"))
+    StoreRecord::connected("pgs", &address, user, "layerfs", "off")
         .write(&home)
         .unwrap();
     let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();

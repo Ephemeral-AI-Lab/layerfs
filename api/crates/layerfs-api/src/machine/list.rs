@@ -30,6 +30,7 @@ const ITEM: Form = Form::of(
         "observed_at",
         "backend",
         "supports",
+        "loopback",
         "cpus",
         "memory_bytes",
         "disk_bytes",

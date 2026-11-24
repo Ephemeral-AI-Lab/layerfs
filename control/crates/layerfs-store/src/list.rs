@@ -45,13 +45,7 @@ fn size(home: &Path, record: &StoreRecord, unanswered: &mut Vec<String>) -> SdkV
 /// `store.list`: every Store, or with `machine` only the sqlite Stores on
 /// that machine, each with its records-only state; with `stats`, each
 /// item's `size`.
-pub fn list(
-    home: &Path,
-    machine: Option<&str>,
-    stats: bool,
-    (machines, sandboxes): (state::Machines, crate::get::Sandboxes),
-) -> Outcome {
-    let pairs = sandboxes(home);
+pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Machines) -> Outcome {
     let mut derived: BTreeMap<String, State> = BTreeMap::new();
     let mut unanswered = Vec::new();
     let mut items = Vec::new();
@@ -71,8 +65,7 @@ pub fn list(
         };
         let state = state::recorded_under(&record, under)?;
         let observed = observed::read(&paths::store_record(home, record.name()));
-        let on = crate::get::sandbox_machines(&pairs, record.name());
-        let mut item = summary(home, &record, &state, observed, &on)?;
+        let mut item = summary(home, &record, &state, observed, false)?;
         if let (true, SdkValue::Map(fields)) = (stats, &mut item) {
             fields.push(("size".to_owned(), size(home, &record, &mut unanswered)));
         }

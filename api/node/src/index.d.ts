@@ -502,26 +502,19 @@ export interface StoreCreateOptions extends CallOptions {
 
 /** Options of `store.connect`; an unknown option is refused. */
 export interface StoreConnectOptions extends CallOptions {
-  auth?: string;
-  machine?: string;
+  user?: string;
+  password?: Content;
   synchronous_commit?: string;
 }
 
-/** Options of `store.disconnect`; an unknown option is refused. */
-export interface StoreDisconnectOptions extends CallOptions {
-  machine?: string;
+/** Options of `store.attach`; an unknown option is refused. */
+export interface StoreAttachOptions extends CallOptions {
+  machine: string;
 }
 
-/** Options of `store.save_auth`; an unknown option is refused. */
-export interface StoreSaveAuthOptions extends CallOptions {
-  user: string;
-  password: Content;
-}
-
-/** Options of `store.update`; an unknown option is refused. */
-export interface StoreUpdateOptions extends CallOptions {
-  auth?: string;
-  synchronous_commit?: string;
+/** Options of `store.detach`; an unknown option is refused. */
+export interface StoreDetachOptions extends CallOptions {
+  machine: string;
 }
 
 /** Options of `store.move`; an unknown option is refused. */
@@ -732,18 +725,14 @@ export interface StoreFamily {
   get(store: string, options?: StoreGetOptions): Promise<Result>;
   /** an empty sqlite Store */
   create(name: string, options?: StoreCreateOptions): Promise<Result>;
-  /** connect a PostgreSQL database as a Store, or set an address of a connected one */
+  /** connect a PostgreSQL database as a Store, or change a connected one's address, login or setting */
   connect(store: string, url: string, options?: StoreConnectOptions): Promise<Result>;
-  /** forget a PostgreSQL Store, or one machine's own address and reach; its data stays */
-  disconnect(store: string, options?: StoreDisconnectOptions): Promise<Result>;
-  /** save a PostgreSQL login in the home; saving again rotates it */
-  save_auth(auth: string, options: StoreSaveAuthOptions): Promise<Result>;
-  /** the saved PostgreSQL logins and the Stores that use each */
-  auths(options?: CallOptions): Promise<Result>;
-  /** remove a saved PostgreSQL login no Store uses */
-  remove_auth(auth: string, options?: CallOptions): Promise<Result>;
-  /** change a PostgreSQL Store's saved login or its synchronous_commit */
-  update(store: string, options?: StoreUpdateOptions): Promise<Result>;
+  /** forget a PostgreSQL Store, its saved login and its attachments; its data stays */
+  disconnect(store: string, options?: CallOptions): Promise<Result>;
+  /** let a machine run Sandboxes of a PostgreSQL Store, checked from that machine first */
+  attach(store: string, options: StoreAttachOptions): Promise<Result>;
+  /** stop a machine running Sandboxes of a PostgreSQL Store; refused while one runs there */
+  detach(store: string, options: StoreDetachOptions): Promise<Result>;
   /** move a sqlite Store between this computer and a machine */
   move(store: string, machine: string, options?: StoreMoveOptions): Promise<Result>;
   /** delete a sqlite Store with every project in it */

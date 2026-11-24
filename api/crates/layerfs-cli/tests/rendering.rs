@@ -219,7 +219,7 @@ fn a_row_s_reason_reads_in_state_and_its_fix_under_the_table() {
                 ("store", t("pg")),
                 ("state", t("broken")),
                 ("reason", t("outdated")),
-                ("fix", t("layerfs store update pg --auth x")),
+                ("fix", t("layerfs store connect pg <url> --password-stdin")),
             ]),
             SdkValue::map([
                 ("store", t("s")),
@@ -238,7 +238,7 @@ fn a_row_s_reason_reads_in_state_and_its_fix_under_the_table() {
          pg     broken: outdated\n\
          s      blocked by machine docker (outdated)\n\
          \n\
-         fix pg: layerfs store update pg --auth x\n"
+         fix pg: layerfs store connect pg <url> --password-stdin\n"
     );
 }
 
@@ -255,7 +255,7 @@ fn doctor_text_aligns_columns_and_renders_detail_tree_and_evidence() {
                 ("check", t("store.connection")),
                 ("severity", t("error")),
                 ("message", t("cannot reach server")),
-                ("fix", t("layerfs store update pg --auth a")),
+                ("fix", t("layerfs store connect pg <url> --password-stdin")),
                 ("evidence", SdkValue::map([("step", t("handshake"))])),
             ])]),
         ),
@@ -295,6 +295,9 @@ fn doctor_text_aligns_columns_and_renders_detail_tree_and_evidence() {
         "{shown}"
     );
     assert!(shown.contains("evidence: step=handshake"), "{shown}");
-    assert!(shown.contains("observed at: 2026-11-20T05:00:00Z"), "{shown}");
+    assert!(
+        shown.contains("observed at: 2026-11-20T05:00:00Z"),
+        "{shown}"
+    );
     assert!(shown.contains("store.record: pass"), "{shown}");
 }

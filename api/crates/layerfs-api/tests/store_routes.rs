@@ -78,21 +78,21 @@ fn a_store_record_whose_machine_is_not_text_is_refused() {
 }
 
 #[test]
-fn a_postgresql_store_reads_its_saved_login_per_call() {
+fn a_postgresql_store_reads_its_saved_password_per_call() {
     let home = home_with(SdkValue::map([
         ("name", t("shop")),
         ("kind", t("postgresql")),
         ("url", t("postgresql://127.0.0.1:1/db")),
-        ("auth", t("route-login")),
+        ("user", t("route-login")),
         ("schema", t("shop")),
         ("synchronous_commit", t("off")),
         ("binding", SdkValue::Bytes(vec![7; 16])),
         ("cursor", SdkValue::Bytes(vec![8; 32])),
     ]));
     let (code, message) = read(&home, "shop/api").unwrap_err();
-    assert_eq!(code, "NotFound");
+    assert_eq!(code, "InvalidInput");
     assert!(
-        message.contains("no saved login named route-login"),
+        message.contains("shop's password is not saved in this home"),
         "{message}"
     );
     std::fs::remove_dir_all(home).unwrap();

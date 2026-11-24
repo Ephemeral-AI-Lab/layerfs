@@ -43,7 +43,6 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
 const WORDS: &[(&str, &str)] = &[
     ("access_key", "K"),
     ("at", "C"),
-    ("auth", "A"),
     ("branch", "B"),
     ("bucket", "B"),
     ("call", "C"),

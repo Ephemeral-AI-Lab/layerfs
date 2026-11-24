@@ -1,10 +1,9 @@
 //! What was seen when a PostgreSQL Store's database was dialled (spec v23
 //! V23-2): `store/<s>/observed.json`, beside the `at` a live read writes
-//! there. `here` is this computer's dial of the Store's address;
-//! `reach.<machine>` a machine's, as its Sandboxes dial it. A Sandbox on
-//! `native` with no address of its own dials as this computer does, so
-//! its reach is `here`. Each entry is `{ at, ok, latency_ms,
-//! server_version, error }`, the last one seen.
+//! there. `here` is this computer's dial of the Store's address (the
+//! control process that holds the connection), never a machine's;
+//! `reach.<machine>` a machine's, as its Sandboxes dial it. Each entry is
+//! `{ at, ok, latency_ms, server_version, error }`, the last one seen.
 //!
 //! It is not a record: a write never moves the home's generation and never
 //! fails the call that made it. Writers run after their Store I/O, under
@@ -106,12 +105,6 @@ pub fn seen_at(home: &Path, store: &str, ms: i64) {
     }
 }
 
-/// The key `machine`'s reach of `record` is kept under: none for this
-/// computer's (`native` without an address of its own).
-fn from<'a>(record: &StoreRecord, machine: Option<&'a str>) -> Option<&'a str> {
-    machine.filter(|m| *m != "native" || record.own_connection(m).is_some())
-}
-
 /// Records what `machine` (none: this computer) saw dialling PostgreSQL
 /// Store `store`, best effort.
 pub fn record(home: &Path, store: &str, machine: Option<&str>, reach: &Reach) {
@@ -120,7 +113,7 @@ pub fn record(home: &Path, store: &str, machine: Option<&str>, reach: &Reach) {
             return Ok(());
         }
         let entry = reach.to_record(now_ms());
-        match from(record, machine) {
+        match machine {
             None => observed::merge(file, HERE, entry),
             Some(machine) => {
                 let machines = reaches(&observed::fields(file));

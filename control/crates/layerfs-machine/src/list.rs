@@ -21,9 +21,23 @@ fn names(items: &[String]) -> (SdkValue, SdkValue) {
     layerfs_home::helpers::shown(names, 0, false)
 }
 
+/// Whether the machine shares this computer's loopback, as its platform's
+/// adapter declares it: `shared` or `apart`; null for a removed platform or
+/// a record that describes no machine.
+fn loopback(home: &Path, record: &MachineRecord) -> SdkValue {
+    if record.removed().is_some() {
+        return SdkValue::Null;
+    }
+    match super::spec::provider_spec(home, record) {
+        Ok(spec) if layerfs_platform::shares_loopback(&spec) => SdkValue::text("shared"),
+        Ok(_) => SdkValue::text("apart"),
+        Err(_) => SdkValue::Null,
+    }
+}
+
 /// The machine as `machine.get` and each `machine.list` item show it:
 /// `platform`, `state` with its companion, `observed_at`, then what its
-/// record holds (`machine`, `backend`, `supports`, its size, images and
+/// record holds (`machine`, `backend`, `supports`, `loopback`, its size, images and
 /// settings, `message`, `created_at`) and what is on it (`stores`,
 /// `sandboxes`, each with its count when cut).
 ///
@@ -55,6 +69,7 @@ pub(super) fn summary(
             )
         }
     };
+    let loopback = loopback(home, record);
     let file = paths::machine_record(home, record.name());
     let (state, message, observed) = match seen {
         // a VM a live read found gone shows the line that removes what is
@@ -110,6 +125,7 @@ pub(super) fn summary(
     fields.push(("machine", SdkValue::text(record.name())));
     fields.push(("backend", backend));
     fields.push(("supports", supports));
+    fields.push(("loopback", loopback));
     for key in SETTINGS {
         fields.push((key, of(key).unwrap_or_default()));
     }

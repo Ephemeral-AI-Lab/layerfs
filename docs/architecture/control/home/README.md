@@ -39,7 +39,7 @@ says how the first call creates one and why a folder that is not a LayerFS
                  workspace/<id>.json  <id>.unmount  <id>.unmount-lock
                  workspace/<id>/exec/<x>.json  one per running command
    backup/<b>/record.json     provider, url, prefix, region, access key id
-   secret/<kind>/<name>.json  0600: saved logins (auth), bucket keys
+   secret/<kind>/<name>.json  0600: PostgreSQL Store passwords (login), bucket keys
    log/                       uncertain.jsonl; leases, exec, repair .jsonl
                               and their <name>.1.jsonl; rotate.lock
    trace/calls.jsonl          the call log; calls.1.jsonl  calls.lock
@@ -218,7 +218,7 @@ is in the home; a worker's root that holds a sqlite Store's file keeps
 | Names | Whose | Source |
 | --- | --- | --- |
 | `layerfs.json`, `layerfs.lock`, `generation`, `machine/`, `store/`, `sandbox/`, `backup/`, `log/`, `trace/` | LayerFS's: every path it builds in a home starts with one of them | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
-| `secret/` | LayerFS's saved logins and bucket keys, `secret/<kind>/<name>.json` | [`home/secrets.rs`](../../../../control/crates/layerfs-home/src/home/secrets.rs) |
+| `secret/` | LayerFS's PostgreSQL Store passwords (kind `login`) and bucket keys, `secret/<kind>/<name>.json` | [`home/secrets.rs`](../../../../control/crates/layerfs-home/src/home/secrets.rs) |
 | `runtime/`, `job/`, `stat/`, `preset/` | an integration's. LayerFS creates none of them; made before the first call they leave the folder a new home ([Opening a home](#opening-a-home)), and neither the home doctor's records scan (four fixed folders) nor a leftover sweep (which never lists the home itself) lists, reads or reports them | [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `scan`, [`sweep.rs`](../../../../control/crates/layerfs-sandbox/src/sweep.rs) |
 
 ### The `op` intent
@@ -297,7 +297,7 @@ and its prefix
 
 | Secret | Where it lives | Source |
 | --- | --- | --- |
-| PostgreSQL password | a saved login (user and password) in `secret/auth/<auth>.json` (0600), named by the Store record's `auth`; put into an in-memory URL on each dial. A PostgreSQL record with no `auth` is refused `InvalidInput` with the fix `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update <store> --auth <auth>`; no other password reference is read | [`home/secrets.rs`](../../../../control/crates/layerfs-home/src/home/secrets.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) |
+| PostgreSQL password | the Store's password in `secret/login/<store>.json` (0600, `{ password, changed }`), saved by `store connect`; with the record's `user` it is put into an in-memory URL on each dial. A record naming no `user` is refused `InvalidInput`; a password this home does not hold is refused `InvalidInput` with the fix `layerfs store connect <store> <url> --password-stdin`; no other password reference is read | [`home/secrets.rs`](../../../../control/crates/layerfs-home/src/home/secrets.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) |
 | Bucket key | its id (`access_key`) in `backup/<bucket>/record.json`, its secret in `secret/bucket/<bucket>.json` (0600); a record with no `access_key` is refused `Failed` with the fix that connects it again | [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) `credentials`, [`backup/secret.rs`](../../../../control/crates/layerfs-store/src/backup/secret.rs) |
 | Worker secret | `machine/<m>/worker.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | Sandbox daemon keys | `sandbox/<n>/control.json` (0600) | same |
@@ -305,7 +305,7 @@ and its prefix
 
 A copy of a home carries its secrets: every `worker.json` and
 `control.json`, each started `native` Sandbox's `daemon.setup`, and every
-saved login and bucket key in `secret/`.
+PostgreSQL Store password and bucket key in `secret/`.
 
 ### Moving or copying a home
 
@@ -389,7 +389,7 @@ independent of `LAYERFS_TRACE`.
 | Lock order is home, start, Store, Sandbox; none is held across a worker call, a VM boot or a byte transfer, except `start.lock` across its start | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | A stale lease (its process gone) is removed under the Store lock by the next lease taker, or by `store.move`, `store.remove` and `store.disconnect`, and logged to `log/leases.jsonl`; reads leave it | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
 | Only host processes take `layerfs.lock`; a worker's root is never treated as a home | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs) |
-| A password never reaches a record: `store.connect` refuses a URL that names a user or carries a password; the record names its saved login (`auth`) only | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) `refuse_login`, [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) |
+| A password never reaches a record: `store.connect` refuses a URL that names a user or carries a password; the record keeps the `user` only; the password is a home secret | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) `refuse_login`, [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) |
 | A trace or call-log line that cannot be written changes no outcome and is not retried | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs), [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
 | A call-log line is one `write` on a file opened `O_APPEND` and closed, so a long-lived process never writes into a rotated or reset file; nothing is written where `layerfs.json` is absent | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
 
@@ -407,7 +407,7 @@ independent of `LAYERFS_TRACE`.
 | New `lima` machine name | shorter where Lima's home path is long: Lima refuses an instance whose socket path `<Lima home>/<VM name>/ssh.sock.<16 digits>` is not shorter than 104 characters, so the VM name is at most 76 minus the length of the Lima home (`LIMA_HOME`, else `~/.lima`, links resolved) and the machine name 17 less; else `InvalidInput` stating the longest name that fits on this host | [`lima/limit.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/limit.rs), [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) `provider_room` |
 | New machine whose VM name another machine has | `Exists`, before any effect: a VM name keeps no punctuation (`a.b` and `a_b` both give `…-a-b`), and the new name is compared with each machine's recorded `vm_name` (a record without one is skipped) | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) `new_name` |
 | Sandbox name ending in `.root` | `InvalidInput`: `<name>.root` in the run root is another Sandbox's private root | [`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs) |
-| PostgreSQL Store with no saved login (`auth`) | `InvalidInput`, fix `layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store update <store> --auth <auth>`; a named login not saved is `NotFound` | [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `dial`, `read` |
+| PostgreSQL Store whose password this home does not hold, or whose record names no `user` | `InvalidInput`; the first with the fix `layerfs store connect <store> <url> --password-stdin` | [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `dial`, `read` |
 | A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or anything but `layerfs.lock`, the integration folders and `.DS_Store` with no `layerfs.json`) | `Unsupported`, fix `mv <home> <home>.old && layerfs home init`; nothing written ([Opening a home](#opening-a-home)) | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `foreign` |
 | Call log size | rotates past 16 MiB to the one `calls.1.jsonl` under a non-blocking `flock` on `calls.lock`; `home.clear_log` waits for that lock, truncates in place and removes the rotated file | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
 | Other log sizes | One rule: past 16 MiB a log moves once to its `.1` name, replacing the one before. `log/*.jsonl` (`leases`, `repair`, and `exec` on the side that keeps the command records): a writer opens, appends one line and closes, and a log then past the size is renamed to `<name>.1.jsonl` under a non-blocking `flock` on `log/rotate.lock`; a writer that does not get the lock skips it. `log/uncertain.jsonl` never rotates: it is the only record of uncertain outcomes. `machine/<m>/forward.log` is checked when a forward starts: it is copied to `forward.1.log` and emptied in place, never renamed, since the machine's other forwards hold it open ([forwards](../machines/workers-and-reach.md#forwards)). A machine's `/layerfs/data/log/worker.log` is renamed to `worker.1.log` only when a worker starts, never while one runs ([workers](../machines/workers-and-reach.md#the-workers-log)). A Sandbox's `daemon.log` is new with its run folder and goes with it: it is never rotated and there is no `daemon.1.log` ([Backends](../sandboxes/backends.md#local-one-daemon-process-on-this-kernel)) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `log_line`, [`log_file.rs`](../../../../engine/crates/layerfs-bridge/src/log_file.rs), [`setup/forward.rs`](../../../../control/crates/layerfs-platform/src/setup/forward.rs), [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) `log_start` |
