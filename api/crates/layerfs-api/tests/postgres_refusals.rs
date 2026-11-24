@@ -528,6 +528,19 @@ fn an_old_url_login_is_never_shown_and_a_broken_login_file_is_saved_again() {
     for secret in ["hunter2", "sekrit", "127.0.0.1"] {
         assert!(!shown.contains(secret), "{secret} in {shown}");
     }
+    // and `store.list` shows it hidden too
+    let listed = layerfs_api::json::print(&ok(
+        &home,
+        "store.list",
+        &[("detail", SdkValue::Bool(true))],
+    ));
+    assert!(
+        listed.contains("postgresql://<hidden: not an address alone>"),
+        "{listed}"
+    );
+    for secret in ["hunter2", "sekrit", "127.0.0.1"] {
+        assert!(!listed.contains(secret), "{secret} in {listed}");
+    }
     // one the client reads shows its address, without its login
     connected(
         &home,

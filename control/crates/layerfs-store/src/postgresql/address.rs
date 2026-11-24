@@ -20,9 +20,72 @@ pub const HIDDEN: &str = "postgresql://<hidden: not an address alone>";
 /// The refusal of a URL holding a login (spec v23 V23-13).
 const LOGIN: &str = "the URL names a user or holds a password (or a password file); give the address alone and the login with --auth (`layerfs store save-auth` saves one)";
 
-/// The refusal of a URL the client does not read.
+/// The refusal of a URL the client does not read, when no key or value
+/// of it can be named ([`unread`]).
 const UNREAD: &str = "the URL is not one its PostgreSQL client reads, or names a user or holds a password (or a password file) under a key it does not know: give the address alone, postgresql://host[:port][,host[:port]...]/database?key=value&... with keys the client knows (not `passfile`, `sslpassword`, `sslkey` or `sslcert`), and the login with --auth (`layerfs store save-auth` saves one)";
 
+/// What a refusal of a URL holding a `#` ends with.
+const HASH: &str = "; a `#` that is part of the address is written %23";
+
+/// The refusal of a URL whose only fault is a `#`.
+const HASH_ONLY: &str = "the URL holds a `#`; one that is part of the address is written %23";
+
+/// The bytes that end a user, a host list or a path, or split pairs: a
+/// user holding one is an address or a query the client read as a user.
+const ADDRESS: [char; 5] = ['/', '?', '&', '=', '#'];
+
+/// The keys the client reads (tokio-postgres 0.7.18 `Config::param`).
+const KEYS: [&str; 19] = [
+    "user",
+    "password",
+    "dbname",
+    "options",
+    "application_name",
+    "sslmode",
+    "sslnegotiation",
+    "host",
+    "hostaddr",
+    "port",
+    "connect_timeout",
+    "tcp_user_timeout",
+    "keepalives",
+    "keepalives_idle",
+    "keepalives_interval",
+    "keepalives_retries",
+    "target_session_attrs",
+    "channel_binding",
+    "load_balance_hosts",
+];
+
+/// libpq's `sslmode` values the client does not read: it reads `disable`,
+/// `prefer` and `require`.
+const TLS_MODES: [&str; 3] = ["allow", "verify-ca", "verify-full"];
+
+/// libpq's TLS keys the client does not read: it takes no certificate,
+/// key or revocation file.
+const TLS_KEYS: [&str; 10] = [
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "sslcrl",
+    "sslcrldir",
+    "sslsni",
+    "sslcompression",
+    "sslcertmode",
+    "ssl_min_protocol_version",
+    "ssl_max_protocol_version",
+];
+
+/// libpq's keys of a login the client does not read.
+const LOGIN_KEYS: [&str; 2] = ["passfile", "sslpassword"];
+
+/// The refusal of a TLS key or `sslmode` value the client does not read,
+/// `what` a name from the lists here. With the engine's connector
+/// (`postgres-native-tls` over `native-tls`, built with its defaults),
+/// `require` verifies the certificate chain and the host name.
+fn tls(what: &str) -> String {
+    format!("the URL's {what} is not read by its PostgreSQL client, which takes `sslmode` disable, prefer or require and no certificate, key or revocation file; `sslmode=require` verifies the server's certificate chain and host name against the trusted roots: give `sslmode=require` and keys the client knows")
+}
 /// `(scheme, after)` of a PostgreSQL URL: its scheme and the text after
 /// `postgresql://` or `postgres://`.
 pub fn scheme(url: &str) -> Result<(&str, &str)> {
@@ -55,45 +118,45 @@ fn has_login(read: &Config) -> bool {
     read.get_user().is_some() || read.get_password().is_some()
 }
 
-/// Refuses a URL that is not an address alone, the one kind dialled and
-/// recorded: one that is not PostgreSQL's; holding an `@` (the client ends
-/// a user part at the first, wherever it is); one the client does not
-/// read; one whose client reads a user or a password (a `user` or
-/// `password` parameter); holding a `#` (the client reads it as text, other
-/// readers end the URL there). An `@` or `#` of the address itself is
-/// written `%40` or `%23`, which the client decodes, so no reading of an
-/// accepted URL can differ from the client's.
-pub fn refuse_login(url: &str) -> Result<()> {
-    let (_, after) = scheme(url)?;
-    if after.contains('@') {
-        return Err(refused(
-            "InvalidInput",
-            format!("{LOGIN}; an `@` or `#` that is part of the address is written %40 or %23"),
-        ));
-    }
-    let read = reading(url).ok_or_else(|| refused("InvalidInput", UNREAD))?;
-    if has_login(&read) {
-        return Err(refused("InvalidInput", LOGIN));
-    }
-    if after.contains('#') {
-        return Err(refused(
-            "InvalidInput",
-            "the URL holds a `#`; one that is part of the address is written %23",
-        ));
-    }
-    Ok(())
+/// Why a URL is not an address alone ([`refuse_login`]): the refusal's
+/// text, and whether what it refuses may be a login (its fix then saves
+/// one first).
+struct Why {
+    message: String,
+    login: bool,
 }
 
-/// `rest`, a URL after its client's user part, without the query pairs
-/// the client reads as a login, each pair asked of the client alone (one
-/// holding an `@` is kept, and [`clean`] then refuses the form); the
-/// rest of the text as it was. The query starts at the first `?`, where the
-/// client ends a host list and a path; a key runs to its `=`, its value to
-/// the next `&`.
-fn without_login_pairs(scheme: &str, rest: &str) -> String {
-    let Some((base, mut query)) = rest.split_once('?') else {
-        return rest.to_owned();
+/// [`Why`] `url` is not an address alone, `None` when it is one: holding
+/// an `@` (the client ends a user part at the first, wherever it is); one
+/// the client does not read ([`unread`]); one whose client reads a user or
+/// a password (a `user` or `password` parameter); holding a `#` (the client
+/// reads it as text, other readers end the URL there), which every other
+/// refusal of a URL holding one also names.
+fn why(url: &str) -> Result<Option<Why>> {
+    let (scheme, after) = scheme(url)?;
+    let hash = |message: String| match after.contains('#') && !message.contains("%23") {
+        true => format!("{message}{HASH}"),
+        false => message,
     };
+    let (message, login) = if after.contains('@') {
+        let hint = "; an `@` or `#` that is part of the address is written %40 or %23";
+        (format!("{LOGIN}{hint}"), true)
+    } else if let Some(read) = reading(url) {
+        match (has_login(&read), after.contains('#')) {
+            (true, _) => (LOGIN.to_owned(), true),
+            (false, true) => (HASH_ONLY.to_owned(), false),
+            (false, false) => return Ok(None),
+        }
+    } else {
+        unread(scheme, after)
+    };
+    let message = hash(message);
+    Ok(Some(Why { message, login }))
+}
+
+/// The query pairs of `query` as the client splits them: a key runs to its
+/// `=`, its value to the next `&`.
+fn pairs(mut query: &str) -> Vec<&str> {
     let mut pairs = Vec::new();
     while !query.is_empty() {
         let end = (query.find('='))
@@ -102,6 +165,89 @@ fn without_login_pairs(scheme: &str, rest: &str) -> String {
         pairs.push(&query[..end]);
         query = query.get(end + 1..).unwrap_or("");
     }
+    pairs
+}
+
+/// The refusal of a URL the client does not read (`after`, its text after
+/// the scheme, holding no `@`), and whether it may hold a login. What the
+/// client refuses is named only in words of the lists here, never in other
+/// text of the URL: a pair read alone as a login, or under a login key
+/// (`passfile`, or `user` or `password` with a value it cannot decode), is
+/// refused as a login; else the first pair the client
+/// refuses alone under a TLS key (`sslrootcert`), `sslmode` (by its value
+/// when that is libpq's, `sslmode=verify-full`) or another key it reads
+/// (the value of `port`) is named. A pair with no `=` or under a key no
+/// list names may hold a login, and so may a URL whose pairs all read alone
+/// (the hosts or the path are refused): [`UNREAD`].
+fn unread(scheme: &str, after: &str) -> (String, bool) {
+    let query = after.split_once('?').map_or("", |(_, query)| query);
+    let pairs = pairs(query);
+    let alone = |pair: &str| reading(&format!("{scheme}://?{pair}"));
+    let key = |pair: &'_ str| pair.split_once('=').map_or(pair, |(key, _)| key).to_owned();
+    let as_login = |pair: &&str| {
+        let key = key(pair);
+        // `user` or `password` with a value the client cannot decode is a
+        // login all the same
+        let login_key =
+            LOGIN_KEYS.contains(&key.as_str()) || matches!(key.as_str(), "user" | "password");
+        alone(pair).is_some_and(|read| has_login(&read)) || login_key
+    };
+    if let Some(pair) = pairs.iter().copied().find(as_login) {
+        return match LOGIN_KEYS.iter().find(|login| **login == key(pair)) {
+            Some(login) => (format!("the URL names a user or holds a password (or a password file) in `{login}`, which its PostgreSQL client does not read; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"), true),
+            None => (LOGIN.to_owned(), true),
+        };
+    }
+    // a pair with no `=` is no key the client reads: it is not named
+    let named = |pair: &str| {
+        let (key, value) = pair.split_once('=')?;
+        let mode = TLS_MODES.iter().find(|mode| **mode == value);
+        match (KEYS.iter().find(|known| **known == key), mode) {
+            (Some(&"sslmode"), Some(mode)) => Some(tls(&format!("`sslmode={mode}`"))),
+            (Some(&"sslmode"), None) => Some(tls("`sslmode` value")),
+            (Some(known), _) => Some(format!("the URL's value of `{known}` is not one its PostgreSQL client reads: give the address with values the client reads")),
+            (None, _) => TLS_KEYS.iter().find(|tls_key| **tls_key == key).map(|tls_key| tls(&format!("`{tls_key}`"))),
+        }
+    };
+    let refused: Vec<&str> = pairs
+        .into_iter()
+        .filter(|pair| alone(pair).is_none())
+        .collect();
+    match refused.iter().find_map(|pair| named(pair)) {
+        Some(message) => (message, refused.iter().any(|pair| named(pair).is_none())),
+        None => (UNREAD.to_owned(), true),
+    }
+}
+
+/// Refuses a URL that is not an address alone, the one kind dialled and
+/// recorded ([`why`]), or one that is not PostgreSQL's. An `@` or `#` of
+/// the address itself is written `%40` or `%23`, which the client decodes,
+/// so no reading of an accepted URL can differ from the client's.
+pub fn refuse_login(url: &str) -> Result<()> {
+    match why(url)? {
+        Some(why) => Err(refused("InvalidInput", why.message)),
+        None => Ok(()),
+    }
+}
+
+/// Whether [`refuse_login`] refuses `url` for what may be a login (an `@`,
+/// a user or a password the client reads, a login key, a key it does not
+/// know): its fix then saves a login first. One refused only for a `#` or
+/// a setting the client does not read is not.
+pub fn holds_login(url: &str) -> bool {
+    matches!(why(url), Ok(Some(Why { login: true, .. })))
+}
+
+/// `rest`, a URL after its client's user part, without the query pairs
+/// the client reads as a login, each pair asked of the client alone (one
+/// holding an `@` is kept, and [`clean`] then refuses the form); the
+/// rest of the text as it was. The query starts at the first `?`, where the
+/// client ends a host list and a path ([`pairs`]).
+fn without_login_pairs(scheme: &str, rest: &str) -> String {
+    let Some((base, query)) = rest.split_once('?') else {
+        return rest.to_owned();
+    };
+    let pairs = pairs(query);
     // a pair holding an `@` is kept: alone, the client would read a user
     // part in it, and in the form it leaves that form refused
     let login = |pair: &&str| {
@@ -116,37 +262,80 @@ fn without_login_pairs(scheme: &str, rest: &str) -> String {
     }
 }
 
+/// `text` with each `%XX` decoded, as the client decodes a URL's parts;
+/// any other `%` kept.
+fn decoded(text: &str) -> Vec<u8> {
+    let (bytes, mut out, mut at) = (text.as_bytes(), Vec::new(), 0);
+    while at < bytes.len() {
+        let hex = bytes.get(at + 1..at + 3).and_then(|hex| {
+            let hex = std::str::from_utf8(hex).ok()?;
+            u8::from_str_radix(hex, 16)
+                .ok()
+                .filter(|_| hex.bytes().all(|b| b.is_ascii_hexdigit()))
+        });
+        let (byte, size) = match (bytes[at], hex) {
+            (b'%', Some(byte)) => (byte, 3),
+            (byte, _) => (byte, 1),
+        };
+        out.push(byte);
+        at += size;
+    }
+    out
+}
+
+/// Whether `text` holds a piece of `secret`: any run of three of its bytes,
+/// or all of a shorter one.
+fn holds(secret: &[u8], text: &[u8]) -> bool {
+    let size = secret.len().min(3);
+    size > 0 && (secret.windows(size)).any(|piece| text.windows(size).any(|t| t == piece))
+}
+
 /// `url` as it may be shown or written down, with the client's reading of
 /// that form: the URL after its client's user part, without the query pairs
 /// the client reads as a login, each `#` written `%23`. It is kept only when
 /// the client reads it with no user and no password and the same hosts,
-/// host addresses, ports and database as the original, and no three bytes
-/// of the original's password (as the client reads it) are in it or in the
-/// original's user. `None` (show [`HIDDEN`], write nothing) when the client
-/// does not read the original, when its user part holds a `?` (a query, so
-/// the login cannot be told from the address: `postgres://h/db?password=
-/// p@ss` has the user `h/db?password=p` and the host `ss` to the client),
-/// or when the form fails a check (an `@` left, which the client would read
-/// as a user part, so a URL holding two is never rewritten to another host).
+/// host addresses, ports and database as the original, and no piece of the
+/// original's password (as the client reads it, [`holds`]) is in it,
+/// encoded or decoded, in what [`target`] shows of it, or in the original's
+/// user. `None` (show [`HIDDEN`], write nothing) when the client does not
+/// read the original; when its user part holds an address or a query, so
+/// the login cannot be told from the address: a `?` anywhere in it
+/// (`postgres://h/db?password=p@ss` has the user `h/db?password=p` and the
+/// host `ss` to the client), a user holding one of [`ADDRESS`]
+/// (`postgres://h/db&password=p@ss`) or a path running into pairs
+/// (`postgres://h:5432/db&password=p@ss`, user `h`); or when the form fails a
+/// check (an `@` left, which the client would read as a user part, so a URL
+/// holding two is never rewritten to another host).
 pub fn clean(url: &str) -> Option<(String, Config)> {
     let (scheme, after) = scheme(url).ok()?;
     let original = reading(url)?;
     let (userinfo, rest) = after.split_once('@').unwrap_or(("", after));
-    if userinfo.contains('?') {
+    let named = userinfo.split(':').next().unwrap_or_default();
+    let address = |user: &[u8]| user.iter().any(|b| ADDRESS.contains(&char::from(*b)));
+    let into_pairs =
+        (userinfo.split_once('/')).is_some_and(|(_, path)| path.contains(['&', '=', '#']));
+    if userinfo.contains('?') || into_pairs || address(&decoded(named)) {
         return None;
     }
     let rest = without_login_pairs(scheme, rest).replace('#', "%23");
     let shown = format!("{scheme}://{rest}");
     let read = reading(&shown)?;
     let password = original.get_password().unwrap_or_default();
-    let leaks = |text: &[u8]| {
-        password
-            .windows(3)
-            .any(|part| text.windows(3).any(|t| t == part))
-    };
-    let user = original.get_user().unwrap_or_default().as_bytes();
+    let (hosts, _, database) = fields(&read);
+    let user = original.get_user().unwrap_or_default();
+    let texts = [
+        rest.as_bytes().to_vec(),
+        decoded(&rest),
+        hosts.clone().into_bytes(),
+        percent(&hosts).into_bytes(),
+        database.clone().into_bytes(),
+        percent(&database).into_bytes(),
+        user.as_bytes().to_vec(),
+        named.as_bytes().to_vec(),
+    ];
+    let leaks = texts.iter().any(|text| holds(password, text));
     let same = !has_login(&read) && endpoints(&read) == endpoints(&original);
-    (same && !leaks(rest.as_bytes()) && !leaks(user)).then_some((shown, read))
+    (same && !leaks).then_some((shown, read))
 }
 
 /// `url` as a row, a fix or a record write shows it: its [`clean`] form,
@@ -156,13 +345,14 @@ pub fn without_login(url: &str) -> String {
 }
 
 /// The user the client reads in `url` (a user part or a `user`
-/// parameter), when the URL has a clean form and the user is not empty: a
-/// fix's `--user`. A 2.0 record's URL names none; one recorded before saved
-/// logins may.
+/// parameter), when the URL has a clean form and the user is not empty and
+/// holds none of [`ADDRESS`] (it would be an address or a query the client
+/// read as a user): a fix's `--user`. A 2.0 record's URL names none; one
+/// recorded before saved logins may.
 pub fn url_user(url: &str) -> Option<String> {
     clean(url)?;
     let user = reading(url)?.get_user()?.to_owned();
-    (!user.is_empty()).then_some(user)
+    (!user.is_empty() && !user.contains(ADDRESS)).then_some(user)
 }
 
 /// `(host, port, database)` the client reads in `url`'s clean form: its
@@ -177,6 +367,11 @@ pub fn target(url: &str) -> Result<(String, String, String)> {
             "the URL has no form that can be shown (it holds a login, or its client does not read it)",
         )
     })?;
+    Ok(fields(&read))
+}
+
+/// [`target`]'s `(host, port, database)` of a reading.
+fn fields(read: &Config) -> (String, String, String) {
     let mut hosts: Vec<String> = (read.get_hosts().iter())
         .map(|host| match host {
             Host::Tcp(name) => name.to_ascii_lowercase(),
@@ -193,7 +388,7 @@ pub fn target(url: &str) -> Result<(String, String, String)> {
         false => ports.join(","),
     };
     let database = read.get_dbname().unwrap_or("").to_owned();
-    Ok((hosts.join(","), port, database))
+    (hosts.join(","), port, database)
 }
 
 fn percent(text: &str) -> String {

@@ -83,7 +83,8 @@ another operation holds the Store
    refuse_login(url)          not an address alone, as the client
                               reads it: any `@` or `#`, a user or a
                               password, a URL it does not read
-                              (passfile, sslpassword) -> InvalidInput
+                              (passfile, sslpassword, sslmode=
+                              verify-full, sslrootcert) -> InvalidInput
    auth                       required, and saved (`store save-auth`):
                               else InvalidInput / NotFound
    synchronous_commit         off | local (default) | remote_write | on
@@ -113,12 +114,22 @@ longer writes (a `password`, a URL that is not an address alone, a
 `machines.<m>` entry without `url` or with more, such as an old `checked`)
 reads `broken` `outdated` (`StoreRecord::outdated_fields`), fixed by `store
 update <s> --auth <auth>` (`login::outdated_fix`; a URL with no clean form,
-below, is replaced instead: a machine's own with `store disconnect <s>
---machine <m>`, the Store's with `store connect <s> <url>`, after `store
-disconnect <s>` when the record names no login, and `store update --auth`
-refuses such a record with that fix, writing nothing); every PostgreSQL record write (`connect`,
+below, is replaced instead: a machine's own with `store connect <s> <url>
+--machine <m>`, the Store's with `store connect <s> <url>`; when the record
+names no login, which `store connect --machine` needs to dial, a machine's
+own goes first with `store disconnect <s> --machine <m>`, or with the whole
+Store's `store disconnect <s>` when the Store's address has no clean form,
+and is connected again as the fix's last step; `store update --auth`
+refuses such a record with that fix, naming the login it was given, and
+writes nothing); every PostgreSQL record write (`connect`,
 `update`, `save_own`, `forget_machine`) drops those fields
-(`StoreRecord::cleaned`, spec v23 V23-6), and no read does.
+(`StoreRecord::cleaned`, spec v23 V23-6), and no read does. Such a record
+keeps its URL, and any password in it, on disk byte for byte until its fix
+runs: a URL with no clean form is never rewritten (the one exception to "no
+password in a Store record", for records written before 2.0's rules). A 2.0
+record whose URL holds a raw `#` (`postgres://h/d#x`), accepted before
+these rules, now reads `outdated` and is refused at dial until `store
+update <s> --auth <auth>` rewrites it with `%23`.
 A Store's URL is read only as its client reads it
 ([`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs),
 `postgres::Config`, tokio-postgres 0.7's `UrlParser`, which
@@ -128,14 +139,17 @@ parser of its own. What is shown or written down is a URL's clean form
 `@` anywhere), without the query pairs the client reads as a login (each
 pair asked of the client alone), each `#` written `%23`. It is kept only
 when the client reads it with no user and no password and the same hosts,
-host addresses, ports and database as the original, and no three bytes of
-the client's password are in it or in the client's user. A URL with no
-clean form (the client does not read it, its client user part holds a `?`
-so the login cannot be told from the address, an `@` is left, or a check
-fails) is shown as `postgresql://<hidden: not an address alone>` with no
+host addresses, ports and database as the original, and no piece of the
+client's password (any three bytes, or all of a shorter one) is in it, as
+written or percent-decoded, in its `target` or in the client's user. A URL
+with no clean form (the client does not read it; its client user part
+holds a `?`, a user holding one of `/ ? & = #`, or a `/` followed by `&`,
+`=` or `#`, so the login cannot be told from an address or a query, as in
+`postgres://h/db&password=p@ss`; an `@` is left; or a check fails) is shown as `postgresql://<hidden: not an address alone>` with no
 `server`, and a write keeps it as it was, never rewritten: the record stays
 `outdated`. `without_login` (rows, fix lines), `url_user` (a fix's
-`--user`: the client's user of a URL with a clean form, else `<user>`;
+`--user`: the client's user of a URL with a clean form, unless it holds
+one of `/ ? & = #`, else `<user>`;
 a fix's address is `<url>` when there is no clean form) and `target` (a
 row's `server`, a refusal's host: the clean form's hosts, ports and
 database as the client reads them) all read that form, so
@@ -203,7 +217,7 @@ update as its fix
 
 | Rule | Source |
 | --- | --- |
-| The login is a saved one, and only an address alone is dialled or recorded: `refuse_login` refuses `InvalidInput` a URL holding any `@` (the client ends a user part at the first, wherever it is) or `#`, one the client does not read (an unknown key such as `passfile`, `sslpassword`, `sslkey` or `sslcert`, or a bad value), and one whose client reads a user or a password (`user=`, `password=` in any spelling the client decodes); an `@` or `#` of the address itself is written `%40` or `%23`, which the client decodes. The refusal's fix gives the clean form (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store), `<url>` and `<user>` when there is none; a named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs), [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
+| The login is a saved one, and only an address alone is dialled or recorded: `refuse_login` refuses `InvalidInput` a URL holding any `@` (the client ends a user part at the first, wherever it is) or `#`, one the client does not read (an unknown key such as `passfile`, `sslpassword`, `sslrootcert`, `sslkey` or `sslcert`, an `sslmode` other than `disable`, `prefer` or `require`, or a bad value), and one whose client reads a user or a password (`user=`, `password=` in any spelling the client decodes); an `@` or `#` of the address itself is written `%40` or `%23`, which the client decodes. A refusal of a URL the client does not read names what it refuses only by a key or value from fixed lists (`sslmode=verify-full`, `sslrootcert`, the value of `port`), never by other URL text; `sslmode=require` verifies the server's certificate chain and host name (the engine's `native-tls` connector, with its defaults), so `verify-ca` and `verify-full` are refused rather than dialled; any refusal of a URL holding a `#` names `%23`. The refusal's fix gives the clean form (`refuse_login_with_fix`: `save-auth` + `--auth` on a first connect, `save-auth` + `store update --auth` before the address alone on a connected Store), `<url>` and `<user>` when there is none; a URL refused only for a `#` or a TLS setting holds no login (`address::holds_login`), so its fix is the connect of the address alone, saving none. A named login not saved is `NotFound`, one with no user or password `Failed` | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs), [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`postgresql/login.rs`](../../../../control/crates/layerfs-store/src/postgresql/login.rs) `read` |
 | Every byte of the user and password outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs) `percent` |
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |

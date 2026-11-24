@@ -1325,16 +1325,25 @@ logins (`save_auth`), and `update`'s `machine`, `url` and `clear` into
   it, and one naming a user or carrying a login (`user`, any `password`
   parameter, `passfile`), holding an `@` or `#` (one of the address is
   written `%40` or `%23`), or that the client does not read (an unknown key
-  such as `sslkey` or `sslcert`) is refused `InvalidInput` with a fix that
+  such as `sslrootcert`, `sslkey` or `sslcert`, or an `sslmode` other than
+  `disable`, `prefer` or `require`) is refused `InvalidInput` with a fix that
   gives the address alone (a first connect saves the login with `save-auth`
   and names it with `--auth`; `<url>` and `<user>` when no form of the URL
-  can be shown). The login goes into the URL only when the Store is
+  can be shown; one refused only for a `#` or a TLS setting saves no
+  login). The refusal names the TLS key or `sslmode` value it met
+  (`sslmode=verify-full`), and `sslmode=require` verifies the server's
+  certificate chain and host name. The login goes into the URL only when the Store is
   dialled, and the URL made is read back by the client first. A URL is
   shown or written only in a form its client reads as the same servers and
   database with no login and no part of the password, else as
   `postgresql://<hidden: not an address alone>`, never rewritten: such a
-  record stays `outdated`, its fix `layerfs store connect <store> <url>`
-  (`layerfs store disconnect <store> --machine <m>` for a machine's own). `auths` answers
+  record stays `outdated` and keeps that URL, and any password in it, on
+  disk as it was until its fix runs: `layerfs store connect <store> <url>`
+  (`layerfs store connect <store> <url> --machine <m>` for a machine's own;
+  with no login named, `layerfs store disconnect <store> --machine <m>`
+  first and that connect last). A 2.0 record whose URL holds a raw `#`
+  reads `outdated` and is refused at dial until `store update <store>
+  --auth <auth>` rewrites it with `%23`. `auths` answers
   `{ items }`, short `{ auth, user }` with `stores` (at most 20) when
   used, `stores_count` only past 20, and `state`, `reason`, `fix` when the
   login's file cannot be read (`broken` `failed`, fixed by saving it

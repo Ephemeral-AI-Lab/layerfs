@@ -128,7 +128,11 @@ Each statement waits for its reply before the next is sent; nothing is
 pipelined. `sslmode` is used exactly as given: the driver's default `prefer`
 costs one extra round trip per connection on a server without TLS, so a
 loopback or private route can give `sslmode=disable`; other routes give
-`require` or `verify-full`. The TLS connector loads the system trust roots
+`require`, which verifies the server's certificate chain and host name (the
+`native-tls` connector built with its defaults). The client reads no
+`verify-ca` or `verify-full` and no certificate or key file: a connection
+string naming one is refused (`Malformed` here, `InvalidInput` at `store
+connect`). The TLS connector loads the system trust roots
 once per process, at the first connection whose `sslmode` may negotiate TLS.
 Every setting is `SET LOCAL` in the same round trip as `BEGIN`, so a
 transaction-pooling proxy never carries one session's settings to another.

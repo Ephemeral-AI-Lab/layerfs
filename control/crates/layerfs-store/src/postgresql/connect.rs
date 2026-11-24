@@ -65,9 +65,11 @@ pub struct StoreConnect {
 /// A first connect names the saved login with `--auth`; a connected Store
 /// takes no `--auth` on connect, so its fix names the login with `store
 /// update --auth` before the address alone (for `machine`'s own connection
-/// when given). The address is the URL's clean form, `<url>` when it has
-/// none; `--user` the user its client reads there, else `<user>`
-/// ([`address`]).
+/// when given). A URL refused only for a `#` or a setting its client does
+/// not read holds no login ([`address::holds_login`]): its fix is the
+/// connect of the address alone, saving none. The address is the URL's
+/// clean form, `<url>` when it has none; `--user` the user its client
+/// reads there, else `<user>` ([`address`]).
 pub fn refuse_login_with_fix(
     store: &str,
     url: &str,
@@ -82,12 +84,12 @@ pub fn refuse_login_with_fix(
         let user = url_user(url).map_or("<user>".to_owned(), |user| shell_word(&user));
         let store = shell_word(store);
         let save = format!("layerfs store save-auth <auth> --user {user} --password-stdin");
-        let fix = match (first, machine) {
-            (true, _) => format!("{save} && layerfs store connect {store} {shown} --auth <auth>"),
-            (false, machine) => {
-                let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
-                format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {shown}{on}")
-            }
+        let on = machine.map_or(String::new(), |m| format!(" --machine {}", shell_word(m)));
+        let fix = match (address::holds_login(url), first) {
+            (true, true) => format!("{save} && layerfs store connect {store} {shown} --auth <auth>"),
+            (true, false) => format!("{save} && layerfs store update {store} --auth <auth> && layerfs store connect {store} {shown}{on}"),
+            (false, true) => format!("layerfs store connect {store} {shown} --auth <auth>"),
+            (false, false) => format!("layerfs store connect {store} {shown}{on}"),
         };
         with_fix(refusal, fix)
     })

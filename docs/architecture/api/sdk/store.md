@@ -168,7 +168,11 @@ the home's `generation`. A PostgreSQL Store naming a login the home does not
 hold is `broken` `missing`; one whose record holds a `password`, a URL that
 is not an address alone or a `machines.<m>` entry with anything but `url`
 is `broken` `outdated`, fixed by `store update <store> --auth <auth>` (a URL
-with no clean form is replaced instead, `store connect <store> <url>`)
+with no clean form is replaced instead, `store connect <store> <url>`, with
+`--machine M` for a machine's own; until then the record keeps that URL, and
+any password in it, as it was written). A 2.0 record whose URL holds a raw
+`#` reads `outdated` and is refused at dial until `store update <store>
+--auth <auth>` rewrites it with `%23`
 ([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs)). `projects` shows at
 most 20 names, `projects_count` only when there are more. A `backups` row's
 long form is `bucket, file, sha256, heads_sha256, last, attempt`: `last` the
@@ -294,7 +298,11 @@ names a user or holds a password, holds an `@` or `#` (written `%40` or
 `%23` when part of the address) or is not read by the PostgreSQL client is
 `InvalidInput`. A URL is read only as that client reads it, and shown only
 in a form it reads as the same servers and database with no login, else as
-`postgresql://<hidden: not an address alone>`.
+`postgresql://<hidden: not an address alone>`. The client takes `sslmode`
+`disable`, `prefer` or `require` and no certificate or key file:
+`sslmode=require` verifies the server's certificate chain and host name, and
+`sslmode=verify-full`, `verify-ca`, `sslrootcert`, `sslcert` and `sslkey` are
+refused, the refusal naming the one it met.
 
 On a Store's first connect `--auth` is required and must be saved;
 `--synchronous-commit` defaults to `local`. It creates the `layerfs` schema

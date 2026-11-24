@@ -123,12 +123,13 @@ pub fn fix_of(record: &StoreRecord) -> String {
 /// The steps that leave PostgreSQL Store `record` naming login `auth` (a
 /// name, or `<auth>`) with every URL an address alone: the login saved
 /// first when `save`; each machine's own address with no clean form
-/// ([`address::clean`]) removed (`store disconnect --machine`); then the
-/// login named with `store update --auth`, which writes every URL clean.
-/// A Store address with no clean form is never rewritten: the Store is
-/// connected again with the address alone (`<url>`, an `@` or `#` in it
-/// written `%40` or `%23`), after a `store disconnect` when the record
-/// names no login, as a connected Store's connect takes no `--auth`.
+/// ([`address::clean`]) replaced by the address alone (`store connect
+/// --machine`, `<url>` with an `@` or `#` in it written `%40` or `%23`);
+/// then the login named with `store update --auth`, which writes every URL
+/// clean. A Store address with no clean form is never rewritten: the Store
+/// is connected again with the address alone, after a `store disconnect`
+/// when the record names no login, as a connected Store's connect takes no
+/// `--auth`.
 fn fix(record: &StoreRecord, save: bool, auth: &str) -> String {
     let store = shell_word(record.name());
     let unclean = |url: &str| address::clean(url).is_none();
@@ -141,12 +142,26 @@ fn fix(record: &StoreRecord, save: bool, auth: &str) -> String {
             "layerfs store save-auth {auth} --user {user} --password-stdin"
         ));
     }
+    // A machine's own address is connected again once a login is named.
+    // With none, `store connect --machine` cannot dial: the address goes
+    // first (`store disconnect --machine`, or with the whole Store), the
+    // login is named, and the address alone is connected last, so the
+    // machine does not stay on the Store's address.
+    let mut last = Vec::new();
     for (machine, own) in record.own_connections() {
-        if (named || !address) && own.url.as_deref().is_some_and(unclean) {
-            let machine = shell_word(&machine);
-            steps.push(format!(
-                "layerfs store disconnect {store} --machine {machine}"
-            ));
+        let Some(url) = own.url.as_deref() else {
+            continue;
+        };
+        let on = shell_word(&machine);
+        let connect = format!("layerfs store connect {store} <url> --machine {on}");
+        match (named, address, unclean(url)) {
+            (true, _, true) => steps.push(connect),
+            (false, false, true) => {
+                steps.push(format!("layerfs store disconnect {store} --machine {on}"));
+                last.push(connect);
+            }
+            (false, true, _) => last.push(connect),
+            (_, _, false) => {}
         }
     }
     steps.push(match (address, named) {
@@ -156,6 +171,7 @@ fn fix(record: &StoreRecord, save: bool, auth: &str) -> String {
             "layerfs store disconnect {store} && layerfs store connect {store} <url> --auth {auth}"
         ),
     });
+    steps.extend(last);
     steps.join(" && ")
 }
 

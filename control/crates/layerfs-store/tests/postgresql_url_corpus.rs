@@ -4,12 +4,14 @@
 //! the corpora of the 3cf2cfc246 and aa83393447 reviews, earlier tests and
 //! generated URLs, compared with the client itself:
 //! (a) nothing shown, no fix line and no record a write leaves holds three
-//! bytes of the password the client reads, nor of the password the URL's
-//! writer meant; (b) a URL shown or written reads, by the client, the same
+//! bytes (all, when shorter) of the password the client reads, nor of the
+//! password the URL's writer meant, as written or percent-decoded; (b) a URL shown or written reads, by the client, the same
 //! hosts, host addresses, ports and database as the original and no login;
 //! (c) the strip is idempotent; (d) a URL dialled reads exactly the saved
 //! login and the address's endpoints; (e) a fix's `--user` is the client's
-//! user. A record whose URL has no clean form is shown hidden and never
+//! user, unless it holds an address or a query; (f) a refusal names only
+//! fixed words, a URL holding a `#` gets the `%23` hint, and a fix saves a
+//! login only when the URL may hold one. A record whose URL has no clean form is shown hidden and never
 //! rewritten, and `store update --auth` refuses it with its fix.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
@@ -62,16 +64,47 @@ fn endpoints(read: &postgres::Config) -> Endpoints {
     )
 }
 
-/// Every three-byte piece of `secret`.
+/// Every three-byte piece of `secret`, or all of a shorter one.
 fn pieces(secret: &[u8]) -> Vec<Vec<u8>> {
-    secret.windows(3).map(<[u8]>::to_vec).collect()
+    let size = secret.len().min(3);
+    match size {
+        0 => Vec::new(),
+        size => secret.windows(size).map(<[u8]>::to_vec).collect(),
+    }
 }
 
-/// The piece of `secret` that `text` holds, if any.
+/// `text` with each `%XX` decoded.
+fn decode(text: &str) -> Vec<u8> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let hex = bytes
+            .get(at + 1..at + 3)
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit));
+        match (bytes[at], hex) {
+            (b'%', Some(hex)) => {
+                out.push(u8::from_str_radix(std::str::from_utf8(hex).unwrap(), 16).unwrap());
+                at += 3;
+            }
+            (byte, _) => {
+                out.push(byte);
+                at += 1;
+            }
+        }
+    }
+    out
+}
+
+/// The piece of `secret` that `text` holds, as written or decoded, if any.
 fn leak(text: &str, secret: &[u8]) -> Option<String> {
-    let found = pieces(secret)
-        .into_iter()
-        .find(|piece| text.as_bytes().windows(3).any(|t| t == piece.as_slice()));
+    let forms = [text.as_bytes().to_vec(), decode(text)];
+    let found = pieces(secret).into_iter().find(|piece| {
+        let size = piece.len();
+        forms
+            .iter()
+            .any(|form| form.windows(size).any(|t| t == piece.as_slice()))
+    });
     found.map(|piece| String::from_utf8_lossy(&piece).into_owned())
 }
 
@@ -123,20 +156,140 @@ const MESSAGES: [&str; 5] = [
     "a PostgreSQL URL starts postgresql:// or postgres://",
 ];
 
+/// What a refusal of a URL holding a `#` ends with.
+const HASH: &str = "; a `#` that is part of the address is written %23";
+
+/// The refusal of a TLS key or `sslmode` value the client does not read.
+fn tls(what: &str) -> String {
+    format!("the URL's {what} is not read by its PostgreSQL client, which takes `sslmode` disable, prefer or require and no certificate, key or revocation file; `sslmode=require` verifies the server's certificate chain and host name against the trusted roots: give `sslmode=require` and keys the client knows")
+}
+
+/// Every message a refused URL may get: [`MESSAGES`] and the ones naming a
+/// key or value from fixed lists, each also with the `#` hint.
+fn messages() -> Vec<String> {
+    let mut all: Vec<String> = MESSAGES.iter().map(|m| (*m).to_owned()).collect();
+    for mode in ["allow", "verify-ca", "verify-full"] {
+        all.push(tls(&format!("`sslmode={mode}`")));
+    }
+    all.push(tls("`sslmode` value"));
+    for key in [
+        "sslrootcert",
+        "sslcert",
+        "sslkey",
+        "sslcrl",
+        "sslcrldir",
+        "sslsni",
+        "sslcompression",
+        "sslcertmode",
+        "ssl_min_protocol_version",
+        "ssl_max_protocol_version",
+    ] {
+        all.push(tls(&format!("`{key}`")));
+    }
+    for key in ["passfile", "sslpassword"] {
+        all.push(format!("the URL names a user or holds a password (or a password file) in `{key}`, which its PostgreSQL client does not read; give the address alone and the login with --auth (`layerfs store save-auth` saves one)"));
+    }
+    for key in [
+        "user",
+        "password",
+        "dbname",
+        "options",
+        "application_name",
+        "sslmode",
+        "sslnegotiation",
+        "host",
+        "hostaddr",
+        "port",
+        "connect_timeout",
+        "tcp_user_timeout",
+        "keepalives",
+        "keepalives_idle",
+        "keepalives_interval",
+        "keepalives_retries",
+        "target_session_attrs",
+        "channel_binding",
+        "load_balance_hosts",
+    ] {
+        all.push(format!("the URL's value of `{key}` is not one its PostgreSQL client reads: give the address with values the client reads"));
+    }
+    let hinted: Vec<String> = all.iter().map(|m| format!("{m}{HASH}")).collect();
+    all.extend(hinted);
+    all
+}
+
+/// The bytes that end a user, a host list or a path, or split pairs.
+const ADDRESS: [char; 5] = ['/', '?', '&', '=', '#'];
+
+/// The keys a no-login refusal's URL may hold: the client's, and libpq's
+/// TLS keys it does not read.
+const KNOWN: [&str; 29] = [
+    "user",
+    "password",
+    "dbname",
+    "options",
+    "application_name",
+    "sslmode",
+    "sslnegotiation",
+    "host",
+    "hostaddr",
+    "port",
+    "connect_timeout",
+    "tcp_user_timeout",
+    "keepalives",
+    "keepalives_idle",
+    "keepalives_interval",
+    "keepalives_retries",
+    "target_session_attrs",
+    "channel_binding",
+    "load_balance_hosts",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "sslcrl",
+    "sslcrldir",
+    "sslsni",
+    "sslcompression",
+    "sslcertmode",
+    "ssl_min_protocol_version",
+    "ssl_max_protocol_version",
+];
+
+/// The query pairs of `after` (a URL after its scheme, holding no `@`) as
+/// the client splits them: from the first `?`, a key to its `=`, a value
+/// to the next `&`.
+fn client_pairs(after: &str) -> Vec<&str> {
+    let mut query = after.split_once('?').map_or("", |(_, query)| query);
+    let mut pairs = Vec::new();
+    while !query.is_empty() {
+        let end = (query.find('='))
+            .and_then(|eq| query[eq..].find('&').map(|amp| eq + amp))
+            .unwrap_or(query.len());
+        pairs.push(&query[..end]);
+        query = query.get(end + 1..).unwrap_or("");
+    }
+    pairs
+}
+
 /// Writes PostgreSQL Store `pg` with `url` as its address and machine
 /// `lab`'s own, naming login `pg`.
 fn store(home: &Path, url: &str) -> StoreRecord {
-    let own = SdkValue::map([("url", t(url))]);
-    let fields = [
+    store_with(home, url, url, Some("pg"))
+}
+
+/// Writes PostgreSQL Store `pg` with address `url`, machine `lab`'s own
+/// address `lab`, naming login `auth` when given.
+fn store_with(home: &Path, url: &str, lab: &str, auth: Option<&str>) -> StoreRecord {
+    let own = SdkValue::map([("url", t(lab))]);
+    let mut fields = vec![
         ("name", t("pg")),
         ("kind", t("postgresql")),
         ("url", t(url)),
         ("schema", t("layerfs")),
         ("synchronous_commit", t("local")),
-        ("auth", t("pg")),
         ("binding", SdkValue::Bytes((0..32).collect())),
         ("machines", SdkValue::map([("lab", own)])),
     ];
+    fields.extend(auth.map(|auth| ("auth", t(auth))));
     let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
     write_entity(&paths::store_record(home, "pg"), &SdkValue::Map(fields)).unwrap();
     StoreRecord::of(home, "pg").unwrap()
@@ -266,6 +419,49 @@ const CORPUS: &[(&str, &str)] = &[
     ("postgresql://db.example:6543/app", ""),
     ("postgresql://db.example/app?sslmode=verify-full", ""),
     ("postgres://postgres:postgres@h/postgres", "postgres"),
+    // review d194c7e9df S2: a user part running over the address and a query
+    (
+        "postgres://h/db&user=alice&password=Zq7Kx@db.example",
+        "Zq7Kx",
+    ),
+    ("postgres://h/db&password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://h:5432/db&password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://h:6543/db&user=alice:Zq7Kx@db.example", "Zq7Kx"),
+    ("postgres://h/db#password=Zq7@Xw9", "Zq7@Xw9"),
+    ("postgres://alice&password=Zq7Kx@db.example/app", "Zq7Kx"),
+    ("postgres://h/db=Zq7Kx@db.example", "Zq7Kx"),
+    (
+        "postgres://h%2Fdb%26password%3DZq7Kx@db.example/app",
+        "Zq7Kx",
+    ),
+    // N1: a short password, and one the decoded database or host holds
+    ("postgres://pg:pg@h/db", "pg"),
+    ("postgres://u:d@h/db", "d"),
+    ("postgres://u:x@h/db", "x"),
+    ("postgres://u:Zq7Xw9@h/%5Aq7x", "Zq7Xw9"),
+    ("postgres://u:Zq7Xw9@%5Aq7.example/db", "Zq7Xw9"),
+    // S1, N5: TLS settings the client does not read, a `#` with them
+    (
+        "postgresql://db.example/app?sslmode=verify-ca&sslrootcert=%2Fca.pem",
+        "",
+    ),
+    (
+        "postgresql://db.example/app?sslcert=%2Fc&sslmode=require",
+        "",
+    ),
+    ("postgres://h/db?sslmode=allow#f", ""),
+    ("postgres://h/db?port=x", ""),
+    (
+        "postgres://h/db?sslmode=verify-full&password=Zq7Xw9q",
+        "Zq7Xw9q",
+    ),
+    ("postgres://h/db?sslmode=verify-full&foo=Zq7Xw9q", "Zq7Xw9q"),
+    ("postgres://h/db?password=Zq7Xw9q#f", "Zq7Xw9q"),
+    // a `password` with no `=`, a login value the client cannot decode
+    ("postgres://h/db?sslmode=require&password", ""),
+    ("postgres://h/db?sslmode=verify-full&password", ""),
+    ("postgres://h/db?user=%db&sslmode=verify-full", ""),
+    ("postgres://h/db?password=Zq7%db&sslmode=verify-full", "Zq7"),
     ("postgresq://alice:Zq7Xw9q@h/db", "Zq7Xw9q"),
     ("host=h password=Zq7Xw9q", "Zq7Xw9q"),
 ];
@@ -351,28 +547,64 @@ fn check(home: &Path, given: &str, meant: &str) {
         assert!(target(given).is_err(), "{given}");
     }
     // (e) and the fix lines of a refused connect
+    let messages = messages();
+    let after = given.split_once("://").map_or("", |(_, after)| after);
     if let Err(refusal) = refuse_login(given) {
         assert!(
-            MESSAGES.contains(&refusal.message.as_str()),
-            "{given}: {}",
+            messages.contains(&refusal.message),
+            "(f) {given}: {}",
             refusal.message
         );
+        // (f) a URL holding a `#` is told how to write one
+        let scheme = given.starts_with("postgres://") || given.starts_with("postgresql://");
+        if scheme && after.contains('#') {
+            assert!(refusal.message.contains("%23"), "(f) {given}");
+        }
         let named = (read.as_ref())
             .and_then(|r| r.get_user())
-            .filter(|user| !user.is_empty() && shown != HIDDEN);
+            .filter(|user| !user.is_empty() && shown != HIDDEN && !user.contains(ADDRESS));
         assert_eq!(url_user(given).as_deref(), named, "(e) {given}");
         for (first, machine) in [(true, None), (false, None), (false, Some("lab"))] {
             let Err(refusal) = refuse_login_with_fix("pg", given, first, machine) else {
                 panic!("{given}");
             };
-            assert!(MESSAGES.contains(&refusal.message.as_str()), "{given}");
+            assert!(messages.contains(&refusal.message), "{given}");
             let Some(fix) = refusal.detail.get_text("fix") else {
-                let scheme = given.starts_with("postgres://") || given.starts_with("postgresql://");
                 assert!(!scheme, "{given}: no fix");
                 continue;
             };
-            let user = named.map_or("<user>".to_owned(), shell_word);
-            assert_eq!(fix_user(fix), user, "(e) {given}: {fix}");
+            // (f) a fix saves a login only when the URL may hold one: one
+            // holding no `@`, whose client reads no login, refused for its
+            // `#` or a TLS setting, only connects the address alone
+            if !fix.starts_with("layerfs store save-auth ") {
+                assert!(!after.contains('@'), "(f) {given}: {fix}");
+                // and every pair, as the client splits them, is a key=value
+                // under a key the client reads or a TLS key, none a login's
+                for pair in client_pairs(after) {
+                    let key = pair.split_once('=').map(|(key, _)| decode(key));
+                    let key = key.unwrap_or_else(|| panic!("(f) {given}: {fix}"));
+                    let key = String::from_utf8_lossy(&key).into_owned();
+                    let login = ["user", "password", "passfile", "sslpassword"];
+                    assert!(!login.contains(&key.as_str()), "(f) {given}: {fix}");
+                    assert!(KNOWN.contains(&key.as_str()), "(f) {given}: {fix}");
+                }
+                assert!(
+                    read.as_ref()
+                        .is_none_or(|r| r.get_user().is_none() && r.get_password().is_none()),
+                    "(f) {given}: {fix}"
+                );
+                assert!(!fix.contains("--user"), "(f) {given}: {fix}");
+                assert!(
+                    fix.starts_with("layerfs store connect pg "),
+                    "(f) {given}: {fix}"
+                );
+            } else {
+                let user = named.map_or("<user>".to_owned(), shell_word);
+                assert_eq!(fix_user(fix), user, "(e) {given}: {fix}");
+            }
+            if refusal.message == MESSAGES[3] {
+                assert!(!fix.contains("save-auth"), "(f) {given}: {fix}");
+            }
             let address = if shown == HIDDEN {
                 "<url>".to_owned()
             } else {
@@ -427,7 +659,7 @@ fn check(home: &Path, given: &str, meant: &str) {
             let message = (refusal.message)
                 .strip_prefix("PostgreSQL Store pg's URL: ")
                 .unwrap_or(&refusal.message);
-            assert!(MESSAGES.contains(&message), "{given}: {message}");
+            assert!(messages.iter().any(|m| m == message), "{given}: {message}");
             texts.push(derived(refusal.detail.get_text("fix").unwrap_or_default()));
         }
     }
@@ -544,11 +776,166 @@ fn an_update_never_rewrites_a_url_to_another_host() {
     };
     let refusal = layerfs_store::postgresql::update::update(&home, &request).unwrap_err();
     assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+    // the machine's own address is connected again, not left on the
+    // Store's (review d194c7e9df N2)
     assert_eq!(
         refusal.detail.get_text("fix"),
-        Some("layerfs store disconnect pg --machine lab && layerfs store connect pg <url>")
+        Some("layerfs store connect pg <url> --machine lab && layerfs store connect pg <url>")
     );
     assert!(!refusal.message.contains("laptop") && !refusal.message.contains("Zq7"));
+    let after = std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    assert_eq!(before, after, "the record was written");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The rows of the d194c7e9df review: what each shows, names and fixes.
+#[test]
+fn the_d194c7e9df_review_rows_show_name_and_fix_as_their_client_reads() {
+    // S2: a user part running over the address and a query is hidden, and
+    // no `--user` is cut from it
+    for given in [
+        "postgres://h/db&user=alice&password=Zq7Kx@db.example",
+        "postgres://h/db&password=Zq7@Xw9",
+        "postgres://h:5432/db&password=Zq7@Xw9",
+    ] {
+        assert_eq!(without_login(given), HIDDEN, "{given}");
+        assert_eq!(url_user(given), None, "{given}");
+        assert!(target(given).is_err(), "{given}");
+        let fix = refuse_login_with_fix("pg", given, true, None).unwrap_err();
+        let fix = fix.detail.get_text("fix").unwrap().to_owned();
+        assert_eq!(
+            fix,
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>"
+        );
+    }
+    // N1: a password of one or two bytes is checked too
+    for given in ["postgres://pg:pg@h/db", "postgres://u:Zq7Xw9@h/%5Aq7x"] {
+        assert_eq!(without_login(given), HIDDEN, "{given}");
+        assert_eq!(url_user(given), None, "{given}");
+    }
+    assert_eq!(without_login("postgres://ab:x@h/db"), "postgres://h/db");
+    assert_eq!(url_user("postgres://ab:x@h/db").as_deref(), Some("ab"));
+    // S1: the TLS setting the client does not read is named, with what
+    // `require` checks; no login is saved for it
+    for (given, first, machine, message, fix) in [
+        (
+            "postgresql://db.example/app?sslmode=verify-full",
+            true,
+            None,
+            tls("`sslmode=verify-full`"),
+            "layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgresql://db.example/app?sslrootcert=%2Fca.pem&sslmode=require",
+            false,
+            None,
+            tls("`sslrootcert`"),
+            "layerfs store connect pg <url>",
+        ),
+        // N5: a `#` is named with any other refusal, and one refused only
+        // for its `#` is connected again with it written %23
+        (
+            "postgres://h/db?sslmode=require#f",
+            false,
+            Some("lab"),
+            format!("{}{HASH}", tls("`sslmode` value")),
+            "layerfs store connect pg <url> --machine lab",
+        ),
+        (
+            "postgres://h/d#x",
+            true,
+            None,
+            MESSAGES[3].to_owned(),
+            "layerfs store connect pg postgres://h/d%23x --auth <auth>",
+        ),
+        (
+            "postgres://h/db?password=Zq7Xw9q#f",
+            true,
+            None,
+            format!("{}{HASH}", MESSAGES[0]),
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg postgres://h/db --auth <auth>",
+        ),
+        // a login is refused first, and a key no list names may hold one
+        (
+            "postgres://h/db?sslmode=verify-full&password=Zq7Xw9q",
+            true,
+            None,
+            MESSAGES[0].to_owned(),
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgres://h/db?sslmode=verify-full&foo=Zq7Xw9q",
+            true,
+            None,
+            tls("`sslmode=verify-full`"),
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+        // a `password` with no `=`, and a `user` the client cannot decode,
+        // are a login all the same (found by fuzzing)
+        (
+            "postgres://h/db?sslmode=verify-full&password",
+            true,
+            None,
+            MESSAGES[0].to_owned(),
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+        (
+            "postgres://h/db?user=%db&sslmode=verify-full",
+            true,
+            None,
+            MESSAGES[0].to_owned(),
+            "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store connect pg <url> --auth <auth>",
+        ),
+    ] {
+        let refusal = refuse_login_with_fix("pg", given, first, machine).unwrap_err();
+        assert_eq!(refusal.message, message, "{given}");
+        assert_eq!(refusal.detail.get_text("fix"), Some(fix), "{given}");
+    }
+}
+
+/// N2, N3 of the d194c7e9df review: a machine's own address with no clean
+/// form is connected again as the address alone (after its disconnect when
+/// the record names no login), and `store update --auth`'s fix names the
+/// login it was given.
+#[test]
+fn a_machine_address_is_connected_again_and_an_update_names_its_login() {
+    let home = tempdir("machine-fix");
+    login::save(&home, "new", "alice", LOGIN_PASSWORD).unwrap();
+    let (clean, unclean) = (
+        "postgres://db.example/app",
+        "postgres://u:Zq7@Xw9@db.example/app",
+    );
+    let named = store_with(&home, clean, unclean, Some("new"));
+    assert_eq!(
+        login::outdated_fix(&named, "new"),
+        "layerfs store connect pg <url> --machine lab && layerfs store update pg --auth new"
+    );
+    let none = store_with(&home, clean, unclean, None);
+    assert_eq!(
+        login::no_auth_fix(&none),
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg --machine lab && layerfs store update pg --auth <auth> && layerfs store connect pg <url> --machine lab"
+    );
+    // the whole Store goes with an unclean address: every machine's own
+    // address is connected again after it
+    let both = store_with(&home, unclean, clean, None);
+    assert_eq!(
+        login::no_auth_fix(&both),
+        "layerfs store save-auth <auth> --user <user> --password-stdin && layerfs store disconnect pg && layerfs store connect pg <url> --auth <auth> && layerfs store connect pg <url> --machine lab"
+    );
+    // N3: the record names `old`, not saved; the update gives `new`
+    store_with(&home, clean, unclean, Some("old"));
+    let before = std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    let request = layerfs_store::postgresql::update::StoreUpdate {
+        store: StoreName::parse("pg").unwrap(),
+        auth: Some("new".to_owned()),
+        synchronous_commit: None,
+    };
+    let refusal = layerfs_store::postgresql::update::update(&home, &request).unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+    assert_eq!(
+        refusal.detail.get_text("fix"),
+        Some("layerfs store connect pg <url> --machine lab && layerfs store update pg --auth new")
+    );
     let after = std::fs::read(paths::store_record(&home, "pg")).unwrap();
     assert_eq!(before, after, "the record was written");
     std::fs::remove_dir_all(home).unwrap();

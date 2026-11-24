@@ -284,17 +284,33 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
     let home = tempdir("home");
     home::ensure(&home).unwrap();
     // `store.connect` records exactly this shape, with its saved login
-    // (`store.save_auth`); `store.status` reads it. A trust-auth server
-    // takes any password.
-    let user = url
-        .split_once("://")
-        .and_then(|(_, rest)| rest.split_once('@'))
-        .map_or("postgres", |(user, _)| {
-            user.split(':').next().unwrap_or(user)
-        });
-    layerfs_store::postgresql::login::save(&home, "pg", user, "unused").unwrap();
-    // the record keeps the address alone; the user is the saved login's
-    let address = layerfs_store::postgresql::connect::without_login(&url);
+    // (`store.save_auth`); `store.status` reads it. The login is the one
+    // the client reads in the URL (a trust-auth server takes any password).
+    let read: postgres::Config = url.parse().expect("LAYERFS_TEST_POSTGRES_URL is a URL");
+    let user = read.get_user().unwrap_or("postgres");
+    let password = read.get_password().map_or("unused".to_owned(), |password| {
+        String::from_utf8(password.to_vec()).expect("a UTF-8 password")
+    });
+    layerfs_store::postgresql::login::save(&home, "pg", user, &password).unwrap();
+    // the record keeps the address alone: the URL's shown form, or, when
+    // that is hidden (a user equal to its password leaves a piece of the
+    // password in the user), the URL after the user part the client reads
+    // (its first `@`), which must then be an address alone
+    let shown = layerfs_store::postgresql::connect::without_login(&url);
+    let hidden = shown == layerfs_store::postgresql::connect::HIDDEN;
+    let user_is_password = read.get_password() == Some(user.as_bytes());
+    assert!(!user_is_password || hidden, "{shown}");
+    let (scheme, after) =
+        (url.split_once("://")).expect("LAYERFS_TEST_POSTGRES_URL is a postgres:// URL");
+    let address = match hidden {
+        false => shown,
+        true => format!(
+            "{scheme}://{}",
+            after.split_once('@').map_or(after, |(_, at)| at)
+        ),
+    };
+    layerfs_store::postgresql::connect::refuse_login(&address)
+        .expect("LAYERFS_TEST_POSTGRES_URL is an address with its login in its user part");
     StoreRecord::connected("pgs", &address, "layerfs", "off", Some("pg"))
         .write(&home)
         .unwrap();
