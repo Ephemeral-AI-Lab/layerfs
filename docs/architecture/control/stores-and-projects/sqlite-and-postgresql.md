@@ -117,7 +117,7 @@ longer writes (a `password`, a URL that is not an address alone, a
 reads `broken` `outdated` (`StoreRecord::outdated_fields`) with a fix the
 user runs; nothing migrates it (owner, 2026-11-19: no backward
 compatibility in 2.0). A URL is never cleaned, stripped or rewritten (the
-e0aa26e149 review's Decision, owner to confirm: five rounds of a grammar
+e0aa26e149 review's Decision, owner-confirmed 2026-11-24: five rounds of a grammar
 of LayerFS's own each mishandled a new shape). A record keeps a URL that
 may hold a login, and any password in it, on disk byte for byte until its
 fix runs (the one exception to "no password in a Store record", for

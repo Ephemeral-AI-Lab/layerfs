@@ -1,5 +1,5 @@
 //! A PostgreSQL Store's URL is never cleaned, stripped or rewritten (the
-//! Decision of the e0aa26e149 review, owner to confirm): a URL that may
+//! Decision of the e0aa26e149 review, owner-confirmed 2026-11-24): a URL that may
 //! hold a login (an `@` after its scheme, a user or password its client
 //! reads, a login key and `=` in its percent-decoded text, or one its
 //! client does not read) is never shown, dialled or rewritten, and its
