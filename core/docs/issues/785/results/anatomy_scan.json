@@ -1,0 +1,179 @@
+{
+ "roles": {
+  "DirectoryLeaf": {
+   "n": 26326,
+   "canonical": 36287447,
+   "record": 8589326,
+   "encoded_share": 4890659.773258156,
+   "n_full": 11563,
+   "rec_full": 2848857,
+   "canon_full": 2837294,
+   "n_prefix": 14763,
+   "rec_prefix": 5740469,
+   "canon_prefix": 33450153
+  },
+  "InodeLeaf": {
+   "n": 30319,
+   "canonical": 147171134,
+   "record": 11638004,
+   "encoded_share": 6920698.732137297,
+   "n_full": 7753,
+   "rec_full": 5529585,
+   "canon_full": 35310857,
+   "n_prefix": 22566,
+   "rec_prefix": 6108419,
+   "canon_prefix": 111860277
+  },
+  "FilesystemRoot": {
+   "n": 4807,
+   "canonical": 620103,
+   "record": 624910,
+   "encoded_share": 516849.4483821113,
+   "n_full": 4807,
+   "rec_full": 624910,
+   "canon_full": 620103
+  },
+  "WholeFile": {
+   "n": 286244,
+   "canonical": 1870246133,
+   "record": 102022904,
+   "encoded_share": 102022904.0,
+   "n_stored": 78009,
+   "rec_stored": 2867689,
+   "canon_stored": 4583887,
+   "raw_stored": 2789680,
+   "n_full": 2223,
+   "rec_full": 9025612,
+   "canon_full": 33542577,
+   "raw_full": 33491448,
+   "n_prefix": 206012,
+   "rec_prefix": 90129603,
+   "canon_prefix": 1832119669,
+   "raw_prefix": 1827381393
+  },
+  "Chunk": {
+   "n": 1176510,
+   "canonical": 23332574991,
+   "record": 4556340239,
+   "encoded_share": 4556340239.0,
+   "n_full": 374317,
+   "rec_full": 2071395695,
+   "canon_full": 7489234767,
+   "raw_full": 7481374110,
+   "n_stored": 907,
+   "rec_stored": 18084829,
+   "canon_stored": 18099341,
+   "raw_stored": 18080294,
+   "n_prefix": 801286,
+   "rec_prefix": 2466859715,
+   "canon_prefix": 15825240883,
+   "raw_prefix": 15808413877
+  },
+  "ExtentLeaf": {
+   "n": 78539,
+   "canonical": 196078436,
+   "record": 85149252,
+   "encoded_share": 64360649.04897295,
+   "n_full": 14627,
+   "rec_full": 43581935,
+   "canon_full": 43567308,
+   "n_prefix": 63912,
+   "rec_prefix": 41567317,
+   "canon_prefix": 152511128
+  },
+  "FileState": {
+   "n": 62794,
+   "canonical": 6656164,
+   "record": 6718958,
+   "encoded_share": 4785855.545283611,
+   "n_full": 62794,
+   "rec_full": 6718958,
+   "canon_full": 6656164
+  },
+  "InodeBranch": {
+   "n": 11739,
+   "canonical": 29606436,
+   "record": 4699713,
+   "encoded_share": 3412845.2428852706,
+   "n_full": 422,
+   "rec_full": 195390,
+   "canon_full": 194968,
+   "n_prefix": 11317,
+   "rec_prefix": 4504323,
+   "canon_prefix": 29411468
+  },
+  "ExtentBranch": {
+   "n": 14890,
+   "canonical": 2783096,
+   "record": 2268804,
+   "encoded_share": 1658026.8067891987,
+   "n_full": 6467,
+   "rec_full": 1221687,
+   "canon_full": 1215220,
+   "n_prefix": 8423,
+   "rec_prefix": 1047117,
+   "canon_prefix": 1567876
+  },
+  "DirectoryBranch": {
+   "n": 1152,
+   "canonical": 494677,
+   "record": 415969,
+   "encoded_share": 270387.9420331512,
+   "n_full": 736,
+   "rec_full": 297367,
+   "canon_full": 296631,
+   "n_prefix": 416,
+   "rec_prefix": 118602,
+   "canon_prefix": 198046
+  }
+ },
+ "lanes": {
+  "ordinary": {
+   "packs": 5850,
+   "pack_bytes": 87718600,
+   "groups": 6407,
+   "group_enc": 87475688,
+   "group_dec": 121052828,
+   "groups_zstd": 5130,
+   "records_framed": 230566
+  },
+  "whole": {
+   "packs": 5957,
+   "pack_bytes": 103374637,
+   "groups": 7971,
+   "group_enc": 103199785,
+   "group_dec": 103199785,
+   "groups_zstd": 0,
+   "records_framed": 286247
+  },
+  "chunk": {
+   "packs": 26873,
+   "pack_bytes": 4563859895,
+   "groups": 108362,
+   "group_enc": 4561481151,
+   "group_dec": 4561481151,
+   "groups_zstd": 0,
+   "records_framed": 1176511
+  }
+ },
+ "whole_size_log2": {
+  "2": 11,
+  "10": 85056,
+  "11": 27622,
+  "7": 2322,
+  "6": 138,
+  "5": 77704,
+  "14": 9628,
+  "9": 16352,
+  "15": 9046,
+  "13": 15729,
+  "12": 9222,
+  "8": 15905,
+  "17": 9092,
+  "16": 8404,
+  "3": 8,
+  "4": 4,
+  "1": 1
+ },
+ "seconds": 10.977781772613525
+}

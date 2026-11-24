@@ -1,0 +1,19 @@
+{
+ "full": {
+  "n": 3000,
+  "full": 16889634,
+  "rule_a": 10101599,
+  "rule_a_conservative": 10873260,
+  "rule_b_proposal_after_loss": 10332874,
+  "a_switch": 2144
+ },
+ "prefix": {
+  "n": 3000,
+  "declared": 8987764,
+  "rule_a": 6956649,
+  "a_switch": 1183,
+  "a_better": 757,
+  "a_worse": 396
+ },
+ "seconds": 10.939182996749878
+}

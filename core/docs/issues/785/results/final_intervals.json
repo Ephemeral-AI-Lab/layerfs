@@ -1,0 +1,268 @@
+{
+ "chunk_earlier_unbounded": {
+  "fraction": 0.4363,
+  "fraction_95": [
+   0.414,
+   0.4573
+  ],
+  "bytes": 903794422,
+  "bytes_95": [
+   857487116,
+   947282916
+  ],
+  "share_of_packs": 0.1901,
+  "samples_improved": 1608
+ },
+ "chunk_earlier_win65536": {
+  "fraction": 0.3882,
+  "fraction_95": [
+   0.3684,
+   0.4089
+  ],
+  "bytes": 804140837,
+  "bytes_95": [
+   763120574,
+   847018137
+  ],
+  "share_of_packs": 0.1691,
+  "samples_improved": 1478
+ },
+ "chunk_earlier_win8192": {
+  "fraction": 0.2685,
+  "fraction_95": [
+   0.2494,
+   0.2867
+  ],
+  "bytes": 556177871,
+  "bytes_95": [
+   516613157,
+   593959976
+  ],
+  "share_of_packs": 0.117,
+  "samples_improved": 1055
+ },
+ "chunk_earlier_best_of_3": {
+  "fraction": 0.4671,
+  "fraction_95": [
+   0.4443,
+   0.4896
+  ],
+  "bytes": 967515197,
+  "bytes_95": [
+   920301387,
+   1014161065
+  ],
+  "share_of_packs": 0.2035,
+  "samples_improved": 1745
+ },
+ "file_earlier": {
+  "fraction": 0.1642,
+  "fraction_95": [
+   0.1495,
+   0.1791
+  ],
+  "bytes": 340134590,
+  "bytes_95": [
+   309645352,
+   371057470
+  ],
+  "share_of_packs": 0.0715,
+  "samples_improved": 1214
+ },
+ "chunk_any_unbounded": {
+  "fraction": 0.4657,
+  "fraction_95": [
+   0.4442,
+   0.4881
+  ],
+  "bytes": 964553736,
+  "bytes_95": [
+   920112523,
+   1011052536
+  ],
+  "share_of_packs": 0.2029,
+  "samples_improved": 1667
+ },
+ "chunk_any_win65536": {
+  "fraction": 0.4197,
+  "fraction_95": [
+   0.3986,
+   0.4414
+  ],
+  "bytes": 869312602,
+  "bytes_95": [
+   825570267,
+   914234461
+  ],
+  "share_of_packs": 0.1828,
+  "samples_improved": 1564
+ },
+ "chunk_any_win8192": {
+  "fraction": 0.3653,
+  "fraction_95": [
+   0.345,
+   0.3854
+  ],
+  "bytes": 756694791,
+  "bytes_95": [
+   714633712,
+   798281586
+  ],
+  "share_of_packs": 0.1591,
+  "samples_improved": 1403
+ },
+ "chunk_any_best_of_3": {
+  "fraction": 0.4952,
+  "fraction_95": [
+   0.4724,
+   0.5188
+  ],
+  "bytes": 1025716300,
+  "bytes_95": [
+   978566415,
+   1074619756
+  ],
+  "share_of_packs": 0.2157,
+  "samples_improved": 1805
+ },
+ "file_any": {
+  "fraction": 0.173,
+  "fraction_95": [
+   0.158,
+   0.1875
+  ],
+  "bytes": 358329173,
+  "bytes_95": [
+   327352526,
+   388327833
+  ],
+  "share_of_packs": 0.0754,
+  "samples_improved": 1294
+ },
+ "policy_None_full_rule_b": {
+  "fraction": 0.4082,
+  "fraction_95": [
+   0.3887,
+   0.4313
+  ],
+  "bytes": 845612942,
+  "bytes_95": [
+   805125771,
+   893422024
+  ],
+  "share_of_packs": 0.1778,
+  "samples_improved": 1553
+ },
+ "policy_None_full_rule_a_conservative": {
+  "fraction": 0.3774,
+  "fraction_95": [
+   0.3579,
+   0.397
+  ],
+  "bytes": 781705014,
+  "bytes_95": [
+   741261655,
+   822398023
+  ],
+  "share_of_packs": 0.1644,
+  "samples_improved": 1435
+ },
+ "policy_None_prefix_rule_a": {
+  "fraction": 0.2317,
+  "fraction_95": [
+   0.2043,
+   0.2602
+  ],
+  "bytes": 571599414,
+  "bytes_95": [
+   504091337,
+   641915270
+  ],
+  "share_of_packs": 0.1202,
+  "samples_improved": 785
+ },
+ "policy_65536_full_rule_b": {
+  "fraction": 0.3882,
+  "fraction_95": [
+   0.3685,
+   0.4087
+  ],
+  "bytes": 804140837,
+  "bytes_95": [
+   763278575,
+   846552296
+  ],
+  "share_of_packs": 0.1691,
+  "samples_improved": 1478
+ },
+ "policy_65536_full_rule_a_conservative": {
+  "fraction": 0.3562,
+  "fraction_95": [
+   0.3369,
+   0.3765
+  ],
+  "bytes": 737866267,
+  "bytes_95": [
+   697850686,
+   779980859
+  ],
+  "share_of_packs": 0.1552,
+  "samples_improved": 1354
+ },
+ "policy_65536_prefix_rule_a": {
+  "fraction": 0.226,
+  "fraction_95": [
+   0.1981,
+   0.2523
+  ],
+  "bytes": 557477451,
+  "bytes_95": [
+   488708747,
+   622267883
+  ],
+  "share_of_packs": 0.1172,
+  "samples_improved": 757
+ },
+ "policy_65536_fullonly_full_rule_b": {
+  "fraction": 0.3494,
+  "fraction_95": [
+   0.3295,
+   0.3683
+  ],
+  "bytes": 723669357,
+  "bytes_95": [
+   682441431,
+   762930140
+  ],
+  "share_of_packs": 0.1522,
+  "samples_improved": 1440
+ },
+ "policy_65536_fullonly_full_rule_a_conservative": {
+  "fraction": 0.3152,
+  "fraction_95": [
+   0.297,
+   0.3347
+  ],
+  "bytes": 652818362,
+  "bytes_95": [
+   615112698,
+   693276479
+  ],
+  "share_of_packs": 0.1373,
+  "samples_improved": 1297
+ },
+ "policy_65536_fullonly_prefix_rule_a": {
+  "fraction": 0.2294,
+  "fraction_95": [
+   0.2065,
+   0.2542
+  ],
+  "bytes": 565992567,
+  "bytes_95": [
+   509448952,
+   626982150
+  ],
+  "share_of_packs": 0.119,
+  "samples_improved": 661
+ }
+}

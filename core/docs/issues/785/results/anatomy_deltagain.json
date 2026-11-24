@@ -1,0 +1,22 @@
+{
+ "WholeFile": {
+  "prefix_sample": 4000,
+  "raw": 37988757,
+  "prefix_records": 1616770,
+  "independent_zstd3_records": 13646929,
+  "full_sample": 4000,
+  "full_raw": 2113640,
+  "full_stored": 659818,
+  "full_reencoded": 659378
+ },
+ "Chunk": {
+  "prefix_sample": 4000,
+  "raw": 79176999,
+  "prefix_records": 12473243,
+  "independent_zstd3_records": 30590824,
+  "full_sample": 4000,
+  "full_raw": 80454079,
+  "full_stored": 21957289,
+  "full_reencoded": 21941333
+ }
+}

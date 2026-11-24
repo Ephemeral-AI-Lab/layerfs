@@ -1,0 +1,45 @@
+{
+ "diag": {
+  "full_chunks": 375224,
+  "first_file_has_no_delta_chunk": 54917,
+  "first_file_mostly_delta(>=50%)": 142060,
+  "distinct_first_files": 10802
+ },
+ "walk_s": 9.217024087905884,
+ "files": 62794,
+ "earlier": {
+  "proposed": 2909,
+  "eligible": 2859,
+  "won": 1214,
+  "full_py": 16889634,
+  "best_py": 14116263,
+  "lookups": 1784
+ },
+ "any": {
+  "proposed": 2934,
+  "eligible": 2896,
+  "won": 1294,
+  "full_py": 16889634,
+  "best_py": 13967909,
+  "lookups": 1784
+ },
+ "base_locality": {
+  "files": 137,
+  "chunks": 9756,
+  "distinct_base_packs": 689
+ },
+ "sample_classes": {
+  "lost_or_shifted": 2530,
+  "no_predecessor": 436,
+  "aligned_base_at_cap": 34
+ },
+ "cap_aware": {
+  "n": 34,
+  "full_py": 241811,
+  "parent_py": 176574,
+  "root_py": 237699,
+  "parent_won": 28,
+  "root_won": 14
+ },
+ "seconds": 17.670982837677002
+}

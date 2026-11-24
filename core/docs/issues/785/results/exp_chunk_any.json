@@ -1,0 +1,57 @@
+{
+ "sample": 3000,
+ "full_chunks": 375224,
+ "results": {
+  "unbounded": {
+   "proposed": 2554,
+   "eligible": 2516,
+   "won": 1667,
+   "full_py": 16889634,
+   "best_py": 9024908,
+   "stored_full": 16889634
+  },
+  "win65536": {
+   "proposed": 2419,
+   "eligible": 2385,
+   "won": 1564,
+   "full_py": 16889634,
+   "best_py": 9801480,
+   "stored_full": 16889634
+  },
+  "win8192": {
+   "proposed": 2065,
+   "eligible": 2034,
+   "won": 1403,
+   "full_py": 16889634,
+   "best_py": 10719737,
+   "stored_full": 16889634
+  },
+  "best_of_3": {
+   "proposed": 2554,
+   "eligible": 2552,
+   "won": 1805,
+   "full_py": 16889634,
+   "best_py": 8526204,
+   "stored_full": 16889634
+  }
+ },
+ "median_us": {
+  "full_compress": 61.729500885121524,
+  "prefix_compress": 165.79099610680714,
+  "base_fetch": 100.20800255006179,
+  "propose": 65.41600305354223,
+  "base_fetch_by_depth_us": {
+   "0": 92.0,
+   "1": 167.6,
+   "2": 220.4,
+   "3": 290.5,
+   "4": 327.0,
+   "5": 434.6,
+   "6": 475.4,
+   "7": 636.5
+  },
+  "mean_base_depth": 0.8741992640043614
+ },
+ "index_build_s": 3.7826192378997803,
+ "seconds": 7.515431880950928
+}
