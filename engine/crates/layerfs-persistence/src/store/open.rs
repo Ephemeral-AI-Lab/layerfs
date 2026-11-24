@@ -106,7 +106,10 @@ impl SqliteHandles {
         )?);
         // An existing Store keeps the layout and acquisition schema it was
         // written with; the creation-only config selection does not name it.
-        if writable {
+        // A current Store runs none of the additive migrations below; only one
+        // that recorded an older source (a converted schema version 1 Store)
+        // does, each step in its own write transaction.
+        if writable && session.needs_migration()? {
             // A Store at the released 2.0 table set recorded its schema
             // without the position columns; it gains them before any table
             // migration runs.
