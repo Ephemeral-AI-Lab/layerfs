@@ -153,7 +153,8 @@ engine's keys are null. `machines` lists each attached machine by name as
 `store/<store>/observed.json` (`here` and `reach.<machine>`, each `{ at, ok,
 latency_ms, server_version, error }`;
 [`observed.rs`](../../../../control/crates/layerfs-store/src/observed.rs)):
-`store attach` records its check, `store doctor` each reach (this
+`store connect` records its check as this computer's, `store attach` its
+check from the machine, `store doctor` each reach (this
 computer's measured with the same check), and a Sandbox create on a machine
 `{ at, ok: true }` after its reply. A writer takes the Store's lock after its
 Store I/O and writes nothing once the record is gone; a live read's `at`
@@ -321,7 +322,10 @@ On a connected Store `connect` changes its address, user, password or
 the server must be reached with the result and hold the same Store (its
 `binding`) before anything is saved. The Store's open connections in this
 process are closed; a running Sandbox keeps the connection it started with.
-Short `{"ok":true}`, long `outcome` `updated`. Attachments are kept: each
+Short `{"ok":true}`, long `outcome` `updated`. A connect that is saved,
+first or not, records its check as this computer's reach (`store get`'s
+`reach`: `ok` and how long the check took), as `store doctor` does; a
+refused connect records nothing. Attachments are kept: each
 attached machine dials the new address and login from its next connection,
 and `store doctor` checks them. A sqlite Store of that name is `Exists`.
 

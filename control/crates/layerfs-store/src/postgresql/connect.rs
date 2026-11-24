@@ -209,7 +209,8 @@ pub fn run(home_dir: &Path, request: &StoreConnect) -> Outcome {
 /// and a new id or reads the id the schema holds, and lists its projects,
 /// before the home lock; the lock covers the re-checks and the writes
 /// only: the record, then the password. A database whose id another
-/// Store of this home holds is `Exists`.
+/// Store of this home holds is `Exists`. Once saved, the check's reach is
+/// this computer's (`here`); a refused connect records nothing.
 pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let given_url = request.url.as_str();
@@ -242,11 +243,13 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
         binding: layerfs_home::helpers::random()?.to_vec(),
         cursor_key: layerfs_home::helpers::random()?,
     };
+    let started = std::time::Instant::now();
     let binding = if crate::project::postgres_init::create_schema(&probe, &fresh)? {
         fresh.binding
     } else {
         crate::postgresql::open::read_binding(&probe)?
     };
+    let reach = measured(started);
     unclaimed_by_others(home_dir, name, &binding)?;
     let record = record.with("binding", SdkValue::Bytes(binding.clone()));
     let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
@@ -255,7 +258,7 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     // schema that does not open is not connected
     let open = OpenArgs::dialled(home_dir, name, &record, probe);
     let listed = crate::service::with_service(&open, |service| listing::listed(service, false))?;
-    let _lock = home::lock::take(home_dir)?;
+    let lock = home::lock::take(home_dir)?;
     if paths::store_record(home_dir, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
@@ -269,7 +272,20 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
         ProjectRecord::found(name, &project.name, stack).write(home_dir)?;
         projects.push(project.name);
     }
+    drop(lock);
+    crate::observed::record(home_dir, name, None, &reach);
     Ok(answer(&record, "connected", Some(&projects)))
+}
+
+/// This computer's reach from a connect's own check, begun at `started`:
+/// reached, with how long the check took. It is recorded only once the
+/// connect is saved, as `store.doctor` records its check (`here`).
+fn measured(started: std::time::Instant) -> crate::observed::Reach {
+    crate::observed::Reach {
+        ok: true,
+        latency_ms: Some(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)),
+        ..crate::observed::Reach::default()
+    }
 }
 
 /// `store.connect` of a connected Store: its address `request.url`, and
@@ -280,7 +296,7 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
 /// the home lock and the Store's, `Conflict` when it was disconnected or
 /// connected to another database meanwhile; this process's open sessions
 /// on it are closed. A running Sandbox keeps the connection it started
-/// with.
+/// with. Once saved, the check's reach is this computer's (`here`).
 pub fn update(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let name = request.store.as_str();
     let record = super::check::postgresql_record(home_dir, name)?;
@@ -322,12 +338,14 @@ pub fn update(home_dir: &Path, request: &StoreConnect) -> Outcome {
     };
     let trial = changed(record.clone());
     let probe = selection_at(&trial, with_login(&request.url, &user, &password)?);
+    let started = std::time::Instant::now();
     super::check::same_store(&trial, &probe).map_err(|refusal| {
         refused(
             &refusal.code,
             format!("PostgreSQL Store {name}: {}", refusal.message),
         )
     })?;
+    let reach = measured(started);
     let home_lock = home::lock::take(home_dir)?;
     let store_lock = crate::record::lock(home_dir, name)?;
     let current = StoreRecord::read(home_dir, name)?.filter(|r| r.binding() == record.binding());
@@ -345,6 +363,7 @@ pub fn update(home_dir: &Path, request: &StoreConnect) -> Outcome {
         login::save(home_dir, name, password)?;
     }
     drop((store_lock, home_lock));
+    crate::observed::record(home_dir, name, None, &reach);
     Ok(answer(&current, "updated", None))
 }
 

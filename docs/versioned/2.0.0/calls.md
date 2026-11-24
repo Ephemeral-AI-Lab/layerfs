@@ -1145,13 +1145,15 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   provider tool's first line of `--version`) and `worker` (`{protocol,
   bundle}` as it answered), each null when not read.
 - **Item and long keys.** A `list` row and the `get` answer have `machine,
-  platform, state, op, reason, fix, observed_at, backend, supports, cpus,
-  memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message,
+  platform, state, op, reason, fix, observed_at, backend, supports,
+  loopback, cpus, memory_bytes, disk_bytes, image, os_image, docker, wsl, daemon, message,
   stores, stores_count, sandboxes, sandboxes_count, created_at` (each list
   the first 20 names, its count only past those; `get` puts
   `platform` and `state` first). `supports` is a list of words: `sqlite`,
   `postgresql_sandbox`, and `log` when the machine has a worker whose log
-  can be read.
+  can be read. `loopback` is `shared` or `apart`: whether the machine
+  shares this computer's loopback, as its platform declares it (null for a
+  removed platform); clients read it and never test platform names.
 - **`start`, `stop`, `create`, `remove`** record their `op` in the machine's
   record before their first effect, move its `phase` as they go and report
   `{"progress":{"phase","done","total"}}` events: `start` `bundle`,
@@ -1261,7 +1263,7 @@ $ layerfs machine list
 $ layerfs machine get docker --with live
 {"platform":"docker","state":"stopped","observed_at":"2026-11-18T15:34:11Z","live":{"tool_version":"29.5.2"}}
 $ layerfs machine get native --detail --with live
-{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
+{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"loopback":"shared","cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
 $ layerfs machine start native
 {"unchanged":true}
 $ layerfs machine stats native
@@ -1352,7 +1354,9 @@ attached to the Store and dial with both.
   Store `connect` changes its address, user, password or
   `synchronous_commit`: an omitted user or password keeps the saved one,
   and the result must reach the same Store (its binding) before anything
-  is saved; `projects` is null. Attachments are kept.
+  is saved; `projects` is null. Attachments are kept. A connect that is
+  saved, first or not, records its check as this computer's reach (`get`'s
+  `reach`), as `store doctor` does; a refused one records nothing.
 - **`disconnect`** long `ok, outcome: "disconnected", store`; it forgets
   the Store's saved password and attachments too. Refused `InUse` while a
   Sandbox or Workspace uses the Store.

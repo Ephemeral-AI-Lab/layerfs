@@ -173,7 +173,8 @@ in `store/<s>/observed.json` with the `at` a live read writes:
 `here` (this computer) and `reach.<machine>`, each `{ at, ok, latency_ms,
 server_version, error }`
 ([`observed.rs`](../../../../control/crates/layerfs-store/src/observed.rs)).
-Writers: `store.attach` (its check), `store.doctor` (this computer, measured
+Writers: `store.connect` (this computer's, from its own check once saved,
+first connect or update), `store.attach` (its check), `store.doctor` (this computer, measured
 with the same check, then every attached machine, or `--machine` alone) and
 a Sandbox create on a machine (`{ at, ok: true }`, on the host after the
 reply, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)

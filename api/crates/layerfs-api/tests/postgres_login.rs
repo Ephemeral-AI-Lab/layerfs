@@ -190,6 +190,12 @@ fn connect_checks_and_saves_the_login_and_a_reconnect_keeps_what_it_is_not_given
     assert_eq!(got.get_text("synchronous_commit"), Some("local"));
     assert_eq!(got.get("machines"), Some(&SdkValue::List(vec![])));
     assert!(got.get("auth").is_none() && got.get("connections").is_none());
+    // the connect's own check is this computer's reach, as the doctor's is
+    let here = |got: &SdkValue| got.get("reach").cloned().unwrap_or_default();
+    let reach = here(&got);
+    assert_eq!(reach.get("ok"), Some(&SdkValue::Bool(true)), "{got:?}");
+    assert!(reach.get_int("latency_ms").is_some(), "{got:?}");
+    let first_at = reach.get_text("at").unwrap().to_owned();
     // a reconnect with the setting alone keeps the user and password
     let updated = long(
         &home,
@@ -208,6 +214,12 @@ fn connect_checks_and_saves_the_login_and_a_reconnect_keeps_what_it_is_not_given
         got.get_text("password_changed_at"),
         Some(changed_at.as_str())
     );
+    // an update records its check too
+    let reach = here(&got);
+    assert_eq!(reach.get("ok"), Some(&SdkValue::Bool(true)), "{got:?}");
+    assert!(reach
+        .get_text("at")
+        .is_some_and(|at| at >= first_at.as_str()));
     let first = std::fs::read(&file).unwrap();
     // a new password is saved
     long(
@@ -226,7 +238,10 @@ fn connect_checks_and_saves_the_login_and_a_reconnect_keeps_what_it_is_not_given
     // new values that reach another Store, or no Store at all, are refused
     // and nothing is written
     let record = || std::fs::read(paths::store_record(&home, "pg")).unwrap();
+    let seen_file = paths::store_record(&home, "pg").with_file_name("observed.json");
+    let seen = || std::fs::read(&seen_file).unwrap();
     let before = (record(), std::fs::read(&file).unwrap());
+    let seen_before = seen();
     for (address, why) in [(&other, "holds another Store than pg"), (&empty_db, "")] {
         let (code, message) = call(
             &home,
@@ -241,6 +256,7 @@ fn connect_checks_and_saves_the_login_and_a_reconnect_keeps_what_it_is_not_given
         assert_ne!(code, "InvalidInput", "{message}");
         assert!(message.contains(why), "{message}");
         assert_eq!((record(), std::fs::read(&file).unwrap()), before);
+        assert_eq!(seen(), seen_before, "a refused connect records no reach");
     }
     // a URL holding a login is refused on a connected Store too
     let (code, _) = call(

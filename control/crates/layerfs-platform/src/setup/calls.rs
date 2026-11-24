@@ -231,6 +231,16 @@ pub fn reach(spec: &Spec, store: &str, url: &str) -> Result<String, MachineError
     crate::reach::dial(spec, (store, url), adapter(spec.kind).loopback(spec))
 }
 
+/// Whether `spec`'s machine shares this computer's loopback, as its
+/// platform's adapter declares it ([`crate::reach::Loopback`]): a URL
+/// naming that loopback is then dialled as given there.
+pub fn shares_loopback(spec: &Spec) -> bool {
+    matches!(
+        adapter(spec.kind).loopback(spec),
+        crate::reach::Loopback::Shared
+    )
+}
+
 /// What a failed connection to Store `store` at `url` from `spec`'s machine
 /// adds for its user, where it may be a loopback the machine does not
 /// share: `Some` only on such a machine and only when the URL names a host
