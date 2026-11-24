@@ -870,7 +870,11 @@ Runs as one operation on the Store's machine (S6).
    `G` through a fresh immutable handle and re-stat last; check
    `(catalog_id, incarnation, dev, ino)` and the sealed `(size, mtime,
    db-header change counter)`; a change is `Conflict`. `chmod 0600`;
-   `sync_all`; `rename`; fsync the directory; release the guard. A
+   `sync_all`; stat the sidecars again (the sync can take seconds; #776 C3);
+   `rename`; fsync the directory; release the guard. Every opener that can
+   create the sidecars takes the writer lane for its open (a writable open,
+   a read-only or diagnostic open of a Store with no `-shm`, and
+   `read_heads` until its close), so none opens during this step. A
    transaction that began before install is caught at its next transaction
    by the `(dev, ino)` fence, not at commit (documented limit).
 8. A definite failure before the rename (disk full, write refused, sidecar,

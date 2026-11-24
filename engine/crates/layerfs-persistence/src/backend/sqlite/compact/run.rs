@@ -10,6 +10,7 @@ use super::install::prepare_target;
 use super::install::remove_scratch;
 use super::install::settle;
 use super::install::settle_leftover;
+use super::install::sidecar_present;
 use super::install::sync_directory;
 use super::install::unfinished_work;
 use super::install::WriterGuard;
@@ -519,6 +520,14 @@ impl SqliteHandles {
             if let Err(error) = prepare_target(&built.target) {
                 abort_before_install(&store, &op_id, true);
                 return Err(error);
+            }
+            // The sidecar check again, right before the rename:
+            // `prepare_target`'s sync can take seconds, and a connection that
+            // bypassed the lane in that window must not leave sidecars beside
+            // the file the rename installs (#776 C3).
+            if sidecar_present(&facts.path).is_some() {
+                abort_before_install(&store, &op_id, true);
+                return Err(HistoryError::Conflict("Store sidecar at install"));
             }
             stop_at(request, CompactFailpoint::BeforeInstall, &op, &store)?;
 
