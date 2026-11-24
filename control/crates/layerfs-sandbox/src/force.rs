@@ -102,11 +102,13 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         None => Err(format!("no Sandbox {id} is recorded")),
     };
     // the runtime is confirmed stopped: write the durable home tombstone
-    // before the record (the folder) goes; a failed write keeps the record
-    if let Some(record) = &record {
-        crate::record::retire(&host.home, record).map_err(after_stop)?;
-    }
-    let left = crate::mount_intents::end(open.as_ref().map_err(String::as_str), &bound);
+    // before the record (the folder) goes, best effort as a close does
+    // (`crate::lifecycle::not_retired`): a failed write is reported in `left`
+    let unretired = (record.as_ref())
+        .and_then(|record| crate::record::retire(&host.home, record).err())
+        .map(|refusal| crate::lifecycle::not_retired(&id, &refusal.message));
+    let mut left = crate::mount_intents::end(open.as_ref().map_err(String::as_str), &bound);
+    left.extend(unretired);
     // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()

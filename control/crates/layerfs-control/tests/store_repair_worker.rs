@@ -35,14 +35,6 @@ fn source(tag: &str) -> PathBuf {
     directory
 }
 
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
 fn mount(stack: &[u8], branch: &[u8], op: u8) -> GcIntent {
     GcIntent::shared(
         [op; 16],
@@ -187,8 +179,14 @@ fn repair_previews_settles_and_releases_through_the_worker() {
     assert_eq!(live.get_text("machine_incarnation"), Some("worker:1"));
     assert_eq!(live.get_text("state"), Some("live"));
 
-    // Preview over the worker answers the typed view and settles nothing.
+    // Preview over the worker answers the typed view and writes nothing.
     let preview = repair(&placed, "preview", None, false);
+    assert_eq!(preview.get("audit"), Some(&SdkValue::Null), "{preview:?}");
+    let audit = repair(&placed, "audit", None, false);
+    assert!(
+        matches!(audit.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
+        "preview wrote a row: {audit:?}"
+    );
     let rows = holders(&preview);
     assert_eq!(rows.len(), 2);
     let live = rows
@@ -260,10 +258,6 @@ fn repair_previews_settles_and_releases_through_the_worker() {
         let evidence = row.get_text("evidence").expect("evidence");
         assert!(evidence.contains("operator=alice"), "{row:?}");
     }
-    let previews: Vec<_> = rows
-        .iter()
-        .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-        .collect();
-    assert_eq!(previews.len(), 4, "every worker preview: {audit:?}");
+    assert_eq!(rows.len(), 2, "no worker preview wrote a row: {audit:?}");
     placed.remove();
 }

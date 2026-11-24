@@ -247,3 +247,48 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     assert!(!paths::sandbox_dir(&home, "s1").exists());
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// The retired tombstone is best effort: a forced remove whose tombstone
+/// cannot be written (here its `sandbox-retired` folder is a file) still
+/// stops the daemon, ends what it holds and removes the record, and reports
+/// the unwritten tombstone in `left`. A missing tombstone is only "no proof
+/// of death".
+#[cfg(target_os = "macos")]
+#[test]
+fn a_forced_remove_goes_on_when_its_tombstone_cannot_be_written() {
+    use layerfs_bridge::process::LocalProcess;
+    let home = new_home("unretired");
+    let mut kept = stand_in();
+    let folder = half_created(&home, "s1", kept.id());
+    let record = read_record(&paths::sandbox_record(&home, "s1"))
+        .unwrap()
+        .unwrap();
+    let record = home::with_field(record, "generation", t("p1:sandbox:0000000000000001:00"));
+    write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
+    let retired = paths::sandbox_retired_dir(&home, "native");
+    std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
+    std::fs::write(&retired, b"not a folder").unwrap();
+    let daemon = LocalProcess::observe(kept.id()).unwrap();
+
+    match removed(&home, "s1", true) {
+        Ok(Removed::Stopped { unmounted, left }) => {
+            assert!(unmounted.is_empty(), "{unmounted:?}");
+            assert_eq!(left.len(), 1, "{left:?}");
+            assert!(
+                left[0].contains("retired tombstone was not written"),
+                "{left:?}"
+            );
+        }
+        Ok(Removed::AlreadyGone { left }) => panic!("taken as gone: {left:?}"),
+        Err(refusal) => panic!("the unwritten tombstone aborted the remove: {refusal:?}"),
+    }
+    let _ = kept.wait();
+    assert!(!daemon.alive(), "its daemon still runs");
+    assert!(!folder.exists(), "its run folder stays");
+    assert!(
+        !paths::sandbox_dir(&home, "s1").exists(),
+        "its record stays"
+    );
+    assert!(retired.is_file());
+    std::fs::remove_dir_all(home).unwrap();
+}

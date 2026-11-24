@@ -12,7 +12,6 @@
 mod worker_store;
 
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
-use layerfs_history::error::HistoryError;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_home::events::Events;
@@ -52,16 +51,6 @@ fn source(tag: &str) -> PathBuf {
     std::fs::create_dir_all(&directory).unwrap();
     std::fs::write(directory.join("a.txt"), b"a\n").unwrap();
     directory
-}
-
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    // An hour: seeding the 331 retired Branches must never let a lease the
-    // test calls live expire underneath it.
-    i64::try_from(now).expect("the clock fits an i64") + 3_600_000
 }
 
 fn text(value: &str) -> SdkValue {
@@ -183,7 +172,6 @@ fn seed(home: &Path) {
                 .named(Some("app"), Some(&name)),
             };
             history.gc_register(&intent).unwrap();
-
         }
 
         // The 331 already retired behind the six: fork, a wholly dead pack,
@@ -555,7 +543,7 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
     );
 
     // The operator's per-Branch preview answers the same typed view and
-    // settles nothing.
+    // writes nothing.
     for tag in FIRST..FIRST + 6 {
         let name = format!("stuck-{}", tag - FIRST);
         let preview = repair(&placed, &name, "preview", None, false);
@@ -617,7 +605,7 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
         assert_eq!(holders(&preview).len(), 0, "{name}: {preview:?}");
     }
     // The audit is scoped to the Branch it names: each Branch's page holds
-    // exactly its own two preview rows and one release row.
+    // exactly its own release row; its two previews wrote none.
     for tag in FIRST..FIRST + 6 {
         let name = format!("stuck-{}", tag - FIRST);
         let audit = repair(&placed, &name, "audit", None, false);
@@ -638,28 +626,21 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
                     .is_some_and(|evidence| evidence.contains("action=release;operator=alice;op="))
             })
             .count();
-        let previews = rows
-            .iter()
-            .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-            .count();
         assert_eq!(releases, 1, "{name}: {audit:?}");
-        assert_eq!(previews, 2, "{name}: {audit:?}");
+        assert_eq!(rows.len(), 1, "{name}: {audit:?}");
     }
 
-    // 3c. The doctor's worker-side audit is the same bounded page (16 rows at
-    // limit 16) over the same retained rows, as evidence; it releases nothing.
+    // 3c. The doctor's worker-side audit is the same bounded page (limit 16)
+    // over the same retained rows, as evidence; it releases nothing. The six
+    // releases are every retained row.
     let doctor = diagnostic_audit(&placed);
     let Some(SdkValue::List(rows)) = doctor.get("items") else {
         panic!("doctor audit items: {doctor:?}");
     };
-    assert_eq!(
-        rows.len(),
-        16,
-        "the worker audit page is bounded: {doctor:?}"
-    );
+    assert_eq!(rows.len(), 6, "{doctor:?}");
     assert_eq!(
         doctor.get("has_more"),
-        Some(&SdkValue::Bool(true)),
+        Some(&SdkValue::Bool(false)),
         "{doctor:?}"
     );
     let releases = rows
@@ -669,12 +650,7 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
                 .is_some_and(|evidence| evidence.starts_with("action=release;"))
         })
         .count();
-    let previews = rows
-        .iter()
-        .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-        .count();
     assert_eq!(releases, 6, "{doctor:?}");
-    assert_eq!(previews, 10, "{doctor:?}");
 
     // 4. The six now remove, and their names stay retired until compaction.
     for tag in FIRST..FIRST + 6 {
@@ -714,17 +690,13 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
     // durable operator audit. Preview still filters them.
     let preview = repair(&placed, "main", "preview", None, false);
     assert_eq!(holders(&preview).len(), 0, "no holder remains");
-    // The audit is scoped: main has only the preview this step wrote, and
-    // each repaired Branch keeps its own six rows through the rebuild.
+    // The audit is scoped: main has no row (its preview wrote none), and
+    // each repaired Branch keeps its own release row through the rebuild.
     let audit = repair(&placed, "main", "audit", None, false);
     let Some(SdkValue::List(rows)) = audit.get("items") else {
         panic!("audit items: {audit:?}");
     };
-    assert_eq!(rows.len(), 1, "main's audit is the preview it wrote: {audit:?}");
-    assert_eq!(
-        rows[0].get_text("evidence"),
-        Some("action=preview;operator=alice")
-    );
+    assert!(rows.is_empty(), "main's preview wrote a row: {audit:?}");
     for tag in FIRST..FIRST + 6 {
         let name = format!("stuck-{}", tag - FIRST);
         let audit = repair(&placed, &name, "audit", None, false);
@@ -738,12 +710,11 @@ fn the_live_six_of_three_hundred_thirty_one_is_repaired_removed_and_reclaimed() 
                     .is_some_and(|evidence| evidence.starts_with("action=release;"))
             })
             .count();
-        let previews = rows
-            .iter()
-            .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-            .count();
-        assert_eq!(releases, 1, "the compaction kept {name}'s release: {audit:?}");
-        assert_eq!(previews, 2, "the compaction kept {name}'s previews: {audit:?}");
+        assert_eq!(
+            releases, 1,
+            "the compaction kept {name}'s release: {audit:?}"
+        );
+        assert_eq!(rows.len(), 1, "{name}: {audit:?}");
     }
 
     placed.remove();

@@ -49,13 +49,11 @@ pub fn store_call(
         Executor::Worker(mut worker) => {
             // the host process holds the lease while it sends the call
             let _lease = lease;
-            let request = frame(
-                method,
-                with_project(args, target),
-                target,
-                &record,
-                crate::place_view::encoded_from_home(&home),
-            );
+            // only an admitting call carries the caller's place view
+            let place = (crate::place_view::admits(method))
+                .then(|| crate::place_view::encoded_from_home(&home))
+                .flatten();
+            let request = frame(method, with_project(args, target), target, &record, place);
             worker.call("store.call", request, &mut |event| events.event(event))
         }
     }

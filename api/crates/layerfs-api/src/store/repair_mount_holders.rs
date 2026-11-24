@@ -1,12 +1,11 @@
 //! `store.repair_mount_holders`: explicit first-class repair of one Branch's
 //! mount admissions, on the machine whose worker holds a SQLite Store and in
-//! this process for a PostgreSQL Store. Preview changes no live admission,
-//! answers the typed holder view and writes its own retained done row
-//! (`action=preview`, no operation); settle/release name one op; `audit` reads
-//! the bounded retained done rows of that Branch. Release retains the row as
-//! the durable operator audit and records
-//! the operator label; every call is also in the home's `trace/calls.jsonl`
-//! call log.
+//! this process for a PostgreSQL Store. List and preview write nothing: they
+//! answer the typed holder view, preview with what release would do for each
+//! holder; settle/release name one op; `audit` reads the bounded retained done
+//! rows of that Branch. Release retains the row as the durable operator audit
+//! and records the operator label; every call is also in the home's
+//! `trace/calls.jsonl` call log.
 use crate::calls::table::{
     a, call, opt, Call,
     Kind::{Bool, Int, Name, Text},

@@ -7,7 +7,7 @@ use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::record::StoreRecord;
-use layerfs_store::service::{branch_named, with_service};
+use layerfs_store::service::with_service;
 use layerfs_store_service::history::lookup;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -810,16 +810,8 @@ fn a_bare_project_name_is_refused_by_every_project_call() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
 /// `store.repair_mount_holders` is the explicit two-step operator repair:
-/// preview answers the typed holder view and changes no intent; release needs
+/// preview answers the typed holder view and writes nothing; release needs
 /// a preceding settle; `settle_legacy` marks only rows with no owner or place
 /// evidence; release retains the row as the durable done audit, and the audit
 /// action reads it back in bounded pages.
@@ -906,7 +898,29 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     assert_eq!(holders.len(), 2, "{preview:?}");
     assert_eq!(preview.get_text("action"), Some("preview"));
     assert_eq!(preview.get("op"), Some(&SdkValue::Null));
-    assert_eq!(preview.get_text("audit"), Some("gc_intent"));
+    assert_eq!(preview.get("audit"), Some(&SdkValue::Null));
+    // Preview is read-only: the Branch's intents are as registered, and no
+    // retained row was written.
+    let intents = with_service(&open, |service| {
+        (service.store.history())
+            .gc_intents(GcScopeKind::Branch, branch.as_slice())
+            .map_err(lookup::history)
+    })
+    .unwrap();
+    assert_eq!(intents.len(), 2, "{intents:?}");
+    assert!(
+        intents.iter().all(|intent| !intent.uncertain),
+        "{intents:?}"
+    );
+    let audit = ok(
+        &home,
+        "store.repair_mount_holders",
+        &repair("audit", None, false),
+    );
+    assert!(
+        matches!(audit.get("items"), Some(SdkValue::List(rows)) if rows.is_empty()),
+        "preview wrote a row: {audit:?}"
+    );
     let live_row = holders
         .iter()
         .find(|row| row.get_text("op") == Some(live_op.as_str()))
@@ -984,9 +998,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     );
 
     // Both releases retained their row as the durable operator audit, and
-    // every preview retained its own done row: the release rows keep the op,
-    // the preview rows are the operator action with no op. Admission still
-    // filters every done row.
+    // the three previews wrote none. Admission still filters every done row.
     let audit = ok(
         &home,
         "store.repair_mount_holders",
@@ -1003,17 +1015,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
         })
         .collect();
     assert_eq!(released.len(), 2, "{audit:?}");
-    let previews: Vec<_> = rows
-        .iter()
-        .filter(|row| row.get_text("evidence") == Some("action=preview;operator=alice"))
-        .collect();
-    assert_eq!(previews.len(), 3, "{audit:?}");
-    for row in &previews {
-        assert_eq!(row.get("phase"), Some(&SdkValue::Null));
-        assert_eq!(row.get_text("op").map(str::len), Some(32));
-        assert_eq!(row.get_text("kind"), Some("mount"));
-        assert_eq!(row.get_text("scope_kind"), Some("branch"));
-    }
+    assert_eq!(rows.len(), 2, "only the releases are retained: {audit:?}");
     let released = released
         .iter()
         .find(|row| row.get_text("op") == Some(live_op.as_str()))
@@ -1063,23 +1065,3 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
-
-/// The bounded read of the Store's retained done rows, as the audit action
-/// answers it.
-fn audit_items(home: &Path) -> Vec<SdkValue> {
-    let audit = ok(
-        home,
-        "store.repair_mount_holders",
-        &[
-            ("name", t("shop")),
-            ("project", t("api")),
-            ("branch", t("main")),
-            ("action", t("audit")),
-        ],
-    );
-    match audit.get("items") {
-        Some(SdkValue::List(items)) => items.clone(),
-        other => panic!("audit items: {other:?}"),
-    }
-}
-

@@ -397,10 +397,15 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // to the caller, which runs PostgreSQL Store calls and ends them
     // (`mount_intents::end_handed`); what records less is reported here
     // The runtime is confirmed stopped: write the durable home tombstone
-    // before the record (the folder) goes; a failed write keeps the record.
-    if let Some(record) = crate::record::SandboxRecord::read(&host.home, &id)? {
-        crate::record::retire(&host.home, &record)?;
+    // before the record (the folder) goes. It is best effort: a missing
+    // tombstone is only "no proof of death", so the close goes on, still
+    // ends the mount intents and reports the failure in `left`.
+    let unretired = match crate::record::SandboxRecord::read(&host.home, &id) {
+        Ok(Some(record)) => crate::record::retire(&host.home, &record).err(),
+        Ok(None) => None,
+        Err(refusal) => Some(refusal),
     }
+    .map(|refusal| not_retired(&id, &refusal.message));
     let pg = (host.store_record.as_ref())
         .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
     let (left, handed) = match (pg, &host.postgresql) {
@@ -422,6 +427,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
             None,
         ),
     };
+    let left = left.into_iter().chain(unretired).collect();
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::home::generation::moved_above(&directory);
@@ -439,6 +445,17 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         (answer.into_iter())
             .map(|(name, value)| (name.to_owned(), value))
             .collect(),
+    ))
+}
+
+/// The `left` sentence of a close whose retired tombstone of Sandbox `id`
+/// was not written for reason `why`. Nothing is unsafe about it: without a
+/// tombstone, admission has no proof the Sandbox is gone, so a mount intent
+/// it held and that was not ended stays live until its owner settles it.
+pub(crate) fn not_retired(id: &str, why: &str) -> SdkValue {
+    SdkValue::text(format!(
+        "Sandbox {id}'s retired tombstone was not written ({why}): a mount intent it held \
+         that was not ended is not proven dead"
     ))
 }
 

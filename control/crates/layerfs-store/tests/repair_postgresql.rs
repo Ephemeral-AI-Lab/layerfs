@@ -117,14 +117,6 @@ impl Drop for Database {
     }
 }
 
-fn future_ms() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("the clock is after the epoch")
-        .as_millis();
-    i64::try_from(now).expect("the clock fits an i64") + 60_000
-}
-
 fn mount(branch: &[u8], stack: &[u8], op: u8) -> GcIntent {
     GcIntent::shared(
         [op; 16],
@@ -206,6 +198,7 @@ fn operator_repair_round_trips_on_postgresql() {
         &open, "app", "main", "preview", None, false, "alice", 0, 100,
     )
     .expect("preview");
+    assert_eq!(preview.get("audit"), Some(&SdkValue::Null), "{preview:?}");
     let rows = holders(&preview);
     assert_eq!(rows.len(), 2, "{rows:?}");
     let row = rows
@@ -300,12 +293,8 @@ fn operator_repair_round_trips_on_postgresql() {
         })
         .collect();
     assert_eq!(releases.len(), 2, "{audit:?}");
-    let previews: Vec<_> = items
-        .iter()
-        .filter(|item| item.get_text("evidence") == Some("action=preview;operator=alice"))
-        .collect();
-    assert_eq!(previews.len(), 2, "the durable preview rows: {audit:?}");
-    for item in previews {
+    assert_eq!(items.len(), 2, "no preview wrote a row: {audit:?}");
+    for item in releases {
         assert_eq!(item.get_text("project"), Some("app"));
         assert_eq!(item.get_text("branch"), Some("main"));
         assert_eq!(item.get_text("op").map(str::len), Some(32));
