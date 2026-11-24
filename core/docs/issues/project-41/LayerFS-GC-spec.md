@@ -477,52 +477,54 @@ malformed one decodes as no token: missing evidence is no proof, never death
   its marker or op row, and commits. A live mount → `MountsActive`; a live
   operation → `Busy`; a provably dead, uncertain op → `Unresolved`; a
   provably dead, certain op is adopted or ignored per its `kind`.
-- **Place authority.** An intent that records a machine incarnation or a
-  Sandbox generation is classified from the control-built bounded `PlaceView`
-  (the current `MachineRecord.incarnation`, `SandboxRecord.generation`, and the
-  machine-level `machine/<machine>/sandbox-retired/<name>.json` tombstone): a
-  current place newer than the recorded one is dead even with a live lease, a
-  current place older (a home restore/rollback) is `Unresolved`, equal is live,
-  and a missing place proves nothing. A live place with an expired lease is
-  `Unresolved`, never adopted. The caller's `owner_runtime`/`owner_boot`
-  evidence is the fallback for a private or place-null intent only, and a
-  presented stale fencing token may not release the row (`Conflict`).
-- **Place writers.** A machine worker records its ordered `incarnation` in the
-  home `MachineRecord` before it serves, and on start settles only the intents
-  that incarnation (or a Sandbox generation/tombstone) proves dead; an
-  uncertain owner, an expired lease and another machine's rows are never
-  settled. There is no separate audit table: a settle keeps the intent as a
-  `done` row (see Audit). A Sandbox close or forced remove writes the
-  generation's durable tombstone under `machine/<machine>/sandbox-retired/`
-  once the runtime is stopped, before its home record goes, so a Sandbox
-  recreated under the same name is not retired by the old generation.
-- **Lease renewal (deferred, #775).** The owner of an intent renews its `lease_expires_ms`
-  with a fenced heartbeat: the Store keeps the later of the recorded and the
-  requested deadline, so a delayed heartbeat never shortens a lease, and a
-  presented stale token may not renew the row (`Conflict`). An absent row
-  reports no renewal, and the owner stops instead of resurrecting a settled
-  mount. Expiry stays `Unresolved`, never adopted.
-- **Audit.** A settle or release keeps the intent as a `gc_intent` `done` row
-  instead of deleting it: the action, the operator/client label, the op and a
-  bounded evidence detail are in `evidence`, the owner columns are cleared so
-  the unique key does not block a remount, admission keeps filtering
-  `state <> 'done'`, and `store.compact` preserves done rows (`Copy::Done`).
-  A separate read (`WHERE state = 'done'`, ordered by `updated_ms, op_id`,
-  paged) exposes them. Preview retains a `done` row too: every preview call
-  writes one retained `gc_intent` `done` row (`action="preview"`, `op=null`,
-  the operator label in `evidence`, owner columns null) while changing no
-  live intent. Admission keeps filtering `state <> 'done'`, so the row
-  never admits, and the CLI call log stays secondary to the retained row.
+- **Place authority.** The owner evidence applies first, exactly as without
+  place evidence: an owner this process proves gone (another boot of a local
+  Store, a vanished or reused pid in this namespace) is dead. An intent that
+  also records a machine incarnation or a Sandbox generation is then compared
+  with the control-built bounded `PlaceView` of the caller's home (the current
+  `MachineRecord.incarnation`, `SandboxRecord.generation`, and the
+  machine-level `machine/<machine>/sandbox-retired/<name>.json` tombstone).
+  Tokens are `p1:<home id>.<kind>:<ms>:<nonce>`, minted at no less than the
+  previous value plus 1 ms. A recorded value older than the current one of
+  the same home is dead; a newer one (a home restore) or one of the same
+  millisecond is uncertain (`Unresolved`); equal is live; a tombstone proves a
+  generation retired only when it names that very generation while the record
+  remains, and a tombstone newer than the live record is uncertain. A value
+  of another home, or one that predates the ordering, is no evidence, and a
+  missing place proves nothing. On a shared Store (PostgreSQL) a place proof
+  is uncertain, never dead, because two running copies of one home share its
+  id. A private or place-null intent keeps the owner evidence alone.
+- **Place writers.** `machine.start` stops and confirms the old worker gone,
+  then records the new ordered `incarnation` in the home `MachineRecord`
+  before the worker serves; the worker-start reconcile settles only the rows
+  of that machine that are dead and not uncertain. Mount registration settles
+  nothing. A Sandbox remove (normal or forced) writes the generation's
+  tombstone under `machine/<machine>/sandbox-retired/` once the runtime is
+  stopped and before its home record goes; a failed tombstone write does not
+  stop the removal (a missing tombstone is only no proof). A placed mount
+  records the place values the daemon's caller read from the home records,
+  and its project and Branch names.
+- **Audit.** An operator release keeps the intent as a `gc_intent` `done` row
+  instead of deleting it: the action, the operator label and the op are in
+  `evidence` (replacing the live row's place tokens), the owner columns are
+  cleared so the unique key does not block a remount, admission keeps
+  filtering `state <> 'done'`, and `store.compact` preserves done rows
+  (`Copy::Done`). The owner's own release, an uncertain mark and a retried
+  registration never delete or revive a `done` row. A separate read
+  (`WHERE state = 'done'`, scoped by the recorded project and Branch names,
+  ordered by `updated_ms, op_id`, paged) exposes them. `list`, `preview` and
+  `audit` write nothing.
 - **Operator repair reachability and the typed holder view.**
   `store.repair_mount_holders` runs where the Store's calls run: a SQLite
   Store on another machine repairs through that machine's worker
   (`store.repair`), and a PostgreSQL Store repairs in the calling process.
-  Preview answers the same typed holder view (`MountHolderView`: owner, place,
-  generation, lease and state) on every route, and the doctor's read-only
-  `store.diagnose` forwards those authority fields from a worker. The
+  `list` and `preview` answer the same typed holder view (`MountHolderView`:
+  owner, place, generation and state) on every route, and the doctor's
+  read-only `store.diagnose` forwards those fields from a worker. The
   Store-wide compact barrier is retained: a live or uncertain holder still
-  refuses `store.compact`, while a place the authority proves dead is adopted
-  with an `adopt` audit row and the rebuild proceeds.
+  refuses `store.compact`; an owner the owner evidence proves dead is adopted
+  and the rebuild proceeds. Lease renewal, fencing and a jsonl audit archive
+  are deferred (#775).
 - Compaction writes its `gc_intent` operation row **before** its first
   checkpoint; the row lives in `<store>.compact` during build/verify, moves
   to the live Store after install, and is cleared at settle. `none` writes

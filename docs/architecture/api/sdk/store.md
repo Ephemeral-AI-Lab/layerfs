@@ -625,9 +625,10 @@ The action is one of:
 | `settle_legacy` | marks only rows with missing owner or place evidence |
 | `audit` | one bounded page of the named project/Branch's retained `done` rows, oldest first (`--page`, `--limit`, clamped to 1000); changes nothing. The scope is the recorded project and Branch names, so a removed Branch's retained rows stay readable |
 
-Every holder row carries `safe` and `reason`: an uncertain (settled) row is
-safe to release and says so; a live row still holds the admission and must be
-settled first. Release answers `{ action: "release", op, audit: "gc_intent" }`;
+Every holder row carries `safe` and `reason`: `safe` means the row is
+uncertain (settled), so `release` is available; it is not a liveness verdict,
+and the operator confirms the holder is gone before releasing. A live row
+still holds the admission and must be settled first. Release answers `{ action: "release", op, audit: "gc_intent" }`;
 preview answers the holders plus `{ action: "preview", op: null, audit: null
 }`; list answers the holders alone; list, preview, settle and `settle_legacy`
 are in the home's `trace/calls.jsonl` call log only. `--operator` is the local name
