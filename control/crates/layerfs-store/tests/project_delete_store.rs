@@ -206,7 +206,7 @@ fn main_resolves_to_the_branch_add_project_recorded() {
         panic!("no items: {listed:?}");
     };
     assert_eq!(items.len(), 1, "{listed:?}");
-    assert_eq!(items[0].get_text("name"), Some("main"));
+    assert_eq!(items[0].get_text("branch"), Some("main"));
     let wanted = recorded.to_string();
     assert_eq!(items[0].get_text("id"), Some(wanted.as_str()), "{listed:?}");
     let _ = std::fs::remove_dir_all(&home);
