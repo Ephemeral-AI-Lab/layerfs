@@ -330,7 +330,9 @@ impl<'a> SharedIntent<'a> {
         let intent = owned(intent, op);
         let admitted = match catalog.gc_register(&intent) {
             Ok(()) => true,
-            Err(layerfs_history::HistoryError::Unsupported(_)) => false,
+            // Only a catalog with no admission at all proceeds unadmitted; a
+            // real provider's `Unsupported` (a pooled connection) refuses.
+            Err(error) if error.no_admission() => false,
             Err(error) => {
                 return Err(lookup::history_in(
                     error,

@@ -609,7 +609,8 @@ impl Effects for Local {
                     Ok(()) => Ok(Admission::new(stack, op)),
                     // A provider without admission cannot exclude a removal; the
                     // marker's own admission still runs, as it did before T6.
-                    Err(HistoryError::Unsupported(_)) => Ok(Admission::new(stack, op)),
+                    // A real provider's own `Unsupported` refuses (#776 C1).
+                    Err(error) if error.no_admission() => Ok(Admission::new(stack, op)),
                     Err(error) => Err(lookup::history_in(
                         error,
                         GcScopeKind::Project,
@@ -793,8 +794,9 @@ pub fn admit_project(root: &Path, frame: &DeleteAdmitFrame) -> Outcome {
         match service.store.history().gc_register(&intent) {
             Ok(()) => Ok(admitted(frame.stack)),
             // A provider without admission cannot exclude a removal; the
-            // marker still admits, as it did before T6.
-            Err(HistoryError::Unsupported(_)) => Ok(admitted(frame.stack)),
+            // marker still admits, as it did before T6. A real provider's
+            // own `Unsupported` refuses (#776 C1).
+            Err(error) if error.no_admission() => Ok(admitted(frame.stack)),
             Err(error) => {
                 let entity = project.unwrap_or_else(|| hex(frame.stack.as_slice()));
                 Err(lookup::history_in(

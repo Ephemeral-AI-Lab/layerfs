@@ -233,6 +233,15 @@ impl HistoryCatalog for HistoryProvider {
         }
     }
 
+    fn pass_publication_lane(&self) -> HistoryResult<()> {
+        match &self.engine {
+            // A SQLite publication runs in this process: once its COMMIT has
+            // answered, even with an error, nothing applies it later.
+            crate::backend::Engine::Sqlite(_) => Ok(()),
+            crate::backend::Engine::Postgres(session) => Ok(session.pass_lane()?),
+        }
+    }
+
     fn commit_branch(&self, request: &CommitRequest) -> HistoryResult<CommitOutcome> {
         self.write(|tx| commit::commit_branch(tx, request))
     }

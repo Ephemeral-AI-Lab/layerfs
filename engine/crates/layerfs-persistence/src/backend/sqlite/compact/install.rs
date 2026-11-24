@@ -244,7 +244,11 @@ pub(crate) fn clear_installed_mark(store: &Path, op_id: &[u8; 16]) -> bool {
     ) else {
         return false;
     };
-    let _ = connection.busy_timeout(std::time::Duration::from_secs(5));
+    // No busy handler (#776 C4): the caller holds the lane, so a writer that
+    // follows the rules is not here; anything else is an exact `Busy`.
+    if connection.busy_timeout(std::time::Duration::ZERO).is_err() {
+        return false;
+    }
     let cleared = connection
         .execute_batch(&format!(
             "BEGIN IMMEDIATE;DELETE FROM gc_intent WHERE op_id=x'{}';DELETE FROM kept_node;COMMIT;",

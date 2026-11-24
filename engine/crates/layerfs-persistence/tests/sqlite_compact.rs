@@ -2283,3 +2283,92 @@ AND l.record_number=v.record_number",
     drop(connection);
     std::fs::remove_file(&scratch).unwrap();
 }
+
+/// #776 S2: a seal refused because another connection keeps the sidecars is a
+/// definite failure, and its cleanup (the intent and `kept_node` delete, the
+/// op record) is a write to the live Store. The seal now hands the writer
+/// lane back, so the cleanup runs under it: a writer waiting on the lane gets
+/// it only once the cleanup is done. Before the fix the lane was let go
+/// inside the seal; that writer took it and held a write transaction, the
+/// lane-less cleanup met it and gave up, and the intent and op record stayed.
+#[test]
+fn a_refused_seal_cleans_up_under_the_writer_lane() {
+    use nix::fcntl::{Flock, FlockArg};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the rebuild would collect");
+    // An in-process connection keeps `-wal` and `-shm` past the seal's close.
+    let held = rusqlite::Connection::open(&path).unwrap();
+    let _: i64 = held
+        .query_row("SELECT count(*) FROM pack", [], |row| row.get(0))
+        .unwrap();
+
+    let directory = path.parent().unwrap().to_path_buf();
+    let store = path.clone();
+    let (stop, stopped) = mpsc::channel::<()>();
+    let (acquired, acquisition) = mpsc::channel::<Instant>();
+    let competitor = std::thread::spawn(move || {
+        // Wait for the compaction's lane, then queue behind it.
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let probe = std::fs::File::open(&directory).unwrap();
+            match Flock::lock(probe, FlockArg::LockExclusiveNonblock) {
+                Ok(free) => drop(free),
+                Err(_) => break,
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the compaction never took the lane"
+            );
+            std::thread::sleep(Duration::from_micros(200));
+        }
+        let lane = Flock::lock(
+            std::fs::File::open(&directory).unwrap(),
+            FlockArg::LockExclusive,
+        )
+        .map_err(|(_, errno)| errno)
+        .unwrap();
+        acquired.send(Instant::now()).unwrap();
+        // An admitted writer: one write transaction, held a while.
+        let writer = rusqlite::Connection::open(&store).unwrap();
+        writer.busy_timeout(Duration::ZERO).unwrap();
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let _ = stopped.recv_timeout(Duration::from_secs(8));
+        writer.execute_batch("COMMIT").unwrap();
+        drop(writer);
+        drop(lane);
+    });
+
+    let error = handles.compact(&request(48)).unwrap_err();
+    let returned = Instant::now();
+    assert!(
+        matches!(
+            error,
+            HistoryError::Conflict("Store sidecar remains after seal")
+        ),
+        "{error:?}"
+    );
+    let intents: i64 = held
+        .query_row(
+            "SELECT count(*) FROM gc_intent WHERE op_id = ?1",
+            [[48u8; 16].to_vec()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(intents, 0, "the definite failure released its intent");
+    assert!(!op_path(&path).exists(), "and removed its op record");
+    stop.send(()).unwrap();
+    let got = acquisition
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the waiting writer got the lane");
+    assert!(
+        got >= returned - Duration::from_millis(50),
+        "the waiting writer got the lane before the cleanup finished"
+    );
+    competitor.join().unwrap();
+    drop(held);
+}

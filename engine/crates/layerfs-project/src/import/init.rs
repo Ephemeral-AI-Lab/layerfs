@@ -116,8 +116,9 @@ pub fn init_observed(
     let admitted = match catalog.gc_register(&intent) {
         Ok(()) => true,
         // A catalog without admission cannot exclude a removal; Init still
-        // proceeds, as it did before #41 T6.
-        Err(layerfs_history::HistoryError::Unsupported(_)) => false,
+        // proceeds, as it did before #41 T6. A real provider's own
+        // `Unsupported` (a pooled connection) refuses Init (#776 C1).
+        Err(error) if error.no_admission() => false,
         Err(error) => {
             return Err(ProjectError::History(
                 error.with_unknown(init_unknown_state(request.name.as_str(), Some(op))),

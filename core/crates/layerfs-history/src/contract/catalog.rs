@@ -327,6 +327,18 @@ pub trait HistoryCatalog: Send + Sync {
         Ok(PublishLane(None))
     }
 
+    /// Returns once every publication that held this Store's lane when the
+    /// call began has ended, committed or rolled back, on a connection of its
+    /// own: a lost `COMMIT` reply may leave the server still applying it, and
+    /// nothing may judge that publication's outcome before then (#776 C2). It
+    /// takes and releases the lane, writes nothing and keeps nothing; a wait
+    /// that reaches the provider's lock timeout is `Busy`. The default returns
+    /// at once: a provider whose publications cannot complete after their
+    /// caller gave up (an in-process SQLite file, a test double) has none.
+    fn pass_publication_lane(&self) -> HistoryResult<()> {
+        Ok(())
+    }
+
     /// Publishes one saved candidate as a Commit against the expected Branch
     /// head in one write transaction. A moved head is `HeadMoved` unless the
     /// request forces an overwrite. UpToDate compares the current root.
@@ -483,21 +495,27 @@ pub trait HistoryCatalog: Send + Sync {
     /// The default refuses: a provider without admission cannot make the
     /// `MountsActive`/`Busy`/`Unresolved` promise.
     fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// Releases one admission intent, deleting its row.
     ///
     /// The default refuses; a provider that never registered one is unaffected.
     fn gc_release(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// Marks one admission intent uncertain, so a later call reports
     /// `Unresolved` until its owner settles it. Returns `false` when no live
     /// or uncertain row has the op (none, or one already retained `done`).
     fn gc_mark_uncertain(&self, _op_id: &[u8; 16]) -> HistoryResult<bool> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// Retains one released admission intent as the durable `done` audit row:
@@ -584,7 +602,9 @@ pub trait HistoryCatalog: Send + Sync {
         _scope_kind: GcScopeKind,
         _scope_id: &[u8],
     ) -> HistoryResult<Vec<GcIntent>> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// What admission would say of each of `intents` now, in order: the
@@ -594,7 +614,9 @@ pub trait HistoryCatalog: Send + Sync {
     /// `preview` report it and its `settle` refuses a holder still `Live`
     /// unless forced. The default refuses.
     fn gc_liveness(&self, _intents: &[GcIntent]) -> HistoryResult<Vec<crate::Liveness>> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// One bounded page of retained `done` admission rows, oldest first, for

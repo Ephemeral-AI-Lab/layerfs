@@ -164,10 +164,11 @@ impl Store {
                 Ok(()) => {
                     gc_op = Some(intent.op_id);
                 }
-                // A provider without admission cannot exclude a removal; it
-                // is a test double or a legacy wrapper, never this service's
-                // real Store provider.
-                Err(layerfs_history::HistoryError::Unsupported(_)) => {}
+                // A catalog with no GC admission at all (a test double) cannot
+                // exclude a removal. The real provider's own `Unsupported`,
+                // such as a transaction-pooled PostgreSQL connection that
+                // cannot keep a session key, refuses the mount (#776 C1).
+                Err(error) if error.no_admission() => {}
                 Err(error) => return Err(BindError::History(error)),
             }
             phase = BindPhase::Root;

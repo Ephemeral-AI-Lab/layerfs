@@ -160,6 +160,22 @@ live by its recorded process, not by this connection. A diagnostic driver
 keeps its read-only connection, whose deadline and cancellation outcome are
 still read ([`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs)).
 
+A mount, a compaction claim and their registrations keep session advisory
+keys (Store, project and Branch) across statements
+([`admission/session.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/session.rs)).
+Each lock and unlock is one autocommit statement outside the generation
+fence: a fenced statement would take or drop the key and then answer
+`Stale`, leaving it held with no intent row behind it. Every exit after a
+key may have been taken unlocks it with the keys before it, and an unlock
+goes on through every key, returning its first failure. A key granted on a
+backend other than the session's own is a transaction-pooling proxy:
+the call is `Unsupported("transaction-pooled PostgreSQL connection")`, and
+mount, merge, Init and the removals refuse it rather than run unadmitted.
+Only a catalog with no GC admission at all (`HistoryError::no_admission`)
+lets them proceed. A refused shared key reports its exclusive holder (a
+compaction or removal row, or else the key's backend as `BusyOp`), never
+peer mount rows.
+
 ## Transactions
 
 | `Mode` | `BEGIN` | Lane row | Used by |
@@ -170,7 +186,7 @@ still read ([`connection.rs`](../../../../engine/crates/layerfs-persistence/src/
 | `Publish` | as `Write` | `FOR UPDATE` and the lane barrier after the pack bodies; nested: as a nested `Write` | one Save publication, up to 16 MiB − 1 |
 | `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values |
-| `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
+| `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents); unfenced, the GC session advisory keys |
 
 Source: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs),
 [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs).

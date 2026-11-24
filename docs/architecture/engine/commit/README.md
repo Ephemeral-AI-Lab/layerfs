@@ -60,7 +60,7 @@ step `merge.lane.changed`).
 | Capture | `Overlay::capture` copies no rows: `active` G becomes `captured`, G+1 becomes active, `captured_revision` is frozen, dirty counts restart; `base_root` is unchanged until install | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
 | Capture readiness | Waits (lock released) while earlier reply attempts are unrecorded or a failed capture is still folding back; mutations arriving meanwhile queue behind the capture (`behind_frontier`), so the frontier is finite. A wait is readiness, not a retry | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) |
 | Captured reads | `OverlayCapturedNamespace` and `OverlayCapturedRuns` over the `CapturedReader`: pages of at most `PAGE_ROWS` rows in key order, run windows of at most `READ_WINDOW`; later active writes cannot change them | [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/src/ports/captured_namespace.rs), [`captured_namespace_port.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/captured_namespace_port.rs), [`captured_run_port.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/captured_run_port.rs) |
-| No change, head unchanged | `UpToDate` with no capture, Save, lane or install: no dirty rows, no capture or consolidation, base root equals the bound root, no pending conflict, head and base Layer unchanged | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| No change, head unchanged | `UpToDate` with no capture, Save, lane or install: no dirty rows, no capture or consolidation, base root equals the bound root, no pending conflict, head and base Layer unchanged; with `expected`, another head is `HeadMoved` here too | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Candidate equals the head's root | `commit_branch` answers `CommitOutcome::UpToDate`; capture, construction and Save ran and the base is still installed. No Commit record is created | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Head unchanged | `Committed` against the head the Workspace bound | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Head moved, `force` false | `merge_candidate`: `merge_roots(base, ours, theirs)` in the Commit's own Save, before the lane; published against the head it merged with (`MergeReport`) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
@@ -149,22 +149,36 @@ The Workspace's next Commit request runs `BoundWorkspace::resolve_retained`
 once, before its own admission (daemon
 [`resolve.rs`](../../../../engine/crates/layerfs-daemon/src/control/resolve.rs),
 activity `Committing`, phase `resolve`). It is not a retry: nothing is
-resent, the head is read once and the record is used once, whatever it finds.
+resent. An attempt that determines the publication's outcome uses the record
+whatever its local step finds; one that cannot determine it puts the record
+back, so the next request reads again instead of the Workspace refusing every
+Commit with nothing left to resolve.
 
-| Head read through the control reader | Step | Then |
+Before history is read the attempt passes the Store's publication lane
+(`HistoryCatalog::pass_publication_lane`). On PostgreSQL a COMMIT whose reply
+was lost may still be applying on the server; a non-nested publication holds
+the lane row and a nested one the barrier key until its transaction ends, so
+a fresh connection that takes the lane row and then the barrier exclusively,
+both under `lock_timeout`, and rolls back, proves the original has ended. A
+wait that reaches the timeout is `Busy`, an undetermined attempt. On SQLite
+the publication ran in this process and the pass returns at once.
+
+| History read through the control reader | Step | Then |
 | --- | --- | --- |
 | Publication already known | Install its root (same validation, live check and mutation hold as a merged install) | Custody released, `Idle`; the Commit is admitted |
-| A Commit with our candidate root, parent and base Layer equal to the head and base we published against | Install it, as above | As above |
-| Still the head we published against, with another root | Nothing was published: `resolve_failed` folds the capture back | As above |
+| Head and base still the ones we published against, with another root | Nothing was published: `resolve_failed` folds the capture back | As above |
 | Still that head, with our root | `UpToDate`: install it | As above |
-| Anything else, a failed read, or a failed install or fold-back | None | Custody stays (`LocalFailure` once a publication is known, else as it was); the Commit is refused `Unknown` with the reason |
+| Moved head whose first-parent chain holds our Commit (our candidate root, parent and base Layer equal to the head and base we published against), or a forced Commit that displaced it | Install it, as above | As above |
+| Moved head whose first-parent chain reaches the head we published against through Commits all made on this Branch, displacing nothing, over the same base | Nothing was published: fold back, as above | As above |
+| A forced Commit displacing another head, a Commit from another Branch (a merge fast-forward), a moved base, more than 1,024 Commits, a failed read, or a lane that does not pass | None; the record is put back | Custody stays as it was; the Commit is refused `Unknown` with the reason |
+| A failed install or fold-back after a determined outcome | None | Custody stays (`LocalFailure` once a publication is known); the Commit is refused `Unknown` with the reason |
 
-The head is read on the control reader's own connection, so a writer session
-that the unknown outcome quarantined does not stop it. The read follows the
-next Commit request, not the failure. On PostgreSQL a COMMIT whose
-connection was lost may still finish on the server shortly after; reading
-the old head then folds the capture back, and the next Commit finds the
-head moved and merges the kept change with it. A known
+Every head move keeps the previous head on the new head's first-parent chain
+(an advance's parent is the head it read), except a forced Commit, which
+records the head it displaced, and a merge fast-forward, which brings in
+another Branch's Commits; the walk stops undetermined at either rather than
+guess. History is read on the control reader's own connection, so a writer
+session that the unknown outcome quarantined does not stop it. A known
 install after a merge with overlapping live rows is refused like a
 Commit's own (`LiveConflict` in the reason), and the custody stays.
 
@@ -213,9 +227,9 @@ construction state lives in indexed operation records.
 | [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/tests/captured_namespace.rs) | `cargo +1.85.1 test --locked -p layerfs-workspace --test captured_namespace` | any | One captured reader becomes one complete root; mutations after the capture land only in the next |
 | [`mounted_install.rs`](../../../../engine/crates/layerfs-daemon/tests/mounted_install.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test mounted_install` | Linux, `/dev/fuse` | Installing the Workspace's own root sends no notification; the mount reads the same through open descriptors, caches and `O_DIRECT` |
 | [`commit_settle.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_settle.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_settle` | any | A failure before publication folds back; local uncertainty keeps custody; a conflicted merge takes no lane |
-| [`commit_expected.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_expected.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_expected` | any | `--expected` is checked inside the publication; `--force` publishes over the head read in the lane |
+| [`commit_expected.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_expected.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_expected` | any | `--expected` is checked inside the publication and by a clean Workspace's `UpToDate`; `--force` publishes over the head read in the lane |
 | [`commit_live_merge.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_live_merge.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_live_merge` | any | A merged install that overlaps rows written after the capture is refused `LiveConflict`; one with no overlap publishes |
-| [`store_commit.rs`](../../../../engine/crates/layerfs-daemon/tests/store_commit.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test store_commit` | any | Custody and settle by phase; one resolution of an unknown outcome installs a landed Commit, folds a lost one back and leaves a moved head retained |
+| [`store_commit.rs`](../../../../engine/crates/layerfs-daemon/tests/store_commit.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test store_commit` | any | Custody and settle by phase; one resolution of an unknown outcome installs a landed Commit (also under a later one), folds a lost one back (also under a moved head) and keeps the record when a forced Commit leaves it undetermined |
 
 Run each under a wall timeout of at most 120 s.
 

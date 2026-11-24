@@ -344,19 +344,30 @@ impl SqliteHandles {
             let mut guard = WriterGuard::new(lane.into_writer());
             let session = match Arc::try_unwrap(session) {
                 Ok(session) => session,
-                Err(_) => {
+                Err(shared) => {
                     // A definite failure before the seal: the live Store is
                     // unchanged, so its intent is released and the op record
                     // removed. A held clone elsewhere is `Busy`, never unknown.
                     abort_before_install(&store, &op_id, true);
+                    // The lane goes first: the other holder may have let go
+                    // meanwhile, making this clone the last, and its close
+                    // waits for the lane this thread holds (#776 S1).
+                    let released = guard.release();
+                    drop(shared);
+                    released?;
                     return Err(HistoryError::Busy);
                 }
             };
             let writer = guard.take();
             let (facts, writer) = match session.seal_holding(writer) {
                 Ok(sealed) => sealed,
-                Err(error) => {
-                    let mapped = seal_error(error);
+                Err(failure) => {
+                    // The seal hands the lane back, so the cleanup below
+                    // writes under it (#776 S2).
+                    if let Some(writer) = failure.writer {
+                        guard.put(writer);
+                    }
+                    let mapped = seal_error(failure.error);
                     if !mapped.unknown() {
                         // Definite: nothing was installed, so the run leaves no
                         // op record and no live intent behind.

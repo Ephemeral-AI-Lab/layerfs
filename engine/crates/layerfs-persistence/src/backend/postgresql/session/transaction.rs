@@ -297,6 +297,17 @@ impl Session {
         self.run_as(Mode::Statement, body)
     }
 
+    /// [`Self::read_statement`] without the generation fence, for a session
+    /// advisory lock or unlock: it acts on this server session, not on the
+    /// Store's rows, and a fenced form would take or drop the lock and then
+    /// answer `Stale`, leaving the caller unaware of the change (#776 P2).
+    pub(crate) fn session_statement<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.run_mode(Mode::Statement, false, body)
+    }
+
     pub(crate) fn run_as<T, E: From<BackendError> + OutcomeError>(
         &self,
         mode: Mode,
