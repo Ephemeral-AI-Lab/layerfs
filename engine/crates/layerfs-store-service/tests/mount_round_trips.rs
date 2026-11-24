@@ -135,18 +135,28 @@ const POSTGRESQL: &[Pin] = &[
 // statement for the Branch, its roots and its project epoch in
 // `commit_branch` (three before), and one publication at a Save's finish
 // for its last wave and its sealed tail (two before).
+//
+// #768's stage-1 cuts then took three reads off a real Commit. Validation
+// checks the candidate from the objects its construction built, not read
+// back through the Workspace reader (5 statements before, on both Commits).
+// The whiteout step uses the bound node's markers read at mount, and a
+// Commit this Workspace published hides nothing: no control read (3
+// statements, 1 transaction before, on both). `logical.known` answers the
+// size of the Commit this Workspace published from memory: the second
+// Commit's writer drops its Read transaction (38/7 before); the first still
+// reads the base Layer's, which the bind snapshot does not carry.
 const SQLITE_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
         writer: [0, 0, 46, 9],
-        control: [0, 0, 3, 1],
-        workspace: [0, 0, 5, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 0, 38, 7],
-        control: [0, 0, 3, 1],
-        workspace: [0, 0, 5, 0],
+        writer: [0, 0, 35, 6],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.up_to_date",
@@ -180,18 +190,26 @@ const SQLITE_COMMIT: &[Pin] = &[
 // The first Commit also prepares the new joined statement once fewer than
 // the three it replaces. Ledger and rules: `docs/architecture/engine/store/
 // postgresql.md`, "Commit round trips".
+//
+// The stage-1 cuts (see the SQLite pins) then took the validation read-back
+// (5 round trips, 5 statements before, on both Commits) and the whiteout
+// read (first [1, 3, 2, 0] with the control reader's connect, second
+// [0, 1, 1, 0]) off both Commits, so no Commit here opens the control
+// reader; and `logical.known` off the second Commit's writer ([0, 32, 19,
+// 4] before: that read was the Commit-row statement's first use on this
+// session, a prepare and its execution, so 2 round trips; 1 once warm).
 const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
         writer: [1, 54, 23, 5],
-        control: [1, 3, 2, 0],
-        workspace: [0, 5, 5, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 32, 19, 4],
-        control: [0, 1, 1, 0],
-        workspace: [0, 5, 5, 0],
+        writer: [0, 30, 18, 4],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.up_to_date",
@@ -232,6 +250,18 @@ fn sqlite_commit_counts() {
 fn postgresql_commit_counts() {
     if let Some(measured) = on_postgresql("postgresql-commit", "commit", commit_scenarios) {
         check("postgresql", &measured, POSTGRESQL_COMMIT);
+    }
+}
+
+#[test]
+fn sqlite_merge_commit_validates_through_the_reader() {
+    check_merge("sqlite", &on_sqlite("sqlite-merge", merge_scenarios));
+}
+
+#[test]
+fn postgresql_merge_commit_validates_through_the_reader() {
+    if let Some(measured) = on_postgresql("postgresql-merge", "merge", merge_scenarios) {
+        check_merge("postgresql", &measured);
     }
 }
 
@@ -528,6 +558,92 @@ fn commit_scenarios(
     measure(&opened, "unmount", &mut out, || opened.unmount(workspace));
     opened.stop();
     out
+}
+
+/// Two Workspaces on Branch `work`: the first Commits `/a`; the second,
+/// bound before it, Commits `/b` over the moved head. Its merge builds the
+/// root it publishes outside construction, so validation reads that root
+/// through the Workspace reader (the fallback for objects construction did
+/// not build) and the install still succeeds with both files. The second
+/// Workspace's next Commit, over the merge it published, validates from
+/// what it built again.
+fn merge_scenarios(
+    dir: &Path,
+    selection: &dyn Fn() -> StoreSelection,
+    branch: BranchId,
+) -> Vec<Measured> {
+    let mut out = Vec::new();
+    let opened = Opened::open(dir, selection(), "d");
+    let first = opened.by_id(5, branch);
+    let second = opened.by_id(6, branch);
+    let write = |workspace: &BoundWorkspace, path: &str| {
+        let mut change = Mutation::new(workspace).unwrap();
+        change.write(path, b"merged\n", None).unwrap();
+        change.finish().unwrap();
+    };
+    let commit = |workspace: &BoundWorkspace| {
+        workspace
+            .commit_captured(&CommitOptions {
+                force: false,
+                message: Some("merge validation".to_owned()),
+                expected: None,
+            })
+            .unwrap_or_else(|failure| panic!("commit: {failure}"))
+    };
+    write(&first, "/a");
+    commit(&first);
+    write(&second, "/b");
+    let merged = measure(&opened, "commit.merge", &mut out, || commit(&second));
+    assert!(merged.merge.is_some(), "the head moved: a merge runs");
+    assert!(
+        matches!(merged.history, Some(CommitOutcome::Committed { .. })),
+        "{:?}",
+        merged.history
+    );
+    let view = Mutation::new(&second).unwrap();
+    for path in ["/a", "/b", "/seed"] {
+        assert!(view.optional(path).unwrap().is_some(), "{path} installed");
+    }
+    // Its base source is released only by `finish`; a held one would keep
+    // the next install waiting.
+    view.finish().unwrap();
+    write(&second, "/c");
+    let after = measure(&opened, "commit.after_merge", &mut out, || commit(&second));
+    assert!(after.merge.is_none(), "over its own head: no merge");
+    assert!(
+        matches!(after.history, Some(CommitOutcome::Committed { .. })),
+        "{:?}",
+        after.history
+    );
+    opened.unmount(first);
+    opened.unmount(second);
+    opened.stop();
+    out
+}
+
+/// The merge's validation read through the Workspace reader; the Commit
+/// after it read nothing there.
+fn check_merge(backend: &str, measured: &[Measured]) {
+    for m in measured {
+        println!(
+            "MERGE_COUNTS {{\"backend\":\"{backend}\",\"scenario\":\"{}\",\"writer\":{:?},\"control\":{:?},\"workspace\":{:?}}}",
+            m.scenario, m.counts[0], m.counts[1], m.counts[2]
+        );
+    }
+    let [merge, after] = measured else {
+        panic!("two scenarios");
+    };
+    assert_eq!(merge.scenario, "commit.merge");
+    assert!(
+        merge.counts[2][2] > 0,
+        "{backend}: the merged root is read back through the Workspace reader"
+    );
+    assert_eq!(after.scenario, "commit.after_merge");
+    assert_eq!(
+        after.counts[2],
+        [0, 0, 0, 0],
+        "{backend}: validated from the built objects"
+    );
 }
 
 /// Prints every scenario, then compares each with its pin.

@@ -607,7 +607,7 @@ intent; merge, Init and the removals follow the same rule
 
 | Test | Command | Checks |
 | --- | --- | --- |
-| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched. Also a mounted Workspace's first and second one-file Commit, an UpToDate Commit and the unmount: the Commit's whiteout read is one statement on the control reader (4 round trips fewer on the first Commit and 3 on later ones than the two reads before #768), which the first Commit opens |
+| [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched. Also a mounted Workspace's first and second one-file Commit, an UpToDate Commit and the unmount: no Commit reads on the control or Workspace reader (whiteout facts kept from the mount, validation from the built objects). A merge Commit reads the merged root back through the Workspace reader, and the Commit after it reads nothing there |
 | [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller of a mount; a catalog without admission still mounts. `a_pooled_connection_refuses_a_shared_intent`: the same for a merge |
 
 ### Commit round trips
@@ -618,32 +618,35 @@ the Save and its publication, the logical count, the binding hints and the
 validation. In the lane it checks the head and publishes. Measured with
 `log_statement=all` on a one-file change (`mount_round_trips.rs`, warm
 statements), the second Commit of a mounted Workspace cost 46 round trips
-before #768's Commit cuts and 36 after:
+before #768's Commit cuts, 36 after them and 29 after the stage-1 cuts
+(column `stage 1`, notes (f) to (h); derived from the cuts
+`mount_round_trips.rs` pins per session, not re-measured with
+`log_statement`):
 
 ```text
- before the lane                                         before after
-   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3
-   file digests, every row below the floor (empty Write)     2   0  (a)
-   base pack and inode values (construct)                    2   2
-   whiteout read (control reader)                            1   1
-   head: branch_snapshot                                     1   1
-   logical.known: the head Commit                            1   1
-   finish: locate                                            1   1
-   finish: the last wave's publication (values only)         4   0  (b)
-   finish: sealed tail (BEGIN, COPY 2, lane, rows, COMMIT)   6   6
-   logical.count reads                                       2   2
-   binding hints (Write: BEGIN+lane row, INSERT, COMMIT)     3   3
-   validate (Workspace reader)                               5   5
+ before the lane                                         before after stage 1
+   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3   3
+   file digests, every row below the floor (empty Write)     2   0   0  (a)
+   base pack and inode values (construct)                    2   2   2
+   whiteout read (control reader)                            1   1   0  (h)
+   head: branch_snapshot                                     1   1   1
+   logical.known: the head Commit                            1   1   0  (g)
+   finish: locate                                            1   1   1
+   finish: the last wave's publication (values only)         4   0   0  (b)
+   finish: sealed tail (BEGIN, COPY 2, lane, rows, COMMIT)   6   6   6
+   logical.count reads                                       2   2   2
+   binding hints (Write: BEGIN+lane row, INSERT, COMMIT)     3   3   3
+   validate (Workspace reader)                               5   5   0  (f)
  in the lane
-   hold_lane BEGIN batch                                     1   1  (c)
-   head.lane: branch_snapshot                                1   0  (c)
-   commit_branch BEGIN batch                                 1   1
-   Branch probe, epoch read, Branch re-read                  3   1  (d)
-   serial, Commit insert, parent line, lineage, advance      5   5
-   epoch FOR SHARE                                           1   1
-   lane check (lane connection), COMMIT                      2   1  (e)
-   lane ROLLBACK                                             1   1
- total                                                      46  36
+   hold_lane BEGIN batch                                     1   1   1  (c)
+   head.lane: branch_snapshot                                1   0   0  (c)
+   commit_branch BEGIN batch                                 1   1   1
+   Branch probe, epoch read, Branch re-read                  3   1   1  (d)
+   serial, Commit insert, parent line, lineage, advance      5   5   5
+   epoch FOR SHARE                                           1   1   1
+   lane check (lane connection), COMMIT                      2   1   1  (e)
+   lane ROLLBACK                                             1   1   1
+ total                                                      46  36  29
 ```
 
 - (a) `record_file_digests` returns before opening a transaction when every
@@ -670,6 +673,24 @@ before #768's Commit cuts and 36 after:
   (the `FOR SHARE` re-check sees the new epoch: `Conflict`). The probe and
   re-read existed only to close the gap between two snapshots.
 - (e) [Lane barrier](#lane-barrier).
+- (f) `validate_candidate` checks the candidate from the objects its
+  construction built (`ConstructedObjects`, through `captured.rs` `Built` and
+  a private cache allowance), not read back through the Workspace reader
+  (owner decision, #768). An object construction did not build or did not
+  keep (a merge's or whiteout step's, an inherited base object, one past the
+  staging bound) is read through the ordinary Workspace client as before.
+  Same checks: decode, `checked_base`, root inode identity,
+  `prepare_base_install`; the prepared install gets the ordinary client
+  back, and the built bytes reach the shared cache only after publication.
+- (g) `logical.known`: the Workspace keeps one node's recorded logical size,
+  the one it last read or published (`BoundWorkspace::known_logical`); a
+  Commit over its own last Commit reads nothing. The bind snapshot carries
+  no size, so the first Commit after a mount still reads it.
+- (h) The whiteout step reuses the bound node's serial and markers that the
+  mount read (`KnownRemovals`), and a Commit this Workspace published hides
+  nothing: its serial is above every marker's frontier, and while the mount
+  admission is registered every marker write refuses `MountsActive`. Any
+  other node, or a catalog with no admission, is read as before.
 
 Checked and not done:
 

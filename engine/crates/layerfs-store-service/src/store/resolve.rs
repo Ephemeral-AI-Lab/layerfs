@@ -209,7 +209,7 @@ impl BoundWorkspace {
             .base()
             .map_err(|error| unresolved(known(), format!("base: {error}")))?;
         let mut prepared = self
-            .validate_candidate(&target, candidate, kept.capture, &base)
+            .validate_candidate(&target, candidate, kept.capture, &base, None)
             .map_err(|error| unresolved(known(), format!("validate: {error:?}")))?;
         let held = match &kept.merged_over {
             Some((ours, changed)) => {

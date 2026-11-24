@@ -29,6 +29,14 @@ impl PreparedBase {
         self.merged = changed;
         self
     }
+    /// The same prepared root over `client`: a preparer that read through an
+    /// operation-local provider hands the install the ordinary one. The
+    /// checked root metadata is kept; nothing is read.
+    #[must_use]
+    pub fn with_client(mut self, client: std::sync::Arc<crate::CanonicalClient>) -> Self {
+        self.next = self.next.with_client(client);
+        self
+    }
 }
 impl Workspace {
     /// Demand/validate one new canonical root before acquiring install state.

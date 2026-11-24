@@ -48,7 +48,7 @@ step `merge.lane.changed`).
 | `Begin`: take the producer `Storage`, `begin_save` | none | [`producer.rs`](../../../../engine/crates/layerfs-store-service/src/store/producer.rs) |
 | `Construct`: captured namespace, head read, merge | Workspace lock per job only | [Construction](construction.md), [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | `Finish`: `Save::finish`, logical size, binding hints, then the lane | none, then the publication lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`hints.rs`](../../../../engine/crates/layerfs-store-service/src/store/hints.rs) |
-| `Validate`: `checked_base`, `prepare_base_install` | none (before the lane); again in the lane only after an in-lane merge changed the candidate | [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs), [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
+| `Validate`: `checked_base`, `prepare_base_install`, from the objects construction built, else through the Workspace reader; the install gets the ordinary client | none (before the lane); again in the lane only after an in-lane merge changed the candidate | [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs), [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
 | `Publish`: `commit_branch` | lane; one history write transaction | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | `Install` | Workspace lock and base write lock, one job | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
 

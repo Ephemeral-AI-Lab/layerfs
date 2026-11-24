@@ -12,13 +12,19 @@ pub struct BoundWorkspace {
     pub(super) identity: WorkspaceId,
     pub(super) workspace: Arc<Workspace>,
     /// The mount admission intent this Workspace must delete on unmount.
-    pub(super) gc_op: Option<[u8; 16]>,
+    pub(crate) gc_op: Option<[u8; 16]>,
     pub(super) committing: AtomicBool,
     pub(super) producer: super::producer::Producer,
     /// A conflicted merge installed locally and not yet committed.
     pub(super) pending: Mutex<Option<super::commit_merge::PendingMerge>>,
     /// A Commit's retained custody awaiting its one resolution (`resolve.rs`).
     pub(super) retained: Mutex<Option<super::resolve::RetainedCommit>>,
+    /// The logical size of one history node, the last one this Workspace
+    /// read or published (`statistics.rs`): a Commit's `logical.known`.
+    pub(super) logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
+    /// The whiteout facts of one node this Workspace knows without a read
+    /// while its mount admission excludes marker changes (`removal.rs`).
+    pub(crate) removals: Mutex<Option<crate::removal::KnownRemovals>>,
 }
 pub struct StoreOperation {
     workspace: Workspace,

@@ -12,8 +12,13 @@ use layerfs_history::{
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::{Active, TimingScope};
-use layerfs_workspace::WorkspaceError;
+use layerfs_workspace::{CanonicalCache, CanonicalClient, ConstructedObjects, WorkspaceError};
 use std::sync::{atomic::Ordering, Arc};
+
+/// The private cache allowance of one validation over a built set: the
+/// candidate's root, the pages down to its root inode and that directory's
+/// first page and attributes.
+const VALIDATION_CACHE_BYTES: usize = 4 * 1024 * 1024;
 
 /// The node a Branch answers as its head: its head Commit, else its base
 /// Layer (`branch get`, `--expected`).
@@ -72,6 +77,7 @@ impl BoundWorkspace {
         let result = crate::telemetry::timed("commit", |timing| {
             self.commit_admitted(
                 construct,
+                || None,
                 || (),
                 &CommitOptions::default(),
                 CommitVia::Workspace,
@@ -113,6 +119,10 @@ impl BoundWorkspace {
     /// publishes nothing: the merge, with marker blocks, is installed as the
     /// Workspace's local base and its history binding moves to the head.
     /// Each phase is a child of `timing`; untraced, it records nothing.
+    ///
+    /// `staged` lends validation what `construct` built, if it kept it
+    /// (`captured.rs`); its candidate is then checked from those bytes, not
+    /// read back from the Store.
     pub(super) fn commit_admitted(
         &self,
         construct: impl FnOnce(
@@ -120,6 +130,7 @@ impl BoundWorkspace {
             Capture,
             &BranchSnapshot,
         ) -> Result<FilesystemRootId, CommitError>,
+        staged: impl Fn() -> Option<Arc<ConstructedObjects>>,
         published: impl FnOnce(),
         options: &CommitOptions,
         via: CommitVia,
@@ -219,14 +230,17 @@ impl BoundWorkspace {
                     };
                 // §4.3: the candidate is a new node above the frontier, so
                 // an entry inherited unchanged from the bound base must be
-                // removed explicitly; a re-creation keeps its new inode.
+                // removed explicitly; a re-creation keeps its new inode. The
+                // bound node's markers are read only when this Workspace
+                // does not already know them (`removal.rs`).
                 let candidate = phase(timing, "removals", || {
+                    let found = self
+                        .commit_removals(snapshot.branch.stack, crate::removal::node_of(&snapshot))
+                        .map_err(crate::removal::commit_error)?;
                     crate::removal::materialize_commit(
-                        &self.store,
-                        snapshot.branch.stack,
                         &save,
                         FilesystemRootId(local),
-                        crate::removal::node_of(&snapshot),
+                        found,
                         candidate,
                     )
                     .map_err(crate::removal::commit_error)
@@ -276,7 +290,7 @@ impl BoundWorkspace {
                     .map(layerfs_history::NodeId::Commit)
                     .unwrap_or(layerfs_history::NodeId::Layer(current.branch.base_layer));
                 let known = phase(timing, "logical.known", || {
-                    self.store.logical_size(node).map_err(CommitError::History)
+                    self.known_logical(node).map_err(CommitError::History)
                 })?;
                 retained.phase = CommitPhase::Finish;
                 let saved = phase(timing, "finish", || {
@@ -308,7 +322,7 @@ impl BoundWorkspace {
                 retained.phase = CommitPhase::Validate;
                 let early_target = if merge.is_some() { &current } else { &snapshot };
                 let early = phase(timing, "validate", || {
-                    self.validate_candidate(early_target, root, capture, &original_base)
+                    self.validate_candidate(early_target, root, capture, &original_base, staged())
                 })?;
                 let early = (Self::target_key(early_target, root), early);
                 retained.phase = CommitPhase::Finish;
@@ -468,7 +482,7 @@ impl BoundWorkspace {
                 early.1
             } else {
                 phase(timing, "validate.lane", || {
-                    self.validate_candidate(target, candidate, capture, &original_base)
+                    self.validate_candidate(target, candidate, capture, &original_base, staged())
                 })?
             });
             // A merge installs a root other than our own. Rows written since
@@ -516,6 +530,14 @@ impl BoundWorkspace {
                     CommitOutcome::Committed { record, .. } => (Some(record.id), record.root),
                     CommitOutcome::UpToDate { head, root } => (*head, *root),
                 };
+                if let CommitOutcome::Committed { record, .. } = &outcome {
+                    // Facts of the published Commit, kept for the next one.
+                    self.remember_logical(
+                        NodeId::Commit(record.id),
+                        record.meta.statistics.logical,
+                    );
+                    self.published_removals(NodeId::Commit(record.id));
+                }
                 retained.published = Some(outcome);
                 if root != candidate.0 {
                     return Err(CommitError::Context(
@@ -565,20 +587,37 @@ impl BoundWorkspace {
     }
 
     /// Checks the candidate root as the next base of `target` and prepares
-    /// its local install; reads only immutable published objects, through
+    /// its local install; reads only immutable objects. What `built` holds
+    /// (the objects this Commit's construction built, which its Save has
+    /// finished) is checked from those bytes; anything else is read through
     /// the Workspace's own reader, opened at bind (#95: a Commit opens no
-    /// control reader for them).
+    /// control reader for them). The checks are the same either way, and the
+    /// install gets the ordinary client: the built set is not kept.
     pub(super) fn validate_candidate(
         &self,
         target: &BranchSnapshot,
         candidate: FilesystemRootId,
         capture: Capture,
         original_base: &layerfs_workspace::BaseView,
+        built: Option<Arc<ConstructedObjects>>,
     ) -> Result<layerfs_workspace::PreparedBase, CommitError> {
         let mut next = target.clone();
         next.effective_root = candidate.0;
         let ports = self.store.ports_for(target.scope, self.identity);
-        let client = ports.client();
+        let ordinary = ports.client();
+        // A private allowance: the built bytes reach the shared cache only
+        // once the Commit is published (`admit_constructed`).
+        let client = match built {
+            Some(objects) => Arc::new(CanonicalClient::with_cache(
+                Arc::new(super::captured::Built {
+                    objects,
+                    store: ordinary.clone(),
+                }),
+                Some(ports.clone()),
+                Arc::new(CanonicalCache::new(VALIDATION_CACHE_BYTES)),
+            )),
+            None => ordinary.clone(),
+        };
         let checked =
             checked_base(client.clone(), &next).map_err(|error| CommitError::Content {
                 error,
@@ -591,11 +630,13 @@ impl BoundWorkspace {
                 "candidate changes root inode identity",
             ));
         }
-        self.workspace
+        let prepared = self
+            .workspace
             .scoped(client)
             .map_err(CommitError::Workspace)?
             .prepare_base_install(capture, candidate)
-            .map_err(CommitError::Workspace)
+            .map_err(CommitError::Workspace)?;
+        Ok(prepared.with_client(ordinary))
     }
 
     /// What a validation depends on: the target's head, base, root, scope
