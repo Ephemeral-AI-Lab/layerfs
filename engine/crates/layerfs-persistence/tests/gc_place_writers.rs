@@ -235,8 +235,9 @@ fn an_unordered_value_that_differs_is_never_dead() {
     let reconcile = history
         .gc_reconcile_machine("machine-6", "worker:2")
         .unwrap();
+    // Values that cannot be related are no evidence: held and live.
     assert!(reconcile.settled.is_empty());
-    assert_eq!((reconcile.held, reconcile.uncertain), (1, 1));
+    assert_eq!((reconcile.held, reconcile.uncertain), (1, 0));
 }
 
 /// A mount registration does what it did before place evidence: it scans
@@ -272,8 +273,8 @@ fn a_mount_registration_settles_no_other_mount_row() {
     assert_eq!(reconcile.settled, vec![op(7)]);
 }
 
-/// Another home's `machine-10` is not this home's: its newer incarnation
-/// leaves this home's mount held and uncertain, never settled.
+/// Another home's `machine-10` is not this home's: its newer incarnation is
+/// no evidence, so this home's mount stays held and live, never settled.
 #[test]
 fn another_homes_incarnation_never_settles_a_mount() {
     let temp = Temp::new("gc-place-writers-home");
@@ -294,7 +295,7 @@ fn another_homes_incarnation_never_settles_a_mount() {
         .gc_reconcile_machine("machine-10", &other_home)
         .unwrap();
     assert!(reconcile.settled.is_empty());
-    assert_eq!((reconcile.held, reconcile.uncertain), (1, 1));
+    assert_eq!((reconcile.held, reconcile.uncertain), (1, 0));
 }
 
 #[test]

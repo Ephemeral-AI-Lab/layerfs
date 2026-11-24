@@ -6,9 +6,10 @@
 //! each Sandbox's current generation, and every machine-level `sandbox-retired`
 //! tombstone. A name missing from the view is no proof, never death.
 //!
-//! Only a call whose admission compares placed mount intents reads it: an
-//! exclusive operation's admission (a Branch removal, a project's file
-//! removal, a project delete) and a machine's start reconcile ([`admits`]).
+//! Only a call whose admission compares placed mount intents reads it: the
+//! exclusive removals named by [`admits`] (a Branch removal, a project's file
+//! removal), and a project delete and a machine's start reconcile, which
+//! install it through [`scoped`] directly.
 //! Every other Store call (reads, listings, file writes, merges) builds and
 //! sends none: their admission meets only operation intents, which carry no
 //! place, so a view could not change it.

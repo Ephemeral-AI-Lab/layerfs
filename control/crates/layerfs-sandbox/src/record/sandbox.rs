@@ -49,13 +49,20 @@ pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
 /// Sandbox compares greater than every earlier one even after the wall clock
 /// stepped backwards, and admission can tell a retired generation from the
 /// current one. A tombstone names this value, so retiring an old generation
-/// never retires a Sandbox recreated under the same name.
+/// never retires a Sandbox recreated under the same name. The floor is best
+/// effort: an unreadable earlier record or tombstone adds no floor rather
+/// than refusing the create (a tombstone newer than the live record is
+/// uncertain, never dead, in admission).
 fn generation(home: &Path, name: &str, machine: &str) -> Result<String> {
     let id = home::opened(home)?.id;
-    let previous = SandboxRecord::read(home, name)?
+    let previous = SandboxRecord::read(home, name)
+        .ok()
+        .flatten()
         .and_then(|record| record.generation().map(str::to_owned))
         .unwrap_or_default();
-    let retired = super::tombstone::SandboxTombstone::read(home, machine, name)?
+    let retired = super::tombstone::SandboxTombstone::read(home, machine, name)
+        .ok()
+        .flatten()
         .map(|tombstone| tombstone.generation)
         .unwrap_or_default();
     Ok(layerfs_home::helpers::ordered_token(

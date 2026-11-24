@@ -141,13 +141,16 @@ impl Store {
             }
             // The row names its project, so the operator audit finds the
             // released row by project and Branch name: a named bind knows
-            // it, a bind by Branch id reads the stack's name once.
+            // it, a bind by Branch id reads the stack's name once. The name
+            // only serves the audit, so a failed read records none instead
+            // of failing the mount.
             let project = match &request {
                 BindIntent::Named(request) => Some(request.project.clone()),
                 BindIntent::Id(_) => self
                     .history()
                     .layer_stack(captured.branch.stack)
-                    .map_err(BindError::History)?
+                    .ok()
+                    .flatten()
                     .map(|stack| stack.name.as_str().to_owned()),
             };
             let intent = crate::history::admission::mount_intent(

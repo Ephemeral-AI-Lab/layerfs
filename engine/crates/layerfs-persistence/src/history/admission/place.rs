@@ -154,9 +154,14 @@ impl PlaceView {
     /// dead whatever the place says. Otherwise a placed intent whose current
     /// place this admission can see is decided by that place: an older
     /// recorded value of the same home is dead, a newer recorded value (a
-    /// restore) or another home's value is uncertain. Place evidence only
-    /// adds proofs of death; it never hides the owner's. Missing evidence is
-    /// never death.
+    /// restore) is uncertain, and another home's value is no evidence.
+    /// Place evidence only adds proofs of death; it never hides the owner's.
+    /// Missing evidence is never death.
+    ///
+    /// On a shared Store (PostgreSQL) a place proof is uncertain, never dead:
+    /// two running copies of one home (a cloned home) mint tokens with the
+    /// same home id, so the other copy's newer start does not prove this
+    /// holder gone. The operator settles and releases such a row.
     pub(crate) fn liveness(
         &mut self,
         _tx: &Transaction<'_>,
@@ -173,7 +178,10 @@ impl PlaceView {
                 true => self.record(intent),
                 false => None,
             };
-        Ok(authority.liveness(self.now_ms, place.as_ref()))
+        Ok(match authority.liveness(self.now_ms, place.as_ref()) {
+            Liveness::Dead if shared_store => Liveness::Uncertain,
+            verdict => verdict,
+        })
     }
 
     /// True only when the place authority (or, for a place-null intent, the

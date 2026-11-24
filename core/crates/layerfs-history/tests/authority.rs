@@ -41,21 +41,22 @@ fn only_a_different_millisecond_orders_a_token() {
         compare_place(&token(2, "00"), &token(1, "ff")),
         PlaceOrder::RecordedNewer
     );
-    // A value written before the ordering is unordered against anything else.
+    // A value written before the ordering cannot be related to anything
+    // else: no evidence either way.
     assert_eq!(
         compare_place("worker:old", &token(2, "00")),
-        PlaceOrder::Unordered
+        PlaceOrder::Foreign
     );
 }
 
 #[test]
-fn tokens_of_different_homes_are_unordered_and_never_dead() {
+fn tokens_of_different_homes_are_foreign_and_never_dead() {
     // Two homes each name a `box` machine: home B's newer start must not
     // prove home A's older placement gone.
     let a = homed("aa11", "worker", 1, "aa");
     let b = homed("bb22", "worker", 2, "bb");
-    assert_eq!(compare_place(&a, &b), PlaceOrder::Unordered);
-    assert_eq!(compare_place(&b, &a), PlaceOrder::Unordered);
+    assert_eq!(compare_place(&a, &b), PlaceOrder::Foreign);
+    assert_eq!(compare_place(&b, &a), PlaceOrder::Foreign);
     let mount = PlaceAuthority {
         machine_incarnation: Some(a.clone()),
         sandbox_generation: Some(homed("aa11", "sandbox", 1, "aa")),
@@ -65,7 +66,9 @@ fn tokens_of_different_homes_are_unordered_and_never_dead() {
         sandbox_generation: Some(homed("bb22", "sandbox", 2, "bb")),
         sandbox_retired: Some(homed("bb22", "sandbox", 2, "bb")),
     };
-    assert_eq!(mount.liveness(0, Some(&other_home)), Liveness::Uncertain);
+    // Another home's values are no evidence: the holder stays live, as with
+    // no place evidence at all.
+    assert_eq!(mount.liveness(0, Some(&other_home)), Liveness::Live);
     // The same home's newer start still proves the older placement dead.
     let same_home = PlaceRecord {
         machine_incarnation: Some(homed("aa11", "worker", 2, "bb")),
@@ -87,7 +90,7 @@ fn a_token_without_a_home_id_is_not_ordered() {
             "p1:worker:0000000000000001:aa",
             "p1:worker:0000000000000002:aa"
         ),
-        PlaceOrder::Unordered
+        PlaceOrder::Foreign
     );
 }
 

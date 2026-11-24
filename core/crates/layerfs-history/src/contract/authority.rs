@@ -159,11 +159,13 @@ pub enum PlaceOrder {
     RecordedOlder,
     /// The recorded value is newer than the current one (a restore).
     RecordedNewer,
-    /// At least one value is unordered (written before the ordering or
-    /// without a home id), the two were minted by different homes, or the
-    /// two name the same millisecond with different nonces, and the two
-    /// differ.
+    /// Two values of the same home name the same millisecond with different
+    /// nonces: no order between them.
     Unordered,
+    /// The values differ and cannot be related: at least one predates the
+    /// ordering or names no home, or the two were minted by different homes.
+    /// This is no evidence either way; admission ignores the comparison.
+    Foreign,
 }
 
 /// The prefix of an ordered place value minted by this release.
@@ -194,9 +196,10 @@ pub fn ordered_token_parts(text: &str) -> Option<(&str, u64, &str)> {
 /// one, minted by the same home, is a place replaced by a newer start (dead);
 /// a recorded value newer than the current one can only come from a restore
 /// or rollback (uncertain, never dead). Values minted by different homes are
-/// unordered: a machine or Sandbox name is a home's own, so another home's
-/// start never proves this home's place gone. A value written before the
-/// ordering compares equal only to itself; any difference is uncertain.
+/// [`PlaceOrder::Foreign`]: a machine or Sandbox name is a home's own, so
+/// another home's start proves nothing about this home's place. A value
+/// written before the ordering compares equal only to itself; any other
+/// comparison with it is foreign too.
 #[must_use]
 pub fn compare_place(recorded: &str, current: &str) -> PlaceOrder {
     if recorded == current {
@@ -216,7 +219,7 @@ pub fn compare_place(recorded: &str, current: &str) -> PlaceOrder {
                 std::cmp::Ordering::Equal => PlaceOrder::Unordered,
             }
         }
-        _ => PlaceOrder::Unordered,
+        _ => PlaceOrder::Foreign,
     }
 }
 
@@ -237,7 +240,8 @@ impl PlaceAuthority {
                 place.machine_incarnation.as_deref(),
             ) {
                 match compare_place(recorded, current) {
-                    PlaceOrder::Equal => {}
+                    // Another home's (or an unordered) value is no evidence.
+                    PlaceOrder::Equal | PlaceOrder::Foreign => {}
                     PlaceOrder::RecordedOlder => return Liveness::Dead,
                     PlaceOrder::RecordedNewer | PlaceOrder::Unordered => {
                         return Liveness::Uncertain
@@ -261,7 +265,7 @@ impl PlaceAuthority {
                             if let Some(retired) = place.sandbox_retired.as_deref() {
                                 match compare_place(recorded, retired) {
                                     PlaceOrder::Equal => return Liveness::Dead,
-                                    PlaceOrder::RecordedNewer => {}
+                                    PlaceOrder::RecordedNewer | PlaceOrder::Foreign => {}
                                     PlaceOrder::RecordedOlder | PlaceOrder::Unordered => {
                                         return Liveness::Uncertain
                                     }
@@ -272,6 +276,7 @@ impl PlaceAuthority {
                         PlaceOrder::RecordedNewer | PlaceOrder::Unordered => {
                             return Liveness::Uncertain
                         }
+                        PlaceOrder::Foreign => {}
                     },
                     // The record is gone: only its tombstone can prove it
                     // retired. A newer recorded generation is a restore and is
@@ -285,6 +290,7 @@ impl PlaceAuthority {
                                 PlaceOrder::RecordedNewer | PlaceOrder::Unordered => {
                                     return Liveness::Uncertain
                                 }
+                                PlaceOrder::Foreign => {}
                             }
                         }
                     }

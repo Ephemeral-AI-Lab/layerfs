@@ -197,8 +197,8 @@ fn the_view_ends_with_its_admission() {
 
 /// Two homes share this Store and each has a `box` machine and a `box-1`
 /// Sandbox: the other home's newer incarnation, newer generation and
-/// tombstone say nothing about this home's mount, which stays held
-/// (uncertain at worst), never settled.
+/// tombstone say nothing about this home's mount, which stays held and live
+/// (no evidence), never settled.
 #[test]
 fn another_homes_place_of_the_same_name_is_never_dead() {
     let temp = Temp::new("gc-place-view-home");
@@ -217,7 +217,7 @@ fn another_homes_place_of_the_same_name_is_never_dead() {
     })
     .unwrap();
     assert!(held.settled.is_empty());
-    assert_eq!((held.held, held.uncertain), (1, 1));
+    assert_eq!((held.held, held.uncertain), (1, 0));
     assert_eq!(
         history
             .gc_intents(GcScopeKind::Branch, branch.as_slice())
