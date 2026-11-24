@@ -483,21 +483,27 @@ pub trait HistoryCatalog: Send + Sync {
     /// The default refuses: a provider without admission cannot make the
     /// `MountsActive`/`Busy`/`Unresolved` promise.
     fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// Releases one admission intent, deleting its row.
     ///
     /// The default refuses; a provider that never registered one is unaffected.
     fn gc_release(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// Marks one admission intent uncertain, so a later call reports
     /// `Unresolved` until its owner settles it. Returns `false` when no live
     /// or uncertain row has the op (none, or one already retained `done`).
     fn gc_mark_uncertain(&self, _op_id: &[u8; 16]) -> HistoryResult<bool> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// Retains one released admission intent as the durable `done` audit row:
@@ -584,7 +590,9 @@ pub trait HistoryCatalog: Send + Sync {
         _scope_kind: GcScopeKind,
         _scope_id: &[u8],
     ) -> HistoryResult<Vec<GcIntent>> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// What admission would say of each of `intents` now, in order: the
@@ -594,7 +602,9 @@ pub trait HistoryCatalog: Send + Sync {
     /// `preview` report it and its `settle` refuses a holder still `Live`
     /// unless forced. The default refuses.
     fn gc_liveness(&self, _intents: &[GcIntent]) -> HistoryResult<Vec<crate::Liveness>> {
-        Err(crate::error::HistoryError::Unsupported("GC admission"))
+        Err(crate::error::HistoryError::Unsupported(
+            crate::error::NO_ADMISSION,
+        ))
     }
 
     /// One bounded page of retained `done` admission rows, oldest first, for

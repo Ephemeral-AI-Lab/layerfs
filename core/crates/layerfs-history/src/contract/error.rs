@@ -203,7 +203,21 @@ pub enum HistoryError {
     UnknownOutcomeOp(Box<UnknownOutcomeState>),
 }
 
+/// The [`HistoryError::Unsupported`] reason of a catalog that has no GC
+/// admission at all (the trait defaults). A real provider that refuses the
+/// environment, such as a transaction-pooled PostgreSQL connection, names its
+/// own reason, so a caller that may proceed without admission matches this one
+/// reason only (#776 C1).
+pub const NO_ADMISSION: &str = "GC admission";
+
 impl HistoryError {
+    /// True when the catalog provides no GC admission at all, the one
+    /// `Unsupported` a mount, merge, Init or removal may proceed past.
+    #[must_use]
+    pub fn no_admission(&self) -> bool {
+        matches!(self, Self::Unsupported(reason) if *reason == NO_ADMISSION)
+    }
+
     /// True when the attempted mutation's persistence outcome is unknown.
     #[must_use]
     pub fn unknown(&self) -> bool {

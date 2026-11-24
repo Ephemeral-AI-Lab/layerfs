@@ -9,7 +9,7 @@ mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
-use layerfs_history::{PlaceAuthority, PlaceView, WorkspaceId};
+use layerfs_history::{HistoryError, PlaceAuthority, PlaceView, WorkspaceId};
 use layerfs_store_service::history::{admission, deletion, lookup, removal};
 use layerfs_store_service::store::BindRequest;
 use std::fs;
@@ -503,6 +503,8 @@ mod fault {
         pub inner: &'a dyn HistoryCatalog,
         pub fail_register: bool,
         pub fail_release: bool,
+        /// A definite refusal the registration answers instead.
+        pub refuse_register: Option<HistoryError>,
     }
 
     macro_rules! forward {
@@ -538,6 +540,9 @@ mod fault {
         fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {
             if self.fail_register {
                 return Err(HistoryError::UnknownOutcome);
+            }
+            if let Some(refusal) = &self.refuse_register {
+                return Err(refusal.clone());
             }
             self.inner.gc_register(intent)
         }
@@ -578,6 +583,7 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
         inner: catalog,
         fail_register: true,
         fail_release: false,
+        refuse_register: None,
     };
     let refused = admission::SharedIntent::begin(&lost, GcIntentKind::Merge, &stack, Some("work"))
         .err()
@@ -588,6 +594,7 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
         inner: catalog,
         fail_register: false,
         fail_release: true,
+        refuse_register: None,
     };
     let intent = admission::SharedIntent::begin(&lost, GcIntentKind::Init, &stack, None)
         .expect("a registration that answers");
@@ -601,6 +608,52 @@ fn a_shared_intent_unknown_outcome_names_its_project_phase_and_op() {
     {
         catalog.gc_release(&intent.op_id).expect("settle the row");
     }
+    fixture.cleanup();
+}
+
+/// #776 C1: only a catalog with no GC admission at all lets a merge proceed
+/// unadmitted. A real provider's own `Unsupported`, the transaction-pooled
+/// PostgreSQL connection that cannot keep a session key, refuses the merge
+/// instead of running it with no intent row.
+#[test]
+fn a_pooled_connection_refuses_a_shared_intent() {
+    let fixture = Fixture::new("admission-pooled", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let catalog = fixture.service.store.history();
+
+    let pooled = fault::Faulty {
+        inner: catalog,
+        fail_register: false,
+        fail_release: false,
+        refuse_register: Some(HistoryError::Unsupported(
+            "transaction-pooled PostgreSQL connection",
+        )),
+    };
+    let refused =
+        admission::SharedIntent::begin(&pooled, GcIntentKind::Merge, &stack, Some("work"))
+            .err()
+            .expect("a pooled connection refuses the merge");
+    assert_eq!(refused.code, "Unsupported", "{refused:?}");
+
+    let unadmitted = fault::Faulty {
+        inner: catalog,
+        fail_register: false,
+        fail_release: false,
+        refuse_register: Some(HistoryError::Unsupported(
+            layerfs_history::error::NO_ADMISSION,
+        )),
+    };
+    let intent =
+        admission::SharedIntent::begin(&unadmitted, GcIntentKind::Merge, &stack, Some("work"))
+            .expect("a catalog without admission proceeds");
+    intent.release().expect("nothing to release");
+    assert!(catalog
+        .gc_intents(GcScopeKind::Project, stack.id.as_slice())
+        .expect("intents")
+        .is_empty());
     fixture.cleanup();
 }
 

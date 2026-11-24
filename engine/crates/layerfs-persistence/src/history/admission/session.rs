@@ -19,7 +19,10 @@ pub(super) fn session_lock(
     let mut taken: Vec<(u8, Vec<u8>, bool)> = Vec::new();
     for (kind, id, shared) in keys {
         let key = advisory_key(catalog, *kind, id);
-        let found = session.read_statement(|statements| {
+        // Unfenced (#776 P2): a fenced lock would be taken and then answered
+        // `Stale`. A failed statement may still have taken the key, so every
+        // error exit unlocks it with the keys before it.
+        let found: HistoryResult<_> = session.session_statement(|statements| {
             Transaction::new(statements).query(
                 if *shared {
                     LOCK_SESSION_SHARED
@@ -28,21 +31,39 @@ pub(super) fn session_lock(
                 },
                 params![key],
             )
-        })?;
+        });
+        let found = match found {
+            Ok(found) => found,
+            Err(error) => {
+                taken.push((*kind, id.clone(), *shared));
+                let _ = session_unlock(session, catalog, &taken);
+                return Err(error);
+            }
+        };
         if found.is_empty() {
             let _ = session_unlock(session, catalog, &taken);
             return Err(session_lock_refusal(session, *kind, id, key, *shared)?);
         }
+        // This key is held from here: every exit below unlocks it too.
+        taken.push((*kind, id.clone(), *shared));
         // Spec §5.2 item 34: a session advisory lock only means presence if the
         // same backend keeps it. The lock statement returns the backend that
         // took it; a transaction-pooling proxy hands the next statement to a
-        // different one, so mounts and compaction are `Unsupported` there.
-        let pid: i64 = found[0].get(1)?;
+        // different one, so mounts and compaction are `Unsupported` there and
+        // every caller refuses (#776 C1). The unlock is best effort: behind
+        // such a proxy it may reach another backend, which then keeps the key
+        // until the proxy recycles it.
+        let pid: i64 = match found[0].get(1) {
+            Ok(pid) => pid,
+            Err(error) => {
+                let _ = session_unlock(session, catalog, &taken);
+                return Err(error.into());
+            }
+        };
         if !session.note_backend(pid) {
             let _ = session_unlock(session, catalog, &taken);
             return Err(HistoryError::Unsupported(POOLED));
         }
-        taken.push((*kind, id.clone(), *shared));
     }
     Ok(())
 }
@@ -59,16 +80,17 @@ fn session_lock_refusal(
 ) -> HistoryResult<HistoryError> {
     // A read transaction, not `Mode::Statement`: the intent queries are the
     // search-path ones the write path uses.
-    let found = session.run(false, |statements| {
+    let mut found = session.run(false, |statements| {
         scope_intents(&Transaction::new(statements), kind, id)
     })?;
+    if shared {
+        // A shared key is refused only by an exclusive holder (a compaction
+        // or a removal); mounts never exclude mounts, so peer mount rows are
+        // not the holder and are not reported as one (#776 G4).
+        found.retain(|intent| intent.kind != GcIntentKind::Mount);
+    }
     if !found.is_empty() {
         return Ok(classify(&found));
-    }
-    if shared {
-        return Ok(HistoryError::MountsActive(Box::new(MountHolders::new(
-            Vec::new(),
-        ))));
     }
     let scope = match kind {
         2 => GcScopeKind::Project,
@@ -98,14 +120,17 @@ fn session_lock_refusal(
     }
     Ok(HistoryError::BusyOp(Box::new(conflict)))
 }
+/// Unlocks every key it is given: a failed key does not stop the ones after
+/// it, and the first failure is returned once all were attempted.
 pub(super) fn session_unlock(
     session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
     catalog: CatalogId,
     keys: &[(u8, Vec<u8>, bool)],
 ) -> HistoryResult<()> {
+    let mut first: Option<HistoryError> = None;
     for (kind, id, shared) in keys {
         let key = advisory_key(catalog, *kind, id);
-        let found = session.read_statement(|statements| {
+        let found: HistoryResult<_> = session.session_statement(|statements| {
             Transaction::new(statements).query(
                 if *shared {
                     UNLOCK_SESSION_SHARED
@@ -114,13 +139,20 @@ pub(super) fn session_unlock(
                 },
                 params![key],
             )
-        })?;
-        if let Some(row) = found.first() {
-            let pid: i64 = row.get(1)?;
-            if !session.note_backend(pid) {
-                return Err(HistoryError::Unsupported(POOLED));
+        });
+        let outcome = found.and_then(|found| match found.first() {
+            Some(row) => {
+                let pid: i64 = row.get(1)?;
+                match session.note_backend(pid) {
+                    true => Ok(()),
+                    false => Err(HistoryError::Unsupported(POOLED)),
+                }
             }
+            None => Ok(()),
+        });
+        if let Err(error) = outcome {
+            first.get_or_insert(error);
         }
     }
-    Ok(())
+    first.map_or(Ok(()), Err)
 }

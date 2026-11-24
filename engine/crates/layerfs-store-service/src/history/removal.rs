@@ -13,7 +13,7 @@ use super::lookup::{self as args, refuse, Answer};
 use super::MAIN;
 use crate::store::Store;
 use layerfs_bridge::control::SdkValue;
-use layerfs_history::{GcScopeKind, HistoryError, LayerStackRecord};
+use layerfs_history::{GcScopeKind, LayerStackRecord};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -32,10 +32,11 @@ pub fn remove(store: &Arc<Store>, stack: &LayerStackRecord, name: &str) -> Answe
     let catalog = store.history();
     let entity = branch.name.as_str();
     // A provider without admission still writes the marker: its register is
-    // `Unsupported`, and there is nothing to release afterwards.
+    // `Unsupported(NO_ADMISSION)`, and there is nothing to release afterwards.
+    // Any other `Unsupported` (a pooled connection) refuses (#776 C1).
     let admitted = match catalog.gc_register(&intent) {
         Ok(()) => true,
-        Err(HistoryError::Unsupported(_)) => false,
+        Err(error) if error.no_admission() => false,
         // The row's durability is unknown, so no durable op is named.
         Err(error) => {
             return Err(args::history_in(
