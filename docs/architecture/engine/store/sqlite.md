@@ -83,8 +83,13 @@ SQL work to the calling thread's counters
 ```text
  SQLite write: Session::run(true, body)
    1 admission.enter        in-process FIFO turn on this session
-   2 Writer::acquire        flock(LOCK_EX) on the Store's parent directory
-                            (Linux and macOS)          (skipped if nested)
+   2 admit_writer           under the turn: quarantined? release, Unknown;
+                            Writer::try_acquire once (flock LOCK_EX|LOCK_NB
+                            on the Store's parent directory, Linux and macOS)
+                            held by another Session or process: drop the
+                            turn; Writer::acquire (blocking flock); enter
+                            the turn again; quarantined? Unknown
+                                                       (skipped if nested)
    3 state mutex            the connection; quarantined? release, Unknown;
                             identity checked under the lane
    4 BEGIN IMMEDIATE        busy_timeout 0 -> Busy
@@ -94,19 +99,31 @@ SQL work to the calling thread's counters
 
  Session::hold_lane() -> LaneHold (!Send)
    writable? else ReadOnly; admission turn (nested -> Integrity);
-   quarantined, or a writer still held? -> Unknown (before the wait);
-   Writer::acquire; turn.hold(): holder = this thread
+   admit_writer, refusing Unknown when quarantined or a writer is still
+   held (before any wait, and again under the re-entered turn);
+   turn.hold(): holder = this thread
    inside: run(true, ..) is nested: no flock, BEGIN IMMEDIATE only
+
+ Reads (run(false, ..), read_mapped, read_immutable)
+   admission.enter only: never the flock, so they wait only for this
+   session's turn holder's short job or its held lane
 ```
 
 The lock is taken on a separate descriptor of the Store's directory (on
 macOS, a `flock` on the main file itself would meet SQLite's own `fcntl`
 locks), never on the main, WAL or SHM file: closing a main-file descriptor
 would drop SQLite's own POSIX locks. Several Store files in one directory
-share it. The kernel wait happens before the state mutex, so a write
-waiting for another process's lane never blocks `diagnostics()` or anything
-else that takes only that mutex (finding #20); the FIFO turn already keeps
-the session's other callers out. It is the same lane on Linux and macOS: a holder process that
+share it. Who waits where: a read waits only for the session's FIFO turn,
+which is held for one short job or by this session's own held lane; a
+writer waits for the turn, then for the flock *without* the turn when
+another session or process holds the lane (the one non-blocking attempt is
+a readiness probe, not a retry), then for the turn again. So a write
+waiting for another process's lane (a compaction's mark holds it for tens
+of seconds) blocks neither this session's reads nor `diagnostics()` or
+anything else that takes only the state mutex (finding #20, #776). Several
+of a session's writers can wait in the kernel at once; they resume in the
+kernel's order, not the session's FIFO order, and each checks quarantine
+again under its re-entered turn. It is the same lane on Linux and macOS: a holder process that
 exits releases it, a signal during the wait is `Cancelled`, and a writable
 open takes it too, so concurrent first openers serialize their opening
 PRAGMA statements instead of meeting SQLite's `Busy`; the schema statements
@@ -119,6 +136,20 @@ connection of a session that nested work quarantined (see below), and a
 failed release quarantines the session and keeps the lock
 ([`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs),
 [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/lane.rs)).
+A session that keeps a writer after a failed release (or after a
+quarantined close SQLite refused) still holds the lane; its own writers
+already waiting in the kernel then wait with every other process until
+that session drops it.
+
+Known limit: a compaction's admission looks for other holders of the
+Store in `/proc/<pid>/fd`
+([`exclusion.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/exclusion.rs)),
+which shows only processes in its own PID namespace (and none on macOS). A
+daemon in another PID namespace (another container sharing the volume)
+that holds the Store open is not seen: the compaction holds the lane for
+its whole mark and then fails `Store sidecar remains after seal`. The
+sidecar fence and the re-check before the rename stay the guard; nothing
+is installed over a held Store.
 
 ### Quarantine
 

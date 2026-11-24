@@ -269,27 +269,26 @@ impl Session {
         let start = Instant::now();
         let turn = self.admission.enter(self.wait_kind()).map_err(E::from)?;
         let background = self.background.as_ref();
-        // The cross-process writer lock is waited for before the state lock
-        // (finding #20): a wait on another process's lane must not block
-        // `diagnostics()` or anything else that takes only the state lock.
-        // The FIFO turn already keeps this Session's other callers out, so no
-        // other thread can take this Session's writer meanwhile. A held
-        // publication lane already owns the writer for its nested work.
-        let writer = if writable && !turn.nested {
-            let mut state = self.state();
-            if state.quarantined {
-                // A writer an earlier attempt retained is released here,
-                // after its connection closes under it (#776 S3).
-                let _ = state.finish_writer(background);
-                return Err(BackendError::Unknown.into());
-            }
-            drop(state);
-            Some(
-                crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)
-                    .map_err(E::from)?,
-            )
+        // The cross-process writer lock is waited for outside the state lock
+        // (finding #20) and outside the FIFO turn (`admit_writer`): a wait on
+        // another Session's or process's lane must block neither
+        // `diagnostics()` nor this Session's reads. A held publication lane
+        // already owns the writer for its nested work.
+        let (_turn, writer) = if writable && !turn.nested {
+            let (turn, writer) = self
+                .admit_writer(turn, |state| {
+                    if state.quarantined {
+                        // A writer an earlier attempt retained is released
+                        // here, after its connection closes under it (#776 S3).
+                        let _ = state.finish_writer(background);
+                        return Err(BackendError::Unknown);
+                    }
+                    Ok(())
+                })
+                .map_err(E::from)?;
+            (turn, Some(writer))
         } else {
-            None
+            (turn, None)
         };
         // A poisoned lock is recovered quarantined, so `writer` goes to
         // `finish_writer` below: nothing has been attempted under it.

@@ -16,8 +16,10 @@ pub struct LaneHold {
 }
 
 impl Session {
-    /// Waits its FIFO turn, then the cross-process writer lock, for the lane.
-    /// A wait is readiness, not a retry: nothing is attempted before it is held.
+    /// Waits its FIFO turn and the cross-process writer lock for the lane;
+    /// the turn is never held across a wait for another Session's or
+    /// process's lane ([`Session::admit_writer`]). A wait is readiness, not a
+    /// retry: nothing is attempted before both are held.
     pub(crate) fn hold_lane(self: &Arc<Self>) -> Result<LaneHold, BackendError> {
         if !self.writable {
             return Err(BackendError::ReadOnly);
@@ -31,14 +33,14 @@ impl Session {
         // A quarantined session, or one that still holds its own writer
         // (a release that failed), is refused before the blocking wait: that
         // writer is this very lock, so waiting for it would never end
-        // (#776 S4).
-        {
-            let state = self.state();
+        // (#776 S4). It is checked again once the lane is held, under the
+        // turn re-entered after a wait.
+        let (turn, writer) = self.admit_writer(turn, |state| {
             if state.quarantined || state.writer_hold.is_some() {
                 return Err(BackendError::Unknown);
             }
-        }
-        let writer = Writer::acquire(&self.path)?;
+            Ok(())
+        })?;
         turn.hold()?;
         Ok(LaneHold {
             session: self.clone(),
