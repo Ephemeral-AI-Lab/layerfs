@@ -15,6 +15,9 @@ use super::*;
 /// so it retains the row as `done` but cannot unlock the keys the owner's
 /// session took at registration. The owner's own release then still unlocks
 /// them, and leaves the `done` row as it is (`release_in` never deletes one).
+/// Only an op this session registered and still holds is unlocked, once: a
+/// repeated release, or one of a row another session registered, unlocks
+/// nothing, so no key level a live mount of this session holds is dropped.
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
@@ -27,7 +30,9 @@ pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryRe
                 Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
             })?;
             if let Some(ReleaseKeys { keys }) = found {
-                let _ = session_unlock(session, provider.catalog_id, &keys);
+                if session.take_op(op_id) {
+                    let _ = session_unlock(session, provider.catalog_id, &keys);
+                }
             }
             Ok(())
         }
@@ -93,7 +98,9 @@ pub(crate) fn release_done(
             })?;
             let retained = found.is_some();
             if let Some(ReleaseKeys { keys }) = found {
-                let _ = session_unlock(session, provider.catalog_id, &keys);
+                if session.take_op(op_id) {
+                    let _ = session_unlock(session, provider.catalog_id, &keys);
+                }
             }
             Ok(retained)
         }

@@ -1026,3 +1026,69 @@ fn an_owner_release_after_an_operator_release_unlocks_its_session_keys() {
     assert_eq!(audit.items[0].op_id, op(60));
     assert_eq!(audit.items[0].evidence.as_deref(), Some(evidence));
 }
+
+/// The session advisory key of `kind` and `id` in the catalog `binding`
+/// derives (spec 5.2).
+fn advisory_key(binding: &[u8], kind: u8, id: &[u8]) -> i64 {
+    let catalog = CatalogId::derive(binding).unwrap();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/advisory/v1\0");
+    hasher.update(catalog.as_slice());
+    hasher.update(&[kind]);
+    hasher.update(id);
+    let mut head = [0u8; 8];
+    head.copy_from_slice(&hasher.finalize().as_bytes()[..8]);
+    i64::from_be_bytes(head)
+}
+
+/// Whether another session could take `key` exclusively now (taken and
+/// given back at once).
+fn key_free(admin: &mut postgres::Client, key: i64) -> bool {
+    let free: bool = admin
+        .query_one("SELECT pg_try_advisory_lock($1::bigint)", &[&key])
+        .unwrap()
+        .get(0);
+    if free {
+        admin
+            .query_one("SELECT pg_advisory_unlock($1::bigint)", &[&key])
+            .unwrap();
+    }
+    free
+}
+
+/// A session's shared keys are reference-counted, one level per mount it
+/// registered. Releasing one op twice in the owner's own session (an
+/// operator release, then the owner's release, then a repeat) unlocks one
+/// level only, so the Branch key of the session's other live mount stays
+/// held; its own release then frees the key.
+#[test]
+fn a_repeated_release_unlocks_its_op_once() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "repeat_release");
+    let binding = binding("repeat_release");
+    let owner = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&owner.history, 1);
+    owner
+        .history
+        .gc_register(&mount(project_id, branch, 70))
+        .unwrap();
+    owner
+        .history
+        .gc_register(&mount(project_id, branch, 71))
+        .unwrap();
+    let key = advisory_key(&binding, 3, branch.as_slice());
+    let mut admin = schema.admin();
+    assert!(!key_free(&mut admin, key));
+
+    let evidence = "action=release;operator=alice;op=46464646464646464646464646464646";
+    assert!(owner.history.gc_release_done(&op(70), evidence).unwrap());
+    owner.history.gc_release(&op(70)).unwrap();
+    owner.history.gc_release(&op(70)).unwrap();
+    assert!(
+        !key_free(&mut admin, key),
+        "op 71 still holds its level of the Branch key"
+    );
+
+    owner.history.gc_release(&op(71)).unwrap();
+    assert!(key_free(&mut admin, key));
+}

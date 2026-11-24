@@ -917,8 +917,11 @@ pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> History
             let result = session.run(true, |statements| {
                 register_in(&Transaction::new(statements), intent, true)
             });
-            if result.is_err() {
-                let _ = session_unlock(session, provider.catalog_id, &keys);
+            match &result {
+                Ok(()) => session.hold_op(intent.op_id),
+                Err(_) => {
+                    let _ = session_unlock(session, provider.catalog_id, &keys);
+                }
             }
             result
         }
