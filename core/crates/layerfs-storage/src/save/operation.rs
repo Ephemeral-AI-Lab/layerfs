@@ -20,7 +20,8 @@ impl<'a> Save<'a> {
     pub(crate) fn new(storage: &'a Storage) -> StorageResult<Self> {
         let work_start = storage.work.snapshot().total;
         let _work = storage.work.span(super::Stage::Begin);
-        storage.source.forget_published();
+        // The bodies and values earlier Saves on this handle published stay
+        // (bounded) for this Save's reads (#768).
         Ok(Self {
             work_start,
             state: RefCell::new(State::new(storage)?),
@@ -36,6 +37,8 @@ impl<'a> Save<'a> {
         }
         let result = (|| {
             let mut state = self.state.borrow_mut();
+            let storage = state.storage;
+            let _published = storage.source.serving_published();
             if let Some(objects) = state.pending.push(object)? {
                 state.wave(objects)?;
             }
@@ -59,6 +62,8 @@ impl<'a> Save<'a> {
             return Err(StorageError::Aborted);
         }
         let mut state = self.state.borrow_mut();
+        let storage = state.storage;
+        let _published = storage.source.serving_published();
         let objects = state.pending.drain();
         // The last wave is published below, with the sealed tail.
         state.prepare(objects)?;
@@ -90,6 +95,9 @@ impl<'a> Save<'a> {
         state.flush_signatures()?;
         drop(closing);
         state.register_ready()?;
+        // Acknowledged: the unused pack ids and the kept ordinal prefix stay
+        // with the handle (#768).
+        state.keep_rest();
         state.outcome.pool = state.pool_stats;
         state.outcome.delta = state.delta;
         state.profile.group_ns += state.packer.group_ns;
@@ -130,6 +138,11 @@ impl Drop for Save<'_> {
             let state = self.state.get_mut();
             state.candidates.invalidate();
             state.storage.source.invalidate_signatures();
+            // A Save that failed, refused or never finished keeps nothing for
+            // the next: no id block (State::new took it) and no published
+            // bodies or values (#768).
+            state.storage.kept.set(None);
+            state.storage.source.forget_published();
         }
     }
 }

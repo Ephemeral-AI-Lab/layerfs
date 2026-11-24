@@ -106,6 +106,19 @@ pub const CHAIN_ENCODED_CUTOFFS: u64 = 2;
 /// bounded by READ_OBJECT_LIMIT. Released bytes are acquired again when needed;
 /// the bound costs work and never correctness.
 pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 2 * 1024 * 1024;
+/// Unused pooled ordinals a Storage handle keeps after a finished Save, for
+/// its next Save (#768).
+///
+/// Owner: one Storage handle. At every acknowledged finish the Save releases
+/// its unused ordinal tail past `next + KEPT_ORDINALS`: the Store's counter is
+/// rewound there when nothing was reserved after the block, and the handle
+/// keeps `[next, next + KEPT_ORDINALS)`, so a small next Save assigns its new
+/// values without a reservation; a larger one refills as before. Bound: a
+/// dropped handle loses at most this many ordinals (plus, as before, a tail
+/// whose rewind did not apply), so the `u32` ordinal space lasts about 33.5
+/// million handle drops, and Saves on separate handles leave gaps of at most
+/// this many ordinals between their values.
+pub const KEPT_ORDINALS: usize = 128;
 /// Canonical bytes one Save keeps of the objects it resolved (#364).
 ///
 /// Owner: one Save. Bound: this many canonical bytes plus a small charge per

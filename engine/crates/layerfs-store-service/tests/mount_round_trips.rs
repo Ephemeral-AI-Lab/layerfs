@@ -145,6 +145,16 @@ const POSTGRESQL: &[Pin] = &[
 // size of the Commit this Workspace published from memory: the second
 // Commit's writer drops its Read transaction (38/7 before); the first still
 // reads the base Layer's, which the bind snapshot does not carry.
+//
+// The stage-1 storage cuts then took 7 statements and 1 transaction off the
+// second Commit's writer (35/6 before). A finished Save leaves its unused
+// pack ids and the first `KEPT_ORDINALS` (128) unused ordinals on the kept
+// Storage handle, so the second Commit reserves nothing (`BEGIN IMMEDIATE`,
+// `UPDATE … RETURNING`, `COMMIT`) and, its kept prefix covering the block,
+// releases no ordinal tail (`UPDATE store_policy`). Its Save also reads the
+// base inode leaf's pack and values from what the first Save published
+// instead of fetching them back. The first Commit's new handle reserves and
+// releases the tail past its kept prefix, as before.
 const SQLITE_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
@@ -154,7 +164,7 @@ const SQLITE_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 0, 35, 6],
+        writer: [0, 0, 28, 5],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -198,6 +208,15 @@ const SQLITE_COMMIT: &[Pin] = &[
 // reader; and `logical.known` off the second Commit's writer ([0, 32, 19,
 // 4] before: that read was the Commit-row statement's first use on this
 // session, a prepare and its execution, so 2 round trips; 1 once warm).
+//
+// The stage-1 storage cuts then took 5 round trips, 3 statements and 1
+// transaction off the second Commit's writer ([0, 30, 18, 4] before): the
+// kept handle's id block needs no reservation (`BEGIN` with the lane row,
+// `UPDATE store_policy … RETURNING`, `COMMIT`: 3), and construct reads the
+// base inode leaf's pack and its values from the bodies and values the first
+// Save published (2). The first Commit's handle is new: it reserves and
+// reads as before, and its ordinal release, now of the tail past the
+// `KEPT_ORDINALS` it keeps, rides in the sealed tail's statement as before.
 const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
@@ -207,7 +226,7 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 30, 18, 4],
+        writer: [0, 25, 15, 3],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },

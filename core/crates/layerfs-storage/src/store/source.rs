@@ -67,6 +67,19 @@ pub trait Source {
     ) -> StorageResult<()> {
         Ok(())
     }
+    /// The walk decoded `base` from `child`'s record and is about to locate
+    /// it: locates it together with the deeper bases `child`'s recorded
+    /// chain lets cached bytes name (#768), for a walk whose chain members
+    /// are not bound. Default: nothing; the walk locates level by level.
+    fn locate_ahead(
+        &self,
+        _child: &ObjectLocation,
+        _base: ObjectId,
+        _packs: &crate::encoding::PackCache,
+        _workspace: &mut crate::encoding::codec::DecompressionWorkspace,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
     /// The walk decoded `base` from `child`'s record: binds and checks the
     /// chain member there, if any (#758). Default: nothing.
     fn bind_base(&self, _child: &ObjectLocation, _base: Option<ObjectId>) -> StorageResult<()> {

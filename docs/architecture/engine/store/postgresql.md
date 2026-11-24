@@ -383,7 +383,7 @@ Store.
      lane barrier                                 barrier key is held
                                                   shared from BEGIN)
    one statement: INSERT locations ... RETURNING, totals, inode value
-     blocks, released ordinals, signatures
+     blocks, released ordinals (past the handle's kept 128, #768), signatures
    COMMIT; nested: the lane check rides in it    lost -> ROLLBACK, Closed
    any failure rolls the whole publication back; ids are never reused
 ```
@@ -646,16 +646,16 @@ the Save and its publication, the logical count, the binding hints and the
 validation. In the lane it checks the head and publishes. Measured with
 `log_statement=all` on a one-file change (`mount_round_trips.rs`, warm
 statements), the second Commit of a mounted Workspace cost 46 round trips
-before #768's Commit cuts, 36 after them and 29 after the stage-1 cuts
-(column `stage 1`, notes (f) to (h); derived from the cuts
+before #768's Commit cuts, 36 after them and 24 after the stage-1 cuts
+(column `stage 1`, notes (f) to (j); derived from the cuts
 `mount_round_trips.rs` pins per session, not re-measured with
 `log_statement`):
 
 ```text
  before the lane                                         before after stage 1
-   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3   3
+   pack reservation (Write: BEGIN+lane row, UPDATE, COMMIT)  3   3   0  (i)
    file digests, every row below the floor (empty Write)     2   0   0  (a)
-   base pack and inode values (construct)                    2   2   2
+   base pack and inode values (construct)                    2   2   0  (j)
    whiteout read (control reader)                            1   1   0  (h)
    head: branch_snapshot                                     1   1   1
    logical.known: the head Commit                            1   1   0  (g)
@@ -674,7 +674,7 @@ before #768's Commit cuts, 36 after them and 29 after the stage-1 cuts
    epoch FOR SHARE                                           1   1   1
    lane check (lane connection), COMMIT                      2   1   1  (e)
    lane ROLLBACK                                             1   1   1
- total                                                      46  36  29
+ total                                                      46  36  24
 ```
 
 - (a) `record_file_digests` returns before opening a transaction when every
@@ -719,6 +719,27 @@ before #768's Commit cuts, 36 after them and 29 after the stage-1 cuts
   nothing: its serial is above every marker's frontier, and while the mount
   admission is registered every marker write refuses `MountsActive`. Any
   other node, or a catalog with no admission, is read as before.
+- (i) The Storage handle a Workspace keeps between Commits keeps the unused
+  pack ids and the first 128 unused ordinals (`KEPT_ORDINALS`) of its last
+  finished Save (`save/reservation.rs`, `IdBlock`); the next Save reserves
+  only when a range runs out, so a steady Commit of a small change reserves
+  nothing. Finish still releases the ordinal tail past the kept 128 in its
+  last publication, as it released the whole tail before. The first Commit
+  of a new handle still reserves. A dropped handle loses at most 4,096 pack
+  ids and 128 ordinals (ids are never reused; gaps are allowed), and a Save
+  that fails or does not finish drops the block.
+- (j) A Save reads the metadata pack bodies and inode values earlier Saves
+  of its handle published (bounded: 2 MiB of bodies, 512 KiB of values,
+  cleared when a Save does not finish), and the pool reader's chain walk
+  fetches a chain's groups in one group read and locates its deeper bases
+  with its first base (`encoding/pool/read.rs`, `Fetch::locate_ahead`).
+  Before, construct read one pack per chain link, so its count grew with
+  the base leaves' pooled delta chains (depth up to 8): a diagnostic
+  harness of 20 mount, one-file Commit, UpToDate and unmount cycles on one
+  Workspace measured 36 37 39 40 … 47 41 round trips per Commit; with this
+  cut alone (before (f) to (h)) it measured 31 to 33 throughout.
+  `mount_round_trips.rs` pins the second Commit's writer at 25 round trips
+  (30 before).
 
 Checked and not done:
 

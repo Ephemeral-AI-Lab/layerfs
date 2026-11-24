@@ -16,12 +16,14 @@ use std::{
     sync::Arc,
 };
 
-/// Metadata pack bodies the latest Save published, newest last, so the
-/// readers that continue its operation ([`crate::Storage::reader_after_save`]:
-/// a Commit's logical count and binding hints) need not fetch them back.
-/// Bounded by [`DEPENDENCY_PACK_CACHE_BYTES`]; the bodies are the published
-/// `Arc`s themselves, and a new Save clears them. Any other reader still
-/// acquires every body it needs.
+/// Metadata pack bodies the Saves of this handle published, newest last, so
+/// a later Save's own reads and the readers that continue a Save
+/// ([`crate::Storage::reader_after_save`]: a Commit's logical count and
+/// binding hints) need not fetch them back. Bounded by
+/// [`DEPENDENCY_PACK_CACHE_BYTES`], oldest evicted first; the bodies are the
+/// published `Arc`s themselves, added only after an acknowledged publication.
+/// A Save that does not finish clears them (#768): the next Save starts from
+/// the Store. Any other reader still acquires every body it needs.
 #[derive(Default)]
 struct Published {
     bodies: VecDeque<(PackInfo, Arc<Vec<u8>>)>,
@@ -81,7 +83,7 @@ pub(crate) struct Fetch {
     pub(super) descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     signatures: RefCell<Option<Vec<SignatureRow>>>,
     published: RefCell<Published>,
-    /// Set while a reader that continues the latest Save reads.
+    /// Set while a Save, or a reader that continues one, reads.
     pub(super) serve_published: Cell<bool>,
     counters: Cell<Diagnostics>,
     /// Chain hints from chain locates (#758).
@@ -179,11 +181,12 @@ impl Fetch {
         }
         Ok(())
     }
-    /// A new Save starts without an earlier Save's published bodies.
+    /// Forgets every published body and value: a Save on this handle did
+    /// not finish.
     pub(crate) fn forget_published(&self) {
         *self.published.borrow_mut() = Published::default();
     }
-    /// Serves the latest Save's published bodies until the guard drops.
+    /// Serves the published bodies and values until the guard drops.
     pub(crate) fn serving_published(&self) -> Restore<'_> {
         Restore(&self.serve_published, self.serve_published.replace(true))
     }
@@ -201,8 +204,8 @@ impl Fetch {
     pub(crate) fn binding_pages(&self) -> Restore<'_> {
         Restore(&self.bind_pages, self.bind_pages.replace(true))
     }
-    /// A body the latest Save published, to a reader that continues it,
-    /// validated as a fetched one would be.
+    /// A body a Save of this handle published, to a Save or a reader that
+    /// continues one, validated as a fetched one would be.
     fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
         if !self.serve_published.get() {
             return Ok(None);
@@ -726,6 +729,15 @@ impl Source for Fetch {
         packs: &mut crate::encoding::PackCache,
     ) -> StorageResult<()> {
         self.prefetch_groups(std::slice::from_ref(location), packs)
+    }
+    fn locate_ahead(
+        &self,
+        child: &ObjectLocation,
+        base: ObjectId,
+        packs: &crate::encoding::PackCache,
+        workspace: &mut crate::encoding::codec::DecompressionWorkspace,
+    ) -> StorageResult<()> {
+        Fetch::locate_ahead(self, child, base, packs, workspace)
     }
     fn bind_base(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
         self.bind(child, base)

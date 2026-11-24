@@ -5,8 +5,11 @@
 //! Commit reads the policy row and the content-hint table again; the handle
 //! of a Commit that completed is kept and its next Save does not. A Commit
 //! that did not complete drops its handle, and the next one starts from the
-//! Store as before. Inode values need no such memory: they are stored rows,
-//! and a Save reads only those of the leaves its change reaches.
+//! Store as before. The kept handle also holds its unused pack ids and a
+//! small prefix of unused ordinals, so a small Commit reserves nothing, and
+//! the metadata pack bodies and inode values its Saves published (bounded),
+//! so the next Save reads its bases' recent chains without fetching them
+//! (#768, `layerfs-storage`).
 //!
 //! The Store keeps one more idle handle (#352 F-025 fix 4). A closing
 //! Workspace hands its idle handle there, and a Workspace without one takes

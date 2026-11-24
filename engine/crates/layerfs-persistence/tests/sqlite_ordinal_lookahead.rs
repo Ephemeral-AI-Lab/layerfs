@@ -86,7 +86,9 @@ fn fresh_leaves_share_one_combined_reservation_and_deduplicate_values() {
     let allocator: i64 = sql
         .query_row("SELECT next_ordinal FROM store_policy", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(allocator, 6);
+    // The release rewinds the allocator past the KEPT_ORDINALS unused ordinals the
+    // handle keeps for its next Save (#768; it was rewound to 6 before).
+    assert_eq!(allocator, 6 + layerfs_storage::policy::KEPT_ORDINALS as i64);
     let ordinals = sql
         .prepare("SELECT first_ordinal,last_ordinal FROM inode_value_block ORDER BY 1")
         .unwrap()
@@ -105,7 +107,8 @@ fn fresh_leaves_share_one_combined_reservation_and_deduplicate_values() {
     // A later Save that names no stored leaf remembers nothing of earlier
     // Saves: the repeated values are stored again, one row each.
     assert_eq!(save.finish().unwrap().pool.new_values, 5);
-    assert_eq!(storage.diagnostics().ordinal_reservations, before + 1);
+    // Its ordinals come from the kept block (#768; `before + 1` before).
+    assert_eq!(storage.diagnostics().ordinal_reservations, before);
     read(&storage, &[duplicate]);
 }
 #[test]
@@ -143,7 +146,10 @@ fn a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan() {
     let next: i64 = sql
         .query_row("SELECT next_ordinal FROM store_policy", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(next, 10);
+    // Past the KEPT_ORDINALS unused ordinals the handle keeps for its next Save (#768;
+    // the unused tail was released to 10 before). The foreign reservation is
+    // still never recycled.
+    assert_eq!(next, 10 + layerfs_storage::policy::KEPT_ORDINALS as i64);
 }
 
 #[test]

@@ -151,6 +151,8 @@ pub(super) struct State<'a> {
     pub(super) pool_stats: crate::save::PoolCounters,
     pub(super) next_ordinal: u64,
     pub(super) ordinal_end: u64,
+    /// Set by `Save::finish`: the last publication releases the ordinal
+    /// tail past the prefix the handle keeps.
     pub(super) finishing: bool,
     pub(super) depths: DepthCache,
     pub(super) losing: LosingBases,

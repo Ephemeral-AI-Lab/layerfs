@@ -7,7 +7,10 @@ use crate::{
     port::PackPersistence,
     read::{Diagnostics, Fetch, Reader},
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
 
 /// C2's immutable-body path, independent of engines and history.
 pub struct Storage {
@@ -17,6 +20,9 @@ pub struct Storage {
     capacities: StorageCapacities,
     pub(crate) candidates: RefCell<Candidates>,
     pub(crate) reservations: crate::ReservationBlocks,
+    /// The unused pack ids and ordinals of the last Save that finished on
+    /// this handle, which the next Save uses before it reserves (#768).
+    pub(crate) kept: Cell<Option<crate::save::IdBlock>>,
 }
 impl Storage {
     /// Opens one handle with an acknowledged persisted policy. No service bootstrap.
@@ -42,6 +48,7 @@ impl Storage {
             capacities,
             candidates: RefCell::new(Candidates::new()?),
             reservations,
+            kept: Cell::new(None),
         })
     }
     /// Persisted, validated storage policy.
@@ -61,8 +68,8 @@ impl Storage {
         Reader::new(self, false)
     }
     /// A reader that continues the latest Save's operation: besides its own
-    /// bounded caches it may read the metadata pack bodies that Save
-    /// published instead of fetching them back. Everything it returns is
+    /// bounded caches it may read the metadata pack bodies and inode values
+    /// this handle's Saves published instead of fetching them back. Everything it returns is
     /// authenticated as by [`Self::reader`].
     pub fn reader_after_save(&self) -> StorageResult<Reader<'_>> {
         Reader::new(self, true)

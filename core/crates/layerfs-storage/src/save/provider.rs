@@ -19,6 +19,8 @@ impl Save<'_> {
     }
     fn read_inner(&self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
         let mut state = self.state.borrow_mut();
+        let storage = state.storage;
+        let _published = storage.source.serving_published();
         let capacities = state.storage.capacities();
         if ids.len() > capacities.read_objects {
             return Err(StorageError::CapacityExceeded {

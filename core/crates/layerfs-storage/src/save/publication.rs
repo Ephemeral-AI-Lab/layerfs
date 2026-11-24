@@ -206,7 +206,13 @@ impl State<'_> {
             }
             batch.signatures.push(row);
         }
-        if self.finishing && self.next_ordinal < self.ordinal_end {
+        // The handle keeps the first KEPT_ORDINALS unused ordinals for its
+        // next Save (#768, `IdBlock`); the tail past them is released, which
+        // rewinds the Store's counter when nothing was reserved after it.
+        let kept_end = self
+            .next_ordinal
+            .saturating_add(crate::policy::KEPT_ORDINALS as u64);
+        if self.finishing && kept_end < self.ordinal_end {
             // The release is a row of the publication too.
             if batch.objects.len() + pack_rows + batch.inode_values.len() + batch.signatures.len()
                 >= limits.transaction_rows as usize
@@ -215,11 +221,14 @@ impl State<'_> {
                 batch = Publication::default();
             }
             batch.release_ordinals = Some((
-                u32::try_from(self.next_ordinal)
+                u32::try_from(kept_end)
                     .map_err(|_| StorageError::Integrity("unused ordinal tail"))?,
-                usize::try_from(self.ordinal_end - self.next_ordinal)
+                usize::try_from(self.ordinal_end - kept_end)
                     .map_err(|_| StorageError::Integrity("unused ordinal count"))?,
             ));
+            // Whether or not the rewind applies, only the kept prefix stays
+            // this handle's: a tail that was not rewound is lost, as before.
+            self.ordinal_end = kept_end;
         }
         if !batch.objects.is_empty()
             || !batch.signatures.is_empty()
