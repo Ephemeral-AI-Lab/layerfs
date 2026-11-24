@@ -9,9 +9,15 @@ use layerfs_bucket::bucket::{
     s3_api::{DiagnosticObject, S3Client},
     RemoteError,
 };
+use layerfs_home::outcome::shell_word;
 use layerfs_store::backup::record::BucketRecord;
 use std::path::Path;
 use std::time::{Duration, Instant};
+
+/// Evidence naming only the cause word of a finding.
+fn cause(word: &str) -> SdkValue {
+    SdkValue::map([("cause", SdkValue::text(word))])
+}
 
 pub(super) fn diagnose(
     home: &Path,
@@ -27,6 +33,15 @@ pub(super) fn diagnose(
                 "bucket.configuration",
                 "saved backup alias is absent, unreadable or invalid",
             );
+            // the URL is not known without the record: the line is a template
+            checks.fix(
+                "bucket.configuration",
+                format!(
+                    "layerfs backup connect {} <url> --access-key <key> --key-stdin",
+                    shell_word(name)
+                ),
+            );
+            checks.evidence("bucket.configuration", cause("record_unavailable"));
             return;
         }
     };
@@ -38,12 +53,31 @@ pub(super) fn diagnose(
             "bucket.configuration",
             "backup alias identity or record version is invalid",
         );
+        checks.fix("bucket.configuration", record.connect_again());
+        checks.evidence(
+            "bucket.configuration",
+            SdkValue::map([
+                ("cause", SdkValue::text("identity_or_version")),
+                (
+                    "expected_v",
+                    SdkValue::Int(layerfs_home::home::RECORD_VERSION),
+                ),
+            ]),
+        );
         return;
     }
     if !matches!(fields.get_text("provider"), Some("r2" | "minio")) {
         checks.fail(
             "bucket.configuration",
             "backup alias does not name a supported S3-compatible provider",
+        );
+        checks.fix("bucket.configuration", record.connect_again());
+        checks.evidence(
+            "bucket.configuration",
+            SdkValue::map([
+                ("cause", SdkValue::text("unsupported_provider")),
+                ("supported", SdkValue::text("r2, minio")),
+            ]),
         );
         return;
     }
@@ -71,6 +105,7 @@ pub(super) fn diagnose(
             if let Some(fix) = fix {
                 checks.fix("bucket.credentials", fix);
             }
+            checks.evidence("bucket.credentials", cause(&refusal.code));
             return;
         }
     };
@@ -78,6 +113,8 @@ pub(super) fn diagnose(
         Ok(client) => client.with_diagnostic_resolver(layerfs_bridge::network::resolve_all_within),
         Err(_) => {
             checks.fail("bucket.configuration", "saved endpoint, bucket, prefix, region or key could not be validated; secrets were not displayed");
+            checks.fix("bucket.configuration", record.connect_again());
+            checks.evidence("bucket.configuration", cause("client_not_validated"));
             return;
         }
     };
@@ -110,6 +147,17 @@ pub(super) fn diagnose(
                 checks.lost("bucket.transport", "DNS, connection, configured TLS or reply could not be established within the diagnostic budget");
             }
             failure(checks, "bucket.list", &error);
+            // a refused key is fixed by connecting again (UI2-3); any other
+            // refusal names no cause a command repairs
+            if matches!(
+                error,
+                RemoteError::Refused {
+                    status: 401 | 403,
+                    ..
+                }
+            ) {
+                checks.fix("bucket.list", record.connect_again());
+            }
         }
     }
     // without `--full` the write test is left out of the report
@@ -131,6 +179,7 @@ pub(super) fn diagnose(
                 "bucket.put",
                 "cryptographic probe token could not be generated; no object was written",
             );
+            checks.evidence("bucket.put", cause("entropy_unavailable"));
             return;
         }
     };
