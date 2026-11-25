@@ -31,24 +31,18 @@ use layerfs_history::MountMarkers;
 ///
 /// A mount whose outcome is unknown may have committed its row, and never
 /// reached its caller, which so holds no op to release: a writer that
-/// reopens records the op and releases it once when it reopens
-/// (`Session::note_orphan`).
+/// reopens records the op, inside the turn that lost the reply, and
+/// releases it when it reopens (`Session::note_orphan`).
 pub(crate) fn register_mount(
     provider: &HistoryProvider,
     intent: &GcIntent,
     markers: Option<(LayerStackId, NodeId)>,
 ) -> HistoryResult<MountMarkers> {
-    let registered = match one_message(provider, intent, markers) {
+    match one_message(provider, intent, markers) {
         Ok(Some(read)) => Ok(read),
         Ok(None) => register_separately(provider, intent).map(|()| MountMarkers::NotRead),
         Err(error) => Err(error),
-    };
-    if let (Err(error), Engine::Postgres(session)) = (&registered, &provider.engine) {
-        if error.unknown() && intent.kind == GcIntentKind::Mount {
-            session.note_orphan(intent.op_id);
-        }
     }
-    registered
 }
 
 /// The one-message registration alone: `Some` when it admitted (the keys
@@ -110,8 +104,17 @@ pub(crate) fn one_message(
     let asked = asked
         .as_ref()
         .map(|(node, stack)| (node.as_slice(), stack.as_slice()));
-    let admission = match admit(session, &keys, &row, asked) {
-        Ok(admission) => admission,
+    // Inside the admission's turn: an admitted op is held (its keys are on
+    // that connection), and an unknown one recorded as an orphan, before
+    // any reopen can read them.
+    let mut earlier = None;
+    let settle = |admission: &Admission| match admission {
+        Admission::Admitted(_) => earlier = session.hold_op(intent.op_id, keys.clone()),
+        Admission::Unknown => session.note_orphan(intent.op_id),
+        _ => {}
+    };
+    let (admission, epoch) = match admit(session, &keys, &row, asked, settle) {
+        Ok(admitted) => admitted,
         // An unknown outcome quarantined the session: never sent again.
         Err(BackendError::Unknown) => return Err(BackendError::Unknown.into()),
         // A definite refusal before anything was sent (a statement that did
@@ -121,8 +124,8 @@ pub(crate) fn one_message(
     match admission {
         Admission::Admitted(found) => {
             // A second registration of a held op keeps one level per key.
-            if let Some(earlier) = session.hold_op(intent.op_id, keys) {
-                let _ = session_unlock(session, &earlier);
+            if let Some(earlier) = earlier {
+                let _ = session_unlock(session, &earlier, Some(epoch));
             }
             Ok(Some(match found.map(paths::node_markers_of) {
                 Some(Ok(found)) => MountMarkers::Read(found),
@@ -130,7 +133,7 @@ pub(crate) fn one_message(
             }))
         }
         Admission::Holding => {
-            session_unlock(session, &keys)?;
+            session_unlock(session, &keys, Some(epoch))?;
             Ok(None)
         }
         Admission::Released => Ok(None),

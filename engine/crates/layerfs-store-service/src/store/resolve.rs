@@ -129,6 +129,9 @@ impl BoundWorkspace {
     /// retained here. On `Ok(Some)` the custody is released and the next
     /// Commit may be admitted.
     pub fn resolve_retained(&self) -> Result<Option<Resolution>, Box<Unresolved>> {
+        layerfs_persistence::one_call(|| self.resolve_once())
+    }
+    fn resolve_once(&self) -> Result<Option<Resolution>, Box<Unresolved>> {
         let kept = self
             .retained
             .lock()

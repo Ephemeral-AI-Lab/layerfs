@@ -4,8 +4,8 @@
 //!
 //! A quarantine closes the connection after an uncertain outcome
 //! (`State::quarantine`). On a session that reopens (the Store service's
-//! writer, [`Session::enable_reopen`]) the next call that takes the writer's
-//! turn outside a held lane opens exactly one new connection: a new session
+//! writer and readers, [`Session::enable_reopen`]) the next call that takes
+//! its turn outside a held lane opens exactly one new connection: a new session
 //! for a new operation, never a resend of the one whose outcome stays
 //! unknown. A connection the server already closed (a terminated backend, a
 //! restart, a dropped route), seen with no round trip before anything is
@@ -28,23 +28,89 @@
 //!    proxy) `Integrity`: the new connection is closed and the writer stays
 //!    quarantined. The intent rows are not touched, so they refuse removals
 //!    and compaction throughout.
-//! 4. Each mount intent whose admission ended with an unknown outcome
-//!    (`Session::orphans`) has its row deleted once, by the owner release's
-//!    generation-checked statement: the mount never reached its caller, so
-//!    nothing else would release it. A lost reply fails the reopen; a
-//!    definite refusal leaves the row, as before reopening existed.
+//! 4. Each orphaned intent (`Session::orphans`) has its row deleted by the
+//!    owner release's generation-checked statement, by op id: a mount whose
+//!    admission ended with an unknown outcome (it never reached its caller),
+//!    and an op whose release could not be sent because its turn found the
+//!    writer quarantined (its owner has closed). Nothing else would release
+//!    them. This runs only when step 1 proved every closed connection's
+//!    backend gone, so no admission `COMMIT` can still land after the
+//!    delete; otherwise every orphan waits for a later reopen. An orphan is
+//!    forgotten once its delete was answered (a definite refusal leaves the
+//!    row, as before reopening existed); one whose delete may not have run
+//!    (a lost reply, its prepare's included) stays for the next reopen. The
+//!    delete names one op and is a no-op once the row is gone, so sending
+//!    it at a later reopen never touches another op's row.
 //! 5. The mount statements prepared at open are prepared again.
 //!
-//! One attempt per call: a reopen that fails answers its error, the writer
-//! stays quarantined, and a later call may try once more. Calls queued for
-//! the writer's turn see the new connection in turn. A call inside a held
-//! lane never reopens: its lane relies on the closed connection.
+//! Every change to `held_ops` and `orphans` happens inside a writer turn,
+//! with the statement that changes what the connection holds, and a reopen
+//! reads them inside its turn: a reopen never sees an op half registered
+//! or half released (`history/admission`, `history/release.rs`). A turn
+//! pinned to the connection an intent's keys were taken on
+//! ([`Session::ready_pinned`]) never reopens: once that connection closed,
+//! the keys are gone and the turn is refused `Unknown`, as before.
+//!
+//! One attempt per public call ([`one_call`]): each session reopens at most
+//! once in it, and a reopen that fails answers its error, the writer stays
+//! quarantined, and a later call may try once more. Outside a call scope the
+//! budget is one per writer turn. Calls queued for the writer's turn see the
+//! new connection in turn. A call inside a held lane never reopens: its lane
+//! relies on the closed connection.
 use super::connection::{LostBackend, Session, SessionKey, State};
 use super::driver::Driver;
 use crate::backend::postgresql::history::{mount, statements};
 use crate::backend::records::BackendError;
 use postgres::SimpleQueryMessage;
-use std::{cell::Cell, sync::atomic::Ordering};
+use std::{
+    cell::{Cell, RefCell},
+    sync::atomic::Ordering,
+};
+
+thread_local! {
+    /// The sessions that already attempted a reopen in this thread's
+    /// current call ([`one_call`]); `None` outside a call.
+    static CALL: RefCell<Option<Vec<usize>>> = const { RefCell::new(None) };
+}
+
+/// Runs `call` as one public call (a Commit, a mount, an unmount, a Store
+/// call): every session it uses attempts at most one reopen in it, so a
+/// reopen that fails, or a connection that closes again later in the call,
+/// is refused (`Unknown`) rather than opened again. A call inside another
+/// shares the outer one's budget.
+pub fn one_call<T>(call: impl FnOnce() -> T) -> T {
+    struct Scope(bool);
+    impl Drop for Scope {
+        fn drop(&mut self) {
+            if self.0 {
+                CALL.with(|tried| *tried.borrow_mut() = None);
+            }
+        }
+    }
+    let outer = CALL.with(|tried| {
+        let mut tried = tried.borrow_mut();
+        let fresh = tried.is_none();
+        if fresh {
+            *tried = Some(Vec::new());
+        }
+        fresh
+    });
+    let _scope = Scope(outer);
+    call()
+}
+
+/// Whether `session` may attempt a reopen in this thread's call, noting it.
+fn first_attempt(session: &Session) -> bool {
+    let id = session as *const Session as usize;
+    CALL.with(|tried| match tried.borrow_mut().as_mut() {
+        Some(tried) if tried.contains(&id) => false,
+        Some(tried) => {
+            tried.push(id);
+            true
+        }
+        None => true,
+    })
+}
 
 /// The token the orphan release records in `layerfs.released`; no unlock
 /// follows it.
@@ -114,23 +180,39 @@ impl Session {
     /// Whether `state` may serve a call that holds this session's turn
     /// (`nested`: inside this thread's held lane). A quarantined session
     /// is refused `Unknown`, unless it reopens: then a top-level call opens
-    /// one new connection first ([`Self::reopen`]).
+    /// one new connection first ([`Self::reopen`]), once per call.
     pub(crate) fn ready(&self, state: &mut State, nested: bool) -> Result<(), BackendError> {
-        if !self.reopens.load(Ordering::Relaxed) {
-            return match state.quarantined {
+        self.ready_pinned(state, nested, None)
+    }
+
+    /// [`Self::ready`] for a turn that relies on keys taken on the
+    /// connection of epoch `pin` (`State::closed` when they were taken):
+    /// it runs only on that connection and never reopens, since a new one
+    /// holds none of them. `Unknown` once that connection has closed.
+    pub(crate) fn ready_pinned(
+        &self,
+        state: &mut State,
+        nested: bool,
+        pin: Option<u64>,
+    ) -> Result<(), BackendError> {
+        let reopens = self.reopens.load(Ordering::Relaxed);
+        if reopens && !state.quarantined && !state.client.alive() {
+            // The server closed it before this call sent anything.
+            state.quarantine();
+        }
+        if let Some(epoch) = pin {
+            return match state.quarantined || state.closed != epoch {
                 true => Err(BackendError::Unknown),
                 false => Ok(()),
             };
         }
-        if !state.quarantined && !state.client.alive() {
-            // The server closed it before this call sent anything.
-            state.quarantine();
+        if !state.quarantined {
+            return Ok(());
         }
-        match (state.quarantined, nested) {
-            (false, _) => Ok(()),
-            (true, true) => Err(BackendError::Unknown),
-            (true, false) => self.reopen(state),
+        if !reopens || nested || !first_attempt(self) {
+            return Err(BackendError::Unknown);
         }
+        self.reopen(state)
     }
 
     /// One new connection for this quarantined session, settled before it
@@ -165,7 +247,9 @@ impl Session {
         self.end_lost(state)?;
         self.read_backend(state)?;
         self.retake_keys(state)?;
-        self.release_orphans(state)?;
+        if state.lost.is_empty() {
+            self.release_orphans(state)?;
+        }
         self.prepare_again(state)
     }
 
@@ -239,7 +323,8 @@ impl Session {
         let keys: Vec<SessionKey> = (self.held_ops.lock())
             .map_err(|_| BackendError::Unknown)?
             .values()
-            .flat_map(|held| held.keys.iter().copied())
+            .flatten()
+            .copied()
             .collect();
         if keys.is_empty() {
             return Ok(());
@@ -282,7 +367,8 @@ impl Session {
         Ok(())
     }
 
-    /// Step 4: each orphaned mount intent's row, deleted once by op id.
+    /// Step 4: each orphaned intent's row, deleted by op id. Only an
+    /// orphan whose delete was answered is forgotten.
     fn release_orphans(&self, state: &mut State) -> Result<(), BackendError> {
         let orphans = std::mem::take(&mut *self.orphans.lock().map_err(|_| BackendError::Unknown)?);
         let expected = i64::try_from(self.incarnation.load(Ordering::SeqCst))
@@ -303,9 +389,10 @@ impl Session {
                 },
             );
             if let Err(BackendError::Unknown) = released {
-                // Never sent again: only those not yet attempted stay.
+                // This delete may not have run (its prepare's reply lost,
+                // among others): it stays, with those not yet attempted.
                 if let Ok(mut kept) = self.orphans.lock() {
-                    kept.extend_from_slice(&orphans[index + 1..]);
+                    kept.extend_from_slice(&orphans[index..]);
                 }
                 return Err(BackendError::Unknown);
             }
@@ -328,12 +415,15 @@ impl Session {
         }
     }
 
-    /// Records a mount intent whose admission ended with an unknown
-    /// outcome, for the next reopen to release (step 4).
+    /// Records an intent no caller will release (step 4), inside the
+    /// writer turn that found it so: a mount whose admission ended with an
+    /// unknown outcome, or an op whose release could not be sent.
     pub(crate) fn note_orphan(&self, op: [u8; 16]) {
         if self.reopens.load(Ordering::Relaxed) {
             if let Ok(mut orphans) = self.orphans.lock() {
-                orphans.push(op);
+                if !orphans.contains(&op) {
+                    orphans.push(op);
+                }
             }
         }
     }

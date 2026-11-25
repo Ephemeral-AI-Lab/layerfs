@@ -42,18 +42,19 @@
 //! A reply lost after the `COMMIT` went out, the markers' included, is an
 //! unknown outcome although the intent may have committed. The writer is
 //! quarantined and nothing is resent; the admission records the op as an
-//! orphan (`Session::note_orphan`), and the writer's reopen deletes a row
-//! left behind once, with the owner release's generation-checked statement
-//! (`session/reopen.rs`). Until then the row refuses `branch.remove` and
-//! compaction (`MountsActive`). Before step B a lost markers reply was the
-//! reader's and left the writer able to release the row.
+//! orphan (`Session::note_orphan`) inside that turn, and the writer's reopen
+//! deletes a row left behind, with the owner release's generation-checked
+//! statement, once the old backend is proven gone (`session/reopen.rs`).
+//! Until then the row refuses `branch.remove` and compaction
+//! (`MountsActive`). Before step B a lost markers reply was the reader's and
+//! left the writer able to release the row.
 //!
 //! A refusal whose session lost a later reply (quarantined, its connection
 //! closed, so the server holds none of its keys) is a definite `Conflict`:
 //! the transaction aborted at the refusal, and the caller's separate path
 //! cannot run on that session. The outcome is decided, and an unknown one
 //! quarantines the session, while the session's lock is still held
-//! (`Session::pipeline_decided`).
+//! (`Session::decided_turn`).
 use super::{fused::nonce, statements};
 use crate::backend::postgresql::{
     metadata::{chains, reads},
@@ -228,7 +229,8 @@ pub(crate) fn admit(
     keys: &[SessionKey],
     row: &IntentRow,
     markers: Option<(&[u8], &[u8])>,
-) -> Result<Admission, BackendError> {
+    settle: impl FnOnce(&Admission),
+) -> Result<(Admission, u64), BackendError> {
     let generation = session.incarnation.load(Ordering::SeqCst);
     if generation == 0 {
         return Err(BackendError::Integrity);
@@ -247,8 +249,10 @@ pub(crate) fn admit(
     // resolves them: the flight prepares a statement not yet cached inside
     // a read transaction with that `search_path`, in its own turn (one
     // round trip; none when all are cached). The backend the keys must be
-    // on is read in that turn, after a quarantined writer reopened.
-    let admission = session.decided_turn(|turn| {
+    // on is read in that turn, after a quarantined writer reopened, and
+    // `settle` records what the session now holds before the turn ends.
+    let (admission, epoch) = session.decided_turn(|turn| {
+        turn.ready()?;
         let pid = session.backend_pid.load(Ordering::SeqCst);
         let lock_params: [&(dyn ToSql + Sync); 4] = [&ids, &modes, &pid, &nonce];
         let insert_params: [&(dyn ToSql + Sync); 18] = [
@@ -296,14 +300,16 @@ pub(crate) fn admit(
                 bytes: 34,
             });
         }
-        turn.send(&requests, |replies, trusted| {
+        let admission = turn.send(&requests, |replies, trusted| {
             let admission = decide(session, &steps, replies, trusted, generation);
             let unknown = matches!(admission, Admission::Unknown);
             (admission, unknown)
-        })
+        })?;
+        settle(&admission);
+        Ok((admission, turn.epoch()))
     })?;
     session.count_fused(matches!(admission, Admission::Admitted(_)));
-    Ok(admission)
+    Ok((admission, epoch))
 }
 
 /// The outcome of one message's replies: the first refusal decides (module

@@ -38,6 +38,10 @@ pub(crate) struct State {
     /// seen gone: a lost reply's resolution ends each before the lane pass
     /// (`Session::pass_lane`), and a reopen first (`Session::reopen`).
     pub(crate) lost: Vec<LostBackend>,
+    /// Ordinary connections closed so far: the epoch of the current one. A
+    /// turn pinned to an epoch (`Session::ready_pinned`) runs only on the
+    /// connection that epoch names, so keys taken there are still held.
+    pub(crate) closed: u64,
 }
 
 /// The backend of a connection a quarantine closed, until it is seen gone.
@@ -64,8 +68,8 @@ impl State {
     /// stays unknown. The closed backend is recorded in [`State::lost`] until
     /// it is proven gone. A session that does not reopen refuses every later
     /// call before it reaches a connection, and the caller opens a new
-    /// session; one that does (the Store service's writer) opens one new
-    /// connection at its next call (`session/reopen.rs`). GC intent rows are not
+    /// session; one that does (the Store service's writer and readers) opens
+    /// one new connection at its next call (`session/reopen.rs`). GC intent rows are not
     /// touched: an intent's owner stays live by its recorded process, not by
     /// this connection. A diagnostic driver keeps its connection: it is
     /// read-only, holds no lane, and its deadline and cancellation outcome
@@ -75,6 +79,7 @@ impl State {
         if matches!(self.client, super::driver::Driver::Ordinary(_)) {
             // Its backend may still be finishing what it was sent. One no
             // check read (an open's own check failing) serves nothing more.
+            self.closed += 1;
             if let Some(backend) = self.backend.take() {
                 self.lost.push(LostBackend {
                     backend,
@@ -391,10 +396,12 @@ pub(crate) struct Session {
     /// never drops a key level a live mount of this session holds
     /// (PostgreSQL counts advisory locks per session), and a release whose
     /// row is already gone still unlocks them.
-    pub(crate) held_ops: Mutex<HashMap<[u8; 16], HeldOp>>,
+    /// Every change to it happens inside a writer turn, as does a reopen's
+    /// read of it, so the two never interleave (`session/reopen.rs`).
+    pub(crate) held_ops: Mutex<HashMap<[u8; 16], Vec<SessionKey>>>,
     /// Whether a quarantined session opens a new connection at its next
-    /// top-level call (`Session::reopen`); only the Store service's writer
-    /// enables it.
+    /// top-level call (`Session::reopen`); the Store service enables it on
+    /// its writer and readers.
     pub(crate) reopens: AtomicBool,
     /// Whether the writer's mount statements were prepared
     /// (`prepare_mount_writes`), so a reopen prepares them again.
@@ -402,15 +409,6 @@ pub(crate) struct Session {
     /// Mount intents whose admission ended with an unknown outcome: the
     /// next reopen deletes each one's row once, by its op id.
     pub(crate) orphans: Mutex<Vec<[u8; 16]>>,
-}
-
-/// One registered intent's session keys, and whether a release of it is
-/// running (a second release then unlocks nothing). A reopen takes every
-/// entry's keys again, a releasing one's included, so the release's unlock
-/// gives back exactly the level it finds.
-pub(crate) struct HeldOp {
-    pub(crate) keys: Vec<SessionKey>,
-    pub(crate) releasing: bool,
 }
 
 /// One session advisory key a registered intent holds: the key, and whether
@@ -457,6 +455,7 @@ impl Session {
                 },
                 backend: None,
                 lost: Vec::new(),
+                closed: 0,
             }),
             lane: Mutex::new(None),
             writable: false,
@@ -494,6 +493,7 @@ impl Session {
                 },
                 backend: None,
                 lost: Vec::new(),
+                closed: 0,
             }),
             lane: Mutex::new(None),
             writable,
@@ -555,55 +555,20 @@ impl Session {
 
     /// Notes that this session holds `keys` for registered op `op`. Returns
     /// the keys an earlier registration of the same op still held, which the
-    /// caller unlocks so the op keeps one level of each key.
+    /// caller unlocks so the op keeps one level of each key. Called inside
+    /// the writer turn whose connection holds `keys`.
     pub(crate) fn hold_op(&self, op: [u8; 16], keys: Vec<SessionKey>) -> Option<Vec<SessionKey>> {
-        let held = HeldOp {
-            keys,
-            releasing: false,
-        };
         self.held_ops
             .lock()
             .ok()
-            .and_then(|mut ops| ops.insert(op, held))
-            .map(|earlier| earlier.keys)
+            .and_then(|mut ops| ops.insert(op, keys))
     }
 
     /// Takes `op` from the ops this session holds keys for, with its keys:
     /// `Some` only the first time, and only when this session registered it.
+    /// Called inside a writer turn.
     pub(crate) fn take_op(&self, op: &[u8; 16]) -> Option<Vec<SessionKey>> {
-        self.held_ops
-            .lock()
-            .ok()
-            .and_then(|mut ops| ops.remove(op))
-            .map(|held| held.keys)
-    }
-
-    /// Marks `op` as being released and returns its keys: `Some` only when
-    /// this session registered it and no other release of it is running.
-    /// The entry stays until [`Self::end_release`], so a reopen meanwhile
-    /// takes its keys again.
-    pub(crate) fn begin_release(&self, op: &[u8; 16]) -> Option<Vec<SessionKey>> {
-        let mut ops = self.held_ops.lock().ok()?;
-        let held = ops.get_mut(op).filter(|held| !held.releasing)?;
-        held.releasing = true;
-        Some(held.keys.clone())
-    }
-
-    /// Ends a release [`Self::begin_release`] began: the op keeps its keys
-    /// when `kept`, else it is gone from the held ops.
-    pub(crate) fn end_release(&self, op: &[u8; 16], kept: bool) {
-        if let Ok(mut ops) = self.held_ops.lock() {
-            match kept {
-                true => {
-                    if let Some(held) = ops.get_mut(op) {
-                        held.releasing = false;
-                    }
-                }
-                false => {
-                    ops.remove(op);
-                }
-            }
-        }
+        self.held_ops.lock().ok().and_then(|mut ops| ops.remove(op))
     }
 
     /// Records the backend that took a session advisory lock. The first lock

@@ -32,18 +32,9 @@ use crate::backend::postgresql::history::release::release as released;
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
-        Engine::Postgres(session) => {
-            // The op stays held while its release runs, so a writer
-            // reopened by the release's own message takes its keys again
-            // first and the unlock gives back exactly that level.
-            let keys = session.begin_release(op_id);
-            let released = released(session, op_id, keys.as_deref().unwrap_or_default());
-            if keys.is_some() {
-                let kept = released.as_ref().map_or(true, |released| released.kept);
-                session.end_release(op_id, kept);
-            }
-            released?.answer
-        }
+        // The op's keys are taken, and kept or dropped, inside the
+        // release's own writer turn (`release.rs`).
+        Engine::Postgres(session) => released(session, op_id)?.answer,
     }
 }
 
@@ -114,9 +105,7 @@ pub(crate) fn release_done(
             // the lane: its done stamp relies on releases being serialized.
             let retained = provider.write(|tx| retain_done_in(tx, op_id, evidence))?;
             if retained {
-                if let Some(keys) = session.take_op(op_id) {
-                    let _ = session_unlock(session, &keys);
-                }
+                let _ = session_unlock_op(session, op_id);
             }
             Ok(retained)
         }

@@ -93,6 +93,12 @@ impl Transaction<'_> {
         self.state.borrow().work.statements
     }
 
+    /// The epoch of the connection this turn runs on (`State::closed`), for
+    /// a later turn pinned to it (`Session::ready_pinned`).
+    pub(crate) fn epoch(&self) -> u64 {
+        self.state.borrow().closed
+    }
+
     /// Online engine check preserving the server's concrete corruption verdict.
     /// Other refusals (including permissions) retain ordinary typed custody.
     pub(crate) fn engine_check(
@@ -310,14 +316,6 @@ impl Session {
         self.run_as(Mode::Statement, body)
     }
 
-    /// One GC admission write outside the publication lane ([`Mode::Admit`]).
-    pub(crate) fn run_admit<T, E: From<BackendError> + OutcomeError>(
-        &self,
-        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
-    ) -> Result<T, E> {
-        self.run_as(Mode::Admit, body)
-    }
-
     /// One autocommit statement sent as written ([`Mode::Bare`]); refused on
     /// a read-only session. The GC session advisory keys use it unfenced: a
     /// fenced form would take or drop a key and then answer `Stale`, leaving
@@ -344,6 +342,31 @@ impl Session {
         fenced: bool,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
+        self.run_turn_fenced(mode, fenced, None, body, |_, _| {})
+    }
+
+    /// One fenced turn of `mode`, pinned to the connection of epoch `pin`
+    /// when given ([`Session::ready_pinned`]), with `after` run on its
+    /// result before the turn ends: a change to what the session holds
+    /// (`held_ops`, `orphans`) made there cannot interleave with a reopen.
+    pub(crate) fn run_turn<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        mode: Mode,
+        pin: Option<u64>,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+        after: impl FnOnce(&mut State, &Result<T, E>),
+    ) -> Result<T, E> {
+        self.run_turn_fenced(mode, true, pin, body, after)
+    }
+
+    fn run_turn_fenced<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        mode: Mode,
+        fenced: bool,
+        pin: Option<u64>,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+        after: impl FnOnce(&mut State, &Result<T, E>),
+    ) -> Result<T, E> {
         if !matches!(mode, Mode::Read | Mode::Immutable | Mode::Statement) && !self.writable {
             return Err(BackendError::ReadOnly.into());
         }
@@ -359,7 +382,20 @@ impl Session {
             .lock()
             .map_err(|_| E::from(BackendError::Unknown))?;
         let state: &mut State = &mut guard;
-        self.ready(state, turn.nested).map_err(E::from)?;
+        let result = self.turn(state, turn.nested, (mode, fenced, pin), start, body);
+        after(state, &result);
+        result
+    }
+
+    fn turn<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        state: &mut State,
+        nested: bool,
+        (mode, fenced, pin): (Mode, bool, Option<u64>),
+        start: Instant,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.ready_pinned(state, nested, pin).map_err(E::from)?;
         // Spec 5.2: the generation check rides in the statements a client
         // already sends. A transaction checks it in the same round trip as its
         // `BEGIN`, so the `AccessShareLock` it takes on `history_meta` holds
@@ -380,14 +416,14 @@ impl Session {
         // A write nested in this thread's held lane relies on the lane
         // connection's row lock: it holds the lane barrier shared and checks
         // that lane transaction in its COMMIT round trip (finding #10).
-        let in_lane = turn.nested && matches!(mode, Mode::Write | Mode::Publish);
+        let in_lane = nested && matches!(mode, Mode::Write | Mode::Publish);
         // A write or publication outside a held lane takes the lane row and
         // passes the barrier itself; its rollback also releases a barrier a
         // cancelled statement left held (#776 P6).
         // A Stage transaction is the compaction swap's, which takes the lane
         // row and its barrier itself (#776 P5): its rollback releases a
         // barrier a failed statement left held, and matches nothing otherwise.
-        let leftover = (!turn.nested && matches!(mode, Mode::Write | Mode::Publish | Mode::Stage))
+        let leftover = (!nested && matches!(mode, Mode::Write | Mode::Publish | Mode::Stage))
             .then(|| super::profile::barrier_leftover(&self.settings.schema))
             .unwrap_or_default();
         let begin = match mode {
@@ -486,7 +522,7 @@ impl Session {
                     uncertain: Cell::new(false),
                     refused: Cell::new(None),
                     single: None,
-                    lane: Cell::new(mode == Mode::Publish && !turn.nested),
+                    lane: Cell::new(mode == Mode::Publish && !nested),
                     fence: None,
                     schema,
                     packs: RefCell::default(),

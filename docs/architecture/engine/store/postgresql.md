@@ -196,11 +196,11 @@ failed `Busy` after its lock wait. Closing ends all of it. Nothing is replayed
 and the outcome stays unknown. The closed connection's backend (pid and
 start, read when the session opened) is recorded as lost until it is proven
 gone. On a session that does not reopen (persistence and compaction
-handles, the Store service's readers), every later call is refused before
-it reaches a connection, and `PostgresStorage::usable` answers `false`, so
-the caller opens a new session. The Store service's writer reopens instead:
-its next call opens one new connection and settles what the closed one left
-before serving ([Writer reopen](#writer-reopen)). GC intent rows are
+handles), every later call is refused before it reaches a connection, and
+`PostgresStorage::usable` answers `false`, so the caller opens a new
+session. The Store service's writer and readers reopen instead: the next
+call opens one new connection and settles what the closed one left before
+serving ([Writer reopen](#writer-reopen)). GC intent rows are
 untouched: an intent's owner stays live by its recorded process, not by
 this connection. A diagnostic driver
 keeps its read-only connection, whose deadline and cancellation outcome are
@@ -235,13 +235,16 @@ peer mount rows.
 The Store service's writer session reopens after a quarantine
 ([`reopen.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/reopen.rs),
 enabled by `PostgresStorage::enable_reopen` in the service's
-[`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)).
-Persistence and compaction handles and the service's readers do not: they
-keep the refusal above. Before the reopen, one lost reply refused every
-later Commit, mount, unmount release and kept-ordinal rewind of that
-service until it closed.
+[`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)),
+and so do its readers (the control reader and every Workspace reader).
+Persistence and compaction handles do not: they keep the refusal above.
+Before the reopen, one lost reply refused every later Commit, mount,
+unmount release and kept-ordinal rewind of that service until it closed,
+and a reader whose connection closed failed every later read of its
+Workspace (a lost control-reader reply failed every later resolution of
+the service, any Workspace's).
 
-The next call that takes the writer's turn outside a held lane opens
+The next call that takes the session's turn outside a held lane opens
 exactly one new connection before its own work: a new session for a new
 operation, never a resend of the one whose outcome stays unknown. A
 connection the server already closed (a terminated backend, a server
@@ -254,18 +257,48 @@ order, before the new connection serves anything:
 | --- | --- | --- |
 | 1. End the old backends | One statement ends every recorded lost backend by pid and start (`pg_terminate_backend` bounded by `lock_timeout`, 30 s when unset) and reads which are gone. One whose start is unknown (the role could not read it) is never ended: the pid alone may name another client's backend | A backend not proven gone stays recorded and the reopen proceeds; a later `pass_lane` ends it before any resolution concludes "not committed". Only a lost reply fails the reopen |
 | 2. Read the new backend | The Store's generation, `pg_backend_pid()` and the backend start in one statement | a moved generation `Stale` |
-| 3. Take held keys again | The advisory keys of every intent the session still holds (`held_ops`: live mounts, an unmount's release in progress) went with the old connection. They are taken again, all or none, in the statement a registration uses (`gc_lock_session`, generation and backend checked) | a refused key `Busy`, a moved generation `Stale`, a key on another backend (a transaction-pooling proxy) `Integrity`: the new connection is closed, the writer stays quarantined and the call fails. The intent rows were never touched, so they kept refusing removals and compaction |
-| 4. Release orphaned mount rows | A mount admission whose reply was lost may have committed its intent row with no caller to release it. Its op id was recorded; the row is deleted once by the owner release's generation-checked statement (token `reopen`) | a lost reply fails the reopen and keeps the unattempted ops; a definite refusal leaves the row |
+| 3. Take held keys again | The advisory keys of every intent the session still holds (`held_ops`: its live mounts) went with the old connection. They are taken again, all or none, in the statement a registration uses (`gc_lock_session`, generation and backend checked) | a refused key `Busy`, a moved generation `Stale`, a key on another backend (a transaction-pooling proxy) `Integrity`: the new connection is closed, the writer stays quarantined and the call fails. The intent rows were never touched, so they kept refusing removals and compaction |
+| 4. Release orphaned rows | Two kinds of intent row no caller will release: a mount whose admission reply was lost (it may have committed its row and never reached its caller), and an op whose release found the writer quarantined and could not be sent (its owner has closed; the closed connection gave its keys back, so it left `held_ops` and step 3 does not take them again). Each was recorded inside the turn that found it; its row is deleted by the owner release's generation-checked statement, by op id (token `reopen`). This step runs only when step 1 proved every closed connection's backend gone, so no admission `COMMIT` can land after the delete; otherwise every orphan waits for a later reopen | An orphan whose delete was answered is forgotten (a definite refusal leaves the row). One whose delete may not have run (a lost reply, its prepare's included) stays, with those not yet attempted, and the reopen fails. The delete names one op and is a no-op once the row is gone, so sending it at a later reopen never touches another op's row |
 | 5. Prepare again | The daemon's mount statements prepared at open (`prepare_mounts`) are prepared on the new connection | as any prepare |
+
+**Custody never straddles a reopen.** Every change to `held_ops` and the
+orphans happens inside a writer turn, together with the statement that
+changes what the connection holds, and a reopen reads them inside its own
+turn, so a reopen never sees an op half registered or half released. A
+mount's one-message admission holds its op, or records it as an orphan,
+before its turn ends. A release takes the op from `held_ops` after the
+turn is ready (a reopen in that turn has taken its keys again, so the
+unlock gives back exactly that level) and puts it back, when the unlock
+gave nothing back, before the turn ends. A registration statement by
+statement (removal, Init, merge, compaction and a mount's fallback) takes
+its keys in one turn and writes its row in a second turn pinned to the
+connection that holds them (`Session::ready_pinned`, by the connection's
+epoch, `State::closed`): once that connection has closed, the pinned turn
+is refused `Unknown` before anything is sent and the row is never written
+keyless. Its op is held inside that second turn. Every unlock of keys that
+are not in `held_ops` (a refused lock's grants, a failed registration's
+keys, an earlier level of a registered op, a compaction claim) is pinned the
+same way and sends nothing once that connection has closed, since the
+current one holds other ops' levels of the same keys.
 
 Pooler detection, the generation fence and `lock_timeout` apply to the new
 connection as to the first; it is opened with the same settings and
-connector. One attempt per call: a reopen that fails answers its error, the
-writer stays quarantined, and a later call may try once more. There is no
-loop or backoff. Calls queued for the writer's turn see the new connection
-in turn, so several calls waiting when the connection died reopen it once.
-A call inside a held lane never reopens: its lane transaction relies on the
-closed connection. The reader pool is unaffected.
+connector. **One reopen attempt per public call.** A Commit, a mount, an
+unmount, a resolution and an SDK Store call each run inside
+`layerfs_persistence::one_call` (the Store service's `BoundWorkspace` and
+`methods::call` entry points): each session attempts at most one reopen in
+it. A reopen that fails answers its error, the session stays quarantined,
+and a later call may try once more; a connection that closes again later in
+the same call is refused `Unknown`, not opened a second time. Outside a
+call scope the budget is one per turn. There is no loop or backoff. Calls
+queued for the writer's turn see the new connection in turn, so several
+calls waiting when the connection died reopen it once. A call inside a held
+lane never reopens: its lane transaction relies on the closed connection.
+
+A reader holds no keys and writes nothing, so its reopen settles nothing
+beyond steps 1 and 2. Its store-service session no longer latches an
+uncertain read as a permanent failure (`StoreReader::reopening`): the read
+whose reply was lost fails, and the next read reopens.
 
 Retained uncertain Commits are not resolved inside the reopen: the Store
 service keeps no Workspace registry, and an owner job run from inside the
@@ -275,6 +308,17 @@ next Commit (`resolve_retained`, [Fused Commit](#fused-commit)): the
 then the attempt lookup installs it or folds it back. Nothing is resent.
 `SqlWork.reopens` counts reopens that served and `last_reopen_ms` records
 the last one; neither is in the observation wire format.
+
+**Known limit: a lost backend that can never be ended.** A closed
+connection's backend whose start the role could not read, or one a session
+lock showed on another backend (a transaction-pooling proxy), cannot be
+ended by pid and start, so it stays recorded for the session's life. Every
+later `pass_lane` on that writer then answers `Unknown` without sending, so
+each later resolution of a retained Commit of that service stays
+undetermined, and step 4 never runs (orphaned rows stay until the daemon
+exits and the owner is settled). Concluding "not committed" without proving
+the backend gone could install a Commit twice, so the record is kept. A
+role that can read its own backends' starts (the default) never meets it.
 
 ## Transactions
 
@@ -634,8 +678,11 @@ stale or refused delete it gives nothing back and the session keeps the
 keys with the op, so a later release still can. A lost delete reply is
 `UnknownOutcome` and quarantines the session; a refused or lost unlock
 quarantines it too, while the release answers its delete, as before. Such
-an op is no longer held, so a writer reopen takes none of its keys again
-([Writer reopen](#writer-reopen)).
+an op has left `held_ops` inside the release's own turn, so no writer
+reopen takes its keys again ([Writer reopen](#writer-reopen)). A release
+whose turn finds the writer quarantined, and whose reopen fails or is
+refused, sends nothing: its op leaves `held_ops` and its row becomes an
+orphan the next reopen deletes.
 
 `postgresql_gc_sessions` pins the counts of one warm mount register and
 release: register 1 round trip since step B (the one message; 6 before it,
@@ -713,13 +760,13 @@ Keys and their custody:
   `pg_backend_pid()`, compared with the session's recorded backend, and a
   transaction-pooled connection is `Unsupported`.
 - An unmount releases the intent on the writer even when closing the
-  Workspace's reader failed (`BoundWorkspace::close`, #768 review): a
-  reader whose backend was terminated fails its reads and the unmount
-  still reports that failure, but the healthy writer deletes the row and
-  gives back the keys instead of keeping them until the service exits.
-  The release runs once, after the local close succeeded; nothing with an
-  unknown outcome is sent again (`tester768_stale_reader`
-  `a_mounted_workspace_reader_terminated`).
+  Workspace's reader failed (`BoundWorkspace::close`, #768 review): the
+  healthy writer deletes the row and gives back the keys instead of keeping
+  them until the service exits. The release runs once, after the local
+  close succeeded; nothing with an unknown outcome is sent again. A reader
+  whose backend was terminated no longer fails: its next read reopens it
+  ([Writer reopen](#writer-reopen)), so its reads and the unmount succeed
+  (`tester768_stale_reader` `a_mounted_workspace_reader_terminated`).
 
 **Not done, and why.** #768 proposed two more cuts that the source does
 not support:
@@ -930,7 +977,7 @@ still quarantines the session and is never sent again. A statement the
 message needs and the connection has not cached (evicted from the
 256-entry statement cache, or a service that did not prepare it at open)
 is prepared in the message's own turn inside a read transaction with the
-Store's `search_path` (`Session::pipeline_decided`), so its unqualified
+Store's `search_path` (`Session::decided_turn`), so its unqualified
 names resolve and nothing can evict it before the flight.
 `postgresql_mount_pipeline.rs` checks this over seeded random sets
 of intents (every kind; Store, project and Branch scopes of the mount's
@@ -949,12 +996,13 @@ session cannot run the fallback.
 after the `COMMIT` went out, the markers' reply included, the mount answers
 `UnknownOutcome` and the writer is quarantined, but the intent may have
 committed. The mount never reached its caller, so its op id is recorded,
-and the writer's reopen deletes that row once with the owner release's
-generation-checked statement ([Writer reopen](#writer-reopen), step 4;
-`mount_fault_*` "unknown, row released at reopen"). Until that next writer
-call the row refuses `branch.remove` and compaction (`MountsActive`). This
-stays within the one-attempt rule: the mount is not resent, and the delete
-is a new operation on a row no caller holds. Before step B the markers were
+inside the turn that lost the reply, and the writer's reopen deletes that
+row with the owner release's generation-checked statement once the old
+backend is proven gone ([Writer reopen](#writer-reopen), step 4;
+`mount_fault_*` "unknown, row released at reopen"). Until then the row
+refuses `branch.remove` and compaction (`MountsActive`). This stays within
+the one-attempt rule: the mount is not resent, and the delete is a new
+operation on a row no caller holds. Before step B the markers were
 read on the Workspace reader, so a lost markers reply left a healthy writer
 that could release the row.
 
@@ -1025,6 +1073,7 @@ entry. Recorded by review, not fixed in #768.
 | [`postgresql_reader_idle.rs`](../../../../engine/crates/layerfs-store-service/tests/postgresql_reader_idle.rs) | the idle reader's check: under the threshold nothing is sent; past it, a reset path and a silently dead backend both get the mount a fresh reader, the second within the 5 s bound; a reader silent past the threshold while checked out is checked at its next checkout, however short its time in the pool |
 | [`mount_fault_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_drop.rs), [`mount_fault_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_kill.rs) | a dropped connection, and a terminated backend, at every server message of a repeated mount and of an unmount (`support/mount_sweep.rs`): an answered mount holds its row and three keys (unless the backend ended after every reply); an answered unmount left neither; a failed call whose service still works left nothing (a mount) or kept both (an unmount); an unknown one closed the writer's connection, so no key, at most its row, and the next call reopened the writer (at most once): a mount's row is released by the reopen, an unmount's row is kept, and the old backend has ended; a backend terminated after every reply of a mount loses its keys, which the reopen takes again; a fresh service mounts; no backend is left in a transaction |
 | [`writer_reopen.rs`](../../../../engine/crates/layerfs-store-service/tests/writer_reopen.rs) | [Writer reopen](#writer-reopen): a terminated writer backend and a dropped writer connection reopen at the next Commit, which lands (`reopens` 1, the old backend gone); an uncertain fused Commit that the server committed is installed once (`resolve_retained` `Committed`, then `UpToDate`) and one cut before its `COMMIT` folds back and lands once; a mount kept across the reopen keeps its row and its keys move to the new backend (removal and compaction still `MountsActive`, the unmount releases both); a key another session holds exclusively refuses the reopen (a definite refusal, no reopen counted, the row kept), the writer stays quarantined and a later call reopens once the key is free; a mount whose reply was lost after its `COMMIT` leaves no row after the reopen; a reopen against a server that refuses connections fails once and the next call reopens; two Commits queued when the writer died reopen it once |
+| [`testerwr_races.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_races.rs), [`testerwr_orphan_release.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_orphan_release.rs), [`testerwr_reopen_sweep.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_reopen_sweep.rs), [`testerwr_resolve_sweep.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_resolve_sweep.rs), [`testerwr_control_reader.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_control_reader.rs) | The independent tester's: queued and racing calls reopen once and keep every key level; an unmount whose reopen is refused leaves no keys held and its row is released by the next reopen; an orphan whose delete was never executed (its prepare's reply lost) is still released by a later reopen; a drop or kill at every message of a reopen and its Commit (each half of the flight in its own test) keeps every live mount's row and all four keys on at most one backend, never resends, and leaves no orphaned row at the end; every message of an uncertain Commit's resolution; after a server restart, and after one lost control-reader reply, a retained Commit still resolves, installed once |
 
 ### Commit round trips
 
