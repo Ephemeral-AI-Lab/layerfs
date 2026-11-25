@@ -35,11 +35,9 @@ impl Session {
         } else {
             Wait::Reader
         };
-        let _turn = self.admission.enter(wait)?;
+        let turn = self.admission.enter(wait)?;
         let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
-        if state.quarantined {
-            return Err(BackendError::Unknown);
-        }
+        self.ready(&mut state, turn.nested)?;
         let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
         let begin = self.settings.read_begin();
         match state.statements_in(&texts, Some(&begin)) {

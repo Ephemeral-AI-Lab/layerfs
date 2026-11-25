@@ -33,11 +33,14 @@ pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryRe
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
         Engine::Postgres(session) => {
-            let keys = session.take_op(op_id).unwrap_or_default();
-            let released = released(session, op_id, &keys);
-            let kept = released.as_ref().map_or(true, |released| released.kept);
-            if kept && !keys.is_empty() {
-                session.hold_op(*op_id, keys);
+            // The op stays held while its release runs, so a writer
+            // reopened by the release's own message takes its keys again
+            // first and the unlock gives back exactly that level.
+            let keys = session.begin_release(op_id);
+            let released = released(session, op_id, keys.as_deref().unwrap_or_default());
+            if keys.is_some() {
+                let kept = released.as_ref().map_or(true, |released| released.kept);
+                session.end_release(op_id, kept);
             }
             released?.answer
         }

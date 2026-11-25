@@ -18,8 +18,12 @@
 //! change, so ids reserved after a rewind are used. At the end the audit
 //! and amcheck pass. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 //!
-//! Split into three binaries (this one, `verify_unknown_allocators_raced_a`
-//! and `_raced_b`) so each stays well under the 120 s test ceiling; a
+//! Split into five binaries (this one with the warm flights,
+//! `verify_unknown_allocators_cold_a` and `_cold_b` with the halves of the
+//! cold flights, `_raced_a` and `_raced_b`) so each stays well under the
+//! 120 s test ceiling (a writer that lost a reply reopens since
+//! `session/reopen.rs`, so more follow-up Commits land and each run does
+//! more work than when the cold flights shared this binary); a
 //! process runs at most `verify768::SWEEPS` sweeps at once. More at once
 //! exhausts macOS's ephemeral ports (about 16k, TIME_WAIT about 30 s) and
 //! later dials fail `Refused { status: "Closed" }`.
@@ -42,16 +46,6 @@ fn drop_warm() {
 }
 
 #[test]
-fn drop_cold() {
-    sweep("v768u_dc", Flight::Cold, Fault::Drop, 0, 1);
-}
-
-#[test]
 fn holdkill_warm() {
     sweep("v768u_kw", Flight::Warm, Fault::HoldKill, 0, 1);
-}
-
-#[test]
-fn holdkill_cold() {
-    sweep("v768u_kc", Flight::Cold, Fault::HoldKill, 0, 1);
 }

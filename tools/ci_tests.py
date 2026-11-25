@@ -120,7 +120,11 @@ SLOW = {
     ("layerfs-store-service", "commit_fused_sizes_seeded"): 60.6,
     # Independent verification suite of the fused Commit (#768), serial runs on
     # the macOS host, 2026-11-25.
-    ("layerfs-store-service", "verify_unknown_allocators"): 52.0,
+    # Warm flights only since the writer reopen (2026-11-25): the cold halves
+    # moved to their own binaries, measured the same day.
+    ("layerfs-store-service", "verify_unknown_allocators"): 65.7,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_a"): 55.3,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_b"): 59.7,
     ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 45.2,
     ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 44.3,
     ("layerfs-store-service", "verify_paused_commit_sweeps"): 69.5,

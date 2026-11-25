@@ -191,8 +191,10 @@ both under `lock_timeout`, and rolls back, proves the original has ended. A
 wait that reaches the timeout is `Busy`, an undetermined attempt. The lane
 alone does not cover a fused Commit, whose message sends its packs before it
 takes the lane row: a backend still inserting them when the reply was lost
-would take the lane and commit after the pass. So on a quarantined writer
-session the pass first ends that session's backend (`pg_terminate_backend`
+would take the lane and commit after the pass. So the pass first ends the
+backend of each closed writer connection still recorded as lost (the
+session quarantined, or [reopened](../store/postgresql.md#writer-reopen)
+while that backend was not yet proven gone; `pg_terminate_backend`
 with a wait, bounded by `lock_timeout`; the backend is named by the pid and
 start the open's check read; with no start read it is never terminated): a
 `COMMIT` it already made is then found by the attempt, and one it had not

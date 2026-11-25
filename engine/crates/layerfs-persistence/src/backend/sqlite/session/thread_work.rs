@@ -139,6 +139,8 @@ impl SqlWork {
     pub fn accumulate(&mut self, next: &SqlWork) {
         macro_rules! add { ($($f:ident),+) => { $(self.$f = self.$f.saturating_add(next.$f);)+ }; }
         scalars!(add);
+        self.reopens = self.reopens.saturating_add(next.reopens);
+        self.last_reopen_ms = self.last_reopen_ms.max(next.last_reopen_ms);
         for (to, from) in self
             .statement_phases
             .iter_mut()
@@ -155,6 +157,7 @@ impl SqlWork {
         let mut out = *self;
         macro_rules! sub { ($($f:ident),+) => { $(out.$f = self.$f.saturating_sub(before.$f);)+ }; }
         scalars!(sub);
+        out.reopens = self.reopens.saturating_sub(before.reopens);
         for (to, from) in out
             .statement_phases
             .iter_mut()

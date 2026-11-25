@@ -227,6 +227,28 @@ impl Session {
         self.pipeline_turn(requests, true, true, None, judge)
     }
 
+    /// [`Self::pipeline_decided`] whose requests are built inside the turn,
+    /// once the session is ready (a quarantined writer reopened,
+    /// `Session::ready`): `run` reads what the connection decides, such as
+    /// the backend its session keys are on, and sends the flight with
+    /// [`DecidedTurn::send`].
+    pub(crate) fn decided_turn<T>(
+        &self,
+        run: impl FnOnce(&mut DecidedTurn<'_>) -> Result<T, BackendError>,
+    ) -> Result<T, BackendError> {
+        if !self.writable {
+            return Err(BackendError::ReadOnly);
+        }
+        let turn = self.admission.enter(Wait::Writer)?;
+        let mut guard = self.state.lock().map_err(|_| BackendError::Unknown)?;
+        let state: &mut State = &mut guard;
+        self.ready(state, turn.nested)?;
+        run(&mut DecidedTurn {
+            session: self,
+            state,
+        })
+    }
+
     fn pipeline_turn<T>(
         &self,
         requests: &[Request<'_>],
@@ -244,9 +266,19 @@ impl Session {
         }
         let mut guard = self.state.lock().map_err(|_| BackendError::Unknown)?;
         let state: &mut State = &mut guard;
-        if state.quarantined {
-            return Err(BackendError::Unknown);
-        }
+        self.ready(state, turn.nested)?;
+        self.flight(state, requests, scoped, release, judge)
+    }
+
+    /// One flight on `state`, whose turn and lock the caller holds.
+    fn flight<T>(
+        &self,
+        state: &mut State,
+        requests: &[Request<'_>],
+        scoped: bool,
+        release: Option<&str>,
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
         let start = Instant::now();
         let texts: Vec<&str> = requests
             .iter()
@@ -346,6 +378,23 @@ impl Session {
             state.quarantine();
         }
         Ok(answer)
+    }
+}
+
+/// A writer turn [`Session::decided_turn`] holds, its session ready.
+pub(crate) struct DecidedTurn<'s> {
+    session: &'s Session,
+    state: &'s mut State,
+}
+
+impl DecidedTurn<'_> {
+    /// Sends one flight as [`Session::pipeline_decided`] does, in this turn.
+    pub(crate) fn send<T>(
+        &mut self,
+        requests: &[Request<'_>],
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        self.session.flight(self.state, requests, true, None, judge)
     }
 }
 

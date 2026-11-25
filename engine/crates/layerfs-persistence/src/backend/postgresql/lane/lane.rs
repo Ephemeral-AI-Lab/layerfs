@@ -8,7 +8,11 @@
 //! The lane transaction's id is recorded when it begins, so a nested write
 //! can prove, in its COMMIT round trip, that the row lock it relies on still
 //! exists (finding #10; the barrier is described in `session/profile.rs`).
-use crate::backend::postgresql::session::{connection::Session, rows};
+use crate::backend::postgresql::session::{
+    connection::{LostBackend, Session},
+    reopen::{end_sql, endable, ended},
+    rows,
+};
 use crate::backend::records::BackendError;
 use layerfs_telemetry::timer::waits::Wait;
 use postgres::{Client, SimpleQueryMessage};
@@ -86,6 +90,12 @@ impl Session {
         if turn.nested {
             return Err(BackendError::Integrity);
         }
+        // The writes nested in the hold never reopen the writer: a
+        // quarantined one reopens here, before the lane is taken.
+        {
+            let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
+            self.ready(&mut state, false)?;
+        }
         let mut lane = self.lane.lock().map_err(|_| BackendError::Unknown)?;
         if lane.is_none() {
             self.lane_work.add(1, 0);
@@ -152,22 +162,24 @@ impl Session {
     /// writes and keeps nothing, needs no turn and works on a session an
     /// unknown outcome quarantined. A wait that reaches the timeout is `Busy`.
     ///
-    /// On a quarantined session the lane alone proves nothing: a fused
-    /// Commit sends its packs before it takes the lane row, so a backend
-    /// still inserting them when the reply was lost would take the lane and
-    /// commit after this pass. So first its backend is ended
-    /// ([`Self::end_lost_backend`]); a `COMMIT` it already made is then
-    /// found by the caller's read, and one it had not made is aborted.
+    /// While a connection a quarantine closed may still have a backend, the
+    /// lane alone proves nothing: a fused Commit sends its packs before it
+    /// takes the lane row, so a backend still inserting them when the reply
+    /// was lost would take the lane and commit after this pass. So first
+    /// every such backend is ended ([`Self::end_lost_backends`]), whether
+    /// the session is still quarantined or was reopened since; a `COMMIT`
+    /// one already made is then found by the caller's read, and one it had
+    /// not made is aborted.
     pub(crate) fn pass_lane(&self) -> Result<(), BackendError> {
-        let lost = self
-            .state
-            .lock()
-            .map_err(|_| BackendError::Unknown)?
-            .quarantined;
+        let (lost, noted) = {
+            let state = self.state.lock().map_err(|_| BackendError::Unknown)?;
+            let noted = self.backend_pid.load(std::sync::atomic::Ordering::SeqCst);
+            (state.lost.clone(), noted)
+        };
         let mut client = self.connector.connect()?;
         self.lane_work.add(1, 1);
-        if lost {
-            self.end_lost_backend(&mut client)?;
+        if !lost.is_empty() {
+            self.end_lost_backends(&mut client, &lost, noted)?;
         }
         let passed = client
             .simple_query(&self.settings.lane_begin())
@@ -178,41 +190,39 @@ impl Session {
         passed
     }
 
-    /// Terminates the backend of this quarantined session's connection, if
-    /// it is still there, and waits until it is gone, bounded by
-    /// `lock_timeout` (30 s when that is 0): `pg_terminate_backend` with a
-    /// timeout answers true only once the process has exited, after its
-    /// transaction ended. Waiting for it is not a retry. One round trip on
-    /// `client`. Not proven gone within the bound is `Busy`; a backend the
-    /// open did not name, one whose start it could not read (the pid alone
-    /// may since name another client's backend, which must not be ended),
-    /// or one a session lock showed on another backend (a
-    /// transaction-pooling proxy), is `Unknown`, with nothing sent: the
-    /// outcome stays unknown either way.
-    fn end_lost_backend(&self, client: &mut Client) -> Result<(), BackendError> {
-        let (pid, start) = *self.opened_backend.get().ok_or(BackendError::Unknown)?;
-        let start = start.ok_or(BackendError::Unknown)?;
-        let noted = self.backend_pid.load(std::sync::atomic::Ordering::SeqCst);
-        let pid = i32::try_from(pid).map_err(|_| BackendError::Unknown)?;
-        if noted != 0 && noted != i64::from(pid) {
-            return Err(BackendError::Unknown);
-        }
-        let bound = match self.settings.lock_timeout_ms {
-            0 => 30_000,
-            ms => i64::from(ms),
-        };
+    /// Terminates the backend of each of `lost` still there and waits until
+    /// each is gone, bounded by `lock_timeout` (30 s when that is 0):
+    /// `pg_terminate_backend` with a timeout answers true only once the
+    /// process has exited, after its transaction ended. Waiting for it is
+    /// not a retry. One round trip on `client`; those proven gone are
+    /// forgotten. Not proven gone within the bound is `Busy`; a backend
+    /// whose start the check could not read (the pid alone may since name
+    /// another client's backend, which must not be ended), or one a session
+    /// lock showed on another backend (a transaction-pooling proxy), is
+    /// `Unknown`, with nothing sent: the outcome stays unknown either way.
+    fn end_lost_backends(
+        &self,
+        client: &mut Client,
+        lost: &[LostBackend],
+        noted: i64,
+    ) -> Result<(), BackendError> {
+        let targets = (lost.iter())
+            .map(|lost| endable(lost, noted))
+            .collect::<Result<Vec<_>, _>>()?;
         self.lane_work.add(0, 1);
-        let rows = client
-            .query(
-                "SELECT pg_terminate_backend(pid, $3) FROM pg_catalog.pg_stat_activity \
-                  WHERE pid = $1 \
-                    AND (extract(epoch FROM backend_start) * 1000000)::bigint = $2",
-                &[&pid, &start, &bound],
-            )
+        let messages = client
+            .simple_query(&end_sql(&targets, self.end_bound()))
             .map_err(|error| rows::error(&error))?;
-        match rows.first().map(|row| row.get::<_, bool>(0)) {
-            None | Some(true) => Ok(()),
-            Some(false) => Err(BackendError::Busy),
+        let gone = ended(&messages, targets.len()).ok_or(BackendError::Unknown)?;
+        let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
+        for (lost, gone) in lost.iter().zip(&gone) {
+            if *gone {
+                state.lost.retain(|kept| kept != lost);
+            }
+        }
+        match gone.iter().all(|gone| *gone) {
+            true => Ok(()),
+            false => Err(BackendError::Busy),
         }
     }
 }

@@ -283,6 +283,10 @@ fn open_postgres(
 ) -> StorageResult<OpenedStore> {
     use layerfs_persistence::PostgresHandles;
     let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
+    // A lost reply quarantines the writer; its next call reopens it once,
+    // settling what the closed connection left, instead of refusing every
+    // later Commit, mount and release until the service closes.
+    writer.storage.enable_reopen();
     let version = format!("postgresql {}", writer.storage.server_version());
     let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
     let binding = binding.to_vec();

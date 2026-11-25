@@ -16,8 +16,10 @@
 //! * a mounted Workspace's reader terminated: its reads fail and its unmount
 //!   reports the reader's failure, but the writer still releases the mount
 //!   intent: no row and no key stay (#768 review fix);
-//! * an idle writer terminated: the next mounts are refused (unknown
-//!   outcome; the writer is quarantined, a known limit) and no key stays;
+//! * an idle writer terminated: the next mount sees the closed connection
+//!   before it sends anything and reopens the writer once
+//!   (`session/reopen.rs`); both mounts and their reads work and no key
+//!   stays (before the reopen existed both were refused);
 //! * an idle reader aged past the threshold whose peer went silent: the
 //!   mount's check gives up after its 5 s cap and opens a fresh reader, so
 //!   the first read does not stall.
@@ -334,10 +336,18 @@ fn an_idle_writer_terminated_between_mounts() {
         held.is_empty(),
         "no key held after the writer's backend ended: {held:?}"
     );
-    // The writer has no idle check: its first call meets the closed
-    // connection, an unknown outcome that quarantines it (a known limit:
-    // the writer is not reopened), so both mounts are refused.
-    assert!(first_text.starts_with("Err") && second_text.starts_with("Err"));
+    // The writer's next call finds the connection the server closed
+    // before it sends anything and reopens it once: both mounts work.
+    assert!(
+        first_text.starts_with("Ok") && second_text.starts_with("Ok"),
+        "both mounts after the reopen: {first_text}, {second_text}"
+    );
+    assert!(first_read.is_ok(), "the first mount reads: {first_read:?}");
+    let reopens = (p.service.service.opened.session_diagnostics(None))
+        .unwrap()
+        .unwrap()
+        .reopens;
+    assert_eq!(reopens, 1, "one reopen");
     assert_eq!(live_mounts(&mut admin, branch), 0, "no row");
     p.service.abandon();
     fresh_mounts_and_reads(&store, branch, 2);

@@ -20,7 +20,8 @@
 //!   test acts on the server from elsewhere.
 //!
 //! [`FaultProxy::cut`] ends one connection's client side on demand, while
-//! its backend is still working on what it was sent.
+//! its backend is still working on what it was sent, and
+//! [`FaultProxy::refuse`] closes new connections as a stopped server would.
 //!
 //! Messages are the protocol's own (type byte and length); the startup of
 //! a connection opened while armed counts too. The backend's pid comes from
@@ -76,6 +77,8 @@ struct State {
     clients: Vec<Option<TcpStream>>,
     cut: Vec<bool>,
     released: bool,
+    /// While set, every new connection is closed at once ([`FaultProxy::refuse`]).
+    refusing: bool,
 }
 
 pub struct FaultProxy {
@@ -125,6 +128,11 @@ impl FaultProxy {
         std::thread::spawn(move || {
             for client in listener.incoming() {
                 let Ok(client) = client else { return };
+                if state.lock().unwrap().refusing {
+                    // A server that is down: the dial reaches no server.
+                    let _ = client.shutdown(Shutdown::Both);
+                    continue;
+                }
                 let Ok(server) = TcpStream::connect(upstream) else {
                     return;
                 };
@@ -198,6 +206,13 @@ impl FaultProxy {
             Some(client) => client.shutdown(Shutdown::Both).is_ok(),
             None => false,
         }
+    }
+
+    /// While `down`, every new connection is closed as soon as it is
+    /// accepted, as a stopped server's would be refused; connections
+    /// already made are untouched.
+    pub fn refuse(&self, down: bool) {
+        self.shared.lock().unwrap().refusing = down;
     }
 
     /// Backend pids of the proxied connections, in connect order.

@@ -25,7 +25,9 @@
 //!
 //! Each case checks the Branch from fresh sessions (`check_attempt`: the old
 //! head, or exactly one Commit past it with the intended tree; an unknown
-//! outcome refuses the next Commit on that Workspace), that no backend is
+//! outcome refuses the next Commit on that Workspace while it is retained;
+//! a writer a lost reply quarantined is reopened by that next Commit, which
+//! may then land the change once), that no backend is
 //! left idle in a transaction, and that a new Commit still publishes within
 //! a bound (nothing leaked the lane). Needs `LAYERFS_TEST_POSTGRES_URL`;
 //! NOT_RUN without it.
@@ -187,7 +189,19 @@ fn lane_wait_kill(tag: &str, victim: Victim) {
     expected.insert("/x".into(), Node::File(b"x\n".to_vec()));
     let state = check_attempt(&store, branch, Some(old), &expected, &first, &follow, tag);
     if victim == Victim::Writer {
-        assert_eq!(state, "old", "a dead writer publishes nothing");
+        // The killed writer's own call publishes nothing; the follow-up
+        // reopens the writer (`session/reopen.rs`) and may land the change
+        // itself, exactly once (`check_attempt`).
+        assert!(
+            !matches!(first, Verdict::Committed(_)),
+            "a dead writer publishes nothing: {first:?}"
+        );
+        if state == "new" {
+            assert!(
+                matches!(follow, Verdict::Committed(_)),
+                "only the follow-up published: {follow:?}"
+            );
+        }
     }
     assert!(
         store.no_open_transaction(),

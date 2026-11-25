@@ -359,9 +359,7 @@ impl Session {
             .lock()
             .map_err(|_| E::from(BackendError::Unknown))?;
         let state: &mut State = &mut guard;
-        if state.quarantined {
-            return Err(BackendError::Unknown.into());
-        }
+        self.ready(state, turn.nested).map_err(E::from)?;
         // Spec 5.2: the generation check rides in the statements a client
         // already sends. A transaction checks it in the same round trip as its
         // `BEGIN`, so the `AccessShareLock` it takes on `history_meta` holds
@@ -644,7 +642,7 @@ fn check_typed_fence(rows: &[Row], fence: Option<u64>) -> Result<(), BackendErro
 }
 
 /// A body of autocommit statements; a lost reply still quarantines.
-fn immutable<T, E: From<BackendError> + OutcomeError>(
+pub(super) fn immutable<T, E: From<BackendError> + OutcomeError>(
     state: &mut State,
     schema: &str,
     single: Option<Cell<bool>>,

@@ -28,15 +28,27 @@ use layerfs_history::MountMarkers;
 /// session with a generation is one message; anything else, and every
 /// refusal of that message it cannot report exactly, registers statement by
 /// statement and reads nothing.
+///
+/// A mount whose outcome is unknown may have committed its row, and never
+/// reached its caller, which so holds no op to release: a writer that
+/// reopens records the op and releases it once when it reopens
+/// (`Session::note_orphan`).
 pub(crate) fn register_mount(
     provider: &HistoryProvider,
     intent: &GcIntent,
     markers: Option<(LayerStackId, NodeId)>,
 ) -> HistoryResult<MountMarkers> {
-    match one_message(provider, intent, markers)? {
-        Some(read) => Ok(read),
-        None => register_separately(provider, intent).map(|()| MountMarkers::NotRead),
+    let registered = match one_message(provider, intent, markers) {
+        Ok(Some(read)) => Ok(read),
+        Ok(None) => register_separately(provider, intent).map(|()| MountMarkers::NotRead),
+        Err(error) => Err(error),
+    };
+    if let (Err(error), Engine::Postgres(session)) = (&registered, &provider.engine) {
+        if error.unknown() && intent.kind == GcIntentKind::Mount {
+            session.note_orphan(intent.op_id);
+        }
     }
+    registered
 }
 
 /// The one-message registration alone: `Some` when it admitted (the keys

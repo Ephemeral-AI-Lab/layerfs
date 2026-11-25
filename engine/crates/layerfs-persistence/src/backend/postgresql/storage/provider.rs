@@ -79,6 +79,14 @@ impl PostgresStorage {
     pub fn prepare_mount_writes(&self) -> Result<(), PersistenceError> {
         self.session.prepare_mount_writes().map_err(Into::into)
     }
+    /// Makes this writer session reopen after a quarantine: the next call
+    /// outside a held lane opens one new connection and settles what the
+    /// closed one left before its own work (`session/reopen.rs`). The Store
+    /// service's writer enables it; every other session stays quarantined
+    /// until it is dropped. Reopens are counted in [`SqlWork::reopens`].
+    pub fn enable_reopen(&self) {
+        self.session.enable_reopen();
+    }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {
         self.session.server_version.get().map_or("", String::as_str)

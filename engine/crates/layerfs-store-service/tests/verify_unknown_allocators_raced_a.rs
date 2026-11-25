@@ -18,8 +18,10 @@
 //! change, so ids reserved after a rewind are used. At the end the audit
 //! and amcheck pass. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 //!
-//! Split into three binaries (this one, `verify_unknown_allocators_raced_a`
-//! and `_raced_b`) so each stays well under the 120 s test ceiling; a
+//! Split into five binaries (`verify_unknown_allocators` with the warm
+//! flights, `_cold_a` and `_cold_b` with the halves of the cold flights,
+//! `_raced_a` and `_raced_b`) so each stays well under the 120 s test
+//! ceiling; a
 //! process runs at most `verify768::SWEEPS` sweeps at once. More at once
 //! exhausts macOS's ephemeral ports (about 16k, TIME_WAIT about 30 s) and
 //! later dials fail `Refused { status: "Closed" }`.

@@ -83,6 +83,8 @@ struct Run {
     retained: bool,
     /// Whether the follow-up Commit was refused `InFlight`.
     follow_in_flight: bool,
+    /// The writer's reopens by the end of the run.
+    reopens: u64,
 }
 
 fn expected(flight: Flight, fault: &[u8]) -> Tree {
@@ -170,6 +172,10 @@ fn run(
         }
         Err(_) => false,
     };
+    let reopens = (service.service.opened.session_diagnostics(None))
+        .unwrap()
+        .unwrap()
+        .reopens;
     let _ = service.try_unmount(workspace);
     service.abandon();
     Run {
@@ -181,6 +187,7 @@ fn run(
         counts,
         retained,
         follow_in_flight,
+        reopens,
     }
 }
 
@@ -229,10 +236,19 @@ fn check(
             // The fallback runs only with the race refusal in hand: it
             // reached the client before the fault, or among the messages
             // delivered from the fault on (a held reply the backend sent
-            // before it was killed). Never after an unknown outcome.
+            // before it was killed), or the fault ended an idle connection
+            // between two of the call's statements, the next one reopened
+            // the writer before sending anything (`session/reopen.rs`) and
+            // the fused attempt met the race there: an error reply on
+            // another connection after the fault. Never after an unknown
+            // outcome.
             if let (Some(fired), Some(refusal)) = (&run.window.fired, race_refusal) {
-                let in_hand =
-                    fired.at > refusal || fired.delivered.iter().any(|kind| kind == RACE_REFUSAL);
+                let reopened = (run.window.log.iter())
+                    .skip(fired.at as usize)
+                    .any(|(connection, kind)| *connection != fired.connection && *kind == 'E');
+                let in_hand = fired.at > refusal
+                    || fired.delivered.iter().any(|kind| kind == RACE_REFUSAL)
+                    || (reopened && run.reopens == 1);
                 if !in_hand {
                     assert_eq!(
                         fallbacks, 0,
@@ -258,13 +274,14 @@ fn check(
             }
         }
     }
-    if let Verdict::Unknown(_) = run.first {
-        assert!(
-            !run.rebound,
-            "{label}: the session that lost a reply must refuse later calls ({:?})",
-            run.first
-        );
-    }
+    // A writer that lost a reply is reopened once by its next call
+    // (`session/reopen.rs`), so the same service always mounts again.
+    assert!(
+        run.rebound,
+        "{label}: the same service mounts again ({:?})",
+        run.first
+    );
+    assert!(run.reopens <= 1, "{label}: at most one reopen");
     adversary::check_attempt(
         store,
         store.branch(name),
@@ -453,7 +470,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
             Verdict::Conflicted => "conflicted",
         };
         println!(
-            "FAULT_RUN {{\"n\":{n},\"at\":\"{}\",\"first\":\"{class}\",\"state\":\"{state}\",\"rebound\":{},\"counts\":\"{:?}\",\"delivered\":\"{}\",\"follow\":\"{:?}\"}}",
+            "FAULT_RUN {{\"n\":{n},\"at\":\"{}\",\"first\":\"{class}\",\"state\":\"{state}\",\"rebound\":{},\"reopens\":{},\"counts\":\"{:?}\",\"delivered\":\"{}\",\"follow\":\"{:?}\"}}",
             outcome
                 .window
                 .fired
@@ -461,6 +478,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
                 .map(|f| format!("c{}:{}", f.connection, f.kind))
                 .unwrap_or_default(),
             outcome.rebound,
+            outcome.reopens,
             outcome.counts,
             outcome
                 .window
