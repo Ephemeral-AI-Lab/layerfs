@@ -56,6 +56,9 @@ impl DirectoryRow<'_> {
             changes: Changes::Resident(row.changes),
         }
     }
+    pub fn is_streamed(&self) -> bool {
+        matches!(self.changes, Changes::Streamed(_))
+    }
     pub fn binding_for(&self, name: &PathName) -> ContentResult<DirectoryChangeLookup> {
         let result = match &self.changes {
             Changes::Resident(changes) => changes

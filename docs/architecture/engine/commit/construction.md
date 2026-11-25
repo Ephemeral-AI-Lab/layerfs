@@ -113,6 +113,11 @@ The reads preserve the resulting roots and stored objects. `commit_batched_direc
 `commit_fault_directories.rs` faults every message of a grouped read
 ([Demonstration](README.md#demonstration)).
 
+Backed validation reads the existing parent inodes of up to 128 streamed
+directory headers in one demand per level. It holds only header descriptors
+until processing their names and keeps placement guards in the original
+64-row classification windows.
+
 The indexed release seed groups the immutable base-inode lookups of whole
 backing waves into a window of up to 256 rows. It writes the original guarded
 jobs in FIFO order. The final pass shares each level’s base reads across up

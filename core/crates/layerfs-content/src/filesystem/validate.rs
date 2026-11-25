@@ -16,10 +16,10 @@
 //! declaration, so one grouped demand reads the base records of the whole
 //! input before the first window, into a memo held under the caller's ordering
 //! budget, and the topology evidence lives in maps held under the same budget.
-//! With backed serial state each window makes its own grouped demand into a
-//! memo of two windows and the same evidence is indexed records, so nothing
-//! resident grows with the base or with the whole change and no total is
-//! refused.
+//! With backed serial state each window makes a grouped demand into a memo of
+//! two windows, and streamed directory headers share a separate bounded parent
+//! demand. The same topology evidence is indexed records, so nothing resident
+//! grows with the base or with the whole change and no total is refused.
 //!
 //! The reducer derives every touched inode's final count. Regular files and
 //! symlinks may have several bindings; directories require one parent. A
@@ -317,6 +317,7 @@ pub(crate) fn check_operation(
         incremental::Classifier::new(reader, input, topology, &mut state, &mut records, work);
     let mut rows = input.directories()?;
     let mut names = 0usize;
+    let mut streamed = Vec::new();
     while let Some(update) = rows.next_row()? {
         names =
             names.saturating_add(usize::try_from(update.header.change_rows).unwrap_or(usize::MAX));
@@ -326,21 +327,18 @@ pub(crate) fn check_operation(
                 actual: names,
             });
         }
-        classifier.row(incremental::WindowRow {
-            parent: update.header.parent,
-            bound: None,
-        })?;
-        for change in update.changes()? {
-            let (name, binding) = change?;
-            if let Some(child) = binding {
-                classifier.row(incremental::WindowRow {
-                    parent: update.header.parent,
-                    bound: Some((name, child)),
-                })?;
+        if !resident && topology.table.is_some() && update.is_streamed() {
+            streamed.push(update);
+            if streamed.len() == classifier.directory_room() {
+                classifier.streamed(&mut streamed)?;
             }
+        } else {
+            classifier.streamed(&mut streamed)?;
+            classifier.directory(update)?;
         }
     }
     drop(rows);
+    classifier.streamed(&mut streamed)?;
     classifier.finish()?;
     let (classified, window_pages) = (classifier.rows, classifier.prefetched_pages);
     drop(classifier);
