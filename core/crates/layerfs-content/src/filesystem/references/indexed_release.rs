@@ -78,20 +78,8 @@ fn seed(
     let mut cursor = RowCursor::new();
     let mut reads = 0u64;
     let batch = batch.clamp(1, 64);
-    let window = SEED_READ_ROWS / batch * batch;
     loop {
-        // Seed reads sealed touched rows and writes only work items and nodes.
-        // Read whole backing waves into one window so their base records can
-        // share each level's Store acquisition.
-        let mut rows = Vec::with_capacity(window);
-        while rows.len() < window {
-            let wave = cursor.wave(reducer, batch)?;
-            let short = wave.len() < batch;
-            rows.extend(wave);
-            if short {
-                break;
-            }
-        }
+        let rows = cursor.window(reducer, batch, SEED_READ_ROWS)?;
         if rows.is_empty() {
             break;
         }

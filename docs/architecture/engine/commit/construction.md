@@ -113,7 +113,9 @@ The reads preserve the resulting roots and stored objects. `commit_batched_direc
 
 The indexed release seed groups the immutable base-inode lookups of whole
 backing waves into a window of up to 256 rows. It writes the original guarded
-jobs in FIFO order. Descendant release advances its frontier after each page.
+jobs in FIFO order. The final pass shares each level’s base reads across up
+to 128 rows and emits final rows in serial order. Descendant release
+advances its frontier after each page.
 
 Every read goes through the captured reader, the attempt's sealed records or
 the immutable base bound to the reader's root; current active state is never
