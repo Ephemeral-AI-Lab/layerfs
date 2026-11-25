@@ -1126,7 +1126,7 @@ fn authenticated_max_count_plus_one_is_length_overflow_before_release_or_final_r
 
 #[test]
 fn late_final_row_failure_is_forwarded_as_error_without_eof_finalization_or_later_demand() {
-    let count = 257u64;
+    let count = 385u64;
     let directories = [DirectoryUpdate {
         parent: 1,
         changes: (2..count + 2)
@@ -1158,7 +1158,9 @@ fn late_final_row_failure_is_forwarded_as_error_without_eof_finalization_or_late
         },
     );
     let mut records = Records {
-        fail_final_row_at: Some(251),
+        // Three complete 126-row windows reach the inode merge before the
+        // refusal, so it has already emitted a provisional leaf.
+        fail_final_row_at: Some(382),
         ..Default::default()
     };
     let (result, emitted, _) = backed(&store, &input, &mut records, false, None);
