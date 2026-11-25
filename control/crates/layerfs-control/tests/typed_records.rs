@@ -279,6 +279,21 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
         recorded(&home, &on("native", r#","broken":"missing""#), machines).unwrap(),
         State::broken(Reason::Missing, Some("layerfs store remove s"))
     );
+    // a missing file with a backup link has no in-place restore fix:
+    // `backup restore` protects the recorded Store from replacement it
+    // cannot prove unchanged
+    assert_eq!(
+        recorded(
+            &home,
+            &on(
+                "native",
+                r#","broken":"missing","backups":{"b1":{"file":"s","heads":null}}"#
+            ),
+            machines
+        )
+        .unwrap(),
+        State::broken(Reason::Missing, None)
+    );
     // a live operation (this process) wins over everything, named by its
     // call word; a gone one's uncertain outcome is unresolved with the call
     // that clears it, its certain one is ignored

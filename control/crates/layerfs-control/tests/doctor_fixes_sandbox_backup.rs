@@ -527,18 +527,12 @@ fn daemon_instance_and_ready_findings() {
 }
 
 #[test]
-fn a_daemon_still_starting_is_a_warning_fixed_by_asking_again() {
+fn a_daemon_still_starting_is_a_warning_without_a_fix() {
     let home = home();
     sandbox(&home, "native", local_record());
     let server = daemon(&home, 52, 9, DaemonPhase::Installing, Vec::new());
     let report = run(&home);
-    let found = finding(
-        &report,
-        "sandbox.daemon_ready",
-        "warning",
-        Some("layerfs sandbox doctor sb"),
-        &["phase"],
-    );
+    let found = finding(&report, "sandbox.daemon_ready", "warning", None, &["phase"]);
     assert_eq!(
         found.get("evidence").unwrap().get_text("phase"),
         Some("installing")
@@ -635,6 +629,42 @@ fn a_mount_being_made_is_a_notice_with_evidence_and_no_fix() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+#[test]
+fn a_malformed_worker_record_discloses_the_forced_stop_blast_radius() {
+    let home = home();
+    sandbox(&home, "box", local_record());
+    write_entity(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-test-box")),
+            ("state", t("running")),
+        ]),
+    )
+    .unwrap();
+    write_entity(&paths::worker_record(&home, "box"), &SdkValue::map([])).unwrap();
+    let report = run(&home);
+    let found = finding(
+        &report,
+        "sandbox.route",
+        "error",
+        Some("layerfs machine stop box --force && layerfs machine start box"),
+        &["cause", "machine", "sandboxes_on"],
+    );
+    assert_eq!(
+        found.get("evidence").unwrap().get_int("sandboxes_on"),
+        Some(1)
+    );
+    assert!(
+        found
+            .get_text("message")
+            .is_some_and(|m| m.contains("force-stops 1 Sandbox")),
+        "{found:?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 // ----------------------------------------------------------------- backup
 
 struct Backup {
@@ -723,19 +753,95 @@ fn a_missing_bucket_record_is_fixed_by_connecting_it() {
     );
     assert_eq!(
         row.get("evidence").unwrap().get_text("cause"),
-        Some("record_unavailable")
+        Some("record_missing")
     );
     std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
-fn an_unsupported_provider_is_fixed_by_connecting_again() {
+fn an_unsupported_provider_has_no_connect_again_fix() {
     let f = Backup::new(Mode::default(), true, "gcs");
     let report = f.report();
     let row = check(&report, "bucket.configuration");
     assert_eq!(row.get_text("outcome"), Some("fail"));
+    assert_eq!(row.get_text("fix").unwrap_or(""), "");
+    assert_eq!(
+        row.get("evidence").unwrap().get_text("cause"),
+        Some("unsupported_provider")
+    );
+}
+
+#[test]
+fn an_unreadable_bucket_record_has_no_connect_fix() {
+    let home = fresh("doctor-fixes-backup-bad-record");
+    home::ensure(&home).unwrap();
+    let record = paths::bucket_record(&home, "production");
+    std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+    std::fs::write(&record, b"{ not json").unwrap();
+    let mut checks = target::Checks::default();
+    backup_target::diagnose(
+        &home,
+        "production",
+        false,
+        &target::Budget::new(Some(Duration::from_secs(10))),
+        &mut checks,
+    );
+    let report = checks.to_wire();
+    let row = check(&report, "bucket.configuration");
+    assert_eq!(row.get_text("outcome"), Some("fail"));
+    assert_eq!(row.get_text("fix").unwrap_or(""), "");
+    assert_eq!(
+        row.get("evidence").unwrap().get_text("cause"),
+        Some("record_unreadable")
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn bucket_record_version_and_name_mismatch_are_distinguished() {
+    let f = Backup::new(Mode::default(), true, "minio");
+    let record = paths::bucket_record(&f.home, "production");
+    let saved = home::read_record(&record).unwrap().unwrap();
+    write_record(&record, &home::with_field(saved, "v", SdkValue::Int(99))).unwrap();
+    let report = f.report();
+    let row = check(&report, "bucket.configuration");
     assert_eq!(row.get_text("fix"), Some(&*f.connect_again()));
-    assert!(row.get("evidence").unwrap().get_text("cause").is_some());
+    assert_eq!(
+        row.get("evidence").unwrap().get_text("cause"),
+        Some("version")
+    );
+
+    let f = Backup::new(Mode::default(), true, "minio");
+    let record = paths::bucket_record(&f.home, "production");
+    let saved = home::read_record(&record).unwrap().unwrap();
+    write_entity(&record, &home::with_field(saved, "name", t("other"))).unwrap();
+    let report = f.report();
+    let row = check(&report, "bucket.configuration");
+    assert_eq!(row.get_text("fix").unwrap_or(""), "");
+    assert_eq!(
+        row.get("evidence").unwrap().get_text("cause"),
+        Some("identity")
+    );
+}
+
+#[test]
+fn invalid_client_configuration_has_no_connect_again_fix() {
+    let f = Backup::new(Mode::default(), true, "minio");
+    let record = paths::bucket_record(&f.home, "production");
+    let saved = home::read_record(&record).unwrap().unwrap();
+    write_entity(
+        &record,
+        &home::with_field(saved, "region", t("not_a_region")),
+    )
+    .unwrap();
+    let report = f.report();
+    let row = check(&report, "bucket.configuration");
+    assert_eq!(row.get_text("outcome"), Some("fail"));
+    assert_eq!(row.get_text("fix").unwrap_or(""), "");
+    assert_eq!(
+        row.get("evidence").unwrap().get_text("cause"),
+        Some("client_not_validated")
+    );
 }
 
 #[test]

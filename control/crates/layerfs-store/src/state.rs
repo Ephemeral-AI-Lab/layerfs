@@ -58,21 +58,17 @@ pub fn held(record: &StoreRecord) -> Option<State> {
 }
 
 /// `broken` for `reason` on Store `record`, with its fix: a missing file
-/// is restored from the first bucket the Store is linked to, or the Store
-/// removed when it has no backup; an unreachable server is the doctor's to
-/// explain; an unsettled compaction is settled by the next one.
+/// has no in-place restore (`backup restore` protects the recorded Store
+/// from replacement it cannot prove unchanged), or the Store removed when
+/// it has no backup; an unreachable server is the doctor's to explain; an
+/// unsettled compaction is settled by the next one.
 pub fn broken(record: &StoreRecord, reason: Reason) -> State {
     let store = record.name();
     let fix = match reason {
-        Reason::Missing => match record.links().first() {
-            Some((bucket, link)) => format!(
-                "layerfs backup restore {bucket} {} {store}",
-                link.file().unwrap_or(store),
-                bucket = shell_word(bucket),
-                store = shell_word(store)
-            ),
-            None => format!("layerfs store remove {store}", store = shell_word(store)),
-        },
+        Reason::Missing if record.links().is_empty() => {
+            format!("layerfs store remove {store}", store = shell_word(store))
+        }
+        Reason::Missing => return State::broken(reason, None),
         Reason::Unreachable => format!("layerfs store doctor {store}", store = shell_word(store)),
         Reason::Unresolved => format!("layerfs store compact {store}", store = shell_word(store)),
         _ => return State::broken(reason, None),

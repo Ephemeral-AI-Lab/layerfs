@@ -56,9 +56,8 @@ pub(super) const CHECKS: &[CheckId] = &[
 /// The worker's shallow cut, the one `cut` its `store.diagnose` takes.
 const CUT: &str = "schema";
 
-/// What a schema this build does not read is told with, beside its restore fix.
-const SCHEMA_HINT: &str =
-    "this build does not read its schema; use the LayerFS build that wrote it, or restore it";
+/// What a schema this build does not read is told with.
+const SCHEMA_HINT: &str = "this build does not read its schema; use the LayerFS build that wrote it, or restore a backup under a new Store name";
 
 /// Checks Store `probe.thing` into `node`: its state from the home's
 /// records (`layerfs_store::state`, with the machine family's derivation
@@ -247,10 +246,11 @@ fn operation(
                     pids.join(", ")
                 ),
             );
-            checks.fix(
-                OPERATION,
-                format!("layerfs store get {} --with live", shell_word(name)),
-            );
+            let files: Vec<String> = stale
+                .iter()
+                .map(|pid| super::scan::shell(&paths::lease_dir(home, name).join(pid.to_string())))
+                .collect();
+            checks.fix(OPERATION, format!("rm {}", files.join(" ")));
             let stale = stale.iter().map(|pid| SdkValue::Int(i64::from(*pid)));
             checks.evidence(
                 OPERATION,
@@ -295,10 +295,9 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
                 // busy is retried, not repaired: no fix
                 "Busy" => checks.busy(CONNECTION, message),
                 _ => {
-                    checks.fail(CONNECTION, message);
-                    checks.fix(
+                    checks.fail(
                         CONNECTION,
-                        format!("layerfs machine doctor {}", shell_word(&machine)),
+                        format!("{message}; `layerfs machine doctor {machine}` diagnoses it"),
                     );
                 }
             }
@@ -309,9 +308,10 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     operation(probe.home, record, found.get("compaction"), checks);
     let text = |key: &str| found.get_text(key).map(str::to_owned);
     if found.get("found") != Some(&SdkValue::Bool(true)) {
-        // the restore from its first backup, or the record removed when it
-        // has none (what its `broken` state says); the remove deletes
-        // records, so the message says what it deletes
+        // no in-place restore: `backup restore` protects the recorded
+        // Store from replacement it cannot prove unchanged. With no backup
+        // the broken state is the record removal, whose message says what
+        // it deletes.
         let fix = match broken(record, Reason::Missing) {
             State::Broken { fix, .. } => fix,
             _ => None,
@@ -319,9 +319,14 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         let removes = fix
             .as_deref()
             .is_some_and(|f| f.starts_with("layerfs store remove"));
-        let lost = match removes {
-            true => "; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back",
-            false => "",
+        let lost = match (removes, record.links().is_empty()) {
+            (true, _) => {
+                "; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back"
+            }
+            (false, false) => {
+                "; no single call repairs it in place - check the machine's mounts first if the file may come back, or restore a backup under a new Store name"
+            }
+            (false, true) => "",
         };
         checks.fail(
             CONNECTION,
@@ -373,7 +378,9 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
             IDENTITY,
             format!("its file records another Store's id than its record: {why}"),
         );
-        checks.fix(IDENTITY, restore_fix(record));
+        // no fix: replacing this file in place can destroy the Store whose
+        // id the file really holds; restore a backup under a new name or
+        // move the right file back by hand
         checks.evidence(
             IDENTITY,
             SdkValue::map([
@@ -403,7 +410,8 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
                 "its file does not open with the schema this build reads: {why}; {SCHEMA_HINT}"
             ),
         );
-        checks.fix(SCHEMA, restore_fix(record));
+        // no fix: replacing this file in place can discard newer data;
+        // restore a backup under a new name or use the build that wrote it
         checks.evidence(
             SCHEMA,
             SdkValue::map([
@@ -848,19 +856,4 @@ fn connect_fix(record: &StoreRecord, login: bool) -> String {
         "layerfs store connect {} <url>{login}",
         shell_word(record.name())
     )
-}
-
-/// The restore of Store `record` from its first bucket link, with
-/// `<bucket> <file>` left to fill when it has none. Never a remove: an id
-/// or schema that is wrong is an integrity problem.
-pub(super) fn restore_fix(record: &StoreRecord) -> String {
-    let name = shell_word(record.name());
-    match record.links().first() {
-        Some((bucket, link)) => format!(
-            "layerfs backup restore {} {} {name}",
-            shell_word(bucket),
-            shell_word(link.file().unwrap_or(record.name()))
-        ),
-        None => format!("layerfs backup restore <bucket> <file> {name}"),
-    }
 }

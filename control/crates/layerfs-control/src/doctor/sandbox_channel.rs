@@ -6,7 +6,6 @@ use super::{cause, remove_fix, Budget, Checks};
 use crate::doctor::report::NoVerdict;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue};
 use layerfs_bridge::duplex::{initiate_observed, ChannelError};
-use layerfs_home::outcome::shell_word;
 use layerfs_home::secrets;
 use layerfs_sandbox::daemon::channel::Control;
 use std::net::{Shutdown, SocketAddr, TcpStream};
@@ -201,11 +200,8 @@ fn inspect(
                         _ => ("its Store is not installed yet", "not_installed"),
                     };
                     checks.warning(READY, format!("its daemon is still starting ({step})"));
-                    // retry once it is up; the doctor starts and waits for nothing
-                    checks.fix(
-                        READY,
-                        format!("layerfs sandbox doctor {}", shell_word(sandbox)),
-                    );
+                    // no fix: re-running the doctor only observes startup;
+                    // it neither starts nor waits for the daemon
                     checks.evidence(READY, SdkValue::map([("phase", SdkValue::text(word))]));
                     return nothing;
                 }
@@ -253,11 +249,11 @@ fn workspaces(control: &mut Control, deadline: Instant) -> Observed {
             Ok(Reply::Sdk(value)) => value,
             // the registry's admission is held: no retry
             Ok(Reply::SdkRefused(refusal)) if refusal.code == "Busy" => {
-                return (Listing::NoVerdict(NoVerdict::Busy), Vec::new())
+                return (Listing::NoVerdict(NoVerdict::Busy), Vec::new());
             }
             // the doctor's own deadline closed its socket
             Err(_) if Instant::now() >= deadline => {
-                return (Listing::NoVerdict(NoVerdict::Timeout), Vec::new())
+                return (Listing::NoVerdict(NoVerdict::Timeout), Vec::new());
             }
             // membership changed between pages, a daemon without the
             // diagnostic list, or a lost reply: no stable answer

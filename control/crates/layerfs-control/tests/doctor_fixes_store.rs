@@ -96,7 +96,7 @@ fn evidence<'a>(finding: &'a SdkValue, key: &str) -> Option<&'a SdkValue> {
 }
 
 #[test]
-fn a_missing_file_fails_with_the_restore_or_remove_fix() {
+fn a_missing_file_fails_with_remove_only_when_there_is_no_backup() {
     let f = Fixture::new();
     write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
     let out = report(&f.root, Kind::Store, "one");
@@ -110,15 +110,19 @@ fn a_missing_file_fails_with_the_restore_or_remove_fix() {
     );
     assert_eq!(ev_text(&found, "reason"), Some("missing"));
     assert_eq!(ev_text(&found, "machine"), Some("native"));
-    // with a backup link the file is restored, not the Store removed
+    // with a backup link there is no valid in-place restore command either:
+    // backup restore protects the recorded Store from replacement it cannot
+    // prove unchanged
     let link = SdkValue::map([("file", SdkValue::text("one")), ("heads", SdkValue::Null)]);
     let record = with_field(fields("one"), "backups", SdkValue::map([("r2-main", link)]));
     write_entity(&paths::store_record(&f.root, "one"), &record).unwrap();
     let out = report(&f.root, Kind::Store, "one");
     let found = finding(&out, "store.connection");
-    assert_eq!(
-        fix_of(&found),
-        "layerfs backup restore r2-main one one",
+    assert_eq!(fix_of(&found), "", "{found:?}");
+    assert!(
+        found
+            .get_text("message")
+            .is_some_and(|m| m.contains("restore a backup under a new Store name")),
         "{found:?}"
     );
 }
@@ -136,7 +140,7 @@ fn an_unreadable_record_has_no_fix_and_never_a_store_remove() {
 }
 
 #[test]
-fn a_file_of_another_store_gets_the_restore_fix_never_a_delete() {
+fn a_file_of_another_store_has_no_in_place_restore_fix() {
     let f = Fixture::new();
     let writer = store_file(&paths::store_file(&f.root, "two"));
     let record = with_field(
@@ -147,18 +151,13 @@ fn a_file_of_another_store_gets_the_restore_fix_never_a_delete() {
     write_entity(&paths::store_record(&f.root, "two"), &record).unwrap();
     let out = report(&f.root, Kind::Store, "two");
     let found = finding(&out, "store.identity");
-    let fix = fix_of(&found);
-    assert_eq!(
-        fix, "layerfs backup restore <bucket> <file> two",
-        "{found:?}"
-    );
-    assert!(!fix.contains("remove") && !fix.contains("delete"), "{fix}");
+    assert_eq!(fix_of(&found), "", "{found:?}");
     assert_eq!(ev_text(&found, "reason"), Some("id_differs"));
     drop(writer);
 }
 
 #[test]
-fn a_file_with_another_schema_gets_the_restore_fix_and_the_build_text() {
+fn a_file_with_another_schema_has_no_in_place_restore_fix() {
     let f = Fixture::new();
     let path = paths::store_file(&f.root, "three");
     drop(store_file(&path));
@@ -175,18 +174,13 @@ fn a_file_with_another_schema_gets_the_restore_fix_and_the_build_text() {
     }
     let out = report(&f.root, Kind::Store, "three");
     let found = finding(&out, "store.schema");
-    let fix = fix_of(&found);
-    assert_eq!(
-        fix, "layerfs backup restore <bucket> <file> three",
-        "{found:?}"
-    );
+    assert_eq!(fix_of(&found), "", "{found:?}");
     assert!(
         found
             .get_text("message")
             .is_some_and(|m| m.contains("build that wrote it")),
         "{found:?}"
     );
-    assert!(!fix.contains("remove") && !fix.contains("delete"), "{fix}");
     assert_eq!(ev_text(&found, "reason"), Some("schema_unreadable"));
 }
 
@@ -231,6 +225,31 @@ fn a_project_record_that_cannot_be_read_says_why_without_a_fix() {
     assert_eq!(fix_of(&found), "", "{found:?}");
     assert!(evidence(&found, "code").is_some(), "{found:?}");
     drop(writer);
+}
+
+#[test]
+fn stale_leases_get_their_own_removal_command_not_a_read() {
+    let f = Fixture::new();
+    write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
+    let lease_dir = paths::lease_dir(&f.root, "one");
+    home::private_dir(&lease_dir).unwrap();
+    let lease = lease_dir.join("99999999");
+    std::fs::write(&lease, "1\n").unwrap();
+    let out = report(&f.root, Kind::Store, "one");
+    let found = finding(&out, "store.operation");
+    assert_eq!(
+        fix_of(&found),
+        format!("rm {}", lease.display()),
+        "{found:?}"
+    );
+    assert_eq!(
+        evidence(&found, "stale_pids"),
+        Some(&SdkValue::List(vec![SdkValue::Int(99999999)]))
+    );
+    assert!(
+        !fix_of(&found).contains("store get"),
+        "a read does not remove stale leases: {found:?}"
+    );
 }
 
 #[test]

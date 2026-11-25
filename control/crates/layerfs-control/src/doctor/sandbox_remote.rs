@@ -4,7 +4,7 @@
 //! Workspaces) is read into this one. A report this build does not read
 //! leaves the Sandbox `not_checked` with `reason` `lost`.
 use super::workspace_target::{Listing, Seen};
-use super::{cause, local, read, Budget, Checks, Observed};
+use super::{local, read, Budget, Checks, Observed};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::{MachineName, SandboxName};
 use layerfs_home::outcome::{refused, Outcome};
@@ -48,17 +48,23 @@ pub(super) fn remote(
             return;
         }
         Err(_) => {
+            let on = sandboxes_on(home, machine);
             checks.fail(
                 ROUTE,
-                format!("machine {machine}'s worker record is malformed or cannot be read"),
+                format!("machine {machine}'s worker record is malformed or cannot be read; replacing the worker force-stops {on} Sandbox{} on it", if on == 1 { "" } else { "es" }),
             );
-            // findings.md: restart the machine; the Sandbox checked is on it,
-            // so the stop is forced
-            checks.fix(
+            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, on));
+            checks.evidence(
                 ROUTE,
-                layerfs_machine::state::replace_worker(machine, sandboxes_on(home, machine)),
+                SdkValue::map([
+                    ("cause", SdkValue::text("worker_record_unreadable")),
+                    ("machine", SdkValue::text(machine)),
+                    (
+                        "sandboxes_on",
+                        SdkValue::Int(i64::try_from(on).unwrap_or(i64::MAX)),
+                    ),
+                ]),
             );
-            checks.evidence(ROUTE, cause("worker_record_unreadable"));
             return;
         }
     };
@@ -74,15 +80,23 @@ pub(super) fn remote(
     let worker = match diagnostic_connect(&endpoint, started + duration) {
         Ok(worker) => worker,
         Err(refusal) if refusal.code == "Denied" => {
+            let on = sandboxes_on(home, machine);
             checks.fail(
                 ROUTE,
-                format!("machine {machine}'s worker refused its saved secret"),
+                format!("machine {machine}'s worker refused its saved secret; replacing the worker force-stops {on} Sandbox{} on it", if on == 1 { "" } else { "es" }),
             );
-            checks.fix(
+            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, on));
+            checks.evidence(
                 ROUTE,
-                layerfs_machine::state::replace_worker(machine, sandboxes_on(home, machine)),
+                SdkValue::map([
+                    ("cause", SdkValue::text("worker_refused_secret")),
+                    ("machine", SdkValue::text(machine)),
+                    (
+                        "sandboxes_on",
+                        SdkValue::Int(i64::try_from(on).unwrap_or(i64::MAX)),
+                    ),
+                ]),
             );
-            checks.evidence(ROUTE, cause("worker_refused_secret"));
             return;
         }
         Err(_) => {
