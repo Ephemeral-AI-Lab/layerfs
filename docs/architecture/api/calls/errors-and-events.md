@@ -52,11 +52,11 @@ worker frame keeps them, and `refusal::value` lifts them out.
 | `Conflict` | `HeadMoved` |
 | `InvalidInput` | `NotFile`, `IsDirectory`, `NotDirectory`, `NotEmpty`, `Binary`, `ReservedName`, `ReadOnly`, `NoMergeBase`, `TooLarge`, `AmbiguousMatch` |
 | `Capacity` | `NoSpace` |
+| `Unsupported` | `OldStore` |
 | `Unavailable` | `Denied`, `Unauthorized`, `StaleSandbox`, `StaleStore`, `Timeout` |
 | `Failed` | `UnknownMethod`, and any code neither list names |
 
-`Busy`, `Unresolved`, `Dirty`, `Unsupported` and `Unknown` hold only
-themselves. The table below lists the codes as they are raised.
+`Busy`, `Unresolved`, `Dirty` and `Unknown` hold only themselves. The table below lists the codes as they are raised.
 
 | Code | Meaning | Raised in (examples) |
 | --- | --- | --- |
@@ -77,6 +77,7 @@ themselves. The table below lists the codes as they are raised.
 | `Capacity` | no room: a full Sandbox (16 Workspaces), a full disk (`detail {needed, free}`), a bounded engine limit | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `TooLarge` | a worker frame or daemon control record would be too large; nothing was sent | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs), [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
 | `Unsupported` | not possible on this host, not built (`detail.missing` names tools), or new work on a removed platform | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
+| `OldStore` | the Store is of an older schema version this release neither reads nor migrates (#776): a SQLite Store of schema version 2, a PostgreSQL Store of schema version 2 or 3. Its message is the version refusal itself ("SQLite Store schema version 2 (…): not supported by this release and not migrated; create a new Store"); its `fix` is `layerfs store remove <store>` (sqlite) or `layerfs store disconnect <store>` (PostgreSQL, which keeps the data). Folded into `Unsupported`: this build cannot open it, and nothing was opened or changed. A project of such a Store is `blocked` by it with the reason `outdated`; `sandbox.remove` of a Sandbox whose Store it is answers it with the fix `layerfs sandbox remove <sandbox> --force` | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `OpenRefusal::Outdated`, [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `OLD_STORE`, `outdated_fix` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `StaleSandbox`, `NoStore`, `Unauthorized`, `UnknownMethod` | a saved daemon not ready; a Store file missing where it should be; a Sandbox record not owned by this user or not private; an operation no one serves | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) |
 | `Failed` | tried and did not happen, or no code of its own (`outcome::failed`); whatever exists is kept | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |

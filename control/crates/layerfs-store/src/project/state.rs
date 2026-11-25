@@ -109,13 +109,15 @@ pub fn store_block(home: &Path, record: &StoreRecord, machines: Machines) -> Res
 }
 
 /// The reason a Store whose list could not be read blocks its projects
-/// with, from the refusal: `busy`, `missing` (no Store file), `unsupported`
-/// (this host cannot open it), `unresolved`, `not_answering` (a worker's
-/// lost reply) or `unreachable`.
+/// with, from the refusal: `busy`, `missing` (no Store file), `outdated`
+/// (a Store of an older schema version), `unsupported` (this host cannot
+/// open it), `unresolved`, `not_answering` (a worker's lost reply) or
+/// `unreachable`.
 pub fn unread(refusal: &SdkRefusal) -> &'static str {
     match refusal.code.as_str() {
         "Busy" => "busy",
         "NoStore" | "NotFound" | "NoSuchStore" => Reason::Missing.word(),
+        crate::state::OLD_STORE => Reason::Outdated.word(),
         "Unsupported" => Reason::Unsupported.word(),
         "Unresolved" => Reason::Unresolved.word(),
         "Unknown" => Reason::NotAnswering.word(),

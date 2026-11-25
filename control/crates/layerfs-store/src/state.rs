@@ -80,6 +80,35 @@ pub fn broken(record: &StoreRecord, reason: Reason) -> State {
     State::broken(reason, Some(&fix))
 }
 
+/// The code a Store call is refused with when its Store is of an older
+/// schema version this release neither reads nor migrates (#776): folded
+/// into `Unsupported` at the call boundary, its message the version the
+/// Store was refused by, its fix [`outdated_fix`]. A project of such a
+/// Store is `blocked` by it, `outdated` (`project::state::unread`).
+pub const OLD_STORE: &str = "OldStore";
+
+/// The fix of older-format Store `store`: this build cannot open it, so it
+/// goes, and a new Store takes its place. A sqlite Store is removed with
+/// its file; a PostgreSQL Store is disconnected, which keeps its data for
+/// the earlier build that wrote it.
+pub fn outdated_fix(store: &str, postgresql: bool) -> String {
+    let call = match postgresql {
+        true => "disconnect",
+        false => "remove",
+    };
+    format!("layerfs store {call} {}", shell_word(store))
+}
+
+/// The older-format Store status `refusal` carries: its message when it is
+/// [`OLD_STORE`], else the version refusal its message wraps (a daemon's
+/// `Store open: ...` text), if any.
+pub fn outdated_status(refusal: &SdkRefusal) -> Option<String> {
+    match refusal.code == OLD_STORE {
+        true => Some(refusal.message.clone()),
+        false => layerfs_persistence::outdated_store(&refusal.message).map(str::to_owned),
+    }
+}
+
 /// The reason a live read may write to the record ([`SEEN`]) for `word`.
 pub fn seen_reason(word: &str) -> Option<Reason> {
     [Reason::Missing, Reason::Unreachable, Reason::Unresolved]

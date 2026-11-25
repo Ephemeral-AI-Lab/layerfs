@@ -87,6 +87,7 @@ pub fn open(
     )
     .map_err(|refusal| {
         let reason = match refusal {
+            OpenRefusal::Outdated(status) => return refused(crate::state::OLD_STORE, status),
             OpenRefusal::Unsupported(reason) => reason.0,
             OpenRefusal::Missing(reason)
             | OpenRefusal::Busy(reason)
