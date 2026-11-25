@@ -77,7 +77,8 @@ impl State {
     /// prepared on this connection are prepared in one flight (one round
     /// trip, however many), each counted in `prepares`; every reply is
     /// collected, and the first failure is returned once the others are
-    /// cached.
+    /// cached. A prepare the client never sent (unencodable, or after one
+    /// that was) fails definitely ([`super::driver::Error::unsent`]).
     pub(crate) fn statements(
         &mut self,
         sqls: &[&str],
@@ -99,10 +100,12 @@ impl State {
         }
         self.work.prepares += missing.len() as u64;
         self.work.round_trips += 1;
-        let replies = self.client.prepare_all(&missing)?;
+        let (sent, replies) = self.client.prepare_all(&missing)?;
         let mut prepared = HashMap::with_capacity(missing.len());
         let mut failed = None;
-        for (sql, reply) in missing.into_iter().zip(replies) {
+        for (index, (sql, reply)) in missing.into_iter().zip(replies).enumerate() {
+            // A prepare never sent lost no reply: its failure is definite.
+            let reply = reply.map_err(|e| if index < sent { e } else { e.unsent() });
             match reply {
                 Ok(statement) => {
                     if self.statements.len() >= STATEMENT_CACHE {

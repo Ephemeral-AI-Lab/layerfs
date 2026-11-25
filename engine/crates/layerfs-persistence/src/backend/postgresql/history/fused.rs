@@ -44,7 +44,11 @@
 //!
 //! A race refusal wrote nothing and is answered [`Fused::Race`]: the caller
 //! continues on the separate path, once, and never sends this message again.
-//! An unknown outcome is never followed by that path.
+//! An unknown outcome is never followed by that path, and neither is a race
+//! refusal whose later replies were lost: that session is quarantined, so
+//! the race is answered `Conflict` (definite, nothing written) instead. The
+//! outcome is decided, and an unknown one quarantines the session, while
+//! the session's lock is still held (`Session::pipeline_judged`).
 use crate::backend::postgresql::session::{
     connection::Session,
     pipeline::{Reply, Request},
@@ -264,12 +268,15 @@ pub(crate) fn commit(
         });
     }
     let steps = &message.steps;
-    let replies = session
-        .pipeline_unnested(&requests)
+    // Decided while the session's lock is held: an unknown outcome
+    // quarantines it before any other caller can use the connection.
+    let outcome = session
+        .pipeline_judged(&requests, |replies, trusted| {
+            let outcome = decided(decide(steps, &replies, trusted), trusted);
+            let unknown = matches!(outcome, Err(Decision::Unknown));
+            (outcome, unknown)
+        })
         .map_err(|error| Fused::History(error.into()))?;
-    // A request the client never sent is definite only when what was sent
-    // before it was rolled back: the session is not quarantined.
-    let outcome = decide(steps, &replies, !session.quarantined());
     session.count_fused(matches!(outcome, Ok(())));
     match outcome {
         Ok(()) => Ok(CommitOutcome::Committed {
@@ -278,10 +285,23 @@ pub(crate) fn commit(
         }),
         Err(Decision::Race) => Err(Fused::Race),
         Err(Decision::Refused(error)) => Err(Fused::History(error)),
-        Err(Decision::Unknown) => {
-            session.quarantine_now();
-            Err(Fused::History(HistoryError::UnknownOutcome))
-        }
+        Err(Decision::Unknown) => Err(Fused::History(HistoryError::UnknownOutcome)),
+    }
+}
+
+/// A race refusal on a session that is no longer trusted (a later reply of
+/// the message was lost and the session quarantined): the separate path
+/// would start on a writer that answers every call unknown, so the race is
+/// answered as the definite refusal it is. The refusal is the server's
+/// reply to a statement after an acknowledged `BEGIN`, inside the
+/// transaction: that transaction aborted there, so neither its `COMMIT` nor
+/// the end of the connection can have applied anything.
+fn decided(outcome: Result<(), Decision>, trusted: bool) -> Result<(), Decision> {
+    match outcome {
+        Err(Decision::Race) if !trusted => Err(Decision::Refused(HistoryError::Conflict(
+            "fused race refusal on a lost session",
+        ))),
+        other => other,
     }
 }
 
@@ -450,7 +470,8 @@ enum Decision {
 
 /// The outcome of one flight's replies: the first refusal decides (module
 /// documentation); `Ok` only when every request, `COMMIT` included,
-/// answered without one.
+/// answered without one. `rolled_back`: the session is trusted (no reply
+/// lost; a partly sent flight was rolled back).
 fn decide(
     steps: &[Step],
     replies: &[Result<Reply, crate::backend::postgresql::session::pipeline::Refusal>],

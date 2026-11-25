@@ -148,9 +148,13 @@ order, never stopping at the first error: each request ends in its own
 `25P02` and a `COMMIT` rolls it back. It counts one round trip for the
 flight, plus one for preparing every statement not yet cached, all in one
 flight of their own (`prepares` counts each). A request that cannot be
-encoded stops the flight before it, and when earlier requests went out, one
-`ROLLBACK` follows. A lost reply quarantines the session; a reply the server
-gave is the caller's to classify. The fused Workspace Commit uses it
+encoded (a value that does not convert, or an `io::Error` while encoding: a
+NUL byte in a text, a message past the protocol's length) stops the flight
+before it: it and every later request never went out and are refused
+definitely (`Integrity`, `sent` false), and when earlier requests went out,
+one `ROLLBACK` follows. Only a sent request's lost reply quarantines the
+session (an unsent one lost nothing); a reply the server gave is the
+caller's to classify. A prepare flight follows the same rule. The fused Workspace Commit uses it
 ([Fused Commit](#fused-commit), #768 stage 2), sending every request of its
 one transaction in one flight; `postgresql_pipeline.rs` proves that a flight is one network wait by
 holding every server byte at a proxy until the server shows the whole
@@ -842,7 +846,18 @@ first refusal decides:
 | 10 | `22012` (the epoch moved or its row went) | `Conflict("project epoch")` |
 | any | another SQLSTATE with a definite rule (`rows::sqlstate`) | that refusal |
 | any | a request the client never sent (unencodable, or after one that was), the pipeline's `ROLLBACK` of what it sent acknowledged | that client refusal, definite |
+| 4, 5, 7, 8, 9 | `22012`, then a later reply of the message lost (the session quarantined) | `Conflict("fused race refusal on a lost session")`, definite, no fallback |
 | any | a SQLSTATE without one, `25P02` first, no reply, or an unsent request whose `ROLLBACK` failed | `UnknownOutcome`, session quarantined |
+
+The outcome is decided while the session's turn and lock are still held
+(`Session::pipeline_judged`), and an unknown one quarantines the session
+before the lock is released: no other caller can use the untrusted
+connection in between. A race refusal is the server's reply to a statement
+after an acknowledged `BEGIN`, so its transaction aborted there and neither
+its `COMMIT` nor the end of the connection can apply anything; when a later
+reply of the message was lost, the separate path would start on a writer
+that answers every call unknown, so the race is answered as the definite
+refusal it is instead.
 
 The fence statement holds `AccessShareLock` on `history_meta` until
 `COMMIT`; the lane row and the barrier are taken by the transaction itself,

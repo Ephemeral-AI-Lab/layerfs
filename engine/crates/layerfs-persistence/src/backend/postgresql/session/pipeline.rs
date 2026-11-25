@@ -169,36 +169,46 @@ impl Session {
     /// `statement_ns`. Transactions, commits and rollbacks are the caller's:
     /// the requests may begin and end one (and must end any they begin).
     ///
-    /// A request that could not be encoded stops the flight before it; when
-    /// earlier requests were sent, one `ROLLBACK` (one more round trip) ends
-    /// a transaction they may have begun. A reply lost with the connection
-    /// quarantines the session (`State::quarantine`); a reply the server
-    /// gave is returned as it is, and its classification is the caller's.
-    /// `Err` means nothing of the flight ran: a read-only or quarantined
-    /// session, a statement that did not prepare, or a parameter count that
-    /// does not match its statement.
+    /// A request that could not be encoded stops the flight before it (a
+    /// definite client refusal, `Integrity`: it never reached the server);
+    /// when earlier requests were sent, one `ROLLBACK` (one more round trip)
+    /// ends a transaction they may have begun. A reply lost with the
+    /// connection (a sent request's, never an unsent one's) quarantines the
+    /// session (`State::quarantine`); a reply the server gave is returned as
+    /// it is, and its classification is the caller's. `Err` means nothing of
+    /// the flight ran: a read-only or quarantined session, a statement that
+    /// did not prepare, or a parameter count that does not match its
+    /// statement.
     pub(crate) fn pipeline(
         &self,
         requests: &[Request<'_>],
     ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
-        self.pipeline_turn(requests, true)
+        self.pipeline_turn(requests, true, |replies, _| (replies, false))
     }
 
     /// [`Self::pipeline`] refused (`Integrity`, nothing sent) inside this
     /// thread's held lane: a flight that takes the lane row itself (a fused
-    /// Commit) would wait for its own lane connection.
-    pub(crate) fn pipeline_unnested(
+    /// Commit) would wait for its own lane connection. `judge` reads the
+    /// replies while the session's turn and lock are still held, with
+    /// whether the session is still trusted (no reply lost, a partly sent
+    /// flight rolled back), and answers what to return and whether the
+    /// flight's outcome is unknown: the session is then quarantined before
+    /// the lock is released, so no other caller uses the connection between
+    /// the flight and that verdict.
+    pub(crate) fn pipeline_judged<T>(
         &self,
         requests: &[Request<'_>],
-    ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
-        self.pipeline_turn(requests, false)
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        self.pipeline_turn(requests, false, judge)
     }
 
-    fn pipeline_turn(
+    fn pipeline_turn<T>(
         &self,
         requests: &[Request<'_>],
         nested: bool,
-    ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
         if !self.writable {
             return Err(BackendError::ReadOnly);
         }
@@ -263,16 +273,17 @@ impl Session {
             .enumerate()
             .map(|(index, reply)| {
                 reply.map_err(|e| {
+                    // An unsent request's failure is the client's own: it
+                    // never reached the server, so no reply of it was lost.
+                    let sent = index < sent;
+                    let e = if sent { e } else { e.unsent() };
                     let code = e.code().cloned();
                     let error = e.backend();
-                    // No SQLSTATE and no definite client refusal
-                    // (`rows::error`): the reply went with the connection.
-                    lost_reply |= code.is_none() && error == BackendError::Unknown;
-                    Refusal {
-                        error,
-                        code,
-                        sent: index < sent,
-                    }
+                    // A sent request with no SQLSTATE and no definite
+                    // client refusal (`rows::error`): the reply went with
+                    // the connection.
+                    lost_reply |= sent && code.is_none() && error == BackendError::Unknown;
+                    Refusal { error, code, sent }
                 })
             })
             .collect();
@@ -295,7 +306,11 @@ impl Session {
         if lost_reply {
             state.quarantine();
         }
-        Ok(replies)
+        let (answer, unknown) = judge(replies, !state.quarantined);
+        if unknown {
+            state.quarantine();
+        }
+        Ok(answer)
     }
 }
 
@@ -315,22 +330,6 @@ impl Session {
         } else {
             work.rollbacks += 1;
         }
-    }
-
-    /// Whether the session is quarantined: after a flight, its `ROLLBACK`
-    /// of a partly sent flight failed or a reply was lost.
-    pub(crate) fn quarantined(&self) -> bool {
-        self.state.lock().map_or(true, |state| state.quarantined)
-    }
-
-    /// Quarantines the session after a flight whose outcome is unknown
-    /// (`State::quarantine`).
-    pub(crate) fn quarantine_now(&self) {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
-        state.quarantine();
     }
 }
 

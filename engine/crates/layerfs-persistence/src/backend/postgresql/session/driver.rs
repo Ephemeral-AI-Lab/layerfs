@@ -60,6 +60,18 @@ impl Error {
             _ => None,
         }
     }
+    /// The failure of a request the client never sent (`pipeline::in_order`
+    /// answered it on its first poll): nothing of it reached the server, so
+    /// a client error the ordinary classification calls unknown (an
+    /// `io::Error` while encoding: a NUL byte in a text, a message past the
+    /// protocol's length) is a definite refusal ([`Self::Unsent`]). A closed
+    /// connection stays as it is.
+    pub(crate) fn unsent(self) -> Self {
+        match self {
+            Self::Database(error) if error.code().is_none() && !error.is_closed() => Self::Unsent,
+            other => other,
+        }
+    }
 }
 
 pub(crate) enum Driver {
@@ -338,17 +350,19 @@ impl Driver {
     }
     /// Prepares every statement of `sqls` in one flight: each Parse/Describe
     /// is sent before any reply is awaited, and every reply is collected.
+    /// Prepares `sqls` in one flight ([`pipeline::in_order`]): how many
+    /// were sent, and every reply in order.
     pub(crate) fn prepare_all(
         &mut self,
         sqls: &[&str],
-    ) -> Result<Vec<Result<Statement, Error>>, Error> {
+    ) -> Result<(usize, Vec<Result<Statement, Error>>), Error> {
         match self {
             Self::Ordinary(client) => {
                 let pending = sqls
                     .iter()
                     .map(|sql| Box::pin(client.client.prepare(sql)) as Pin<Box<_>>)
                     .collect();
-                Ok(client.runtime.block_on(pipeline::in_order(pending)).1)
+                Ok(client.runtime.block_on(pipeline::in_order(pending)))
             }
             Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),

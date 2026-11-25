@@ -456,3 +456,128 @@ fn a_pipeline_is_one_flight_with_every_reply() {
     assert_eq!(row_count(replies[0].as_ref().unwrap()), 5);
     drop(handles);
 }
+
+/// #768 independent verification, finding 3: a request the client never
+/// sent because it could not be encoded as a protocol message (an
+/// `io::Error`: a NUL byte in a simple text, or in a statement's text,
+/// which fails its Parse) lost no reply. The flight's sent prefix is rolled
+/// back, the refusal is definite (`Integrity`, unsent), and the session is
+/// not quarantined: it answers the next flight, outside any transaction.
+#[test]
+fn an_unencodable_request_rolls_back_and_keeps_the_session() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url.clone(), "pipeline_nul");
+    drop(schema.create(BINDING, CURSOR));
+    let table_schema = format!("{}_t", schema.name);
+    let table = format!("{table_schema}.pipe");
+    let mut observer = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    observer
+        .batch_execute(&format!(
+            "DROP SCHEMA IF EXISTS {table_schema} CASCADE; CREATE SCHEMA {table_schema}; \
+             CREATE TABLE {table} (k int8 PRIMARY KEY, v bytea NOT NULL)"
+        ))
+        .unwrap();
+    struct Drops(String, String);
+    impl Drop for Drops {
+        fn drop(&mut self) {
+            if let Ok(mut client) = postgres::Client::connect(&self.0, postgres::NoTls) {
+                let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {} CASCADE", self.1));
+            }
+        }
+    }
+    let _drops = Drops(url.clone(), table_schema.clone());
+    let handles = PostgresHandles::open_writable(&schema.selection(), BINDING, CURSOR).unwrap();
+    let insert = format!("INSERT INTO {table} (k, v) VALUES ($1, $2)");
+    let value: &[u8] = b"nul";
+    let (one, two, three) = (1i64, 2i64, 3i64);
+    let (k1, k2, k3) = (pair(&one, &value), pair(&two, &value), pair(&three, &value));
+    // Prepare the insert first, so the flight below sends no prepare.
+    let warm = postgresql_pipeline(
+        &handles,
+        &[PipelineRequest::Statement {
+            sql: &insert,
+            params: &k3,
+            bytes: 8 + value.len() as u64,
+        }],
+    )
+    .unwrap();
+    assert!(warm[0].is_ok());
+
+    // 1. A simple text with a NUL byte after a sent BEGIN and insert.
+    let unencodable = [
+        PipelineRequest::Simple("BEGIN"),
+        PipelineRequest::Statement {
+            sql: &insert,
+            params: &k1,
+            bytes: 8 + value.len() as u64,
+        },
+        PipelineRequest::Simple("SELECT 1\0"),
+        PipelineRequest::Simple("COMMIT"),
+    ];
+    let before = handles.diagnostics().unwrap();
+    let replies = postgresql_pipeline(&handles, &unencodable).unwrap();
+    assert_eq!(
+        delta(&before, &handles.diagnostics().unwrap()),
+        Delta {
+            statements: 2,
+            round_trips: 2,
+            prepares: 0
+        },
+        "one flight of the two sent requests and one ROLLBACK"
+    );
+    assert!(replies[0].is_ok() && replies[1].is_ok());
+    for reply in &replies[2..] {
+        let refusal = reply.as_ref().err().expect("not sent");
+        assert_eq!(
+            (refusal.error, refusal.code.clone(), refusal.sent),
+            (BackendError::Integrity, None, false),
+            "an unsent request is the client's definite refusal"
+        );
+    }
+    assert_eq!(committed(&mut observer, &table, &[1]), 0, "rolled back");
+    // The session still serves, and no transaction is left open: an insert
+    // on its own commits at once.
+    let replies = postgresql_pipeline(
+        &handles,
+        &[PipelineRequest::Statement {
+            sql: &insert,
+            params: &k2,
+            bytes: 8 + value.len() as u64,
+        }],
+    )
+    .expect("the session is not quarantined");
+    assert!(replies[0].is_ok(), "{:?}", replies[0].as_ref().err());
+    assert_eq!(
+        committed(&mut observer, &table, &[2]),
+        1,
+        "autocommitted: no transaction was left open"
+    );
+
+    // 2. A statement whose text holds a NUL byte: its Parse cannot be
+    // encoded, so it is never sent. The flight is refused definitely and
+    // the session stays usable.
+    let nul = format!("SELECT k FROM {table} WHERE k = $1\0");
+    let refused = postgresql_pipeline(
+        &handles,
+        &[PipelineRequest::Statement {
+            sql: &nul,
+            params: &[&one],
+            bytes: 8,
+        }],
+    )
+    .err()
+    .expect("an unencodable statement does not prepare");
+    assert_eq!(refused, BackendError::Integrity, "a definite refusal");
+    let count = format!("SELECT k FROM {table} WHERE k <= $1");
+    let replies = postgresql_pipeline(
+        &handles,
+        &[PipelineRequest::Statement {
+            sql: &count,
+            params: &[&three],
+            bytes: 8,
+        }],
+    )
+    .expect("the session is not quarantined");
+    assert_eq!(row_count(replies[0].as_ref().unwrap()), 2);
+    drop(handles);
+}
