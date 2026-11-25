@@ -52,10 +52,14 @@ one `BEGIN IMMEDIATE` on SQLite, one pipelined message on PostgreSQL, see
 [Fused Commit](../store/postgresql.md#fused-commit)), which asserts the
 bound head. A definite race refusal (the head moved, another writer stored
 one of the publication's objects, the Commit identity exists) wrote
-nothing: the held publication and the hints are published on their own and
-the Commit continues from step 3 in the same call, once: the head read and,
-if it moved, the merge before the lane in a Save of its own, then step 4.
-An unknown outcome never continues. Only a Commit that is not forced, names
+nothing: the held publication and the hints are published on their own
+(phase `Finish`, no intent: a lost reply there folds back as a failed
+`finish` does) and the Commit continues from step 3 in the same call, once:
+the head read and, if it moved, the merge before the lane in a Save of its
+own, then step 4. An unknown outcome never continues, and neither does a
+race refusal whose session lost a later reply (a definite `Conflict`). A
+Commit whose new bindings pass one hint transaction (4,096 rows) publishes
+its tail, then its hints, then attempts the Commit alone fused. Only a Commit that is not forced, names
 no other `--expected` head, and whose construction kept its whole built set
 (`ConstructedObjects::covers`) is fused; every other Commit takes steps 3
 and 4 as drawn.
@@ -235,6 +239,7 @@ Commit's own (`LiveConflict` in the reason), and the custody stays.
 | Uncertain outcome | `CommitFailure::uncertain()` true, code `Unknown`; custody kept | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
 | Concurrent Commits on other Workspaces | Correct, serialized by the publication lane; not the optimized case | [Store](../store/README.md) |
 | A fused request too large for one message | `Fused::Overflow`, nothing sent: the tail and the hints are published first, then the Commit alone is attempted fused | [`commit_fused.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_fused.rs) |
+| New bindings past one hint transaction (4,096 rows) | The tail is published, then every binding recorded, then the Commit alone is attempted fused; no hint row precedes its objects | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`hints.rs`](../../../../engine/crates/layerfs-store-service/src/store/hints.rs) |
 
 No total file, edit or Commit size cap exists: captured input is paged and
 construction state lives in indexed operation records.

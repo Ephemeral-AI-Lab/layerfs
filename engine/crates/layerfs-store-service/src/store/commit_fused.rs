@@ -17,7 +17,10 @@
 //! the Commit's identity exists; nothing written) continues on the separate
 //! path in the same call, once: the held publication is published on its
 //! own (its lost identities compared with their winners, as a finish does),
-//! the hints are recorded, and today's path follows from its head read: a
+//! the hints are recorded (both in phase Finish with no Commit intent: a
+//! lost reply there folds the capture back as a failed finish does, and
+//! never leaves the Workspace refusing Commits with nothing to resolve),
+//! and today's path follows from its head read: a
 //! moved head is merged with before the lane, in a Save of its own, then
 //! the lane and, if the head moved again, an in-lane merge step. The same
 //! message is never sent again, and an unknown outcome never continues:
@@ -226,11 +229,15 @@ impl BoundWorkspace {
     /// of `candidate` over the bound `snapshot` in one transaction. `Some`:
     /// published, the Save completed (`retained.saved`). `None`: a race
     /// refusal, after which `tail` was published and the hints recorded on
-    /// their own, and the caller continues on the separate path.
+    /// their own ([`Self::publish_apart`]), and the caller continues on the
+    /// separate path. Without a `tail` the Save was published on its own
+    /// already (`retained.saved`; its new bindings passed one hint
+    /// transaction and were recorded after it) and the Commit is attempted
+    /// alone.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn publish_fused(
         &self,
-        tail: PreparedTail<'_>,
+        tail: Option<PreparedTail<'_>>,
         snapshot: &BranchSnapshot,
         candidate: FilesystemRootId,
         logical: u64,
@@ -240,7 +247,6 @@ impl BoundWorkspace {
         retained: &mut CommitFailure,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Option<CommitOutcome>, CommitError> {
-        let history = &*self.store.history;
         let committer = self
             .store
             .committer
@@ -249,15 +255,19 @@ impl BoundWorkspace {
         // Nothing changed against the bound root: not a fused Commit (the
         // separate path answers UpToDate).
         if candidate.0 == snapshot.effective_root {
-            self.settle_saved(tail.publish().map_err(CommitError::Storage)?, retained);
-            if let Some(rows) = hints {
-                super::hints::record_rows(history, &rows)?;
-            }
+            self.publish_apart(tail, hints, retained)?;
             return Ok(None);
         }
-        let mut tail = Some(tail);
+        let mut saved = match &tail {
+            Some(_) => None,
+            None => Some(
+                retained
+                    .saved
+                    .ok_or(CommitError::Context("finished Save"))?,
+            ),
+        };
+        let mut tail = tail;
         let mut hints = hints;
-        let mut saved = None;
         let stack = snapshot.branch.stack;
         let attempt = loop {
             let outcome = match (&saved, &tail) {
@@ -268,6 +278,7 @@ impl BoundWorkspace {
             let request = commit_request(
                 snapshot, snapshot, candidate, logical, &outcome, None, options, via,
             );
+            retained.phase = CommitPhase::Publish;
             retained.intent = Some(request.clone());
             let publication = tail.as_ref().and_then(|tail| tail.publication());
             let rows = hints.as_deref().unwrap_or(&[]);
@@ -278,11 +289,7 @@ impl BoundWorkspace {
             // each on its own as the separate path sends them, then the
             // Commit alone.
             if matches!(attempt, Err(Fused::Overflow)) && saved.is_none() {
-                let tail = tail.take().ok_or(CommitError::Context("fused tail"))?;
-                saved = Some(tail.publish().map_err(CommitError::Storage)?);
-                if let Some(rows) = hints.take() {
-                    super::hints::record_rows(history, &rows)?;
-                }
+                saved = self.publish_apart(tail.take(), hints.take(), retained)?;
                 continue;
             }
             break attempt;
@@ -290,39 +297,61 @@ impl BoundWorkspace {
         match attempt {
             Ok(outcome) => {
                 retained.published = Some(outcome.clone());
-                let saved = match (saved, tail) {
-                    (Some(saved), _) => saved,
-                    (None, Some(tail)) => tail.acknowledged().map_err(CommitError::Storage)?,
-                    (None, None) => return Err(CommitError::Context("fused tail")),
-                };
-                self.settle_saved(saved, retained);
+                if let Some(tail) = tail {
+                    // The Commit is known published; what is left is local:
+                    // the Save's settlement, then the install. A failure
+                    // there keeps the custody of a known publication whose
+                    // install is still to come, which the next Commit's
+                    // resolution installs (`resolve.rs`), as after a failed
+                    // install.
+                    retained.phase = CommitPhase::Install;
+                    let saved = tail.acknowledged().map_err(CommitError::Storage)?;
+                    self.settle_saved(saved, retained);
+                    retained.phase = CommitPhase::Publish;
+                }
                 self.store.fused.committed.fetch_add(1, Ordering::Relaxed);
                 Ok(Some(outcome))
             }
             Err(Fused::Race) => {
                 self.store.fused.fallbacks.fetch_add(1, Ordering::Relaxed);
-                retained.intent = None;
-                let saved = match (saved, tail) {
-                    (Some(saved), _) => saved,
-                    (None, Some(tail)) => tail.publish().map_err(CommitError::Storage)?,
-                    (None, None) => return Err(CommitError::Context("fused tail")),
-                };
-                self.settle_saved(saved, retained);
-                if let Some(rows) = hints {
-                    super::hints::record_rows(history, &rows)?;
-                }
+                self.publish_apart(tail, hints, retained)?;
                 Ok(None)
             }
-            Err(error) => {
-                if let Some(saved) = saved {
-                    self.settle_saved(saved, retained);
-                }
-                Err(match error {
-                    Fused::History(error) => CommitError::History(error),
-                    _ => CommitError::Context("fused Commit bounds"),
-                })
-            }
+            Err(error) => Err(match error {
+                Fused::History(error) => CommitError::History(error),
+                _ => CommitError::Context("fused Commit bounds"),
+            }),
         }
+    }
+
+    /// Publishes the held `tail` (`None`: already published) on its own,
+    /// as `finish` does, and records `hints` (`None`: already recorded), as
+    /// the separate path's finish and binding phases do: in phase Finish,
+    /// with no Commit intent outstanding. No Commit was made or is pending,
+    /// so a lost reply here is an unknown Storage or hint outcome before any
+    /// publication and folds the capture back as a failed `finish` does; it
+    /// never leaves the Workspace refusing later Commits with nothing to
+    /// resolve. Returns the published Save's outcome, if published here.
+    fn publish_apart(
+        &self,
+        tail: Option<PreparedTail<'_>>,
+        hints: Option<Vec<BindingHint>>,
+        retained: &mut CommitFailure,
+    ) -> Result<Option<WriteOutcome>, CommitError> {
+        retained.phase = CommitPhase::Finish;
+        retained.intent = None;
+        let saved = match tail {
+            Some(tail) => {
+                let saved = tail.publish().map_err(CommitError::Storage)?;
+                self.settle_saved(saved, retained);
+                Some(saved)
+            }
+            None => None,
+        };
+        if let Some(rows) = hints {
+            super::hints::record_rows(&*self.store.history, &rows)?;
+        }
+        Ok(saved)
     }
 
     fn settle_saved(&self, saved: WriteOutcome, retained: &mut CommitFailure) {

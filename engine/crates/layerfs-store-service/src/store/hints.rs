@@ -56,13 +56,15 @@ pub fn record_new_bindings(
     Ok(recorded)
 }
 
-/// [`record_new_bindings`] for a fused Commit (#768): up to one write
-/// transaction's worth of rows ([`BATCH`]) is returned unrecorded, for the
-/// Commit's own transaction; past that, every row is recorded in bounded
-/// write transactions as there, and `None` is returned.
+/// [`record_new_bindings`] for a fused Commit (#768), recording nothing:
+/// the rows, when they fit one write transaction ([`BATCH`]), for the
+/// Commit's own transaction. `None` when they do not: the walk stops at the
+/// first row past [`BATCH`] and nothing is recorded, so the caller can
+/// publish its Save first and record them then (`record_new_bindings`), as
+/// the separate path does, and attempt the Commit alone.
+/// A hint row is never written before the objects of the tree it describes.
 pub fn collect_new_bindings(
     reader: &dyn AuthenticatedObjects,
-    catalog: &dyn HistoryCatalog,
     left: Option<FilesystemRootId>,
     right: FilesystemRootId,
 ) -> Result<Option<Vec<BindingHint>>, CommitError> {
@@ -71,32 +73,24 @@ pub fn collect_new_bindings(
         .transpose()
         .map_err(CommitError::from)?;
     let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
-    let (mut rows, mut recorded, mut failure) = (Vec::new(), false, None);
+    let (mut rows, mut spilled) = (Vec::new(), false);
     let walked = new_bindings(reader, left.as_ref(), &right, |child, parent, name| {
+        if rows.len() == BATCH {
+            spilled = true;
+            return Err(ContentError::OutputRejected);
+        }
         rows.push(BindingHint {
             child,
             parent,
             name: name.as_bytes().to_vec(),
         });
-        if rows.len() == BATCH {
-            if let Err(error) = catalog.record_bindings(&rows) {
-                failure = Some(error);
-                return Err(ContentError::OutputRejected);
-            }
-            recorded = true;
-            rows.clear();
-        }
         Ok(())
     });
-    if let Some(error) = failure {
-        return Err(CommitError::History(error));
+    if spilled {
+        return Ok(None);
     }
     walked.map_err(CommitError::from)?;
-    if !recorded {
-        return Ok(Some(rows));
-    }
-    record_rows(catalog, &rows)?;
-    Ok(None)
+    Ok(Some(rows))
 }
 
 /// Records `rows` in bounded write transactions.

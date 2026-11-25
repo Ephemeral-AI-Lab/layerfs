@@ -326,18 +326,38 @@ impl BoundWorkspace {
                 })?;
                 let left = Some(FilesystemRootId(current.effective_root));
                 let hints = phase(timing, "bindings", || match fused {
-                    true => super::hints::collect_new_bindings(
-                        &reader,
-                        &*self.store.history,
-                        left,
-                        root,
-                    ),
+                    true => super::hints::collect_new_bindings(&reader, left, root),
                     false => {
                         super::hints::record_new_bindings(&reader, &*self.store.history, left, root)
                             .map(|_| None)
                     }
                 })?;
                 drop(reader);
+                // New bindings past one transaction's rows: the Save is
+                // published and then every binding recorded, as on the
+                // separate path, so no hint row is written before the
+                // objects it describes; then the Commit alone is attempted
+                // fused, as after an overflow.
+                let tail = match (tail, &hints) {
+                    (Some(tail), None) => {
+                        let saved = phase(timing, "finish.tail", || {
+                            tail.publish().map_err(CommitError::Storage)
+                        })?;
+                        self.store.note_save(&saved);
+                        retained.saved = Some(saved);
+                        let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
+                        phase(timing, "bindings", || {
+                            super::hints::record_new_bindings(
+                                &reader,
+                                &*self.store.history,
+                                left,
+                                root,
+                            )
+                        })?;
+                        None
+                    }
+                    (tail, _) => tail,
+                };
                 // The candidate is validated and its install prepared before
                 // the lane: they read only immutable published objects. Only
                 // an in-lane merge step, which changes the candidate, is
@@ -349,7 +369,7 @@ impl BoundWorkspace {
                 })?;
                 let early = (Self::target_key(early_target, root), early);
                 let mut fused_outcome = None;
-                if let Some(tail) = tail {
+                if fused {
                     retained.phase = CommitPhase::Publish;
                     fused_outcome = self.publish_fused(
                         tail,

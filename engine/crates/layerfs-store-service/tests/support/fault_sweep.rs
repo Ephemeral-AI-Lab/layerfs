@@ -21,7 +21,14 @@
 //! * by `Store::fused_counts`: one call makes at most one fused Commit or
 //!   one fallback; only a raced Commit falls back, at most once, and never
 //!   when the fault came at or before the fused attempt's race refusal
-//!   (the client then never saw a definite race: an unknown outcome).
+//!   (the client then never saw a definite race: an unknown outcome);
+//! * the Workspace is never locked out: its follow-up Commit is refused
+//!   `InFlight` only while a retained Commit waits for its resolution
+//!   (`BoundWorkspace::has_retained`), never with nothing to resolve;
+//! * a connection dropped after the race refusal reached the client but
+//!   before the rest of the fused message's replies did (the session is
+//!   quarantined with the race in hand) does not fall back on that session:
+//!   the call answers a definite refusal.
 //!
 //! At the end the Store's full audit (`diagnose`) reports no failure, no
 //! backend of the Store is left idle in a transaction, and a new Commit
@@ -72,6 +79,10 @@ struct Run {
     old: Option<CommitId>,
     /// `fused_counts` growth over the armed Commit: (fused, fallbacks).
     counts: (u64, u64),
+    /// Whether the Workspace kept a retained Commit after the armed one.
+    retained: bool,
+    /// Whether the follow-up Commit was refused `InFlight`.
+    follow_in_flight: bool,
 }
 
 fn expected(flight: Flight, fault: &[u8]) -> Tree {
@@ -145,7 +156,13 @@ fn run(
     let window = proxy.disarm();
     let after = service.service.store.fused_counts();
     let counts = (after.0 - before.0, after.1 - before.1);
-    let follow = verdict(&commit(&workspace));
+    let retained = workspace.has_retained();
+    let followed = commit(&workspace);
+    let follow_in_flight = matches!(
+        &followed,
+        Err(failure) if matches!(failure.error, layerfs_store_service::store::CommitError::InFlight)
+    );
+    let follow = verdict(&followed);
     let rebound = match service.try_bind(store.branch(name)) {
         Ok(other) => {
             let _ = service.try_unmount(other);
@@ -162,6 +179,8 @@ fn run(
         rebound,
         old,
         counts,
+        retained,
+        follow_in_flight,
     }
 }
 
@@ -170,18 +189,32 @@ fn proxied(store: &TestStore, proxy: &FaultProxy) -> String {
     super::fault_proxy::proxied_url(url, proxy.port).0
 }
 
+/// Where a raced flight's fused attempt stands in the clean flight: the
+/// race refusal, and the last reply of its message (the `COMMIT`'s
+/// `ReadyForQuery`, which follows the first `CommandComplete` after it).
+#[derive(Clone, Copy, Debug)]
+pub struct Raced {
+    pub refusal: u64,
+    pub fused_end: u64,
+}
+
 /// Checks the invariants of one run on Branch `name`; returns the state
 /// label for the summary.
 fn check(
     store: &TestStore,
     name: &str,
     flight: Flight,
-    race_refusal: Option<u64>,
+    raced: Option<Raced>,
     run: &Run,
 ) -> &'static str {
+    let race_refusal = raced.map(|raced| raced.refusal);
     let label = format!(
-        "{name}: fired {:?}, fused counts {:?}",
-        run.window.fired, run.counts
+        "{name}: fired {:?}, fused counts {:?}, first {:?}",
+        run.window.fired, run.counts, run.first
+    );
+    assert!(
+        !run.follow_in_flight || run.retained,
+        "{label}: the follow-up was refused InFlight with no retained Commit to resolve"
     );
     let (fused, fallbacks) = run.counts;
     assert!(
@@ -204,6 +237,22 @@ fn check(
                     assert_eq!(
                         fallbacks, 0,
                         "{label}: no fallback without the race refusal in hand"
+                    );
+                }
+            }
+            // A drop among the fused message's later replies: the race is in
+            // hand but the session lost a reply. No fallback on it, and a
+            // definite refusal (nothing was written).
+            if let (Some(fired), Some(raced)) = (&run.window.fired, raced) {
+                let lost_after_race = fired.at > raced.refusal
+                    && fired.at <= raced.fused_end
+                    && fired.delivered.is_empty()
+                    && fired.killed.is_none();
+                if lost_after_race {
+                    assert_eq!(fallbacks, 0, "{label}: no fallback on a lost session");
+                    assert!(
+                        matches!(run.first, Verdict::Refused(_)),
+                        "{label}: a race refusal in hand is definite"
                     );
                 }
             }
@@ -239,6 +288,13 @@ pub enum Positions {
     /// connection's first replies (its `BEGIN` batch with the lane row) and
     /// before its last (the lane's release).
     InLaneWriter,
+    /// A raced flight: the fused message's replies after its race refusal.
+    RaceReplies,
+    /// A raced flight: the writer's messages after the fused message, up
+    /// to the first message of a connection opened after it: the fallback's
+    /// publication of the held tail, its hint rows, its head read and what
+    /// follows on the writer before anything else connects.
+    Fallback,
 }
 
 /// The sweep: `fault` at every server message of the `flight` Commit that
@@ -264,20 +320,33 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     let k = clean.window.seen;
     let kinds: String = clean.window.log.iter().map(|(_, kind)| *kind).collect();
     // A raced flight: the fused attempt's first error reply is its race
-    // refusal, and exactly one fallback follows it.
-    let race_refusal = (flight == Flight::Raced).then(|| {
+    // refusal, and exactly one fallback follows it. The fused message ends
+    // at its COMMIT's answer: the first CommandComplete after the refusal
+    // (every request between them answers an error), then ReadyForQuery.
+    let raced = (flight == Flight::Raced).then(|| {
         assert_eq!(
             clean.counts,
             (0, 1),
             "the clean raced Commit fell back once"
         );
-        kinds.find('E').expect("the fused attempt's race refusal") as u64
+        let refusal = kinds.find('E').expect("the fused attempt's race refusal");
+        let end = refusal
+            + kinds[refusal..]
+                .find('C')
+                .expect("the fused COMMIT's answer")
+            + 1;
+        assert_eq!(&kinds[end..=end], "Z", "the fused message's last reply");
+        Raced {
+            refusal: refusal as u64,
+            fused_end: end as u64,
+        }
     });
+    let race_refusal = raced.map(|raced| raced.refusal);
     if flight != Flight::Raced {
         let fused = u64::from(matches!(flight, Flight::Warm | Flight::First));
         assert_eq!(clean.counts, (fused, 0), "the clean Commit's path");
     }
-    check(&store, "clean", flight, race_refusal, &clean);
+    check(&store, "clean", flight, raced, &clean);
     // The flight by connection: runs of messages, each tagged by the
     // connection's order within this flight.
     let mut order = Vec::new();
@@ -320,6 +389,28 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
             let released = log.iter().rposition(|(c, _)| *c == writer).unwrap();
             (lane_held as u64..=released as u64).collect()
         }
+        Positions::RaceReplies => {
+            let raced = raced.expect("a raced flight");
+            (raced.refusal + 1..=raced.fused_end).collect()
+        }
+        Positions::Fallback => {
+            let raced = raced.expect("a raced flight");
+            let log = &clean.window.log;
+            let writer = log[raced.refusal as usize].0;
+            let before: std::collections::BTreeSet<usize> = log[..=raced.fused_end as usize]
+                .iter()
+                .map(|(c, _)| *c)
+                .collect();
+            let end = log
+                .iter()
+                .enumerate()
+                .skip(raced.fused_end as usize + 1)
+                .find(|(_, (c, _))| !before.contains(c))
+                .map_or(log.len(), |(at, _)| at);
+            (raced.fused_end + 1..end as u64)
+                .filter(|n| log[*n as usize].0 == writer)
+                .collect()
+        }
     };
     println!(
         "FAULT_POSITIONS {{\"tag\":\"{tag}\",\"positions\":\"{positions:?}\",\"selected\":{},\"from\":{},\"to\":{}}}",
@@ -352,7 +443,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
                 assert_eq!(fired.killed, Some(true), "{name}: the backend was killed");
             }
         }
-        let state = check(&store, &name, flight, race_refusal, &outcome);
+        let state = check(&store, &name, flight, raced, &outcome);
         let class = match &outcome.first {
             Verdict::Committed(_) => "committed",
             Verdict::Refused(_) => "refused",
@@ -388,7 +479,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     // The flight is the same at the end: every position above was the
     // message it names.
     let again = run(&store, &proxy, "again", flight, None);
-    check(&store, "again", flight, race_refusal, &again);
+    check(&store, "again", flight, raced, &again);
     assert_eq!(
         again
             .window

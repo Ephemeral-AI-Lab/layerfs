@@ -865,9 +865,18 @@ on the writer connection (the held-lane connection is not used); the epoch
 is read under the lane at step 4 and re-checked `FOR SHARE` last. A race
 (`Fused::Race`) wrote nothing: the Store service publishes the held tail
 and the hints on their own and continues on the separate path in the same
-call, once, from its head read (`reread_after_fused`: a moved head is
-merged with before the lane, in a Save of its own), then
-`publish_lane_unmoved` and the rest of that path. The message is never sent again, an epoch
+call, once, from its head read. The tail and hints are written in phase
+`Finish` with no Commit intent outstanding, as the separate path's `finish`
+and binding hints are: a lost reply there is an unknown Storage or hint
+outcome before any publication, folds the capture back like a failed
+`finish`, and never leaves the Workspace refusing later Commits `InFlight`
+with nothing to resolve (`commit_fault_race_custody.rs`; the writer
+session is quarantined all the same, so that service's later Commits fail
+until it is reopened). The same holds for an overflow's tail and hints and
+for a held tail with no change against the bound root. The separate path
+then runs from its head read (`reread_after_fused`: a moved head is merged
+with before the lane, in a Save of its own), then `publish_lane_unmoved`
+and the rest of that path. The message is never sent again, an epoch
 `Conflict` has no fallback, and an unknown outcome never continues: custody
 is kept. The pack ids the attempt carried are published unchanged; the
 rolled-back transaction wrote nothing and they stay reserved to the handle.
@@ -927,7 +936,27 @@ lane), a Commit that `--expected` names another head for, and a
 request too large for one message (`Fused::Overflow`: more hint blocks than
 one array, more rows than the transaction row limit, or a publication past
 16 MiB − 1): the tail and the hints are published first, then the Commit
-alone is attempted fused.
+alone is attempted fused. So is a Commit whose new tree adds more name
+bindings than one hint transaction carries (4,096 rows): the walk that
+collects them stops there with nothing written, the held tail is published
+on its own, every binding is then recorded in bounded transactions, and
+the Commit alone is attempted fused. A hint row is never written before the
+objects of the tree it describes (`commit_fused_hint_spill.rs`). A dangling
+hint could not have made a reader fail: a hint names inode serials, and
+every reader checks it against the tree it reads (`tree.lookup(parent,
+name) == child`) before using it, reading only that tree's objects; it
+would only have cost a lookup.
+
+A fused Commit's new objects are never read back from the Store before the
+Commit becomes visible: validation checks the candidate from the bytes the
+Commit built (`ConstructedObjects`), and the Commit's own reads before the
+transaction come from the held batch. This is the owner's decision; it
+gives up a defence in depth (a Store read-back that would catch a
+publication that stored other bytes than were built), not a known defect.
+A fused Commit known published whose Save then fails to settle its held
+batch locally (`PreparedTail::acknowledged`) keeps its custody as a failed
+install after a known publication does (phase `Install`): the next Commit's
+resolution installs it.
 
 Not done: the fused transaction and a held lane assume one server, as the
 lane barrier does. A writer whose route reaches another server than another

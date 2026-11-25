@@ -99,12 +99,18 @@ SLOW = {
     ("layerfs-store-service", "commit_fault_first_kill"): 26.5,
     ("layerfs-store-service", "commit_fault_race_drop"): 37.4,
     ("layerfs-store-service", "commit_fault_race_kill"): 40.0,
+    # The raced flight's fused replies after its refusal and the fallback's
+    # writer messages, dropped and killed (#768 verification fixes).
+    ("layerfs-store-service", "commit_fault_race_custody"): 22.2,
     ("layerfs-store-service", "commit_lane_kill"): 15.4,
     ("layerfs-store-service", "commit_random_model"): 8.4,
     ("layerfs-store-service", "commit_stress"): 6.7,
     # Fused Commits of 8,000 new files and of 400 rewrites over a 20,000-file
     # seed on both backends (#768 stage 2b review), macOS host, 2026-11-25.
     ("layerfs-store-service", "commit_fused_held"): 45.1,
+    # A 4,200-file Commit refused after its hints spilled, both backends
+    # (#768 verification fixes), macOS host, 2026-11-25.
+    ("layerfs-store-service", "commit_fused_hint_spill"): 16.4,
     # Fused-versus-forced size-boundary matrix on both backends (#768 stage
     # 2b), slowest of the a36e9b997c runs, macOS host, 2026-11-25.
     ("layerfs-store-service", "commit_fused_sizes"): 38.0,
