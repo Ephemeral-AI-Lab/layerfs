@@ -12,7 +12,9 @@ use crate::{
 /// the tail past them; on any other handle it releases every unused
 /// ordinal), kept on the handle when the Save finished, so the next Save on
 /// it reserves only when a range runs out (#768). Ids are never reused: a
-/// Save that fails, refuses or ends uncertain drops the block, and a handle
+/// Save that fails, refuses or ends uncertain drops the block (except a
+/// held tail whose transaction was refused definitely,
+/// [`super::PreparedTail::refused`]: its unused rest is kept), and a handle
 /// dropped with it leaks its rest (at most one pack refill and
 /// `KEPT_ORDINALS` ordinals). The owner of a keeping handle returns its kept
 /// ordinals before an orderly drop ([`crate::Storage::release_kept_ordinals`]);
@@ -87,6 +89,22 @@ impl State<'_> {
             next_ordinal: self.next_ordinal,
             ordinal_end: self.ordinal_end,
         }));
+    }
+    /// After a definite refusal of the transaction that carried this Save's
+    /// held last publication (`release`: that publication's ordinal
+    /// release, which was not applied either): every id from the first one
+    /// the Save did not assign, up to its reserved ends. Ids the refused
+    /// publication assigned stay below it and are never reused.
+    pub(super) fn unused_after_refusal(&self, release: Option<(u32, usize)>) -> IdBlock {
+        let ordinal_end = release.map_or(self.ordinal_end, |(first, count)| {
+            u64::from(first) + count as u64
+        });
+        IdBlock {
+            next_pack: self.next_pack,
+            pack_end: self.pack_end,
+            next_ordinal: self.next_ordinal,
+            ordinal_end: ordinal_end.max(self.next_ordinal),
+        }
     }
     pub(super) fn reserve_ordinals(&mut self, block: usize) -> StorageResult<()> {
         self.storage.source.note(|c| {

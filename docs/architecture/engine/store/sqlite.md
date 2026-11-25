@@ -486,7 +486,8 @@ object identity in the publication, a moved head (`HeadMoved`) or an
 was written, and the Store service publishes the tail and the hints on
 their own and continues on the separate path, once. Any other refusal is
 the Commit's own (`Conflict` for a missing or moved epoch, `Busy` for the
-lane), with no fallback. Before the transaction the tail is checked against
+lane), with no fallback; its Save's unused ids go back to the handle and
+its ordinals to the Store, as on PostgreSQL. Before the transaction the tail is checked against
 SQLite's publication bound (`TRANSACTION_CANONICAL_BYTES_LIMIT`, 4 MiB − 1),
 the unit layout and the file system's headroom, as a publication on its own
 is; one that does not fit is `Fused::Overflow`, and the tail and the hints

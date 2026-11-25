@@ -900,6 +900,16 @@ and the rest of that path. The message is never sent again, an epoch
 `Conflict` has no fallback, and an unknown outcome never continues: custody
 is kept. The pack ids the attempt carried are published unchanged; the
 rolled-back transaction wrote nothing and they stay reserved to the handle.
+A definite refusal with no fallback (`Conflict`, `Busy`, `Integrity`,
+`StaleStore`, a race on a lost session, an unsent request) rolled the whole
+message back, the held publication's ordinal release included: the Save
+does not finish, but `PreparedTail::refused` puts its unused pack ids and
+ordinals (from the first ones it did not assign to its reserved ends) on
+the handle, and the failed Commit returns the ordinals
+(`release_kept_ordinals`, the conditional rewind; refused by a quarantined
+session). The ids the refused publication assigned stay below them and are
+never reused. After an unknown outcome the tail is dropped and the Save's
+whole remaining block is lost (`fused_refusal_ids.rs`).
 
 While the tail is held, the Commit's own reads (the logical count's file
 lengths, the binding hints) must see what the Store does not have yet. The

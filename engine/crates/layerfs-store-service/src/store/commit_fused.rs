@@ -317,10 +317,21 @@ impl BoundWorkspace {
                 self.publish_apart(tail, hints, retained)?;
                 Ok(None)
             }
-            Err(error) => Err(match error {
-                Fused::History(error) => CommitError::History(error),
-                _ => CommitError::Context("fused Commit bounds"),
-            }),
+            Err(error) => {
+                // A definite refusal rolled the whole transaction back: the
+                // Save's unused ids go back to its handle, whose owner
+                // returns the ordinals with the failed Commit (`commit.rs`).
+                // After an unknown outcome the tail is dropped and the block
+                // lost.
+                let definite = !matches!(&error, Fused::History(error) if error.unknown());
+                if let (true, Some(tail)) = (definite, tail) {
+                    tail.refused();
+                }
+                Err(match error {
+                    Fused::History(error) => CommitError::History(error),
+                    _ => CommitError::Context("fused Commit bounds"),
+                })
+            }
         }
     }
 

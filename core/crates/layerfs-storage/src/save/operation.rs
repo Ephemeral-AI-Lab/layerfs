@@ -179,7 +179,8 @@ impl Drop for Save<'_> {
 /// caller published [`Self::publication`] in its own transaction, nothing
 /// lost) and [`Self::publish`] (publish it now, as `finish` does) completes
 /// the Save. Dropped without either, the Save did not finish: its held
-/// locations are forgotten with the handle's kept ids and bodies.
+/// locations are forgotten with the handle's kept ids and bodies
+/// ([`Self::refused`], after a definite refusal, keeps the unused ids).
 pub struct PreparedTail<'a> {
     save: Option<Save<'a>>,
     held: Option<super::publication::Held>,
@@ -240,6 +241,32 @@ impl PreparedTail<'_> {
         self.held = None;
         let save = self.save.take().ok_or(StorageError::Aborted)?;
         Ok(save.complete())
+    }
+}
+impl<'a> PreparedTail<'a> {
+    /// The caller's transaction carrying [`Self::publication`] was refused
+    /// definitely: it was rolled back and none of it applied. The Save does
+    /// not finish (as when the tail is dropped), but its unused pack ids and
+    /// ordinals, from the first ones it did not assign up to its reserved
+    /// ends, go to the handle's kept block, so the handle's next Save uses
+    /// them or its owner returns the ordinals
+    /// ([`crate::Storage::release_kept_ordinals`]). The ids the refused
+    /// publication assigned are below them and never reused. Never call it
+    /// after an unknown outcome: dropping the tail loses the block.
+    pub fn refused(self) {
+        let Some(save) = self.save.as_ref() else {
+            return;
+        };
+        let (storage, block): (&'a crate::Storage, _) = {
+            let state = save.state.borrow();
+            let release = self
+                .held
+                .as_ref()
+                .and_then(|held| held.batch.release_ordinals);
+            (state.storage, state.unused_after_refusal(release))
+        };
+        drop(self);
+        storage.kept.set(Some(block));
     }
 }
 impl Drop for PreparedTail<'_> {
