@@ -9,7 +9,9 @@
 //! another Workspace moved first (the fused attempt's race refusal and the
 //! fallback on the separate path, in one call), or a warm one that also adds
 //! families of similar files (#810: the Save's publication of the families'
-//! first members before the fused message).
+//! first members before the fused message), or one whose change touches
+//! two base directories nothing read before (their root pages one grouped
+//! read, #810 F3).
 //!
 //! After each run, from fresh sessions that do not go through the proxy:
 //!
@@ -43,6 +45,14 @@ use layerfs_history::CommitId;
 use std::time::{Duration, Instant};
 
 const SEED: &[(&str, &[u8])] = &[("/seed", b"seed\n"), ("/dir/inner", b"inner\n")];
+/// A spread flight's seed: two more directories, which its armed Commit
+/// touches and nothing before it reads.
+const SPREAD_SEED: &[(&str, &[u8])] = &[
+    ("/seed", b"seed\n"),
+    ("/dir/inner", b"inner\n"),
+    ("/one/inner", b"one\n"),
+    ("/two/inner", b"two\n"),
+];
 /// The lane wait of the faulted sessions: a lane row left held shows up as
 /// a bounded `Busy`, never a hang.
 const LOCK_TIMEOUT_MS: u32 = 5_000;
@@ -66,6 +76,10 @@ pub enum Flight {
     /// holds each family's later members until one publication of the
     /// families' first members, before the fused message (#810).
     Similar,
+    /// A warm Commit whose change touches two base directories nothing
+    /// read before (`/one`, `/two`): their root pages are one grouped read,
+    /// one locate message for both (#810 F3).
+    Spread,
 }
 
 impl Flight {
@@ -109,6 +123,16 @@ fn expected(flight: Flight, fault: &[u8]) -> Tree {
     if flight == Flight::Similar {
         for (path, bytes) in similar_files(fault) {
             tree.insert(path, Node::File(bytes));
+        }
+    }
+    if flight == Flight::Spread {
+        for dir in ["one", "two"] {
+            tree.insert(format!("/{dir}"), Node::Dir);
+            tree.insert(
+                format!("/{dir}/inner"),
+                Node::File(format!("{dir}\n").into_bytes()),
+            );
+            tree.insert(format!("/{dir}/fault"), Node::File(fault.to_vec()));
         }
     }
     tree
@@ -211,6 +235,10 @@ fn run(
             write(&workspace, &path, &bytes);
         }
     }
+    if flight == Flight::Spread {
+        write(&workspace, "/one/fault", &content(name));
+        write(&workspace, "/two/fault", &content(name));
+    }
     let before = service.service.store.fused_counts();
     proxy.arm(target);
     let first = verdict(&commit(&workspace));
@@ -283,7 +311,7 @@ fn check(
         "{label}: one fused Commit or one fallback"
     );
     match flight {
-        Flight::Warm | Flight::First | Flight::Similar => {
+        Flight::Warm | Flight::First | Flight::Similar | Flight::Spread => {
             assert_eq!(fallbacks, 0, "{label}: nothing raced")
         }
         Flight::Forced => assert_eq!(run.counts, (0, 0), "{label}: a forced Commit is not fused"),
@@ -363,7 +391,12 @@ pub enum Positions {
 /// The sweep: `fault` at every server message of the `flight` Commit that
 /// `positions` selects.
 pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
-    let Some(store) = TestStore::postgres(tag, SEED) else {
+    let seed = if flight == Flight::Spread {
+        SPREAD_SEED
+    } else {
+        SEED
+    };
+    let Some(store) = TestStore::postgres(tag, seed) else {
         return;
     };
     let started = Instant::now();
@@ -408,7 +441,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     if flight != Flight::Raced {
         let fused = u64::from(matches!(
             flight,
-            Flight::Warm | Flight::First | Flight::Similar
+            Flight::Warm | Flight::First | Flight::Similar | Flight::Spread
         ));
         assert_eq!(clean.counts, (fused, 0), "the clean Commit's path");
     }

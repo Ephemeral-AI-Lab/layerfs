@@ -90,6 +90,28 @@ Before its rows are built, each captured inode page (at most `PAGE_ROWS` =
 | Failures | One attempt. A failed overlay question is that file's custody (as a failed preparation keeps it); a failed length demand or batch is the namespace's original failure | [`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs) |
 | Memory | One page's lengths and at most one batch in flight; fetched roots live in the existing bounded cache allowance | [`base/batch.rs`](../../../../engine/crates/layerfs-workspace/src/base/batch.rs) |
 
+### Base directory reads (#810 F3)
+
+Step 6 rewrites every changed base directory from its stored root page, and
+step 7 reads the new root page of each remembered directory. Neither reads
+one page at a time:
+
+| Read | Grouping | Bound | Source |
+| --- | --- | --- | --- |
+| Base root pages the update rewrites | Content's directories phase takes rows a window of whole base-read batches at a time (`batch × max(1, 256 / batch)`; 256 at the default batch 32). Each batch keeps its own grouped inode demand; the base roots of the window's rewritten directories are then read in row order in grouped demands of at most `PAGES_AHEAD` = 256 ids, and each row decodes the page handed to it (`Engine::fetched_root`) instead of a point read | 256 pages of at most 8,192 bytes (2 MiB) and one window of rows; deeper pages of a large directory are still read as the merge reaches them | [`directory/ahead.rs`](../../../../core/crates/layerfs-content/src/filesystem/directory/ahead.rs), [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs), [`sorted/finish.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/finish.rs) |
+| Chains of a grouped demand's stored objects | The Save's read (`Save::read_objects`) locates the chains of the stored objects of a demand of more than one a level at a time, one locate per level for all of them (`read::prefetch::chains`, as the Store's own reads do), before rebuilding each object | The Save's pack cache | [`save/provider.rs`](../../../../core/crates/layerfs-storage/src/save/provider.rs) |
+| Remembered directories' new root pages (step 7) | One grouped demand (`directory::root_shapes`) | `REMEMBERED_DIRECTORIES` = 256 pages | [`base/links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
+
+One grouped demand is one attempt: its failure is the provider's original
+error and ends the operation (a later row's failure now surfaces at its
+group's first row), with no fallback to point reads. A chain walk a stale
+delta-chain hint broke runs once more without hints, exactly as each
+object's own resolution and the Store's reads do (#758). The pages read are
+the ones a point read would return, so roots and stored objects are
+unchanged. `commit_batched_directories.rs` pins the counts and
+`commit_fault_directories.rs` faults every message of a grouped read
+([Demonstration](README.md#demonstration)).
+
 Every read goes through the captured reader, the attempt's sealed records or
 the immutable base bound to the reader's root; current active state is never
 read, so mutations made after the capture are absent from this root and

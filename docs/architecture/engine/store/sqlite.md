@@ -533,6 +533,15 @@ statements 4,724 → 1,052 and packs 605 → 3, B6n's 3,971 → 65 and 552 → 4
 B1's 7,077 → 2,588 and 662 → 134, with the same records, roots and depths
 ([PostgreSQL](postgresql.md#similar-files-publish-once-per-wave)).
 
+## Commit reads
+
+A Commit's construction reads the base root pages of the directories it
+rewrites 256 to a demand and the remembered directories' new roots in one
+demand (#810 F3, [Construction](../commit/construction.md#base-directory-reads-810-f3)),
+so each such demand is one locator statement for all its objects instead of
+one per directory: the "delete `node_modules`" shape (B2) runs 332
+statements instead of 1,732, with the same roots and stored bytes.
+
 ## Fused Commit
 
 A Workspace Commit over its bound head is one `BEGIN IMMEDIATE` transaction

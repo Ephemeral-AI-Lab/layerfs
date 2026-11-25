@@ -7,7 +7,7 @@ mod hints;
 mod length;
 mod locator_cache;
 mod objects;
-mod prefetch;
+pub(crate) mod prefetch;
 mod provider;
 mod units;
 

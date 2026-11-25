@@ -1139,6 +1139,18 @@ Checked and not done:
   PostgreSQL-only statement form or a server-side assert with its own error
   mapping; about 1 round trip each, not done.
 
+Construction's base directory reads are grouped (#810 F3,
+[Construction](../commit/construction.md#base-directory-reads-810-f3)): the
+base root pages a Commit rewrites are read 256 to a demand, the Save locates
+a demand's delta chains one level at a time for all its objects, and the
+remembered directories' new roots are one demand. A change that touches
+many directories therefore costs a few round trips per 256 directories
+rather than one or two per directory: on the campaign's shape kit the
+"add 10,000 files into 3,942 directories" cell (C4s4) fell from 8,514 to
+2,021 construct round trips and "delete `node_modules`" (B2) from 1,681 to
+281, with the same roots and stored bytes; what remains there is mostly
+inode value-block reads and the base-read batches (32) of the inode lookups.
+
 | Test | Command | Checks |
 | --- | --- | --- |
 | [`postgresql_commit_round_trips.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_commit_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_commit_round_trips` | The lane with a head read and `commit_branch` is 12 round trips (15 before), with the head check in the lane's `BEGIN` 11; a moved head and an absent Branch are never answered unmoved |
