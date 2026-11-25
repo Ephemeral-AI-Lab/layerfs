@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-81 calls: 17 in `work` (the table's `agent` profile), 64 in `admin` only (`full`); `--profile admin` lists 81.
+82 calls: 17 in `work` (the table's `agent` profile), 65 in `admin` only (`full`); `--profile admin` lists 82.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -184,17 +184,18 @@ built addon).
 | `machine.remove` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
 | `machine.update` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
 | `machine.doctor` | admin | admin | machines hold Stores and workers: read, start, stop, create, change, inspect and check them; the `full` profile (administration) |
-| `store.list` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.get` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.create` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.connect` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.disconnect` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.attach` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.detach` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.move` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
-| `store.remove` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.list` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.get` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.create` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.connect` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.disconnect` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.attach` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.detach` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.move` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
+| `store.remove` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
 | `store.compact` | admin | admin | reclaim one Store's dead bytes; a folder scope refuses it; the `full` profile (administration) |
-| `store.doctor` | admin | admin | create, connect, attach, move, compact, check and remove Stores; the `full` profile (administration) |
+| `store.upgrade` | admin | admin | bring an older-format Store to the latest format, in place; Ctrl-C cancels it before COMMIT; the `full` profile (administration) |
+| `store.doctor` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
 | `backup.connect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
 | `backup.disconnect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
 | `backup.list` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |

@@ -67,9 +67,13 @@ pub(crate) const CALL: Call = call(
     run,
 )
 .form(&FORM)
-.with(&[Section::item("stats", &["size"])]);
+.with(&[
+    Section::item("stats", &["size"]),
+    Section::item("format", &["format"]),
+]);
 
-/// Runs `store.list`: sizes are read only when `stats` was asked for.
+/// Runs `store.list`: sizes are read only when `stats` was asked for, and
+/// formats only when `format` was.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = args
         .get_text("machine")
@@ -77,5 +81,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .transpose()?;
     let machine = machine.as_ref().map(MachineName::as_str);
     let machines = layerfs_control::store::reads();
-    layerfs_store::list::list(&context.home, machine, context.with("stats"), machines)
+    let (stats, format) = (context.with("stats"), context.with("format"));
+    layerfs_store::list::list_with(&context.home, machine, stats, format, machines)
 }

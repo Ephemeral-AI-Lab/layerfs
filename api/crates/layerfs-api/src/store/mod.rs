@@ -17,6 +17,7 @@ mod list;
 mod r#move;
 mod remove;
 mod repair_mount_holders;
+mod upgrade;
 
 use crate::calls::Calls;
 
@@ -33,6 +34,7 @@ pub(crate) fn calls() -> Calls {
         r#move::CALL,
         remove::CALL,
         compact::CALL,
+        upgrade::CALL,
         repair_mount_holders::CALL,
         doctor::CALL,
     ]

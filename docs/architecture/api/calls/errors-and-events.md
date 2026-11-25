@@ -54,7 +54,7 @@ worker frame keeps them, and `refusal::value` lifts them out.
 | `Capacity` | `NoSpace` |
 | `Unsupported` | `OldStore` |
 | `Unavailable` | `Denied`, `Unauthorized`, `StaleSandbox`, `StaleStore`, `Timeout` |
-| `Failed` | `UnknownMethod`, and any code neither list names |
+| `Failed` | `UnknownMethod`, `Cancelled`, and any code neither list names |
 
 `Busy`, `Unresolved`, `Dirty` and `Unknown` hold only themselves. The table below lists the codes as they are raised.
 
@@ -77,10 +77,11 @@ worker frame keeps them, and `refusal::value` lifts them out.
 | `Capacity` | no room: a full Sandbox (16 Workspaces), a full disk (`detail {needed, free}`), a bounded engine limit | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `TooLarge` | a worker frame or daemon control record would be too large; nothing was sent | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs), [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
 | `Unsupported` | not possible on this host, not built (`detail.missing` names tools), or new work on a removed platform | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
-| `OldStore` | the Store is of an older schema version this release neither reads nor migrates (#776): a SQLite Store of schema version 2, a PostgreSQL Store of schema version 2 or 3. Its message is the version refusal itself ("SQLite Store schema version 2 (…): not supported by this release and not migrated; create a new Store"); its `fix` is `layerfs store remove <store>` (sqlite) or `layerfs store disconnect <store>` (PostgreSQL, which keeps the data). Folded into `Unsupported`: this build cannot open it, and nothing was opened or changed. A project of such a Store is `blocked` by it with the reason `outdated`; `sandbox.remove` of a Sandbox whose Store it is answers it with the fix `layerfs sandbox remove <sandbox> --force`, except on a machine with a worker, whose close goes on without the Store (each mount intent it cannot end there is named in its `left`) | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `OpenRefusal::Outdated`, [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `OLD_STORE`, `outdated_fix` |
+| `OldStore` | the Store is of an older schema version this release neither reads nor migrates (#776): a SQLite Store of schema version 2, a PostgreSQL Store of schema version 2 or 3. Its message is the version refusal itself ("SQLite Store schema version 2 (…): not supported by this release and not migrated; create a new Store"); its `fix` is `layerfs store upgrade <store>` when this build has a step from its version (SQLite 2, PostgreSQL 3; #804), else `layerfs store remove <store>` (sqlite) or `layerfs store disconnect <store>` (PostgreSQL, which keeps the data). Folded into `Unsupported`: this build cannot open it, and nothing was opened or changed. A project of such a Store is `blocked` by it with the reason `outdated`; `sandbox.remove` of a Sandbox whose Store it is answers it with the fix `layerfs sandbox remove <sandbox> --force`, except on a machine with a worker, whose close goes on without the Store (each mount intent it cannot end there is named in its `left`) | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `OpenRefusal::Outdated`, [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `OLD_STORE`, `outdated_fix` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `StaleSandbox`, `NoStore`, `Unauthorized`, `UnknownMethod` | a saved daemon not ready; a Store file missing where it should be; a Sandbox record not owned by this user or not private; an operation no one serves | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) |
 | `Failed` | tried and did not happen, or no code of its own (`outcome::failed`); whatever exists is kept | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
+| `Cancelled` | `store.upgrade` stopped by its caller before its `commit` phase (Ctrl-C or SIGTERM to the `layerfs` command, a worker's `store.cancel`, a PostgreSQL cancel request): "cancelled before COMMIT; nothing changed". Folded into `Failed`, `detail.code` `Cancelled`. A second signal exits the command at once with `Unknown` and the fix `layerfs store upgrade <store>` (#804 §6) | [`upgrade.rs`](../../../../control/crates/layerfs-store/src/upgrade.rs), [`signals.rs`](../../../../api/crates/layerfs-cli/src/signals.rs) |
 | `Unknown` | the outcome is not known; a GC call names its durable operation (`detail {entity, phase, op}`, with `phase`/`op` null when none is known) | [Uncertain outcomes](#uncertain-outcomes) |
 
 A daemon refusal of a Workspace call carries the daemon's `ControlCode` as
@@ -165,7 +166,7 @@ sends the call surface's event `{ progress: { phase, done, total, … } }`
 worker's event as it came, `output(stream, bytes)` sends `{ stream, bytes }`. Events are sent on
 the call's own thread, before it returns.
 
-Nineteen calls declare the shared `PROGRESS` option (`on_progress`; CLI
+Twenty calls declare the shared `PROGRESS` option (`on_progress`; CLI
 `--progress`) in their entries; `help --json` shows them as `progress: true`.
 `workspace.exec` alone also declares the `stdout` and `stderr` functions. A
 function never crosses into the library:
@@ -179,7 +180,7 @@ key. What `done` and `total` count depends on the call:
 | --- | --- | --- |
 | `project.init`, `store.move`, `backup.create`, `backup.restore` | bytes while a phase moves bytes, else null | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs), [`backup/progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs) |
 | `project.export` | `done` the bytes written so far, `total` always null (no prescan) | [`project/export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs) `phase_event` |
-| `store.compact` | null: one event as each phase starts | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
+| `store.compact`, `store.upgrade` | null: one event as each phase starts | [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
 | `machine.start`, `machine.stop`, `machine.create`, `machine.remove`, `machine.load_image`, `sandbox.create`, `sandbox.remove` | the call's phases: `done` those finished, `total` how many there are (a copied image's `send` counts bytes) | [`layerfs-machine/src/progress.rs`](../../../../control/crates/layerfs-machine/src/progress.rs) `Phases` |
 | `home.doctor`, `project.doctor`, `sandbox.doctor`, `machine.doctor`, `store.doctor` | things checked; each event adds `node`, the finished check | [`doctor/frame.rs`](../../../../control/crates/layerfs-control/src/doctor/frame.rs) `finished` |
 | `workspace.exec` | `{ phase: "start", done: 0, total: 1, exec }`, once, before the command starts; `exec` is the id `workspace.cancel --exec` takes | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
@@ -190,6 +191,7 @@ key. What `done` and `total` count depends on the call:
 | `project.export` | `prepare`, `export` (at most one per 200 ms, last at the final count), `finalize` (after the staging folder is renamed onto the destination) |
 | `store.move` | `check`, `snapshot`, `send` (8 MiB chunks, [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `CHUNK`), `verify`, `install`, `record`, `retire` |
 | `store.compact` | SQLite: `mark`, `build`, `verify`, `install` (a run with nothing to rebuild sends `mark` alone); PostgreSQL: `mark`, `build`, `swap`, `cleanup` |
+| `store.upgrade` | SQLite: `check`, `convert`, `verify`, `commit`; PostgreSQL: `check`, `convert` (the server runs the rest in one message). `commit` is the point of no return: a cancel is no longer read, and a front end disables Cancel there; a Store already current sends `check` alone |
 | `backup.create` | `check`, `snapshot`, `send` (from a machine to this computer), `hash`, `upload` |
 | `backup.restore` | `check`, `download`, `verify`, `install` |
 | `machine.load_image` | `inspect`, `lock`, `export`, `send`, `unpack` |

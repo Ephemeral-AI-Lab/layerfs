@@ -35,6 +35,11 @@ fn version_identifies_source_and_features_without_a_home() {
         features.contains(&SdkValue::text("sandbox-runtime")),
         layerfs_bridge::sandbox_runtime::LOADER.is_some()
     );
+    // the Store formats this build writes (#804 §2)
+    assert_eq!(
+        json::print(value.get("formats").unwrap()),
+        r#"{"sqlite":3,"postgresql":4}"#
+    );
     assert!(!home.exists());
 }
 

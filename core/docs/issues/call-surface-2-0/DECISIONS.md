@@ -684,3 +684,31 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
     is not leaked); a live read still probes the machine and mends the record if the VM is back.
   A machine whose records say only `stopped` has to be read live first (the plugin's machine pages
   do), since nothing short of the provider says the VM is gone.
+
+## Store upgrade (owner, 2026-11-25): one explicit call converts an older Store (#804)
+
+- **SU-1** (scopes the exception to V20-5) `layerfs store upgrade <store>` (`store.upgrade`, new,
+  `PROGRESS`) is the one reader of earlier Store state, and only for the Store formats with a step:
+  SQLite 2 → 3 and PostgreSQL 3 → 4 (no 1.x Stores; PostgreSQL 2 gets no step). The exception is
+  exactly this and nothing more:
+  - **one explicit call**: nothing else converts a Store, and no other call reads an older format
+    (backup restore runs the same chain on its private download before opening it);
+  - **frozen exact recognition**: each step embeds, as frozen literal text, every recorded source it
+    accepts and the target it writes; anything else is refused `Unsupported`, unchanged;
+  - **no conversion at open**: open still refuses an older Store by name (`OldStore`, folded into
+    `Unsupported`); its fix is `layerfs store upgrade <store>` when a step exists, else `store
+    remove` (sqlite) or `store disconnect` (PostgreSQL);
+  - **one attempt**: one transaction, never retried; a failure rolls back, an uncertain end is
+    `Unknown` and the next `store upgrade` reads the version and continues.
+  V20-5 stands for every other record and older state.
+- **SU-2** Its answer: short `outcome` (`upgraded` or `current`); long `outcome, store, engine,
+  format_before, format_after, steps, warnings`. Phases `check, convert, verify, commit` (SQLite),
+  `check, convert` (PostgreSQL); `commit` is the point of no return. Ctrl-C (SIGINT) or SIGTERM
+  cancels before COMMIT: `Failed` with `detail.code` `Cancelled` (the internal code `Cancelled`
+  folds into `Failed`); a second signal exits at once, `Unknown`, fix `layerfs store upgrade
+  <store>`.
+- **SU-3** `--with format` is a new `--with` value, on `store get` (its own `format` section:
+  `version, latest, status, fix`) and `store list` (each item's `format`): read without opening the
+  Store, so it answers on a Store this build refuses to open. `layerfs --version --json` adds
+  `formats: {"sqlite": 3, "postgresql": 4}`. The rows now number 82 (store 12; the totals above
+  are the freeze's).

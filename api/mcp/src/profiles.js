@@ -22,7 +22,7 @@ const WHY = {
   sandbox: "start, read, remove, inspect and check a Sandbox",
   workspace: "mount, run in, cancel, commit and unmount a Workspace explicitly; nothing is implicit",
   machine: "machines hold Stores and workers: read, start, stop, create, change, inspect and check them",
-  store: "create, connect, attach, move, compact, check and remove Stores",
+  store: "create, connect, attach, move, compact, upgrade, check and remove Stores",
   backup: "connect buckets, back up and restore a Store, and check a bucket",
 };
 
@@ -34,6 +34,7 @@ const CALL_WHY = {
   "project.export": "export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it",
   "branch.remove": "retire one Branch in its Store; a folder scope refuses it",
   "store.compact": "reclaim one Store's dead bytes; a folder scope refuses it",
+  "store.upgrade": "bring an older-format Store to the latest format, in place; Ctrl-C cancels it before COMMIT",
   "sandbox.create": "start a Sandbox, and with --mount mount a Branch in it",
   "sandbox.remove": "stop a Sandbox and remove it",
 };

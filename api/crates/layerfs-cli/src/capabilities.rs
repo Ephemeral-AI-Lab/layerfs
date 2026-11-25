@@ -43,6 +43,15 @@ pub fn version() -> ExitCode {
                         .map(|(name, _)| name),
                 ),
             ),
+            // the Store formats this build writes, so "latest" can be checked (#804)
+            (
+                "formats",
+                SdkValue::Map(
+                    (layerfs_api::FORMATS.iter())
+                        .map(|(engine, format)| ((*engine).to_owned(), SdkValue::Int(*format)))
+                        .collect(),
+                ),
+            ),
         ]),
         false,
         None,
