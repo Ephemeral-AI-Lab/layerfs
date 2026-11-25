@@ -1,7 +1,7 @@
 //! #810 F3: a dropped connection, and the backend killed while its replies
 //! are held, at every server message of a warm Workspace Commit whose change
 //! touches two base directories nothing read before (`/one`, `/two`), so
-//! their root pages are one grouped read
+//! their delta-encoded root pages are one grouped read
 //! (`support/fault_sweep.rs` states the invariants). Needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #[path = "support/adversary.rs"]
