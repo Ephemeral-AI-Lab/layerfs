@@ -262,6 +262,15 @@ struct InlineAllow {
 /// Every entry is a compaction-internal decision, not a convenience.
 const INLINE_ALLOWED: &[InlineAllow] = &[
     InlineAllow {
+        file: "src/backend/postgresql/upgrade/run.rs",
+        needle: "FROM layer_stack),'')||'|'||coalesce((SELECT string_agg(encode(branch_id,'hex')",
+        markers: &[],
+        reason: "#804 store upgrade, message 2: the before/after heads digest covers every \
+                 Branch and LayerStack row, a retired one included, because the step must \
+                 prove it changed no row at all; it renders nothing and runs inside the \
+                 upgrade's exclusive locks",
+    },
+    InlineAllow {
         file: "src/backend/postgresql/compact/cleanup.rs",
         needle: "UNION SELECT b.layer_stack_id FROM {schema}.branch b",
         markers: &[],
