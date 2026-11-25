@@ -293,6 +293,10 @@ pub(crate) fn check(
         policy,
         server_version: text(&row, at + 11)?.to_owned(),
         trace_salt,
+        // A start that is NULL (hidden from the session's role) or does not
+        // decode is kept as unknown, and an unknown start means a lost
+        // reply's resolution never terminates the backend
+        // (`Session::end_lost_backend`), so no decode error can widen it.
         backend: (int(&row, at + 13)?, int(&row, at + 14).ok()),
     })
 }

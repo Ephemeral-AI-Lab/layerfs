@@ -184,11 +184,14 @@ impl Session {
     /// timeout answers true only once the process has exited, after its
     /// transaction ended. Waiting for it is not a retry. One round trip on
     /// `client`. Not proven gone within the bound is `Busy`; a backend the
-    /// open did not name, or one a session lock showed on another backend
-    /// (a transaction-pooling proxy), is `Unknown`: the outcome stays
-    /// unknown either way.
+    /// open did not name, one whose start it could not read (the pid alone
+    /// may since name another client's backend, which must not be ended),
+    /// or one a session lock showed on another backend (a
+    /// transaction-pooling proxy), is `Unknown`, with nothing sent: the
+    /// outcome stays unknown either way.
     fn end_lost_backend(&self, client: &mut Client) -> Result<(), BackendError> {
         let (pid, start) = *self.opened_backend.get().ok_or(BackendError::Unknown)?;
+        let start = start.ok_or(BackendError::Unknown)?;
         let noted = self.backend_pid.load(std::sync::atomic::Ordering::SeqCst);
         let pid = i32::try_from(pid).map_err(|_| BackendError::Unknown)?;
         if noted != 0 && noted != i64::from(pid) {
@@ -202,8 +205,8 @@ impl Session {
         let rows = client
             .query(
                 "SELECT pg_terminate_backend(pid, $3) FROM pg_catalog.pg_stat_activity \
-                  WHERE pid = $1 AND ($2::bigint IS NULL \
-                    OR (extract(epoch FROM backend_start) * 1000000)::bigint = $2)",
+                  WHERE pid = $1 \
+                    AND (extract(epoch FROM backend_start) * 1000000)::bigint = $2",
                 &[&pid, &start, &bound],
             )
             .map_err(|error| rows::error(&error))?;

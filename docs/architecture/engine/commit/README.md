@@ -194,9 +194,10 @@ takes the lane row: a backend still inserting them when the reply was lost
 would take the lane and commit after the pass. So on a quarantined writer
 session the pass first ends that session's backend (`pg_terminate_backend`
 with a wait, bounded by `lock_timeout`; the backend is named by the pid and
-start the open's check read): a `COMMIT` it already made is then found by
-the attempt, and one it had not made is aborted. Not proven gone, the
-outcome stays undetermined, with no fold-back and no install. On SQLite
+start the open's check read; with no start read it is never terminated): a
+`COMMIT` it already made is then found by the attempt, and one it had not
+made is aborted. Not proven gone, or not named exactly, the outcome stays
+undetermined, with no fold-back and no install. On SQLite
 the publication ran in this process and the pass returns at once.
 
 Every Commit request carries a fresh attempt: 16 bytes the Commit draws from

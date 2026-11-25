@@ -785,10 +785,12 @@ fn postgresql_lost_reply_is_unknown() {
 /// fused lane request (simple query text with the attempt check and the
 /// barrier) so its barrier statement sleeps between the lock and the
 /// unlock: `pg_advisory_lock(..), pg_sleep(30)` inside the fenced
-/// subquery. Server bytes pass through unchanged.
+/// subquery. Server bytes pass through unchanged. [`Self::cut`] ends every
+/// connection's client side, leaving the server side open.
 struct BarrierPause {
     url: String,
     armed: Arc<std::sync::atomic::AtomicBool>,
+    clients: Arc<std::sync::Mutex<Vec<std::net::TcpStream>>>,
 }
 
 impl BarrierPause {
@@ -819,9 +821,12 @@ impl BarrierPause {
         }
         let armed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = armed.clone();
+        let clients: Arc<std::sync::Mutex<Vec<TcpStream>>> = Arc::default();
+        let kept = clients.clone();
         std::thread::spawn(move || {
             for client in listener.incoming() {
                 let Ok(client) = client else { return };
+                kept.lock().unwrap().push(client.try_clone().unwrap());
                 let Ok(server) = TcpStream::connect(upstream) else {
                     return;
                 };
@@ -840,6 +845,16 @@ impl BarrierPause {
         Self {
             url: proxied,
             armed,
+            clients,
+        }
+    }
+
+    /// Ends the client side of every connection so far: each client sees
+    /// its connection end without replies (a lost reply), while the server
+    /// side stays open and its backend keeps running what it was sent.
+    fn cut(&self) {
+        for client in self.clients.lock().unwrap().iter() {
+            let _ = client.shutdown(std::net::Shutdown::Both);
         }
     }
 }
@@ -1007,4 +1022,96 @@ fn postgresql_cancelled_barrier_is_released() {
         "{again:?}"
     );
     tail.acknowledged().unwrap();
+}
+
+/// A lost reply's resolution never terminates a backend it cannot name
+/// exactly. The writer runs under a role that may not see its own login's
+/// activity row (`-c role=`), so the open's check reads no backend start.
+/// The fused message is held in its barrier's sleep and the connection's
+/// client side is cut: an unknown outcome, the session quarantined, its
+/// backend still running. The lane pass (`pass_publication_lane`) must
+/// answer unknown and send no `pg_terminate_backend`: the backend is still
+/// listed, with the same start, until the test ends it.
+#[test]
+fn postgresql_lost_backend_without_start_is_not_terminated() {
+    let Some(pg) = Pg::new("nostart") else { return };
+    let role = format!("lfs768_nostart_{}", std::process::id());
+    let s = &pg.schema;
+    let mut admin = pg.admin();
+    admin
+        .batch_execute(&format!(
+            "DROP ROLE IF EXISTS {role}; CREATE ROLE {role}; \
+             GRANT USAGE ON SCHEMA {s} TO {role}; \
+             GRANT ALL ON ALL TABLES IN SCHEMA {s} TO {role}; \
+             GRANT ALL ON ALL SEQUENCES IN SCHEMA {s} TO {role}"
+        ))
+        .unwrap();
+    let proxy = BarrierPause::start(&pg.url);
+    let url = format!("{} options='-c role={role}'", proxy.url);
+    let mut selection = PostgresSelection::new(&url, s);
+    selection.lock_timeout_ms = 30_000;
+    let handles = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
+    let fixture = Fixture::new(
+        handles.storage.clone(),
+        &handles.history,
+        Box::new(|| handles.diagnostics().unwrap()),
+    );
+    let over = fixture.snapshot();
+    let (tail, candidate) = held(&fixture.storage, 91);
+    proxy.armed.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut observer = pg.admin();
+    let (attempt, (writer, start)) = std::thread::scope(|scope| {
+        let proxy = &proxy;
+        let cutter = scope.spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                let row = observer
+                    .query_opt(
+                        "SELECT pid, backend_start::text FROM pg_stat_activity \
+                          WHERE wait_event = 'PgSleep' AND query LIKE '%pg_advisory_lock(%' \
+                          LIMIT 1",
+                        &[],
+                    )
+                    .unwrap();
+                if let Some(row) = row {
+                    proxy.cut();
+                    return (row.get::<_, i32>(0), row.get::<_, String>(1));
+                }
+                assert!(Instant::now() < deadline, "the barrier never paused");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+        let attempt = fixture.fused(tail.publication(), &fixture.request(&over, candidate), &[]);
+        (attempt, cutter.join().unwrap())
+    });
+    assert!(
+        matches!(attempt, Err(Fused::History(HistoryError::UnknownOutcome))),
+        "a lost reply: {attempt:?}"
+    );
+    let passed = fixture.history.pass_publication_lane();
+    assert!(
+        matches!(passed, Err(HistoryError::UnknownOutcome)),
+        "no backend start, no termination: {passed:?}"
+    );
+    let listed: Option<String> = admin
+        .query_opt(
+            "SELECT backend_start::text FROM pg_stat_activity WHERE pid = $1",
+            &[&writer],
+        )
+        .unwrap()
+        .map(|row| row.get(0));
+    assert_eq!(
+        listed.as_deref(),
+        Some(start.as_str()),
+        "the writer's backend was not terminated"
+    );
+    admin
+        .execute("SELECT pg_terminate_backend($1, 10000)", &[&writer])
+        .unwrap();
+    drop(tail);
+    drop(fixture);
+    drop(handles);
+    admin
+        .batch_execute(&format!("DROP OWNED BY {role}; DROP ROLE {role}"))
+        .unwrap();
 }
