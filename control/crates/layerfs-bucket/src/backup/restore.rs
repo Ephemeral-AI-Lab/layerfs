@@ -1,6 +1,9 @@
 //! Load (#509): download the remote Store file `FILE` to a temporary
 //! sibling of the new Store (on its filesystem), verify its sha256 (and
-//! each piece's), check it opens with the binding the remote file records,
+//! each piece's), bring it to the latest format with the chain `store
+//! upgrade` runs (#804; a format the chain does not take, such as schema
+//! version 1, is refused in the engine's words), check it opens with the
+//! binding the remote file records,
 //! then link it into place, so a Store that appeared meanwhile is never
 //! replaced.
 //!
@@ -43,9 +46,9 @@ pub struct Loaded {
     /// The SQLite version that wrote the remote copy, as its push recorded
     /// it (`layerfs-sqlite`); `None` when the copy carries none.
     pub sqlite: Option<String>,
-    /// The copy was a schema version 1 Store (before #91), converted to
-    /// schema version 2 before it was opened.
-    pub converted: Option<layerfs_persistence::ConvertedStore>,
+    /// What the format chain did to the copy before it was opened (#804):
+    /// `upgraded` with its steps, or `current`.
+    pub upgrade: layerfs_persistence::upgrade::UpgradeReport,
 }
 
 /// A failed load: its cause and the temporary file it left, if any.
@@ -108,6 +111,28 @@ pub fn load(
     cursor_key: [u8; 32],
 ) -> Result<Loaded, PullFailure> {
     fetch(driver, file, destination, cursor_key)
+}
+
+/// Runs the format chain on the private download at `path`, which no one
+/// else has open: a current copy is left as it is; a refusal is the
+/// engine's text. Nothing cancels it: a restore has no cancel.
+fn upgrade_download(path: &Path) -> Result<layerfs_persistence::upgrade::UpgradeReport, String> {
+    use layerfs_persistence::upgrade::{upgrade_sqlite, UpgradeError, UpgradeRequest};
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let request = UpgradeRequest {
+        cancel: &cancel,
+        failpoint: None,
+    };
+    upgrade_sqlite(path, &request, &mut |_| {}).map_err(|error| match error {
+        UpgradeError::Unsupported(why) => format!("the pulled Store cannot be restored: {why}"),
+        UpgradeError::InUse(why)
+        | UpgradeError::Busy(why)
+        | UpgradeError::Failed(why)
+        | UpgradeError::Unknown(why) => {
+            format!("the pulled Store could not be brought to the latest format: {why}")
+        }
+        UpgradeError::Cancelled => "the pulled Store's upgrade was cancelled".to_owned(),
+    })
 }
 
 /// The remote copy's recorded SQLite version, if its upload recorded one.
@@ -182,13 +207,11 @@ fn fetch(
         // The verified bytes must open as this Store before they are
         // installed; closing it removes the sidecars it created.
         progress::begin("verify", None);
-        // a copy backed up before #91 holds one row per inode value and
-        // binding hint: this private download is converted to the blocks
-        // first, as `tools/store_blocks.py migrate` converts a closed copy
-        let converted =
-            layerfs_persistence::convert_schema_version_1(&temporary).map_err(|error| {
-                format!("the pulled Store is schema version 1 and could not be converted: {error}")
-            })?;
+        // a copy of an older format is brought to the latest on this
+        // private download first, by the chain `store upgrade` runs (#804);
+        // one the chain does not take (schema version 1, a newer build's)
+        // is refused in the engine's words
+        let upgrade = upgrade_download(&temporary)?;
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&temporary)
                 .with_sqlite_profile(SqlitePersistenceProfile::Normal),
@@ -229,7 +252,7 @@ fn fetch(
             pieces: moved.pieces,
             heads: digest,
             sqlite: remote_sqlite(&stat.metadata),
-            converted,
+            upgrade,
         })
     })();
     result.map_err(|cause: String| PullFailure {

@@ -1,4 +1,4 @@
-//! `store.upgrade` end to end through the engine (#804 §11 B, H, M).
+//! `store.upgrade` end to end through the engine (#804 §11 B, H, K, M).
 //!
 //! **Needs W1's engine** (`layerfs_persistence::upgrade`): on a branch where
 //! its entry points are the skeleton's stubs ("not implemented") every test
@@ -209,6 +209,43 @@ fn needs_w1_a_store_on_a_machine_is_upgraded_by_its_worker() {
         .op()
         .is_none());
     fixture.remove();
+}
+
+/// K (needs W1): a backup of a schema version 1 Store is refused by name,
+/// in the engine's words, and nothing is installed.
+#[test]
+fn needs_w1_a_schema_version_1_backup_is_refused_by_name() {
+    use layerfs_bucket::bucket::local_folder::LocalFolder;
+    use layerfs_bucket::bucket::{pieces, Limits, Metadata};
+    let Some(home) = home_with_shop("restore-v1") else {
+        return;
+    };
+    let record = StoreRecord::of(&home, "shop").unwrap();
+    let identity = layerfs_store::identity::identity_in(&record).unwrap();
+    let copy = home.join("copy.sqlite");
+    std::fs::copy(paths::store_file(&home, "shop"), &copy).unwrap();
+    set_user_version(&copy, 16);
+    let remote = home.join("remote");
+    std::fs::create_dir_all(&remote).unwrap();
+    let limits = Limits {
+        max_file: 1 << 30,
+        max_request: 1 << 30,
+        piece_size: 1 << 30,
+    };
+    let driver = LocalFolder::new(&remote, limits).unwrap();
+    let binding = layerfs_bucket::bucket::pieces::hex(&identity.binding);
+    let metadata = Metadata::from([(layerfs_bucket::backup::create::BINDING.to_owned(), binding)]);
+    pieces::upload(&driver, "old/store.sqlite", &copy, &metadata).unwrap();
+    let destination = home.join("restored");
+    let failure = layerfs_bucket::backup::load(&driver, "old", &destination, identity.cursor_key)
+        .unwrap_err();
+    assert!(
+        failure.cause.contains("schema version 1"),
+        "{}",
+        failure.cause
+    );
+    assert!(!failure.cause.contains("store_blocks"), "{}", failure.cause);
+    assert!(!destination.join("store.sqlite").exists());
 }
 
 /// PostgreSQL (needs W1 and `LAYERFS_TEST_POSTGRES_URL`, the URL form): a
