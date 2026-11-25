@@ -2,10 +2,11 @@
 //! `sandbox.daemon_keys` to `sandbox.daemon_ready`, the daemon's Workspace
 //! list (`workspace_target`) and `sandbox.session`.
 use super::workspace_target::{Listed, Listing};
-use super::{remove_fix, Budget, Checks};
+use super::{cause, remove_fix, Budget, Checks};
 use crate::doctor::report::NoVerdict;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue};
 use layerfs_bridge::duplex::{initiate_observed, ChannelError};
+use layerfs_home::outcome::shell_word;
 use layerfs_home::secrets;
 use layerfs_sandbox::daemon::channel::Control;
 use std::net::{Shutdown, SocketAddr, TcpStream};
@@ -71,6 +72,16 @@ pub(super) fn observe(
             "its daemon's saved endpoint or identities are malformed",
         );
         checks.fix("sandbox.daemon_keys", remove_fix(sandbox));
+        let readable = |key: &str| SdkValue::Bool(secrets::key::<32>(keys, key).is_ok());
+        checks.evidence(
+            "sandbox.daemon_keys",
+            SdkValue::map([
+                ("endpoint_ok", SdkValue::Bool(endpoint.is_some())),
+                ("secret_ok", readable("secret")),
+                ("peer_ok", readable("peer")),
+                ("instance_ok", readable("instance")),
+            ]),
+        );
         return nothing;
     };
     checks.pass(
@@ -93,6 +104,7 @@ pub(super) fn observe(
                 "its daemon does not answer: nothing listens on its saved endpoint",
             );
             checks.fix(CONNECT, remove_fix(sandbox));
+            checks.evidence(CONNECT, cause("connection_refused"));
             return nothing;
         }
         Err(_) => {
@@ -111,6 +123,7 @@ pub(super) fn observe(
         Err(ChannelError::Noise(_)) => {
             checks.fail(AUTH, "its daemon refused the saved identities");
             checks.fix(AUTH, remove_fix(sandbox));
+            checks.evidence(AUTH, cause("identities_refused"));
             return nothing;
         }
         Err(_) => {
@@ -164,6 +177,7 @@ fn inspect(
                 "another daemon answers than the one it was started with",
             );
             checks.fix(INSTANCE, remove_fix(sandbox));
+            checks.evidence(INSTANCE, cause("instance_mismatch"));
             return nothing;
         }
         Ok(Reply::Hello(status)) => {
@@ -175,14 +189,24 @@ fn inspect(
                 DaemonPhase::Retained => {
                     checks.fail(READY, "its daemon's startup failed and is kept as it ended");
                     checks.fix(READY, remove_fix(sandbox));
+                    checks.evidence(
+                        READY,
+                        SdkValue::map([("phase", SdkValue::text("retained"))]),
+                    );
                     return nothing;
                 }
                 phase => {
-                    let step = match phase {
-                        DaemonPhase::Installing => "its Store is being installed",
-                        _ => "its Store is not installed yet",
+                    let (step, word) = match phase {
+                        DaemonPhase::Installing => ("its Store is being installed", "installing"),
+                        _ => ("its Store is not installed yet", "not_installed"),
                     };
                     checks.warning(READY, format!("its daemon is still starting ({step})"));
+                    // retry once it is up; the doctor starts and waits for nothing
+                    checks.fix(
+                        READY,
+                        format!("layerfs sandbox doctor {}", shell_word(sandbox)),
+                    );
+                    checks.evidence(READY, SdkValue::map([("phase", SdkValue::text(word))]));
                     return nothing;
                 }
             }

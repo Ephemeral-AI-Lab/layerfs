@@ -8,6 +8,7 @@
 //! set is not made.
 use super::records::Findings;
 use super::target::{Budget, Checks};
+use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{detect, Layout};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -30,7 +31,7 @@ pub(super) fn diagnose(
 ) {
     install::build(home, checks);
     install::prerequisites(checks);
-    let scanned = layout(home, budget, checks);
+    let scanned = layout(home, build, budget, checks);
     if let Some(records) = &scanned {
         install::bundle(home, records, checks);
     }
@@ -43,7 +44,12 @@ pub(super) fn diagnose(
 
 /// `home.layout`, then `home.records` on a home whose layout reads: what
 /// the records scan read, when it gave a stable verdict.
-fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::scan::Scanned> {
+fn layout(
+    home: &Path,
+    build: crate::home::Build<'_>,
+    budget: &Budget,
+    checks: &mut Checks,
+) -> Option<super::scan::Scanned> {
     if budget.expired() {
         checks.timeout(LAYOUT, "its time ran out before the home was read");
         return None;
@@ -54,6 +60,15 @@ fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::sc
         Ok(layout) => layout,
         Err(refusal) => {
             checks.fail(LAYOUT, refusal.message);
+            // no fix: the OS error is the finding, and the cause is the
+            // home folder's permissions or mount
+            checks.evidence(
+                LAYOUT,
+                SdkValue::map([
+                    ("path", SdkValue::text(home.display().to_string())),
+                    ("code", SdkValue::text(&refusal.code)),
+                ]),
+            );
             return None;
         }
     };
@@ -66,18 +81,30 @@ fn layout(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::sc
                 "not a LayerFS 2.0 home: this build writes nothing in it; move it aside and make a new home",
             );
             checks.fix(LAYOUT, layerfs_home::home::layout::foreign_fix(home));
+            checks.evidence(
+                LAYOUT,
+                SdkValue::map([
+                    ("path", SdkValue::text(home.display().to_string())),
+                    ("layout", SdkValue::text("foreign")),
+                ]),
+            );
             None
         }
         Layout::Current(_) => {
             checks.pass(LAYOUT, "a current-layout home this build reads");
-            observed(home, budget, checks)
+            observed(home, build, budget, checks)
         }
     }
 }
 
 /// `home.records`: every record, with the home's record set fingerprinted
 /// before and after so a home that changed meanwhile gives no verdict.
-fn observed(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::scan::Scanned> {
+fn observed(
+    home: &Path,
+    build: crate::home::Build<'_>,
+    budget: &Budget,
+    checks: &mut Checks,
+) -> Option<super::scan::Scanned> {
     let before = inventory::fingerprint(home, budget);
     if before.is_err() {
         // a home folder the inventory will not walk (a symlinked `store/`)
@@ -102,8 +129,8 @@ fn observed(home: &Path, budget: &Budget, checks: &mut Checks) -> Option<super::
         super::scan::scan(home, &mut findings)
             .map_err(|_| ())
             .and_then(|records| {
-                let result =
-                    super::checks::check_local(home, &records, &mut findings).map_err(|_| ());
+                let result = super::checks::check_local(home, &records, build, &mut findings)
+                    .map_err(|_| ());
                 scanned = Some(records);
                 result
             })

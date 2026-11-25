@@ -3,6 +3,7 @@
 //! (`home.prerequisites`), the Linux bundle where a recorded machine needs
 //! it (`home.bundle`), the native daemon (`home.native_daemon`) and each
 //! machine's configured daemon file (`home.artifacts`).
+use super::super::checks::daemon_fix;
 use super::super::scan::{shell, Scanned};
 use super::{executable, Checks};
 use crate::home::{Build, NativeDaemon};
@@ -51,6 +52,9 @@ pub(super) fn prerequisites(checks: &mut Checks) {
                     missing.join(", ")
                 ),
             );
+            // no fix: the host's setup is not a layerfs call
+            let missing = missing.iter().map(SdkValue::text).collect();
+            checks.evidence(ID, SdkValue::map([("missing", SdkValue::List(missing))]));
         }
     }
     #[cfg(not(feature = "machine"))]
@@ -78,6 +82,13 @@ pub(super) fn bundle(home: &Path, records: &Scanned, checks: &mut Checks) {
     };
     let manifest = read_record(&dir.join("bundle.json"));
     let platform = format!("linux-{}", std::env::consts::ARCH);
+    let word = match &manifest {
+        Ok(None) => "missing",
+        Err(_) => "unreadable",
+        Ok(Some(_)) => "invalid",
+    };
+    let found = (manifest.as_ref().ok().cloned().flatten())
+        .and_then(|m| m.get_text("version").map(str::to_owned));
     let valid = manifest.ok().flatten().is_some_and(|m| {
         m.get_text("version") == Some(env!("CARGO_PKG_VERSION"))
             && m.get_text("platform") == Some(platform.as_str())
@@ -90,16 +101,45 @@ pub(super) fn bundle(home: &Path, records: &Scanned, checks: &mut Checks) {
             ID,
             format!("the Linux bundle at {shown} is missing, malformed or of another build; install this build's bundle there"),
         );
+        // no fix: no call installs a bundle, it ships with the install
+        checks.evidence(
+            ID,
+            SdkValue::map([
+                ("path", SdkValue::text(dir.display().to_string())),
+                ("platform", SdkValue::text(&platform)),
+                (
+                    "expected_version",
+                    SdkValue::text(env!("CARGO_PKG_VERSION")),
+                ),
+                ("found_version", SdkValue::opt_text(found)),
+                ("manifest", SdkValue::text(word)),
+            ]),
+        );
         return;
     }
     let binaries = ["layerfs", "layerfs-daemon", "layerfs-sandbox-helper"];
-    if binaries.iter().all(|name| executable(&dir.join(name))) && dir.join(IMAGE_ARCHIVE).is_file()
-    {
+    let lacking: Vec<SdkValue> = (binaries.iter().copied())
+        .chain([IMAGE_ARCHIVE])
+        .filter(|name| match *name == IMAGE_ARCHIVE {
+            true => !dir.join(name).is_file(),
+            false => !executable(&dir.join(name)),
+        })
+        .map(SdkValue::text)
+        .collect();
+    if lacking.is_empty() {
         checks.pass(ID, format!("the Linux bundle at {shown} is complete"));
     } else {
         checks.fail(
             ID,
             format!("the Linux bundle at {shown} lacks a program or its image; install this build's bundle there"),
+        );
+        // no fix: no call installs a bundle
+        checks.evidence(
+            ID,
+            SdkValue::map([
+                ("path", SdkValue::text(dir.display().to_string())),
+                ("missing", SdkValue::List(lacking)),
+            ]),
         );
     }
 }
@@ -127,13 +167,32 @@ pub(super) fn artifacts(records: &Scanned, budget: &super::Budget, checks: &mut 
                 format!("machine {name}'s daemon {path} is not executable"),
             );
             checks.fix(ID, format!("chmod +x {}", shell(file)));
+            artifact(checks, name, path, true);
         } else {
             checks.fail(
                 ID,
                 format!("machine {name}'s daemon {path} is not there; record another with `layerfs machine update {name} --daemon <path>`"),
             );
+            // no fix: the daemon of a machine that is not `native` is the
+            // one the user keeps for it; no file of this build is known
+            artifact(checks, name, path, false);
         }
     }
+}
+
+/// The evidence of a configured daemon file that cannot run: `present` is
+/// whether the file is there.
+fn artifact(checks: &mut Checks, machine: &str, path: &str, present: bool) {
+    let mut fields = vec![
+        ("machine", SdkValue::text(machine)),
+        ("path", SdkValue::text(path)),
+    ];
+    match present {
+        true => fields.push(("executable", SdkValue::Bool(false))),
+        false => fields.push(("present", SdkValue::Bool(false))),
+    }
+    let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
+    checks.evidence("home.artifacts", SdkValue::Map(fields));
 }
 
 /// `home.native_daemon`: the daemon the native machine runs (its recorded
@@ -178,8 +237,14 @@ pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) 
             ),
             _ => checks.warning(ID, daemon.missing()),
         }
+        if let Some(fix) = daemon_fix("native", build) {
+            checks.fix(ID, fix);
+        }
     } else if let Some(message) = daemon.mismatch(build) {
         checks.warning(ID, message);
+        if let Some(fix) = daemon_fix("native", build) {
+            checks.fix(ID, fix);
+        }
     } else if matched == SdkValue::Bool(true) {
         checks.pass(ID, format!("the native daemon at {shown} is this build's"));
     } else {

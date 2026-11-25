@@ -94,7 +94,14 @@ pub fn doctor_text(report: &SdkValue) -> String {
     let mut printed = format!("{}\n", crate::banner::bold(&summary));
     let width = if open.is_empty() { 8 } else { 11 };
     let pad = " ".repeat(width + 1);
-    for finding in found {
+    // worst first (the frozen `doctor.worst_first`), report order within one severity
+    let mut ordered: Vec<&SdkValue> = found.iter().collect();
+    ordered.sort_by_key(|f| match text(f, "severity").as_str() {
+        "error" => 0,
+        "warning" => 1,
+        _ => 2,
+    });
+    for finding in ordered {
         printed.push_str(&format!(
             "{:<width$} {} {}: {}\n",
             text(finding, "severity"),
