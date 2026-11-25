@@ -33,9 +33,14 @@
 //! reader (a connection of its own, unaffected by a writer session the
 //! unknown outcome quarantined), and the install or fold-back runs once. A
 //! record whose publication outcome this attempt could not determine is put
-//! back for the next request, whose attempt only reads again; one whose
-//! outcome was determined is taken by the attempt whatever the local step
-//! finds.
+//! back for the next request, whose attempt only reads again. A known
+//! publication whose local install failed definitely (nothing installed: a
+//! failed read of the candidate's objects, a refused live check, an install
+//! job that failed with no uncertain effect) is put back too, now with the
+//! publication known, so the next request installs it without reading the
+//! history again; taken, the Workspace would refuse every later Commit
+//! (`InFlight`). An install whose local effect is uncertain, one that
+//! installed, and a fold-back are taken by the attempt whatever follows.
 use super::{BoundWorkspace, CapturedConstruction, CommitFailure, CommitPhase};
 use layerfs_content::{filesystem::FilesystemRootId, ObjectId};
 use layerfs_history::{
@@ -44,6 +49,10 @@ use layerfs_history::{
 use layerfs_overlay::{Capture, CapturedReader, OperationOwner};
 use layerfs_workspace::WorkspaceError;
 use std::sync::{atomic::Ordering, Arc};
+
+/// A failed install of a known publication, and whether it was definite
+/// (nothing installed locally).
+type Failed = (Box<Unresolved>, bool);
 
 /// What a retained Commit needs for its one resolution.
 #[derive(Debug)]
@@ -153,7 +162,20 @@ impl BoundWorkspace {
             },
         };
         let replaced = match outcome {
-            Some(ref published) => self.install_retained(&kept, published)?,
+            Some(ref published) => match self.install_retained(&kept, published) {
+                Ok(replaced) => replaced,
+                Err((unresolved, definite)) => {
+                    if definite {
+                        if let Ok(mut slot) = self.retained.lock() {
+                            *slot = Some(RetainedCommit {
+                                published: Some(published.clone()),
+                                ..kept
+                            });
+                        }
+                    }
+                    return Err(unresolved);
+                }
+            },
             None => {
                 self.job(|client: &crate::OwnerClient, route| {
                     client.resolve_failed(route, kept.capture)
@@ -207,13 +229,15 @@ impl BoundWorkspace {
             .map_err(|error| unresolved(None, format!("history read failed: {error:?}")))?
     }
     /// Installs a known publication's root, under the same live check and
-    /// mutation hold as a Commit's own merged install.
+    /// mutation hold as a Commit's own merged install. A failure says whether
+    /// it was definite: nothing was installed locally.
     fn install_retained(
         &self,
         kept: &RetainedCommit,
         outcome: &CommitOutcome,
-    ) -> Result<Option<(ObjectId, ObjectId)>, Box<Unresolved>> {
+    ) -> Result<Option<(ObjectId, ObjectId)>, Failed> {
         let known = || Some(outcome.clone());
+        let failed = |reason: String| (unresolved(known(), reason), true);
         let candidate = FilesystemRootId(kept.intent.candidate_root);
         let mut target = kept.binding.clone();
         target.branch.head_commit = kept.intent.expected_head;
@@ -222,21 +246,20 @@ impl BoundWorkspace {
         let base = self
             .workspace
             .base()
-            .map_err(|error| unresolved(known(), format!("base: {error}")))?;
+            .map_err(|error| failed(format!("base: {error}")))?;
         let mut prepared = self
             .validate_candidate(&target, candidate, kept.capture, &base, None)
-            .map_err(|error| unresolved(known(), format!("validate: {error:?}")))?;
+            .map_err(|error| failed(format!("validate: {error:?}")))?;
         let held = match &kept.merged_over {
             Some((ours, changed)) => {
                 let (hold, overlap) = self
                     .hold_live(changed)
-                    .map_err(|error| unresolved(known(), format!("live check: {error:?}")))?;
+                    .map_err(|error| failed(format!("live check: {error:?}")))?;
                 if !overlap.is_empty() {
                     let conflict = self.live_conflict(target.scope, *ours, candidate, &overlap);
-                    return Err(unresolved(
-                        known(),
-                        format!("published; rows written since overlap the merge: {conflict:?}"),
-                    ));
+                    return Err(failed(format!(
+                        "published; rows written since overlap the merge: {conflict:?}"
+                    )));
                 }
                 prepared = prepared.merged(changed.clone());
                 Some(hold)
@@ -246,7 +269,10 @@ impl BoundWorkspace {
         self.job(|client: &crate::OwnerClient, route| {
             client.install_prepared(route, self.workspace.clone(), prepared)
         })
-        .map_err(|error| unresolved(known(), format!("install: {error:?}")))?;
+        .map_err(|error| {
+            let definite = !super::owner_uncertain(&error);
+            (unresolved(known(), format!("install: {error:?}")), definite)
+        })?;
         drop(held);
         let (head, root) = match outcome {
             CommitOutcome::Committed { record, .. } => (Some(record.id), record.root),
@@ -256,7 +282,11 @@ impl BoundWorkspace {
         next.effective_root = candidate.0;
         next.branch.head_commit = head;
         next.head_root = head.map(|_| root);
-        let poisoned = || unresolved(known(), format!("{:?}", WorkspaceError::BindingPoisoned));
+        // Installed: a poisoned binding after it is not definite.
+        let poisoned = || {
+            let reason = format!("{:?}", WorkspaceError::BindingPoisoned);
+            (unresolved(known(), reason), false)
+        };
         *self.snapshot.lock().map_err(|_| poisoned())? = next;
         *self.pending.lock().map_err(|_| poisoned())? = None;
         Ok(kept

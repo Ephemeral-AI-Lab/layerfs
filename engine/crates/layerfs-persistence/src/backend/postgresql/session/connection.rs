@@ -409,6 +409,9 @@ pub(crate) struct Session {
     /// Mount intents whose admission ended with an unknown outcome: the
     /// next reopen deletes each one's row once, by its op id.
     pub(crate) orphans: Mutex<Vec<[u8; 16]>>,
+    /// This session's identity in a call's reopen budget (`reopen::one_call`):
+    /// unique in the process, never reused, unlike its address.
+    pub(crate) identity: u64,
 }
 
 /// One session advisory key a registered intent holds: the key, and whether
@@ -471,6 +474,7 @@ impl Session {
             reopens: AtomicBool::new(false),
             mount_writes: AtomicBool::new(false),
             orphans: Mutex::default(),
+            identity: super::reopen::identity(),
         })
     }
     pub(crate) fn connect(
@@ -509,6 +513,7 @@ impl Session {
             reopens: AtomicBool::new(false),
             mount_writes: AtomicBool::new(false),
             orphans: Mutex::default(),
+            identity: super::reopen::identity(),
         })
     }
 

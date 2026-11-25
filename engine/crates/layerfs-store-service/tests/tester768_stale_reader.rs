@@ -301,7 +301,7 @@ fn a_mounted_workspace_reader_terminated() {
     assert_eq!(
         (held_after_unmount, rows_after_unmount),
         (0, 0),
-        "no key and no live row after the failed unmount"
+        "no key and no live row after the unmount"
     );
     assert!(
         again_read.is_ok(),

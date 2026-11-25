@@ -279,15 +279,24 @@ keyless. Its op is held inside that second turn. Every unlock of keys that
 are not in `held_ops` (a refused lock's grants, a failed registration's
 keys, an earlier level of a registered op, a compaction claim) is pinned the
 same way and sends nothing once that connection has closed, since the
-current one holds other ops' levels of the same keys.
+current one holds other ops' levels of the same keys. Only that pin refusal
+counts as unlocked; any other refusal before the unlock is sent (a closed
+session, same-thread re-entry, a poisoned lock) is answered as it is.
 
 Pooler detection, the generation fence and `lock_timeout` apply to the new
 connection as to the first; it is opened with the same settings and
 connector. **One reopen attempt per public call.** A Commit, a mount, an
 unmount, a resolution and an SDK Store call each run inside
 `layerfs_persistence::one_call` (the Store service's `BoundWorkspace` and
-`methods::call` entry points): each session attempts at most one reopen in
-it. A reopen that fails answers its error, the session stays quarantined,
+`methods::call` entry points, and each daemon control request as a whole,
+so a Commit request's custody resolution and its own Commit share one
+budget): each session attempts at most one reopen in it. Sessions are told
+apart by a process-unique identity, never reused, so a session closed and
+opened again within a call has a budget of its own. The scope is the
+calling thread's: a thread spawned inside a call starts unscoped (one
+attempt per turn) unless it scopes its own work; no product call hands a
+session's work to such a thread (a Commit's construction thread takes no
+session turn). A reopen that fails answers its error, the session stays quarantined,
 and a later call may try once more; a connection that closes again later in
 the same call is refused `Unknown`, not opened a second time. Outside a
 call scope the budget is one per turn. There is no loop or backoff. Calls
@@ -682,7 +691,14 @@ an op has left `held_ops` inside the release's own turn, so no writer
 reopen takes its keys again ([Writer reopen](#writer-reopen)). A release
 whose turn finds the writer quarantined, and whose reopen fails or is
 refused, sends nothing: its op leaves `held_ops` and its row becomes an
-orphan the next reopen deletes.
+orphan the next reopen deletes. So does a release whose flight quarantined
+the writer before its delete was sent (the reply to a prepare in that
+flight lost, after a full statement cache cleared its statements): the op
+left `held_ops` before the flight, so it is recorded as an orphan directly
+(`writer_reopen_release.rs`). A release whose delete was sent and whose
+outcome is unknown is not an orphan: the row stays, marked uncertain by
+`release_or_mark`, and no reopen deletes it a second time (the documented
+limit below).
 
 `postgresql_gc_sessions` pins the counts of one warm mount register and
 release: register 1 round trip since step B (the one message; 6 before it,
@@ -1074,6 +1090,8 @@ entry. Recorded by review, not fixed in #768.
 | [`mount_fault_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_drop.rs), [`mount_fault_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_kill.rs) | a dropped connection, and a terminated backend, at every server message of a repeated mount and of an unmount (`support/mount_sweep.rs`): an answered mount holds its row and three keys (unless the backend ended after every reply); an answered unmount left neither; a failed call whose service still works left nothing (a mount) or kept both (an unmount); an unknown one closed the writer's connection, so no key, at most its row, and the next call reopened the writer (at most once): a mount's row is released by the reopen, an unmount's row is kept, and the old backend has ended; a backend terminated after every reply of a mount loses its keys, which the reopen takes again; a fresh service mounts; no backend is left in a transaction |
 | [`writer_reopen.rs`](../../../../engine/crates/layerfs-store-service/tests/writer_reopen.rs) | [Writer reopen](#writer-reopen): a terminated writer backend and a dropped writer connection reopen at the next Commit, which lands (`reopens` 1, the old backend gone); an uncertain fused Commit that the server committed is installed once (`resolve_retained` `Committed`, then `UpToDate`) and one cut before its `COMMIT` folds back and lands once; a mount kept across the reopen keeps its row and its keys move to the new backend (removal and compaction still `MountsActive`, the unmount releases both); a key another session holds exclusively refuses the reopen (a definite refusal, no reopen counted, the row kept), the writer stays quarantined and a later call reopens once the key is free; a mount whose reply was lost after its `COMMIT` leaves no row after the reopen; a reopen against a server that refuses connections fails once and the next call reopens; two Commits queued when the writer died reopen it once |
 | [`testerwr_races.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_races.rs), [`testerwr_orphan_release.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_orphan_release.rs), [`testerwr_reopen_sweep.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_reopen_sweep.rs), [`testerwr_resolve_sweep.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_resolve_sweep.rs), [`testerwr_control_reader.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr_control_reader.rs) | The independent tester's: queued and racing calls reopen once and keep every key level; an unmount whose reopen is refused leaves no keys held and its row is released by the next reopen; an orphan whose delete was never executed (its prepare's reply lost) is still released by a later reopen; a drop or kill at every message of a reopen and its Commit (each half of the flight in its own test) keeps every live mount's row and all four keys on at most one backend, never resends, and leaves no orphaned row at the end; every message of an uncertain Commit's resolution; after a server restart, and after one lost control-reader reply, a retained Commit still resolves, installed once |
+| [`testerwr2_custody.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr2_custody.rs), [`testerwr2_lost_backend.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr2_lost_backend.rs), [`testerwr2_one_call.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr2_one_call.rs), [`testerwr2_reader_resolve.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr2_reader_resolve.rs), [`testerwr2_audit_cost.rs`](../../../../engine/crates/layerfs-store-service/tests/testerwr2_audit_cost.rs) | The second independent round: a registration's second turn and a refused admission's unlock never run on a reopened connection; a lost release or mount reply leaves no owner-less keys and no orphaned row; an orphan is not released while its old backend is stopped, not proven gone (needs `LAYERFS_TEST_POSTGRES_CONTAINER`, NOT_RUN without it); the shapes of the one-call reopen budget; a server restart during a retained Commit's resolution never folds it back or publishes it twice, and one after the lookup leaves the custody retained so a later resolution installs it; the allocator audit's cost (a measurement) |
+| [`writer_reopen_release.rs`](../../../../engine/crates/layerfs-store-service/tests/writer_reopen_release.rs) | A release whose flight prepares its statements and loses the prepare's reply quarantines the writer with nothing sent; its row is an orphan the next reopen deletes (keys gone, compaction admitted) |
 
 ### Commit round trips
 

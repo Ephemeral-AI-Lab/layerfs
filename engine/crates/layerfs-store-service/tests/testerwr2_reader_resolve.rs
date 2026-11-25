@@ -13,11 +13,13 @@
 //! candidate root's objects through the Workspace's reader).
 //!
 //! Both must decide the lost Commit as committed, never fold it back, and
-//! never publish it again. Observed, and printed as a finding rather than
-//! asserted: with the restart after the lookup, the install's reads fail,
-//! the resolution answers `Unresolved` with the known publication and takes
-//! the custody, and the Workspace then refuses every Commit (`InFlight`).
-//! The same happens at 7c18d93b57, before readers reopened.
+//! never publish it again. With the restart after the lookup, the install's
+//! reads fail and the resolution answers `Unresolved` with the known
+//! publication; the custody must stay retained with it, so a later
+//! resolution installs it and a new change lands on the lost Commit. Before
+//! review round 2 (V5; also at 7c18d93b57) the resolution took the custody
+//! and the Workspace refused every later Commit (`InFlight`), which this
+//! printed as a finding; it is now asserted.
 //!
 //! PostgreSQL only. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #[path = "support/adversary.rs"]
@@ -172,12 +174,10 @@ fn restart_during_resolution(label: &str, at: At) {
                     "a new change lands on the lost one"
                 )
             }
-            // Pre-existing (also at 7c18d93b57, before readers reopened): a
-            // resolution whose install fails after it knew the publication
-            // takes the custody and leaves the Workspace refusing every
-            // later Commit. Recorded, not asserted: the subject here is the
-            // reader reopen, which never folds back or publishes twice.
-            other => println!(
+            // Review round 2, V5: a resolution whose install failed
+            // definitely after it knew the publication keeps the custody,
+            // so the Workspace is never left refusing every later Commit.
+            other => panic!(
                 "TESTERWR2_T4_FINDING {at:?}: the Workspace refuses every Commit after the \
                  resolution (first resolved {}, second resolved {}): {other:?}",
                 first.is_ok(),

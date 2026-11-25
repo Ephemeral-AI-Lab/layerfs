@@ -206,6 +206,7 @@ pub(super) fn session_unlock(
         return Ok(());
     }
     let sent = Cell::new(false);
+    let gone = Cell::new(false);
     let pids = session.run_turn(
         Mode::Bare,
         pin,
@@ -213,10 +214,16 @@ pub(super) fn session_unlock(
             sent.set(true);
             unlock_rows(tx, keys)
         },
-        |_, _| {},
+        // Only the pin's own refusal counts as unlocked: the connection the
+        // keys were taken on has closed, and the server gave them back with
+        // it. Any other refusal before the body (a closed session, same
+        // thread re-entry, a poisoned lock) is answered as it is.
+        |state, _| {
+            gone.set(!sent.get() && pin.is_some_and(|pin| state.quarantined || state.closed != pin))
+        },
     );
     let pids = match pids {
-        Err(_) if pin.is_some() && !sent.get() => return Ok(()),
+        Err(_) if gone.get() => return Ok(()),
         pids => pids?,
     };
     pooled_unlock(session, &pids)

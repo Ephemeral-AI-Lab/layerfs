@@ -64,20 +64,31 @@ use crate::backend::records::BackendError;
 use postgres::SimpleQueryMessage;
 use std::{
     cell::{Cell, RefCell},
-    sync::atomic::Ordering,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 thread_local! {
     /// The sessions that already attempted a reopen in this thread's
     /// current call ([`one_call`]); `None` outside a call.
-    static CALL: RefCell<Option<Vec<usize>>> = const { RefCell::new(None) };
+    static CALL: RefCell<Option<Vec<u64>>> = const { RefCell::new(None) };
+}
+
+/// The next session identity ([`Session::identity`]).
+pub(crate) fn identity() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Runs `call` as one public call (a Commit, a mount, an unmount, a Store
 /// call): every session it uses attempts at most one reopen in it, so a
 /// reopen that fails, or a connection that closes again later in the call,
 /// is refused (`Unknown`) rather than opened again. A call inside another
-/// shares the outer one's budget.
+/// shares the outer one's budget. Sessions are told apart by identity, not
+/// address, so a session dropped and opened again within a call has a budget
+/// of its own. The scope is this thread's: a thread spawned inside a call
+/// starts with no scope (one attempt per writer turn) unless it scopes its
+/// own work; no product call hands a session's work to such a thread today
+/// (a Commit's construction thread never takes a session's turn).
 pub fn one_call<T>(call: impl FnOnce() -> T) -> T {
     struct Scope(bool);
     impl Drop for Scope {
@@ -101,7 +112,7 @@ pub fn one_call<T>(call: impl FnOnce() -> T) -> T {
 
 /// Whether `session` may attempt a reopen in this thread's call, noting it.
 fn first_attempt(session: &Session) -> bool {
-    let id = session as *const Session as usize;
+    let id = session.identity;
     CALL.with(|tried| match tried.borrow_mut().as_mut() {
         Some(tried) if tried.contains(&id) => false,
         Some(tried) => {

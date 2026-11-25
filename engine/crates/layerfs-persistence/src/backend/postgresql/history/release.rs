@@ -22,7 +22,7 @@
 //! | a definite SQLSTATE | no row | that refusal | kept with the op |
 //! | answered | refused, or a reply lost | the delete's answer | unknown: the session is quarantined, its connection closes with every key |
 //! | no reply, or a SQLSTATE without a definite rule | — | `UnknownOutcome` | unknown: quarantined |
-//! | not sent: the turn found the writer quarantined | — | that refusal | gone with the connection; the row is an orphan for the next reopen |
+//! | not sent: the turn found the writer quarantined, or a prepare in the flight lost its reply | — | that refusal | gone with the connection; the row is an orphan for the next reopen |
 //!
 //! Nothing is resent: an unknown outcome quarantines the session while its
 //! lock is still held (`Session::decided_turn`).
@@ -104,9 +104,10 @@ pub(crate) fn release(session: &Session, op_id: &[u8; 16]) -> Result<Released, B
         let kept = match &released {
             Ok(released) => released.kept,
             // Nothing was sent: the keys stay held unless the connection
-            // closed (a lost prepare reply), which gave them back.
+            // closed (a lost prepare reply), which gave them back; the op
+            // was taken above, so its row is recorded here directly.
             Err(_) if turn.quarantined() => {
-                orphaned(session, op_id);
+                session.note_orphan(*op_id);
                 false
             }
             Err(_) => true,
