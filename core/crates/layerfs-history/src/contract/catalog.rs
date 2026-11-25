@@ -165,6 +165,22 @@ pub trait HistoryCatalog: Send + Sync {
         })
     }
 
+    /// [`Self::branch_snapshot`] with the name of the Branch's stack. A
+    /// provider answers from the snapshot's own statement, which already
+    /// reads the stack row; this default reads the stack after the snapshot.
+    fn branch_snapshot_with_stack_name(
+        &self,
+        id: BranchId,
+    ) -> HistoryResult<Option<(BranchSnapshot, HistoryName)>> {
+        let Some(snapshot) = self.branch_snapshot(id)? else {
+            return Ok(None);
+        };
+        let stack = self
+            .layer_stack(snapshot.branch.stack)?
+            .ok_or(crate::error::HistoryError::Integrity("Branch LayerStack"))?;
+        Ok(Some((snapshot, stack.name)))
+    }
+
     /// Branches of one stack in name order.
     fn branches(&self, stack: LayerStackId, page: &Page)
         -> HistoryResult<PageResult<BranchRecord>>;
@@ -458,6 +474,22 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported(
             "node history position",
         ))
+    }
+
+    /// The `history_serial` `node` records with every `path_removed` marker
+    /// of `stack`, or `None` when the node does not exist. A provider reads
+    /// both in one statement, so they come from one snapshot; this default
+    /// reads [`Self::node_history_serial`] and then [`Self::path_removals`],
+    /// and refuses as they do.
+    fn node_path_removals(
+        &self,
+        stack: LayerStackId,
+        node: NodeId,
+    ) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
+        let Some(serial) = self.node_history_serial(node)? else {
+            return Ok(None);
+        };
+        Ok(Some((serial, self.path_removals(stack)?)))
     }
 
     /// The retained history roots of one Stack. The default refuses.

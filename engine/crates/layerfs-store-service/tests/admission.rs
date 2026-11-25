@@ -11,7 +11,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryError, PlaceAuthority, PlaceView, WorkspaceId};
 use layerfs_store_service::history::{admission, deletion, lookup, removal};
-use layerfs_store_service::store::BindRequest;
+use layerfs_store_service::store::{BindError, BindPhase, BindRequest};
 use std::fs;
 use support::Fixture;
 
@@ -554,6 +554,135 @@ mod fault {
             self.inner.gc_release(op_id)
         }
     }
+
+    /// A writer catalog whose registration is refused `Unsupported(reason)`:
+    /// the PostgreSQL provider's own reason on a transaction-pooled
+    /// connection (§5.2), or the trait default's `NO_ADMISSION` of a catalog
+    /// without admission.
+    pub struct Pooled {
+        pub inner: std::sync::Arc<dyn HistoryCatalog>,
+        pub reason: &'static str,
+    }
+
+    impl HistoryCatalog for Pooled {
+        forward! {
+            catalog_id() -> CatalogId;
+            incarnation() -> u64;
+            layer_stack(id: LayerStackId) -> HistoryResult<Option<LayerStackRecord>>;
+            layer_stacks(page: &Page) -> HistoryResult<PageResult<LayerStackRecord>>;
+            branch(id: BranchId) -> HistoryResult<Option<BranchRecord>>;
+            branch_named(stack: LayerStackId, name: &HistoryName) -> HistoryResult<Option<BranchRecord>>;
+            branch_snapshot(id: BranchId) -> HistoryResult<Option<BranchSnapshot>>;
+            branches(stack: LayerStackId, page: &Page) -> HistoryResult<PageResult<BranchRecord>>;
+            commit(id: CommitId) -> HistoryResult<Option<CommitRecord>>;
+            layer(id: LayerId) -> HistoryResult<Option<LayerRecord>>;
+            commit_history(request: &CommitHistoryRequest) -> HistoryResult<PageResult<CommitRecord>>;
+            layer_history(request: &LayerHistoryRequest) -> HistoryResult<PageResult<LayerRecord>>;
+            initialize_layerstack(request: &StackInitialization) -> HistoryResult<LayerStackRecord>;
+            fork(request: &ForkRequest) -> HistoryResult<BranchSnapshot>;
+            merge_base(left: NodeId, right: NodeId) -> HistoryResult<Option<NodeId>>;
+            is_ancestor(ancestor: NodeId, descendant: NodeId) -> HistoryResult<bool>;
+            commit_branch(request: &CommitRequest) -> HistoryResult<CommitOutcome>;
+            add_layer(request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome>;
+            merge_branch(request: &BranchMergeRequest) -> HistoryResult<BranchSnapshot>;
+            reserve_inodes(request: &ReserveRequest) -> HistoryResult<Reservation>;
+        }
+
+        fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
+            Err(HistoryError::Unsupported(self.reason))
+        }
+    }
+}
+
+/// A Store over `host`'s SQLite file whose writer catalog is [`fault::Pooled`].
+fn pooled_store(
+    host: &installed::Fixture,
+    reason: &'static str,
+) -> std::sync::Arc<layerfs_store_service::store::Store> {
+    use layerfs_persistence::SqliteHandles;
+    use layerfs_store_service::store::{ReaderFactory, Store, StoreReader};
+    use std::sync::Arc;
+    let writer =
+        SqliteHandles::open_writable(host.config.clone(), installed::BINDING, installed::CURSOR)
+            .unwrap();
+    let config = host.config.clone();
+    let factory: ReaderFactory = Arc::new(move |_| {
+        let read =
+            SqliteHandles::open_read_only(config.clone(), installed::BINDING, installed::CURSOR)?;
+        Ok(StoreReader::new(
+            layerfs_storage::Storage::new(read.storage)?,
+            Arc::new(read.history),
+        ))
+    });
+    let control = factory(0).unwrap();
+    let history = Arc::new(fault::Pooled {
+        inner: Arc::new(writer.history),
+        reason,
+    });
+    Arc::new(
+        Store::new(
+            writer.storage,
+            history,
+            control,
+            factory,
+            0,
+            layerfs_storage::ReservationBlocks::default(),
+            2,
+        )
+        .unwrap(),
+    )
+}
+
+/// #768, #776 C1: a provider whose registration is refused with its own
+/// `Unsupported` (PostgreSQL on a transaction pooler, §5.2) refuses the
+/// mount; only a catalog without admission (`NO_ADMISSION`) mounts with no
+/// intent. The bind path's twin of `a_pooled_connection_refuses_a_shared_intent`.
+#[test]
+fn a_pooled_registration_refuses_the_mount() {
+    let host = installed::Fixture::built("admission-pooled-mount", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let owner = layerfs_store_service::Owner::start(
+        &host.directory.join("overlay.sqlite"),
+        layerfs_overlay::ProfileConfig::default(),
+        layerfs_store_service::OwnerConfig::default(),
+    )
+    .unwrap();
+    let request = |n: u8| BindRequest {
+        branch: host.branch,
+        workspace: WorkspaceId::from_authority([n; 32]).unwrap(),
+    };
+
+    let store = pooled_store(&host, "transaction-pooled PostgreSQL connection");
+    let refused = store
+        .bind(owner.client(), request(31))
+        .err()
+        .expect("a pooled registration refuses the mount");
+    assert!(
+        matches!(
+            refused.error,
+            BindError::History(layerfs_history::HistoryError::Unsupported(
+                "transaction-pooled PostgreSQL connection"
+            ))
+        ),
+        "{:?}",
+        refused.error
+    );
+    assert_eq!(refused.phase, BindPhase::Snapshot);
+    drop(store);
+
+    let store = pooled_store(&host, layerfs_history::error::NO_ADMISSION);
+    let bound = store
+        .bind(owner.client(), request(32))
+        .expect("a provider without admission mounts")
+        .workspace;
+    let namespace = bound.route().namespace();
+    bound.close().expect("close the Workspace");
+    owner.client().retire_namespace(namespace).unwrap();
+    drop(store);
+    owner.stop().unwrap();
+    host.cleanup();
 }
 
 fn unknown_names(refused: &SdkRefusal, phase: &str) {

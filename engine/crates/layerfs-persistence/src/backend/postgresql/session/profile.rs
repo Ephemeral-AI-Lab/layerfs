@@ -79,7 +79,8 @@ impl Settings {
 
     /// A publication: like `write_begin(false)` with the lane's
     /// `lock_timeout`; the body takes the lane row itself, after its pack
-    /// bodies are sent, with [`Self::lane_row`].
+    /// bodies are sent, with [`Self::lane_row`]. A mount's GC registration
+    /// (`Mode::Admit`) begins the same way and never takes the lane row.
     pub(crate) fn publish_begin(&self) -> String {
         format!(
             "{}; SET LOCAL lock_timeout TO {}",

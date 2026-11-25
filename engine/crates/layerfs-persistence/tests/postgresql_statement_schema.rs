@@ -64,6 +64,11 @@ const READS: &[Read] = &[
         pg_only: false,
     },
     Read {
+        called: "branch_snapshot_with_stack_name",
+        keys: &["branch_snapshot"],
+        pg_only: false,
+    },
+    Read {
         called: "branch_snapshot_named",
         keys: &["branch_snapshot_named"],
         pg_only: false,
@@ -89,6 +94,11 @@ const READS: &[Read] = &[
         pg_only: false,
     },
     Read {
+        called: "node_markers",
+        keys: &["paths_node_markers"],
+        pg_only: false,
+    },
+    Read {
         called: "stored",
         keys: &["digest_roots"],
         pg_only: false,
@@ -100,19 +110,10 @@ const READS: &[Read] = &[
         keys: &[],
         pg_only: false,
     },
-    // Spec 5.1/§8 admission: a session advisory lock takes and releases
-    // PostgreSQL-only locks. The statement reads no table, so nothing is
-    // qualified and nothing may have an unqualified SQLite body.
-    Read {
-        called: "Transaction::new",
-        keys: &[
-            "gc_lock_session_shared",
-            "gc_lock_session_exclusive",
-            "gc_unlock_session_shared",
-            "gc_unlock_session_exclusive",
-        ],
-        pg_only: true,
-    },
+    // The GC session keys and the owner's release are no `read_statement`
+    // bodies since #768: `Mode::Bare` sends them as written
+    // (`statements::bare`), and `postgresql_gc_sessions` runs each one on a
+    // real server.
 ];
 
 /// Every `.rs` file under `root`, as `(path, source)`.
@@ -463,6 +464,42 @@ fn postgresql_one_statement_reads_answer() {
         "a Commit records its serial"
     );
 
+    // node_path_removals: a node's serial with its stack's markers, one
+    // statement; a missing node is none.
+    let serial = history
+        .node_history_serial(NodeId::Commit(record.id))
+        .expect("the Commit's serial")
+        .expect("a Commit serial");
+    assert_eq!(
+        history
+            .node_path_removals(stack, NodeId::Commit(record.id))
+            .expect("no markers yet"),
+        Some((serial, Vec::new()))
+    );
+    history
+        .mark_path_removed(stack, b"b/gone", serial, 7)
+        .expect("a marker");
+    history
+        .mark_path_removed(stack, b"a", serial, 8)
+        .expect("a second marker");
+    let (found, markers) = history
+        .node_path_removals(stack, NodeId::Commit(record.id))
+        .expect("the markers")
+        .expect("the Commit");
+    assert_eq!(found, serial);
+    let paths: Vec<&[u8]> = markers.iter().map(|m| m.path.as_slice()).collect();
+    assert_eq!(paths, [b"a".as_slice(), b"b/gone".as_slice()]);
+    assert_eq!(
+        (markers[1].frontier_serial, markers[1].removed_ms),
+        (serial, 7)
+    );
+    assert_eq!(
+        history
+            .node_path_removals(stack, NodeId::Commit(absent_commit()))
+            .expect("a missing node"),
+        None
+    );
+
     // layer.get and layer.list.
     assert_eq!(
         history
@@ -488,6 +525,14 @@ fn postgresql_one_statement_reads_answer() {
         .expect("branch.get")
         .expect("the Branch snapshot");
     assert_eq!(snapshot.branch.id, branch);
+    let (with_name, stack_name) = history
+        .branch_snapshot_with_stack_name(branch)
+        .expect("branch.get with its project")
+        .expect("the Branch snapshot");
+    assert_eq!(
+        (with_name, stack_name.as_str()),
+        (snapshot.clone(), "project-1")
+    );
     assert!(matches!(
         history
             .branch_snapshot_named(&support::name("project-1"), &support::name("work"))
@@ -517,4 +562,11 @@ fn postgresql_one_statement_reads_answer() {
         history.statistics().expect("statistics").file > 0,
         "the Store's page total"
     );
+}
+
+/// A Commit id no Store holds.
+fn absent_commit() -> layerfs_history::CommitId {
+    let mut bytes = [0x5a; 33];
+    bytes[0] = 0x12;
+    layerfs_history::CommitId::from_bytes(bytes).expect("a Commit id")
 }

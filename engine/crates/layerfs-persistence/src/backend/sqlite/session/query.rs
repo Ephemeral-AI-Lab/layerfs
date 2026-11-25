@@ -222,6 +222,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "paths_markers" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/paths_markers.sql"
         )),
+        "paths_node_markers" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/paths_node_markers.sql"
+        )),
         "paths_upsert" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/paths_upsert.sql"
         )),
@@ -230,12 +233,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "gc_intent_insert" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_insert.sql"
-        )),
-        "gc_intent_get" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/gc_intent_get.sql"
-        )),
-        "gc_intent_get_any" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/gc_intent_get_any.sql"
         )),
         "gc_intent_release" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_intent_release.sql"
@@ -283,9 +280,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
             "../../../../sql/sqlite/queries/history/gc_intent_done_newest.sql"
         )),
 
-        "gc_branch_stack_any" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/gc_branch_stack_any.sql"
-        )),
         "gc_epoch_read" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_epoch_read.sql"
         )),

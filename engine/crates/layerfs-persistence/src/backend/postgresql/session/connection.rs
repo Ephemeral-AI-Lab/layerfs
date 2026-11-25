@@ -253,12 +253,18 @@ pub(crate) struct Session {
     /// Pack rows chain locates returned (#758, `metadata::chains`).
     pub(crate) chain_packs: Mutex<super::super::metadata::chains::ChainPacks>,
     /// The intents this session registered and still holds advisory keys
-    /// for. A release unlocks an op's keys only when it takes the op from
-    /// here, so a repeated release, or a release of a row another session
-    /// registered, never drops a key level a live mount of this session holds
-    /// (PostgreSQL counts advisory locks per session).
-    pub(crate) held_ops: Mutex<std::collections::HashSet<[u8; 16]>>,
+    /// for, each with the keys it took (the key and whether it is shared). A
+    /// release unlocks an op's keys only when it takes the op from here, so a
+    /// repeated release, or a release of a row another session registered,
+    /// never drops a key level a live mount of this session holds
+    /// (PostgreSQL counts advisory locks per session), and a release whose
+    /// row is already gone still unlocks them.
+    pub(crate) held_ops: Mutex<HashMap<[u8; 16], Vec<SessionKey>>>,
 }
+
+/// One session advisory key a registered intent holds: the key, and whether
+/// it was taken shared.
+pub(crate) type SessionKey = (i64, bool);
 
 /// Connections opened and round trips made on the lane connection.
 #[derive(Default)]
@@ -386,23 +392,29 @@ impl Session {
         Ok(groups)
     }
 
+    /// Notes that this session holds `keys` for registered op `op`. Returns
+    /// the keys an earlier registration of the same op still held, which the
+    /// caller unlocks so the op keeps one level of each key.
+    pub(crate) fn hold_op(&self, op: [u8; 16], keys: Vec<SessionKey>) -> Option<Vec<SessionKey>> {
+        self.held_ops
+            .lock()
+            .ok()
+            .and_then(|mut held| held.insert(op, keys))
+    }
+
+    /// Takes `op` from the ops this session holds keys for, with its keys:
+    /// `Some` only the first time, and only when this session registered it.
+    pub(crate) fn take_op(&self, op: &[u8; 16]) -> Option<Vec<SessionKey>> {
+        self.held_ops
+            .lock()
+            .ok()
+            .and_then(|mut held| held.remove(op))
+    }
+
     /// Records the backend that took a session advisory lock. The first lock
     /// statement sets it; every later statement must run on the same backend.
     /// `false` means the connection is transaction-pooled and cannot hold the
     /// lock across transactions (spec §5.2 item 34).
-    /// Notes that this session holds the advisory keys of registered op `op`.
-    pub(crate) fn hold_op(&self, op: [u8; 16]) {
-        if let Ok(mut held) = self.held_ops.lock() {
-            held.insert(op);
-        }
-    }
-
-    /// Takes `op` from the ops this session holds keys for: `true` only the
-    /// first time, and only when this session registered it.
-    pub(crate) fn take_op(&self, op: &[u8; 16]) -> bool {
-        self.held_ops.lock().is_ok_and(|mut held| held.remove(op))
-    }
-
     pub(crate) fn note_backend(&self, pid: i64) -> bool {
         if pid <= 0 {
             return false;

@@ -168,6 +168,34 @@ fn marker_frontier_and_up_to_date_follow_the_store_position() {
     assert_eq!(markers[1].frontier_serial, 6);
     // `ab` is not governed by the `a` marker.
     assert!(!layerfs_history::path::governs(b"a", b"ab"));
+
+    // The mount's one read (#768): the node's serial with every marker of
+    // its project, the same rows the two separate reads return; another
+    // project's node keeps its own serial and this project's markers are
+    // not its own; an absent node is none.
+    assert_eq!(
+        history
+            .node_path_removals(shop, NodeId::Commit(first.id))
+            .unwrap(),
+        Some((2, markers))
+    );
+    assert_eq!(
+        history
+            .node_path_removals(api_stack(&history, api), NodeId::Layer(genesis))
+            .unwrap(),
+        Some((1, Vec::new()))
+    );
+    assert_eq!(
+        history
+            .node_path_removals(shop, NodeId::Commit(absent_commit()))
+            .unwrap(),
+        None
+    );
+}
+
+/// The stack of Branch `branch`.
+fn api_stack(history: &dyn HistoryCatalog, branch: BranchId) -> LayerStackId {
+    history.branch(branch).unwrap().unwrap().stack
 }
 
 #[test]
@@ -199,4 +227,11 @@ fn an_unknown_project_is_missing() {
         }),
         Err(HistoryError::Missing(Missing::LayerStack))
     );
+}
+
+/// A Commit id no Store holds.
+fn absent_commit() -> layerfs_history::CommitId {
+    let mut bytes = [0x5a; 33];
+    bytes[0] = 0x12;
+    layerfs_history::CommitId::from_bytes(bytes).expect("a Commit id")
 }

@@ -88,6 +88,13 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| branch::branch_snapshot(tx, id))
     }
 
+    fn branch_snapshot_with_stack_name(
+        &self,
+        id: BranchId,
+    ) -> HistoryResult<Option<(BranchSnapshot, HistoryName)>> {
+        self.read_statement(|tx| branch::branch_snapshot_with_stack_name(tx, id))
+    }
+
     fn branch_snapshot_named(
         &self,
         stack: &HistoryName,
@@ -301,6 +308,14 @@ impl HistoryCatalog for HistoryProvider {
 
     fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {
         self.read_statement(|tx| super::position::node_serial(tx, node))
+    }
+
+    fn node_path_removals(
+        &self,
+        stack: LayerStackId,
+        node: NodeId,
+    ) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
+        self.read_statement(|tx| super::paths::node_markers(tx, stack, node))
     }
 
     fn retained_roots(&self, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {

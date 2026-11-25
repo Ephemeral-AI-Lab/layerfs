@@ -72,6 +72,18 @@ impl BoundWorkspace {
     pub fn route(&self) -> layerfs_workspace::Route {
         self.workspace.route()
     }
+    /// One lookup in published history on this Workspace's own reader, the
+    /// one its bind read the snapshot on, so the mount opens no other
+    /// session (#768). It sees what is published when it runs.
+    pub(crate) fn published<T>(
+        &self,
+        lookup: impl FnOnce(&dyn layerfs_history::HistoryCatalog) -> layerfs_history::HistoryResult<T>,
+    ) -> Result<T, Arc<super::PortError>> {
+        self.store
+            .reader(Some(self.identity))
+            .map_err(|error| Arc::new(super::PortError::ReadAdmission(error)))?
+            .published(lookup)
+    }
     /// The `history_serial` of one Commit or Layer, for `remove_file`
     /// visibility in operator reads; absent is 0, as the resolver reports.
     pub fn node_serial(&self, node: layerfs_history::NodeId) -> u64 {
