@@ -188,7 +188,15 @@ was lost may still be applying on the server; a non-nested publication holds
 the lane row and a nested one the barrier key until its transaction ends, so
 a fresh connection that takes the lane row and then the barrier exclusively,
 both under `lock_timeout`, and rolls back, proves the original has ended. A
-wait that reaches the timeout is `Busy`, an undetermined attempt. On SQLite
+wait that reaches the timeout is `Busy`, an undetermined attempt. The lane
+alone does not cover a fused Commit, whose message sends its packs before it
+takes the lane row: a backend still inserting them when the reply was lost
+would take the lane and commit after the pass. So on a quarantined writer
+session the pass first ends that session's backend (`pg_terminate_backend`
+with a wait, bounded by `lock_timeout`; the backend is named by the pid and
+start the open's check read): a `COMMIT` it already made is then found by
+the attempt, and one it had not made is aborted. Not proven gone, the
+outcome stays undetermined, with no fold-back and no install. On SQLite
 the publication ran in this process and the pass returns at once.
 
 Every Commit request carries a fresh attempt: 16 bytes the Commit draws from
@@ -275,6 +283,7 @@ construction state lives in indexed operation records.
 | [`commit_live_merge.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_live_merge.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_live_merge` | any | A merged install that overlaps rows written after the capture is refused `LiveConflict`, before the lane when the overlap is already there; one with no overlap publishes |
 | [`fused_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/fused_commit.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test fused_commit` | any; PostgreSQL cases need the URL | One transaction per fused Commit (one round trip warm on PostgreSQL); races, `StaleStore`, `Busy`, `Conflict`, a lost reply and a barrier cancelled between its lock and unlock (the leftover released, another writer proceeds), each writing nothing |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | any | Pinned per-session work of fused Commits; a merge Commit is one race refusal and one fallback |
+| [`commit_lost_before_lane.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_lost_before_lane.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test commit_lost_before_lane` | PostgreSQL (SQLite has no such window: its publication runs in process) | A fused Commit's connection cut while its pack insert waits (before the lane row): resolution, run while the insert still waits, answers exactly and nothing lands after a not-committed answer |
 | [`store_commit.rs`](../../../../engine/crates/layerfs-daemon/tests/store_commit.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test store_commit` | any | Custody and settle by phase; one resolution of an unknown outcome installs a landed Commit (also under a later one), folds a lost one back (also under a moved head) and keeps the record when a forced Commit leaves it undetermined |
 
 Run each under a wall timeout of at most 120 s.

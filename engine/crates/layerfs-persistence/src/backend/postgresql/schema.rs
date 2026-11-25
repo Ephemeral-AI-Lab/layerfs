@@ -163,11 +163,15 @@ pub(crate) struct Checked {
     pub(crate) server_version: String,
     /// The Store's `store_policy.trace_salt`, the keyed trace-hash salt.
     pub(crate) trace_salt: [u8; 32],
+    /// The backend the check ran on: its pid and start, when visible.
+    pub(crate) backend: (i64, Option<i64>),
 }
 
-/// The `history_meta` columns both checks read, then the policy row and the
-/// server's version; `{s}.` names the schema for a statement outside the
-/// search path. `trace_salt` is read through the row's JSON form, so a Store
+/// The `history_meta` columns both checks read, then the policy row, the
+/// server's version and the connection's backend (its pid and start, in
+/// microseconds since the epoch; the start is NULL when the session's role
+/// may not see its own login's activity row); `{s}.` names the schema for a statement
+/// outside the search path. `trace_salt` is read through the row's JSON form, so a Store
 /// written before the column existed yields NULL instead of failing the
 /// statement, and [`refuse_pre_2_0`] still names its version (#776).
 fn meta_columns(s: &str) -> String {
@@ -176,7 +180,9 @@ fn meta_columns(s: &str) -> String {
          h.identity_format,h.schema_version,p.format_profile,p.small_file_threshold_bytes,\
          p.whole_file_delta_max_depth,p.chunk_delta_max_depth,p.metadata_delta_max_depth,\
          p.schema_version,current_setting('server_version'),\
-         substr(to_jsonb(p)->>'trace_salt',3) \
+         substr(to_jsonb(p)->>'trace_salt',3),pg_backend_pid(),\
+         (SELECT (extract(epoch FROM a.backend_start)*1000000)::bigint \
+            FROM pg_catalog.pg_stat_activity a WHERE a.pid=pg_backend_pid()) \
          FROM {s}history_meta h, {s}store_policy p WHERE h.id=1 AND p.id=1"
     )
 }
@@ -287,6 +293,7 @@ pub(crate) fn check(
         policy,
         server_version: text(&row, at + 11)?.to_owned(),
         trace_salt,
+        backend: (int(&row, at + 13)?, int(&row, at + 14).ok()),
     })
 }
 

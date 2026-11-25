@@ -956,6 +956,18 @@ failed release quarantines the session, so the verdict sees it untrusted. A
 lost reply needs none: the quarantine closes the connection, which ends
 every session-level lock.
 
+A reply lost before step 3 leaves a backend that may still be inserting the
+packs, outside the lane: a later lane pass would not wait for it, and the
+`COMMIT` could follow the resolution's read. The open's check reads the
+session's backend pid and start with the other meta columns (no extra round
+trip), and `Session::pass_lane` on a quarantined session first runs
+`pg_terminate_backend(pid, lock_timeout)` on that backend, if it is still
+listed, which answers true only once the process has exited; not proven
+gone is `Busy`, and a pid a session lock showed on another backend (a
+transaction-pooling proxy) is `Unknown`. A `COMMIT` the backend made is then
+found by the attempt (`commit_by_attempt`); one it had not made is aborted
+(`commit_lost_before_lane.rs`).
+
 The fence statement holds `AccessShareLock` on `history_meta` until
 `COMMIT`; the lane row and the barrier are taken by the transaction itself,
 on the writer connection (the held-lane connection is not used); the epoch

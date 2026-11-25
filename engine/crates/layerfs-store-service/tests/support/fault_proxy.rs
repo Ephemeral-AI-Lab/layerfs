@@ -19,6 +19,9 @@
 //!   delivered in order: the client is stopped at a chosen point while the
 //!   test acts on the server from elsewhere.
 //!
+//! [`FaultProxy::cut`] ends one connection's client side on demand, while
+//! its backend is still working on what it was sent.
+//!
 //! Messages are the protocol's own (type byte and length); the startup of
 //! a connection opened while armed counts too. The backend's pid comes from
 //! its `BackendKeyData`. Nothing here is product code; the proxy listens on
@@ -68,6 +71,10 @@ struct State {
     target: Option<(u64, Fault)>,
     window: Window,
     pids: Vec<Option<i32>>,
+    /// The client socket of each connection, and whether it was cut
+    /// ([`FaultProxy::cut`]).
+    clients: Vec<Option<TcpStream>>,
+    cut: Vec<bool>,
     released: bool,
 }
 
@@ -126,6 +133,8 @@ impl FaultProxy {
                 let connection = {
                     let mut state = state.lock().unwrap();
                     state.pids.push(None);
+                    state.clients.push(client.try_clone().ok());
+                    state.cut.push(false);
                     state.pids.len() - 1
                 };
                 let (up_from, up_to) = (client.try_clone().unwrap(), server.try_clone().unwrap());
@@ -173,6 +182,24 @@ impl FaultProxy {
         std::mem::take(&mut state.window)
     }
 
+    /// Ends the client side of the connection whose backend is `pid`, as a
+    /// partition the client noticed first: the client sees its connection
+    /// end without the replies, while the server's side stays open, its
+    /// replies are read and discarded (its writes succeed) and it gets an
+    /// orderly end only after the bytes it was already sent, which it runs.
+    /// False when no connection has that backend.
+    pub fn cut(&self, pid: i32) -> bool {
+        let mut state = self.shared.lock().unwrap();
+        let Some(connection) = state.pids.iter().position(|p| *p == Some(pid)) else {
+            return false;
+        };
+        state.cut[connection] = true;
+        match &state.clients[connection] {
+            Some(client) => client.shutdown(Shutdown::Both).is_ok(),
+            None => false,
+        }
+    }
+
     /// Backend pids of the proxied connections, in connect order.
     pub fn pids(&self) -> Vec<Option<i32>> {
         self.shared.lock().unwrap().pids.clone()
@@ -212,6 +239,9 @@ fn back(
             Ok(0) | Err(_) => break,
             Ok(read) => read,
         };
+        if shared.lock().unwrap().cut[connection] {
+            continue;
+        }
         if passthrough {
             delivered(&shared, &mut tail, &buffer[..read]);
             if client.write_all(&buffer[..read]).is_err() {

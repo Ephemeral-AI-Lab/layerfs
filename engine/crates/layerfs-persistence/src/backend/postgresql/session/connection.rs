@@ -327,6 +327,12 @@ pub(crate) struct Session {
     /// proxy changes it between transactions, which is `Unsupported` for
     /// mounts and compaction.
     pub(crate) backend_pid: AtomicI64,
+    /// The backend of this session's connection as the open's check read
+    /// it: its pid and, when the role may see it, its start (microseconds
+    /// since the epoch), which together name it even if the pid is reused.
+    /// A lost reply's resolution ends it before the lane pass
+    /// (`Session::pass_lane`).
+    pub(crate) opened_backend: OnceLock<(i64, Option<i64>)>,
     /// The `catalog_incarnation` this session opened at (spec §5.2, §10); the
     /// generation fence in [`super::transaction::Session::run_as`] compares
     /// every write transaction against it. `0` until an open's check set it,
@@ -395,6 +401,7 @@ impl Session {
             connector,
             lane_work: LaneWork::default(),
             backend_pid: AtomicI64::new(0),
+            opened_backend: OnceLock::new(),
             incarnation: AtomicU64::new(0),
             chain_packs: Mutex::default(),
             held_ops: Mutex::default(),
@@ -427,6 +434,7 @@ impl Session {
             connector,
             lane_work: LaneWork::default(),
             backend_pid: AtomicI64::new(0),
+            opened_backend: OnceLock::new(),
             incarnation: AtomicU64::new(0),
             chain_packs: Mutex::default(),
             held_ops: Mutex::default(),
