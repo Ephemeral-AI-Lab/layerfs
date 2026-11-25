@@ -120,13 +120,18 @@ SLOW = {
     ("layerfs-store-service", "commit_fused_sizes_seeded"): 60.6,
     # Independent verification suite of the fused Commit (#768), serial runs on
     # the macOS host, 2026-11-25.
-    # Warm flights only since the writer reopen (2026-11-25): the cold halves
-    # moved to their own binaries, measured the same day.
-    ("layerfs-store-service", "verify_unknown_allocators"): 65.7,
-    ("layerfs-store-service", "verify_unknown_allocators_cold_a"): 55.3,
-    ("layerfs-store-service", "verify_unknown_allocators_cold_b"): 59.7,
-    ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 45.2,
-    ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 44.3,
+    # Split into nine binaries by the writer reopen's fix round (warm halves,
+    # cold quarters, raced ninths), --test-threads 3, macOS host at a 1-minute
+    # load of 18-23 on 14 cores, 2026-11-26.
+    ("layerfs-store-service", "verify_unknown_allocators"): 57.0,
+    ("layerfs-store-service", "verify_unknown_allocators_warm_b"): 76.8,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_a"): 64.7,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_b"): 45.3,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_c"): 43.2,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_d"): 39.5,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 61.0,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 88.3,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_c"): 77.3,
     ("layerfs-store-service", "verify_paused_commit_sweeps"): 69.5,
     ("layerfs-store-service", "verify_paused_commit_sweeps_third_a"): 45.6,
     ("layerfs-store-service", "verify_paused_commit_sweeps_third_b"): 45.9,
@@ -151,6 +156,12 @@ SLOW = {
     # The independent #768 tester's binaries, same host and day.
     ("layerfs-store-service", "tester768_stale_reader"): 9.1,
     ("layerfs-store-service", "tester768_interleave"): 7.0,
+    # The independent writer-reopen tester's binaries, --test-threads 3,
+    # macOS host at a 1-minute load of 13-25, 2026-11-26 (the reopen sweep is
+    # four half-flight tests).
+    ("layerfs-store-service", "testerwr_reopen_sweep"): 86.4,
+    ("layerfs-store-service", "testerwr_resolve_sweep"): 20.2,
+    ("layerfs-store-service", "testerwr_races"): 14.9,
     # `store upgrade` on the PostgreSQL fixture, one restore per case, and
     # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
     ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,

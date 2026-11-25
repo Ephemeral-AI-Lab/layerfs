@@ -239,13 +239,13 @@ fn check(
             // before it was killed), or the fault ended an idle connection
             // between two of the call's statements, the next one reopened
             // the writer before sending anything (`session/reopen.rs`) and
-            // the fused attempt met the race there: an error reply on
+            // the fused attempt met the race there: the race refusal on
             // another connection after the fault. Never after an unknown
             // outcome.
             if let (Some(fired), Some(refusal)) = (&run.window.fired, race_refusal) {
-                let reopened = (run.window.log.iter())
-                    .skip(fired.at as usize)
-                    .any(|(connection, kind)| *connection != fired.connection && *kind == 'E');
+                let reopened = (run.window.errors.iter()).any(|(at, connection, code)| {
+                    *at > fired.at && *connection != fired.connection && code == RACE_REFUSAL
+                });
                 let in_hand = fired.at > refusal
                     || fired.delivered.iter().any(|kind| kind == RACE_REFUSAL)
                     || (reopened && run.reopens == 1);

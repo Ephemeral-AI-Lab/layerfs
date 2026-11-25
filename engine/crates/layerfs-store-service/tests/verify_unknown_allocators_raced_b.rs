@@ -18,13 +18,14 @@
 //! change, so ids reserved after a rewind are used. At the end the audit
 //! and amcheck pass. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 //!
-//! Split into five binaries (`verify_unknown_allocators` with the warm
-//! flights, `_cold_a` and `_cold_b` with the halves of the cold flights,
-//! `_raced_a` and `_raced_b`) so each stays well under the 120 s test
-//! ceiling; a
-//! process runs at most `verify768::SWEEPS` sweeps at once. More at once
-//! exhausts macOS's ephemeral ports (about 16k, TIME_WAIT about 30 s) and
-//! later dials fail `Refused { status: "Closed" }`.
+//! Split into nine binaries so each stays well under the 120 s test ceiling
+//! on a loaded host: `verify_unknown_allocators` and `_warm_b` hold the
+//! halves of the warm flights, `_cold_a` to `_cold_d` the quarters of the
+//! cold flights, and `_raced_a` to `_raced_c` the ninths of the raced
+//! flights. The final audit has its own 30 s deadline, which a host loaded
+//! well past its cores misses whatever the sweep's size (`Cancelled`). A
+//! process runs at most `verify768::SWEEPS` sweeps at once. More at once exhausts macOS's ephemeral ports (about 16k,
+//! TIME_WAIT about 30 s) and later dials fail `Refused { status: "Closed" }`.
 // Each binary runs part of the shared body.
 #![allow(dead_code)]
 #[path = "support/adversary.rs"]
@@ -40,15 +41,13 @@ include!("support/verify_unknown_body.rs");
 
 #[test]
 fn drop_raced_part_3() {
-    sweep("v768u_dr3", Flight::Raced, Fault::Drop, 3, 6);
+    sweep("v768u_dr3", Flight::Raced, Fault::Drop, 3, 9);
 }
-
 #[test]
 fn drop_raced_part_4() {
-    sweep("v768u_dr4", Flight::Raced, Fault::Drop, 4, 6);
+    sweep("v768u_dr4", Flight::Raced, Fault::Drop, 4, 9);
 }
-
 #[test]
 fn drop_raced_part_5() {
-    sweep("v768u_dr5", Flight::Raced, Fault::Drop, 5, 6);
+    sweep("v768u_dr5", Flight::Raced, Fault::Drop, 5, 9);
 }

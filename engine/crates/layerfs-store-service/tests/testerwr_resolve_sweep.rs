@@ -98,8 +98,9 @@ fn a_drop_at_every_message_of_an_uncertain_commits_resolution() {
         // prepared): then nothing fired and the resolution ran unfaulted.
         let fired_kind = armed.fired.as_ref().map_or('-', |fired| fired.kind);
         let flight: String = (armed.log.iter())
-            .map(|(c, kind)| format!("{c}{kind} "))
-            .collect();
+            .map(|(c, kind)| format!("{c}{kind}"))
+            .collect::<Vec<_>>()
+            .join(" ");
         let (outcome, how) = match first {
             Ok(Some(resolution)) => (resolution.outcome, "resolved"),
             Ok(None) => panic!("{label}: nothing retained"),
