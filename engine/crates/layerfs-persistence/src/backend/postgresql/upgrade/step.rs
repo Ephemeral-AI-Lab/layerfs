@@ -53,6 +53,7 @@ fn recognize_3(context: &mut Context) -> Result<Option<&'static str>, UpgradeErr
     let exact = check.recorded_definition == check.live_definition
         && check.live_definition == frozen::columns_v3(acquisition)
         && !check.attempt_index
+        && check.gc_ops == 0
         && check.version_checks == 2;
     context.acquisition = acquisition;
     Ok(exact.then_some(frozen::VARIANT))
