@@ -108,7 +108,7 @@ const HIDDEN: &[Pin] = &[Pin {
     demands: [1, 1],
 }];
 
-// Before F5 (`e11d8c8d0f`), the writer's counts were the same and the
+// F5 alone left the writer unchanged. Before F5 (`e11d8c8d0f`), the
 // Workspace reader sent `commit.metadata` 72-76 round trips and
 // `commit.edits` 72-73 (the count moved with the reader's kept pack
 // caches), construct 99-100 and 106-107 combined: about one `locate` and
@@ -132,10 +132,10 @@ const POSTGRESQL: &[Wire] = &[
     },
     Wire {
         scenario: "commit.metadata",
-        writer: [0, 34, 40, 2],
+        writer: [0, 15, 21, 2],
         workspace: [0, 0, 0, 0],
         phases: &[
-            ("construct", 24),
+            ("construct", 5),
             ("finish", 4),
             ("logical.count", 4),
             ("publish.fused", 2),
@@ -143,10 +143,10 @@ const POSTGRESQL: &[Wire] = &[
     },
     Wire {
         scenario: "commit.edits",
-        writer: [0, 41, 43, 3],
+        writer: [0, 25, 27, 3],
         workspace: [0, 3, 3, 0],
         phases: &[
-            ("construct", 37),
+            ("construct", 21),
             ("finish", 5),
             ("logical.count", 1),
             ("publish.fused", 1),

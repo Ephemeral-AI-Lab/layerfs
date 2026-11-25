@@ -86,20 +86,20 @@ struct Measured {
 // on cold directories, the C4s4 cell). #810 F4: one difference walk with
 // key-bounded read-ahead for the logical count and the hints, and the
 // Save's leaf reads and selection's base leaves rebuilt a window at a time
-// with one value lookup each. The Workspace readers' reads are Lane C's
-// (#810 F5); `adds`' remaining construct reads are the directory rewrites
-// (#810 F3).
+// with one value lookup each. These pins cover all five integrated fixes.
+// F2 uses fewer packs for edits and adds, while each exact root and object
+// count stays the same. F5 batches the Workspace reader's base-file reads.
 const SQLITE: &[Pin] = &[
     Pin {
         scenario: "edits",
-        work: [[0, 365], [0, 2], [0, 12], [0, 0], [0, 398], [0, 200]],
-        saved: [519, 0, 5, 38478],
+        work: [[0, 87], [0, 2], [0, 12], [0, 0], [0, 119], [0, 1]],
+        saved: [519, 0, 2, 38382],
         root: "9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533",
     },
     Pin {
         scenario: "adds",
-        work: [[0, 1498], [0, 10], [0, 14], [0, 12], [0, 1557], [0, 0]],
-        saved: [782, 0, 53, 52968],
+        work: [[0, 61], [0, 10], [0, 14], [0, 7], [0, 116], [0, 0]],
+        saved: [782, 0, 4, 51408],
         root: "35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4",
     },
     Pin {
@@ -112,14 +112,14 @@ const SQLITE: &[Pin] = &[
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "edits",
-        work: [[79, 64], [2, 2], [10, 10], [0, 0], [92, 86], [200, 200]],
-        saved: [519, 0, 5, 38478],
+        work: [[34, 29], [2, 2], [10, 10], [0, 0], [47, 51], [1, 1]],
+        saved: [519, 0, 2, 38382],
         root: "9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533",
     },
     Pin {
         scenario: "adds",
-        work: [[925, 776], [9, 7], [10, 10], [4, 4], [950, 808], [0, 0]],
-        saved: [782, 0, 53, 52968],
+        work: [[37, 32], [9, 7], [10, 10], [2, 2], [60, 62], [0, 0]],
+        saved: [782, 0, 4, 51408],
         root: "35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4",
     },
     Pin {

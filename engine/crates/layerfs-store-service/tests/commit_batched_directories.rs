@@ -273,9 +273,9 @@ fn directory_rewrites_are_batched_sqlite() {
     shapes(
         &store,
         Pins {
-            add: (12, 45),
-            again: (16, 52),
-            remove: (11, 38),
+            add: (8, 41),
+            again: (10, 46),
+            remove: (8, 35),
         },
     );
 }
@@ -290,9 +290,9 @@ fn directory_rewrites_are_batched_postgresql() {
     shapes(
         &store,
         Pins {
-            add: (15, 30),
-            again: (21, 37),
-            remove: (14, 26),
+            add: (11, 26),
+            again: (16, 31),
+            remove: (11, 23),
         },
     );
 }
