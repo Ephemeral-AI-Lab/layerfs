@@ -299,6 +299,89 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     },
 ];
 
+// The per-tool-call shape on one service ([`cycle_scenarios`]), measured
+// before #768's mount pipeline: the idle reader opened after readiness
+// (`Store::prefill_reader`, SQLite keeps no idle reader), the first mount
+// that takes it, a one-file Commit, the unmount, and a mount of the moved
+// head. The mount after the Commit does not pay the content-read chain: the
+// Commit's install put the new root's objects in the shared object cache, so
+// its Workspace reader sends what a repeated mount of an unmoved root sends.
+const SQLITE_CYCLE: &[Pin] = &[
+    Pin {
+        scenario: "reader.prefill",
+        writer: [0, 0, 0, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "mount.prefilled",
+        writer: [0, 0, 5, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 47, 4],
+    },
+    Pin {
+        scenario: "cycle.commit",
+        writer: [0, 0, 35, 5],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "cycle.unmount",
+        writer: [0, 0, 3, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "mount.after_commit",
+        writer: [0, 0, 5, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 42, 4],
+    },
+];
+
+// On PostgreSQL the prefill is the idle reader's connect and its light
+// check (1 round trip, 1 statement). The mount that takes it then checks it
+// with an empty query (1 round trip, no statement), so it sends one round
+// trip more than a first mount that opens its own reader, and one statement
+// fewer (the light check). Its other 12 reader round trips are 7 statements
+// (the snapshot, the five dependent content reads and the markers) and 5
+// prepares (the three locates share one text); the writer's 10 are the
+// admission's 6 and its 4 prepares. The mount
+// after the Commit is a repeated mount: writer 6, reader 3 (the empty-query
+// check, the snapshot and the markers), as `mount.by_id.again`.
+const POSTGRESQL_CYCLE: &[Pin] = &[
+    Pin {
+        scenario: "reader.prefill",
+        writer: [0, 0, 0, 0],
+        control: [0, 0, 0, 0],
+        workspace: [1, 1, 1, 0],
+    },
+    Pin {
+        scenario: "mount.prefilled",
+        writer: [0, 10, 4, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 13, 7, 0],
+    },
+    Pin {
+        scenario: "cycle.commit",
+        writer: [0, 23, 21, 3],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "cycle.unmount",
+        writer: [0, 4, 2, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "mount.after_commit",
+        writer: [0, 6, 4, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 3, 2, 0],
+    },
+];
+
 /// What one test measures on a Store holding Branch `work`.
 type Scenarios = fn(&Path, &dyn Fn() -> StoreSelection, BranchId) -> Vec<Measured>;
 
@@ -324,6 +407,18 @@ fn sqlite_commit_counts() {
 fn postgresql_commit_counts() {
     if let Some(measured) = on_postgresql("postgresql-commit", "commit", commit_scenarios) {
         check("postgresql", &measured, POSTGRESQL_COMMIT);
+    }
+}
+
+#[test]
+fn sqlite_cycle_counts() {
+    check("sqlite", &on_sqlite("sqlite-cycle", cycle_scenarios), SQLITE_CYCLE);
+}
+
+#[test]
+fn postgresql_cycle_counts() {
+    if let Some(measured) = on_postgresql("postgresql-cycle", "cycle", cycle_scenarios) {
+        check("postgresql", &measured, POSTGRESQL_CYCLE);
     }
 }
 
@@ -635,6 +730,44 @@ fn commit_scenarios(
     measure(&opened, "close", &mut out, || {
         opened.service.store.release_producer()
     });
+    opened.stop();
+    out
+}
+
+/// The per-tool-call shape on one newly opened service: the idle reader
+/// opened after readiness, the first mount (it takes that reader), a
+/// one-file Commit, the unmount, then a mount of the head the Commit moved.
+fn cycle_scenarios(
+    dir: &Path,
+    selection: &dyn Fn() -> StoreSelection,
+    branch: BranchId,
+) -> Vec<Measured> {
+    let mut out = Vec::new();
+    let opened = Opened::open(dir, selection(), "e");
+    measure(&opened, "reader.prefill", &mut out, || {
+        if let Some(prefilled) = opened.service.store.prefill_reader() {
+            prefilled.unwrap();
+        }
+    });
+    let first = measure(&opened, "mount.prefilled", &mut out, || {
+        opened.by_id(7, branch)
+    });
+    let mut change = Mutation::new(&first).unwrap();
+    change.write("/cycle", b"cycle\n", None).unwrap();
+    change.finish().unwrap();
+    let outcome = measure(&opened, "cycle.commit", &mut out, || opened.commit(&first));
+    assert!(
+        matches!(outcome, CommitOutcome::Committed { .. }),
+        "{outcome:?}"
+    );
+    measure(&opened, "cycle.unmount", &mut out, || opened.unmount(first));
+    let moved = measure(&opened, "mount.after_commit", &mut out, || {
+        opened.by_id(8, branch)
+    });
+    let view = Mutation::new(&moved).unwrap();
+    assert!(view.optional("/cycle").unwrap().is_some(), "the moved head");
+    view.finish().unwrap();
+    opened.unmount(moved);
     opened.stop();
     out
 }
