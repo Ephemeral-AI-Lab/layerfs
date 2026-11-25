@@ -3,7 +3,6 @@
 pub(crate) mod acquisition;
 pub(crate) mod compact;
 pub(crate) mod compact_visit;
-pub(crate) mod convert_v1;
 pub(crate) mod exclusion;
 pub(crate) mod heads;
 pub(crate) mod lane;
@@ -16,3 +15,4 @@ pub(crate) mod schema_diagnostic;
 pub(crate) mod session;
 pub(crate) mod snapshot;
 pub(crate) mod storage;
+pub(crate) mod upgrade;

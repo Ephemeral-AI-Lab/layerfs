@@ -27,6 +27,8 @@ pub const REMOVE: &str = "store.remove";
 pub const CREATE: &str = "store.create";
 /// A compaction.
 pub const COMPACT: &str = "store.compact";
+/// An in-place format upgrade (#804).
+pub const UPGRADE: &str = "store.upgrade";
 /// A backup to a bucket.
 pub const BACKUP: &str = "backup.create";
 /// A restore from a bucket over the Store.

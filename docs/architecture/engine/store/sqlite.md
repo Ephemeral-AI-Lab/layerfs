@@ -43,7 +43,7 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Open | Steps | Source |
 | --- | --- | --- |
 | `create` | platform check; policy and catalog config valid; `create_new` (an existing file refuses); schema scripts, `application_id`, `user_version`, `store_policy` and `history_meta` rows | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
-| `open_writable` | `user_version` 56–58 or 62–64, schema version 3 (#776 R1: `commit.attempt` and its partial unique index `commit_attempt`); 36–38 and 42–44 (schema version 2, no Commit attempt) get `SchemaVersion2` ("not supported by this release and not migrated; create a new Store"), 16–18 and 22–24 `SchemaVersion1`, others `Integrity`; then one read (`needs_migration`): a Store that recorded this build's schema source and has `history_meta.next_history_serial` is current and runs no in-place migration and no write transaction for one (#776). Only a Store that recorded an older source (a schema version 1 Store converted by `backup restore` or `tools/store_blocks.py migrate`, or one whose first open was interrupted between steps) runs the additive steps `add_gc_columns`, `add_binding_hints`, `add_lineage` (with backfill), `add_merge_scratch`, `add_file_digests`, `add_gc_columns` again, `add_gc`, `add_kept_node`, `add_position_state`, each in its own write transaction and only when the recorded schema is exactly the one before; then sweep merge records of expired owners | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| `open_writable` | `user_version` 56–58 or 62–64, schema version 3 (#776 R1: `commit.attempt` and its partial unique index `commit_attempt`); 36–38 and 42–44 (schema version 2, no Commit attempt) get `SchemaVersion2` (naming `layerfs store upgrade <store>`, see [Format upgrade](#format-upgrade)), 16–18 and 22–24 `SchemaVersion1`, others `Integrity`; then one read (`needs_migration`): a Store that recorded this build's schema source and has `history_meta.next_history_serial` is current and runs no in-place migration and no write transaction for one (#776). Only a Store that recorded an older source (one whose first open was interrupted between steps) runs the additive steps `add_gc_columns`, `add_binding_hints`, `add_lineage` (with backfill), `add_merge_scratch`, `add_file_digests`, `add_gc_columns` again, `add_gc`, `add_kept_node`, `add_position_state`, each in its own write transaction and only when the recorded schema is exactly the one before; then sweep merge records of expired owners | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | `open_read_only` | same checks, no migrations; every write refused before `BEGIN` | same |
 | `open_diagnostic` | read-only, never changes journal or checkpoint settings; see [Diagnostics](diagnostics.md) | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
 
@@ -556,3 +556,28 @@ from one thread.
 - [Diagnostics](diagnostics.md): auditing a SQLite Store.
 - [Project Init](../project-init/README.md): who creates and seals a Store.
 - [Control: Backups](../../control/backups/README.md): who uses `snapshot` and `heads_digest`.
+
+## Format upgrade
+
+`upgrade_sqlite` (#804 §5.1) brings a schema-2 Store to schema 3 in place
+([`backend/sqlite/upgrade/`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/upgrade)).
+It opens one raw connection (DEFENSIVE off, `busy_timeout=0`), sets
+`locking_mode=EXCLUSIVE` before the first read, then the Normal profile's
+`synchronous=NORMAL`, `checkpoint_fullfsync=1` and `wal_autocheckpoint=0`.
+
+| Phase | What runs | Refusal |
+| --- | --- | --- |
+| (before) | the first read takes the exclusive file lock: every open WAL connection holds a SHARED lock, so any other opener refuses it; then `Writer::try_acquire` | `InUse`; `Busy` |
+| `check` | `BEGIN IMMEDIATE`; `application_id` and `user_version` classified (2 upgrades, 3 answers `current` with no write, anything else `Unsupported` by name, a newer one said as newer); no live or uncertain `gc_intent` row; the before values: compaction's Commit tuple, the live-heads digest, the Commit count, `page_count`, `freelist_count` | `Unsupported`, `Busy` |
+| `convert` | the chain: step 2 → 3 recognizes source (d) exactly (the recorded source equals the frozen one for its `user_version`, the recorded definition equals the live one, each live row is the frozen (d) row or its position-migrated form) and runs `ADD COLUMN attempt`, `CREATE UNIQUE INDEX commit_attempt`, `ignore_check_constraints=ON`, the two `writable_schema` CHECK rewrites, `writable_schema=RESET`, `user_version`, `store_policy`, `history_meta` (version, frozen schema-3 source, live definition), `ignore_check_constraints=OFF` | `Unsupported`, `Failed` |
+| `verify` | §7 on the same transaction: before values unchanged; the live rows equal the frozen target (the exact rows before with the attempt text after `history_serial`, the new CHECK versions and the index); the open-time checks (`schema::check`, the `history_meta` and `store_policy` comparison against this build's source); `quick_check` of `sqlite_schema`, `history_meta` and `store_policy`; no page freed | `Failed` naming the check |
+| `commit` | the cancel watcher stops; `COMMIT`; `wal_checkpoint(TRUNCATE)`; close; release the lane; any sidecar left; `open_read_only` and `open_diagnostic` with this build | after COMMIT only warnings |
+
+Any failure before COMMIT rolls back, closes the connection (never reused
+after a `writable_schema` change) and releases the lane. A cancel flag set
+before `commit` interrupts the running statement through the connection's
+interrupt handle and answers `Cancelled`; from `commit` on it is not read.
+A test-only failpoint (`UpgradeRequest::failpoint`, statement `n` counted
+from `BEGIN` to `COMMIT`, 13 statements for step 2 → 3) stops the run, and
+with `LAYERFS_UPGRADE_CRASH_GATE` naming a Unix socket reports there and
+blocks until the harness kills the process, as compaction's crash gate does.

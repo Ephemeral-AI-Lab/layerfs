@@ -14,3 +14,4 @@ pub(crate) mod schema;
 pub(crate) mod session;
 pub(crate) mod status;
 pub(crate) mod storage;
+pub(crate) mod upgrade;

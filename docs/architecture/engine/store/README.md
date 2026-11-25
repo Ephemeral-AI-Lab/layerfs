@@ -140,7 +140,7 @@ own write transaction, which the one writer already orders.
 | Published packs, units, locations and value blocks never change; a block overlapping a stored one fails its publication | Triggers and insert-only statements: [`objects.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects.sql), [`sqlite/metadata/values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/values.rs) |
 | Pack ids never go back; inode serials are never recycled | [`metadata/allocation.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/allocation.rs), [`history/allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/allocation.rs) |
 | Every value a writer depends on is fixed at creation or read inside its own write transaction | [`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs), [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
-| Open never converts or migrates beyond the named additive steps (`add_gc_columns`, `add_binding_hints`, `add_lineage`, `add_merge_scratch`, `add_file_digests`, `add_gc`, `add_kept_node`, `add_position_state`), and a current Store, one that recorded this build's schema source, runs none of them (#776): they complete only a converted schema version 1 Store | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
+| Open never converts or migrates across format versions, nor beyond the named additive steps (`add_gc_columns`, `add_binding_hints`, `add_lineage`, `add_merge_scratch`, `add_file_digests`, `add_gc`, `add_kept_node`, `add_position_state`), and a current Store, one that recorded this build's schema source, runs none of them (#776). An older-format Store is upgraded only by the explicit `store upgrade` call (`layerfs_persistence::upgrade`, #804), never by an open | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`upgrade/`](../../../../engine/crates/layerfs-persistence/src/upgrade) |
 | Every opener of a SQLite Store shares one kernel and a local filesystem | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Every opener holds whole-Store authority; there is no per-Branch scoping between openers | The handles expose the whole catalog: [`handles.rs`](../../../../engine/crates/layerfs-persistence/src/store/handles.rs) |
 
@@ -169,8 +169,8 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | Ordinals | end ordinal at most 2^32; else `Capacity` | [`metadata/allocation.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/allocation.rs) |
 | Signature ring | 8,192 slots | [`signatures.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/signatures.rs) |
 | SQLite disk margin | a pack batch must leave `STORE_HEADROOM_BYTES` (64 MiB) after counting its bytes twice; else `Capacity` | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
-| Schema version 1 Store (SQLite `user_version` 16–18, 22–24) | refused at open, naming the offline `tools/store_blocks.py migrate`, which converts it to schema version 3 (56–58, 62–64, with an empty `commit.attempt`); a backup of one is converted by `backup restore` before it is opened (the same conversion, on the restore's private download); PostgreSQL version 1 is `Integrity` | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs), [`convert_v1.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/convert_v1.rs) |
-| Schema version 2 Store (SQLite `user_version` 36–38, 42–44; PostgreSQL `SCHEMA_VERSION` 3), written before each Commit recorded its attempt (#776 R1) | refused at open by name (`SchemaVersion2`, `PostgresSchema3`: "not supported by this release and not migrated; create a new Store"); never converted | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs), [`postgresql/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Schema version 1 Store (SQLite `user_version` 16–18, 22–24, a 1.x Store) | refused at open by name (`SchemaVersion1`); nothing converts it: `store upgrade` has no step for it and the schema-1 conversion was removed (owner, 2026-11-25, #804); PostgreSQL version 1 is `Integrity` | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| Schema version 2 Store (SQLite `user_version` 36–38, 42–44; PostgreSQL `SCHEMA_VERSION` 3), written before each Commit recorded its attempt (#776 R1) | refused at open by name (`SchemaVersion2`, `PostgresSchema3`: "not opened by this release; upgrade it in place with `layerfs store upgrade <store>`"); converted only by that call, in one transaction (see [Format upgrade](#format-upgrade)) | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs), [`postgresql/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | Work in the lane that grows with tree size, history or Branch count | a defect; lineage walks follow runs, not history length | [`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage.rs) |
 
 | `BackendError` | `PersistenceError` | `HistoryError` | Meaning |
@@ -182,9 +182,9 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | `ReadOnly` | `Refused "ReadOnly"` | `ContinuityUnavailable` | Write on a read-only session |
 | `Capacity` | `Refused "Capacity"` | `Capacity("persistence")` | A bound or the disk margin was reached |
 | `Integrity` | `Malformed` | `Integrity("persistence")` | Stored or supplied data broke a rule |
-| `SchemaVersion1` | `Refused` (names the conversion) | `Integrity` | A schema version 1 SQLite Store |
-| `SchemaVersion2` | `Refused` (create a new Store) | `Integrity` | A schema version 2 SQLite Store (no Commit attempt) |
-| `PostgresSchema2`, `PostgresSchema3` | `Refused` (create a new Store) | `Integrity` | A PostgreSQL Store of schema version 2 or 3 |
+| `SchemaVersion1` | `Refused` (no upgrade) | `Integrity` | A schema version 1 SQLite Store |
+| `SchemaVersion2` | `Refused` (names `store upgrade`) | `Integrity` | A schema version 2 SQLite Store (no Commit attempt) |
+| `PostgresSchema2`, `PostgresSchema3` | `Refused` (version 2: create a new Store; version 3: names `store upgrade`) | `Integrity` | A PostgreSQL Store of schema version 2 or 3 |
 | `UnsupportedSchemaVersion` | `Refused` | `Unsupported` | Diagnostic open of an unknown layout |
 | `Unknown` | `Uncertain` | `UnknownOutcome` | Outcome unknown; session quarantined, its connection closed and the writer lane released ([SQLite](sqlite.md#quarantine), [PostgreSQL](postgresql.md#session)) |
 
@@ -216,3 +216,35 @@ and refuses anything else before cargo starts.
 | [PostgreSQL](postgresql.md) | The PostgreSQL backend: schema, open checks and authority, connections, transactions, publication, acquisition, access and status. |
 | [Diagnostics](diagnostics.md) | Read-only Store audits: observations, the SQLite and PostgreSQL audits, table coverage and the structural fallback. |
 | [Testing](testing.md) | The filesystem the Store suites need, the harness that enforces it, and the PostgreSQL test server. |
+
+## Format upgrade
+
+`layerfs_persistence::upgrade` (#804) is the only code that converts a
+Store across format versions. Each engine has an ordered chain of steps
+(`upgrade/chain.rs`); a step converts exactly one version to the next and
+the whole chain from the Store's version to the latest runs in one
+transaction, checked once before COMMIT. Each step embeds, as frozen
+shipped text under [`sql/upgrade/`](../../../../engine/crates/layerfs-persistence/sql/upgrade),
+every recorded source it accepts and the exact target it produces; nothing
+is derived from the current schema constants. Anything else is refused
+`Unsupported`, unchanged.
+
+| Engine | Format (raw) | Step | Status |
+| --- | --- | --- | --- |
+| SQLite | 2 (`user_version` 36–38, 42–44) | 2 → 3: `commit.attempt` appended (`ALTER TABLE … ADD COLUMN`), `commit_attempt`, the two `schema_version=` CHECK texts rewritten, `user_version` +20, `history_meta` records the schema-3 source and the live definition | accepts source variant (d) (91635f51f8 through dcd0fa2c30), fresh or position-migrated |
+| SQLite | 3 (56–58, 62–64) | — | latest |
+| SQLite | 1, transient 39–41/45–47, retired 1–15 | none | refused by name |
+| PostgreSQL | 3 | 3 → 4: `commit.attempt`, `commit_attempt`, the version CHECKs dropped and re-added, `catalog_incarnation` + 1 | accepts the source written after the `25c261b205` revert, with or without the acquisition tables |
+| PostgreSQL | 4 | — | latest |
+| PostgreSQL | 1, 2 | none | refused by name |
+
+The format is read without a full open (`sqlite_format`: the header as the
+newest committed WAL frame of page 1 shows it, or the main file; no lock and
+no connection; `postgresql_format`: one connect and one `SELECT`), so it
+works on a Store this build refuses. An upgraded Store's `attempt` column
+ends the `commit` column list; open compares against the Store's own live
+definition, and the doctor's schema checks admit that order beside the
+shipped one ([`schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/schema_diagnostic.rs),
+[`postgresql/schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema_diagnostic.rs)).
+The runs are on the [SQLite](sqlite.md#format-upgrade) and
+[PostgreSQL](postgresql.md#format-upgrade) pages.

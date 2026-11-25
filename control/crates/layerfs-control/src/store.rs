@@ -69,6 +69,13 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
     })
 }
 
+/// `store.upgrade`: brings an older-format Store to the latest format in
+/// place (#804), reading the process-wide cancel flag; a refusal gets the
+/// call that clears it as its `fix` (W2 implements).
+pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
+    layerfs_store::upgrade::upgrade(home, events, name.as_str(), layerfs_home::cancel::flag())
+}
+
 /// `store.repair_mount_holders(project, branch, action, { op, legacy,
 /// force, operator, limit, cursor })` as the call surface takes it.
 #[derive(Clone, Debug, Default)]

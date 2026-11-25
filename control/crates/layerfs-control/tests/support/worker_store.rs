@@ -161,6 +161,7 @@ pub fn stats(home: &Path) -> Result<SdkValue, SdkRefusal> {
     let with = layerfs_store::get::With {
         live: false,
         stats: true,
+        format: false,
     };
     layerfs_store::get::get(
         home,
