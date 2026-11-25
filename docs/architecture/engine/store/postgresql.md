@@ -747,7 +747,9 @@ measured with `log_statement=all` on the private test server, and pinned):
   every orderly drop the kept handle returns its kept ordinals
   (`Storage::release_kept_ordinals`: one publication of the same
   conditional rewind, one attempt, never repeated): a Workspace close that
-  finds the Store's idle slot taken or whose overlay close fails, a Store
+  finds the Store's idle slot taken (the handle whose kept ordinals end
+  later is released, the other takes the slot) or whose overlay close
+  fails, a Store
   close (`StoreService::close`, the daemon's `close_bound`) and a Commit
   that failed definitely; after an unknown outcome it is not sent, and a
   quarantined session refuses it.
@@ -765,6 +767,14 @@ measured with `log_statement=all` on the private test server, and pinned):
   A Save that fails definitely or does not finish (an in-lane step Save, a
   fallback's merge Save) leaves its unused rest on the handle, which that
   release returns; one whose write had an unknown outcome drops the block.
+  Per-call Workspaces on one service, measured (`ordinal_burn` harness,
+  both backends alike): two lose no ordinal in steady state in either
+  unmount order (`slot_taken_ordinals.rs`; 128 per cycle when the closing
+  handle was always the one released); three lose 44 per Commit
+  sequentially and 5,460 per Commit when their Commits run at once (new
+  handles' concurrent 16,384 reservations; 10,921 before #768). The `u32`
+  ordinal space lasts about 97.6 million and 786,000 such Commits; see the
+  physical-storage reservation row.
 - (j) A Save reads the metadata pack bodies and inode values earlier Saves
   of its handle published (bounded: 2 MiB of bodies, 512 KiB of values,
   cleared when a Save does not finish), and the pool reader's chain walk

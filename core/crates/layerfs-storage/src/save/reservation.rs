@@ -39,6 +39,10 @@ impl IdBlock {
     fn is_empty(&self) -> bool {
         self.next_pack >= self.pack_end && self.next_ordinal >= self.ordinal_end
     }
+    /// The end of its unused ordinals, when it has any.
+    pub(crate) fn ordinal_end(&self) -> Option<u64> {
+        (self.next_ordinal < self.ordinal_end).then_some(self.ordinal_end)
+    }
     /// The unused ordinals, as first ordinal and count, taken out of the
     /// block: they are no longer this block's whether or not their release
     /// is acknowledged.

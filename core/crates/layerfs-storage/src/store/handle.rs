@@ -91,6 +91,17 @@ impl Storage {
         })?;
         Ok(())
     }
+    /// The end of the ordinals this handle keeps (one past the last), or
+    /// `None` when it keeps none. Ordinal blocks are reserved in increasing
+    /// order, so of several handles only the one whose kept ordinals end
+    /// last can still end the Store's counter and be rewound by
+    /// [`Self::release_kept_ordinals`].
+    pub fn kept_ordinal_end(&self) -> Option<u64> {
+        let block = self.kept.take();
+        let end = block.as_ref().and_then(crate::save::IdBlock::ordinal_end);
+        self.kept.set(block);
+        end
+    }
     /// Persisted, validated storage policy.
     pub const fn policy(&self) -> StoragePolicy {
         self.policy

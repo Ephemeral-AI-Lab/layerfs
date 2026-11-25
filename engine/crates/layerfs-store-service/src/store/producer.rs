@@ -19,7 +19,9 @@
 //!
 //! A handle dropped in order returns its kept ordinals first
 //! (`Storage::release_kept_ordinals`, one write, never repeated): a closing
-//! Workspace whose handle finds the Store's slot taken, a Store closed in
+//! Workspace whose handle finds the Store's slot taken (of the two, the one
+//! whose kept ordinals end later is released, the only one whose rewind can
+//! still apply; the other takes the slot), a Store closed in
 //! order ([`Store::release_producer`]) and a Commit that failed definitely
 //! (`commit.rs`). Only a crash, a Workspace dropped without its close or an
 //! unknown outcome leaves them lost; a steady Commit sends nothing for it.
@@ -63,20 +65,44 @@ impl Producer {
             self.keep(storage);
         }
     }
-    /// Moves this Workspace's idle handle to `to` when `to` has none;
-    /// otherwise the handle returns its kept ordinals and is dropped.
+    /// Moves this Workspace's idle handle to `to` when `to` has none.
+    /// Otherwise one of the two returns its kept ordinals and is dropped:
+    /// the one whose kept ordinals end later (or that keeps none), the only
+    /// one whose release can still rewind the Store's counter; the other
+    /// stays in `to` with its block, for a later Commit.
     pub(super) fn hand_to(&self, to: &Self) {
         let Some(storage) = self.idle() else { return };
         let left = match to.idle.lock() {
-            Ok(mut idle) if idle.is_none() => {
-                *idle = Some(storage);
-                None
-            }
-            _ => Some(storage),
+            Ok(mut idle) => match idle.take() {
+                None => {
+                    *idle = Some(storage);
+                    None
+                }
+                Some(held) if releases_first(&storage, &held) => {
+                    *idle = Some(held);
+                    Some(storage)
+                }
+                Some(held) => {
+                    *idle = Some(storage);
+                    Some(held)
+                }
+            },
+            Err(_) => Some(storage),
         };
         if let Some(storage) = left {
             let _ = storage.release_kept_ordinals();
         }
+    }
+}
+
+/// Of two idle handles, whether `a` is the one to release: it keeps no
+/// ordinals, or its kept ordinals end after `b`'s (reserved later, so only
+/// it can still end the Store's counter).
+fn releases_first(a: &Storage, b: &Storage) -> bool {
+    match (a.kept_ordinal_end(), b.kept_ordinal_end()) {
+        (None, _) => true,
+        (Some(_), None) => false,
+        (Some(a), Some(b)) => a > b,
     }
 }
 
