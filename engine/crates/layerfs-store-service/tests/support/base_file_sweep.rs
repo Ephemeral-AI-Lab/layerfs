@@ -17,7 +17,9 @@
 //! exactly one Commit past it whose tree is the seed plus the edits; a
 //! Commit answered `Committed` is that head; a definite refusal left the old
 //! head (unless the follow-up published the change); after an unknown
-//! outcome the follow-up is refused. At the end: the flight is the same as
+//! outcome the follow-up is refused. With [`Lengths::Elsewhere`] another
+//! Workspace of the service stated the files first, so the armed Commit's
+//! reader also sends its batched length demand. At the end: the flight is the same as
 //! the clean one, every position fired, the Store's audit reports nothing,
 //! no backend is left idle in a transaction, no object is located twice, and
 //! a new Commit through a direct service still publishes.
@@ -61,6 +63,20 @@ fn expected() -> Tree {
     tree
 }
 
+/// Where the base files' lengths come from when the armed Commit starts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Lengths {
+    /// The changes' own stats asked them on the Workspace's reader, so its
+    /// batched length demand is answered from the locators that read and
+    /// sends nothing.
+    Stated,
+    /// Another Workspace of the same service stated the files first: the
+    /// lengths are remembered in the shared cache, so the changes' stats
+    /// demand nothing on this Workspace's reader, whose Commit then sends
+    /// its batched length demand (one locate) and its prefetch.
+    Elsewhere,
+}
+
 struct Run {
     window: Window,
     first: Verdict,
@@ -68,7 +84,13 @@ struct Run {
     old: Option<layerfs_history::CommitId>,
 }
 
-fn run(store: &TestStore, proxy: &FaultProxy, name: &str, target: Option<(u64, Fault)>) -> Run {
+fn run(
+    store: &TestStore,
+    proxy: &FaultProxy,
+    name: &str,
+    lengths: Lengths,
+    target: Option<(u64, Fault)>,
+) -> Run {
     let branch = store.fork(name);
     let (url, _) = store.postgres.as_ref().unwrap();
     let proxied = super::fault_proxy::proxied_url(url, proxy.port).0;
@@ -80,6 +102,15 @@ fn run(store: &TestStore, proxy: &FaultProxy, name: &str, target: Option<(u64, F
         Verdict::Committed(id) => Some(id),
         other => panic!("{name}: warm-up Commit: {other:?}"),
     };
+    let peer = (lengths == Lengths::Elsewhere).then(|| {
+        let peer = service.bind(branch);
+        let m = Mutation::new(&peer).unwrap();
+        for n in 0..EDITED + KEPT {
+            m.resolve(&format!("/base/f{n}")).unwrap();
+        }
+        m.finish().unwrap();
+        peer
+    });
     {
         let mut m = Mutation::new(&workspace).unwrap();
         m.now = adversary::NOW;
@@ -99,6 +130,9 @@ fn run(store: &TestStore, proxy: &FaultProxy, name: &str, target: Option<(u64, F
     let window = proxy.disarm();
     let follow = verdict(&commit(&workspace));
     let _ = service.try_unmount(workspace);
+    if let Some(peer) = peer {
+        let _ = service.try_unmount(peer);
+    }
     service.abandon();
     Run {
         window,
@@ -108,7 +142,7 @@ fn run(store: &TestStore, proxy: &FaultProxy, name: &str, target: Option<(u64, F
     }
 }
 
-pub fn sweep(tag: &str, fault: Fault) {
+pub fn sweep(tag: &str, fault: Fault, lengths: Lengths) {
     let seed = seed();
     let pairs: Vec<(&str, &[u8])> = seed
         .iter()
@@ -133,9 +167,9 @@ pub fn sweep(tag: &str, fault: Fault) {
         )
     };
     // The first service on a new Store sends a shorter flight; prime once.
-    let prime = run(&store, &proxy, "prime", None);
+    let prime = run(&store, &proxy, "prime", lengths, None);
     check("prime", &prime);
-    let clean = run(&store, &proxy, "clean", None);
+    let clean = run(&store, &proxy, "clean", lengths, None);
     assert!(
         matches!(clean.first, Verdict::Committed(_)),
         "{:?}",
@@ -161,12 +195,29 @@ pub fn sweep(tag: &str, fault: Fault) {
         runs.push(*kind);
     }
     println!(
-        "FAULT_FLIGHT {{\"tag\":\"{tag}\",\"fault\":\"{fault:?}\",\"K\":{k},\"kinds\":\"{kinds}\",\"by_connection\":\"{}\"}}",
+        "FAULT_FLIGHT {{\"tag\":\"{tag}\",\"fault\":\"{fault:?}\",\"lengths\":\"{lengths:?}\",\"K\":{k},\"kinds\":\"{kinds}\",\"by_connection\":\"{}\"}}",
         runs.trim()
     );
     assert!(
         order.len() >= 2,
         "the armed Commit's Workspace reader and writer both send"
+    );
+    // The reader sends first (construction reads before the Save writes):
+    // its batched prefetch, and with `Elsewhere` its length demand before.
+    let reader = clean.window.log[0].0;
+    let reader_replies = clean
+        .window
+        .log
+        .iter()
+        .filter(|(c, kind)| *c == reader && *kind == 'Z')
+        .count();
+    let wanted = match lengths {
+        Lengths::Stated => 1,
+        Lengths::Elsewhere => 2,
+    };
+    assert_eq!(
+        reader_replies, wanted,
+        "{lengths:?}: the Workspace reader's batched messages in the flight"
     );
     let mut states = std::collections::BTreeMap::<String, u64>::new();
     let mut unfired = Vec::new();
@@ -174,7 +225,7 @@ pub fn sweep(tag: &str, fault: Fault) {
     for n in 0..k {
         let name = format!("n{n}");
         names.push(name.clone());
-        let outcome = run(&store, &proxy, &name, Some((n, fault)));
+        let outcome = run(&store, &proxy, &name, lengths, Some((n, fault)));
         if outcome.window.fired.is_none() {
             unfired.push(n);
         }
@@ -214,7 +265,7 @@ pub fn sweep(tag: &str, fault: Fault) {
         "FAULT_SUMMARY {{\"tag\":\"{tag}\",\"K\":{k},\"states\":{states:?},\"unfired\":{unfired:?},\"seconds\":{:.1}}}",
         started.elapsed().as_secs_f64()
     );
-    let again = run(&store, &proxy, "again", None);
+    let again = run(&store, &proxy, "again", lengths, None);
     check("again", &again);
     assert_eq!(
         again
