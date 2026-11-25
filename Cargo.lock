@@ -755,6 +755,7 @@ version = "2.0.0"
 dependencies = [
  "layerfs-api",
  "layerfs-bridge",
+ "nix",
 ]
 
 [[package]]
