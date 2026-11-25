@@ -33,8 +33,18 @@ pub struct StoreOperation {
     owner: OwnerClient,
 }
 impl BoundWorkspace {
-    /// Terminal local close, then the Workspace's opened Store reader.
-    /// A failed boundary retains its original cause and permits no replay.
+    /// Terminal local close, then the Workspace's opened Store reader, then
+    /// the mount admission intent on the writer. A failed boundary retains
+    /// its original cause and permits no replay.
+    ///
+    /// The intent is released once the local close succeeded, even when
+    /// closing the reader failed (#768 review): the reader only reads, and a
+    /// read with an unknown outcome changes nothing, so it is no reason to
+    /// keep the intent row and its keys on a healthy writer, where they
+    /// would refuse removals and compaction until the service exits. The
+    /// reader's failure is still returned (before the intent's, which a
+    /// refused release has already marked uncertain), and nothing with an
+    /// unknown outcome is sent again.
     pub fn close(&self) -> Result<(), super::CloseError> {
         if let Err(error) = self.owner.close(self.route()) {
             // The Workspace stays bound; its idle producer handle stays too,
@@ -44,14 +54,13 @@ impl BoundWorkspace {
             return Err(super::CloseError::Owner(error));
         }
         self.producer.hand_to(&self.store.idle_producer);
-        self.store
-            .close_reader(self.identity)
-            .map_err(super::CloseError::Reader)?;
-        if let Some(op) = self.gc_op {
-            crate::history::admission::release_or_mark(self.store.history(), &op)
-                .map_err(super::CloseError::Intent)?;
-        }
-        Ok(())
+        let reader = self.store.close_reader(self.identity);
+        let intent = match self.gc_op {
+            Some(op) => crate::history::admission::release_or_mark(self.store.history(), &op),
+            None => Ok(()),
+        };
+        reader.map_err(super::CloseError::Reader)?;
+        intent.map_err(super::CloseError::Intent)
     }
     pub fn operation(&self) -> WorkspaceResult<StoreOperation> {
         let ports = self.store.ports_for(self.snapshot()?.scope, self.identity);

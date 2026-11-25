@@ -605,6 +605,14 @@ Keys and their custody:
 - §5.2 item 34 is kept: the lock and unlock statements return
   `pg_backend_pid()`, compared with the session's recorded backend, and a
   transaction-pooled connection is `Unsupported`.
+- An unmount releases the intent on the writer even when closing the
+  Workspace's reader failed (`BoundWorkspace::close`, #768 review): a
+  reader whose backend was terminated fails its reads and the unmount
+  still reports that failure, but the healthy writer deletes the row and
+  gives back the keys instead of keeping them until the service exits.
+  The release runs once, after the local close succeeded; nothing with an
+  unknown outcome is sent again (`tester768_stale_reader`
+  `a_mounted_workspace_reader_terminated`).
 
 **Not done, and why.** #768 proposed two more cuts that the source does
 not support:
