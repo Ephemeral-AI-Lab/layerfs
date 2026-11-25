@@ -252,10 +252,27 @@ const _: () = assert!(
 pub fn directory_bindings(
     reader: &dyn AuthenticatedObjects,
     directories: &ChangedDirectories,
+    visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
+) -> ContentResult<()> {
+    directory_bindings_from(reader, directories, None, visit)
+}
+
+/// Visits new bindings from an inclusive parent and name. Earlier directories
+/// are skipped without reading their pages; the boundary directory is compared
+/// from its root and emits only names at or after the supplied name.
+pub fn directory_bindings_from(
+    reader: &dyn AuthenticatedObjects,
+    directories: &ChangedDirectories,
+    start: Option<(u64, &PathName)>,
     mut visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
 ) -> ContentResult<()> {
     let mut work = DifferenceWork::default();
-    for window in directories.entries.chunks(DIRECTORY_WINDOW) {
+    let first = start.map_or(0, |(parent, _)| {
+        directories
+            .entries
+            .partition_point(|entry| entry.0 < parent)
+    });
+    for window in directories.entries[first..].chunks(DIRECTORY_WINDOW) {
         let mut ids = Vec::with_capacity(window.len() * 2);
         for (_, was, now) in window {
             for id in was.iter().chain(std::iter::once(now)) {
@@ -267,6 +284,11 @@ pub fn directory_bindings(
         let held = Held::read(reader, &ids)?;
         for (parent, was, now) in window {
             binding_changes(&held, *was, Some(*now), &mut work, |name, _, child| {
+                if start.is_some_and(|(from_parent, from_name)| {
+                    *parent == from_parent && name < from_name
+                }) {
+                    return Ok(());
+                }
                 child.map_or(Ok(()), |child| visit(child, *parent, name))
             })?;
         }

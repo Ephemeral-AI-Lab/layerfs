@@ -366,8 +366,10 @@ impl BoundWorkspace {
                         Some(&mut directories),
                     )
                 })?;
-                let hints = phase(timing, "bindings", || match fused {
-                    true => super::hints::collect_directory_bindings(&reader, &directories),
+                let collected = phase(timing, "bindings", || match fused {
+                    true => {
+                        super::hints::collect_directory_bindings(&reader, &directories).map(Some)
+                    }
                     false => super::hints::record_directory_bindings(
                         &reader,
                         &*self.store.history,
@@ -391,8 +393,10 @@ impl BoundWorkspace {
                 // separate path, so no hint row is written before the
                 // objects it describes; then the Commit alone is attempted
                 // fused, as after an overflow.
-                let tail = match (tail, &hints) {
-                    (Some(tail), None) => {
+                let (tail, hints) = match collected {
+                    Some(super::hints::CollectedBindings::Overflow(overflow)) => {
+                        let tail = tail
+                            .ok_or(CommitError::Context("binding overflow without a held Save"))?;
                         let saved = phase(timing, "finish.tail", || {
                             tail.publish().map_err(CommitError::Storage)
                         })?;
@@ -400,15 +404,12 @@ impl BoundWorkspace {
                         retained.saved = Some(saved);
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         phase(timing, "bindings", || {
-                            super::hints::record_directory_bindings(
-                                &reader,
-                                &*self.store.history,
-                                &directories,
-                            )
+                            overflow.record(&reader, &*self.store.history, &directories)
                         })?;
-                        None
+                        (None, None)
                     }
-                    (tail, _) => tail,
+                    Some(super::hints::CollectedBindings::Fits(rows)) => (tail, Some(rows)),
+                    None => (tail, None),
                 };
                 // The candidate is validated and its install prepared before
                 // the lane: they read only immutable published objects. Only

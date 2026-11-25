@@ -1,6 +1,7 @@
 //! Name bindings a new saved tree adds, recorded as path hints for readers
 //! (the daemon's Commit and merge; host Init records its own tree's).
 use super::commit_types::CommitError;
+use layerfs_content::compare::tree::directory_bindings_from;
 use layerfs_content::compare::{
     directory_bindings, inode_differences, BindingHints, ChangedDirectories, TreeTable,
 };
@@ -63,8 +64,17 @@ pub(super) fn record_directory_bindings(
     catalog: &dyn HistoryCatalog,
     directories: &ChangedDirectories,
 ) -> Result<u64, CommitError> {
+    record_directory_bindings_from(reader, catalog, directories, None)
+}
+
+fn record_directory_bindings_from(
+    reader: &dyn AuthenticatedObjects,
+    catalog: &dyn HistoryCatalog,
+    directories: &ChangedDirectories,
+    start: Option<(u64, &PathName)>,
+) -> Result<u64, CommitError> {
     let (mut rows, mut recorded, mut failure) = (Vec::new(), 0u64, None);
-    let walked = directory_bindings(reader, directories, |child, parent, name| {
+    let walked = directory_bindings_from(reader, directories, start, |child, parent, name| {
         rows.push(BindingHint {
             child,
             parent,
@@ -93,21 +103,50 @@ pub(super) fn record_directory_bindings(
     Ok(recorded)
 }
 
-/// [`record_directory_bindings`] for a fused Commit (#768), recording
-/// nothing: the rows, when they fit one write transaction ([`BATCH`]), for
-/// the Commit's own transaction. `None` when they do not: the walk stops at
-/// the first row past [`BATCH`] and nothing is recorded, so the caller can
-/// publish its Save first and record them then, as the separate path does,
-/// and attempt the Commit alone.
+pub(super) enum CollectedBindings {
+    Fits(Vec<BindingHint>),
+    Overflow(BindingOverflow),
+}
+
+pub(super) struct BindingOverflow {
+    prefix: Vec<BindingHint>,
+    parent: u64,
+    name: PathName,
+}
+
+impl BindingOverflow {
+    /// Records the already read first batch, then resumes at the next row.
+    /// The Save must be published before either write.
+    pub(super) fn record(
+        self,
+        reader: &dyn AuthenticatedObjects,
+        catalog: &dyn HistoryCatalog,
+        directories: &ChangedDirectories,
+    ) -> Result<(), CommitError> {
+        record_rows(catalog, &self.prefix)?;
+        drop(self.prefix);
+        record_directory_bindings_from(
+            reader,
+            catalog,
+            directories,
+            Some((self.parent, &self.name)),
+        )?;
+        Ok(())
+    }
+}
+
+/// [`record_directory_bindings`] for a fused Commit (#768). When the rows
+/// exceed one write transaction, keep the first batch and the next row's
+/// position so recording can resume there after the Save publishes.
 /// A hint row is never written before the objects of the tree it describes.
 pub(super) fn collect_directory_bindings(
     reader: &dyn AuthenticatedObjects,
     directories: &ChangedDirectories,
-) -> Result<Option<Vec<BindingHint>>, CommitError> {
-    let (mut rows, mut spilled) = (Vec::new(), false);
+) -> Result<CollectedBindings, CommitError> {
+    let (mut rows, mut next) = (Vec::new(), None);
     let walked = directory_bindings(reader, directories, |child, parent, name| {
         if rows.len() == BATCH {
-            spilled = true;
+            next = Some((parent, name.clone()));
             return Err(ContentError::OutputRejected);
         }
         rows.push(BindingHint {
@@ -117,11 +156,15 @@ pub(super) fn collect_directory_bindings(
         });
         Ok(())
     });
-    if spilled {
-        return Ok(None);
+    if let Some((parent, name)) = next {
+        return Ok(CollectedBindings::Overflow(BindingOverflow {
+            prefix: rows,
+            parent,
+            name,
+        }));
     }
     walked.map_err(CommitError::from)?;
-    Ok(Some(rows))
+    Ok(CollectedBindings::Fits(rows))
 }
 
 /// Records `rows` in bounded write transactions.
