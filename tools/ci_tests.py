@@ -121,17 +121,19 @@ SLOW = {
     # Independent verification suite of the fused Commit (#768), serial runs on
     # the macOS host, 2026-11-25.
     # Split into nine binaries by the writer reopen's fix round (warm halves,
-    # cold quarters, raced ninths), --test-threads 3, macOS host at a 1-minute
-    # load of 18-23 on 14 cores, 2026-11-26.
-    ("layerfs-store-service", "verify_unknown_allocators"): 57.0,
-    ("layerfs-store-service", "verify_unknown_allocators_warm_b"): 76.8,
-    ("layerfs-store-service", "verify_unknown_allocators_cold_a"): 64.7,
-    ("layerfs-store-service", "verify_unknown_allocators_cold_b"): 45.3,
-    ("layerfs-store-service", "verify_unknown_allocators_cold_c"): 43.2,
-    ("layerfs-store-service", "verify_unknown_allocators_cold_d"): 39.5,
-    ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 61.0,
-    ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 88.3,
-    ("layerfs-store-service", "verify_unknown_allocators_raced_c"): 77.3,
+    # cold quarters, raced ninths), a direct Commit every fifth run of a part
+    # and the audit deadline scaled by located objects (review round 2),
+    # --test-threads 3, macOS host at a 1-minute load of 3-7 on 14 cores,
+    # 2026-11-26.
+    ("layerfs-store-service", "verify_unknown_allocators"): 38.1,
+    ("layerfs-store-service", "verify_unknown_allocators_warm_b"): 36.8,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_a"): 31.0,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_b"): 30.2,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_c"): 31.0,
+    ("layerfs-store-service", "verify_unknown_allocators_cold_d"): 30.3,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 38.5,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 38.3,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_c"): 38.4,
     ("layerfs-store-service", "verify_paused_commit_sweeps"): 69.5,
     ("layerfs-store-service", "verify_paused_commit_sweeps_third_a"): 45.6,
     ("layerfs-store-service", "verify_paused_commit_sweeps_third_b"): 45.9,
@@ -162,6 +164,10 @@ SLOW = {
     ("layerfs-store-service", "testerwr_reopen_sweep"): 86.4,
     ("layerfs-store-service", "testerwr_resolve_sweep"): 20.2,
     ("layerfs-store-service", "testerwr_races"): 14.9,
+    # The second writer-reopen round's audit measurement (one warm half-flight
+    # sweep, then the audit), same host, load 5-6, 2026-11-26. Its other
+    # binaries take under 5 s.
+    ("layerfs-store-service", "testerwr2_audit_cost"): 38.2,
     # `store upgrade` on the PostgreSQL fixture, one restore per case, and
     # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
     ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,
