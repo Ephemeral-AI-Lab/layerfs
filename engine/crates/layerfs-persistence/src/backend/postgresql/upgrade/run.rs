@@ -53,7 +53,8 @@ fn read(client: &mut postgres::Client, schema: &str) -> Result<Check, UpgradeErr
                 server_words(&e)
             )),
             Some(_) => UpgradeError::Failed(format!("message 1: {}", server_words(&e))),
-            None => UpgradeError::Unknown(format!("message 1: {e}")),
+            // Message 1 only reads: a lost reply changed nothing.
+            None => UpgradeError::Failed(format!("message 1 (nothing was changed): {e}")),
         }),
     }
 }
