@@ -6,13 +6,30 @@
 //! request, read until the upgrade's `commit` phase); the second exits at
 //! once, its outcome unknown. Once the call has answered, a signal changes
 //! nothing: the answer is printed and the process ends.
+//!
+//! The second signal's refusal is written to a duplicate of descriptor 2
+//! on a thread of its own, never through `stderr().lock()`: the call's
+//! thread may hold that lock, blocked writing a progress line to a full
+//! pipe. The exit waits at most [`WRITE_WAIT`] for that write.
+//!
+//! The residual window: the call's thread marks the call answered as soon
+//! as the call returns, and the signal thread checks the mark again just
+//! before it exits. A second signal taken in the few instructions between
+//! the call's return and that mark still exits `Unknown`; the outcome was
+//! settled, so the next `store upgrade` answers `current` or does the work.
 use crate::output;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use nix::sys::signal::{SigSet, Signal};
+use std::io::Write;
+use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 /// Set once the call has answered.
 static ANSWERED: AtomicBool = AtomicBool::new(false);
+
+/// How long the second signal's exit waits for its refusal to be written.
+const WRITE_WAIT: Duration = Duration::from_millis(500);
 
 /// Blocks SIGINT and SIGTERM in this thread and starts the thread that
 /// takes them; `store` names the Store the second signal's fix upgrades,
@@ -55,7 +72,28 @@ fn wait(signals: SigSet, store: &str, detail: bool, text: bool) {
                 SdkValue::Text(format!("layerfs store upgrade {store}")),
             )]),
         };
-        let _ = output::refusal(&refusal, detail, text);
+        let line = format!("{}\n", output::refusal_line(&refusal, detail, text));
+        if ANSWERED.load(Ordering::SeqCst) {
+            continue;
+        }
+        unlocked(line.into_bytes());
         std::process::exit(i32::from(crate::run::REFUSED));
+    }
+}
+
+/// Writes `bytes` to a duplicate of descriptor 2, which takes no lock the
+/// call's thread may hold, on a thread of its own; waits at most
+/// [`WRITE_WAIT`] for it (a full pipe may never take it).
+fn unlocked(bytes: Vec<u8>) {
+    let Ok(fd) = std::io::stderr().as_fd().try_clone_to_owned() else {
+        return;
+    };
+    let (done, wait) = std::sync::mpsc::channel();
+    let started = std::thread::Builder::new().spawn(move || {
+        let _ = std::fs::File::from(fd).write_all(&bytes);
+        let _ = done.send(());
+    });
+    if started.is_ok() {
+        let _ = wait.recv_timeout(WRITE_WAIT);
     }
 }
