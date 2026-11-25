@@ -515,12 +515,13 @@ impl BoundWorkspace {
                 ))
             })();
             retained.storage = Some(super::producer::since(storage.diagnostics(), before));
+            // Held here from now on, so a failure below still has it.
+            producer = Some(storage);
             let (candidate, ours, current, logical, lane, early, changed, mut fused_outcome) =
                 built?;
             if candidate != ours {
                 replaced = Some((ours.0, candidate.0));
             }
-            producer = Some(storage);
             let conflicted = merge
                 .as_ref()
                 .is_some_and(|report: &MergeReport| !report.conflicts.is_empty());
@@ -644,6 +645,14 @@ impl BoundWorkspace {
         })();
         if let Err(error) = result {
             retained.error = error;
+            // A failed Commit drops its handle: on a definite failure the
+            // ordinals it kept from a finished Save go back to the Store
+            // first (#768); after an unknown outcome they are left lost.
+            if let Some(storage) = producer.take() {
+                if !retained.uncertain() && !retained.error.uncertain() {
+                    let _ = storage.release_kept_ordinals();
+                }
+            }
             return Err(self.settle_failure(retained));
         }
         if let Some(storage) = producer {

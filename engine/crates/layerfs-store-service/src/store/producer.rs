@@ -16,6 +16,13 @@
 //! it, so an SDK file call (a private Workspace per call) does not reload
 //! the policy row and content hints each time. One Save per handle at a
 //! time still holds: a taken handle is in no slot.
+//!
+//! A handle dropped in order returns its kept ordinals first
+//! (`Storage::release_kept_ordinals`, one write, never repeated): a closing
+//! Workspace whose handle finds the Store's slot taken, a Store closed in
+//! order ([`Store::release_producer`]) and a Commit that failed definitely
+//! (`commit.rs`). Only a crash, a Workspace dropped without its close or an
+//! unknown outcome leaves them lost; a steady Commit sends nothing for it.
 use super::Store;
 use layerfs_storage::{Diagnostics, Storage, StorageResult};
 use std::sync::Mutex;
@@ -35,7 +42,7 @@ impl Producer {
                 let before = storage.diagnostics();
                 Ok((storage, before))
             }
-            None => Ok((store.producer()?, Diagnostics::default())),
+            None => Ok((store.producer()?.keeping_ordinals(), Diagnostics::default())),
         }
     }
     /// Keeps the handle of a completed Commit. Admission makes this the only
@@ -48,13 +55,30 @@ impl Producer {
     fn idle(&self) -> Option<Storage> {
         self.idle.lock().ok().and_then(|mut idle| idle.take())
     }
-    /// Moves this Workspace's idle handle to `to` when `to` has none.
+    /// Moves this Workspace's idle handle to `to` when `to` has none;
+    /// otherwise the handle returns its kept ordinals and is dropped.
     pub(super) fn hand_to(&self, to: &Self) {
         let Some(storage) = self.idle() else { return };
-        if let Ok(mut idle) = to.idle.lock() {
-            if idle.is_none() {
+        let left = match to.idle.lock() {
+            Ok(mut idle) if idle.is_none() => {
                 *idle = Some(storage);
+                None
             }
+            _ => Some(storage),
+        };
+        if let Some(storage) = left {
+            let _ = storage.release_kept_ordinals();
+        }
+    }
+}
+
+impl Store {
+    /// Before an orderly close: the Store's idle producer handle returns its
+    /// kept ordinals and is dropped (one write when it kept any). A refused
+    /// or uncertain release leaves them lost; nothing is retried.
+    pub fn release_producer(&self) {
+        if let Some(storage) = self.idle_producer.idle() {
+            let _ = storage.release_kept_ordinals();
         }
     }
 }

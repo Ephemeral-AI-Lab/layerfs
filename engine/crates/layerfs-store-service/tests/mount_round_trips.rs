@@ -7,7 +7,8 @@
 //! The Commit scenarios run on a third Store open, after one mount: the
 //! first and the second Commit of a one-file change, an UpToDate Commit,
 //! then the unmount (`BoundWorkspace::close` and the overlay namespace's
-//! retirement). They cover the whole Store-service Commit, the pre-lane
+//! retirement) and the Store's part of an orderly close (its idle producer
+//! handle returning its kept ordinals). They cover the whole Store-service Commit, the pre-lane
 //! whiteout read (`materialize_commit`) included; the lane itself is pinned
 //! by persistence `postgresql_commit_round_trips.rs`.
 //! Counts come from the sessions' own counters (`SqlWork`), split into the
@@ -166,6 +167,15 @@ const POSTGRESQL: &[Pin] = &[
 // 28 statements in 5 transactions before, now 16 in 1 (the fused
 // transaction); first: 46/9 before, now 35/5 (the new handle's
 // reservation, its first reads and the fused transaction).
+//
+// #768 verification finding 6: the producer handle's kept ordinals go back
+// to the Store before every orderly drop, never on a Commit's path. The
+// Commits and the unmount (whose handle takes the Store's free idle slot)
+// are unchanged; the Store close's release is one publication (`BEGIN
+// IMMEDIATE`, the conditional `UPDATE store_policy`, `COMMIT`). Measured
+// alternative, not taken: a producer handle that keeps no ordinal (pack ids
+// only) sends nothing at close, but its second Commit reserves ordinals
+// again: 21 statements in 2 transactions instead of 16 in 1.
 const SQLITE_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
@@ -187,6 +197,12 @@ const SQLITE_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "unmount",
+        writer: [0, 0, 3, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "close",
         writer: [0, 0, 3, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
@@ -243,6 +259,13 @@ const SQLITE_COMMIT: &[Pin] = &[
 // before). The UpToDate Commit's Branch read is now that statement's first
 // use on this session (no head read before the lane), so one prepare:
 // [0, 1, 1, 0] before.
+//
+// #768 verification finding 6 (see the SQLite pins): the Store close's
+// release of the idle handle's kept ordinals is one publication (the lane
+// row and the rows statement, in one transaction), cold on this session:
+// the Commits were fused, so its statements are first prepared here. Measured alternative, not taken: a
+// handle that keeps no ordinal sends nothing at close, but its second Commit
+// reserves again: [0, 6, 13, 2] instead of [0, 3, 12, 1].
 const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
@@ -265,6 +288,12 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "unmount",
         writer: [0, 4, 2, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "close",
+        writer: [0, 5, 2, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -601,6 +630,11 @@ fn commit_scenarios(
         "{outcome:?}"
     );
     measure(&opened, "unmount", &mut out, || opened.unmount(workspace));
+    // The Store's part of an orderly close (`StoreService::close`): the idle
+    // producer handle, the unmounted Workspace's, returns its kept ordinals.
+    measure(&opened, "close", &mut out, || {
+        opened.service.store.release_producer()
+    });
     opened.stop();
     out
 }

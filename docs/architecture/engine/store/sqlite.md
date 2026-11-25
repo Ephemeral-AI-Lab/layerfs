@@ -445,8 +445,10 @@ group, so a selected group is read without the rest of the pack. Publication
 writes the pack (or its control and unit rows), `object_location ... ON
 CONFLICT DO NOTHING RETURNING`, `store_totals` when bytes were added,
 `inode_value_block` only where no stored block overlaps, the released ordinal
-tail (since #768 the tail past the 128 ordinals a Storage handle keeps for
-its next Save) and the signature upserts, in one write transaction
+tail (since #768 the tail past the 128 ordinals a keeping Storage handle
+keeps for its next Save; a publication of the kept ordinals alone, `BEGIN
+IMMEDIATE`, the conditional `UPDATE store_policy`, `COMMIT`, returns them
+before the handle's orderly drop) and the signature upserts, in one write transaction
 ([`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/publish.rs),
 [`units_publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_publish.rs),
 [`units_read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs)).

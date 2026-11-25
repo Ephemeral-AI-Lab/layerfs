@@ -6,20 +6,25 @@ use crate::{
     port::Reserve,
 };
 
-/// The unused rest of a Save's reserved pack ids, and at most
+/// The unused rest of a Save's reserved pack ids, and, on a handle that keeps
+/// ordinals ([`crate::Storage::keeping_ordinals`]), at most
 /// [`crate::policy::KEPT_ORDINALS`] of its unused ordinals (finish releases
-/// the tail past them), kept on the handle when the Save finished, so the
-/// next Save on it reserves only when a range runs out (#768). Ids are never
-/// reused: a Save that fails, refuses or ends uncertain drops the block, and
-/// a dropped handle leaks its rest (at most one pack refill and
-/// `KEPT_ORDINALS` ordinals). Gaps are allowed.
+/// the tail past them; on any other handle it releases every unused
+/// ordinal), kept on the handle when the Save finished, so the next Save on
+/// it reserves only when a range runs out (#768). Ids are never reused: a
+/// Save that fails, refuses or ends uncertain drops the block, and a handle
+/// dropped with it leaks its rest (at most one pack refill and
+/// `KEPT_ORDINALS` ordinals). The owner of a keeping handle returns its kept
+/// ordinals before an orderly drop ([`crate::Storage::release_kept_ordinals`]);
+/// only a crash or an unknown outcome loses them. Gaps are allowed.
 ///
 /// The block records no Store generation: the storage port does not expose
-/// one, and none is needed. Neither allocator moves back: a PostgreSQL
-/// compaction swaps only the pack and locator tables and abandons when
-/// `store_policy` moved after its mark, a SQLite compaction copies both
-/// counters, and a write on a handle whose session is fenced to an older
-/// generation fails, which drops the block.
+/// one, and none is needed. Neither allocator moves back except by a
+/// release that rewinds the ordinal counter only while it still ends this
+/// block: a PostgreSQL compaction swaps only the pack and locator tables and
+/// abandons when `store_policy` moved after its mark, a SQLite compaction
+/// copies both counters, and a write on a handle whose session is fenced to
+/// an older generation fails, which drops the block.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct IdBlock {
     next_pack: i64,
@@ -30,6 +35,15 @@ pub(crate) struct IdBlock {
 impl IdBlock {
     fn is_empty(&self) -> bool {
         self.next_pack >= self.pack_end && self.next_ordinal >= self.ordinal_end
+    }
+    /// The unused ordinals, as first ordinal and count, taken out of the
+    /// block: they are no longer this block's whether or not their release
+    /// is acknowledged.
+    pub(crate) fn take_ordinals(&mut self) -> Option<(u32, usize)> {
+        let count = self.ordinal_end.checked_sub(self.next_ordinal)?;
+        let first = u32::try_from(self.next_ordinal).ok()?;
+        self.next_ordinal = self.ordinal_end;
+        (count != 0).then_some((first, count as usize))
     }
 }
 

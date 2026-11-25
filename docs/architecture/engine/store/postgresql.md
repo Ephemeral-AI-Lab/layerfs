@@ -391,7 +391,8 @@ Store.
      lane barrier                                 barrier key is held
                                                   shared from BEGIN)
    one statement: INSERT locations ... RETURNING, totals, inode value
-     blocks, released ordinals (past the handle's kept 128, #768), signatures
+     blocks, released ordinals (past a keeping handle's kept 128, #768),
+     signatures
    COMMIT; nested: the lane check rides in it    lost -> ROLLBACK, Closed
    any failure rolls the whole publication back; ids are never reused
 ```
@@ -736,13 +737,27 @@ measured with `log_statement=all` on the private test server, and pinned):
   PostgreSQL, 3 on SQLite, measured by `kept_removals_bound.rs`).
 - (i) The Storage handle a Workspace keeps between Commits keeps the unused
   pack ids and the first 128 unused ordinals (`KEPT_ORDINALS`) of its last
-  finished Save (`save/reservation.rs`, `IdBlock`); the next Save reserves
-  only when a range runs out, so a steady Commit of a small change reserves
-  nothing. Finish still releases the ordinal tail past the kept 128 in its
-  last publication, as it released the whole tail before. The first Commit
-  of a new handle still reserves. A dropped handle loses at most 4,096 pack
-  ids and 128 ordinals (ids are never reused; gaps are allowed), and a Save
-  that fails or does not finish drops the block.
+  finished Save (`save/reservation.rs`, `IdBlock`; such a handle is made
+  with `Storage::keeping_ordinals`); the next Save reserves only when a
+  range runs out, so a steady Commit of a small change reserves nothing.
+  Finish still releases the ordinal tail past the kept 128 in its last
+  publication, as it released the whole tail before; a handle that does not
+  keep ordinals (Project Init, a Branch merge) releases every unused one
+  there, as before. The first Commit of a new handle still reserves. Before
+  every orderly drop the kept handle returns its kept ordinals
+  (`Storage::release_kept_ordinals`: one publication of the same
+  conditional rewind, one attempt, never repeated): a Workspace close that
+  finds the Store's idle slot taken, a Store close (`StoreService::close`,
+  the daemon's `close_bound`) and a Commit that failed definitely; after an
+  unknown outcome it is not sent, and a quarantined session refuses it.
+  Only a crash, an unknown outcome or a refused release loses them (at most
+  128 per handle), and a dropped handle loses at most 4,096 pack ids (ids
+  are never reused; gaps are allowed). The release is never on a Commit's
+  path: measured by `mount_round_trips.rs`, the Store close costs [0, 5, 2,
+  1] (cold) and a steady Commit stays [0, 3, 12, 1]; a handle keeping pack
+  ids only would send nothing at close but make the second Commit [0, 6, 13,
+  2] (it reserves ordinals again). A Save that fails or does not finish
+  drops the block.
 - (j) A Save reads the metadata pack bodies and inode values earlier Saves
   of its handle published (bounded: 2 MiB of bodies, 512 KiB of values,
   cleared when a Save does not finish), and the pool reader's chain walk

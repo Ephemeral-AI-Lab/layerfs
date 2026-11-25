@@ -211,12 +211,15 @@ impl State<'_> {
             }
             batch.signatures.push(row);
         }
-        // The handle keeps the first KEPT_ORDINALS unused ordinals for its
-        // next Save (#768, `IdBlock`); the tail past them is released, which
-        // rewinds the Store's counter when nothing was reserved after it.
-        let kept_end = self
-            .next_ordinal
-            .saturating_add(crate::policy::KEPT_ORDINALS as u64);
+        // A keeping handle keeps the first KEPT_ORDINALS unused ordinals for
+        // its next Save (#768, `IdBlock`); the tail past them, or on any
+        // other handle every unused ordinal, is released, which rewinds the
+        // Store's counter when nothing was reserved after it.
+        let keep = match self.storage.keeps_ordinals {
+            true => crate::policy::KEPT_ORDINALS as u64,
+            false => 0,
+        };
+        let kept_end = self.next_ordinal.saturating_add(keep);
         if self.finishing && kept_end < self.ordinal_end {
             // The release is a row of the publication too.
             if batch.objects.len() + pack_rows + batch.inode_values.len() + batch.signatures.len()

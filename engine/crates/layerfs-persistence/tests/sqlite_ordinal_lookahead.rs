@@ -86,9 +86,11 @@ fn fresh_leaves_share_one_combined_reservation_and_deduplicate_values() {
     let allocator: i64 = sql
         .query_row("SELECT next_ordinal FROM store_policy", [], |r| r.get(0))
         .unwrap();
-    // The release rewinds the allocator past the KEPT_ORDINALS unused ordinals the
-    // handle keeps for its next Save (#768; it was rewound to 6 before).
-    assert_eq!(allocator, 6 + layerfs_storage::policy::KEPT_ORDINALS as i64);
+    // A handle that does not keep ordinals releases every unused one: the
+    // allocator is rewound to 6 (#768 verification finding 6; while every
+    // handle kept KEPT_ORDINALS it stood at 6 + KEPT_ORDINALS, and a
+    // dropped handle left them behind).
+    assert_eq!(allocator, 6);
     let ordinals = sql
         .prepare("SELECT first_ordinal,last_ordinal FROM inode_value_block ORDER BY 1")
         .unwrap()
@@ -107,9 +109,31 @@ fn fresh_leaves_share_one_combined_reservation_and_deduplicate_values() {
     // A later Save that names no stored leaf remembers nothing of earlier
     // Saves: the repeated values are stored again, one row each.
     assert_eq!(save.finish().unwrap().pool.new_values, 5);
-    // Its ordinals come from the kept block (#768; `before + 1` before).
-    assert_eq!(storage.diagnostics().ordinal_reservations, before);
+    // Its ordinals come from a refill: the handle kept its unused pack ids
+    // but no ordinal.
+    assert_eq!(storage.diagnostics().ordinal_reservations, before + 1);
     read(&storage, &[duplicate]);
+    // A keeping handle keeps KEPT_ORDINALS past its values and returns them
+    // in one publication of the same conditional rewind.
+    let kept = Storage::new(h.storage.clone()).unwrap().keeping_ordinals();
+    let save = kept.begin_save().unwrap();
+    save.accept(leaf(40, &[7])).unwrap();
+    save.finish().unwrap();
+    let allocator = |sql: &rusqlite::Connection| -> i64 {
+        sql.query_row("SELECT next_ordinal FROM store_policy", [], |r| r.get(0))
+            .unwrap()
+    };
+    let last: i64 = sql
+        .query_row("SELECT max(last_ordinal) FROM inode_value_block", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(
+        allocator(&sql),
+        last + 1 + layerfs_storage::policy::KEPT_ORDINALS as i64
+    );
+    kept.release_kept_ordinals().unwrap();
+    assert_eq!(allocator(&sql), last + 1);
 }
 #[test]
 fn a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan() {
@@ -146,10 +170,11 @@ fn a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan() {
     let next: i64 = sql
         .query_row("SELECT next_ordinal FROM store_policy", [], |r| r.get(0))
         .unwrap();
-    // Past the KEPT_ORDINALS unused ordinals the handle keeps for its next Save (#768;
-    // the unused tail was released to 10 before). The foreign reservation is
-    // still never recycled.
-    assert_eq!(next, 10 + layerfs_storage::policy::KEPT_ORDINALS as i64);
+    // The unused tail is released to 10: this handle keeps no ordinal (#768
+    // verification finding 6; while every handle kept KEPT_ORDINALS it stood
+    // at 10 + KEPT_ORDINALS). The foreign reservation is still never
+    // recycled.
+    assert_eq!(next, 10);
 }
 
 #[test]

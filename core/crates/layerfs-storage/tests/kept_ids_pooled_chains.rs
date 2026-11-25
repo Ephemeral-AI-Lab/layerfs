@@ -1,7 +1,9 @@
-//! Two Commit round-trip cuts (#768): a handle keeps its unused pack ids and
-//! ordinals between Saves and reserves only when a range runs out, dropping
-//! them after any failed Save; and a pooled leaf's delta chain is read in a
-//! bounded number of provider calls, not one per link.
+//! Two Commit round-trip cuts (#768): a handle keeps its unused pack ids
+//! (and, when it keeps ordinals, `KEPT_ORDINALS` unused ordinals) between
+//! Saves and reserves only when a range runs out, dropping them after any
+//! failed Save; and a pooled leaf's delta chain is read in a bounded number
+//! of provider calls, not one per link. A keeping handle returns its kept
+//! ordinals before an orderly drop; any other handle keeps none.
 #[path = "support/chain_provider.rs"]
 mod chains;
 #[path = "support/memory_metadata.rs"]
@@ -83,7 +85,7 @@ fn published_packs(memory: &metadata::MemoryMetadata) -> Vec<i64> {
 #[test]
 fn a_kept_block_serves_later_saves_and_a_failed_save_drops_it() {
     let memory = Arc::new(metadata::MemoryMetadata::default());
-    let storage = Storage::new(memory.clone()).unwrap();
+    let storage = Storage::new(memory.clone()).unwrap().keeping_ordinals();
     let mut last = None;
     for rewrites in 0..3 {
         let object = version(rewrites, last.as_ref());
@@ -160,13 +162,10 @@ fn a_kept_block_serves_later_saves_and_a_failed_save_drops_it() {
 #[test]
 fn the_kept_ordinals_are_bounded_and_a_larger_save_refills() {
     let memory = Arc::new(metadata::MemoryMetadata::default());
-    let ordinals = |memory: &metadata::MemoryMetadata| -> Vec<u32> {
-        let state = memory.state.lock().unwrap();
-        state.values.keys().copied().collect()
-    };
-    // One Save per fresh handle, as one-shot callers make: each releases its
-    // tail past the kept KEPT_ORDINALS, so the next handle's values start at
-    // most KEPT_ORDINALS ordinals after the last one used.
+    // One Save per fresh handle, as one-shot callers make: a handle that
+    // does not keep ordinals releases every unused one at finish, so the
+    // next handle's values follow on with no gap (#768 verification finding
+    // 6; with KEPT_ORDINALS kept and dropped, each gap was up to 128).
     for at in 0..3_u64 {
         save(
             &Storage::new(memory.clone()).unwrap(),
@@ -175,13 +174,15 @@ fn the_kept_ordinals_are_bounded_and_a_larger_save_refills() {
         .unwrap();
     }
     let used = ordinals(&memory);
-    assert_eq!(used.len() as u64, 3 * ROWS);
-    for pair in used.windows(2) {
-        assert!(pair[1] - pair[0] <= 1 + KEPT_ORDINALS as u32, "{used:?}");
-    }
+    assert_eq!(used, (1..=3 * ROWS as u32).collect::<Vec<_>>());
+    assert_eq!(
+        memory.state.lock().unwrap().next_ordinal,
+        3 * ROWS + 1,
+        "nothing left behind the last value"
+    );
     // A kept handle whose next Save needs more new values than it kept
     // refills ordinals once, as before.
-    let storage = Storage::new(memory.clone()).unwrap();
+    let storage = Storage::new(memory.clone()).unwrap().keeping_ordinals();
     save(&storage, &[leaf(10_000, 0)]).unwrap();
     let wide: Vec<_> = (0..40_u64).map(|at| leaf(20_000 + at * ROWS, 0)).collect();
     assert!(wide.len() as u64 * ROWS > KEPT_ORDINALS as u64);
@@ -196,8 +197,8 @@ fn the_kept_ordinals_are_bounded_and_a_larger_save_refills() {
 fn ids_stay_unique_across_saves_and_across_two_handles_on_one_store() {
     let memory = Arc::new(metadata::MemoryMetadata::default());
     let handles = [
-        Storage::new(memory.clone()).unwrap(),
-        Storage::new(memory.clone()).unwrap(),
+        Storage::new(memory.clone()).unwrap().keeping_ordinals(),
+        Storage::new(memory.clone()).unwrap().keeping_ordinals(),
     ];
     let mut last: [Option<FinalizedObject>; 2] = [None, None];
     for round in 0..6_u64 {
@@ -236,6 +237,76 @@ fn ids_stay_unique_across_saves_and_across_two_handles_on_one_store() {
     assert!(packs.iter().any(|id| *id <= 4_096));
     assert!(packs.iter().any(|id| *id > 4_096));
     assert!(ordinals.len() as u64 >= 2 * (ROWS + 5));
+}
+
+#[test]
+fn a_keeping_handle_returns_its_kept_ordinals_once_and_never_reuses_them() {
+    let memory = Arc::new(metadata::MemoryMetadata::default());
+    let storage = Storage::new(memory.clone()).unwrap().keeping_ordinals();
+    save(&storage, &[leaf(1, 0)]).unwrap();
+    let kept = KEPT_ORDINALS as u64;
+    let next = |memory: &metadata::MemoryMetadata| memory.state.lock().unwrap().next_ordinal;
+    // The finish rewound the counter to the end of the kept prefix.
+    assert_eq!(next(&memory), ROWS + 1 + kept);
+    let publications = |memory: &metadata::MemoryMetadata| calls(memory, "register");
+    let before = publications(&memory);
+    // The orderly release: one publication, which rewinds the counter to
+    // right after the last value (before the fix a dropped handle left it
+    // KEPT_ORDINALS past it).
+    storage.release_kept_ordinals().unwrap();
+    assert_eq!(publications(&memory), before + 1);
+    assert_eq!(next(&memory), ROWS + 1);
+    {
+        let state = memory.state.lock().unwrap();
+        let last = state.registrations.last().unwrap();
+        assert_eq!(
+            last.release_ordinals,
+            Some((ROWS as u32 + 1, KEPT_ORDINALS))
+        );
+        assert!(last.objects.is_empty() && last.packs.is_empty());
+    }
+    // Returned once: a second call sends nothing, and the handle's next
+    // Save refills ordinals (its kept pack ids still serve it).
+    storage.release_kept_ordinals().unwrap();
+    assert_eq!(publications(&memory), before + 1);
+    let reserves = storage.diagnostics().reserve;
+    save(&storage, &[leaf(1_000, 0)]).unwrap();
+    let counts = storage.diagnostics();
+    assert_eq!(counts.reserve, reserves + 1);
+    assert_eq!(counts.reservation_refills, 1, "ordinals only");
+    assert_eq!(
+        ordinals(&memory),
+        (1..=2 * ROWS as u32).collect::<Vec<_>>(),
+        "the next values follow on"
+    );
+
+    // A refused release loses the kept ordinals: they leave the handle
+    // first, the counter is not rewound, and nothing reuses them.
+    let lost = next(&memory);
+    memory.state.lock().unwrap().fail_register = Some(PersistenceError::Uncertain);
+    assert!(storage.release_kept_ordinals().is_err());
+    assert_eq!(next(&memory), lost);
+    storage.release_kept_ordinals().unwrap();
+    save(&storage, &[leaf(2_000, 0)]).unwrap();
+    assert!(
+        ordinals(&memory)[2 * ROWS as usize..]
+            .iter()
+            .all(|ordinal| u64::from(*ordinal) >= lost),
+        "{:?}",
+        ordinals(&memory)
+    );
+
+    // A one-shot handle keeps no ordinal: releasing sends nothing.
+    let one_shot = Storage::new(memory.clone()).unwrap();
+    save(&one_shot, &[leaf(3_000, 0)]).unwrap();
+    let before = publications(&memory);
+    one_shot.release_kept_ordinals().unwrap();
+    assert_eq!(publications(&memory), before);
+}
+
+fn ordinals(memory: &metadata::MemoryMetadata) -> Vec<u32> {
+    let state = memory.state.lock().unwrap();
+    state.values.keys().copied().collect()
 }
 
 /// Nine Saves of one leaf, each on its own handle: a FULL leaf and eight

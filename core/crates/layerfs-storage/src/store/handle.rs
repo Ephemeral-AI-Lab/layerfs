@@ -23,6 +23,9 @@ pub struct Storage {
     /// The unused pack ids and ordinals of the last Save that finished on
     /// this handle, which the next Save uses before it reserves (#768).
     pub(crate) kept: Cell<Option<crate::save::IdBlock>>,
+    /// Whether a finished Save keeps [`crate::policy::KEPT_ORDINALS`] unused
+    /// ordinals for the next one ([`Self::keeping_ordinals`]).
+    pub(crate) keeps_ordinals: bool,
 }
 impl Storage {
     /// Opens one handle with an acknowledged persisted policy. No service bootstrap.
@@ -49,7 +52,44 @@ impl Storage {
             candidates: RefCell::new(Candidates::new()?),
             reservations,
             kept: Cell::new(None),
+            keeps_ordinals: false,
         })
+    }
+    /// A handle whose finished Saves keep up to
+    /// [`crate::policy::KEPT_ORDINALS`] unused ordinals for its next Save,
+    /// so a small next Save reserves nothing (#768). For a handle its owner
+    /// keeps between Saves; that owner returns them with
+    /// [`Self::release_kept_ordinals`] before it drops the handle in order.
+    /// Any other handle's finish releases every unused ordinal, as before
+    /// #768. Unused pack ids are kept either way (never reused, no release).
+    #[must_use]
+    pub fn keeping_ordinals(mut self) -> Self {
+        self.keeps_ordinals = true;
+        self
+    }
+    /// Returns the ordinals this handle kept from its last finished Save
+    /// (#768): one publication of their release, which rewinds the Store's
+    /// counter only while it still ends them (nothing was reserved after
+    /// them), as a finish's release does. One attempt, never repeated: the
+    /// ordinals leave the handle first, so a refused or uncertain release
+    /// loses them and never reuses them. Nothing is sent when the handle
+    /// keeps none (no finished Save, a Save open or dropped unfinished, or
+    /// already returned). The kept pack ids stay with the handle.
+    pub fn release_kept_ordinals(&self) -> StorageResult<()> {
+        let Some(mut block) = self.kept.take() else {
+            return Ok(());
+        };
+        let release = block.take_ordinals();
+        self.kept.set(Some(block));
+        let Some(range) = release else {
+            return Ok(());
+        };
+        self.source.note(|c| c.publish += 1);
+        self.source.metadata.publish(&crate::port::Publication {
+            release_ordinals: Some(range),
+            ..Default::default()
+        })?;
+        Ok(())
     }
     /// Persisted, validated storage policy.
     pub const fn policy(&self) -> StoragePolicy {

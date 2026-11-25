@@ -155,9 +155,12 @@ impl StoreService {
         Ok(service)
     }
 
-    /// Stops the overlay owner this service started. Private Workspaces kept
-    /// with an uncertain Commit stay with it until then.
+    /// Returns the Store's idle producer handle's kept ordinals
+    /// ([`Store::release_producer`]), then stops the overlay owner this
+    /// service started. Private Workspaces kept with an uncertain Commit stay
+    /// with it until then.
     pub fn close(mut self) -> Result<(), String> {
+        self.store.release_producer();
         match self.owned.take() {
             Some(owner) => owner.stop().map_err(|error| error.to_string()),
             None => Ok(()),
