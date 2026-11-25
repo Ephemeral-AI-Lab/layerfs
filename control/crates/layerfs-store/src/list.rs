@@ -1,7 +1,7 @@
 //! `store.list` (call surface 2.0): every Store, from the home's records.
 //! Each item is [`crate::get::summary`] in its records-only state; each
 //! machine's state is derived once for all its Stores. Nothing is probed
-//! unless `--with stats` asks for sizes.
+//! unless `--with stats` asks for sizes or `--with format` for formats.
 use crate::get::summary;
 use crate::place;
 use crate::record::StoreRecord;
@@ -49,8 +49,9 @@ pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Ma
     list_with(home, machine, stats, false, machines)
 }
 
-/// [`list`], with `format` each item's `format` section (#804), read
-/// without opening the Store.
+/// [`list`], with `format` each item's `format` section (#804,
+/// [`crate::formats`]), read without opening the Store; a machine that did
+/// not answer is not asked again for its other Stores.
 pub fn list_with(
     home: &Path,
     machine: Option<&str>,
@@ -58,7 +59,6 @@ pub fn list_with(
     format: bool,
     machines: state::Machines,
 ) -> Outcome {
-    let _ = format;
     let mut derived: BTreeMap<String, State> = BTreeMap::new();
     let mut unanswered = Vec::new();
     let mut items = Vec::new();
@@ -81,6 +81,10 @@ pub fn list_with(
         let mut item = summary(home, &record, &state, observed, false)?;
         if let (true, SdkValue::Map(fields)) = (stats, &mut item) {
             fields.push(("size".to_owned(), size(home, &record, &mut unanswered)));
+        }
+        if let (true, SdkValue::Map(fields)) = (format, &mut item) {
+            let section = crate::formats::of(home, &record, &mut unanswered);
+            fields.push(("format".to_owned(), section));
         }
         items.push(item);
     }

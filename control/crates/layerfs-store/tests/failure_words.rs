@@ -92,9 +92,19 @@ fn an_old_format_store_is_named_by_its_version_refusal() {
         "Store open: pack persistence: Refused { status: \"Closed\" }",
     );
     assert_eq!(outdated_status(&other), None);
-    assert_eq!(outdated_fix("shop", false), "layerfs store remove shop");
+    // schema version 2 has a step (#804): its fix is the upgrade
     assert_eq!(
-        outdated_fix("my pg", true),
+        outdated_fix("shop", false, version),
+        "layerfs store upgrade shop"
+    );
+    // a refusal no step takes keeps remove / disconnect
+    let none = "SQLite Store schema version 1: not supported by this release";
+    assert_eq!(
+        outdated_fix("shop", false, none),
+        "layerfs store remove shop"
+    );
+    assert_eq!(
+        outdated_fix("my pg", true, none),
         "layerfs store disconnect 'my pg'"
     );
 }

@@ -1,7 +1,8 @@
 //! `store.get` and each `store.list` item (call surface 2.0): a Store's
 //! record and its records-only state ([`crate::state::recorded`]), with no
 //! probe. `--with live` reads the Store where it lives ([`crate::live`]);
-//! `--with stats` opens it for its counters ([`crate::stats`]).
+//! `--with stats` opens it for its counters ([`crate::stats`]); `--with
+//! format` reads its format without opening it ([`crate::formats`], #804).
 //!
 //! The answer is one full map, the long form's keys: the dispatcher makes
 //! the short form from it. A sqlite Store answers `machine`, `profile` and
@@ -217,7 +218,8 @@ pub fn summary(
 /// `store.get(store)`: the Store's record and its records-only state. With
 /// `live`, the state, its companion and `observed_at` come from a read of
 /// the Store where it lives, and the `live` section holds what that read
-/// found; with `stats`, the `stats` section holds its counters.
+/// found; with `stats`, the `stats` section holds its counters; with
+/// `format`, the `format` section holds its format ([`crate::formats`]).
 pub fn get(
     home: &Path,
     events: &mut Events<'_>,
@@ -251,6 +253,10 @@ pub fn get(
                 "stats".to_owned(),
                 crate::stats::stats(home, events, &record)?,
             ));
+        }
+        if with.format {
+            let format = crate::formats::of(home, &record, &mut Vec::new());
+            fields.push(("format".to_owned(), format));
         }
     }
     Ok(answer)
