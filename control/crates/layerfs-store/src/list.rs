@@ -61,6 +61,9 @@ pub fn list_with(
 ) -> Outcome {
     let mut derived: BTreeMap<String, State> = BTreeMap::new();
     let mut unanswered = Vec::new();
+    // the machines a format read did not reach: kept apart from the size
+    // reads', where any failure skips a machine's later Stores
+    let mut unformatted = Vec::new();
     let mut items = Vec::new();
     for record in crate::record::stores(home)? {
         let on = state::placed(&record);
@@ -83,7 +86,7 @@ pub fn list_with(
             fields.push(("size".to_owned(), size(home, &record, &mut unanswered)));
         }
         if let (true, SdkValue::Map(fields)) = (format, &mut item) {
-            let section = crate::formats::of(home, &record, &mut unanswered);
+            let section = crate::formats::of(home, &record, &mut unformatted);
             fields.push(("format".to_owned(), section));
         }
         items.push(item);

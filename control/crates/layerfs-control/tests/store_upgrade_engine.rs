@@ -378,3 +378,34 @@ fn needs_w1_a_schema_2_backup_restores_through_the_chain() {
     let format = layerfs_persistence::upgrade::sqlite_format(&destination).unwrap();
     assert_eq!(format.version, Some(3));
 }
+
+/// `store list --with stats --with format` (needs W1): a Store whose size
+/// cannot be read (a sidecar that is a symlink loop) does not blank the
+/// format of the next Store on the same machine.
+#[test]
+fn needs_w1_a_failed_size_does_not_blank_later_formats() {
+    let Some(home) = home_with_shop("list-size") else {
+        return;
+    };
+    let name = StoreName::parse("a").unwrap();
+    layerfs_store::sqlite::create::create(&home, &name, None).unwrap();
+    let wal = format!("{}-wal", paths::store_file(&home, "a").display());
+    let _ = std::fs::remove_file(&wal);
+    std::os::unix::fs::symlink(&wal, &wal).unwrap();
+    let listed =
+        layerfs_store::list::list_with(&home, None, true, true, layerfs_control::store::reads())
+            .unwrap();
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("{listed:?}");
+    };
+    let item = |name: &str| {
+        (items.iter())
+            .find(|item| item.get_text("store") == Some(name))
+            .unwrap()
+    };
+    // the size read of `a` failed (not an unreached machine)
+    assert_eq!(item("a").get("size"), Some(&SdkValue::Null));
+    let shop = item("shop");
+    let format = shop.get("format").unwrap();
+    assert_eq!(format.get_text("status"), Some("current"), "{format:?}");
+}
