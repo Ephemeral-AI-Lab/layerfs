@@ -132,6 +132,9 @@ SLOW = {
     ("layerfs-store-service", "verify_history_readback"): 10.0,
     ("layerfs-store-service", "verify_two_daemons_one_branch"): 7.7,
     ("layerfs-store-service", "verify_edge_commits"): 7.3,
+    ("layerfs-store-service", "verify768x_fallback_custody"): 23.9,
+    ("layerfs-store-service", "verify768x_ordinal_cycles"): 11.2,
+    ("layerfs-store-service", "verify768x_two_services_rounds"): 55.2,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
