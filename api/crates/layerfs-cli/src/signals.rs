@@ -12,6 +12,16 @@
 //! thread may hold that lock, blocked writing a progress line to a full
 //! pipe. The exit waits at most [`WRITE_WAIT`] for that write.
 //!
+//! nix's `SigSet::wait` panics when `sigwait` fails (it reads `sigwait`'s
+//! error number as success, then unwraps an unset signal number). On macOS
+//! that happens when two signals arrive back to back, and the failed wait
+//! has taken the first of them (seen: a failed wait, then the second
+//! signal, then nothing). So each wait runs under `catch_unwind` and every
+//! return, a panic included, counts as one signal taken. The panic hook
+//! says nothing for this thread (the default hook would write to a
+//! standard error that may be full) and hands every other thread's panic
+//! to the hook it replaced.
+//!
 //! The residual window: the call's thread marks the call answered as soon
 //! as the call returns, and the signal thread checks the mark again just
 //! before it exits. A second signal taken in the few instructions between
@@ -22,11 +32,15 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use nix::sys::signal::{SigSet, Signal};
 use std::io::Write;
 use std::os::fd::AsFd;
+use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 /// Set once the call has answered.
 static ANSWERED: AtomicBool = AtomicBool::new(false);
+
+/// The name of the thread that takes the signals.
+const THREAD: &str = "layerfs-signals";
 
 /// How long the second signal's exit waits for its refusal to be written.
 const WRITE_WAIT: Duration = Duration::from_millis(500);
@@ -41,8 +55,9 @@ pub fn cancel_on_signal(store: &str, detail: bool, text: bool) -> std::io::Resul
     signals.add(Signal::SIGTERM);
     signals.thread_block().map_err(std::io::Error::from)?;
     let store = store.to_owned();
+    quiet_panics_here();
     std::thread::Builder::new()
-        .name("layerfs-signals".to_owned())
+        .name(THREAD.to_owned())
         .spawn(move || wait(signals, &store, detail, text))?;
     Ok(())
 }
@@ -52,9 +67,27 @@ pub fn answered() {
     ANSWERED.store(true, Ordering::SeqCst);
 }
 
+/// Replaces the panic hook: silent on the signal thread, the previous
+/// hook everywhere else.
+fn quiet_panics_here() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if std::thread::current().name() != Some(THREAD) {
+            previous(info);
+        }
+    }));
+}
+
+/// Waits for the next signal; a failed wait has taken one too (see the
+/// module's words), so every return is one signal taken.
+fn next(signals: &SigSet) {
+    let _ = std::panic::catch_unwind(AssertUnwindSafe(|| signals.wait()));
+}
+
 fn wait(signals: SigSet, store: &str, detail: bool, text: bool) {
     let mut seen = 0;
-    while signals.wait().is_ok() {
+    loop {
+        next(&signals);
         if ANSWERED.load(Ordering::SeqCst) {
             continue;
         }
