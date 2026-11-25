@@ -420,30 +420,24 @@ impl State<'_> {
         if leaves.len() < 2 {
             return Ok(());
         }
-        // The stored leaves' delta chains are located a level at a time for
-        // all of them together, as a Store reader's demand does
-        // (`read/prefetch.rs`), instead of one locate per leaf and level. A
-        // stale chain hint only drops the hints: the rebuild below walks the
-        // chains from authoritative locates, as without them.
-        let stored: Vec<ObjectLocation> = leaves
-            .iter()
-            .filter(|leaf| self.packer.location(leaf.object_id).is_none())
-            .copied()
-            .collect();
-        if stored.len() > 1 {
-            match crate::read::prefetch_chains(
-                &self.storage.source,
-                &stored,
-                &mut self.packs,
-                &mut self.decode,
-                &mut self.groups,
-            ) {
-                Err(error) if hint_failure(&error) => {
-                    self.storage.source.drop_hints(&[])?;
-                }
-                other => {
-                    other?;
-                }
+        // A Save read has already located its stored chains in read_inner.
+        // For selection, group the stored leaf bases here. The wave starts
+        // with binding disabled, and its guarded base verification has
+        // finished before selection, so a walk failure is authoritative.
+        if !resolving {
+            let stored: Vec<ObjectLocation> = leaves
+                .iter()
+                .filter(|leaf| self.packer.location(leaf.object_id).is_none())
+                .copied()
+                .collect();
+            if stored.len() > 1 {
+                crate::read::prefetch_chains(
+                    &self.storage.source,
+                    &stored,
+                    &mut self.packs,
+                    &mut self.decode,
+                    &mut self.groups,
+                )?;
             }
         }
         let capacities = self.storage.capacities();

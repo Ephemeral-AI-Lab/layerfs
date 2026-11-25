@@ -102,13 +102,12 @@ one page at a time:
 | Chains of a grouped demand's stored objects | The Save's read (`Save::read_objects`) locates the chains of the stored objects of a demand of more than one a level at a time, one locate per level for all of them (`read::prefetch::chains`, as the Store's own reads do), before rebuilding each object | The Save's pack cache | [`save/provider.rs`](../../../../core/crates/layerfs-storage/src/save/provider.rs) |
 | Remembered directories' new root pages (step 7) | One grouped demand (`directory::root_shapes`) | `REMEMBERED_DIRECTORIES` = 256 pages | [`base/links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
 
-One grouped demand is one attempt: its failure is the provider's original
-error and ends the operation (a later row's failure now surfaces at its
-group's first row), with no fallback to point reads. A chain walk a stale
-delta-chain hint broke runs once more without hints, exactly as each
-object's own resolution and the Store's reads do (#758). The pages read are
-the ones a point read would return, so roots and stored objects are
-unchanged. `commit_batched_directories.rs` pins the counts and
+One grouped demand is one attempt. Its failure is the provider's original
+error and ends the operation at the group's first row. Save reads begin
+with locator hint binding disabled. The pooled leaf preparation reuses the
+grouped chain walk for the same demand. Wave selection walks the chains of
+its own stored leaf bases after the guarded base verification has ended.
+The reads preserve the resulting roots and stored objects. `commit_batched_directories.rs` pins the counts and
 `commit_fault_directories.rs` faults every message of a grouped read
 ([Demonstration](README.md#demonstration)).
 
