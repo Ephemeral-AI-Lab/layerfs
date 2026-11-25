@@ -231,9 +231,10 @@ is derived from the current schema constants. Anything else is refused
 
 | Engine | Format (raw) | Step | Status |
 | --- | --- | --- | --- |
-| SQLite | 2 (`user_version` 36–38, 42–44) | 2 → 3: `commit.attempt` appended (`ALTER TABLE … ADD COLUMN`), `commit_attempt`, the two `schema_version=` CHECK texts rewritten, `user_version` +20, `history_meta` records the schema-3 source and the live definition | accepts source variant (d) (91635f51f8 through dcd0fa2c30), fresh or position-migrated |
+| SQLite | 2 (`user_version` 36–38, 42–44) | 2 → 3: `commit.attempt` appended (`ALTER TABLE … ADD COLUMN`), `commit_attempt`, the two `schema_version=` CHECK texts rewritten, `user_version` +20, `history_meta` records the schema-3 source and the live definition | accepts source (d) (91635f51f8 through dcd0fa2c30) in two variants, each with its fixture: `d` (every row as the frozen scripts write it) and `d-appended` (the position columns the schema-2 open migrations appended end their tables; the owner's Stores) |
 | SQLite | 3 (56–58, 62–64) | — | latest |
 | SQLite | 1, transient 39–41/45–47, retired 1–15 | none | refused by name |
+| SQLite | above 64 (a LayerFS `application_id`) | none | `newer`, refused with `upgrade::NEWER` ("newer than this build"), never as outdated |
 | PostgreSQL | 3 | 3 → 4: `commit.attempt`, `commit_attempt`, the version CHECKs dropped and re-added, `catalog_incarnation` + 1 | accepts the source written after the `25c261b205` revert, with or without the acquisition tables |
 | PostgreSQL | 4 | — | latest |
 | PostgreSQL | 1, 2 | none | refused by name |

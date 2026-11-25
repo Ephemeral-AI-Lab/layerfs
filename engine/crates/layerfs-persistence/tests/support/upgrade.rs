@@ -32,10 +32,19 @@ pub fn unhex(text: &str) -> Vec<u8> {
         .collect()
 }
 
-/// Copies the SQLite v2 fixture into `dir` as `store.sqlite`.
+/// The SQLite schema-2 fixtures: `(variant, folder under fixtures/store-formats)`.
+pub const SQLITE_V2: [(&str, &str); 2] =
+    [("d", "sqlite/v2"), ("d-appended", "sqlite/v2/d-appended")];
+
+/// Copies the base SQLite v2 fixture into `dir` as `store.sqlite`.
 pub fn sqlite_v2_copy(dir: &Path) -> PathBuf {
+    sqlite_fixture_copy(dir, "sqlite/v2")
+}
+
+/// Copies the SQLite fixture in `folder` into `dir` as `store.sqlite`.
+pub fn sqlite_fixture_copy(dir: &Path, folder: &str) -> PathBuf {
     let path = dir.join("store.sqlite");
-    std::fs::copy(fixtures().join("sqlite/v2/store.sqlite"), &path).expect("copy fixture");
+    std::fs::copy(fixtures().join(folder).join("store.sqlite"), &path).expect("copy fixture");
     path
 }
 

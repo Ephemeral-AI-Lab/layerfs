@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
-use support::upgrade::sqlite_v2_copy;
+use support::upgrade::{sqlite_fixture_copy, SQLITE_V2};
 use support::Temp;
 
 const STORE_ENV: &str = "LAYERFS_UPGRADE_CRASH_STORE";
@@ -26,10 +26,12 @@ const GATE_ENV: &str = "LAYERFS_UPGRADE_CRASH_GATE";
 /// `BEGIN IMMEDIATE`, step 2 -> 3's eleven statements, `COMMIT`.
 const STATEMENTS: u32 = 13;
 
-/// The child body: a normal run returns at once.
+/// The child body, run only by the parent's re-exec: on its own it is
+/// NOT_RUN.
 #[test]
 fn crash_child() {
     let Some(store) = std::env::var_os(STORE_ENV) else {
+        eprintln!("NOT_RUN: crash_child runs only inside the crash test's child process");
         return;
     };
     let failpoint: u32 = std::env::var(FAILPOINT_ENV).unwrap().parse().unwrap();
@@ -147,18 +149,24 @@ fn kill_at(store: &Path, n: u32) -> (usize, usize) {
 
 #[test]
 fn killed_after_every_statement_the_store_is_wholly_old_or_new_and_a_rerun_converges() {
+    for (variant, folder) in SQLITE_V2 {
+        crash_sweep(variant, folder);
+    }
+}
+
+fn crash_sweep(variant: &str, folder: &str) {
     let temp = Temp::new("upgrade-crash-heads");
-    let heads = read_heads(&sqlite_v2_copy(temp.path())).unwrap();
+    let heads = read_heads(&sqlite_fixture_copy(temp.path(), folder)).unwrap();
     for n in 1..=STATEMENTS {
         let temp = Temp::new("upgrade-crash");
-        let store = sqlite_v2_copy(temp.path());
+        let store = sqlite_fixture_copy(temp.path(), folder);
         let (frames, commits) = kill_at(&store, n);
         let committed = n == STATEMENTS;
         // J: the upgrade's one write transaction is one WAL commit frame.
         assert_eq!(
             commits,
             usize::from(committed),
-            "failpoint {n}: {frames} frames"
+            "{variant} failpoint {n}: {frames} frames"
         );
         let format = sqlite_format(&store).unwrap();
         assert_eq!(

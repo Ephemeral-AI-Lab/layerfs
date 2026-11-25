@@ -15,7 +15,7 @@ pub(crate) struct Context<'c> {
     pub(crate) connection: &'c Connection,
     /// The `user_version` the transaction holds now.
     pub(crate) user_version: i64,
-    /// The live-schema form the last recognition found (`"d"`, `"d+appended"`).
+    /// The variant the last recognition found (`"d"`, `"d-appended"`).
     pub(crate) form: Option<&'static str>,
     statements: u32,
     failpoint: Option<u32>,
@@ -106,7 +106,7 @@ pub(crate) fn steps<'c>() -> [Step<Context<'c>>; 1] {
         from: 2,
         to: 3,
         raw: &[(36, 56), (37, 57), (38, 58), (42, 62), (43, 63), (44, 64)],
-        variants: &["d"],
+        variants: &["d", "d-appended"],
         recognize: recognize_2,
         apply: apply_2,
     }]
@@ -117,7 +117,9 @@ pub(crate) const FLOOR: i64 = 2;
 
 /// Step 2 -> 3 accepts the Store exactly when it records source (d) for
 /// its `user_version`, its recorded definition is its live one, and every
-/// live row is the (d) row, fresh or position-migrated.
+/// live row is the (d) row: variant `d` (every row as the frozen scripts
+/// write it) or `d-appended` (the position columns the schema-2 open
+/// migrations appended end their tables).
 fn recognize_2(context: &mut Context<'_>) -> Result<Option<&'static str>, UpgradeError> {
     let user_version = context.user_version;
     if !matches!(user_version, 36..=38 | 42..=44) {
@@ -146,7 +148,7 @@ fn recognize_2(context: &mut Context<'_>) -> Result<Option<&'static str>, Upgrad
     let (fresh, migrated) =
         frozen::rows_v2(user_version).map_err(|e| error(e, "building the frozen schema"))?;
     context.form = frozen::recognize_rows(&live, &fresh, &migrated);
-    Ok(context.form.map(|_| "d"))
+    Ok(context.form)
 }
 
 /// Step 2 -> 3's statements, in order (§5.1 step 4).

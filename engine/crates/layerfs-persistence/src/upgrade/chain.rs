@@ -6,7 +6,7 @@
 //! transaction (`C`). The engine begins the transaction, calls [`run`],
 //! checks the result once, and commits; any error from [`run`] leaves the
 //! engine to roll everything back, so a chain never stops in the middle.
-use super::types::UpgradeError;
+use super::types::{UpgradeError, NEWER};
 
 /// One format change `from -> to` (`to == from + 1`).
 pub struct Step<C> {
@@ -41,7 +41,7 @@ impl<C> Step<C> {
 pub fn plan<C>(steps: &[Step<C>], from: i64, latest: i64) -> Result<Vec<&Step<C>>, UpgradeError> {
     if from > latest {
         return Err(UpgradeError::Unsupported(format!(
-            "format {from} is newer than this build, which writes format {latest}"
+            "format {from} is {NEWER}, which writes format {latest}"
         )));
     }
     let mut planned = Vec::new();
@@ -75,7 +75,8 @@ pub fn run<C>(
     let planned = plan(steps, from, latest)?;
     let mut names = Vec::with_capacity(planned.len());
     for step in planned {
-        if (step.recognize)(context)?.is_none() {
+        let variant = (step.recognize)(context)?;
+        if !variant.is_some_and(|variant| step.variants.contains(&variant)) {
             return Err(UpgradeError::Unsupported(format!(
                 "the Store's recorded schema is not one step {} recognizes (format {}, \
                  variants {})",
