@@ -126,17 +126,18 @@ pub enum BackendError {
     Capacity,
     /// The reply or stored layout violated a checked invariant.
     Integrity,
-    /// A SQLite Store of schema version 1 (before #91): refused at open with
-    /// the offline conversion named, never misread.
+    /// A SQLite Store of schema version 1 (before #91): refused at open by
+    /// name, never misread; nothing converts it (#804).
     SchemaVersion1,
     /// A SQLite Store of schema version 2 (before #776's Commit attempt):
-    /// refused at open by name, never converted.
+    /// refused at open by name; only `store upgrade` converts it (#804).
     SchemaVersion2,
     /// A PostgreSQL Store of schema version 2, written before 2.0's ancestor
     /// lists and pack directories (#758): refused at open, never converted.
     PostgresSchema2,
     /// A PostgreSQL Store of schema version 3, written before each Commit
-    /// recorded its attempt (#776 R1): refused at open, never converted.
+    /// recorded its attempt (#776 R1): refused at open; only `store upgrade`
+    /// converts it (#804).
     PostgresSchema3,
     /// Stored SQLite layout is not implemented; this is not a corruption verdict.
     UnsupportedSchemaVersion(i64),
@@ -146,11 +147,11 @@ pub enum BackendError {
 /// The refusal a schema version 1 SQLite Store gets at open.
 pub(crate) const SCHEMA_VERSION_1: &str =
     "schema version 1 Store (one row per inode value and binding hint, before #91): \
-convert a closed copy offline with tools/store_blocks.py migrate";
+not supported by this release, which has no upgrade for it";
 /// The refusal a schema version 2 SQLite Store gets at open (#776 R1).
 pub(crate) const SCHEMA_VERSION_2: &str =
     "SQLite Store schema version 2 (before each Commit recorded its attempt, #776): \
-not supported by this release and not migrated; create a new Store";
+not opened by this release; upgrade it in place with `layerfs store upgrade <store>`";
 /// The refusal a PostgreSQL Store of schema version 2 gets at open (#758 D5).
 pub(crate) const POSTGRES_SCHEMA_2: &str =
     "PostgreSQL Store schema version 2 (before 2.0's ancestor lists and pack directories, #758): \
@@ -158,9 +159,9 @@ not supported by this release and not migrated; create a new Store";
 /// The refusal a PostgreSQL Store of schema version 3 gets at open (#776 R1).
 pub(crate) const POSTGRES_SCHEMA_3: &str =
     "PostgreSQL Store schema version 3 (before each Commit recorded its attempt, #776): \
-not supported by this release and not migrated; create a new Store";
+not opened by this release; upgrade it in place with `layerfs store upgrade <store>`";
 /// The refusals of a Store of an older schema version that this release
-/// neither reads nor migrates: its remedy is a new Store.
+/// does not open: [`upgradable_store`] tells which `store upgrade` converts.
 const OUTDATED: [&str; 3] = [SCHEMA_VERSION_2, POSTGRES_SCHEMA_2, POSTGRES_SCHEMA_3];
 /// The open refusal of an older-format Store that `text` carries, if any:
 /// one of the exact statuses such a Store is refused with at open

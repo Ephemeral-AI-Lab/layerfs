@@ -1,4 +1,4 @@
-//! The upgrade's entry points (skeleton; W1 implements).
+//! The upgrade's entry points; each engine's run is under its backend.
 use super::types::{Format, FormatEvidence, UpgradeError, UpgradeReport, UpgradeRequest};
 use std::path::Path;
 
@@ -11,8 +11,7 @@ pub fn sqlite_format(path: &Path) -> Result<Format, UpgradeError> {
 /// [`sqlite_format`] with the doctor's evidence (raw `user_version`,
 /// recorded-source variant).
 pub fn sqlite_format_evidence(path: &Path) -> Result<FormatEvidence, UpgradeError> {
-    let _ = path;
-    Err(UpgradeError::Failed("not implemented".to_owned()))
+    crate::backend::sqlite::upgrade::run::evidence(path)
 }
 
 /// The PostgreSQL Store's format in `schema` at `url`: one connect, one `SELECT`.
@@ -22,8 +21,7 @@ pub fn postgresql_format(url: &str, schema: &str) -> Result<Format, UpgradeError
 
 /// [`postgresql_format`] with the doctor's evidence.
 pub fn postgresql_format_evidence(url: &str, schema: &str) -> Result<FormatEvidence, UpgradeError> {
-    let _ = (url, schema);
-    Err(UpgradeError::Failed("not implemented".to_owned()))
+    crate::backend::postgresql::upgrade::run::evidence(url, schema)
 }
 
 /// Upgrades the closed-to-others SQLite Store at `path` in place, in one
@@ -34,8 +32,7 @@ pub fn upgrade_sqlite(
     request: &UpgradeRequest<'_>,
     phase: &mut dyn FnMut(&'static str),
 ) -> Result<UpgradeReport, UpgradeError> {
-    let _ = (path, request, phase);
-    Err(UpgradeError::Failed("not implemented".to_owned()))
+    crate::backend::sqlite::upgrade::run::upgrade(path, request, phase)
 }
 
 /// Upgrades the PostgreSQL Store in `schema` at `url` in place: connect and
@@ -47,6 +44,5 @@ pub fn upgrade_postgresql(
     request: &UpgradeRequest<'_>,
     phase: &mut dyn FnMut(&'static str),
 ) -> Result<UpgradeReport, UpgradeError> {
-    let _ = (url, schema, request, phase);
-    Err(UpgradeError::Failed("not implemented".to_owned()))
+    crate::backend::postgresql::upgrade::run::upgrade(url, schema, request, phase)
 }
