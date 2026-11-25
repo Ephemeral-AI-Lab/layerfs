@@ -100,7 +100,7 @@ TODAY_CODES = {
     "Capacity": ["NoSpace"],
     "Unsupported": ["OldStore"],
     "Unavailable": ["Denied", "Unauthorized", "StaleSandbox", "StaleStore", "Timeout"],
-    "Failed": ["UnknownMethod"],
+    "Failed": ["UnknownMethod", "Cancelled"],  # Cancelled: SU-2 (#804)
 }
 EXIT_CODES = {
     "0": "done; a doctor exits 0 once its report is made, whatever it found",
@@ -114,7 +114,7 @@ TODAY_REDACTED = ["command", "message", "old", "new", "password", "url", "path",
                   "to_path", "path_prefix", "pattern"]
 NEW_REDACTED = ["cwd", "env", "include", "exclude", "stdin"]  # new arguments that are redacted too (review fix 9)
 ARG_FIELDS = ["name", "kind", "optional", "default", "help", "required", "redact", "shell", "repeat"]
-WITH_ORDER = ["live", "stats", "space", "docker", "platforms", "tree", "patch"]  # DECISIONS.md, "Simplicity changes adopted"
+WITH_ORDER = ["live", "stats", "space", "docker", "platforms", "tree", "patch", "format"]  # DECISIONS.md, "Simplicity changes adopted"; format: SU-3
 WITH_GONE = {"write": "R5", "leftovers": "R6", "storage": "folded into stats", "usage": "folded into stats"}
 # today's calls with no row: removed with no successor (DECISIONS.md, the version that removed them)
 REMOVED_TODAY = {"doctor.fix": "v20: LayerFS removes leftovers itself; no call lists or removes them"}

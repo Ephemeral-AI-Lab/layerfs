@@ -2,18 +2,18 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `store` calls: list and read Stores, create a sqlite Store, connect a PostgreSQL database as a Store with its login, attach machines to it, move, remove, compact and check a Store, within the [SDK](README.md). `store.doctor` is one of [the doctors](../../control/doctor/README.md).
+The `store` calls: list and read Stores, create a sqlite Store, connect a PostgreSQL database as a Store with its login, attach machines to it, move, remove, compact, upgrade and check a Store, within the [SDK](README.md). `store.doctor` is one of [the doctors](../../control/doctor/README.md).
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/store`](../../../../api/crates/layerfs-api/src/store) (one file per call), [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) (`sqlite/`, `postgresql/`, `list.rs`, `get.rs`, `state.rs`, `live.rs`, `stats.rs`, `intent.rs`, `compact.rs`), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
+| Source | [`api/crates/layerfs-api/src/store`](../../../../api/crates/layerfs-api/src/store) (one file per call), [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) (`sqlite/`, `postgresql/`, `list.rs`, `get.rs`, `state.rs`, `live.rs`, `stats.rs`, `intent.rs`, `compact.rs`, `upgrade.rs`), [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
 | Runs by default | the caller's process (records, locks, leases, saved passwords, PostgreSQL connections); a sqlite Store's file steps run in its machine's worker when it is not on a locally executing machine |
 | Design | [Stores and projects](../../control/stores-and-projects/README.md) (records, placement, leases), [SQLite and PostgreSQL](../../control/stores-and-projects/sqlite-and-postgresql.md), [Engine: Store](../../engine/store/README.md) |
 
 ## Calls
 
 ```text
-  reads, any time:  list [--with stats]    get [--with live,stats]    doctor
+  reads, any time:  list [--with stats,format]    get [--with live,stats,format]    doctor
                          |
      sqlite              |                 PostgreSQL
      ------              |                 ----------
@@ -26,6 +26,7 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
         v
      remove (file + projects)
      compact (both engines: reclaim dead bytes)
+     upgrade (both engines: an older format to the latest, in place)
 ```
 
 | Call | Engine | Short answer | MCP |
@@ -41,6 +42,7 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
 | [`store.remove`](#storeremove) | sqlite | `{ ok }`, or `{ left }` | `admin` |
 | [`store.repair_mount_holders`](#storerepair_mount_holders) | both | a page of holders or done rows (`items`, `next_cursor`), or one settled/released op | `admin` |
 | [`store.compact`](#storecompact) | both | `{ freed_bytes }` | `admin` |
+| [`store.upgrade`](#storeupgrade) | both | `{ outcome }` | `admin` |
 | [`store.doctor`](#storedoctor) | both | the doctor report | `admin` |
 
 A sqlite Store is opened with the Normal profile (WAL,
@@ -117,7 +119,7 @@ $ layerfs store list
 A Store's record and state.
 
 ```text
-CLI     layerfs store get <store> [--with live,stats]
+CLI     layerfs store get <store> [--with live,stats,format]
 Node    await layerfs.store.get(store, { with })
 Python  layerfs.store.get(store, *, with_=None)
 ```
@@ -138,6 +140,7 @@ Python  layerfs.store.get(store, *, with_=None)
 | `backups[]` long | `bucket, file, sha256, heads_sha256, last, attempt` |
 | `--with live` | adds `holders`, `phases`, `behind`, `server_version`, `latency_ms` |
 | `--with stats` | adds `size`, `logical_bytes`, `canonical_bytes`, `stored_bytes`, `metadata_bytes`, `file_bytes`, `reusable_bytes`, `dedupe`, `compression`, `init` |
+| `--with format` | adds `format`: `version`, `latest`, `status`, `fix` |
 | call | writes one call-log line; MCP `admin` |
 
 A Store's record and records-only state
@@ -200,6 +203,20 @@ it), and reads its statistics totals in constant work: `size`,
 `compression` (ratios as text, six decimals) and `init` (the first project
 init's figures, or null). `logical_bytes` sums saved trees over every
 Commit, so it is not a deduplication numerator.
+
+**`--with format`** (#804) reads the Store's format without opening it,
+starting nothing: a sqlite Store's file header on a raw read-only
+connection (through its machine's worker, `store.format`, on another
+machine), one `SELECT` on a PostgreSQL Store. So it answers on a Store this
+build refuses to open, where `--with live` and `--with stats` fail. The
+`format` section: `version` (one integer per engine: SQLite 2, 3;
+PostgreSQL 3, 4; null when unrecognized), `latest` (the format this build
+writes), `status` (`current`; `outdated`, an upgrade path exists;
+`unsupported`, none: below the floor, transient or unrecognized; `newer`,
+written by a newer build) and `fix` (`layerfs store upgrade <store>` when
+outdated, `layerfs store remove <store>` or `layerfs store disconnect
+<store>` when unsupported, else null). `store list --with format` adds each
+item's `format`.
 
 Run on macOS native with a debug build:
 
@@ -724,6 +741,81 @@ $ layerfs store compact shop --progress
 {"phase":"mark","done":null,"total":null}
 {"freed_bytes":0}
 ```
+
+### store.upgrade
+
+Bring an older Store to the latest format, in place.
+
+```text
+CLI     layerfs store upgrade <store> [--progress]
+Node    await layerfs.store.upgrade(store, { on_progress })
+Python  layerfs.store.upgrade(store, *, on_progress=None)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `store` | name | a Store name |
+| `on_progress` option | function |  |
+
+| Answer | Keys |
+| --- | --- |
+| short | `outcome` |
+| long | `outcome, store, engine, format_before, format_after, steps, warnings` |
+| call | sends progress; writes one call-log line; MCP `admin` |
+
+Brings a Store written in an earlier format in place, in one transaction,
+to the latest format this build writes, keeping everything it holds (#804;
+[`upgrade.rs`](../../../../api/crates/layerfs-api/src/store/upgrade.rs), one
+call of [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-control/src/store.rs)
+`upgrade`). Nothing else converts a Store: open refuses an older one
+(`OldStore`, whose `fix` names this call when a step exists). The steps
+today: SQLite 2 → 3 and PostgreSQL 3 → 4. It runs where the Store's record
+says: a sqlite Store on `native` in this process, on another machine in that
+machine's worker, a PostgreSQL Store from this process. `outcome` is
+`upgraded`, or `current` for a Store already at the latest format, which is
+not changed; `steps` lists the steps applied (`["2->3"]`, `[]` when
+current) and `warnings` what failed after COMMIT (a busy checkpoint, a
+sidecar left, the confirming open), which never fails the call. Progress
+phases, sent as each starts with null counts: `check`, `convert`, `verify`,
+`commit` (SQLite), `check`, `convert` (PostgreSQL); `commit` is the point of
+no return.
+
+**Cancel.** The `layerfs` command blocks SIGINT and SIGTERM for this call
+alone, before any thread starts, and takes them on a thread
+([`signals.rs`](../../../../api/crates/layerfs-cli/src/signals.rs)): the
+first sets the process-wide cancel request
+([`cancel.rs`](../../../../control/crates/layerfs-home/src/cancel.rs)), which
+the upgrade reads until `commit` starts, and the call answers `Failed` with
+`detail.code: "Cancelled"`, "cancelled before COMMIT; nothing changed"; the
+second exits at once (125) with `Unknown` and `fix: layerfs store upgrade
+<store>`. A signal after the call answered changes nothing. Ctrl-D does
+nothing: the call reads no input. On a worker a cancel is the request
+`store.cancel { op }` on a second connection; on PostgreSQL the connection's
+cancel request, and an `Ok` reply is `upgraded` whatever was asked.
+
+| Refusal | When | Next |
+| --- | --- | --- |
+| `InUse` | a Workspace of the Store is mounted, a lease is held, a Sandbox uses it, or (sqlite) another process has the file open | the call that releases it, when known |
+| `Busy` | another Store op runs (named, with `op`), the Writer lane or a lock was not granted at once, or old-build mount rows are live | |
+| `Unresolved` | an earlier upgrade's outcome is not known and its owner is gone | `fix: layerfs store upgrade <store>` (it adopts and settles it) |
+| `Unavailable` | the Store's machine is stopped, or its worker is of another build | as for `store.compact` |
+| `Unsupported` | not a format this build can upgrade: an unrecognized source, a version with no step, a pre-2.0 Store, or one newer than this build (said as such) | `fix: layerfs store remove <store>` (sqlite), `layerfs store disconnect <store>` (PostgreSQL); none for a newer Store |
+| `Failed` | a check before COMMIT failed (named), or cancelled (`detail.code: "Cancelled"`) | |
+| `Unknown` | a lost reply, a killed process or a second signal; the Store is wholly old or wholly new | `fix: layerfs store upgrade <store>`, which answers `current` or does the work |
+
+```console
+$ layerfs store upgrade shop --progress
+{"phase":"check","done":null,"total":null}
+{"phase":"convert","done":null,"total":null}
+{"phase":"verify","done":null,"total":null}
+{"phase":"commit","done":null,"total":null}
+{"outcome":"upgraded"}
+$ layerfs store upgrade shop
+{"outcome":"current"}
+```
+
+(The console lines are the contract's shape; a run on this build is
+recorded at integration.)
 
 ### store.doctor
 

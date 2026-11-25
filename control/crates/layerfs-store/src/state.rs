@@ -76,20 +76,23 @@ pub fn broken(record: &StoreRecord, reason: Reason) -> State {
 }
 
 /// The code a Store call is refused with when its Store is of an older
-/// schema version this release neither reads nor migrates (#776): folded
-/// into `Unsupported` at the call boundary, its message the version the
-/// Store was refused by, its fix [`outdated_fix`]. A project of such a
-/// Store is `blocked` by it, `outdated` (`project::state::unread`).
+/// format this release does not open (#776): folded into `Unsupported` at
+/// the call boundary, its message the version the Store was refused by,
+/// its fix [`outdated_fix`]. A project of such a Store is `blocked` by it,
+/// `outdated` (`project::state::unread`).
 pub const OLD_STORE: &str = "OldStore";
 
-/// The fix of older-format Store `store`: this build cannot open it, so it
-/// goes, and a new Store takes its place. A sqlite Store is removed with
-/// its file; a PostgreSQL Store is disconnected, which keeps its data for
-/// the earlier build that wrote it.
-pub fn outdated_fix(store: &str, postgresql: bool) -> String {
-    let call = match postgresql {
-        true => "disconnect",
-        false => "remove",
+/// The fix of older-format Store `store`, refused with version refusal
+/// `status`: `layerfs store upgrade <store>` when `status` names a format
+/// `store upgrade` brings to the latest (SQLite 2, PostgreSQL 3, #804);
+/// otherwise this build cannot open it, so it goes and a new Store takes
+/// its place: a sqlite Store is removed with its file, a PostgreSQL Store
+/// disconnected, which keeps its data for the earlier build that wrote it.
+pub fn outdated_fix(store: &str, postgresql: bool, status: &str) -> String {
+    let call = match (layerfs_persistence::upgradable_store(status), postgresql) {
+        (true, _) => "upgrade",
+        (false, true) => "disconnect",
+        (false, false) => "remove",
     };
     format!("layerfs store {call} {}", shell_word(store))
 }

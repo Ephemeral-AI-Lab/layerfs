@@ -329,7 +329,7 @@ mod with_a_store {
     /// A Store of schema version 2 (#776 R1: before each Commit recorded
     /// its attempt) is refused at open by its version: `store get --with
     /// stats` answers `Unsupported` (raised `OldStore`) with that refusal
-    /// as its message and `store remove` as its fix, its projects are
+    /// as its message and `store upgrade` as its fix (#804: schema 2 has a step), its projects are
     /// `blocked` by it `outdated`, and its doctor fails `store.schema`
     /// with the same fix, its project's check waiting on it `outdated`.
     /// None says `Failed` or Debug text.
@@ -362,7 +362,7 @@ mod with_a_store {
         assert_eq!(stats.detail.get_text("code"), Some("OldStore"), "{stats:?}");
         assert_eq!(
             stats.detail.get_text("fix"),
-            Some("layerfs store remove shop")
+            Some("layerfs store upgrade shop")
         );
         let by = SdkValue::map([("store", t("shop")), ("reason", t("outdated"))]);
         let got = ok(&home, "project.get", &[("project", t("shop/api"))]);
@@ -373,7 +373,7 @@ mod with_a_store {
         let doctor = format!("{:?}", ok(&home, "store.doctor", &[("store", t("shop"))]));
         let said = [
             "store.schema",
-            "layerfs store remove shop",
+            "layerfs store upgrade shop",
             version,
             "(\"reason\", Text(\"outdated\"))",
         ];

@@ -1,7 +1,7 @@
 //! `store.list` (call surface 2.0): every Store, from the home's records.
 //! Each item is [`crate::get::summary`] in its records-only state; each
 //! machine's state is derived once for all its Stores. Nothing is probed
-//! unless `--with stats` asks for sizes.
+//! unless `--with stats` asks for sizes or `--with format` for formats.
 use crate::get::summary;
 use crate::place;
 use crate::record::StoreRecord;
@@ -46,8 +46,24 @@ fn size(home: &Path, record: &StoreRecord, unanswered: &mut Vec<String>) -> SdkV
 /// that machine, each with its records-only state; with `stats`, each
 /// item's `size`.
 pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Machines) -> Outcome {
+    list_with(home, machine, stats, false, machines)
+}
+
+/// [`list`], with `format` each item's `format` section (#804,
+/// [`crate::formats`]), read without opening the Store; a machine that did
+/// not answer is not asked again for its other Stores.
+pub fn list_with(
+    home: &Path,
+    machine: Option<&str>,
+    stats: bool,
+    format: bool,
+    machines: state::Machines,
+) -> Outcome {
     let mut derived: BTreeMap<String, State> = BTreeMap::new();
     let mut unanswered = Vec::new();
+    // the machines a format read did not reach: kept apart from the size
+    // reads', where any failure skips a machine's later Stores
+    let mut unformatted = Vec::new();
     let mut items = Vec::new();
     for record in crate::record::stores(home)? {
         let on = state::placed(&record);
@@ -68,6 +84,10 @@ pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Ma
         let mut item = summary(home, &record, &state, observed, false)?;
         if let (true, SdkValue::Map(fields)) = (stats, &mut item) {
             fields.push(("size".to_owned(), size(home, &record, &mut unanswered)));
+        }
+        if let (true, SdkValue::Map(fields)) = (format, &mut item) {
+            let section = crate::formats::of(home, &record, &mut unformatted);
+            fields.push(("format".to_owned(), section));
         }
         items.push(item);
     }

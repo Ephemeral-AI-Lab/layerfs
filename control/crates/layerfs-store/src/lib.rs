@@ -16,6 +16,7 @@ pub mod call;
 pub mod calls;
 pub mod compact;
 pub mod diagnostic;
+pub mod formats;
 pub mod get;
 #[doc(hidden)]
 pub mod identity;
@@ -48,6 +49,7 @@ pub mod state;
 mod stats;
 #[doc(hidden)]
 pub mod unknown;
+pub mod upgrade;
 pub mod words;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.

@@ -517,9 +517,10 @@ fn schema_version_1_store_is_refused_before_prepare_and_keeps_destination() {
         message.contains("schema version 1"),
         "refusal must name the Store format: {message}"
     );
+    // #804 removed the offline conversion: the refusal names no tool
     assert!(
-        message.contains("tools/store_blocks.py migrate"),
-        "refusal must name the offline conversion: {message}"
+        !message.contains("store_blocks.py"),
+        "refusal must name no conversion tool: {message}"
     );
 
     assert!(

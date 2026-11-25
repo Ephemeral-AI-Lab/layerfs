@@ -1,6 +1,7 @@
 //! `store.get`: a Store's record and state, from the home's records; with
 //! `--with live`, read where the Store lives; with `--with stats`, its
-//! counters.
+//! counters; with `--with format`, its format, read without opening it
+//! (#804).
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::{Context, Form, Part, Section};
@@ -136,6 +137,7 @@ pub(crate) const CALL: Call = call(
             "init",
         ],
     ),
+    Section::own("format", &["version", "latest", "status", "fix"]),
 ]);
 
 /// Runs `store.get`: the Store is read only for the sections asked for.
@@ -144,6 +146,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let with = With {
         live: context.with("live"),
         stats: context.with("stats"),
+        format: context.with("format"),
     };
     let (home, events) = context.parts();
     let reads = layerfs_control::store::reads();

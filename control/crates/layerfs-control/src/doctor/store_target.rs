@@ -392,14 +392,16 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     }
     // a file of an older schema version: outdated, with the call that
     // clears it (`state::outdated_fix`)
+    let format = found.get("format");
     if let Some(why) = text("outdated") {
         checks.pass(IDENTITY, "the id in its file is the id in its record");
         checks.fail(SCHEMA, format!("its file is of an older format: {why}"));
-        checks.evidence(
+        let reason = ("reason", SdkValue::text(Reason::Outdated.word()));
+        checks.evidence(SCHEMA, with_format(vec![reason], format));
+        checks.fix(
             SCHEMA,
-            SdkValue::map([("reason", SdkValue::text(Reason::Outdated.word()))]),
+            layerfs_store::state::outdated_fix(name, false, &why),
         );
-        checks.fix(SCHEMA, layerfs_store::state::outdated_fix(name, false));
         return;
     }
     if let Some(why) = text("schema_error") {
@@ -412,17 +414,14 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         );
         // no fix: replacing this file in place can discard newer data;
         // restore a backup under a new name or use the build that wrote it
-        checks.evidence(
-            SCHEMA,
-            SdkValue::map([
-                ("reason", SdkValue::text("schema_unreadable")),
-                ("machine", SdkValue::text(machine.as_str())),
-            ]),
-        );
+        let reason = ("reason", SdkValue::text("schema_unreadable"));
+        let on = ("machine", SdkValue::text(machine.as_str()));
+        checks.evidence(SCHEMA, with_format(vec![reason, on], format));
         return;
     }
     checks.pass(IDENTITY, "the id in its file is the id in its record");
     checks.pass(SCHEMA, "its schema is the one this build reads");
+    checks.evidence(SCHEMA, with_format(Vec::new(), format));
     // the live mount admissions and one bounded page of the retained done
     // audit: reported as evidence, never released or settled by a doctor
     match found.get("mount_holders") {
@@ -476,12 +475,13 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 }
 
 /// The shallow cut of the sqlite file at `path`, as this process or a
-/// worker makes it: `{ found, compaction, unsupported, busy,
+/// worker makes it: `{ found, compaction, format, unsupported, busy,
 /// identity_error, outdated, schema_error, heads, heads_error }` (`busy`:
 /// another writer holds the file; `outdated`: it is of an older schema
 /// version), `compaction` the run its `<store>.compact-op` records
-/// (`report::compact_status`), its heads read only when `heads` and the
-/// schema check passed.
+/// (`report::compact_status`), `format` its format from its header
+/// ([`format_evidence`], or `{ error }`), its heads read only when `heads`
+/// and the schema check passed.
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     let mut fields = vec![("found", SdkValue::Bool(path.is_file()))];
     if !path.is_file() {
@@ -490,6 +490,14 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     if let Some(run) = layerfs_store::compact::recorded_run(path) {
         fields.push(("compaction", run));
     }
+    // the format from its header alone, whatever this build makes of it
+    fields.push((
+        "format",
+        match layerfs_persistence::upgrade::sqlite_format_evidence(path) {
+            Ok(evidence) => format_evidence(&evidence),
+            Err(error) => SdkValue::map([("error", SdkValue::text(upgrade_error(&error)))]),
+        },
+    ));
     match diagnostic::sqlite_schema(path, identity) {
         Err(error) if error.code == "Unsupported" => {
             fields.push(("unsupported", SdkValue::Text(error.message)))
@@ -643,7 +651,10 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
                 layerfs_store::observed::record(probe.home, record.name(), None, &failed);
                 false
             }
-            None => here(probe.home, record),
+            None => {
+                postgresql_format(record, checks);
+                here(probe.home, record)
+            }
         },
     };
     // the machines dial the same URL with the same login: when this
@@ -856,4 +867,62 @@ fn connect_fix(record: &StoreRecord, login: bool) -> String {
         "layerfs store connect {} <url>{login}",
         shell_word(record.name())
     )
+}
+
+/// `store.schema`'s evidence (#804 §2): `{ version, latest, status, raw,
+/// variant }`, the format with the raw encoding (`user_version`, or
+/// `history_meta.schema_version`) and the recorded-source variant.
+fn format_evidence(evidence: &layerfs_persistence::upgrade::FormatEvidence) -> SdkValue {
+    let format = &evidence.format;
+    SdkValue::map([
+        (
+            "version",
+            format.version.map_or(SdkValue::Null, SdkValue::Int),
+        ),
+        ("latest", SdkValue::Int(format.latest)),
+        ("status", SdkValue::text(format.status.word())),
+        ("raw", SdkValue::Int(evidence.raw)),
+        ("variant", SdkValue::opt_text(evidence.variant.clone())),
+    ])
+}
+
+/// The engine's words for a format it could not read.
+fn upgrade_error(error: &layerfs_persistence::upgrade::UpgradeError) -> String {
+    use layerfs_persistence::upgrade::UpgradeError;
+    match error {
+        UpgradeError::InUse(why)
+        | UpgradeError::Busy(why)
+        | UpgradeError::Unsupported(why)
+        | UpgradeError::Failed(why)
+        | UpgradeError::Unknown(why) => why.clone(),
+        UpgradeError::Cancelled => layerfs_store::upgrade::CANCELLED.to_owned(),
+    }
+}
+
+/// `fields` with the shallow cut's `format` (`{ version, latest, status,
+/// raw, variant }` or `{ error }`) as `format` beside them.
+fn with_format(mut fields: Vec<(&str, SdkValue)>, format: Option<&SdkValue>) -> SdkValue {
+    if let Some(format) = format {
+        fields.push(("format", format.clone()));
+    }
+    map_of(fields)
+}
+
+/// PostgreSQL Store `record`'s format as `store.schema`'s evidence: one
+/// connect and one `SELECT` (`postgresql_format_evidence`).
+fn postgresql_format(record: &StoreRecord, checks: &mut Checks) {
+    let url = layerfs_store::record::url(record);
+    let schema = layerfs_store::upgrade::postgresql_schema(record);
+    let format = match (url, schema) {
+        (Ok(url), Ok(schema)) => {
+            match layerfs_persistence::upgrade::postgresql_format_evidence(&url, &schema) {
+                Ok(evidence) => format_evidence(&evidence),
+                Err(error) => SdkValue::map([("error", SdkValue::text(upgrade_error(&error)))]),
+            }
+        }
+        (Err(error), _) | (_, Err(error)) => {
+            SdkValue::map([("error", SdkValue::text(error.message))])
+        }
+    };
+    checks.evidence(SCHEMA, with_format(Vec::new(), Some(&format)));
 }

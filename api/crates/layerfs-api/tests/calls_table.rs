@@ -797,6 +797,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.move",
         "store.remove",
         "store.compact",
+        "store.upgrade",
         "store.doctor",
     ];
     let after = [
@@ -878,7 +879,7 @@ fn the_global_options_are_taken_out_before_the_check_on_every_call() {
     let refused = code("store.list", map(&[("with", t("live"))]));
     assert_eq!(
         refused,
-        "InvalidInput: store.list: `with` names `live`; this call takes stats"
+        "InvalidInput: store.list: `with` names `live`; this call takes stats, format"
     );
     // an empty list asks for nothing
     let reached = code("store.list", map(&[("with", SdkValue::List(vec![]))]));

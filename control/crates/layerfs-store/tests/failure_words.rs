@@ -74,13 +74,23 @@ fn a_history_failure_keeps_the_history_crates_words() {
 /// is read back to it, as `sandbox remove` reads a refusal; any other
 /// refusal carries none. Its fix removes a sqlite Store and disconnects a
 /// PostgreSQL one, which keeps its data.
+///
+/// The version refusal is the engine's own, from an open of a Store whose
+/// header says schema version 2, so the test follows its wording.
 #[test]
 fn an_old_format_store_is_named_by_its_version_refusal() {
     use layerfs_home::outcome::refused;
     use layerfs_store::state::{outdated_fix, outdated_status, OLD_STORE};
-    let version = "SQLite Store schema version 2 (before each Commit recorded its attempt, \
-#776): not supported by this release and not migrated; create a new Store";
-    let raised = refused(OLD_STORE, version);
+    let Some(raised) = schema_2_open_refusal() else {
+        return;
+    };
+    assert_eq!(raised.code, OLD_STORE, "{raised:?}");
+    let version = raised.message.as_str();
+    assert_eq!(
+        layerfs_persistence::outdated_store(version),
+        Some(version),
+        "the message is the engine's version refusal itself"
+    );
     assert_eq!(outdated_status(&raised).as_deref(), Some(version));
     let wrapped = format!(
         "Store open: physical Store I/O: pack persistence: Refused {{ status: {version:?} }}"
@@ -92,9 +102,54 @@ fn an_old_format_store_is_named_by_its_version_refusal() {
         "Store open: pack persistence: Refused { status: \"Closed\" }",
     );
     assert_eq!(outdated_status(&other), None);
-    assert_eq!(outdated_fix("shop", false), "layerfs store remove shop");
+    // schema version 2 has a step (#804): its fix is the upgrade
     assert_eq!(
-        outdated_fix("my pg", true),
+        outdated_fix("shop", false, version),
+        "layerfs store upgrade shop"
+    );
+    // a refusal no step takes keeps remove / disconnect
+    let none = "SQLite Store schema version 1: not supported by this release";
+    assert_eq!(
+        outdated_fix("shop", false, none),
+        "layerfs store remove shop"
+    );
+    assert_eq!(
+        outdated_fix("my pg", true, none),
         "layerfs store disconnect 'my pg'"
     );
+}
+
+/// The refusal an open of sqlite Store `shop` gets once its header says
+/// schema version 2 (`user_version` 36, at offset 60 of the closed file);
+/// `None` where this filesystem cannot hold a directly opened Store.
+fn schema_2_open_refusal() -> Option<layerfs_bridge::control::SdkRefusal> {
+    use std::os::unix::fs::PermissionsExt;
+    let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("layerfs-old-format-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    layerfs_home::home::open(&home).unwrap();
+    let name = layerfs_home::names::StoreName::parse("shop").unwrap();
+    if let Err(refusal) = layerfs_store::sqlite::create::create(&home, &name, None) {
+        assert!(
+            refusal.message.contains("does not carry SQLite locks"),
+            "{refusal:?}"
+        );
+        eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store");
+        return None;
+    }
+    let file = layerfs_home::home::paths::store_file(&home, "shop");
+    let mut bytes = std::fs::read(&file).unwrap();
+    bytes[60..64].copy_from_slice(&36u32.to_be_bytes());
+    std::fs::write(&file, bytes).unwrap();
+    let record = layerfs_store::record::StoreRecord::of(&home, "shop").unwrap();
+    let open = layerfs_store::open_args::OpenArgs::in_root(
+        &home,
+        "shop",
+        Some(record.to_record().clone()),
+    );
+    let refusal = layerfs_store::service::with_service(&open, |_| Ok(())).unwrap_err();
+    let _ = std::fs::remove_dir_all(&home);
+    Some(refusal)
 }

@@ -85,7 +85,7 @@ record. Built-in `native` and `docker` count as present without a record.
 | store | a copy a move did not retire (from the record) | warning | none: the next `layerfs store move <s>` deletes it first |
 | sandbox | record names no project, or its Store, project or machine is gone | error | `layerfs sandbox remove <x>` |
 | machine | ended owner's uncertain `op` | error | `layerfs machine remove <m>` after a create or remove, else `layerfs machine get <m> --with live` (`layerfs_machine::state::settle`) |
-| store | ended owner's uncertain `op` | error | the Store's clearing call: `layerfs store move <s> <to>`, `store remove <s>`, `store compact <s>`, else `store get <s> --with live` (`intent::clearing`) |
+| store | ended owner's uncertain `op` | error | the Store's clearing call: `layerfs store move <s> <to>`, `store remove <s>`, `store compact <s>`, `store upgrade <s>`, else `store get <s> --with live` (`intent::clearing`) |
 | sandbox | ended owner's uncertain `op` | error | `layerfs sandbox remove <x>` |
 
 A live owner's `op` is not a finding, and neither is an ended owner's

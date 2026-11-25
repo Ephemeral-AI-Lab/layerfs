@@ -314,8 +314,8 @@ fn a_store_of_the_value_group_format_is_refused_at_open() {
     // the formats before #327's commit-v3 records, refused without migration.
     // Versions 16 to 18 and 22 to 24 are schema version 1, one row per
     // value, refused since #91 without conversion.
-    // Schema version 1 is refused with the offline conversion named (to
-    // schema version 3 since #776).
+    // Schema version 1 is refused by name with no conversion named: nothing
+    // converts a 1.x Store (#804).
     for version in [16, 17, 18, 22, 23, 24] {
         let temp = Temp::new("inode-values-v1-store");
         let path = temp.join("store.sqlite");
@@ -330,14 +330,19 @@ fn a_store_of_the_value_group_format_is_refused_at_open() {
         ] {
             match opened {
                 Some(PersistenceError::Refused { status }) => {
-                    assert!(status.contains("tools/store_blocks.py migrate"), "{status}")
+                    assert!(
+                        status.starts_with("schema version 1 Store")
+                            && !status.contains("store_blocks")
+                            && !status.contains("store upgrade"),
+                        "{status}"
+                    )
                 }
                 other => panic!("{version}: {other:?}"),
             }
         }
     }
     // Schema version 2 (36 to 38, 42 to 44) recorded no Commit attempt
-    // (#776 R1): refused by name, never converted.
+    // (#776 R1): refused by name at open, naming `store upgrade` (#804).
     for version in [36, 37, 38, 42, 43, 44] {
         let temp = Temp::new("inode-values-v2-store");
         let path = temp.join("store.sqlite");
@@ -353,7 +358,9 @@ fn a_store_of_the_value_group_format_is_refused_at_open() {
             match opened {
                 Some(PersistenceError::Refused { status }) => assert!(
                     status.starts_with("SQLite Store schema version 2")
-                        && status.contains("create a new Store"),
+                        && status.contains("layerfs store upgrade <store>")
+                        && layerfs_persistence::upgradable_store(&status)
+                        && layerfs_persistence::outdated_store(&status).is_some(),
                     "{status}"
                 ),
                 other => panic!("{version}: {other:?}"),

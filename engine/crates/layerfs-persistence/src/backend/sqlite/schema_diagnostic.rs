@@ -36,6 +36,15 @@ pub(crate) fn check(
     }
     let migrated = schema_rows(&trusted, &work)?;
     let migrated_definition = definition(&migrated)?;
+    // A Store `store upgrade` brought from schema 2 (#804) has `attempt`
+    // appended after every other `commit` column, after the position columns
+    // too when the Store had been position-migrated: admitted the same way.
+    let upgraded = with_attempt_appended(&shipped_scripts(selection)?, &work)?;
+    let upgraded_definition = definition(&upgraded)?;
+    reappend_attempt(&trusted)?;
+    let migrated_upgraded = schema_rows(&trusted, &work)?;
+    let migrated_upgraded_definition = definition(&migrated_upgraded)?;
+    let candidates = [&shipped, &migrated, &upgraded, &migrated_upgraded];
     let claims = tx.query(
         "SELECT count(*) FROM history_meta WHERE id=1 AND typeof(catalog_id)='blob' AND length(catalog_id)=32 AND typeof(catalog_incarnation)='integer' AND typeof(identity_format)='integer' AND typeof(schema_version)='integer' AND typeof(binding_key)='blob' AND length(binding_key) BETWEEN 1 AND 128 AND typeof(schema_source)='text' AND schema_source=?1 AND typeof(schema_definition)='text'",
         vec![Param::Text(schema::source(selection))],
@@ -57,8 +66,14 @@ pub(crate) fn check(
         .filter(|_| recorded.len() == 1)
         .ok_or(BackendError::Integrity)?;
     let recorded_definition: String = recorded.get(1)?;
-    if !same_schema(&recorded_definition, &shipped_definition)
-        && !same_schema(&recorded_definition, &migrated_definition)
+    if ![
+        &shipped_definition,
+        &migrated_definition,
+        &upgraded_definition,
+        &migrated_upgraded_definition,
+    ]
+    .iter()
+    .any(|candidate| same_schema(&recorded_definition, candidate))
     {
         return Err(BackendError::Integrity);
     }
@@ -91,13 +106,50 @@ pub(crate) fn check(
             vec![Param::Text(kind), Param::Text(name)],
         )?;
         let live: String = live.first().ok_or(BackendError::Integrity)?.get(0)?;
-        let shipped_sql: String = row.get(2)?;
-        let migrated_sql: String = migrated[index].get(2)?;
-        if !same_schema(&live, &shipped_sql) && !same_schema(&live, &migrated_sql) {
+        let mut admitted = false;
+        for candidate in candidates {
+            let sql: String = candidate[index].get(2)?;
+            admitted |= same_schema(&live, &sql);
+        }
+        if !admitted {
             return Err(BackendError::Integrity);
         }
     }
     Ok(())
+}
+
+/// A scratch database holding the shipped scripts.
+fn shipped_scripts(
+    selection: (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema),
+) -> Result<rusqlite::Connection, BackendError> {
+    let scratch = rusqlite::Connection::open_in_memory().map_err(rows::error)?;
+    for script in schema::scripts(selection) {
+        scratch.execute_batch(&script).map_err(rows::error)?;
+    }
+    Ok(scratch)
+}
+
+/// `scratch`'s rows once `attempt` is appended as `store upgrade` appends it.
+fn with_attempt_appended(
+    scratch: &rusqlite::Connection,
+    work: &RefCell<SqlWork>,
+) -> Result<Vec<Record>, BackendError> {
+    reappend_attempt(scratch)?;
+    schema_rows(scratch, work)
+}
+
+/// Drops `commit.attempt` (and its index) and adds both back, so the column
+/// ends the column list as `ALTER TABLE ... ADD COLUMN` writes it.
+fn reappend_attempt(scratch: &rusqlite::Connection) -> Result<(), BackendError> {
+    let index =
+        "CREATE UNIQUE INDEX commit_attempt ON \"commit\"(attempt) WHERE attempt IS NOT NULL";
+    scratch
+        .execute_batch(&format!(
+            "DROP INDEX commit_attempt; ALTER TABLE \"commit\" DROP COLUMN attempt; \
+             ALTER TABLE \"commit\" ADD COLUMN attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16); \
+             {index}"
+        ))
+        .map_err(rows::error)
 }
 
 /// The schema rows the shipped scripts create, ordered as recorded.
@@ -128,7 +180,7 @@ fn definition(rows: &[Record]) -> Result<String, BackendError> {
 /// Whether two schema texts carry the same SQL. SQLite rewrites a table's
 /// stored definition when a column is appended, moving only whitespace and a
 /// separator; every token must still match, so no other schema is admitted.
-fn same_schema(left: &str, right: &str) -> bool {
+pub(crate) fn same_schema(left: &str, right: &str) -> bool {
     tokens(left) == tokens(right)
 }
 

@@ -84,6 +84,7 @@ class Progress(unittest.TestCase):
                 "machine.doctor",
                 "store.move",
                 "store.compact",
+                "store.upgrade",
                 "store.doctor",
                 "backup.create",
                 "backup.restore",

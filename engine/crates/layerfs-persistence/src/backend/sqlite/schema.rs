@@ -46,7 +46,7 @@ pub(crate) const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_un
 pub(crate) const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 pub(crate) const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
 type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
-pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
+pub(crate) fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {
         crate::SqlitePackLayout::Monolithic => OBJECTS.to_owned(),
         crate::SqlitePackLayout::GroupRows => UNITS.to_owned(),

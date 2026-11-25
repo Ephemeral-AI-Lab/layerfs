@@ -797,7 +797,7 @@ class AsyncStoreFamily:
         *,
         machine: str | None = None,
         detail: bool | None = None,
-        with_: Sequence[Literal['stats']] | None = None,
+        with_: Sequence[Literal['stats', 'format']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """every Store, from the home's records"""
@@ -806,7 +806,7 @@ class AsyncStoreFamily:
         store: str,
         *,
         detail: bool | None = None,
-        with_: Sequence[Literal['live', 'stats']] | None = None,
+        with_: Sequence[Literal['live', 'stats', 'format']] | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """a Store's record and state"""
@@ -892,6 +892,16 @@ class AsyncStoreFamily:
         log_tag: str | None = None,
     ) -> Result:
         """reclaim dead bytes from one Store"""
+    async def upgrade(
+        self,
+        store: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """bring an older Store to the latest format, in place"""
     async def doctor(
         self,
         store: str,
