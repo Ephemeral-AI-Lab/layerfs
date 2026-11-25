@@ -42,10 +42,15 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
 /// lost reply or an unresolved earlier run, and for a format this build
 /// cannot upgrade (not one newer than this build) the Store's `store
 /// remove` (sqlite) or `store disconnect` (PostgreSQL, which keeps its data).
+/// The process-wide cancel request is cleared when the call returns.
 pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
     let store = name.as_str();
     let cancel = layerfs_home::cancel::flag();
-    layerfs_store::upgrade::upgrade_with(home, events, store, cancel, RELATED).map_err(|refusal| {
+    // a cancel asked for before the run still stops it; once the answer is
+    // decided the request is dropped, so it does not cancel a later call
+    let outcome = layerfs_store::upgrade::upgrade_with(home, events, store, cancel, RELATED);
+    layerfs_home::cancel::clear();
+    outcome.map_err(|refusal| {
         if refusal.code != "Unsupported" || refusal.message.contains("newer than this build") {
             return with_store_fix(home, store, refusal, "upgrade");
         }
