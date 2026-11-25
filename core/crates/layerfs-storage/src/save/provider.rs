@@ -40,6 +40,7 @@ impl Save<'_> {
                     && state.pending.pending_canonical(*id).is_none()
                     && !state.deferred.holds(*id)
                     && state.packer.location(*id).is_none()
+                    && !state.resolved.holds(*id)
             })
             .collect();
         state.storage.source.locate(&stored)?;
@@ -87,6 +88,8 @@ impl Save<'_> {
                 .or_else(|| state.deferred.canonical(*id))
             {
                 value.len()
+            } else if let Some(length) = state.resolved.canonical_len(*id) {
+                length
             } else {
                 match state.packer.location(*id) {
                     Some(location) => location,

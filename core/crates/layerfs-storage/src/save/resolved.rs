@@ -51,6 +51,11 @@ impl Resolved {
         self.values.contains_key(&id)
     }
 
+    /// Length of an authenticated value already kept by this Save.
+    pub(super) fn canonical_len(&self, id: ObjectId) -> Option<usize> {
+        self.values.get(&id).map(|(value, _)| value.len())
+    }
+
     /// Keeps `value` as `id`'s canonical bytes; a value larger than the whole
     /// bound is not kept.
     pub(super) fn keep(&mut self, id: ObjectId, value: &[u8]) {
