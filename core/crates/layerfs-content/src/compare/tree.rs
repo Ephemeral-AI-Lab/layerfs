@@ -180,19 +180,35 @@ pub fn inode_differences(
     )
 }
 
-/// The directories whose listing differs between two roots, in serial
-/// order: each one's serial, its listing on the left (none when the left
-/// lacks it as a directory) and on the right. Held for one Commit's change:
-/// one entry per changed directory.
+/// Most changed directories retained for reuse after logical counting.
+/// Larger changes stream bindings from their immutable roots.
+const RETAINED_DIRECTORIES: usize = 4096;
+type ChangedDirectory = (u64, Option<ObjectId>, ObjectId);
+
+/// Bounded reuse of the directory changes found during logical counting.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ChangedDirectories {
-    entries: Vec<(u64, Option<ObjectId>, ObjectId)>,
+    entries: Vec<ChangedDirectory>,
+    roots: Option<(FilesystemRootId, FilesystemRootId)>,
+    count: usize,
 }
 
 impl ChangedDirectories {
+    pub(crate) fn between(before: FilesystemRootId, after: FilesystemRootId) -> Self {
+        Self {
+            roots: Some((before, after)),
+            ..Self::default()
+        }
+    }
+
     /// Notes one changed inode row: kept when it is a directory on the right
     /// whose listing differs from the left's.
-    pub fn note(&mut self, serial: u64, before: Option<&InodeValue>, after: Option<&InodeValue>) {
+    pub(crate) fn note(
+        &mut self,
+        serial: u64,
+        before: Option<&InodeValue>,
+        after: Option<&InodeValue>,
+    ) {
         let listing = |value: Option<&InodeValue>| {
             value
                 .filter(|value| value.kind == InodeKind::Directory)
@@ -201,19 +217,24 @@ impl ChangedDirectories {
         if let Some(now) = listing(after) {
             let was = listing(before);
             if was != Some(now) {
-                self.entries.push((serial, was, now));
+                self.count = self.count.saturating_add(1);
+                if self.count <= RETAINED_DIRECTORIES {
+                    self.entries.push((serial, was, now));
+                } else if !self.entries.is_empty() {
+                    self.entries = Vec::new();
+                }
             }
         }
     }
 
     /// Directories noted.
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.count
     }
 
     /// Whether none was noted.
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.count == 0
     }
 }
 
@@ -227,13 +248,7 @@ pub fn new_bindings(
     right: &TreeTable,
     visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
 ) -> ContentResult<()> {
-    let mut work = DifferenceWork::default();
-    let mut directories = ChangedDirectories::default();
-    inode_differences(reader, left, right, &mut work, |serial, before, after| {
-        directories.note(serial, before, after);
-        Ok(())
-    })?;
-    directory_bindings(reader, &directories, visit)
+    stream_bindings(reader, left, right, None, visit)
 }
 
 /// Directories one [`directory_bindings`] window reads together: both root
@@ -266,13 +281,58 @@ pub fn directory_bindings_from(
     start: Option<(u64, &PathName)>,
     mut visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
 ) -> ContentResult<()> {
+    if directories.len() > RETAINED_DIRECTORIES {
+        let (before, after) = directories
+            .roots
+            .ok_or(ContentError::InvalidRecord("changed directory roots"))?;
+        let left = TreeTable::open(reader, before)?;
+        let right = TreeTable::open(reader, after)?;
+        return stream_bindings(reader, Some(&left), &right, start, visit);
+    }
+    visit_directories(reader, &directories.entries, start, &mut visit)
+}
+
+/// Streams the inode difference and drains one bounded directory window at a time.
+fn stream_bindings(
+    reader: &dyn AuthenticatedObjects,
+    left: Option<&TreeTable>,
+    right: &TreeTable,
+    start: Option<(u64, &PathName)>,
+    mut visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
+) -> ContentResult<()> {
+    let mut window = ChangedDirectories::default();
+    inode_differences(
+        reader,
+        left,
+        right,
+        &mut DifferenceWork::default(),
+        |serial, before, after| {
+            if start.is_some_and(|(parent, _)| serial < parent) {
+                return Ok(());
+            }
+            window.note(serial, before, after);
+            if window.len() == DIRECTORY_WINDOW {
+                visit_directories(reader, &window.entries, start, &mut visit)?;
+                window.entries.clear();
+                window.count = 0;
+            }
+            Ok(())
+        },
+    )?;
+    visit_directories(reader, &window.entries, start, &mut visit)
+}
+
+fn visit_directories(
+    reader: &dyn AuthenticatedObjects,
+    directories: &[ChangedDirectory],
+    start: Option<(u64, &PathName)>,
+    visit: &mut impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
+) -> ContentResult<()> {
     let mut work = DifferenceWork::default();
     let first = start.map_or(0, |(parent, _)| {
-        directories
-            .entries
-            .partition_point(|entry| entry.0 < parent)
+        directories.partition_point(|entry| entry.0 < parent)
     });
-    for window in directories.entries[first..].chunks(DIRECTORY_WINDOW) {
+    for window in directories[first..].chunks(DIRECTORY_WINDOW) {
         let mut ids = Vec::with_capacity(window.len() * 2);
         for (_, was, now) in window {
             for id in was.iter().chain(std::iter::once(now)) {

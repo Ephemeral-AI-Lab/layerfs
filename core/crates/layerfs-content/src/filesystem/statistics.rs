@@ -79,6 +79,9 @@ pub fn logical_size_and_directories(
     lengths: &mut dyn FnMut(&[ObjectId]) -> ContentResult<Vec<u64>>,
     mut directories: Option<&mut ChangedDirectories>,
 ) -> ContentResult<u64> {
+    if let Some(directories) = directories.as_deref_mut() {
+        *directories = ChangedDirectories::between(before, after);
+    }
     if before == after {
         return Ok(known);
     }

@@ -592,7 +592,8 @@ the inode leaves of a demand (and selection's base leaves) a window at a
 time with one value lookup each. On SQLite a lookup is a statement, not a
 round trip; what it saves is statements and decoding the same pages twice:
 C4 6,138 -> 1,725 statements, C4s4 31,822 -> 9,585, C1 652 -> 253 (shape
-kit, 2026-11-26), every root and Save outcome identical.
+kit, 2026-11-26), every root and Save outcome identical. The same bounded changed-directory
+retention and streamed traversal apply on SQLite.
 
 ## Acquisition
 

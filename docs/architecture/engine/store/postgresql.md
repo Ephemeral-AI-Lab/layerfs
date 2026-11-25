@@ -1210,6 +1210,10 @@ server message of its flight:
   locate, its delta chains' levels and one pack read instead of one locate
   per page and chain level. A directory the left root lacks is diffed
   against the empty listing, with the same bindings in the same order.
+  Logical counting retains up to 4,096 changed directories. Larger changes
+  stream another inode difference in bounded directory windows. If hints
+  exceed one transaction, the retained prefix is recorded after the Save
+  publishes, and the next read starts at the first remaining directory.
   C4s4 (10,000 new files over 3,942 directories): `bindings` 11,403 -> 2,056
   round trips, the same root and stored bytes.
 

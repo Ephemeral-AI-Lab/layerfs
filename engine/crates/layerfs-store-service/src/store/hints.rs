@@ -3,7 +3,7 @@
 use super::commit_types::CommitError;
 use layerfs_content::compare::tree::directory_bindings_from;
 use layerfs_content::compare::{
-    directory_bindings, inode_differences, BindingHints, ChangedDirectories, TreeTable,
+    directory_bindings, new_bindings, BindingHints, ChangedDirectories, TreeTable,
 };
 use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::FilesystemRootId;
@@ -24,35 +24,14 @@ pub fn record_new_bindings(
     left: Option<FilesystemRootId>,
     right: FilesystemRootId,
 ) -> Result<u64, CommitError> {
-    let directories = changed_directories(reader, left, right)?;
-    record_directory_bindings(reader, catalog, &directories)
-}
-
-/// The directories whose listing differs between `left` and `right`, from
-/// the difference of their inode tables.
-fn changed_directories(
-    reader: &dyn AuthenticatedObjects,
-    left: Option<FilesystemRootId>,
-    right: FilesystemRootId,
-) -> Result<ChangedDirectories, CommitError> {
     let left = left
         .map(|root| TreeTable::open(reader, root))
         .transpose()
         .map_err(CommitError::from)?;
     let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
-    let mut directories = ChangedDirectories::default();
-    inode_differences(
-        reader,
-        left.as_ref(),
-        &right,
-        &mut Default::default(),
-        |serial, before, after| {
-            directories.note(serial, before, after);
-            Ok(())
-        },
-    )
-    .map_err(CommitError::from)?;
-    Ok(directories)
+    record_binding_rows(catalog, |visit| {
+        new_bindings(reader, left.as_ref(), &right, visit)
+    })
 }
 
 /// Records the new bindings of the changed `directories`, read a window of
@@ -73,8 +52,17 @@ fn record_directory_bindings_from(
     directories: &ChangedDirectories,
     start: Option<(u64, &PathName)>,
 ) -> Result<u64, CommitError> {
+    record_binding_rows(catalog, |visit| {
+        directory_bindings_from(reader, directories, start, visit)
+    })
+}
+
+fn record_binding_rows(
+    catalog: &dyn HistoryCatalog,
+    walk: impl FnOnce(&mut dyn FnMut(u64, u64, &PathName) -> ContentResult<()>) -> ContentResult<()>,
+) -> Result<u64, CommitError> {
     let (mut rows, mut recorded, mut failure) = (Vec::new(), 0u64, None);
-    let walked = directory_bindings_from(reader, directories, start, |child, parent, name| {
+    let walked = walk(&mut |child, parent, name| {
         rows.push(BindingHint {
             child,
             parent,
