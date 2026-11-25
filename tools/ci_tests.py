@@ -118,6 +118,20 @@ SLOW = {
     ("layerfs-store-service", "commit_fused_sizes_moves"): 47.0,
     ("layerfs-store-service", "commit_fused_sizes_rounds"): 22.5,
     ("layerfs-store-service", "commit_fused_sizes_seeded"): 60.6,
+    # Independent verification suite of the fused Commit (#768), serial runs on
+    # the macOS host, 2026-11-25.
+    ("layerfs-store-service", "verify_unknown_allocators"): 52.0,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 45.2,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 44.3,
+    ("layerfs-store-service", "verify_paused_commit_sweeps"): 69.5,
+    ("layerfs-store-service", "verify_paused_commit_sweeps_third_a"): 45.6,
+    ("layerfs-store-service", "verify_paused_commit_sweeps_third_b"): 45.9,
+    ("layerfs-store-service", "verify_generation_and_kept_ids"): 29.7,
+    ("layerfs-store-service", "verify_differential_faults"): 16.1,
+    ("layerfs-store-service", "verify_fused_injected_aborts"): 10.8,
+    ("layerfs-store-service", "verify_history_readback"): 10.0,
+    ("layerfs-store-service", "verify_two_daemons_one_branch"): 7.7,
+    ("layerfs-store-service", "verify_edge_commits"): 7.3,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

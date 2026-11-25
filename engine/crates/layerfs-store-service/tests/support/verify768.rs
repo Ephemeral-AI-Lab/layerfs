@@ -260,3 +260,45 @@ pub fn duplicate_allocations(store: &TestStore) -> Vec<String> {
     }
     out
 }
+
+/// Sweeps one test process runs at once. Each sweep opens and drops many
+/// short connections (a proxied run is two sockets each way); ten at once
+/// exhausted macOS's ephemeral ports (about 16k, each closed socket held
+/// about 30 s in TIME_WAIT) and later dials failed `Refused { status:
+/// "Closed" }`. The independent verification ran at most three or four.
+pub const SWEEPS: usize = 3;
+
+/// A slot among [`SWEEPS`], held for the returned guard's lifetime. The
+/// wait is bounded: a slot not free within 100 s panics, so a binary that
+/// queues more sweeps than fit the 120 s test ceiling fails as a hang
+/// instead of waiting on.
+pub fn sweep_slot() -> SweepSlot {
+    use std::time::{Duration, Instant};
+    let (lock, freed) = &SLOTS;
+    let deadline = Instant::now() + Duration::from_secs(100);
+    let mut busy = lock.lock().unwrap_or_else(|e| e.into_inner());
+    while *busy >= SWEEPS {
+        let left = deadline.saturating_duration_since(Instant::now());
+        assert!(!left.is_zero(), "no sweep slot within 100 s");
+        busy = freed
+            .wait_timeout(busy, left)
+            .unwrap_or_else(|e| e.into_inner())
+            .0;
+    }
+    *busy += 1;
+    SweepSlot
+}
+
+static SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) =
+    (std::sync::Mutex::new(0), std::sync::Condvar::new());
+
+/// Releases its [`sweep_slot`] when dropped, also when the sweep panics.
+pub struct SweepSlot;
+
+impl Drop for SweepSlot {
+    fn drop(&mut self) {
+        let (lock, freed) = &SLOTS;
+        *lock.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+        freed.notify_one();
+    }
+}
