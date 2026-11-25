@@ -1881,6 +1881,7 @@ answers the public one.
 | `Conflict` | `HeadMoved` |
 | `InvalidInput` | `NotFile`, `IsDirectory`, `NotDirectory`, `NotEmpty`, `Binary`, `ReservedName`, `ReadOnly`, `NoMergeBase`, `TooLarge`, `AmbiguousMatch` |
 | `Capacity` | `NoSpace` |
+| `Unsupported` | `OldStore` |
 | `Unavailable` | `Denied`, `Unauthorized`, `StaleSandbox`, `StaleStore`, `Timeout` |
 | `Failed` | `UnknownMethod`, and any code this table does not name |
 

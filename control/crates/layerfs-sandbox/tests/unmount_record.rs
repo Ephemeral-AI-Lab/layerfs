@@ -1,10 +1,13 @@
 //! The unmount guard's record file across a forced attempt (layerfs-project#136):
 //! an attempt that changed nothing must leave the earlier record as it was.
 use layerfs_bridge::control::{
-    Request, SdkRefusal, SdkValue, TeardownCustody, TeardownStage, UnmountControl, WorkspaceToken,
+    AbortDisposition, CommitKnowledge, DetachDisposition, ForcedFacts, Request, SdkRefusal,
+    SdkValue, TeardownCustody, TeardownStage, UnmountControl, WorkspaceToken,
 };
 use layerfs_history::WorkspaceId;
-use layerfs_sandbox::unmount_guard::{begin_at, cancel, find_in, finish, forceable, repeat};
+use layerfs_sandbox::unmount_guard::{
+    admits, begin_at, cancel, find_in, finish, forceable, repeat, retryable,
+};
 use layerfs_sandbox::{OperationCause, OperationFailure};
 use layerfs_store::project::discovery;
 use std::{
@@ -204,6 +207,74 @@ fn a_retained_answer_carries_its_stage_into_the_record() {
         let kept = discovery::load(&file).unwrap();
         assert_eq!(kept.get_text("stage"), Some(stage));
         assert_eq!(forceable(&kept), forceable_stage, "{stage}: {kept:?}");
+        drop(attempt);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+/// A forced detach the kernel refused `EBUSY` (#538): its record is sent
+/// again by a later unmount or force instead of answered, while any other
+/// forced stop, or the same stop at another stage, keeps its answer.
+#[test]
+fn a_forced_detach_refused_busy_is_sent_again() {
+    let token = WorkspaceToken {
+        workspace: WorkspaceId::from_authority([9; 32]).unwrap(),
+        namespace: 3,
+    };
+    let failure = |stage: TeardownStage, detach: Option<DetachDisposition>| {
+        Box::new(OperationFailure {
+            request: Request::ForceUnmount {
+                token,
+                relinquish_unknown: false,
+            },
+            cause: OperationCause::Retained(Box::new(TeardownCustody {
+                token,
+                stage,
+                detached: false,
+                work: None,
+                detail: "forced drain stopped".into(),
+                forced: detach.map(|detach| ForcedFacts {
+                    abort: AbortDisposition::Written,
+                    detach,
+                    commit: CommitKnowledge::Absent,
+                    fenced: 0,
+                }),
+            })),
+        })
+    };
+    let cases = [
+        (
+            "busy",
+            TeardownStage::Detach,
+            Some(DetachDisposition::Busy),
+            true,
+        ),
+        (
+            "failed",
+            TeardownStage::Detach,
+            Some(DetachDisposition::Failed),
+            false,
+        ),
+        (
+            "join",
+            TeardownStage::Join,
+            Some(DetachDisposition::Busy),
+            false,
+        ),
+        ("unforced", TeardownStage::Detach, None, false),
+    ];
+    for (label, stage, detach, expected) in cases {
+        let refusal = layerfs_sandbox::daemon::values::failure(failure(stage, detach));
+        let dir = fixture(&format!("retry-{label}"));
+        let file = record_file(&dir);
+        let attempt = begin_at(file.clone(), "/w", true).unwrap();
+        finish(&attempt, "/w", &Err(refusal)).unwrap();
+        let kept = discovery::load(&file).unwrap();
+        assert_eq!(retryable(&kept), expected, "{label}: {kept:?}");
+        assert_eq!(admits(&kept, false), expected, "{label}: {kept:?}");
+        // Already forced: no second force replaces it, only the retry.
+        assert!(!forceable(&kept), "{label}: {kept:?}");
+        assert_eq!(admits(&kept, true), expected, "{label}: {kept:?}");
         drop(attempt);
         std::fs::remove_dir_all(dir).unwrap();
     }

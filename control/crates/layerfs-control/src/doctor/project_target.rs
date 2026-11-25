@@ -164,7 +164,7 @@ fn listed(
 }
 
 /// A check `id` the Store's route could not make: a Store this host cannot
-/// open, or whose file is gone, and a worker that does not answer block it
+/// open, of an older format, or whose file is gone, and a worker that does not answer block it
 /// (their own doctors say why); an operation holding the Store makes it
 /// `busy`; anything else gives no verdict.
 fn not_made(home: &Path, store: &StoreRecord, id: &str, refusal: SdkRefusal, checks: &mut Checks) {
@@ -190,6 +190,11 @@ fn not_made(home: &Path, store: &StoreRecord, id: &str, refusal: SdkRefusal, che
             id,
             refusal.message,
             by("store", store.name().to_owned(), "unsupported"),
+        ),
+        (layerfs_store::state::OLD_STORE, _) => checks.waits(
+            id,
+            refusal.message,
+            by("store", store.name().to_owned(), "outdated"),
         ),
         ("Busy", _) => checks.busy(id, refusal.message),
         ("Unavailable", Some(machine)) => {

@@ -215,17 +215,21 @@ pub fn owner_tokens(suffix: &str) -> (String, String) {
     let pid = std::process::id();
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
+        // An unreadable start is recorded as 0 and an unreadable boot as
+        // `unknown`; admission reads either as missing evidence, never as
+        // proof that the owner is gone (#776 G2).
         let start = layerfs_bridge::process::stat(pid)
             .map(|stat| stat.start)
             .unwrap_or(0);
-        let boot = layerfs_bridge::process::boot().unwrap_or(0);
+        let boot = layerfs_bridge::process::boot()
+            .map_or_else(|_| "unknown".to_owned(), |boot| format!("{boot:032x}"));
         let namespace = match pid_namespace() {
             Some(namespace) => format!("@ns:{namespace}"),
             None => String::new(),
         };
         (
             format!("pid:{pid}@{start}{namespace}"),
-            format!("boot:{boot:032x}:{suffix}"),
+            format!("boot:{boot}:{suffix}"),
         )
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]

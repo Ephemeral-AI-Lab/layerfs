@@ -9,7 +9,10 @@
 //! mutations and refuses with `LiveConflict` when an active row overlaps
 //! what the merge changed; nothing is published and the capture folds back.
 //! Without overlap the hold lasts through the publication and install, so no
-//! checked row changes before the new base is in place.
+//! checked row changes before the new base is in place. The same check runs
+//! once before the lane, unheld, so an overlap already present refuses
+//! without the lane; it probes the changed serials, never every row written
+//! since the capture (#776 R3).
 use super::{BoundWorkspace, CommitError};
 use crate::MutationHold;
 use layerfs_content::{
@@ -23,6 +26,9 @@ use std::collections::BTreeSet;
 pub const LIVE_CONFLICT_PATHS: usize = 16;
 /// Directories one path search lists, at most.
 const LOCATE_DIRECTORIES: usize = 4096;
+/// Changed serials one owner job probes, at most: the Workspace's lock is
+/// held for one short job, never the whole check.
+const OVERLAP_WINDOW: usize = 512;
 
 /// Serials whose stored inode value (content, metadata, link count, a
 /// directory's listing) differs between two roots, or that only one holds,
@@ -63,45 +69,45 @@ pub(super) fn union(first: &[u64], second: &[u64]) -> Vec<u64> {
 }
 
 impl BoundWorkspace {
-    /// Holds this Workspace's mutations, then reads the active generation's
-    /// changed rows a window at a time: an inode row of a changed serial, or
-    /// a name binding under a changed directory, overlaps the merge. A row
-    /// carried for an mtime-only capture and not written since holds no data
-    /// of its own: it is no overlap, and the install deletes it when its
-    /// serial changed. Returns the hold and up to `LIVE_CONFLICT_PATHS`
-    /// overlapping serials; empty means the install may proceed.
+    /// Up to `LIVE_CONFLICT_PATHS` serials of `changed` that a row of the
+    /// active generation overlaps: an inode row of a changed serial, or a
+    /// name binding under a changed directory. A row carried for an
+    /// mtime-only capture and not written since holds no data of its own: it
+    /// is no overlap, and the install deletes it when its serial changed.
+    /// Each changed serial costs two index seeks, in owner jobs of
+    /// `OVERLAP_WINDOW` serials: the work follows what the merge changed,
+    /// never the rows written since the capture (#776 R3). Empty means the
+    /// install may proceed.
+    pub(super) fn live_overlap(&self, changed: &[u64]) -> Result<Vec<u64>, CommitError> {
+        let route = self.route();
+        let mut found = Vec::new();
+        for window in changed.chunks(OVERLAP_WINDOW) {
+            if found.len() >= LIVE_CONFLICT_PATHS {
+                break;
+            }
+            found.extend(
+                self.owner
+                    .active_overlap(route, window.to_vec())
+                    .map_err(CommitError::Owner)?,
+            );
+        }
+        found.truncate(LIVE_CONFLICT_PATHS);
+        Ok(found)
+    }
+
+    /// Holds this Workspace's mutations, then checks the active rows against
+    /// `changed` ([`Self::live_overlap`]). Returns the hold and the
+    /// overlapping serials.
     pub(super) fn hold_live(
         &self,
         changed: &[u64],
     ) -> Result<(MutationHold, Vec<u64>), CommitError> {
-        let route = self.route();
         let hold = self
             .owner
-            .hold_mutations(route)
+            .hold_mutations(self.route())
             .map_err(CommitError::Owner)?;
-        let hit = |serial: u64| changed.binary_search(&serial).is_ok();
-        let mut found = BTreeSet::new();
-        let mut after = 0;
-        while found.len() < LIVE_CONFLICT_PATHS {
-            let window = self
-                .owner
-                .active_inodes(route, after)
-                .map_err(CommitError::Owner)?;
-            let Some(last) = window.last() else { break };
-            after = last.serial;
-            found.extend(window.iter().map(|row| row.serial).filter(|s| hit(*s)));
-        }
-        let mut cursor = None;
-        while found.len() < LIVE_CONFLICT_PATHS {
-            let window = self
-                .owner
-                .active_directory_entries(route, cursor.clone())
-                .map_err(CommitError::Owner)?;
-            let Some(last) = window.last() else { break };
-            cursor = Some((last.parent, last.name.clone()));
-            found.extend(window.iter().map(|row| row.parent).filter(|p| hit(*p)));
-        }
-        Ok((hold, found.into_iter().take(LIVE_CONFLICT_PATHS).collect()))
+        let found = self.live_overlap(changed)?;
+        Ok((hold, found))
     }
 
     /// The refusal of a merged install that overlaps `serials`, naming their

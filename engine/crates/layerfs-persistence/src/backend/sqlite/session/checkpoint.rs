@@ -33,7 +33,7 @@ impl Session {
         // A checkpoint thread's pass (`background.rs`) ends first, so it
         // does not leave this one `Busy`.
         let _pass = self.background.as_ref().map(|b| b.hold());
-        let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
+        let mut state = self.state();
         super::thread_work::attributed(&mut state, |state| {
             if state.quarantined {
                 return Err(BackendError::Unknown);
@@ -77,7 +77,7 @@ impl Session {
             return Err(BackendError::ReadOnly);
         }
         let _pass = self.background.as_ref().map(|pass| pass.hold());
-        let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
+        let mut state = self.state();
         super::thread_work::attributed(&mut state, |state| {
             if state.quarantined || !state.connection.is_autocommit() {
                 state.quarantined = true;

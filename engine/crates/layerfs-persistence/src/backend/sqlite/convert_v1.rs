@@ -1,6 +1,7 @@
 //! The offline conversion of a closed schema version 1 SQLite Store (one row
-//! per inode value and binding hint, before #91) to schema version 2 (the
-//! blocks), in place. It is `tools/store_blocks.py migrate` in the engine, so
+//! per inode value and binding hint, before #91) to schema version 3 (the
+//! blocks, and the Commit attempt column of #776 R1, empty for every Commit
+//! it holds), in place. It is `tools/store_blocks.py migrate` in the engine, so
 //! a restore can load a backup written before #91: the restore converts its
 //! own private download before it opens it, and never a live Store.
 //!
@@ -36,12 +37,19 @@ const NEXT_SERIAL: &str = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n
 const TRACE_SALT: &str = ",\n trace_salt BLOB NOT NULL DEFAULT \
 (X'0000000000000000000000000000000000000000000000000000000000000000') \
 CHECK(length(trace_salt)=32)";
+/// The Commit attempt column (#776 R1) and its index, which schema version 1
+/// lacked: the conversion adds them.
+const ATTEMPT_COLUMN: &str = "    attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16),\n";
+const ATTEMPT_INDEX: &str =
+    "CREATE UNIQUE INDEX commit_attempt ON \"commit\"(attempt) WHERE attempt IS NOT NULL;\n";
+const ADD_ATTEMPT: &str = "ALTER TABLE \"commit\" ADD COLUMN \
+attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16)";
 const SIDECARS: [&str; 2] = ["-wal", "-shm"];
 
 /// What a conversion did.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConvertedStore {
-    /// `PRAGMA user_version` before and after (16-18 → 36-38, 22-24 → 42-44).
+    /// `PRAGMA user_version` before and after (16-18 → 56-58, 22-24 → 62-64).
     pub user_version: (i64, i64),
     /// Inode value blocks written.
     pub value_blocks: usize,
@@ -86,7 +94,7 @@ pub fn convert_schema_version_1(path: &Path) -> Result<Option<ConvertedStore>, S
 }
 
 fn convert(path: &Path, old: i64) -> Result<ConvertedStore, String> {
-    let new = old + 20;
+    let new = old + 40;
     let con = open(path)?;
     let (recorded, definition): (String, String) = con
         .query_row(
@@ -180,6 +188,8 @@ fn convert(path: &Path, old: i64) -> Result<ConvertedStore, String> {
         }
         hint_blocks = blocks.len();
     }
+    con.execute_batch(&format!("{ADD_ATTEMPT}; {ATTEMPT_INDEX}"))
+        .map_err(text)?;
     con.execute_batch("PRAGMA writable_schema=ON")
         .map_err(text)?;
     for table in ["store_policy", "history_meta"] {
@@ -271,14 +281,16 @@ pub fn old_source(old: i64, missing: usize) -> String {
             statement(HISTORY, "CREATE TABLE binding_hint_block ("),
             V1_HINTS,
         )
+        .replacen(ATTEMPT_COLUMN, "", 1)
+        .replacen(ATTEMPT_INDEX, "", 1)
 }
 
-/// The source its conversion records (schema version 2, `old` + 20).
+/// The source its conversion records (schema version 3, `old` + 40).
 pub fn new_source(old: i64, missing: usize) -> String {
     let (layout, tables) = selection(old);
     let lacking = lacking(missing);
     let without: Vec<&str> = lacking.iter().map(String::as_str).collect();
-    source(old + 20, layout, tables, &without)
+    source(old + 40, layout, tables, &without)
 }
 
 /// The schema source the engine records for `version` (its scripts in their

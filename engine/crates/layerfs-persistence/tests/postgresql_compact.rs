@@ -1177,6 +1177,7 @@ fn a_recorded_live_owner_without_the_store_key_is_terminated() {
     // `first` is still open, so its backend is alive; it is idle and holds no
     // Store key (the failpoint path released its intent).
     let (pid, start, phase) = op_owner(&schema).expect("the op records its owner");
+    let (pid, start) = (pid.expect("an owner pid"), start.expect("an owner start"));
     assert!(pid > 0, "the op records its owner backend");
     assert_eq!(phase, "mark");
     let second = schema.open();
@@ -1308,6 +1309,95 @@ fn an_exclusive_table_lock_makes_the_swap_busy() {
     );
 }
 
+/// #776 P1: a swap that fails definitely (here a 55P03 `Busy`) leaves the
+/// Store at `G`, so the round drops its owner identity before it releases the
+/// key; the op and scratch stay for the next round's §9 cleanup. An op still
+/// naming the healthy first session would make the next compaction judge it
+/// a lost `COMMIT` and terminate it.
+#[test]
+fn a_definite_swap_failure_leaves_no_owner_to_terminate() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "busy_clears");
+    schema.drop_scratch();
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the second round collects");
+    let before = generation(&handles);
+    // A test-only trigger keeps the owner the mark records, since the failed
+    // round drops it from the op.
+    let mut admin = schema.client();
+    admin
+        .batch_execute(&format!(
+            "CREATE TABLE {s}.lfs_test_owner (pid bigint, backend_start text);\
+             CREATE FUNCTION {s}.lfs_test_owner() RETURNS trigger LANGUAGE plpgsql AS \
+             $fn$ BEGIN INSERT INTO {s}.lfs_test_owner VALUES (NEW.pid, NEW.backend_start); \
+               RETURN NEW; END $fn$;\
+             CREATE TRIGGER lfs_test_owner AFTER INSERT ON {s}.gc_op \
+              FOR EACH ROW EXECUTE FUNCTION {s}.lfs_test_owner();",
+            s = schema.selection.schema
+        ))
+        .unwrap();
+    let mut blocker = schema.client();
+    blocker
+        .batch_execute(&format!(
+            "BEGIN; LOCK TABLE {}.binding_hint_block IN ACCESS EXCLUSIVE MODE;",
+            schema.selection.schema
+        ))
+        .unwrap();
+    let error = handles.compact(&request(7)).unwrap_err();
+    blocker.batch_execute("ROLLBACK").unwrap();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::BusyOp(_)),
+        "{error:?}"
+    );
+    let (pid, start, _phase) = op_owner(&schema).expect("the op stays for §9");
+    assert_eq!(
+        (pid, start),
+        (None, None),
+        "the definite failure drops its owner"
+    );
+    assert_eq!(db_generation(&schema), before);
+    let row = admin
+        .query_one(
+            &format!(
+                "SELECT pid, backend_start FROM {}.lfs_test_owner",
+                schema.selection.schema
+            ),
+            &[],
+        )
+        .unwrap();
+    let (owner, owner_start): (i64, String) = (row.get(0), row.get(1));
+    admin
+        .batch_execute(&format!(
+            "DROP TRIGGER lfs_test_owner ON {s}.gc_op; \
+             DROP FUNCTION {s}.lfs_test_owner(); DROP TABLE {s}.lfs_test_owner;",
+            s = schema.selection.schema
+        ))
+        .unwrap();
+
+    // `handles` is still open, so the failed round's backend is alive and
+    // holds no Store key; the next round must clean up without ending it.
+    let second = schema.open();
+    let receipt = second.compact(&request(8)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(db_generation(&schema), before + 1);
+    assert_settled(&schema, 8);
+    let alive: i64 = admin
+        .query_one(
+            "SELECT count(*) FROM pg_stat_activity \
+              WHERE pid::bigint=$1 AND backend_start::text=$2",
+            &[&owner, &owner_start],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        alive, 1,
+        "the failed round's healthy backend was terminated"
+    );
+    clean(&schema.open());
+}
+
 /// F50R5-2 (§8 step 5): an ordinary reader's granted `AccessShareLock`
 /// conflicts with the swap's `ACCESS EXCLUSIVE` lock exactly as another
 /// writer's does. The 55P03 `Busy` must name that reader (pid, client_addr,
@@ -1368,6 +1458,110 @@ fn an_access_share_reader_makes_the_swap_busy_and_is_named() {
     assert_eq!(db_generation(&schema), before, "nothing was swapped");
 }
 
+/// Backends that wait for a lock `client`'s backend holds.
+fn blocked_by(client: &mut postgres::Client) -> i64 {
+    client
+        .query_one(
+            "SELECT count(*) FROM pg_stat_activity \
+              WHERE pg_backend_pid() = ANY(pg_blocking_pids(pid))",
+            &[],
+        )
+        .expect("blocked backends")
+        .get(0)
+}
+
+/// Polls (at most 5 s) until a backend waits for `client`'s lock, or `round`
+/// has ended without waiting. True when one waits.
+fn wait_blocked<T>(client: &mut postgres::Client, round: &std::thread::JoinHandle<T>) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if blocked_by(client) > 0 {
+            return true;
+        }
+        if round.is_finished() {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    false
+}
+
+/// #776 P5: the swap takes the lane before its history- and Branch-sized
+/// checks and before any base-table lock. A head that moved after the mark
+/// while the swap waited for the lane is a `Conflict` once the lane is free,
+/// with nothing swapped, and readers are not blocked while it waits. Before,
+/// the swap locked every table `NOWAIT` (the lane row's table included), so a
+/// held lane was `Busy`.
+#[test]
+fn a_head_moved_while_the_swap_waits_for_the_lane_is_a_conflict() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "lane_wait");
+    schema.drop_scratch();
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    let project = initialize(&handles, 1, live);
+    fork(&handles, project.id, branch_id(2), 2);
+    let _dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = db_generation(&schema);
+    let s = schema.selection.schema.clone();
+    let reader = schema.open();
+
+    // Pause the round after its mark: a test-only trigger on Phase M's
+    // `gc_op` insert waits for an advisory key this test holds.
+    let key = 776_005_000_i64 + i64::from(std::process::id());
+    let mut pause = schema.client();
+    pause
+        .batch_execute(&format!(
+            "CREATE FUNCTION {s}.lfs_test_pause() RETURNS trigger LANGUAGE plpgsql AS \
+             $fn$ BEGIN PERFORM pg_advisory_xact_lock_shared({key}); RETURN NEW; END $fn$;\
+             CREATE TRIGGER lfs_test_pause BEFORE INSERT ON {s}.gc_op \
+              FOR EACH ROW EXECUTE FUNCTION {s}.lfs_test_pause();\
+             SELECT pg_advisory_lock({key});"
+        ))
+        .expect("the pause trigger");
+    let round = spawn_round(schema.selection.clone(), schema.binding.clone(), 9, None);
+    assert!(
+        wait_blocked(&mut pause, &round),
+        "the round never reached its gc_op insert"
+    );
+
+    // The mark is taken. Hold the lane and move the live heads (a new Branch
+    // at an existing head: the digest moves, the allocators do not).
+    let mut lane = schema.client();
+    lane.batch_execute(&format!(
+        "BEGIN; SELECT 1 FROM {s}.store_lane WHERE id=1 FOR UPDATE; \
+         INSERT INTO {s}.branch (branch_id,layer_stack_id,name,base_layer_id,forked_from_id,head_commit_id) \
+         SELECT '\\x11'::bytea || decode(repeat('ee',16),'hex'),layer_stack_id,'moved',base_layer_id, \
+                forked_from_id,head_commit_id FROM {s}.branch WHERE name='branch-2';"
+    ))
+    .expect("hold the lane and move a head");
+    pause
+        .batch_execute(&format!("SELECT pg_advisory_unlock({key})"))
+        .expect("release the round");
+    let waited = wait_blocked(&mut lane, &round);
+    if waited {
+        // Readers are not blocked while the swap waits for the lane.
+        assert!(
+            reader.history.layer_stack(project.id).unwrap().is_some(),
+            "a read while the swap waits"
+        );
+        assert!(reader.history.branch(branch_id(2)).unwrap().is_some());
+    }
+    lane.batch_execute("COMMIT").expect("release the lane");
+    let result = round.join().expect("the round's thread");
+    assert!(
+        matches!(
+            result,
+            Err(layerfs_history::HistoryError::Conflict(
+                "live heads moved after the mark"
+            ))
+        ),
+        "a head moved while the swap waited for the lane: {result:?}"
+    );
+    assert!(waited, "the swap waited for the held lane");
+    assert_eq!(db_generation(&schema), before, "nothing was swapped");
+}
+
 // --- AC-44: a killed backend and the lost COMMIT reply ---------------------
 //
 // The failpoints above stop a live session and return `UnknownOutcome`: the
@@ -1413,7 +1607,7 @@ fn totals(schema: &Schema) -> (i64, i64, i64, i64) {
 }
 
 /// One `gc_op` row: `(pid, backend_start, phase)`.
-fn op_owner(schema: &Schema) -> Option<(i64, String, String)> {
+fn op_owner(schema: &Schema) -> Option<(Option<i64>, Option<String>, String)> {
     let mut client = schema.client();
     let row = client
         .query_opt(
@@ -1430,8 +1624,8 @@ fn op_owner(schema: &Schema) -> Option<(i64, String, String)> {
 /// Waits for the interrupted round to record its `(pid, backend_start)`.
 fn wait_for_op_owner(schema: &Schema) -> (i64, String, String) {
     for _ in 0..2400 {
-        if let Some(owner) = op_owner(schema) {
-            return owner;
+        if let Some((Some(pid), Some(start), phase)) = op_owner(schema) {
+            return (pid, start, phase);
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
@@ -1611,8 +1805,8 @@ fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
     let (op_pid, op_start, op_phase) = op_owner(&schema).expect("the op row survives the kill");
     // §11: the live Phase A phase was written before the build, so the last
     // committed phase is `build`; Phase B's `swap` write rolled back.
-    assert_eq!((op_pid, op_phase), (pid, "build".to_owned()));
-    assert_eq!(op_start, start);
+    assert_eq!((op_pid, op_phase), (Some(pid), "build".to_owned()));
+    assert_eq!(op_start.as_deref(), Some(start.as_str()));
     assert!(schema.scratch_exists(), "Phase A's scratch schema remains");
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
 
@@ -1699,8 +1893,8 @@ fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     );
     assert!(located(&observed, live));
     let (op_pid, op_start, op_phase) = op_owner(&schema).expect("the op row survives the kill");
-    assert_eq!((op_pid, op_phase), (pid, "cleanup".to_owned()));
-    assert_eq!(op_start, start);
+    assert_eq!((op_pid, op_phase), (Some(pid), "cleanup".to_owned()));
+    assert_eq!(op_start.as_deref(), Some(start.as_str()));
     assert!(
         !schema.scratch_exists(),
         "the swap transaction dropped the scratch before COMMIT"
@@ -1768,13 +1962,18 @@ fn a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1() {
         .expect("the failpoint returned");
 
     // The committed incarnation says the swap happened; the op still names
-    // Phase C and the scratch is already gone. The child is still holding its
-    // handles open, so this backend is alive and idle: the real kill below
-    // proves the owner ended.
+    // the swap, and the scratch schema now holds the retired payload tables
+    // for Phase C to drop (#776 P5). The child is still holding its handles
+    // open, so this backend is alive and idle: the real kill below proves the
+    // owner ended.
     assert_eq!(db_generation(&schema), before + 1);
     let (pid, start, phase) = wait_for_op_owner(&schema);
     assert_eq!(phase, "swap");
-    assert!(!schema.scratch_exists());
+    let scratch = schema.scratch();
+    assert!(schema.exists(&format!(
+        "SELECT ((to_regclass('{scratch}.gc_retired_pack') IS NOT NULL) \
+            AND (to_regclass('{scratch}.gc_retired_object_location') IS NOT NULL))::int::bigint"
+    )));
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
     // A simulated lost reply keeps the process alive and releases its intent;
     // the real kill below then proves the owner ended. The child installed

@@ -361,6 +361,15 @@ impl Session {
         // connection's row lock: it holds the lane barrier shared and checks
         // that lane transaction before its COMMIT (finding #10).
         let in_lane = turn.nested && matches!(mode, Mode::Write | Mode::Publish);
+        // A write or publication outside a held lane takes the lane row and
+        // passes the barrier itself; its rollback also releases a barrier a
+        // cancelled statement left held (#776 P6).
+        // A Stage transaction is the compaction swap's, which takes the lane
+        // row and its barrier itself (#776 P5): its rollback releases a
+        // barrier a failed statement left held, and matches nothing otherwise.
+        let leftover = (!turn.nested && matches!(mode, Mode::Write | Mode::Publish | Mode::Stage))
+            .then(|| super::profile::barrier_leftover(&self.settings.schema))
+            .unwrap_or_default();
         let begin = match mode {
             Mode::Read => self.settings.read_begin(),
             Mode::Snapshot => self.settings.snapshot_begin(),
@@ -380,8 +389,20 @@ impl Session {
         let result = (|| {
             state.work.round_trips += 1;
             if let Some(expected) = expected {
+                // A REPEATABLE READ snapshot is fixed when the first statement
+                // that needs one is analysed, before that statement waits for
+                // its `AccessShareLock`: a read queued behind the swap's ACCESS
+                // EXCLUSIVE lock would pass the fence at `G` from a snapshot
+                // older than the swap's `G + 1`, then resolve the installed
+                // tables. `LOCK TABLE` takes no snapshot and is allowed READ
+                // ONLY, so the fence read's snapshot follows the swap.
+                let lock_first = if matches!(mode, Mode::Read | Mode::Snapshot) {
+                    format!("; LOCK TABLE {schema}.history_meta IN ACCESS SHARE MODE")
+                } else {
+                    String::new()
+                };
                 let check = format!(
-                    "{begin}; SELECT catalog_incarnation::text FROM {schema}.history_meta WHERE id=1"
+                    "{begin}{lock_first}; SELECT catalog_incarnation::text FROM {schema}.history_meta WHERE id=1"
                 );
                 match state.client.simple_query(&check) {
                     Ok(messages) => {
@@ -391,11 +412,21 @@ impl Session {
                                 actual = row.try_get(0).ok().flatten();
                             }
                         }
-                        let generation = actual
-                            .and_then(|text| text.parse::<u64>().ok())
-                            .ok_or(BackendError::Integrity)?;
+                        // An unreadable fence still ends the transaction its
+                        // `BEGIN` opened: a `Write` holds the lane row from
+                        // there, and leaving it open on a live connection kept
+                        // every other writer waiting (#776 P7).
+                        let Some(generation) = actual.and_then(|text| text.parse::<u64>().ok())
+                        else {
+                            if rollback(state, &leftover).is_err() {
+                                state.quarantine();
+                                return Err(BackendError::Unknown.into());
+                            }
+                            state.work.rollbacks += 1;
+                            return Err(BackendError::Integrity.into());
+                        };
                         if generation != expected {
-                            if rollback(state).is_err() {
+                            if rollback(state, &leftover).is_err() {
                                 state.quarantine();
                                 return Err(BackendError::Unknown.into());
                             }
@@ -405,7 +436,7 @@ impl Session {
                     }
                     Err(e) => {
                         let error = e.backend();
-                        if error == BackendError::Unknown || rollback(state).is_err() {
+                        if error == BackendError::Unknown || rollback(state, &leftover).is_err() {
                             state.quarantine();
                             return Err(BackendError::Unknown.into());
                         }
@@ -415,7 +446,7 @@ impl Session {
                 }
             } else if let Err(e) = state.client.batch_execute(&begin) {
                 let error = e.backend();
-                if error == BackendError::Unknown || rollback(state).is_err() {
+                if error == BackendError::Unknown || rollback(state, &leftover).is_err() {
                     state.quarantine();
                     return Err(BackendError::Unknown.into());
                 }
@@ -451,7 +482,7 @@ impl Session {
             match result {
                 Ok(_) if in_lane && self.lane_still_held().is_err() => {
                     // The lane was lost: nothing of this write is kept.
-                    if rollback(state).is_err() {
+                    if rollback(state, &leftover).is_err() {
                         state.quarantine();
                         return Err(BackendError::Unknown.into());
                     }
@@ -485,7 +516,7 @@ impl Session {
                     }
                 }
                 Err(e) => {
-                    if rollback(state).is_err() {
+                    if rollback(state, &leftover).is_err() {
                         state.quarantine();
                         return Err(BackendError::Unknown.into());
                     }
@@ -595,7 +626,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
     result
 }
 
-fn rollback(state: &mut State) -> Result<(), super::driver::Error> {
+fn rollback(state: &mut State, leftover: &str) -> Result<(), super::driver::Error> {
     state.work.round_trips += 1;
-    state.client.batch_execute("ROLLBACK")
+    state.client.batch_execute(&format!("ROLLBACK{leftover}"))
 }

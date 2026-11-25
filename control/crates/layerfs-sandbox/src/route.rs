@@ -619,7 +619,7 @@ pub fn in_worker(
     // on the held read session
     let opened = match held {
         true => None,
-        false => Some(layerfs_store::open::hold(&host.open_args(), None)?),
+        false => opened_for(op, layerfs_store::open::hold(&host.open_args(), None))?,
     };
     layerfs_home::trace::step("store_open");
     if op == Op::Status {
@@ -696,6 +696,24 @@ impl Drop for Ended {
 
 /// A closed Sandbox's sqlite Store, held open here at `opened`: its log is
 /// checkpointed and truncated before the close is answered (#86).
+/// The Store a call on this side holds open while it runs, from its
+/// attempted open `held`. A close needs none: a Store of an older schema
+/// version (#776), which this build does not open, does not stop it, and
+/// each mount intent it cannot end there is named in its `left`. Every
+/// other call keeps the refusal.
+pub fn opened_for(op: Op, held: Result<PathBuf>) -> Result<Option<PathBuf>> {
+    match held {
+        Ok(path) => Ok(Some(path)),
+        Err(refusal)
+            if op == Op::SandboxClose
+                && layerfs_store::state::outdated_status(&refusal).is_some() =>
+        {
+            Ok(None)
+        }
+        Err(refusal) => Err(refusal),
+    }
+}
+
 fn closed(op: Op, opened: Option<&Path>, out: &Outcome) {
     if let (Some(path), Op::SandboxClose, true) = (opened, op, out.is_ok()) {
         let _ = layerfs_store::open::released(path);

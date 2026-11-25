@@ -104,6 +104,7 @@ CREATE TABLE "commit" (
     new_metadata INTEGER NOT NULL DEFAULT 0 CHECK(new_metadata>=0),
     lww BLOB NOT NULL,
     displaced_id BLOB CHECK(displaced_id IS NULL OR length(displaced_id)=33),
+    attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16),
     history_serial INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (layer_stack_id, base_layer_id)
         REFERENCES layer(layer_stack_id, layer_id) DEFERRABLE INITIALLY DEFERRED,
@@ -159,6 +160,7 @@ CREATE UNIQUE INDEX layers_child ON layer(layer_stack_id, parent_layer_id)
 CREATE UNIQUE INDEX layers_source ON layer(source_branch_id, source_commit_id)
     WHERE source_branch_id IS NOT NULL;
 CREATE UNIQUE INDEX commit_identity ON "commit"(layer_stack_id, commit_id);
+CREATE UNIQUE INDEX commit_attempt ON "commit"(attempt) WHERE attempt IS NOT NULL;
 CREATE UNIQUE INDEX branch_identity ON branch(layer_stack_id, branch_id);
 CREATE UNIQUE INDEX branch_names ON branch(layer_stack_id, name);
 

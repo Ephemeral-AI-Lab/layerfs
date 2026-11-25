@@ -21,13 +21,13 @@ The SQLite backend of the [Store](README.md): one WAL file every opener shares t
  store_totals  id=1                       file_digest
  lineage:  layer_lineage, commit_lineage, absorbed, reach
  merge:    merge_operation, merge_record
- Init:     init_operation, init_entry, init_host_file   (42-44 only)
+ Init:     init_operation, init_entry, init_host_file   (62-64 only)
 ```
 
 | Config at creation | Values | Source |
 | --- | --- | --- |
-| `sqlite_pack_layout` | `Monolithic` (`user_version` 36): whole `pack.body`; `GroupRows` (37): `control` row plus one `pack_unit` row per group; `GroupRowsIndexed` (38): adds index `pack_unit_mapping` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`objects_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects_units.sql) |
-| `sqlite_acquisition` | `Absent` (+0) or `Tables` (+6, versions 42–44, created with `auto_vacuum=INCREMENTAL`) | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
+| `sqlite_pack_layout` | `Monolithic` (`user_version` 56): whole `pack.body`; `GroupRows` (57): `control` row plus one `pack_unit` row per group; `GroupRowsIndexed` (58): adds index `pack_unit_mapping` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`objects_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/objects_units.sql) |
+| `sqlite_acquisition` | `Absent` (+0) or `Tables` (+6, versions 62–64, created with `auto_vacuum=INCREMENTAL`) | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs), [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
 | `sqlite_profile` | `Normal`, the only profile a Store opens with (see [Store](README.md)) | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 
 Every table is `STRICT`; history keys are `WITHOUT ROWID` blobs whose first
@@ -43,7 +43,7 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 | Open | Steps | Source |
 | --- | --- | --- |
 | `create` | platform check; policy and catalog config valid; `create_new` (an existing file refuses); schema scripts, `application_id`, `user_version`, `store_policy` and `history_meta` rows | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
-| `open_writable` | `user_version` 36–38 or 42–44 (16–18 and 22–24 get `SchemaVersion1`, others `Integrity`); additive `add_binding_hints`, `add_lineage` (with backfill), `add_merge_scratch`, `add_file_digests`, each only when the recorded schema is exactly the one before; then sweep merge records of expired owners | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| `open_writable` | `user_version` 56–58 or 62–64, schema version 3 (#776 R1: `commit.attempt` and its partial unique index `commit_attempt`); 36–38 and 42–44 (schema version 2, no Commit attempt) get `SchemaVersion2` ("not supported by this release and not migrated; create a new Store"), 16–18 and 22–24 `SchemaVersion1`, others `Integrity`; then one read (`needs_migration`): a Store that recorded this build's schema source and has `history_meta.next_history_serial` is current and runs no in-place migration and no write transaction for one (#776). Only a Store that recorded an older source (a schema version 1 Store converted by `backup restore` or `tools/store_blocks.py migrate`, or one whose first open was interrupted between steps) runs the additive steps `add_gc_columns`, `add_binding_hints`, `add_lineage` (with backfill), `add_merge_scratch`, `add_file_digests`, `add_gc_columns` again, `add_gc`, `add_kept_node`, `add_position_state`, each in its own write transaction and only when the recorded schema is exactly the one before; then sweep merge records of expired owners | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | `open_read_only` | same checks, no migrations; every write refused before `BEGIN` | same |
 | `open_diagnostic` | read-only, never changes journal or checkpoint settings; see [Diagnostics](diagnostics.md) | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
 
@@ -51,12 +51,12 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 
 | Step in `Session::connect` | Detail | Source |
 | --- | --- | --- |
-| Writer lock | When `writable`, takes `Writer::acquire(path)` across connect and releases it after `profile::check`; a read-only connect takes none | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| Writer lock | When `writable`, or read-only with no `-shm` beside the Store, takes `Writer::acquire(path)` across connect and releases it after the last step that can fail (see Last close) | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Open | `READ_WRITE` or `READ_ONLY`, `NO_MUTEX`; statement cache 64 | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back into `ConnectionProfile`; a mismatch is `Integrity`; an existing Store not in `wal` mode is refused | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 | Checkpoint thread | writable Normal session only: a second connection on its own thread, opened with the session's `synchronous` value and `checkpoint_fullfsync=0`, both read back (the second as `ConnectionProfile::checkpoint_thread_checkpoint_fullfsync`); failure to start it refuses the open. It runs only the routine PASSIVE passes; the idle TRUNCATE and the last close run on the session's own connection, which has `checkpoint_fullfsync=1` (finding #11, narrowed by the owner 2026-11-23; see [Checkpoints](#checkpoints)) | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
-| Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files and takes no lane. The checkpoint thread's connection closes first and never takes it; after a quarantine closed the session's connection (see [Quarantine](#quarantine)) it may be SQLite's last, so it then closes with `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` and leaves `-wal`/`-shm` in place (kept until process exit if that setting fails). A writable open keeps its own lane until its last step that can fail (the checkpoint thread's start and the file identity capture), so a failed open's connection also closes under it | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
+| Last close | A writable session's close waits for `Writer::acquire(path)` like any write (or reuses the lane an uncertain transaction already holds), so its close, which may be SQLite's last, checkpoints and removes `-wal`/`-shm` under the lane; a pull's verify close and a restore's in-use check rely on that. If the wait itself fails (interrupted, or the directory cannot be opened), the close sets `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` first, so SQLite takes no exclusive lock, runs no checkpoint and removes nothing; there is no second attempt. If even that setting fails, the connection is kept until process exit. A read-only or diagnostic session cannot checkpoint or remove those files, so its close takes no lane. Its open takes the lane only when the Store has no `-shm`: that open creates the sidecars by path and runs SQLite's WAL recovery, which must not meet an admitted writer's transaction or a compaction's install (#776 C3, S6); with `-shm` there, another connection holds the Store and the open maps it without the lane. Raw read-only connections outside a session follow the same rule through `open_admitted_read_only`, which holds the lane through the first read and checks the file identity after it: the doctor's structure probe (`diagnostic::sqlite_structure`), a compaction's leftover-work check (`unfinished_work`) and a snapshot's source; the last two also refuse a quarantined session (`Unknown`) and a file other than the one the session opened (`StaleStore`). The `-shm` check and the first read are separate steps: a race with the last close can still leave empty sidecars, which a compaction's re-check before its rename catches. Every open captures the file identity before and after opening and refuses `StaleStore` if they differ, so a session never fences on a file other than the one it opened. The checkpoint thread's connection closes first and never takes it; after a quarantine closed the session's connection (see [Quarantine](#quarantine)) it may be SQLite's last, so it then closes with `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` and leaves `-wal`/`-shm` in place (kept until process exit if that setting fails). A writable open keeps its own lane until its last step that can fail (the checkpoint thread's start and the file identity capture), so a failed open's connection also closes under it | [`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs) |
 
 | Setting | Normal | Source |
 | --- | --- | --- |
@@ -83,8 +83,13 @@ SQL work to the calling thread's counters
 ```text
  SQLite write: Session::run(true, body)
    1 admission.enter        in-process FIFO turn on this session
-   2 Writer::acquire        flock(LOCK_EX) on the Store's parent directory
-                            (Linux and macOS)          (skipped if nested)
+   2 admit_writer           under the turn: quarantined? release, Unknown;
+                            Writer::try_acquire once (flock LOCK_EX|LOCK_NB
+                            on the Store's parent directory, Linux and macOS)
+                            held by another Session or process: drop the
+                            turn; Writer::acquire (blocking flock); enter
+                            the turn again; quarantined? Unknown
+                                                       (skipped if nested)
    3 state mutex            the connection; quarantined? release, Unknown;
                             identity checked under the lane
    4 BEGIN IMMEDIATE        busy_timeout 0 -> Busy
@@ -94,18 +99,31 @@ SQL work to the calling thread's counters
 
  Session::hold_lane() -> LaneHold (!Send)
    writable? else ReadOnly; admission turn (nested -> Integrity);
-   Writer::acquire; turn.hold(): holder = this thread
+   admit_writer, refusing Unknown when quarantined or a writer is still
+   held (before any wait, and again under the re-entered turn);
+   turn.hold(): holder = this thread
    inside: run(true, ..) is nested: no flock, BEGIN IMMEDIATE only
+
+ Reads (run(false, ..), read_mapped, read_immutable)
+   admission.enter only: never the flock, so they wait only for this
+   session's turn holder's short job or its held lane
 ```
 
 The lock is taken on a separate descriptor of the Store's directory (on
 macOS, a `flock` on the main file itself would meet SQLite's own `fcntl`
 locks), never on the main, WAL or SHM file: closing a main-file descriptor
 would drop SQLite's own POSIX locks. Several Store files in one directory
-share it. The kernel wait happens before the state mutex, so a write
-waiting for another process's lane never blocks `diagnostics()` or anything
-else that takes only that mutex (finding #20); the FIFO turn already keeps
-the session's other callers out. It is the same lane on Linux and macOS: a holder process that
+share it. Who waits where: a read waits only for the session's FIFO turn,
+which is held for one short job or by this session's own held lane; a
+writer waits for the turn, then for the flock *without* the turn when
+another session or process holds the lane (the one non-blocking attempt is
+a readiness probe, not a retry), then for the turn again. So a write
+waiting for another process's lane (a compaction's mark holds it for tens
+of seconds) blocks neither this session's reads nor `diagnostics()` or
+anything else that takes only the state mutex (finding #20, #776). Several
+of a session's writers can wait in the kernel at once; they resume in the
+kernel's order, not the session's FIFO order, and each checks quarantine
+again under its re-entered turn. It is the same lane on Linux and macOS: a holder process that
 exits releases it, a signal during the wait is `Cancelled`, and a writable
 open takes it too, so concurrent first openers serialize their opening
 PRAGMA statements instead of meeting SQLite's `Busy`; the schema statements
@@ -118,6 +136,20 @@ connection of a session that nested work quarantined (see below), and a
 failed release quarantines the session and keeps the lock
 ([`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs),
 [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/lane.rs)).
+A session that keeps a writer after a failed release (or after a
+quarantined close SQLite refused) still holds the lane; its own writers
+already waiting in the kernel then wait with every other process until
+that session drops it.
+
+Known limit: a compaction's admission looks for other holders of the
+Store in `/proc/<pid>/fd`
+([`exclusion.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/exclusion.rs)),
+which shows only processes in its own PID namespace (and none on macOS). A
+daemon in another PID namespace (another container sharing the volume)
+that holds the Store open is not seen: the compaction holds the lane for
+its whole mark and then fails `Store sidecar remains after seal`. The
+sidecar fence and the re-check before the rename stay the guard; nothing
+is installed over a held Store.
 
 ### Quarantine
 
@@ -142,6 +174,21 @@ transaction still open, the lane would stay with the connection until the
 session drops, as before
 ([`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs)).
 A read that quarantines holds no lane and closes nothing.
+
+A panic is a quarantine too (#776 S3). A body that panics inside a write
+transaction is caught there: the session is quarantined, its connection is
+closed under the job's own writer and that writer released (nested, the
+held `LaneHold` closes it before the lane goes), and then the panic
+resumes. A thread that panics anywhere else while holding the state mutex
+poisons it; every later lock recovers that state as quarantined, so a held
+lane still closes the connection before it lets go, and a later write
+releases a writer the state kept. Before, a caller that catches panics
+(the daemon does) kept a poisoned session whose writer held the lane, or
+whose nested write transaction stayed open after the lane was released, so
+other processes' writers waited forever or failed `Busy`. `hold_lane`
+refuses a quarantined session, or one that still holds its writer, with
+`Unknown` before the blocking wait: that writer is the very lock it would
+wait for (#776 S4).
 
 ## Checkpoints
 
@@ -173,7 +220,7 @@ A read that quarantines holds no lane and closes nothing.
 ```text
  live Store (WAL, writers continue)        sole session (host Init)
    snapshot(destination)                     SqliteHandles::seal(self)
-     own READ_ONLY connection                  storage still shared? Busy
+     own READ_ONLY connection (open rule)      storage still shared? Busy
      VACUUM INTO destination                   read-only? Refused "ReadOnly"
      reopen copy, journal_mode=wal             quarantined / open tx? Uncertain
      wal_checkpoint(TRUNCATE), close           take the writer lock (both OSes)
@@ -427,8 +474,11 @@ set in memory peaked at 1.73 GB.
 | `heads_digest(path)` | sha256 of those lines, each ending in `\n` | same |
 
 `read_heads` opens its own read-write but `query_only` connection, because
-SQLite cannot open a WAL file read-only without a `-shm`. A busy Store is
-reported, never waited on. The heads change exactly when history changes, so
+SQLite cannot open a WAL file read-only without a `-shm`. Its close may be
+SQLite's last, which checkpoints and removes `-wal`/`-shm`, so it holds the
+writer lane from before the open to after the close, as a writable session
+does (#776 C3, C4). It waits for the lane like any writer; a Store busy once
+the lane is held is reported, never retried. The heads change exactly when history changes, so
 the digest identifies a backup copy
 ([Control: Backups](../../control/backups/README.md)). Both reads are filtered
 by the same §4.2 markers the catalog uses: a row named by `branch_retired`
@@ -478,6 +528,17 @@ transaction or one read snapshot on the shared session; a released or foreign
 operation is refused first. A Store created without the tables refuses every
 unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition)).
 The import algorithm is in [Project Init](../project-init/README.md).
+
+The session's epoch (the identity of its first operation, which later
+operations reuse) is read without a lock, so a live owner's unit never waits
+on, or is refused by, a `begin` that waits for another process's lane. Only
+while the epoch is still zero does a `begin` hold a mutex across its
+transaction, so two first `begin`s cannot both claim one: the second waits
+and reuses the first's. `abandoned` and `discard_abandoned` wait for such a
+first `begin` too, so its new operation is never taken for an abandoned one
+([`epoch.rs`](../../../../engine/crates/layerfs-persistence/src/backend/epoch.rs),
+shared with PostgreSQL). Only Project Init begins operations in production,
+from one thread.
 
 ## Merge records
 

@@ -326,6 +326,66 @@ mod with_a_store {
         (home, folder, commit)
     }
 
+    /// A Store of schema version 2 (#776 R1: before each Commit recorded
+    /// its attempt) is refused at open by its version: `store get --with
+    /// stats` answers `Unsupported` (raised `OldStore`) with that refusal
+    /// as its message and `store remove` as its fix, its projects are
+    /// `blocked` by it `outdated`, and its doctor fails `store.schema`
+    /// with the same fix, its project's check waiting on it `outdated`.
+    /// None says `Failed` or Debug text.
+    #[test]
+    fn an_old_format_store_answers_outdated_with_its_fix() {
+        let (home, folder, _) = shop_with_api("outdated");
+        layerfs_api::close_idle(std::time::Duration::ZERO);
+        rusqlite::Connection::open(paths::store_file(&home, "shop"))
+            .unwrap()
+            .execute_batch("PRAGMA user_version=36")
+            .unwrap();
+        let version = "SQLite Store schema version 2 (before each Commit recorded its attempt, \
+#776): not supported by this release and not migrated; create a new Store";
+        let with = |what: &str| ("with", SdkValue::List(vec![t(what)]));
+        let stats = call(
+            &home,
+            "store.get",
+            &[
+                ("store", t("shop")),
+                with("stats"),
+                ("detail", SdkValue::Bool(true)),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(
+            (stats.code.as_str(), stats.message.as_str()),
+            ("Unsupported", version),
+            "{stats:?}"
+        );
+        assert_eq!(stats.detail.get_text("code"), Some("OldStore"), "{stats:?}");
+        assert_eq!(
+            stats.detail.get_text("fix"),
+            Some("layerfs store remove shop")
+        );
+        let by = SdkValue::map([("store", t("shop")), ("reason", t("outdated"))]);
+        let got = ok(&home, "project.get", &[("project", t("shop/api"))]);
+        assert_eq!(got.get_text("state"), Some("blocked"), "{got:?}");
+        assert_eq!(got.get("blocked_by"), Some(&by), "{got:?}");
+        let row = &items(&ok(&home, "project.list", &[]))[0];
+        assert_eq!(row.get("blocked_by"), Some(&by), "{row:?}");
+        let doctor = format!("{:?}", ok(&home, "store.doctor", &[("store", t("shop"))]));
+        let said = [
+            "store.schema",
+            "layerfs store remove shop",
+            version,
+            "(\"reason\", Text(\"outdated\"))",
+        ];
+        for said in said {
+            assert!(doctor.contains(said), "{said}: {doctor}");
+        }
+        assert!(!doctor.contains("Text(\"failed\")"), "{doctor}");
+        layerfs_api::close_idle(std::time::Duration::ZERO);
+        std::fs::remove_dir_all(home).unwrap();
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
     #[test]
     fn a_ready_project_answers_main_s_head_and_its_size() {
         let (home, folder, commit) = shop_with_api("ready");

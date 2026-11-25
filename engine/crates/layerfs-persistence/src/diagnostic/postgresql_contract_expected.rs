@@ -1,4 +1,4 @@
-//! Normative schema-3 (2.0) live-object signatures; generated from the shipped DDL.
+//! Normative schema-4 (2.0, #776 Commit attempt) live-object signatures; generated from the shipped DDL.
 //! PostgreSQL 17 deparse, whitespace normalized; healthy DDL fixtures verify drift.
 pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "absorbed", "absorbed_depth_check", "CHECK (depth >= 1)"),
@@ -21,6 +21,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "branch", "branch_layer_stack_id_name_key", "UNIQUE (layer_stack_id, name)"),
     ("C", "branch", "branch_name_check", "CHECK (length(name) >= 1 AND length(name) <= 63 AND name ~ '^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$'::text)"),
     ("C", "branch", "branch_pkey", "PRIMARY KEY (branch_id)"),
+    ("C", "commit", "commit_attempt_check", "CHECK (attempt IS NULL OR octet_length(attempt) = 16)"),
     ("C", "commit", "commit_base_layer_id_check", "CHECK (octet_length(base_layer_id) = 33 AND get_byte(base_layer_id, 0) = 50)"),
     ("C", "commit", "commit_branch_id_check", "CHECK (branch_id IS NULL OR octet_length(branch_id) = 17 AND get_byte(branch_id, 0) = 17)"),
     ("C", "commit", "commit_commit_id_check", "CHECK (octet_length(commit_id) = 33 AND get_byte(commit_id, 0) = 18)"),
@@ -61,7 +62,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "history_meta", "history_meta_id_check", "CHECK (id = 1)"),
     ("C", "history_meta", "history_meta_identity_format_check", "CHECK (identity_format = 3)"),
     ("C", "history_meta", "history_meta_pkey", "PRIMARY KEY (id)"),
-    ("C", "history_meta", "history_meta_schema_version_check", "CHECK (schema_version = 3)"),
+    ("C", "history_meta", "history_meta_schema_version_check", "CHECK (schema_version = 4)"),
     ("C", "init_entry", "init_entry_canonical_position_check", "CHECK (canonical_position > 0)"),
     ("C", "init_entry", "init_entry_content_root_check", "CHECK (octet_length(content_root) = 32)"),
     ("C", "init_entry", "init_entry_host_identity_check", "CHECK (octet_length(host_identity) = 60)"),
@@ -156,7 +157,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("C", "store_policy", "store_policy_next_ordinal_check", "CHECK (next_ordinal >= 1 AND next_ordinal <= '4294967296'::bigint)"),
     ("C", "store_policy", "store_policy_next_pack_id_check", "CHECK (next_pack_id > 0)"),
     ("C", "store_policy", "store_policy_pkey", "PRIMARY KEY (id)"),
-    ("C", "store_policy", "store_policy_schema_version_check", "CHECK (schema_version = 3)"),
+    ("C", "store_policy", "store_policy_schema_version_check", "CHECK (schema_version = 4)"),
     ("C", "store_policy", "store_policy_small_file_threshold_bytes_check", "CHECK (small_file_threshold_bytes >= 131072 AND small_file_threshold_bytes <= 1048576)"),
     ("C", "store_policy", "store_policy_whole_file_delta_max_depth_check", "CHECK (whole_file_delta_max_depth >= 0 AND whole_file_delta_max_depth <= 50)"),
     ("C", "store_totals", "store_totals_canonical_check", "CHECK (canonical >= 0)"),
@@ -183,6 +184,7 @@ pub(super) const EXPECTED: &[(&str, &str, &str, &str)] = &[
     ("I", "branch", "branch_layer_stack_id_branch_id_key", "CREATE UNIQUE INDEX branch_layer_stack_id_branch_id_key ON branch USING btree (layer_stack_id, branch_id)"),
     ("I", "branch", "branch_layer_stack_id_name_key", "CREATE UNIQUE INDEX branch_layer_stack_id_name_key ON branch USING btree (layer_stack_id, name)"),
     ("I", "branch", "branch_pkey", "CREATE UNIQUE INDEX branch_pkey ON branch USING btree (branch_id)"),
+    ("I", "commit", "commit_attempt", "CREATE UNIQUE INDEX commit_attempt ON commit USING btree (attempt) WHERE attempt IS NOT NULL"),
     ("I", "commit", "commit_layer_stack_id_commit_id_key", "CREATE UNIQUE INDEX commit_layer_stack_id_commit_id_key ON commit USING btree (layer_stack_id, commit_id)"),
     ("I", "commit", "commit_pkey", "CREATE UNIQUE INDEX commit_pkey ON commit USING btree (commit_id)"),
     ("I", "commit_lineage", "commit_lineage_pkey", "CREATE UNIQUE INDEX commit_lineage_pkey ON commit_lineage USING btree (commit_id)"),

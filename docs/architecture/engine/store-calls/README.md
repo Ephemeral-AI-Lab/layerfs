@@ -204,6 +204,7 @@ not in `methods::call`, and in this repository only tests call it.
 | --- | --- | --- |
 | Unsupported directory, platform or filesystem | `OpenRefusal::Unsupported`, nothing opened or created | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Store file absent | `OpenRefusal::Missing` | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
+| Store of an older schema version (SQLite 2, PostgreSQL 2 or 3; #776) | `OpenRefusal::Outdated` with the persistence refusal's exact status (`layerfs_persistence::outdated_store`), nothing opened or changed; control answers it `OldStore` (public `Unsupported`) with a fix | same |
 | Private Workspaces per process | 64; then `Capacity` | same |
 | Overlay maintenance stopped | `bind` refuses | same |
 | `pageSize` | 1..=1000, default 50 | [`operator/args.rs`](../../../../engine/crates/layerfs-store-service/src/operator/args.rs), [`read/query.rs`](../../../../engine/crates/layerfs-store-service/src/read/query.rs) |

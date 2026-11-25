@@ -1,11 +1,12 @@
 //! `backup restore` converts a closed schema version 1 SQLite Store (before
-//! #91) to schema version 2 before it opens it: every inode value and binding
+//! #91) to schema version 3 (#776) before it opens it: every inode value and binding
 //! hint comes back exactly from the blocks, the recorded schema is the one the
 //! engine recognizes, and a schema no release wrote is refused unchanged.
 //!
 //! The fixture is a v1 Store's schema and rows, made the way
-//! `tools/test_store_blocks.py` makes one; it has no history, so the engine
-//! itself would not open it either way.
+//! `tools/test_store_blocks.py` makes one. It has no history and is not in
+//! WAL mode; the open test switches it to WAL, as the engine wrote every
+//! Store, before converting and opening it.
 use layerfs_history::records::BindingHint;
 use layerfs_persistence::convert_schema_version_1;
 use layerfs_persistence::internals::{
@@ -126,12 +127,12 @@ fn every_schema_version_1_layout_converts_with_every_value_and_hint() {
             let path = temp(&format!("{version}-{missing}"));
             let (values, hints) = old_store(&path, version, missing);
             let done = convert_schema_version_1(&path).unwrap().unwrap();
-            assert_eq!(done.user_version, (version, version + 20), "{at}");
+            assert_eq!(done.user_version, (version, version + 40), "{at}");
             let con = Connection::open(&path).unwrap();
             let user_version: i64 = con
                 .query_row("PRAGMA user_version", [], |r| r.get(0))
                 .unwrap();
-            assert_eq!(user_version, version + 20, "{at}");
+            assert_eq!(user_version, version + 40, "{at}");
             let (source, definition, recorded): (String, String, i64) = con
                 .query_row(
                     "SELECT schema_source,schema_definition,schema_version FROM history_meta",
@@ -139,7 +140,7 @@ fn every_schema_version_1_layout_converts_with_every_value_and_hint() {
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .unwrap();
-            assert_eq!(recorded, version + 20, "{at}");
+            assert_eq!(recorded, version + 40, "{at}");
             assert_eq!(source, converted_source(version, missing), "{at}");
             assert_eq!(definition, sqlite_definition(&con).unwrap(), "{at}");
             let tables: Vec<String> = con
@@ -247,4 +248,46 @@ fn a_store_that_is_not_closed_is_refused() {
     std::fs::write(PathBuf::from(wal), b"not empty").unwrap();
     let err = convert_schema_version_1(&path).unwrap_err();
     assert!(err.contains("not closed"), "{err}");
+}
+
+/// What `backup restore` does next: the first writable open of a converted
+/// Store runs the additive migrations its older recorded source still needs
+/// (#776 gates them on that source), and a later open runs none of them.
+#[test]
+fn a_converted_store_completes_on_its_first_writable_open() {
+    use layerfs_persistence::{
+        thread_work, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
+    };
+    let open = |path: &Path| {
+        let before = thread_work();
+        let config =
+            PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal);
+        let handles = SqliteHandles::open_writable(config, BINDING, [9; 32]);
+        (
+            handles.map(drop),
+            thread_work().since(&before).write_transactions,
+        )
+    };
+    for version in [16, 17, 18, 22, 23, 24] {
+        for missing in 0..SCHEMA_VERSION_1_SOURCES {
+            let at = format!("{version}/{missing}");
+            let path = temp(&format!("open-{version}-{missing}"));
+            old_store(&path, version, missing);
+            // the engine wrote every Store in WAL mode; the fixture does not
+            let con = Connection::open(&path).unwrap();
+            let mode: String = con
+                .query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(mode, "wal", "{at}");
+            con.close().unwrap();
+            convert_schema_version_1(&path).unwrap().unwrap();
+            let (first, writes) = open(&path);
+            first.unwrap_or_else(|e| panic!("{at}: first open: {e:?}"));
+            assert!(writes > 1, "{at}: the first open migrated nothing");
+            let (second, writes) = open(&path);
+            second.unwrap_or_else(|e| panic!("{at}: second open: {e:?}"));
+            // the merge record sweep alone
+            assert_eq!(writes, 1, "{at}");
+        }
+    }
 }

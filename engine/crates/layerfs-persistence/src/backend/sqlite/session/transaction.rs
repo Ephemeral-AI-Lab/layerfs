@@ -158,10 +158,7 @@ impl Session {
     ) -> Result<Vec<T>, E> {
         let start = Instant::now();
         let _turn = self.admission.enter(self.wait_kind()).map_err(E::from)?;
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| E::from(BackendError::Unknown))?;
+        let mut state = self.state();
         super::thread_work::attributed(&mut state, |state| {
             if state.quarantined {
                 return Err(BackendError::Unknown.into());
@@ -218,10 +215,7 @@ impl Session {
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
         let _turn = self.admission.enter(self.wait_kind()).map_err(E::from)?;
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| E::from(BackendError::Unknown))?;
+        let mut state = self.state();
         super::thread_work::attributed(&mut state, |state| {
             if state.quarantined {
                 return Err(BackendError::Unknown.into());
@@ -275,35 +269,37 @@ impl Session {
         let start = Instant::now();
         let turn = self.admission.enter(self.wait_kind()).map_err(E::from)?;
         let background = self.background.as_ref();
-        // The cross-process writer lock is waited for before the state lock
-        // (finding #20): a wait on another process's lane must not block
-        // `diagnostics()` or anything else that takes only the state lock.
-        // The FIFO turn already keeps this Session's other callers out, so no
-        // other thread can take this Session's writer meanwhile. A held
-        // publication lane already owns the writer for its nested work.
-        let writer = if writable && !turn.nested {
-            if self
-                .state
-                .lock()
-                .map_err(|_| E::from(BackendError::Unknown))?
-                .quarantined
-            {
-                return Err(BackendError::Unknown.into());
-            }
-            Some(
-                crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)
-                    .map_err(E::from)?,
-            )
+        // The cross-process writer lock is waited for outside the state lock
+        // (finding #20) and outside the FIFO turn (`admit_writer`): a wait on
+        // another Session's or process's lane must block neither
+        // `diagnostics()` nor this Session's reads. A held publication lane
+        // already owns the writer for its nested work.
+        let (_turn, writer) = if writable && !turn.nested {
+            let (turn, writer) = self
+                .admit_writer(turn, |state| {
+                    if state.quarantined {
+                        // A writer an earlier attempt retained is released
+                        // here, after its connection closes under it (#776 S3).
+                        let _ = state.finish_writer(background);
+                        return Err(BackendError::Unknown);
+                    }
+                    Ok(())
+                })
+                .map_err(E::from)?;
+            (turn, Some(writer))
         } else {
-            None
+            (turn, None)
         };
-        // A poisoned lock drops `writer` here, which releases it: nothing has
-        // been attempted under it.
-        let mut s = self
-            .state
-            .lock()
-            .map_err(|_| E::from(BackendError::Unknown))?;
-        super::thread_work::attributed(&mut s, |s| {
+        // A poisoned lock is recovered quarantined, so `writer` goes to
+        // `finish_writer` below: nothing has been attempted under it.
+        let mut s = self.state();
+        // A panicking body is caught so the connection is closed and the
+        // writer released here, then the panic resumes once the state lock
+        // is dropped (#776 S3). Unwinding with them inside a poisoned lock
+        // kept the lane (or, nested, an open write transaction) for as long
+        // as a caller that catches panics kept the Session.
+        let mut panicked = None;
+        let result = super::thread_work::attributed(&mut s, |s| {
             // State owns the writer before BEGIN, including across a poisoned
             // unwind, and every exit below hands it to `finish_writer`. A
             // call that took none leaves a writer retained after an earlier
@@ -339,7 +335,18 @@ impl Session {
             if writable {
                 tx.work.borrow_mut().write_transactions += 1;
             }
-            let result = body(&tx);
+            let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| body(&tx)))
+            {
+                Ok(result) => result,
+                Err(payload) => {
+                    s.quarantined = true;
+                    // Nested, there is no writer here: the held lane closes
+                    // the quarantined connection before it lets go.
+                    let _ = s.finish_writer(background);
+                    panicked = Some(payload);
+                    return Err(BackendError::Unknown.into());
+                }
+            };
             let uncertain =
                 tx.uncertain.get() || result.as_ref().err().is_some_and(OutcomeError::uncertain);
             if uncertain {
@@ -424,6 +431,11 @@ impl Session {
                 }
             }
             result
-        })
+        });
+        if let Some(payload) = panicked {
+            drop(s);
+            std::panic::resume_unwind(payload);
+        }
+        result
     }
 }

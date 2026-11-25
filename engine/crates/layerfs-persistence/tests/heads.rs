@@ -193,3 +193,126 @@ fn heads_follow_history_and_match_the_snapshot() {
     }
     assert!(read_heads(&temp.join("absent")).is_err());
 }
+
+fn create(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::create(
+        config(path.to_path_buf()),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: BINDING.to_vec(),
+            cursor_key: CURSOR,
+            incarnation: 3,
+        },
+    )
+    .unwrap()
+}
+
+/// Runs `work` on a detached thread, so a wait that never ends cannot hold
+/// the test past its bounds; process exit ends it.
+fn started<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> std::sync::mpsc::Receiver<T> {
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = done.send(work());
+    });
+    finished
+}
+
+const STILL_WAITING: std::time::Duration = std::time::Duration::from_millis(300);
+const BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// #776 C3/C4: `read_heads` opens the Store read-write, and its close may be
+/// SQLite's last, which checkpoints and removes `-wal`/`-shm`. It holds the
+/// writer lane from before the open to after the close, so it waits while
+/// another holder (here a publication lane; a compaction's install in the
+/// finding) has it.
+#[test]
+fn reading_heads_waits_for_the_writer_lane() {
+    let temp = Temp::new("heads-lane");
+    let path = temp.join("store");
+    let handles = create(&path);
+    let lane = handles.history.publish_lane().unwrap();
+    let reading = path.clone();
+    let finished = started(move || read_heads(&reading));
+    assert!(
+        finished.recv_timeout(STILL_WAITING).is_err(),
+        "read_heads opened the Store while another holder had the lane"
+    );
+    drop(lane);
+    let heads = finished
+        .recv_timeout(BOUND)
+        .expect("read_heads takes the lane once it is free")
+        .unwrap();
+    assert!(heads.is_empty(), "{heads:?}");
+}
+
+/// #776 C3/S6: a read-only open of a Store nobody holds (no `-shm`) creates
+/// the sidecars and runs SQLite's WAL recovery, so it waits for the lane.
+/// The lane is the Store directory's: here another Store in the same folder
+/// holds it, which leaves this Store's sidecars absent.
+#[test]
+fn a_read_only_open_of_an_unheld_store_waits_for_the_lane() {
+    let temp = Temp::new("heads-read-only-lane");
+    let unheld = temp.join("a");
+    drop(create(&unheld));
+    let mut shm = unheld.as_os_str().to_os_string();
+    shm.push("-shm");
+    assert!(
+        !std::path::Path::new(&shm).exists(),
+        "the closed Store keeps no -shm"
+    );
+    let other = create(&temp.join("b"));
+    let lane = other.history.publish_lane().unwrap();
+    let opening = unheld.clone();
+    let finished = started(move || {
+        SqliteHandles::open_read_only(config(opening), BINDING, CURSOR).map(|_| ())
+    });
+    assert!(
+        finished.recv_timeout(STILL_WAITING).is_err(),
+        "the read-only open created the sidecars while another holder had the lane"
+    );
+    drop(lane);
+    finished
+        .recv_timeout(BOUND)
+        .expect("the read-only open takes the lane once it is free")
+        .unwrap();
+}
+
+/// #776: the doctor's structure probe (`sqlite_structure`, the fallback when a
+/// diagnostic open fails) opens the Store raw. On a Store nobody holds its
+/// first read creates the sidecars and runs SQLite's WAL recovery, so it
+/// follows the open rule and waits for the lane, as a read-only open does.
+#[test]
+fn the_structure_probe_of_an_unheld_store_waits_for_the_lane() {
+    use layerfs_persistence::diagnostic::{sqlite_structure, Options, Outcome};
+    let temp = Temp::new("heads-structure-lane");
+    let unheld = temp.join("a");
+    drop(create(&unheld));
+    let mut shm = unheld.as_os_str().to_os_string();
+    shm.push("-shm");
+    assert!(
+        !std::path::Path::new(&shm).exists(),
+        "the closed Store keeps no -shm"
+    );
+    let other = create(&temp.join("b"));
+    let lane = other.history.publish_lane().unwrap();
+    let probing = unheld.clone();
+    let finished = started(move || {
+        let mut failed = false;
+        let result = sqlite_structure(&probing, Options::default(), &mut |o| {
+            failed |= o.outcome == Outcome::Fail;
+        });
+        (result, failed)
+    });
+    assert!(
+        finished.recv_timeout(STILL_WAITING).is_err(),
+        "the structure probe created the sidecars while another holder had the lane"
+    );
+    drop(lane);
+    let (result, failed) = finished
+        .recv_timeout(BOUND)
+        .expect("the structure probe takes the lane once it is free");
+    result.unwrap();
+    assert!(!failed, "a sound Store has no structural failure");
+}

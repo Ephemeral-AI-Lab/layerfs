@@ -467,7 +467,7 @@ impl Rig {
     }
     pub fn write(&self, serial: u64, handle: u64, offset: u64, bytes: &[u8]) {
         let input = MutationInput::Write {
-            offset,
+            position: layerfs_workspace::Position::At(offset),
             data: bytes.into(),
             cached: false,
         };

@@ -113,9 +113,9 @@ fn inventory(
         ("layer_stack","layer_stack_id","layer_stack_id,name,scope_id,profile_id,head_layer_id",0),
         ("branch","branch_id","branch_id,layer_stack_id,name,base_layer_id,head_commit_id,forked_from_id",3),
         ("layer","layer_id","layer_id,layer_stack_id,parent_layer_id,root_id,source_branch_id,source_commit_id,logical,0",2),
-        ("\"commit\"","commit_id","commit_id,layer_stack_id,root_id,parent_commit_id,base_layer_id,second_parent_id,branch_id,via,message,merged_from_id,created_ms,logical,new_canonical,new_stored,new_metadata,substr(lww,1,0),displaced_id",1),
+        ("\"commit\"","commit_id","commit_id,layer_stack_id,root_id,parent_commit_id,base_layer_id,second_parent_id,branch_id,via,message,merged_from_id,created_ms,logical,new_canonical,new_stored,new_metadata,substr(lww,1,0),displaced_id,attempt",1),
     ] {
-        let widths:&[(&str,usize)]=&[("layer_stack_id",17),("branch_id",17),("source_branch_id",17),("commit_id",33),("layer_id",33),("parent_layer_id",33),("source_commit_id",33),("parent_commit_id",33),("base_layer_id",33),("second_parent_id",33),("head_layer_id",33),("head_commit_id",33),("forked_from_id",33),("merged_from_id",33),("displaced_id",33),("root_id",32),("scope_id",32),("profile_id",32)];
+        let widths:&[(&str,usize)]=&[("layer_stack_id",17),("branch_id",17),("source_branch_id",17),("commit_id",33),("layer_id",33),("parent_layer_id",33),("source_commit_id",33),("parent_commit_id",33),("base_layer_id",33),("second_parent_id",33),("head_layer_id",33),("head_commit_id",33),("forked_from_id",33),("merged_from_id",33),("displaced_id",33),("attempt",16),("root_id",32),("scope_id",32),("profile_id",32)];
         let selected=columns.replace("substr(lww,1,0)","lww").split(',').map(|field|{
             if let Some((_,width))=widths.iter().find(|(name,_)|*name==field){format!("CASE WHEN blob_length({field})={width} THEN {field} END")}
             else if field=="name"{format!("CASE WHEN byte_length({field})<=63 THEN {field} END")}

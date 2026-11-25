@@ -2,7 +2,7 @@
 use super::{
     accounting::Opcode,
     failure::{failed, KernelInput},
-    mutate::MutationReply,
+    mutate::{Appended, MutationReply},
     reply::ReadReply,
     state::KernelFilesystem,
 };
@@ -20,7 +20,7 @@ use layerfs_mount_ports::operations::{
     write::{self, AttributeChange, Stamp},
     Declined, MutationInput,
 };
-use layerfs_workspace::KernelReadOperation;
+use layerfs_workspace::{KernelReadOperation, Position};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::Path, time::SystemTime};
 
 /// FLUSH, FSYNC and FSYNCDIR: the declared answer, with no work.
@@ -129,7 +129,7 @@ impl Filesystem for KernelFilesystem {
             return;
         };
         // The descriptor's access mode is its engine custody. O_TRUNC arrives
-        // separately as a size-0 SETATTR; O_APPEND is resolved by the kernel.
+        // separately as a size-0 SETATTR; O_APPEND arrives with each WRITE.
         self.submit(
             permit,
             req.unique().0,
@@ -548,7 +548,7 @@ impl Filesystem for KernelFilesystem {
         offset: u64,
         data: &[u8],
         flags: WriteFlags,
-        _: OpenFlags,
+        file: OpenFlags,
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
@@ -557,7 +557,22 @@ impl Filesystem for KernelFilesystem {
         if data.len() > layerfs_overlay::WRITE_WINDOW {
             return self.refuse(Opcode::Write, reply, ReplyWrite::error, Errno::EINVAL);
         }
-        let reply = MutationReply::Written(reply, data.len());
+        // A store from a shared mapping carries the per-request page-cache
+        // flag and is accepted as such, at its own offset.
+        let cached = flags.contains(WriteFlags::FUSE_WRITE_CACHE);
+        // The kernel resolved O_APPEND against the size it caches, which a
+        // merged install can leave behind the Workspace's: it refreshes no
+        // attributes before a write while writeback is off. The engine
+        // resolves it at the file's end inside the job. The file's flags
+        // arrive with every WRITE (ABI 7.9). A large write reaches here as
+        // sequential windows under the kernel's inode lock (no async direct
+        // I/O is negotiated), so each lands after the one before.
+        let append = !cached && file.0 & libc::O_APPEND != 0;
+        let appended = append.then(|| Appended {
+            offset,
+            pages: self.deferred.clone(),
+        });
+        let reply = MutationReply::Written(reply, data.len(), appended);
         let Some((permit, reply)) =
             self.receive_reply(Opcode::Write, data.len(), reply, MutationReply::error)
         else {
@@ -566,13 +581,16 @@ impl Filesystem for KernelFilesystem {
         let Some((serial, reply)) = self.serial(inode, reply, MutationReply::error) else {
             return;
         };
-        // The one copy of the window. A store from a shared mapping carries
-        // the per-request page-cache flag and is accepted as such.
-        let cached = flags.contains(WriteFlags::FUSE_WRITE_CACHE);
+        // The one copy of the window.
         if cached {
             self.accounting.store_unit();
         }
-        let input = write::write(offset, data, cached);
+        let position = if append {
+            Position::End
+        } else {
+            Position::At(offset)
+        };
+        let input = write::write(position, data, cached);
         self.mutate(
             permit,
             req.unique().0,

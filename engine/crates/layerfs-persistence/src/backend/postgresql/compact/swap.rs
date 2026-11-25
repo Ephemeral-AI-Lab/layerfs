@@ -14,6 +14,7 @@ use super::types::Built;
 use super::types::DeadTotals;
 use super::types::Swapped;
 use crate::backend::postgresql::session::connection::Session;
+use crate::backend::postgresql::session::profile::Settings;
 use crate::backend::postgresql::session::transaction::Transaction;
 use crate::backend::records::Param;
 use crate::diagnostic::postgresql_contract::check_table_objects;
@@ -27,11 +28,22 @@ use layerfs_history::records::GcIntentKind;
 use layerfs_history::records::GcScopeKind;
 use std::sync::Arc;
 
-/// Phase B: check the scratch tables' rows against the mark, then lock every
-/// base table, re-check the mark tuple, swap the two payload tables, bump the
-/// generation and drop the scratch schema, all in one transaction. The row
-/// checks scan the scratch tables, so they run before the Store-wide lock
-/// and no reader or writer waits for them. `55P03` is `Busy`; any tuple
+/// Phase B: check the scratch tables' rows against the mark, take the
+/// publication lane, re-check the mark tuple, lock every base table, swap the
+/// two payload tables and bump the generation, all in one transaction.
+///
+/// The checks that grow with the Store run before any base-table lock, so no
+/// reader waits for them: the scratch row checks, then, holding the lane row
+/// (no writer can publish, move a head or allocate), the full tuple (`COUNT`
+/// of the history rows, `MAX(stamp)`), the live-heads digest (a page of heads
+/// at a time) and the history `SUM(logical)`. Under the `ACCESS EXCLUSIVE
+/// NOWAIT` lock only the one-row tables are re-read and the payload tables
+/// are swapped by renames: the old ones move into the scratch schema the
+/// moved tables left empty, and Phase C drops it with them, so no file is
+/// unlinked under the lock. `store_lane` is left out of the lock: the swap
+/// owns its row, and the writers queued behind that row hold `RowShare` on
+/// the table, which would make every queued writer `Busy` (#776 P5).
+/// `55P03` (the lane's `lock_timeout` or a held table) is `Busy`; any tuple
 /// change is `Conflict` with no writes.
 pub(crate) fn swap(
     _handles: &PostgresHandles,
@@ -47,49 +59,76 @@ pub(crate) fn swap(
     let tables = tables_of(session, schema)?;
     let locked = tables
         .iter()
+        .filter(|table| table.as_str() != "store_lane")
         .map(|table| format!("{schema}.{}", quote_ident(table)))
         .collect::<Vec<_>>()
         .join(", ");
     let scratch = built.scratch.clone();
+    let lock_timeout = session.settings.lock_timeout_ms;
+    let at_lane = std::cell::Cell::new(false);
     let result = stage(session, |tx| -> HistoryResult<Swapped> {
         tx.batch(&format!(
             "SET LOCAL synchronous_commit TO {}",
             sync_name(rank)
         ))?;
         verify_scratch(tx, &scratch, mark, tuple, &built.dead)?;
+        // §11: the moved tables' post-swap relation size. The scratch tables
+        // are locked by the check above and `SET SCHEMA` keeps their files, so
+        // this is the size they have once live. Persisting it keeps a save
+        // that lands after the swap (AC-28) out of a resumed `G + 1` report's
+        // `physicalShrink`.
+        let physical_after = relation_bytes_tx(tx, &scratch, &["pack", "object_location"])?;
+        // The lane: no writer can publish, allocate or move a head from here
+        // to COMMIT, so the checks below see the state the swap installs at.
+        at_lane.set(true);
         tx.batch(&format!(
-            "LOCK TABLE {locked} IN ACCESS EXCLUSIVE MODE NOWAIT"
+            "SET LOCAL lock_timeout TO {lock_timeout}; {}",
+            Settings::lane_row(schema)
         ))?;
-        // The tuple the mark recorded, re-read under the lock. Any publication
+        at_lane.set(false);
+        // The tuple the mark recorded, re-read under the lane. Any publication
         // after the mark moved one of these, so nothing is written.
         let now = read_tuple(tx, schema)?;
         if now != *tuple {
             return Err(HistoryError::Conflict("Store moved after the mark"));
         }
-        // Read once: the lock is held from here to COMMIT, so the heads this
-        // digest covers cannot move again inside this transaction. The mark's
-        // own statements read them, a bounded page at a time.
+        // The mark's own statements read the heads, a bounded page at a time.
         if crate::history::live_heads_digest_in(tx)? != mark.live_heads_digest() {
             return Err(HistoryError::Conflict("live heads moved after the mark"));
         }
-        // The ACL lives on the tables this transaction drops, so read it
+        // `store_totals.logical` equals the mark's (the tuple re-check above),
+        // so the history rows are summed against that value.
+        let logical = scalar(
+            tx,
+            &format!(
+                "SELECT (SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.\"commit\")+(SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.layer)"
+            ),
+            Vec::new(),
+        )?;
+        if logical != tuple.logical {
+            return Err(HistoryError::Integrity(
+                "Store totals disagree with the history rows",
+            ));
+        }
+        tx.batch(&format!(
+            "LOCK TABLE {locked} IN ACCESS EXCLUSIVE MODE NOWAIT"
+        ))?;
+        // Under the lock, only the one-row tables: the lane already held them,
+        // so a difference here is a writer that bypassed it.
+        if read_rows(tx, schema)? != rows_of(&now) {
+            return Err(HistoryError::Conflict("Store moved after the mark"));
+        }
+        // The ACL lives on the tables this transaction retires, so read it
         // first; the owner and both ACL levels are replayed on the NEW tables
         // after `SET SCHEMA`, when they are the schema's tables again. A
-        // `GRANT` before the drop would name the table that is about to go.
+        // `GRANT` before the move would name the table that is about to go.
         let acls = [
             ("pack", read_acl(tx, schema, "pack")?),
             ("object_location", read_acl(tx, schema, "object_location")?),
         ];
-        tx.batch(&format!(
-            "DROP TABLE {schema}.object_location;\
-             DROP TABLE {schema}.pack;\
-             ALTER TABLE {scratch}.object_location SET SCHEMA {schema};\
-             ALTER TABLE {scratch}.pack SET SCHEMA {schema};\
-             CREATE TRIGGER pack_immutable BEFORE UPDATE OR DELETE ON {schema}.pack \
-              FOR EACH ROW EXECUTE FUNCTION {schema}.pack_immutable();"
-        ))?;
+        tx.batch(&retire_and_move(tx, schema, &scratch)?)?;
         // Owner, PUBLIC grants, grant options and column ACLs, on the tables
-        // that survive.
+        // that are now live.
         for (table, acl) in &acls {
             apply_acl(tx, schema, table, acl)?;
         }
@@ -115,20 +154,6 @@ pub(crate) fn swap(
         if recorded != moved {
             return Err(HistoryError::Integrity("compaction table fingerprint"));
         }
-        // `store_totals.logical` equals the mark's under the lock (the tuple
-        // re-check above), so the history rows are summed against that value.
-        let logical = scalar(
-            tx,
-            &format!(
-                "SELECT (SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.\"commit\")+(SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.layer)"
-            ),
-            Vec::new(),
-        )?;
-        if logical != tuple.logical {
-            return Err(HistoryError::Integrity(
-                "Store totals disagree with the history rows",
-            ));
-        }
         // The trigger and immutable-pack function entries need the
         // Store-schema function, so they are verified here, bounded to the
         // moved table, after the trigger exists.
@@ -141,11 +166,6 @@ pub(crate) fn swap(
         if applied != 0 {
             return Err(HistoryError::Integrity("compaction totals already applied"));
         }
-        // §11: the swap's own post-swap relation size, measured inside the
-        // transaction that makes the moved tables live. Persisting it keeps a
-        // save that lands after the swap (AC-28) out of a resumed `G + 1`
-        // report's `physicalShrink`.
-        let physical_after = relation_bytes_tx(tx, schema, &["pack", "object_location"])?;
         // §11: the swap records everything a resumed `G + 1` report cannot
         // recompute after the old tables are gone: both relation sizes, the
         // Phase-A peak and the mark's kept waste.
@@ -169,7 +189,6 @@ pub(crate) fn swap(
             ),
             Vec::new(),
         )?;
-        tx.batch(&format!("DROP SCHEMA {scratch} CASCADE"))?;
         let names: String = tx
             .query(
                 "SELECT current_setting('synchronous_standby_names')",
@@ -191,9 +210,9 @@ pub(crate) fn swap(
         Err(HistoryError::Busy) => {
             // §8 step 5: roll back first, then drop the scratch schema in a
             // new transaction, and report Busy with the holder detail (the
-            // backend holding the base table's ACCESS EXCLUSIVE lock).
+            // lane holder, or the backend holding a base table's lock).
             let _ = drop_scratch(session, &scratch);
-            return Err(swap_busy(session, schema, op_id)?);
+            return Err(swap_busy(session, schema, op_id, at_lane.get())?);
         }
         Err(other) => return Err(other),
     };
@@ -206,9 +225,64 @@ pub(crate) fn swap(
     Ok(result)
 }
 
+/// The prefix the retired payload tables and their indexes take before they
+/// move into the scratch schema.
+const RETIRED: &str = "gc_retired_";
+
+/// The statements that retire the old payload tables and install the moved
+/// ones: the old tables and their indexes are renamed (index names share the
+/// schema's relation namespace with the moved tables' indexes), the moved
+/// tables enter the Store schema, the retired ones enter the now-empty
+/// scratch schema for Phase C to drop, and the immutable-pack trigger is
+/// created on the new `pack`. Renames and `SET SCHEMA` are catalog updates:
+/// nothing here grows with the payload.
+fn retire_and_move(tx: &Transaction<'_>, schema: &str, scratch: &str) -> HistoryResult<String> {
+    let rows = tx.query(
+        "SELECT i.relname::text FROM pg_index x \
+           JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid \
+           JOIN pg_namespace n ON n.oid=t.relnamespace \
+          WHERE n.nspname=$1 AND t.relname IN ('pack','object_location') ORDER BY 1",
+        vec![Param::Text(schema.to_owned())],
+    )?;
+    let mut sql = String::new();
+    for table in ["object_location", "pack"] {
+        sql.push_str(&format!(
+            "ALTER TABLE {schema}.{table} RENAME TO {RETIRED}{table};"
+        ));
+    }
+    for row in &rows {
+        let index: String = row.get(0)?;
+        let mut retired = format!("{RETIRED}{index}");
+        retired.truncate(63);
+        sql.push_str(&format!(
+            "ALTER INDEX {schema}.{} RENAME TO {};",
+            quote_ident(&index),
+            quote_ident(&retired)
+        ));
+    }
+    for table in ["object_location", "pack"] {
+        sql.push_str(&format!(
+            "ALTER TABLE {scratch}.{table} SET SCHEMA {schema};"
+        ));
+    }
+    for table in ["object_location", "pack"] {
+        sql.push_str(&format!(
+            "ALTER TABLE {schema}.{RETIRED}{table} SET SCHEMA {scratch};"
+        ));
+    }
+    sql.push_str(&format!(
+        "CREATE TRIGGER pack_immutable BEFORE UPDATE OR DELETE ON {schema}.pack \
+          FOR EACH ROW EXECUTE FUNCTION {schema}.pack_immutable();"
+    ));
+    Ok(sql)
+}
+
 /// The `Busy` a contended swap reports: the compaction identity with the
-/// backend holding any granted table lock on the Store's base tables, in any
-/// mode, read from `pg_locks`/`pg_stat_activity`. A reader's
+/// backend that held it, read from `pg_locks`/`pg_stat_activity`. A swap that
+/// timed out waiting for the lane (`lane`) names the lane holder: a backend
+/// with `store_lane` locked that waits for no lock (the writers queued behind
+/// the row hold the table too, but wait). Otherwise it names the backend
+/// holding any granted lock on a locked base table, in any mode: a reader's
 /// `AccessShareLock` conflicts with the swap's `ACCESS EXCLUSIVE` lock just
 /// as another writer's does, so filtering on `AccessExclusiveLock` alone
 /// turned a reader-blocked swap into a holder-less `Busy`.
@@ -216,6 +290,7 @@ pub(crate) fn swap_busy(
     session: &Arc<Session>,
     schema: &str,
     op_id: &[u8; 16],
+    lane: bool,
 ) -> HistoryResult<HistoryError> {
     let mut conflict = OpConflict::new(
         GcIntentKind::Compaction,
@@ -226,18 +301,26 @@ pub(crate) fn swap_busy(
         false,
     );
     let holder = stage(session, |tx| {
+        // 55P03 does not name the blocking mode: an ordinary reader's
+        // granted AccessShareLock blocks the swap exactly as another writer
+        // does, so any granted table lock by another backend is the holder.
+        let which = match lane {
+            true => {
+                "c.relname='store_lane' AND NOT EXISTS (SELECT 1 FROM pg_locks w \
+                  WHERE w.pid=l.pid AND NOT w.granted)"
+            }
+            false => "c.relname <> 'store_lane'",
+        };
         let rows = tx.query(
-            // 55P03 does not name the blocking mode: an ordinary reader's
-            // granted AccessShareLock blocks the swap exactly as another
-            // writer does, so any granted table lock by another backend is
-            // the holder here.
-            "SELECT a.pid::bigint, a.client_addr::text, a.backend_start::text \
-               FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid \
-               JOIN pg_class c ON c.oid=l.relation \
-               JOIN pg_namespace n ON n.oid=c.relnamespace \
-              WHERE n.nspname=$1 AND c.relkind='r' \
-                AND l.granted AND a.pid <> pg_backend_pid() \
-              ORDER BY a.backend_start LIMIT 1",
+            &format!(
+                "SELECT a.pid::bigint, a.client_addr::text, a.backend_start::text \
+                   FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid \
+                   JOIN pg_class c ON c.oid=l.relation \
+                   JOIN pg_namespace n ON n.oid=c.relnamespace \
+                  WHERE n.nspname=$1 AND c.relkind='r' AND {which} \
+                    AND l.granted AND a.pid <> pg_backend_pid() \
+                  ORDER BY a.backend_start LIMIT 1"
+            ),
             vec![Param::Text(schema.to_owned())],
         )?;
         let Some(row) = rows.first() else {
@@ -268,15 +351,56 @@ pub(crate) fn tables_of(session: &Arc<Session>, schema: &str) -> HistoryResult<V
     })
 }
 
+/// The tuple's one-row columns: the generation, the allocators and the
+/// totals, in [`GcTuple`] order.
+const ROW_COLUMNS: &str = "h.catalog_incarnation,h.next_history_serial,p.next_pack_id,\
+     p.next_ordinal,t.logical,t.canonical,t.stored,t.metadata";
+
+fn row_tables(schema: &str) -> String {
+    format!(
+        "FROM {schema}.history_meta h, {schema}.store_policy p, {schema}.store_totals t \
+         WHERE h.id=1 AND p.id=1 AND t.id=1"
+    )
+}
+
+/// The one-row part of `tuple`, as [`read_rows`] returns it.
+fn rows_of(tuple: &GcTuple) -> [i64; 8] {
+    [
+        tuple.generation,
+        tuple.next_history_serial,
+        tuple.next_pack_id,
+        tuple.next_ordinal,
+        tuple.logical,
+        tuple.canonical,
+        tuple.stored,
+        tuple.metadata,
+    ]
+}
+
+/// The tuple's one-row columns alone: a constant-cost re-read for the swap's
+/// table lock, where the history- and Branch-sized checks no longer run.
+pub(crate) fn read_rows(tx: &Transaction<'_>, schema: &str) -> HistoryResult<[i64; 8]> {
+    let rows = tx.query(
+        &format!("SELECT {ROW_COLUMNS} {}", row_tables(schema)),
+        Vec::new(),
+    )?;
+    let [row] = rows.as_slice() else {
+        return Err(HistoryError::Integrity("Store tuple"));
+    };
+    let mut values = [0; 8];
+    for (index, value) in values.iter_mut().enumerate() {
+        *value = row.get(index)?;
+    }
+    Ok(values)
+}
+
 pub(crate) fn read_tuple(tx: &Transaction<'_>, schema: &str) -> HistoryResult<GcTuple> {
     let rows = tx.query(
         &format!(
-            "SELECT h.catalog_incarnation,h.next_history_serial,p.next_pack_id,p.next_ordinal,\
-             t.logical,t.canonical,t.stored,t.metadata,\
+            "SELECT {ROW_COLUMNS},\
              (SELECT COALESCE(MAX(stamp),0) FROM {schema}.content_signature),\
-             (SELECT COUNT(*) FROM {schema}.\"commit\")+(SELECT COUNT(*) FROM {schema}.layer) \
-             FROM {schema}.history_meta h, {schema}.store_policy p, {schema}.store_totals t \
-             WHERE h.id=1 AND p.id=1 AND t.id=1"
+             (SELECT COUNT(*) FROM {schema}.\"commit\")+(SELECT COUNT(*) FROM {schema}.layer) {}",
+            row_tables(schema)
         ),
         Vec::new(),
     )?;

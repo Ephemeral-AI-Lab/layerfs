@@ -42,6 +42,13 @@ impl Service {
     }
     fn unmount_held(&self, control: UnmountControl) -> Result<Success, Failure> {
         let token = control.token;
+        // A forced detach the kernel refused `EBUSY` is asked again before
+        // the retained custody would answer: its holder may be gone (#538).
+        #[cfg(target_os = "linux")]
+        if let Some(retry) = self.take_retryable(token)? {
+            let retried = self.retry_detach(token, retry)?;
+            return self.unmount_retried(token, retried);
+        }
         if !control.discard {
             if let Some(report) = self.dirty(token)? {
                 return Ok(Success::reply(Reply::Dirty(Box::new(report))));

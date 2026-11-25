@@ -383,6 +383,18 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         );
         return;
     }
+    // a file of an older schema version: outdated, with the call that
+    // clears it (`state::outdated_fix`)
+    if let Some(why) = text("outdated") {
+        checks.pass(IDENTITY, "the id in its file is the id in its record");
+        checks.fail(SCHEMA, format!("its file is of an older format: {why}"));
+        checks.evidence(
+            SCHEMA,
+            SdkValue::map([("reason", SdkValue::text(Reason::Outdated.word()))]),
+        );
+        checks.fix(SCHEMA, layerfs_store::state::outdated_fix(name, false));
+        return;
+    }
     if let Some(why) = text("schema_error") {
         checks.pass(IDENTITY, "the id in its file is the id in its record");
         checks.fail(
@@ -457,8 +469,9 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 
 /// The shallow cut of the sqlite file at `path`, as this process or a
 /// worker makes it: `{ found, compaction, unsupported, busy,
-/// identity_error, schema_error, heads, heads_error }` (`busy`: another
-/// writer holds the file), `compaction` the run its `<store>.compact-op` records
+/// identity_error, outdated, schema_error, heads, heads_error }` (`busy`:
+/// another writer holds the file; `outdated`: it is of an older schema
+/// version), `compaction` the run its `<store>.compact-op` records
 /// (`report::compact_status`), its heads read only when `heads` and the
 /// schema check passed.
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
@@ -478,6 +491,9 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
         Err(error) if error.code == "Busy" => fields.push(("busy", SdkValue::Text(error.message))),
         Err(error) => match diagnostic::sqlite_identity(path, identity) {
             Ok(false) => fields.push(("identity_error", SdkValue::Text(error.message))),
+            _ if error.code == layerfs_store::state::OLD_STORE => {
+                fields.push(("outdated", SdkValue::Text(error.message)))
+            }
             _ => fields.push(("schema_error", SdkValue::Text(error.message))),
         },
         Ok(()) if heads => match layerfs_bucket::backup::heads(path) {

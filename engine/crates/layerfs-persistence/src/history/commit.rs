@@ -9,7 +9,9 @@ use super::params;
 use super::transaction::Transaction;
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
-use layerfs_history::identity::{BranchId, CatalogId, CommitId, LayerId, LayerStackId, NodeId};
+use layerfs_history::identity::{
+    BranchId, CatalogId, CommitAttempt, CommitId, LayerId, LayerStackId, NodeId,
+};
 use layerfs_history::records::{
     CommitHistoryRequest, CommitMeta, CommitOutcome, CommitRecord, CommitRequest, PageResult,
 };
@@ -19,6 +21,8 @@ use super::rows::{commit_row, one, sql};
 
 const COMMIT_BY_ID: &str = "commit_commit_by_id";
 
+const COMMIT_BY_ATTEMPT: &str = "commit_commit_by_attempt";
+
 const INSERT_COMMIT: &str = "commit_insert_commit";
 
 const ADVANCE_BRANCH: &str = "commit_advance_branch";
@@ -26,6 +30,15 @@ const ADVANCE_BRANCH: &str = "commit_advance_branch";
 /// Reads one Commit by identity.
 pub(crate) fn commit(tx: &Transaction<'_>, id: CommitId) -> HistoryResult<Option<CommitRecord>> {
     one(tx, COMMIT_BY_ID, [id.as_slice()], commit_row)
+}
+
+/// Reads the Commit one publication attempt made (#776 R1): the attempt is
+/// unique among the Store's Commits, through its partial index.
+pub(crate) fn commit_by_attempt(
+    tx: &Transaction<'_>,
+    attempt: CommitAttempt,
+) -> HistoryResult<Option<CommitRecord>> {
+    one(tx, COMMIT_BY_ATTEMPT, [attempt.as_slice()], commit_row)
 }
 
 /// True when an existing row for this identity carries the same immutable fields.
@@ -271,6 +284,10 @@ pub(crate) fn new_commit(
                 super::facts::encode(&record.meta.lww, &record.meta.units)?,
                 record.meta.displaced.map(|id| id.to_bytes().to_vec()),
                 i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
+                record
+                    .meta
+                    .attempt
+                    .map(|attempt| attempt.to_bytes().to_vec()),
             ],
         )
         .map_err(sql)?;

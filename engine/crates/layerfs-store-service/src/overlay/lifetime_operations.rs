@@ -81,6 +81,13 @@ impl OwnerClient {
             db.active_directory_entries(after.as_ref().map(|(p, n)| (*p, n.as_slice())))
         })
     }
+    /// The serials of one window of `changed` that a changed active row
+    /// overlaps (`Overlay::active_overlap`).
+    pub fn active_overlap(&self, route: Route, changed: Vec<u64>) -> Result<Vec<u64>, OwnerError> {
+        self.call(route, ServiceClass::General, None, move |db| {
+            db.active_overlap(&changed)
+        })
+    }
     pub fn release_base_source(&self, route: Route, source: BaseSource) -> Result<(), OwnerError> {
         self.call(route, ServiceClass::General, None, move |db| {
             db.release_base_source(source)

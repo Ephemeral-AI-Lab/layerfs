@@ -39,7 +39,7 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 | Object locations | narrow rows; no unique key on the id but a B-tree `object_location_prefix` on its first eight bytes, with the full id compared in the heap; a location is inserted only when its id is absent, which is unique because every location insert holds the lane, including a nested one whose lane connection dies (see [the lane barrier](#lane-barrier)); each row also carries `ancestors`, its record's delta chain as a physical list (see [delta chains](#delta-chains)) | [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs), [`metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 | Short values | bounded `bytea`/`text` columns and both block bodies are `STORAGE PLAIN` (column storage in `CREATE TABLE`, PostgreSQL 16 or newer), so those tables have no TOAST relation | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Merge records | `pg_temp` tables of the writer connection: outside the checked schema, seen by that connection only, gone with it; writes are `Stage` transactions | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
-| Schema version | `SCHEMA_VERSION = 3` (2.0's ancestor lists and pack directories, #758); 27 tables, or 30 with acquisition; version 1 is refused (`Integrity`); version 2 is refused as `Refused` ("not supported by this release and not migrated; create a new Store") by the Full, Light and diagnostic checks before any source comparison; nothing is converted | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Schema version | `SCHEMA_VERSION = 4` (version 3's ancestor lists and pack directories, #758, plus each Commit's attempt, `commit.attempt` with the partial unique index `commit_attempt`, #776 R1); 27 tables, or 30 with acquisition; version 1 is refused (`Integrity`); versions 2 and 3 are refused as `Refused`, each by its own name ("PostgreSQL Store schema version 2 …" or "… 3 …: not supported by this release and not migrated; create a new Store") by the Full, Light and diagnostic checks before any source comparison; nothing is converted, and an open runs no in-place migration first, so a version 2 Store that predates the GC, `kept_node` or position additions gets the same named refusal (#776); the checks read `store_policy.trace_salt` through the row's JSON form, so a Store without that column still reaches the version check | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | File operations | none: no seal, snapshot, heads digest, checkpoint or reclamation (`Handles::file` is `None`) | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/store/selection.rs) |
 
 ## Authority and access
@@ -288,6 +288,19 @@ it, and the swap reads the live heads for its digest with the mark's own
 statements, 1,024 rows at a time
 ([`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs),
 [`compact/swap.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/swap.rs)).
+The swap takes the publication lane (the `store_lane` row and the lane
+barrier, under `lock_timeout`) before any base-table lock, and reads the
+full mark tuple (with the history-row `COUNT` and `MAX(stamp)`), that
+digest and the history `SUM(logical)` while it holds the lane alone:
+readers are not blocked by these history- and Branch-sized reads, writers
+wait for the lane as they do for any holder, and a lane wait that reaches
+`lock_timeout` is `Busy` naming the lane holder. Only then does it lock
+every base table except `store_lane` (`ACCESS EXCLUSIVE NOWAIT`; the
+writers queued behind the lane row hold `RowShare` on it), re-read the
+one-row tables, and swap by renames: the old `pack` and `object_location`
+and their indexes become `gc_retired_*` and move into the scratch schema
+the new tables left, which Phase C drops first, so no payload file is
+unlinked under the lock (#776 P5).
 So nothing the client holds through a compaction grows with the Store's
 objects, packs, Commits or Branches. What it does hold per unit is small and
 not of those: one row for each batch of about 1 GiB of kept pack bodies, and
@@ -319,14 +332,29 @@ paths that can observe a compaction swap (spec §5.2, §10):
   `AccessShareLock` the transaction takes on `history_meta` holds until
   `COMMIT`: a swap that starts after this point meets `LOCK TABLE ...
   ACCESS EXCLUSIVE NOWAIT` and abandons, and one that already installed
-  `G + 1` makes the transaction `StaleStore`.
+  `G + 1` makes the transaction `StaleStore`. The REPEATABLE READ ones
+  (`Read`, `Snapshot`) first take `LOCK TABLE <schema>.history_meta IN
+  ACCESS SHARE MODE` in the same batch. PostgreSQL fixes a REPEATABLE READ
+  snapshot when the first statement that needs one is analysed, before that
+  statement waits for its `AccessShareLock`; a read that queued behind a
+  swap's ACCESS EXCLUSIVE lock would otherwise pass the fence at `G` from a
+  snapshot older than the swap's `G + 1` update and then resolve the
+  installed tables, so a compacted-away object would read as absent instead
+  of `StaleStore`. `LOCK TABLE` takes no snapshot and is allowed in a READ
+  ONLY transaction, so the fence read's snapshot follows the swap (#776).
+  The READ COMMITTED ones (`Write`, `Stage`, `Publish`) take a new snapshot
+  per statement and need no lock first.
 - **Autocommit reads** (`Statement`, `Immutable`) join
   `catalog_incarnation` as the trailing column of the read's one statement,
   under a schema-qualified `history_meta` one-row subquery; the trailing
   column is checked and removed before the row reaches the decoder. A read
   that finds no row needs no generation to answer: the swap retains exactly
   the live set (`live_heads_digest` is unchanged), so an absence at `G` is an
-  absence at `G + 1`.
+  absence at `G + 1`. Its snapshot is taken for its one statement; this
+  relies on the server's default isolation being READ COMMITTED, as it is
+  unless the database or role sets `default_transaction_isolation` higher
+  (an autocommit statement under REPEATABLE READ would have the same
+  snapshot-before-lock window).
 - A session whose open has not set a generation yet (the open check's own
   `Statement` reads) is unfenced, and the Store diagnostic reads through
   `run_observed`: it must be able to read a Store whose authority changed and
@@ -334,7 +362,11 @@ paths that can observe a compaction swap (spec §5.2, §10):
   `StaleStore`.
 
 A mismatch is `StaleStore`: nothing was written and the caller reopens the
-Store.
+Store. A transaction whose check reads no generation (no `history_meta` row,
+or a value that does not parse) is `Integrity`, and it is rolled back first
+like a mismatch: a `Write` holds the lane row from its `BEGIN`, so leaving it
+open on a pooled connection would hold every later writer (#776 P7). A
+rollback that fails quarantines the connection and answers `Unknown`.
 
 ```text
  PostgresStorage::publish(batch)                 one Publish transaction
@@ -376,7 +408,9 @@ database ([`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backe
 
 ```text
  every writer, right after it locks store_lane (same round trip, same
- lock_timeout):  pg_advisory_lock(class, key); pg_advisory_unlock(class, key)
+ lock_timeout):  one statement:
+   SELECT pg_advisory_unlock(class, key)
+     FROM (SELECT pg_advisory_lock(class, key) OFFSET 0) AS barrier
  every nested Write/Publish: BEGIN ...; pg_advisory_xact_lock_shared(class, key)
    body
    lane check, one round trip on the lane connection:
@@ -393,6 +427,17 @@ has ended; a nested write that starts after that point fails its lane
 check, rolls back and answers `Closed` (`OwnershipUnavailable` in history
 terms): nothing of it was kept. Its own holder never takes the key
 exclusively while its lane is held, so its nested writes never wait for it.
+
+The take and the release are one statement, so an error cannot fall between
+them. A session-level advisory lock survives `ROLLBACK`, and before #776 P6
+they were two statements: a failure after the first left the key held
+exclusively on a pooled connection, and every later nested write's shared
+key waited for it. A statement cancelled after its lock and before its
+release can still leave it, so the `ROLLBACK` of every non-nested `Write` or
+`Publish`, and of a failed `hold_lane`, also releases a granted exclusive
+barrier of its own backend (no barrier is held past its statement, so such a
+lock is always a leftover). No test injects that cancellation; the suites
+run the rollback statement on every definite failure.
 
 | `SynchronousCommit` | Write acknowledged after |
 | --- | --- |
@@ -444,7 +489,9 @@ encodings, charges, refusal order and failures. Each unit is one transaction;
 reads are index range scans in one `REPEATABLE READ` snapshot after the owner
 check; writes are lane-ordered. A released or foreign operation is `Stale`
 before any row is read. A schema without the acquisition tables refuses every
-unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)).
+unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
+same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
+`begin` waiting for the lane blocks no live owner's unit.
 
 ```text
  release of the last operation                    one Write transaction
