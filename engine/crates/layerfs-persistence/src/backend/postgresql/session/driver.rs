@@ -103,6 +103,10 @@ pub(crate) struct Ordinary {
     pub(super) client: tokio_postgres::Client,
     connection: tokio::task::JoinHandle<()>,
     pub(super) runtime: tokio::runtime::Runtime,
+    /// When the server last answered on this connection (a reply or a
+    /// server error; set at the connect): how long the connection has been
+    /// silent, which the idle reader's check reads (#768).
+    heard: std::cell::Cell<Instant>,
 }
 
 pub(crate) struct Diagnostic {
@@ -390,6 +394,7 @@ impl Driver {
                     }));
                 }
                 let (sent, mut replies) = client.runtime.block_on(pipeline::in_order(pending));
+                client.heard_from(&replies);
                 let around = |reply: Result<Answer, Error>| reply.map(drop);
                 let (opened, closed) = match begin {
                     Some(_) => {
@@ -418,9 +423,13 @@ impl Driver {
     /// driver.
     pub(crate) fn pipeline(&mut self, requests: &[Bound<'_>]) -> Result<Flight, Error> {
         match self {
-            Self::Ordinary(client) => Ok(client
-                .runtime
-                .block_on(pipeline::flight(&client.client, requests))),
+            Self::Ordinary(client) => {
+                let flight = client
+                    .runtime
+                    .block_on(pipeline::flight(&client.client, requests));
+                client.heard_from(&flight.replies);
+                Ok(flight)
+            }
             Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
@@ -452,10 +461,22 @@ impl Driver {
                 let check = client.client.simple_query("");
                 let check = async { tokio::time::timeout(timeout, check).await };
                 // No answer in time: whether the connection works is unknown.
-                matches!(client.runtime.block_on(check), Ok(Ok(_)))
+                let answered = matches!(client.runtime.block_on(check), Ok(Ok(_)));
+                if answered {
+                    client.heard.set(Instant::now());
+                }
+                answered
             }
             Self::Diagnostic(client) => client.run(client.client.batch_execute("")).is_ok(),
             Self::Closed => false,
+        }
+    }
+    /// How long the server has not answered on this connection: zero for
+    /// the diagnostic driver and a closed one.
+    pub(crate) fn silent(&self) -> Duration {
+        match self {
+            Self::Ordinary(client) => client.heard.get().elapsed(),
+            Self::Diagnostic(_) | Self::Closed => Duration::ZERO,
         }
     }
     pub(crate) fn cancellation(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
@@ -531,6 +552,7 @@ impl Ordinary {
                 client,
                 connection,
                 runtime,
+                heard: std::cell::Cell::new(Instant::now()),
             }),
             Ok(Err(error)) => Err(Dial::Driver(error)),
             Err(_) => {
@@ -542,7 +564,19 @@ impl Ordinary {
         }
     }
     fn run<T>(&self, future: impl Future<Output = Result<T, postgres::Error>>) -> Result<T, Error> {
-        self.runtime.block_on(future).map_err(Into::into)
+        let answer = self.runtime.block_on(future).map_err(Error::from);
+        self.heard_from(std::slice::from_ref(&answer));
+        answer
+    }
+    /// Notes that the server answered when any of `replies` is its reply or
+    /// a server error.
+    fn heard_from<T>(&self, replies: &[Result<T, Error>]) {
+        if replies.iter().any(|reply| match reply {
+            Ok(_) => true,
+            Err(error) => error.code().is_some(),
+        }) {
+            self.heard.set(Instant::now());
+        }
     }
     /// Drops the client, which lets the connection task send `Terminate`
     /// when no reply is outstanding and shut the socket, then aborts the
@@ -553,6 +587,7 @@ impl Ordinary {
             client,
             mut connection,
             runtime,
+            ..
         } = self;
         drop(client);
         // The timer is made inside the runtime, which owns the clock.

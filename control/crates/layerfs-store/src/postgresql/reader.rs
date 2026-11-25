@@ -87,9 +87,9 @@ mod held {
         );
     }
 
-    /// The held session, checked locally and, once idle as long as
-    /// `PostgresStorage::usable` says (30 s by default), with one empty
-    /// query; or a new one.
+    /// The held session, checked locally and, once its connection has been
+    /// silent as long as `PostgresStorage::usable` says (30 s by default),
+    /// with one empty query; or a new one.
     pub fn session(
         key_path: &Path,
         record: &StoreRecord,
@@ -101,12 +101,11 @@ mod held {
             .unwrap_or_else(|e| e.into_inner())
             .get_mut(&id)
             .map(|held| {
-                let idle = held.last.elapsed();
                 held.last = Instant::now();
-                (held.handles.clone(), idle)
+                held.handles.clone()
             });
-        if let Some((handles, idle)) = kept {
-            if handles.storage.usable(idle) {
+        if let Some(handles) = kept {
+            if handles.storage.usable() {
                 return Ok(Some(handles));
             }
             HELD.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);

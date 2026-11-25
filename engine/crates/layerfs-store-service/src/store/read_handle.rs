@@ -15,7 +15,7 @@ pub struct StoreReader {
     pub(super) storage: Storage,
     pub(super) history: Arc<dyn HistoryCatalog>,
     closed: Option<Box<dyn FnOnce() + Send>>,
-    usable: Option<Box<dyn Fn(std::time::Duration) -> bool + Send + Sync>>,
+    usable: Option<Box<dyn Fn() -> bool + Send + Sync>>,
 }
 impl StoreReader {
     pub fn new(storage: Storage, history: Arc<dyn HistoryCatalog>) -> Self {
@@ -26,18 +26,15 @@ impl StoreReader {
             usable: None,
         }
     }
-    /// Says whether an idle reader, idle for the given time, can still serve
-    /// before a mount takes it: a PostgreSQL reader whose connection closed,
-    /// was quarantined, or (idle long) does not answer cannot.
-    pub fn with_usable(
-        mut self,
-        usable: impl Fn(std::time::Duration) -> bool + Send + Sync + 'static,
-    ) -> Self {
+    /// Says whether an idle reader can still serve before a mount takes it:
+    /// a PostgreSQL reader whose connection closed or was quarantined, or
+    /// (silent 30 s) does not answer, cannot.
+    pub fn with_usable(mut self, usable: impl Fn() -> bool + Send + Sync + 'static) -> Self {
         self.usable = Some(Box::new(usable));
         self
     }
-    pub(super) fn usable(&self, idle: std::time::Duration) -> bool {
-        self.usable.as_ref().is_none_or(|usable| usable(idle))
+    pub(super) fn usable(&self) -> bool {
+        self.usable.as_ref().is_none_or(|usable| usable())
     }
     pub fn on_close(mut self, closed: impl FnOnce() + Send + 'static) -> Self {
         self.closed = Some(Box::new(closed));

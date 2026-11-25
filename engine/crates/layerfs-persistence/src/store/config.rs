@@ -65,19 +65,22 @@ pub struct PostgresSelection {
     pub lock_timeout_ms: u32,
     /// What an open checks; see [`PostgresCheck`].
     pub check: PostgresCheck,
-    /// How long a Workspace reader may sit idle before a mount that takes it
-    /// first checks it with one round trip, in milliseconds
-    /// ([`READER_IDLE_CHECK_MS`] by default; see `PostgresStorage::usable`).
+    /// How long a Workspace reader's connection may have been silent (no
+    /// server reply) before a mount that takes it first checks it with one
+    /// round trip, in milliseconds ([`READER_IDLE_CHECK_MS`] by default; see
+    /// `PostgresStorage::usable`).
     pub reader_idle_check_ms: u32,
 }
-/// The default idle time after which a pooled Workspace reader is checked
+/// The default silence after which a pooled Workspace reader is checked
 /// with an empty query (answer within [`READER_CHECK_TIMEOUT`]) before a
-/// mount takes it: 30 s. A reader used more recently is checked locally
-/// only, with no round trip, so back-to-back per-tool-call mounts send
-/// nothing; one idle longer meets the network paths that end an idle
-/// connection without telling the client (a load balancer or NAT that
-/// resets it at the next packet, a cloud path that drops it silently) while
-/// it can still be swapped for a fresh reader.
+/// mount takes it: 30 s since the server last answered on its connection.
+/// A reader whose server answered more recently is checked locally only,
+/// with no round trip, so back-to-back per-tool-call mounts send nothing;
+/// one silent longer, however short its time among the idle readers, meets
+/// the network paths that end an idle connection without telling the
+/// client (a load balancer or NAT that resets it at the next packet, a
+/// cloud path that drops it silently) while it can still be swapped for a
+/// fresh reader.
 pub const READER_IDLE_CHECK_MS: u32 = 30_000;
 /// How long the idle reader's empty query may take before the reader is
 /// dropped as unusable: 5 s.

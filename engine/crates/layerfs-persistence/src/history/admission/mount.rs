@@ -6,8 +6,10 @@
 //! The message admits only what the statement-by-statement registration
 //! would admit with nothing to settle: it refuses whenever a live operation
 //! row conflicts, dead or not. Every definite refusal it does not report
-//! itself (only `StaleStore` and a pooled connection, which that
-//! registration would report too) is decided by that registration, once,
+//! itself (`StaleStore` and a pooled connection, which that registration
+//! would report too, and a lock timeout before any key, reported `Busy`
+//! because that registration's key statement would wait without one) is
+//! decided by that registration, once,
 //! whatever its cause: a refusal after the keys were
 //! granted first gives back exactly those keys (one statement), and a
 //! refused key leaves none held. That registration then settles provably
@@ -42,7 +44,9 @@ pub(crate) fn register_mount(
 /// refusal, with nothing written and no key held (keys it held are given
 /// back first), for [`register_separately`] to decide once; `Err` only for
 /// `StaleStore`, a pooled connection (the answers that registration would
-/// give itself), a refusal on a session that lost a reply, and an unknown
+/// give itself), `Busy` for a lock timeout before any key was taken (that
+/// registration's key statement has no lock timeout), a refusal on a
+/// session that lost a reply, and an unknown
 /// outcome, which quarantined the session and is never sent again.
 pub(crate) fn one_message(
     provider: &HistoryProvider,

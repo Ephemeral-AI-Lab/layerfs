@@ -299,7 +299,7 @@ fn open_postgres(
         let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
         let session = opened.storage.clone();
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
-            .with_usable(move |idle| session.usable(idle));
+            .with_usable(move || session.usable());
         observe(&registry, index, provider, reader)
     });
     let committer = writer.history.committer();

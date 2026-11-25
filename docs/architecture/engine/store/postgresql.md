@@ -795,7 +795,8 @@ are session locks, so they outlive the rolled-back transaction:
 | Refused at | SQLSTATE | Keys | Outcome |
 | --- | --- | --- | --- |
 | 1 | `22012` | none taken | `StaleStore` |
-| 1 | another definite one (a lock timeout on `history_meta`, among others) | none taken | the statement-by-statement registration, once |
+| 1 | `55P03` (the lock timeout, waiting on `history_meta`) | none taken | `Busy`, as before step B: the fallback's key statement runs without `lock_timeout` and would wait as long as the lock is held |
+| 1 | another definite one | none taken | the statement-by-statement registration, once |
 | 2 | `22012` (a key refused) | none held | the statement-by-statement registration, once |
 | 2 | `22003` (another backend) | none taken | `Unsupported("transaction-pooled PostgreSQL connection")` |
 | 3, 4 | a definite one (`rows::sqlstate`) | held | one unlock statement (+1 RT), then the statement-by-statement registration, once |
@@ -813,8 +814,10 @@ registers. So for every state the message reads with all its replies
 received, the fast path changes the cost of an admission, not its answer;
 the exceptions are a lost reply (below) and the cases it reports itself
 (`StaleStore` and a pooled connection, which that registration would also
-report). Any other definite error of the fast path, a statement that does
-not prepare included, falls back the same way, once; an unknown outcome
+report, and a lock timeout in the `BEGIN` batch, which answers `Busy`
+within about the session's `lock_timeout`). Any other definite error of
+the fast path, a statement that does not prepare included, falls back the
+same way, once; an unknown outcome
 still quarantines the session and is never sent again. A statement the
 message needs and the connection has not cached (evicted from the
 256-entry statement cache, or a service that did not prepare it at open)
@@ -872,25 +875,41 @@ prepare), the idle reader's prefill 2, mount 7 (2 on the writer), unmount
 takes a pooled reader) is local first: two runtime turns, then whether the
 client or its connection task has ended, which catches a connection the
 server closed (a restart, a terminated backend, an idle timeout) with no
-round trip. A reader idle at least `READER_IDLE_CHECK_MS` (30 s, the
-selection's `reader_idle_check_ms`) must also answer an empty query within
+round trip. A reader whose connection has been silent at least
+`READER_IDLE_CHECK_MS` (30 s, the selection's `reader_idle_check_ms`) must
+also answer an empty query within
 `READER_CHECK_TIMEOUT` (5 s, one counted round trip), as every reuse did
 before step B: a path that ends an idle connection without telling the
 client (a load balancer or NAT that resets it at the next packet, a cloud
 path that drops it silently, where a read would wait for the TCP
 retransmission timeout) is found here, and the mount gets a fresh reader
 instead of a failed or stalled first read. This is a readiness check
-before the reader serves anything, not a retry. Back-to-back per-tool-call
-mounts reuse a reader idle well under 30 s and send nothing for it (step B
-first made the check local only; the 30 s query is a review fix).
+before the reader serves anything, not a retry. Silence counts from the
+connection's last reply from the server (a result or a server error, kept
+in the session, `Driver::silent`), not from the reader's return to the
+pool: a Workspace that held the reader for minutes without reading leaves
+it as silent as one that sat in the pool, and its next checkout checks it.
+Back-to-back per-tool-call mounts reuse a reader that heard the server well
+under 30 s ago and send nothing for it (step B first made the check local
+only; the 30 s query and the reply clock are review fixes).
 `postgresql_reader_idle.rs` checks a fresh reader (nothing sent), an aged
-one whose path resets (replaced) and an aged one whose backend was
-terminated behind a silent path (replaced after the 5 s bound).
+one whose path resets (replaced), one that went silent while a Workspace
+held it and was handed back just before the next mount (checked, replaced)
+and an aged one whose backend was terminated behind a silent path
+(replaced after the 5 s bound).
+
+**Known limit: a reader close that fails leaves its session entry.**
+`ReadService::close` (`read_service.rs`) returns the error of
+`session.release()?` before it removes the Workspace's session entry, so a
+reader whose close fails stays listed under that Workspace (its counters
+are not retired either). The unmount still releases its intent (step C's
+custody fix in the daemon); only the read service's bookkeeping keeps the
+entry. Recorded by review, not fixed in #768.
 
 | Test | Checks |
 | --- | --- |
-| [`postgresql_mount_pipeline.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_mount_pipeline.rs) | the random equivalence and edge cases above; a mount racing a compaction or a project removal on another session is never both admitted; two sessions mounting one Branch are both admitted; a backend terminated while the insert waits on a table lock is an unknown outcome with no row and no key, and the session refuses further calls; an insert reaching the lock timeout gives its keys back and the fallback reports `Busy`; a release whose delete the server refuses keeps its row and keys, and the next release frees both in one round trip; a release whose generation moves after its delete gives its keys back; a `BEGIN` batch that meets the lock timeout falls back once and the mount is admitted when the lock goes |
-| [`postgresql_reader_idle.rs`](../../../../engine/crates/layerfs-store-service/tests/postgresql_reader_idle.rs) | the idle reader's check: under the threshold nothing is sent; past it, a reset path and a silently dead backend both get the mount a fresh reader, the second within the 5 s bound |
+| [`postgresql_mount_pipeline.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_mount_pipeline.rs) | the random equivalence and edge cases above; a mount racing a compaction or a project removal on another session is never both admitted; two sessions mounting one Branch are both admitted; a backend terminated while the insert waits on a table lock is an unknown outcome with no row and no key, and the session refuses further calls; an insert reaching the lock timeout gives its keys back and the fallback reports `Busy`; a release whose delete the server refuses keeps its row and keys, and the next release frees both in one round trip; a release whose generation moves after its delete gives its keys back; a `BEGIN` batch that meets the lock timeout answers `Busy` within about the lock timeout, with no row and no key; a `BEGIN` batch cancelled while it waits (`57014`) falls back once and the mount is admitted when the lock goes |
+| [`postgresql_reader_idle.rs`](../../../../engine/crates/layerfs-store-service/tests/postgresql_reader_idle.rs) | the idle reader's check: under the threshold nothing is sent; past it, a reset path and a silently dead backend both get the mount a fresh reader, the second within the 5 s bound; a reader silent past the threshold while checked out is checked at its next checkout, however short its time in the pool |
 | [`mount_fault_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_drop.rs), [`mount_fault_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_kill.rs) | a dropped connection, and a terminated backend, at every server message of a repeated mount and of an unmount (`support/mount_sweep.rs`): an answered mount holds its row and three keys (unless the backend ended after every reply); an answered unmount left neither; a failed call whose service still works left nothing (a mount) or kept both (an unmount); an unknown one closed the writer's connection, so no key, at most its row; a fresh service mounts; no backend is left in a transaction |
 
 ### Commit round trips

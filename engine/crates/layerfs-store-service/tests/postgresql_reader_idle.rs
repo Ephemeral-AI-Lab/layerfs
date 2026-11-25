@@ -1,12 +1,16 @@
 //! #768: the idle Workspace reader a mount takes is checked locally, and
-//! with one empty query once it sat idle `reader_idle_check_ms` (30 s by
-//! default, `READER_IDLE_CHECK_MS`), so a network path that ended the idle
+//! with one empty query once its connection has been silent (no reply from
+//! the server) for `reader_idle_check_ms` (30 s by default,
+//! `READER_IDLE_CHECK_MS`), so a network path that ended the idle
 //! connection without telling the client costs the mount a fresh reader,
 //! not a failed or stalled first read.
 //!
 //! * A reader idle under the threshold is handed over with nothing sent.
 //! * An aged reader whose path resets at the next packet (the proxy drops
 //!   the connection at the check's reply) is replaced by a fresh reader.
+//! * A reader that went silent past the threshold while a Workspace held
+//!   it is checked at its next checkout, though it spent almost no time in
+//!   the pool: silence counts from the server's last reply.
 //! * An aged reader whose backend was terminated while the path hid it (the
 //!   proxy holds every later byte, as a silent drop does) is replaced within
 //!   the check's 5 s bound (`READER_CHECK_TIMEOUT`).
@@ -103,6 +107,35 @@ fn an_aged_reader_whose_path_reset_is_replaced() {
     // The fresh reader reads.
     opened.store.close_reader(ws(1)).unwrap();
     opened.store.mount_reader(ws(2)).unwrap();
+    opened.store.close_reader(ws(2)).unwrap();
+}
+
+#[test]
+fn a_reader_silent_while_checked_out_is_checked_at_its_next_checkout() {
+    let Some(store) = TestStore::postgres("reader_held", &[("/seed", b"seed\n")]) else {
+        return;
+    };
+    let (url, _) = store.postgres.clone().unwrap();
+    let (proxy, _) = FaultProxy::start(&url);
+    let (opened, reader) = opened(&store, &proxy, SHORT_MS);
+    opened.store.mount_reader(ws(1)).unwrap();
+    let reuse = opened.store.reuse_work();
+    assert_eq!((reuse.readers_opened, reuse.readers_reused), (0, 1));
+    // The Workspace holds the reader past the threshold without reading,
+    // then hands it back; the next mount takes it at once.
+    std::thread::sleep(Duration::from_millis(u64::from(SHORT_MS) + 100));
+    opened.store.close_reader(ws(1)).unwrap();
+    proxy.arm(Some((0, Fault::Drop)));
+    opened.store.mount_reader(ws(2)).unwrap();
+    let window = proxy.disarm();
+    let fired = window.fired.expect("the check's reply was dropped");
+    assert_eq!(fired.connection, reader, "the check ran on the held reader");
+    let reuse = opened.store.reuse_work();
+    assert_eq!(
+        (reuse.readers_opened, reuse.readers_reused),
+        (1, 1),
+        "a fresh reader serves the second mount"
+    );
     opened.store.close_reader(ws(2)).unwrap();
 }
 

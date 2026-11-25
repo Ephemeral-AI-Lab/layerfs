@@ -24,8 +24,9 @@
 //! * Step C: an owner release whose delete the server refuses keeps its row
 //!   and its keys; the next release frees both in one message. A release
 //!   whose generation moves after its delete still gives its keys back.
-//! * A definite refusal of the one message before any key is held is
-//!   decided by the statement-by-statement registration, once.
+//! * A lock timeout in the one message's `BEGIN` batch answers `Busy`
+//!   within about the lock timeout; any other definite refusal before a key
+//!   is held is decided by the statement-by-statement registration, once.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 mod support;
@@ -747,19 +748,65 @@ fn a_release_whose_generation_moves_after_its_delete_gives_its_keys_back() {
     );
 }
 
-/// Review fix (#768 step B): a definite refusal of the one message before
-/// any key is held (here its `BEGIN` batch meets the session's lock timeout
-/// on `history_meta`, which an operator holds) is not reported: the
-/// statement-by-statement registration decides, once. Its key statement
-/// waits for the operator (it has no lock timeout), and once the lock goes
-/// the mount is admitted.
+/// Review fixes (#768 step B): a lock timeout in the one message's `BEGIN`
+/// batch (an operator holds `history_meta`) answers `Busy` within about the
+/// session's lock timeout, as before the review fixes, never falling back
+/// into the statement-by-statement registration, whose key statement has
+/// no lock timeout and would wait as long as the lock is held.
+#[test]
+fn a_lock_timeout_of_the_one_message_answers_busy() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mount_timeout_busy");
+    let binding = binding("timeout_busy");
+    drop(open(&schema, &binding, LOCK_TIMEOUT_MS, true));
+    let handles = open(&schema, &binding, 300, false);
+    let (stack, branch, _) = project(&handles.history, 1);
+    // Warm the message's statements.
+    let warm = mount(stack, branch, 1);
+    handles.history.gc_register(&warm).unwrap();
+    handles.history.gc_release(&warm.op_id).unwrap();
+
+    let mut locker = schema.admin();
+    let mut admin = schema.admin();
+    locker
+        .batch_execute("BEGIN; LOCK TABLE history_meta IN ACCESS EXCLUSIVE MODE")
+        .unwrap();
+    let start = Instant::now();
+    let refusal = handles
+        .history
+        .gc_register(&mount(stack, branch, MOUNT))
+        .unwrap_err();
+    let took = start.elapsed();
+    locker.batch_execute("ROLLBACK").unwrap();
+    assert!(matches!(refusal, HistoryError::Busy), "{refusal:?}");
+    assert!(
+        took >= Duration::from_millis(300) && took < Duration::from_millis(2_300),
+        "about the lock timeout: {took:?}"
+    );
+    assert_eq!(rows(&mut admin), 0);
+    assert!(
+        keys_free(&mut admin, &binding, stack, branch),
+        "no key held"
+    );
+    handles
+        .history
+        .gc_register(&mount(stack, branch, 2))
+        .unwrap();
+    handles.history.gc_release(&op(2)).unwrap();
+}
+
+/// Review fixes (#768 step B): any other definite refusal of the one
+/// message before a key is held is decided by the statement-by-statement
+/// registration, once. Here the `BEGIN` batch, waiting on `history_meta`
+/// (which an operator holds), is cancelled (`57014`); the registration that
+/// follows waits for the operator in its key statement, and once the lock
+/// goes the mount is admitted.
 #[test]
 fn a_definite_refusal_of_the_one_message_falls_back_once() {
     let Some(url) = url() else { return };
     let schema = Schema::new(url, "mount_fallback");
     let binding = binding("fallback");
-    drop(open(&schema, &binding, LOCK_TIMEOUT_MS, true));
-    let handles = open(&schema, &binding, 300, false);
+    let handles = open(&schema, &binding, LOCK_TIMEOUT_MS, true);
     let (stack, branch, _) = project(&handles.history, 1);
     // Warm both registrations' statements.
     let warm = mount(stack, branch, 1);
@@ -773,29 +820,42 @@ fn a_definite_refusal_of_the_one_message_falls_back_once() {
     locker
         .batch_execute("BEGIN; LOCK TABLE history_meta IN ACCESS EXCLUSIVE MODE")
         .unwrap();
+    let waiting = |admin: &mut postgres::Client| -> Option<i32> {
+        admin
+            .query_opt(
+                "SELECT pid FROM pg_locks WHERE relation = 'history_meta'::regclass \
+                 AND NOT granted LIMIT 1",
+                &[],
+            )
+            .unwrap()
+            .map(|row| row.get(0))
+    };
     let intent = mount(stack, branch, MOUNT);
-    let held = Duration::from_millis(1_000);
     let answered = std::sync::atomic::AtomicBool::new(false);
-    let (registered, took) = std::thread::scope(|scope| {
+    let registered = std::thread::scope(|scope| {
         let call = scope.spawn(|| {
-            let start = Instant::now();
             let registered = handles.history.gc_register(&intent);
             answered.store(true, std::sync::atomic::Ordering::SeqCst);
-            (registered, start.elapsed())
+            registered
         });
-        std::thread::sleep(held);
+        let pid = wait_for(Duration::from_secs(4), || waiting(&mut admin))
+            .expect("the BEGIN batch waits on history_meta");
+        let cancelled: bool = admin
+            .query_one("SELECT pg_cancel_backend($1)", &[&pid])
+            .unwrap()
+            .get(0);
+        assert!(cancelled);
+        // The fallback's key statement waits on the lock again.
+        std::thread::sleep(Duration::from_millis(500));
         let early = answered.load(std::sync::atomic::Ordering::SeqCst);
+        let again = waiting(&mut admin);
         locker.batch_execute("ROLLBACK").unwrap();
-        let answer = call.join().expect("the call");
-        assert!(
-            !early,
-            "the one message's Busy was reported, not decided again: {:?}",
-            answer.0
-        );
-        answer
+        let registered = call.join().expect("the call");
+        assert!(!early, "the cancelled message was reported: {registered:?}");
+        assert_eq!(again, Some(pid), "the fallback waits on the same backend");
+        registered
     });
     registered.unwrap();
-    assert!(took >= held, "{took:?}");
     assert_eq!(rows(&mut admin), 1, "the fallback registered the mount");
     assert!(
         !keys_free(&mut admin, &binding, stack, branch),

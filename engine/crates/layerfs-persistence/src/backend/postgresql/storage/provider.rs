@@ -31,21 +31,24 @@ impl PostgresStorage {
             ),
         }
     }
-    /// Whether this session, idle for `idle`, can still serve a mount
-    /// (#64): it was not quarantined and its connection still stands, judged
-    /// locally (#768: a connection the server closed, by a restart, a
-    /// terminated backend or an idle timeout, is seen with no round trip).
-    /// A session idle at least the selection's `reader_idle_check_ms`
-    /// ([`crate::READER_IDLE_CHECK_MS`], 30 s by default) must also answer an
-    /// empty query within [`crate::READER_CHECK_TIMEOUT`] (one round trip,
-    /// counted): a path that ended the idle connection without telling the
-    /// client (reset at the next packet, or dropped silently, where a read
-    /// would wait for the TCP retransmission timeout) is found here, not by
-    /// the mount's first read. A session that cannot serve is quarantined
-    /// and never handed to a mount; its caller opens a new one. The check
-    /// runs before any operation uses the session, so no operation is
-    /// retried.
-    pub fn usable(&self, idle: std::time::Duration) -> bool {
+    /// Whether this idle session can still serve a mount (#64): it was not
+    /// quarantined and its connection still stands, judged locally (#768: a
+    /// connection the server closed, by a restart, a terminated backend or
+    /// an idle timeout, is seen with no round trip). A connection on which
+    /// the server has not answered for at least the selection's
+    /// `reader_idle_check_ms` ([`crate::READER_IDLE_CHECK_MS`], 30 s by
+    /// default) must also answer an empty query within
+    /// [`crate::READER_CHECK_TIMEOUT`] (one round trip, counted). The silence
+    /// is the connection's own, counted from the server's last reply, not
+    /// the time the reader spent among the idle readers: a Workspace that
+    /// read nothing for long before its unmount hands back a silent
+    /// connection. A path that ended it without telling the client (reset at
+    /// the next packet, or dropped silently, where a read would wait for the
+    /// TCP retransmission timeout) is found here, not by the mount's first
+    /// read. A session that cannot serve is quarantined and never handed to
+    /// a mount; its caller opens a new one. The check runs before any
+    /// operation uses the session, so no operation is retried.
+    pub fn usable(&self) -> bool {
         let Ok(mut state) = self.session.state.lock() else {
             return false;
         };
@@ -53,8 +56,9 @@ impl PostgresStorage {
             return false;
         }
         let threshold = u64::from(self.session.settings.reader_idle_check_ms);
+        let quiet = state.client.silent() < std::time::Duration::from_millis(threshold);
         let alive = state.client.alive()
-            && (idle < std::time::Duration::from_millis(threshold) || {
+            && (quiet || {
                 state.work.round_trips += 1;
                 state.client.answers(crate::READER_CHECK_TIMEOUT)
             });

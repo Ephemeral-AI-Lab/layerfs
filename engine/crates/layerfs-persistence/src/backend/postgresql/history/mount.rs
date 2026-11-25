@@ -30,6 +30,7 @@
 //! | Request | Refusal | Outcome |
 //! | --- | --- | --- |
 //! | 1 | `22012` (generation moved) | `StaleStore`, no key taken |
+//! | 1 | `55P03` (the lock timeout, on `history_meta`) | `Busy`, no key taken |
 //! | 1 | another definite SQLSTATE | [`Admission::Released`]: no key taken |
 //! | 2 | `22012` (a key refused) | [`Admission::Released`]: no key held |
 //! | 2 | `22003` (another backend, §5.2 item 34) | `Unsupported`, no key taken |
@@ -195,9 +196,11 @@ pub(crate) enum Admission {
     /// refused a key and gave back its grants, or the transaction's `BEGIN`
     /// batch failed): nothing was written and no key is held.
     Released,
-    /// A refusal reported as it is: `StaleStore`, a pooled connection, or a
-    /// refusal on a session that lost a later reply. Nothing written, no
-    /// key held.
+    /// A refusal reported as it is: `StaleStore`, `Busy` for a lock timeout
+    /// in the `BEGIN` batch (the statement-by-statement registration's key
+    /// statement has no lock timeout, so falling back would wait as long as
+    /// the lock is held), a pooled connection, or a refusal on a session
+    /// that lost a later reply. Nothing written, no key held.
     Refused(HistoryError),
     /// Unknown; the session is quarantined.
     Unknown,
@@ -356,6 +359,9 @@ fn decide(
         let definite = rows::sqlstate(code.code()) != BackendError::Unknown;
         let outcome = match step {
             Step::Begin if division => Admission::Refused(HistoryError::StaleStore),
+            Step::Begin if *code == SqlState::LOCK_NOT_AVAILABLE => {
+                Admission::Refused(BackendError::Busy.into())
+            }
             Step::Lock if division => Admission::Released,
             Step::Lock if range => Admission::Refused(HistoryError::Unsupported(POOLED)),
             Step::Lock => Admission::Unknown,
