@@ -75,9 +75,12 @@ Some findings have no `fix`. That means no single command repairs the cause, or
 the obvious command could lose data. Read the `message`: it says what to do by
 hand. Three cases to know:
 
-- A damaged Store (`store.identity`, `store.schema`, `project.data`) is fixed by
-  restoring a backup, `layerfs backup restore <bucket> <file> <store>`, and
-  never by removing the Store.
+- A damaged Store (`store.identity`, `store.schema`, `project.data`) has no
+  in-place restore fix. `backup restore` refuses to replace a recorded Store
+  whose current state cannot be proven unchanged, and replacing the whole Store
+  can discard newer data. Restore a backup under a new Store name, or use the
+  LayerFS build or database tools that own the damaged data; never remove the
+  Store as a data repair.
 - A machine record that is not valid JSON, or names an unknown platform, cannot
   be removed with `machine remove` either; the doctor gives no fix, and the file
   has to be repaired or deleted by hand.

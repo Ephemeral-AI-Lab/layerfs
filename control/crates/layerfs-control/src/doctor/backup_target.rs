@@ -28,12 +28,12 @@ pub(super) fn diagnose(
 ) {
     let record = match BucketRecord::of(home, name) {
         Ok(record) => record,
-        Err(_) => {
+        Err(refusal) if refusal.code == "NotFound" => {
             checks.fail(
                 "bucket.configuration",
-                "saved backup alias is absent, unreadable or invalid",
+                "no backup alias is saved under this name",
             );
-            // the URL is not known without the record: the line is a template
+            // no record exists to read or preserve: the line is a template
             checks.fix(
                 "bucket.configuration",
                 format!(
@@ -41,23 +41,33 @@ pub(super) fn diagnose(
                     shell_word(name)
                 ),
             );
-            checks.evidence("bucket.configuration", cause("record_unavailable"));
+            checks.evidence("bucket.configuration", cause("record_missing"));
+            return;
+        }
+        Err(_) => {
+            checks.fail(
+                "bucket.configuration",
+                "saved backup alias is unreadable or invalid; repair or remove its record by hand before connecting it again",
+            );
+            // `backup connect` reads an existing record before it can replace
+            // it, so it cannot repair the record it cannot read
+            checks.evidence("bucket.configuration", cause("record_unreadable"));
             return;
         }
     };
     let fields = record.to_record();
-    if fields.get_int("v") != Some(layerfs_home::home::RECORD_VERSION)
-        || fields.get_text("name") != Some(name)
-    {
+    if fields.get_int("v") != Some(layerfs_home::home::RECORD_VERSION) {
         checks.fail(
             "bucket.configuration",
-            "backup alias identity or record version is invalid",
+            "backup alias record version is invalid",
         );
+        // rotation rewrites the record through `write_entity`, which writes
+        // this build's record version and keeps the Stores' links
         checks.fix("bucket.configuration", record.connect_again());
         checks.evidence(
             "bucket.configuration",
             SdkValue::map([
-                ("cause", SdkValue::text("identity_or_version")),
+                ("cause", SdkValue::text("version")),
                 (
                     "expected_v",
                     SdkValue::Int(layerfs_home::home::RECORD_VERSION),
@@ -66,12 +76,25 @@ pub(super) fn diagnose(
         );
         return;
     }
+    if fields.get_text("name") != Some(name) {
+        checks.fail(
+            "bucket.configuration",
+            "backup alias record names another bucket; connecting it again keeps that wrong name, so repair the record by hand",
+        );
+        checks.evidence(
+            "bucket.configuration",
+            SdkValue::map([("cause", SdkValue::text("identity"))]),
+        );
+        return;
+    }
     if !matches!(fields.get_text("provider"), Some("r2" | "minio")) {
         checks.fail(
             "bucket.configuration",
             "backup alias does not name a supported S3-compatible provider",
         );
-        checks.fix("bucket.configuration", record.connect_again());
+        // no fix: connecting the supported form at this name names another
+        // place, which `backup connect` refuses; disconnecting would drop
+        // the Stores' links
         checks.evidence(
             "bucket.configuration",
             SdkValue::map([
@@ -112,8 +135,9 @@ pub(super) fn diagnose(
     let client = match record.diagnostic_client(credentials) {
         Ok(client) => client.with_diagnostic_resolver(layerfs_bridge::network::resolve_all_within),
         Err(_) => {
-            checks.fail("bucket.configuration", "saved endpoint, bucket, prefix, region or key could not be validated; secrets were not displayed");
-            checks.fix("bucket.configuration", record.connect_again());
+            checks.fail("bucket.configuration", "saved endpoint, bucket, prefix, region or key could not be validated; secrets were not displayed; repair the record by hand or connect the bucket under a new name");
+            // no fix: the invalid field is not identified, and reconnecting
+            // the same saved values repairs only a bad key
             checks.evidence("bucket.configuration", cause("client_not_validated"));
             return;
         }

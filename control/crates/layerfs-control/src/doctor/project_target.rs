@@ -267,7 +267,7 @@ fn data(probe: &Probe<'_>, store: &StoreRecord, stack: LayerStackId, checks: &mu
         }
         Err(refusal) => Err(refusal),
     };
-    found.fill(store, checks);
+    found.fill(checks);
     match made {
         Ok(coverage) if coverage.failed == 0 && !coverage.incomplete && found.kept.is_empty() => {
             checks.pass(
@@ -309,11 +309,12 @@ impl Found {
     /// Each kept problem as one finding of `project.data`: an object the
     /// walk could not read (a corrupt pack) is as much a problem of the data
     /// as a wrong one, and is never also a `not_checked` entry (R4 F3).
-    /// Its fix is the Store's restore, never a delete.
-    fn fill(&self, store: &StoreRecord, checks: &mut Checks) {
+    /// No fix: replacing the whole Store can discard newer data, PostgreSQL
+    /// Stores are not restorable by `backup restore`, and an unknown outcome
+    /// does not establish corruption.
+    fn fill(&self, checks: &mut Checks) {
         for (outcome, message) in &self.kept {
             checks.fail(DATA, message.clone());
-            checks.fix(DATA, super::store_target::restore_fix(store));
             let word = if *outcome == Outcome::Fail {
                 "fail"
             } else {
@@ -326,7 +327,6 @@ impl Found {
                 DATA,
                 format!("{} more problems were found and are not listed", self.more),
             );
-            checks.fix(DATA, super::store_target::restore_fix(store));
             let more = i64::try_from(self.more).unwrap_or(i64::MAX);
             checks.evidence(DATA, SdkValue::map([("more", SdkValue::Int(more))]));
         }
