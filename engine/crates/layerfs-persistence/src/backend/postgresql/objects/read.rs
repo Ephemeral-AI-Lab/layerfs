@@ -440,17 +440,8 @@ pub(crate) fn ranges(
     let rows = if total == 0 {
         Vec::new()
     } else {
-        // `OFFSET 0` keeps the span a value computed once per span row; the
-        // ranges are then cut from that value in memory.
         tx.typed(
-            &format!(
-                "SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) \
-                 FROM unnest($1::bigint[],$2::int4[],$3::int4[],$4::int4[],$5::int4[]) AS g(pack_id,o,l,first,n) \
-                 JOIN {}.pack p ON p.pack_id=g.pack_id \
-                 CROSS JOIN LATERAL (SELECT substring(p.body FROM g.o FOR g.l) AS span OFFSET 0) s \
-                 CROSS JOIN LATERAL generate_series(g.first,g.first+g.n-1) AS k ORDER BY k",
-                tx.schema
-            ),
+            &ranges_sql(tx.schema),
             &[&ids, &starts, &lengths, &firsts, &counts, &from, &count],
             ids.len() as u64 * 24 + total as u64 * 8,
         )?
@@ -471,4 +462,17 @@ pub(crate) fn ranges(
         out.push(bodies);
     }
     Ok(())
+}
+
+/// The multi-range reader's text ([`ranges`]): `OFFSET 0` keeps the span a
+/// value computed once per span row; the ranges are then cut from that value
+/// in memory.
+pub(crate) fn ranges_sql(schema: &str) -> String {
+    format!(
+        "SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) \
+         FROM unnest($1::bigint[],$2::int4[],$3::int4[],$4::int4[],$5::int4[]) AS g(pack_id,o,l,first,n) \
+         JOIN {schema}.pack p ON p.pack_id=g.pack_id \
+         CROSS JOIN LATERAL (SELECT substring(p.body FROM g.o FOR g.l) AS span OFFSET 0) s \
+         CROSS JOIN LATERAL generate_series(g.first,g.first+g.n-1) AS k ORDER BY k"
+    )
 }

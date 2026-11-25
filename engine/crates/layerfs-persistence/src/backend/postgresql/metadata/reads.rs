@@ -380,14 +380,7 @@ fn value_blocks(
             }
         }
     }
-    let sql = format!(
-        "SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 THEN b.body END FROM {s}.inode_value_block b WHERE b.first_ordinal IN (\
-         SELECT x.first_ordinal FROM unnest($1::bigint[],$2::bigint[]) r(lo,hi) JOIN {s}.inode_value_block x \
-         ON x.first_ordinal BETWEEN coalesce((SELECT max(y.first_ordinal) FROM {s}.inode_value_block y \
-         WHERE y.first_ordinal<=r.lo),0) AND r.hi) AND NOT (b.first_ordinal = ANY($3::bigint[])) \
-         ORDER BY b.first_ordinal",
-        s = tx.schema
-    );
+    let sql = values_sql(tx.schema);
     if let Some(high) = highs.last_mut() {
         *high += i64::from(ahead);
     }
@@ -436,4 +429,17 @@ pub(crate) fn signatures(
     }
     out.sort_unstable_by_key(|row| row.stamp);
     Ok(())
+}
+
+/// The inode value block reader's text (`inode_values_ahead`): the blocks
+/// covering each requested range, without the ones the caller holds.
+pub(crate) fn values_sql(schema: &str) -> String {
+    format!(
+        "SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 THEN b.body END FROM {s}.inode_value_block b WHERE b.first_ordinal IN (\
+         SELECT x.first_ordinal FROM unnest($1::bigint[],$2::bigint[]) r(lo,hi) JOIN {s}.inode_value_block x \
+         ON x.first_ordinal BETWEEN coalesce((SELECT max(y.first_ordinal) FROM {s}.inode_value_block y \
+         WHERE y.first_ordinal<=r.lo),0) AND r.hi) AND NOT (b.first_ordinal = ANY($3::bigint[])) \
+         ORDER BY b.first_ordinal",
+        s = schema
+    )
 }

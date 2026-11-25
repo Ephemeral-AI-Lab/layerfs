@@ -99,12 +99,21 @@ const SQLITE: &[Pin] = &[
 // the mount outside the publication lane: 2 round trips and 2 statements
 // fewer on the writer than the 12/6 (first) and 8/6 (again) it had after the
 // read changes alone.
+//
+// #768 step A then prepared the mount's statements before the mount: the
+// writer's admission and release statements in one flight at Store open
+// (`store.open` in the cycle pins: 1 round trip and 1 read transaction
+// more), and a Workspace reader's mount statements in one flight when it
+// opens. A first mount was writer [0, 10, 4, 1] (its 4 prepares) and reader
+// [1, 13, 8, 0] (its connect, light check, 7 statements and 5 prepares);
+// now the writer prepares nothing and the reader's 5 prepares are one
+// flight in its open (1 round trip, 1 transaction): 23 round trips -> 15.
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "mount.by_id.first",
-        writer: [0, 10, 4, 1],
+        writer: [0, 6, 4, 1],
         control: [0, 0, 0, 0],
-        workspace: [1, 13, 8, 0],
+        workspace: [1, 9, 8, 1],
     },
     Pin {
         scenario: "mount.by_id.again",
@@ -114,9 +123,9 @@ const POSTGRESQL: &[Pin] = &[
     },
     Pin {
         scenario: "mount.by_name.first",
-        writer: [0, 10, 4, 1],
+        writer: [0, 6, 4, 1],
         control: [0, 0, 0, 0],
-        workspace: [1, 13, 8, 0],
+        workspace: [1, 9, 8, 1],
     },
 ];
 
@@ -215,9 +224,10 @@ const SQLITE_COMMIT: &[Pin] = &[
 // on the second (a fenced autocommit statement, then a Read transaction:
 // `BEGIN` batch, statement, `COMMIT`); the one statement is now 4 and 3
 // round trips fewer. The writer's first Commit opens the lane connection.
-// The unmount is the owner's release on the writer, cold on this session (2
-// statements, each prepared once): `postgresql_gc_sessions` pins the warm
-// release at 2 round trips, 8 before #768's admission change.
+// The unmount is the owner's release on the writer: `postgresql_gc_sessions`
+// pins it at 2 round trips, 8 before #768's admission change. Its two
+// statements were prepared here (4 round trips) until #768 step A prepared
+// them at Store open.
 //
 // #768's Commit cuts then took 11 round trips off the first Commit's writer
 // (65 before) and 10 off the second's (42 before; 40 of them warm): the
@@ -287,7 +297,7 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "unmount",
-        writer: [0, 4, 2, 0],
+        writer: [0, 2, 2, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -307,6 +317,12 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
 // Commit's install put the new root's objects in the shared object cache, so
 // its Workspace reader sends what a repeated mount of an unmoved root sends.
 const SQLITE_CYCLE: &[Pin] = &[
+    Pin {
+        scenario: "store.open",
+        writer: [0, 0, 66, 12],
+        control: [0, 0, 36, 2],
+        workspace: [0, 0, 0, 0],
+    },
     Pin {
         scenario: "reader.prefill",
         writer: [0, 0, 0, 0],
@@ -339,28 +355,45 @@ const SQLITE_CYCLE: &[Pin] = &[
     },
 ];
 
-// On PostgreSQL the prefill is the idle reader's connect and its light
-// check (1 round trip, 1 statement). The mount that takes it then checks it
-// with an empty query (1 round trip, no statement), so it sends one round
-// trip more than a first mount that opens its own reader, and one statement
-// fewer (the light check). Its other 12 reader round trips are 7 statements
-// (the snapshot, the five dependent content reads and the markers) and 5
-// prepares (the three locates share one text); the writer's 10 are the
-// admission's 6 and its 4 prepares. The mount
-// after the Commit is a repeated mount: writer 6, reader 3 (the empty-query
-// check, the snapshot and the markers), as `mount.by_id.again`.
+// `store.open` is every session's work from its connect to the opened
+// Store; the SQLite control reader opens at start, a PostgreSQL one at its
+// first use.
+//
+// On PostgreSQL, measured before #768 step A: the Store open was writer
+// [1, 9, 5, 1]; the prefill the idle reader's connect and its light check
+// (reader [1, 1, 1, 0]); the mount that takes it checks it with an empty
+// query (1 round trip, no statement), so it sent one round trip more than a
+// first mount that opens its own reader, and one statement fewer (the light
+// check): writer [0, 10, 4, 1] (the admission's 6 and its 4 prepares),
+// reader [0, 13, 7, 0] (the check, 7 statements: the snapshot, the five
+// dependent content reads and the markers, and 5 prepares: the three locates
+// share one text). The unmount was [0, 4, 2, 0] (its two prepares).
+//
+// Step A prepares those statements ahead: the Store open adds one flight of
+// the writer's admission and release statements, in one read transaction
+// whose `search_path` resolves their names ([1, 10, 5, 2]); the prefill adds
+// one flight of the reader's mount statements ([1, 2, 1, 1]); the mount and
+// the unmount then prepare nothing: 23 round trips -> 14, unmount 4 -> 2.
+// The mount after the Commit is a repeated mount: writer 6, reader 3 (the
+// empty-query check, the snapshot and the markers), as `mount.by_id.again`.
 const POSTGRESQL_CYCLE: &[Pin] = &[
+    Pin {
+        scenario: "store.open",
+        writer: [1, 10, 5, 2],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
     Pin {
         scenario: "reader.prefill",
         writer: [0, 0, 0, 0],
         control: [0, 0, 0, 0],
-        workspace: [1, 1, 1, 0],
+        workspace: [1, 2, 1, 1],
     },
     Pin {
         scenario: "mount.prefilled",
-        writer: [0, 10, 4, 1],
+        writer: [0, 6, 4, 1],
         control: [0, 0, 0, 0],
-        workspace: [0, 13, 7, 0],
+        workspace: [0, 8, 7, 0],
     },
     Pin {
         scenario: "cycle.commit",
@@ -370,7 +403,7 @@ const POSTGRESQL_CYCLE: &[Pin] = &[
     },
     Pin {
         scenario: "cycle.unmount",
-        writer: [0, 4, 2, 0],
+        writer: [0, 2, 2, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -412,7 +445,11 @@ fn postgresql_commit_counts() {
 
 #[test]
 fn sqlite_cycle_counts() {
-    check("sqlite", &on_sqlite("sqlite-cycle", cycle_scenarios), SQLITE_CYCLE);
+    check(
+        "sqlite",
+        &on_sqlite("sqlite-cycle", cycle_scenarios),
+        SQLITE_CYCLE,
+    );
 }
 
 #[test]
@@ -744,6 +781,12 @@ fn cycle_scenarios(
 ) -> Vec<Measured> {
     let mut out = Vec::new();
     let opened = Opened::open(dir, selection(), "e");
+    // The Store open itself: every session's work since it connected.
+    let open = opened.work();
+    out.push(Measured {
+        scenario: "store.open",
+        counts: [counts(&open[0]), counts(&open[1]), counts(&open[2])],
+    });
     measure(&opened, "reader.prefill", &mut out, || {
         if let Some(prefilled) = opened.service.store.prefill_reader() {
             prefilled.unwrap();

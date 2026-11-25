@@ -567,17 +567,7 @@ impl Transaction<'_> {
     fn fenced<'a>(&self, sql: &'a str) -> std::borrow::Cow<'a, str> {
         match self.fence {
             None => std::borrow::Cow::Borrowed(sql),
-            Some(_) => {
-                // A shipped statement ends in `;`, which the extended protocol
-                // accepts as one statement but a parenthesized subquery does not.
-                let statement = sql.trim_end();
-                let statement = statement.strip_suffix(';').unwrap_or(statement).trim_end();
-                std::borrow::Cow::Owned(format!(
-                    "SELECT q.*,f.__layerfs_incarnation FROM ({statement}) q CROSS JOIN \
-                     (SELECT catalog_incarnation AS __layerfs_incarnation FROM {}.history_meta WHERE id=1) f",
-                    self.schema
-                ))
-            }
+            Some(_) => std::borrow::Cow::Owned(super::prepare::fenced(sql, self.schema)),
         }
     }
 

@@ -74,6 +74,17 @@ impl Error {
     }
 }
 
+/// What one prepare flight answered ([`Driver::prepare_all`]).
+pub(crate) struct Prepared {
+    /// Prepares sent: a prefix of them.
+    pub(crate) sent: usize,
+    /// One reply per prepare, in order.
+    pub(crate) statements: Vec<Result<Statement, Error>>,
+    /// The `begin` text's and the `COMMIT`'s answers, the first failure of
+    /// the two (`Ok` without `begin`).
+    pub(crate) around: Result<(), Error>,
+}
+
 pub(crate) enum Driver {
     Ordinary(Ordinary),
     Diagnostic(Diagnostic),
@@ -349,20 +360,53 @@ impl Driver {
         }
     }
     /// Prepares every statement of `sqls` in one flight: each Parse/Describe
-    /// is sent before any reply is awaited, and every reply is collected.
-    /// Prepares `sqls` in one flight ([`pipeline::in_order`]): how many
-    /// were sent, and every reply in order.
+    /// is sent before any reply is awaited, and every reply is collected
+    /// ([`pipeline::in_order`]): how many were sent, and every reply in
+    /// order. With `begin`, the flight is that text, the prepares and
+    /// `COMMIT`: statements whose names resolve through the `search_path`
+    /// its `SET LOCAL` gives, and the answers of `begin` and `COMMIT`.
     pub(crate) fn prepare_all(
         &mut self,
         sqls: &[&str],
-    ) -> Result<(usize, Vec<Result<Statement, Error>>), Error> {
+        begin: Option<&str>,
+    ) -> Result<Prepared, Error> {
+        type Answer = Option<Statement>;
         match self {
             Self::Ordinary(client) => {
-                let pending = sqls
-                    .iter()
-                    .map(|sql| Box::pin(client.client.prepare(sql)) as Pin<Box<_>>)
-                    .collect();
-                Ok(client.runtime.block_on(pipeline::in_order(pending)))
+                let c = &client.client;
+                let mut pending: Vec<pipeline::Pending<'_, Answer>> =
+                    Vec::with_capacity(sqls.len() + 2);
+                if let Some(begin) = begin {
+                    pending.push(Box::pin(async move {
+                        c.batch_execute(begin).await.map(|()| None)
+                    }));
+                }
+                for sql in sqls {
+                    pending.push(Box::pin(async move { c.prepare(sql).await.map(Some) }));
+                }
+                if begin.is_some() {
+                    pending.push(Box::pin(async move {
+                        c.batch_execute("COMMIT").await.map(|()| None)
+                    }));
+                }
+                let (sent, mut replies) = client.runtime.block_on(pipeline::in_order(pending));
+                let around = |reply: Result<Answer, Error>| reply.map(drop);
+                let (opened, closed) = match begin {
+                    Some(_) => {
+                        let closed = replies.pop().map_or(Err(Error::Unsent), around);
+                        (around(replies.remove(0)), closed)
+                    }
+                    None => (Ok(()), Ok(())),
+                };
+                let skip = usize::from(begin.is_some());
+                Ok(Prepared {
+                    sent: sent.saturating_sub(skip).min(sqls.len()),
+                    statements: replies
+                        .into_iter()
+                        .map(|reply| reply.and_then(|answer| answer.ok_or(Error::Unsent)))
+                        .collect(),
+                    around: opened.and(closed),
+                })
             }
             Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),

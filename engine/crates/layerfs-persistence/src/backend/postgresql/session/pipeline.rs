@@ -81,7 +81,7 @@ pub(crate) struct Flight {
     pub(crate) replies: Vec<Result<Reply, Error>>,
 }
 
-type Pending<'a, T> = Pin<Box<dyn Future<Output = Result<T, postgres::Error>> + 'a>>;
+pub(crate) type Pending<'a, T> = Pin<Box<dyn Future<Output = Result<T, postgres::Error>> + 'a>>;
 
 /// Polls `pending` in order until every one has answered, never stopping at
 /// an error. A future that answers on its first poll was never sent (a sent

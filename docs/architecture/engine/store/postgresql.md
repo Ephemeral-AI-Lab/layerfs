@@ -647,6 +647,45 @@ intent; merge, Init and the removals follow the same rule
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched. Also a mounted Workspace's first and second one-file Commit, an UpToDate Commit and the unmount: no Commit reads on the control or Workspace reader (whiteout facts kept from the mount, validation from the built objects). A merge Commit reads the merged root back through the Workspace reader, and the Commit after it reads nothing there |
 | [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller of a mount; a catalog without admission still mounts. `a_pooled_connection_refuses_a_shared_intent`: the same for a merge |
 
+### Mount statements prepared at open
+
+A statement is prepared once per connection, on its first use, at one round
+trip each (`State::statement`). Since #768 step A the mount's statements are
+prepared before the mount, in one flight each
+([`mount.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/mount.rs),
+[`prepare.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/prepare.rs)):
+
+- **The writer**, when the Store service opens it
+  ([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)
+  `open_postgres`): the mount admission's and the owner release's
+  statements. Some name tables without the schema, as the transactions that
+  run them resolve them through `SET LOCAL search_path`, so the flight is
+  one read transaction: its `BEGIN` batch, the prepares and `COMMIT`, one
+  round trip. Every Store service open pays it, an SDK call's included,
+  whether or not it mounts.
+- **A Workspace reader**, when it opens (at the mount that opens it, or
+  after readiness for the idle reader, `Store::prefill_reader`): the
+  snapshot by Branch id and by name, the markers, and the root's first
+  demand (the chain locate, the pack ranges, the inode value blocks), each
+  in its fenced autocommit form. The control reader prepares none.
+
+A prepare changes nothing on the server: a refused one fails the open as
+its one attempt, and one whose reply is lost quarantines the session.
+
+```text
+                                  before step A    after step A
+ Store open (writer)              9 RT, 1 tx       10 RT, 2 tx
+ idle reader (prefill)            1 RT             2 RT
+ first mount, own reader          23 RT            15 RT   (writer 10 -> 6, reader 13 -> 9)
+ first mount, prefilled reader    23 RT            14 RT   (writer 10 -> 6, reader 13 -> 8)
+ repeated mount                   9 RT             9 RT
+ unmount, first on the session    4 RT             2 RT
+```
+
+The counts are `mount_round_trips.rs`'s session counters (connects are not
+round trips); `postgresql_open_cost.rs` sees the same +1 on the wire (a
+daemon Store open 10 -> 11, a reader open 2 -> 3).
+
 ### Commit round trips
 
 A Workspace Commit ([`store/commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs))

@@ -50,6 +50,18 @@ impl PostgresStorage {
         }
         alive.is_ok()
     }
+    /// Prepares the statements a Workspace mount sends on this reader
+    /// session in one flight (#768): one round trip when the reader opens,
+    /// so the mount prepares none.
+    pub fn prepare_mount_reads(&self) -> Result<(), PersistenceError> {
+        self.session.prepare_mount_reads().map_err(Into::into)
+    }
+    /// Prepares the writer session's mount admission and owner release
+    /// statements in one flight (#768): one round trip when the Store opens,
+    /// so neither call prepares one.
+    pub fn prepare_mount_writes(&self) -> Result<(), PersistenceError> {
+        self.session.prepare_mount_writes().map_err(Into::into)
+    }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {
         self.session.server_version.get().map_or("", String::as_str)

@@ -270,6 +270,9 @@ fn open_postgres(
 ) -> StorageResult<OpenedStore> {
     use layerfs_persistence::PostgresHandles;
     let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
+    // #768: the mount's admission and the unmount's release, prepared now in
+    // one flight, so neither call prepares a statement.
+    writer.storage.prepare_mount_writes()?;
     let version = format!("postgresql {}", writer.storage.server_version());
     let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
     let binding = binding.to_vec();
@@ -277,6 +280,12 @@ fn open_postgres(
     let registry = observations.clone();
     let factory: crate::store::ReaderFactory = Arc::new(move |index| {
         let opened = PostgresHandles::open_read_only(&selection, &binding, cursor_key)?;
+        // #768: a Workspace reader (the control reader is index 0) prepares
+        // its mount statements in one flight when it opens: at the mount
+        // that opens it, or after readiness for the idle reader.
+        if index != 0 {
+            opened.storage.prepare_mount_reads()?;
+        }
         let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
         let session = opened.storage.clone();
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
