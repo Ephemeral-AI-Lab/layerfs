@@ -465,6 +465,8 @@ class Run:
             time.sleep(0.3)
         self.note("backends_after_exit", left=left)
         self.role(self.admin(), "probe", 15, "probe-exit.out", CHAOS811_LABEL="exit")
+        # The history rows before any compaction can collect a removed Branch.
+        self.role(self.admin(), "rows", 15, "rows.out")
         # Settlement: first each host's own compaction admission (it adopts
         # the intents of owners this PID namespace proves gone), then, for
         # rows that remain, the documented operator path, then one more
@@ -475,7 +477,6 @@ class Run:
         settled = load(self.dir / "probe-settled.json") or {"intents": []}
         if [r for r in settled["intents"] if r["state"] != "done"]:
             self.role(self.admin(), "operator", 25, "operator.out")
-        self.role(self.admin(), "rows", 15, "rows.out")
         self.role(self.host(0), "settle", 25, "settle-final.out", CHAOS811_LABEL="final")
         self.role(self.admin(), "probe", 15, "probe-final.out", CHAOS811_LABEL="final")
         (self.dir / "stop-monitor").write_text("stop\n")
