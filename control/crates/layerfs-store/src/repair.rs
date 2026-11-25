@@ -2,16 +2,20 @@
 //! for a PostgreSQL Store or a SQLite Store on this computer, or in the
 //! machine's worker (`store.repair`) for a SQLite Store there. The caller's
 //! side resolves the project and the cursor ([`Repair`] is what crosses);
-//! this side reads the Branch's mount intents, judges each with the same
+//! this side reads the Branch's mount intents and the Init, merge and
+//! removal intents at the Branch and its project, judges each with the same
 //! owner check and place view admission uses, and acts on one explicit op.
+//! An operation row records no place, so only its owner can prove it gone:
+//! one left by an owner in another PID namespace or on another host would
+//! otherwise hold its scopes until the owner's boot ends (#776 G1).
 //!
 //! `list` and `preview` write nothing: one page of holders by op, each with
 //! its row `state` (`live`, `uncertain`) and the `liveness` admission would
 //! give it now (`live`, `uncertain`, `dead`). `settle` marks one op uncertain
 //! and refuses a holder that still looks `live` unless forced; `release`
 //! retains a settled row as the durable `done` audit; `settle_legacy` marks
-//! only rows without owner or place evidence; `audit` reads one page of the
-//! Branch's retained rows. Nothing is automatic.
+//! only mount rows without owner or place evidence; `audit` reads one page of
+//! the Branch's retained rows. Nothing is automatic.
 use crate::open_args::OpenArgs;
 use crate::service::{branch_named, with_service};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -39,7 +43,7 @@ pub const ACTIONS: [&str; 6] = [
 pub struct Repair {
     /// The project's name in its Store.
     pub project: String,
-    /// The Branch whose mount holders it repairs.
+    /// The Branch whose holders it repairs.
     pub branch: String,
     /// One of [`ACTIONS`].
     pub action: String,
@@ -182,26 +186,38 @@ fn audit_after(after: Option<&SdkValue>) -> Result<Option<GcAuditAfter>> {
     Ok(Some(GcAuditAfter { updated_ms, op_id }))
 }
 
-/// The actions on the Branch's live mount intents.
+/// The actions on the live intents that hold the Branch: its mounts, and the
+/// Init, merge and removal operations at the Branch or its project.
 fn holders(
     service: &layerfs_store_service::StoreService,
     branch: layerfs_history::BranchId,
     request: &Repair,
 ) -> Result<SdkValue> {
     let catalog = service.store.history();
+    let operation = |intent: &GcIntent| {
+        matches!(
+            intent.kind,
+            GcIntentKind::Init | GcIntentKind::Merge | GcIntentKind::Removal
+        )
+    };
     let mut mounts: Vec<GcIntent> = (catalog.gc_intents(GcScopeKind::Branch, branch.as_slice()))
         .map_err(failed)?
         .into_iter()
-        .filter(|intent| intent.kind == GcIntentKind::Mount)
+        .filter(|intent| intent.kind == GcIntentKind::Mount || operation(intent))
         .collect();
+    if let Some(record) = catalog.branch(branch).map_err(failed)? {
+        let project = catalog.gc_intents(GcScopeKind::Project, record.stack.as_slice());
+        mounts.extend(project.map_err(failed)?.into_iter().filter(operation));
+    }
     mounts.sort_by_key(|intent| intent.op_id);
+    mounts.dedup_by_key(|intent| intent.op_id);
     let action = request.action.as_str();
     if matches!(action, "list" | "preview") {
         return page(catalog, &mounts, request);
     }
     if action == "settle_legacy" {
         let mut settled = 0i64;
-        for intent in mounts.iter().filter(|i| MountHolderView::of(i).legacy()) {
+        for intent in mounts.iter().filter(|i| legacy(i)) {
             // a row released since the listing is not counted
             if catalog.gc_mark_uncertain(&intent.op_id).map_err(failed)? {
                 settled += 1;
@@ -219,9 +235,10 @@ fn holders(
     let found = (mounts.iter().find(|intent| intent.op_id == op)).ok_or_else(|| {
         refused(
             "NotFound",
-            format!("no mount holder {shown} at this Branch"),
+            format!("no holder {shown} at this Branch or its project"),
         )
     })?;
+    let noun = found.kind.as_str();
     let state = match action {
         "settle" => {
             settle(catalog, found, request)?;
@@ -231,7 +248,7 @@ fn holders(
             if !found.uncertain {
                 return Err(refused(
                     "Conflict",
-                    format!("mount holder {shown} is not settled: settle it before release"),
+                    format!("{noun} holder {shown} is not settled: settle it before release"),
                 ));
             }
             let operator = operator_label(&request.operator)?;
@@ -239,7 +256,7 @@ fn holders(
             if !catalog.gc_release_done(&op, &evidence).map_err(failed)? {
                 return Err(refused(
                     "NotFound",
-                    format!("mount holder {shown} was already released"),
+                    format!("{noun} holder {shown} was already released"),
                 ));
             }
             "done"
@@ -254,7 +271,7 @@ fn holders(
 
 /// Marks `found` uncertain. A holder the owner check and place view still
 /// find `live` is refused `InUse` unless forced; `--legacy` settles only a
-/// row without owner or place evidence, which nothing can judge. A row its
+/// mount row without owner or place evidence, which nothing can judge. A row its
 /// owner (or another operator) released since the listing is `NotFound`,
 /// as a second release is.
 fn settle(
@@ -262,11 +279,11 @@ fn settle(
     found: &GcIntent,
     request: &Repair,
 ) -> Result<()> {
-    let legacy = MountHolderView::of(found).legacy();
-    if request.legacy && !legacy {
+    let noun = found.kind.as_str();
+    if request.legacy && !legacy(found) {
         return Err(refused(
             "InvalidInput",
-            "this holder has owner or place evidence; --legacy settles only legacy rows",
+            "this holder is not a legacy mount row; --legacy settles only those",
         ));
     }
     if !(request.force || request.legacy) {
@@ -275,7 +292,7 @@ fn settle(
             return Err(refused(
                 "InUse",
                 format!(
-                    "mount holder {} still looks live: nothing proves its owner gone; \
+                    "{noun} holder {} still looks live: nothing proves its owner gone; \
                      settle it with --force once you know it is",
                     hex(&found.op_id)
                 ),
@@ -285,7 +302,7 @@ fn settle(
     if !catalog.gc_mark_uncertain(&found.op_id).map_err(failed)? {
         return Err(refused(
             "NotFound",
-            format!("mount holder {} was already released", hex(&found.op_id)),
+            format!("{noun} holder {} was already released", hex(&found.op_id)),
         ));
     }
     Ok(())
@@ -315,7 +332,7 @@ fn page(
     };
     let judged = admission::liveness(catalog, &shown).map_err(failed)?;
     let items = (shown.iter().zip(judged))
-        .map(|(intent, liveness)| holder_row(&MountHolderView::of(intent), liveness))
+        .map(|(intent, liveness)| holder_row(intent, liveness))
         .collect();
     Ok(SdkValue::map([
         ("action", SdkValue::text(&request.action)),
@@ -334,13 +351,22 @@ pub fn liveness_word(liveness: Liveness) -> &'static str {
     }
 }
 
-/// One holder row: the typed view, its row `state`, the `liveness` judged
-/// now and `safe` (true unless it still looks live: settle needs no force).
-fn holder_row(holder: &MountHolderView, liveness: Liveness) -> SdkValue {
+/// True for the rows `settle_legacy` may mark: a mount row without owner or
+/// place evidence. An operation row records no place, so it is never one.
+fn legacy(intent: &GcIntent) -> bool {
+    intent.kind == GcIntentKind::Mount && MountHolderView::of(intent).legacy()
+}
+
+/// One holder row: its `kind`, the typed view, its row `state`, the
+/// `liveness` judged now and `safe` (true unless it still looks live: settle
+/// needs no force).
+fn holder_row(intent: &GcIntent, liveness: Liveness) -> SdkValue {
+    let holder = &MountHolderView::of(intent);
     let text = |value: Option<&str>| SdkValue::opt_text(value);
     let workspace = holder.workspace.map(|ws| hex(&ws));
     SdkValue::map([
         ("op", SdkValue::text(hex(&holder.op))),
+        ("kind", SdkValue::text(intent.kind.as_str())),
         ("branch", text(holder.branch.as_deref())),
         ("project", text(holder.project.as_deref())),
         ("workspace", text(workspace.as_deref())),
@@ -359,7 +385,7 @@ fn holder_row(holder: &MountHolderView, liveness: Liveness) -> SdkValue {
         ("state", SdkValue::text(holder.state())),
         ("liveness", SdkValue::text(liveness_word(liveness))),
         ("safe", SdkValue::Bool(liveness != Liveness::Live)),
-        ("legacy", SdkValue::Bool(holder.legacy())),
+        ("legacy", SdkValue::Bool(legacy(intent))),
     ])
 }
 

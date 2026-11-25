@@ -87,6 +87,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "commit_commit_by_id" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/commit_commit_by_id.sql"
         )),
+        "commit_commit_by_attempt" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/commit_commit_by_attempt.sql"
+        )),
         "commit_insert_commit" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/commit_insert_commit.sql"
         )),

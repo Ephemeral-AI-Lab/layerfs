@@ -2,6 +2,7 @@
 //! built. Shared Metadata, Objects and history semantics reach
 //! an engine only through [`Mechanics`] and [`HistoryStatements`].
 pub(crate) mod admission;
+pub(crate) mod epoch;
 pub(crate) mod postgresql;
 pub(crate) mod records;
 mod seam;

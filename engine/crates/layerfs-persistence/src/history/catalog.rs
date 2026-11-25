@@ -149,6 +149,12 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| commit::commit(tx, id))
     }
 
+    // A lost publication reply's one lookup (#776 R1): rare, so a read
+    // transaction rather than a schema-qualified one-statement read.
+    fn commit_by_attempt(&self, attempt: CommitAttempt) -> HistoryResult<Option<CommitRecord>> {
+        self.read(|tx| commit::commit_by_attempt(tx, attempt))
+    }
+
     fn layer(&self, id: LayerId) -> HistoryResult<Option<LayerRecord>> {
         self.read_statement(|tx| layerstack::layer(tx, id))
     }

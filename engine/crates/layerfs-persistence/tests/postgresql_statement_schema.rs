@@ -247,37 +247,41 @@ fn pinned_name(chain: &str) -> String {
     }
 }
 
-/// The `read_statement` call sites of `sources`, as call name → the keys the
+/// The `read_statement` and `session_statement` call sites of `sources`, as call name → the keys the
 /// closure sends itself (only the session-lock shape names its statement).
 fn call_sites(sources: &[(PathBuf, String)]) -> BTreeMap<String, BTreeSet<String>> {
     let mut sites: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    // A session lock runs through `session_statement`, the unfenced form of
+    // `read_statement` (#776 P2); both are one-statement reads.
     for (path, source) in sources {
-        let mut from = 0;
-        while let Some(at) = source[from..].find("read_statement(") {
-            let at = from + at;
-            from = at + 1;
-            // The definition, not a call.
-            if source[..at].trim_end().ends_with("fn") {
-                continue;
-            }
-            let open = at + "read_statement".len();
-            let close = closing(source, open);
-            let argument = &source[open + 1..close];
-            let name = pinned_name(&called(argument));
-            let mut keys = BTreeSet::new();
-            if name == "Transaction::new" {
-                for (ident, key) in constants(source) {
-                    if mentions(argument, &ident) {
-                        keys.insert(key);
-                    }
+        for caller in ["read_statement(", "session_statement("] {
+            let mut from = 0;
+            while let Some(at) = source[from..].find(caller) {
+                let at = from + at;
+                from = at + 1;
+                // The definition, not a call.
+                if source[..at].trim_end().ends_with("fn") {
+                    continue;
                 }
-                assert!(
-                    !keys.is_empty(),
-                    "{}: a session-lock closure names no statement key",
-                    path.display()
-                );
+                let open = at + caller.len() - 1;
+                let close = closing(source, open);
+                let argument = &source[open + 1..close];
+                let name = pinned_name(&called(argument));
+                let mut keys = BTreeSet::new();
+                if name == "Transaction::new" {
+                    for (ident, key) in constants(source) {
+                        if mentions(argument, &ident) {
+                            keys.insert(key);
+                        }
+                    }
+                    assert!(
+                        !keys.is_empty(),
+                        "{}: a session-lock closure names no statement key",
+                        path.display()
+                    );
+                }
+                sites.entry(name).or_default().extend(keys);
             }
-            sites.entry(name).or_default().extend(keys);
         }
     }
     sites

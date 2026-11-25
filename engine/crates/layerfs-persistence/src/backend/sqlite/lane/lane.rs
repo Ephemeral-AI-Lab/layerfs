@@ -16,8 +16,10 @@ pub struct LaneHold {
 }
 
 impl Session {
-    /// Waits its FIFO turn, then the cross-process writer lock, for the lane.
-    /// A wait is readiness, not a retry: nothing is attempted before it is held.
+    /// Waits its FIFO turn and the cross-process writer lock for the lane;
+    /// the turn is never held across a wait for another Session's or
+    /// process's lane ([`Session::admit_writer`]). A wait is readiness, not a
+    /// retry: nothing is attempted before both are held.
     pub(crate) fn hold_lane(self: &Arc<Self>) -> Result<LaneHold, BackendError> {
         if !self.writable {
             return Err(BackendError::ReadOnly);
@@ -28,7 +30,17 @@ impl Session {
         if turn.nested {
             return Err(BackendError::Integrity);
         }
-        let writer = Writer::acquire(&self.path)?;
+        // A quarantined session, or one that still holds its own writer
+        // (a release that failed), is refused before the blocking wait: that
+        // writer is this very lock, so waiting for it would never end
+        // (#776 S4). It is checked again once the lane is held, under the
+        // turn re-entered after a wait.
+        let (turn, writer) = self.admit_writer(turn, |state| {
+            if state.quarantined || state.writer_hold.is_some() {
+                return Err(BackendError::Unknown);
+            }
+            Ok(())
+        })?;
         turn.hold();
         Ok(LaneHold {
             session: self.clone(),
@@ -57,18 +69,21 @@ impl Drop for LaneHold {
             // here, while this thread still holds the lane, before the lane
             // is released (finding #2); if SQLite refuses the close with a
             // transaction open, the lane stays with the connection instead.
+            // A state a panic poisoned is recovered quarantined, so its
+            // connection (which may hold an open write transaction) is closed
+            // here too, before the lane goes (#776 S3).
             let mut writer = Some(writer);
-            if let Ok(mut state) = self.session.state.lock() {
+            {
+                let mut state = self.session.state();
                 if state.quarantined && !state.close_quarantined(self.session.background.as_ref()) {
                     state.writer_hold = writer.take();
                 }
             }
             if let Some(Err(retained)) = writer.map(Writer::release) {
                 // As a failed per-job release: keep the lock, refuse later work.
-                if let Ok(mut state) = self.session.state.lock() {
-                    state.quarantined = true;
-                    state.writer_hold = Some(retained);
-                }
+                let mut state = self.session.state();
+                state.quarantined = true;
+                state.writer_hold = Some(retained);
             }
         }
         self.session.admission.release_hold();

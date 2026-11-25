@@ -2,7 +2,7 @@
 #![cfg(target_os = "macos")]
 mod support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
-use layerfs_history::HistoryCatalogConfig;
+use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{
     PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
@@ -292,3 +292,47 @@ fn typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds
 /// deferred by owner for Normal-only development. Durable support and its
 /// retained historical receipts are unchanged.
 const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Normal];
+
+/// A `begin` that waits for another Session's lane holds no lock a live
+/// owner's read needs (#776). Before the fix `begin` held the epoch mutex
+/// across its write transaction, and every live-owner check took it with
+/// `try_lock`, so a read of an existing operation failed `Busy` for as long
+/// as another process held the lane.
+#[test]
+fn a_live_owner_is_read_while_a_begin_waits_for_another_sessions_lane() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let temp = Temp::new("acquisition-read-during-lane");
+    let path = temp.join("store");
+    let handles = create(&path, SqlitePersistenceProfile::Normal);
+    let owner = begin(&handles);
+    let other = SqliteHandles::open_writable(
+        config(&path, SqlitePersistenceProfile::Normal),
+        BINDING_KEY,
+        [91; 32],
+    )
+    .unwrap();
+    let (read, second) = std::thread::scope(|scope| {
+        let (held, holding) = mpsc::channel();
+        let history = &other.history;
+        let lane = scope.spawn(move || {
+            let lane = history.publish_lane().expect("publication lane");
+            held.send(()).ok();
+            std::thread::sleep(Duration::from_secs(2));
+            drop(lane);
+        });
+        holding
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the lane is held");
+        let handles = &handles;
+        let waiting = scope.spawn(move || begin(handles));
+        // Setup, not a threshold: lets the second begin reach the lane wait.
+        std::thread::sleep(Duration::from_millis(300));
+        let read = handles.acquisition.work(owner);
+        lane.join().expect("lane holder");
+        (read, waiting.join().expect("waiting begin"))
+    });
+    read.expect("the live owner is read while another begin waits");
+    assert_eq!(second.epoch, owner.epoch, "one epoch per session");
+    assert_ne!(second.operation, owner.operation);
+}

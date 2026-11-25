@@ -7,7 +7,8 @@
 use super::workspace::{CommitReply, MountedWorkspace, Unmounted};
 use crate::{OperationCause, OperationFailure};
 use layerfs_bridge::control::{
-    ForcedOutcome, SdkRefusal, SdkValue, TeardownStage, WorkspaceStatus,
+    AbortDisposition, DetachDisposition, ForcedOutcome, SdkRefusal, SdkValue, TeardownStage,
+    WorkspaceStatus,
 };
 use layerfs_bridge::sdk_values::{
     commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated,
@@ -31,17 +32,37 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
         // the machine writes into `workspace/<id>.unmount`; a failure without
         // such an answer (a send or connect failure, or a refusal before any
         // effect) has no stage.
-        OperationCause::Retained(custody) => Some(SdkRefusal {
-            code: "Failed".to_owned(),
-            message: format!(
-                "teardown custody retained at {}; do not resend",
-                stage_text(custody.stage)
-            ),
-            detail: SdkValue::map([
+        // A forced teardown's abort and detach dispositions travel too: a
+        // detach the kernel refused `EBUSY` is the one custody a later
+        // unmount or force may ask again (#538).
+        OperationCause::Retained(custody) => {
+            let mut detail = vec![
                 ("stage", SdkValue::text(stage_text(custody.stage))),
                 ("detached", SdkValue::Bool(custody.detached)),
-            ]),
-        }),
+            ];
+            let text = |value: &dyn std::fmt::Debug| SdkValue::text(format!("{value:?}"));
+            if let Some(facts) = &custody.forced {
+                detail.push(("abort", text(&facts.abort)));
+                detail.push(("detach", text(&facts.detach)));
+            }
+            let busy = custody.forced.as_ref().is_some_and(|facts| {
+                facts.abort == AbortDisposition::Written && facts.detach == DetachDisposition::Busy
+            });
+            Some(SdkRefusal {
+                code: "Failed".to_owned(),
+                message: if busy && custody.stage == TeardownStage::Detach {
+                    "aborted; a process still holds the mount, so the kernel refused its detach; unmount again once it exits".to_owned()
+                } else {
+                    format!(
+                        "teardown custody retained at {}; do not resend",
+                        stage_text(custody.stage)
+                    )
+                },
+                detail: SdkValue::Map(
+                    detail.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+                ),
+            })
+        }
         // The daemon answered something this build cannot read: a daemon of
         // another build whose record differs. It is never shown raw.
         OperationCause::Exchange(exchange)

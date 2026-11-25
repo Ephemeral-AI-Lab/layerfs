@@ -147,7 +147,34 @@ fn barrier_key(schema: &str) -> (i32, i32) {
 /// any nested write of the previous holder still in flight before it reads
 /// anything. Together they keep the head check and the `object_location`
 /// existence probe exact without a unique key or a second database.
+///
+/// The take and the release are one statement (the subquery is an
+/// optimization fence, so the lock is taken first): as two statements, an
+/// error between them left the key held at session level, which `ROLLBACK`
+/// does not end, on a connection that is then reused, and every later nested
+/// write's shared key waited for it forever (#776 P6).
 fn lane_barrier(schema: &str) -> String {
     let (class, key) = barrier_key(schema);
-    format!("SELECT pg_advisory_lock({class}, {key}); SELECT pg_advisory_unlock({class}, {key})")
+    format!(
+        "SELECT pg_advisory_unlock({class}, {key}) \
+           FROM (SELECT pg_advisory_lock({class}, {key}) OFFSET 0) AS barrier"
+    )
+}
+
+/// Appended to the `ROLLBACK` of a transaction that may have run
+/// [`lane_barrier`]: a statement cancelled after its lock and before its
+/// release leaves the key held at session level, and no barrier is ever held
+/// past its own statement, so a granted exclusive barrier of this backend is
+/// such a leftover and is released. It matches nothing otherwise.
+pub(crate) fn barrier_leftover(schema: &str) -> String {
+    let (class, key) = barrier_key(schema);
+    let unsigned = |value: i32| u32::from_ne_bytes(value.to_ne_bytes());
+    format!(
+        "; SELECT pg_advisory_unlock({class}, {key}) FROM pg_locks \
+          WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted \
+            AND mode = 'ExclusiveLock' AND objsubid = 2 \
+            AND classid = {} AND objid = {}",
+        unsigned(class),
+        unsigned(key)
+    )
 }

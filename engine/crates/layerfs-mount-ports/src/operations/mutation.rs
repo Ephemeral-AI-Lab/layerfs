@@ -4,8 +4,8 @@
 use crate::ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply};
 use layerfs_overlay::{KernelMount, OpenFile, Publication};
 use layerfs_workspace::{
-    JobOutcome, KernelMutationOutcome, KernelVisitRequest, Refusal, Time, ViewStat, VisitFacts,
-    WorkspaceError,
+    JobOutcome, KernelMutationOutcome, KernelVisitRequest, Position, Refusal, Time, ViewStat,
+    VisitFacts, WorkspaceError,
 };
 use std::{fmt, sync::Arc};
 
@@ -237,9 +237,11 @@ impl Custody {
             _ => None,
         };
         // What a write's own bytes say about committed content is settled
-        // once, before the first owner visit, and is part of every visit.
+        // once, before the first owner visit, and is part of every visit. An
+        // appending write's offset is decided in the job, and the job keeps
+        // no claims for it, so it is not examined.
         if let MutationInput::Write {
-            offset,
+            position: Position::At(offset),
             data,
             cached: false,
         } = &mut self.request.input

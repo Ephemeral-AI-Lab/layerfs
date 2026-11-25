@@ -1,11 +1,12 @@
 //! `store.repair_mount_holders`: explicit first-class repair of one Branch's
-//! mount admissions, on the machine whose worker holds a SQLite Store and in
+//! mount admissions and the Init, merge and removal admissions at the Branch
+//! or its project, on the machine whose worker holds a SQLite Store and in
 //! this process for a PostgreSQL Store. `list` and `preview` write nothing:
 //! one page of holders, each with its row `state` and the `liveness`
 //! admission would give it now; `settle` refuses a holder still `live`
 //! unless forced; `release` retains a settled row as the durable done audit
-//! and records the operator label; `settle_legacy` settles only rows without
-//! owner or place evidence; `audit` pages the Branch's retained rows by
+//! and records the operator label; `settle_legacy` settles only mount rows
+//! without owner or place evidence; `audit` pages the Branch's retained rows by
 //! `(updated_ms, op)`.
 //! Every call is also in the home's `trace/calls.jsonl` call log.
 use crate::calls::table::{
@@ -29,7 +30,7 @@ pub(crate) const CALL: Call = call(
         opt("limit", Int),
         opt("cursor", Text).redact(),
     ],
-    "list, preview, settle, release, settle_legacy or audit mount holders (operator)",
+    "list, preview, settle, release, settle_legacy or audit a Branch's holders (operator)",
     run,
 );
 // It pages by `limit`/`cursor`, but its answers are not on the 2.0 answer

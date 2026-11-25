@@ -81,9 +81,9 @@ fn fixture(h: &SqliteHandles) -> Vec<FinalizedObject> {
 #[test]
 fn declared_layouts_reopen_without_mutating_or_promoting_their_schema() {
     for (layout, version) in [
-        (SqlitePackLayout::Monolithic, 36),
-        (SqlitePackLayout::GroupRows, 37),
-        (SqlitePackLayout::GroupRowsIndexed, 38),
+        (SqlitePackLayout::Monolithic, 56),
+        (SqlitePackLayout::GroupRows, 57),
+        (SqlitePackLayout::GroupRowsIndexed, 58),
     ] {
         let t = support::Temp::new("indexed-legacy-open");
         let path = t.join("db");

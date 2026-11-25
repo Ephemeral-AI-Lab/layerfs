@@ -69,8 +69,10 @@ receive loop entered; a spawn or a probe of the mount is not that evidence.
 | `abort` | one `write(2)` of one byte on the bound control | detached, aborted, or no control (`ForceRefusal`) | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
 | `force_drain` | quiesce, then one plain detach | abort not `Written`, or a recorded failed detach | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
 | `Undrained::end_stalled` | `abort_detached`, then `force_drain` | stage is not `Join` | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
+| `Undrained::retry_detach` | for a later terminal call: clears the recorded failed detach, then `force_drain` (local drain, one plain detach); the abort is not written again | stage is not `Detach`, or no recorded failed detach | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
 | `Invalidator::inode(serial)` | one `inval_inode(inode, 0, 0)`: attributes and cached pages or listing | uncached target: `ENOENT`, reported as success | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
 | `Invalidator::entry(parent, name)` | one `inval_entry` | same | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
+| `Deferred::pages(serial)` | queues one `Invalidator::inode(serial)` for the mount's page thread (`layerfs-pages-<owner>`, started before serving, ended with the callbacks) | page thread not started: nothing was replied | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
 
 `DrainStage` is `Detach`, `Join`, `Owner`, `Requests` or `Lane`
 ([`state.rs`](../../../../engine/crates/layerfs-fuse/src/session/state.rs)).
@@ -81,6 +83,11 @@ unmount, not sufficient. The daemon uses the `Invalidator` only after a Commit
 installed a root other than the one shown, for each `Stale::Inode` or
 `Stale::Entry` that `stale_after_install` returns
 ([`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs)).
+The adapter itself defers one inode invalidation after an `O_APPEND` WRITE
+whose resolved end differs from the kernel's (see
+[Writes and `O_APPEND`](#writes-and-o_append)); it runs on the page thread
+because an invalidation waits for pages a writer keeps locked until its
+request is answered, which a receive loop must never wait for.
 
 ## Dispatch (`dispatch/`)
 
@@ -117,7 +124,8 @@ reader holds its loop; two loops let one request proceed while another waits.
 | `Declined::NoSpace`, `Contended`, `TargetTooLong` | `ENOSPC`, `EAGAIN`, `ENAMETOOLONG` | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
 | Missing LOOKUP name | Negative entry (node 0), 60 s entry TTL; every create, link, mkdir, symlink or rename through the mount replaces it | [`reply.rs`](../../../../engine/crates/layerfs-fuse/src/request/reply.rs) |
 | FLUSH, FSYNC, FSYNCDIR and the unsupported set | `ENOSYS` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
-| Shared-mapping store | WRITE with `FUSE_WRITE_CACHE`, counted in `store_units` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
+| Shared-mapping store | WRITE with `FUSE_WRITE_CACHE`, counted in `store_units`, at its own offset | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
+| WRITE through an `O_APPEND` descriptor (the file flags of every WRITE, ABI 7.9) | Written at the file's end as the engine job finds it (`Position::End`), not at the kernel's offset; the full count is replied, then the inode's pages are invalidated if the two ends differ | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`mutate.rs`](../../../../engine/crates/layerfs-fuse/src/request/mutate.rs) |
 | Reply not composable from the published result | `EIO`, request retained | [`mutate.rs`](../../../../engine/crates/layerfs-fuse/src/request/mutate.rs) |
 
 | Identity | Rule | Source |
@@ -126,6 +134,34 @@ reader holds its loop; two loops let one request proceed while another waits.
 | Generation | The mount's `owner_id` | [`reply.rs`](../../../../engine/crates/layerfs-fuse/src/request/reply.rs) |
 | Link count | Directory: 0 once removed, else child directories + 2; others: namespace references | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
 | Times | One stored mtime shows as atime, mtime, ctime and crtime | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
+
+### Writes and `O_APPEND`
+
+With writeback caching off the kernel asks for no attributes before a WRITE:
+it resolves `O_APPEND` in `generic_write_checks` against the size it caches.
+A merged install expires the attributes of a changed file (`inval_inode`)
+but leaves that size, so until the next attribute read the kernel's end of a
+file another Workspace appended to is behind the Workspace's. A write at the
+kernel's offset would overwrite the merged bytes, and the next Commit would
+publish that (#776 R4). The adapter therefore sends every WRITE of a
+descriptor opened `O_APPEND` (other than a mapped store) as `Position::End`;
+the job places it at the inode's size under the Workspace lock, and the
+write recognizer does not examine its bytes. The kernel splits a large write
+into `max_write` windows sent one after another under its inode lock (no
+asynchronous direct I/O is negotiated), so each window lands after the one
+before.
+
+The kernel has already copied the bytes into its page cache at its own
+offset and set its size to that offset plus the count. When the published
+size differs from that, the reply is sent first and the inode's pages are
+then dropped on the page thread; the kernel takes the size from its next
+attribute read, and a size it finds changed drops the pages again
+(`FUSE_EXPLICIT_INVAL_DATA` is not negotiated). Until that read a later
+append still computes a stale offset, and each is placed and invalidated the
+same way. A `pwritev2(RWF_NOAPPEND)` on an `O_APPEND` descriptor carries the
+same file flags and is also placed at the end. A read-modify-write whose read
+preceded the install can still write pre-merge content back: that writer is
+concurrent with the merge, and no adapter rule can see it.
 
 A batched FORGET reaches the adapter as single callbacks, each admitted and
 served alone ([`inline.rs`](../../../../engine/crates/layerfs-fuse/src/request/inline.rs)).

@@ -31,7 +31,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::{refused, shell_word, with_next};
+use layerfs_home::outcome::{refused, shell_word, with_fix, with_next};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -94,8 +94,31 @@ fn texts(items: &[SdkValue]) -> impl Iterator<Item = &str> {
     })
 }
 
-/// Stops the Sandbox and removes its record.
+/// Stops the Sandbox and removes its record. A remove without `force`
+/// refused because the Sandbox's Store is of an older schema version (the
+/// Store call's `OldStore`, or a daemon that did not open it and said so)
+/// answers `OldStore` with the version and the forced remove as its fix,
+/// which goes by the Sandbox's records and runtime, not its Store.
 pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Result<Removed> {
+    removed(home, events, request).map_err(|refusal| {
+        // an unknown outcome stays as it is: its record keeps the intent
+        let status = match request.force || refusal.code == "Unknown" {
+            true => None,
+            false => layerfs_store::state::outdated_status(&refusal),
+        };
+        let Some(status) = status else {
+            return refusal;
+        };
+        let fix = format!(
+            "layerfs sandbox remove {} --force",
+            shell_word(&request.name)
+        );
+        with_fix(refused(layerfs_store::state::OLD_STORE, status), fix)
+    })
+}
+
+/// [`remove`], as it is attempted once.
+fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Result<Removed> {
     let home = home.to_path_buf();
     let name = request.name.as_str();
     let found = named(&home, name)?;

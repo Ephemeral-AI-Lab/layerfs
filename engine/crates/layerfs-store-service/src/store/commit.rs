@@ -6,7 +6,8 @@ use super::{
 use crate::telemetry::phase;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
-    error::MovedState, BranchSnapshot, CommitOutcome, CommitVia, HistoryError, NodeId,
+    error::MovedState, BranchSnapshot, CommitAttempt, CommitOutcome, CommitVia, HistoryError,
+    NodeId,
 };
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
@@ -42,6 +43,17 @@ fn busy(error: &CommitError) -> bool {
         } => true,
         _ => false,
     }
+}
+
+/// A fresh Commit attempt (#776 R1): 16 bytes from the kernel's random
+/// source. A failed read fails the Commit before anything is published.
+fn fresh_attempt() -> Result<CommitAttempt, CommitError> {
+    use std::io::Read;
+    let mut bytes = [0; 16];
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut source| source.read_exact(&mut bytes))
+        .map_err(|_| CommitError::Context("Commit attempt: /dev/urandom read failed"))?;
+    Ok(CommitAttempt::from_bytes(bytes))
 }
 
 /// `HeadMoved` for a Branch whose head is not the `expected` one.
@@ -208,6 +220,9 @@ impl BoundWorkspace {
                     return Ok(());
                 }
             }
+            // The attempt this Commit publishes under, drawn before anything
+            // is captured: a failed draw leaves nothing to fold back.
+            let attempt = fresh_attempt()?;
             retained.phase = CommitPhase::Capture;
             let capture = phase(timing, "capture", || {
                 self.job(|job_client: &crate::OwnerClient, job_route| job_client.capture(job_route))
@@ -349,6 +364,16 @@ impl BoundWorkspace {
                     }
                 })?;
                 drop(reader);
+                // Rows written since the capture are checked first here,
+                // before the lane and unheld: an overlap already present
+                // refuses without taking the lane. The held check before the
+                // install repeats it for rows written since (#776 R3).
+                if !changed.is_empty() {
+                    let overlap = phase(timing, "live.early", || self.live_overlap(&changed))?;
+                    if !overlap.is_empty() {
+                        return Err(self.live_conflict(snapshot.scope, candidate, root, &overlap));
+                    }
+                }
                 // New bindings past one transaction's rows: the Save is
                 // published and then every binding recorded, as on the
                 // separate path, so no hint row is written before the
@@ -395,6 +420,7 @@ impl BoundWorkspace {
                         hints,
                         options,
                         via,
+                        attempt,
                         &mut retained,
                         timing,
                     )?;
@@ -418,6 +444,21 @@ impl BoundWorkspace {
                         Some(report) => {
                             merge = Some(report);
                             changed = again.changed;
+                            // The fallback's merge gets the same unheld check
+                            // before the lane as a first merge (#776 R3).
+                            if !changed.is_empty() {
+                                let overlap = phase(timing, "live.early", || {
+                                    self.live_overlap(&changed)
+                                })?;
+                                if !overlap.is_empty() {
+                                    return Err(self.live_conflict(
+                                        snapshot.scope,
+                                        root,
+                                        again.root,
+                                        &overlap,
+                                    ));
+                                }
+                            }
                             retained.phase = CommitPhase::Validate;
                             let checked = phase(timing, "validate", || {
                                 self.validate_candidate(
@@ -561,6 +602,7 @@ impl BoundWorkspace {
                     merge.as_ref(),
                     options,
                     via,
+                    attempt,
                 ));
             }
             retained.phase = CommitPhase::Validate;
@@ -656,6 +698,10 @@ impl BoundWorkspace {
                 })
                 .map_err(CommitError::Owner)
             })?;
+            // Mutations resume before the daemon invalidates the kernel's
+            // caches: a held FUSE mutation keeps its directory's inode lock
+            // or its locked pages in the kernel, which the invalidation waits
+            // for, so a hold kept through it would deadlock (#776 R4).
             drop(held);
             *self
                 .snapshot

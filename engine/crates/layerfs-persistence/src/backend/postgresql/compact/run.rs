@@ -82,41 +82,65 @@ pub(crate) fn round(
         ));
     }
     metrics.end_phase();
-    stop(
-        request,
-        CompactFailpoint::PostgresAfterMark,
-        session,
-        schema,
-        "mark",
-    )?;
-    // §11: the op row names the live phase while the run is in it.
-    stage(session, |tx| {
-        tx.batch(&format!(
-            "UPDATE {schema}.gc_op SET phase='build' WHERE id=1"
-        ))?;
-        Ok(())
-    })?;
-    metrics.begin_phase(CompactPhase::PostgresBuild);
-    let mut built = build(session, schema, &scratch, &mark, &tuple)?;
-    metrics.end_phase();
-    built.dead.logical = mark_dead.logical;
-    stop(
-        request,
-        CompactFailpoint::PostgresAfterBuild,
-        session,
-        schema,
-        "build",
-    )?;
-    metrics.begin_phase(CompactPhase::PostgresSwap);
-    let swapped = swap(
-        handles,
-        session,
-        schema,
-        &tuple,
-        &mark,
-        &built,
-        &request.op_id,
-    )?;
+    // Phases B and S. A definite failure here leaves the live Store at `G`
+    // (the swap rolled back, or never began). The op row and any scratch stay
+    // for the next round's §9 cleanup, but the round drops its owner identity
+    // before the caller releases the exclusive key: an op still naming this
+    // live session would let the next compaction judge it a lost `COMMIT` and
+    // terminate a healthy connection (#776 P1). An unknown outcome (a lost
+    // reply, or a stop point) keeps the owner for the §8 recovery.
+    let swapped = (|| {
+        stop(
+            request,
+            CompactFailpoint::PostgresAfterMark,
+            session,
+            schema,
+            "mark",
+        )?;
+        // §11: the op row names the live phase while the run is in it.
+        stage(session, |tx| {
+            tx.batch(&format!(
+                "UPDATE {schema}.gc_op SET phase='build' WHERE id=1"
+            ))?;
+            Ok(())
+        })?;
+        metrics.begin_phase(CompactPhase::PostgresBuild);
+        let mut built = build(session, schema, &scratch, &mark, &tuple)?;
+        metrics.end_phase();
+        built.dead.logical = mark_dead.logical;
+        stop(
+            request,
+            CompactFailpoint::PostgresAfterBuild,
+            session,
+            schema,
+            "build",
+        )?;
+        metrics.begin_phase(CompactPhase::PostgresSwap);
+        swap(
+            handles,
+            session,
+            schema,
+            &tuple,
+            &mark,
+            &built,
+            &request.op_id,
+        )
+    })();
+    let swapped = match swapped {
+        Ok(swapped) => swapped,
+        Err(error) => {
+            if !error.unknown() {
+                let _ = stage(session, |tx| {
+                    tx.batch(&format!(
+                        "UPDATE {schema}.gc_op \
+                            SET pid=NULL, backend_start=NULL, usename=NULL WHERE id=1"
+                    ))?;
+                    Ok(())
+                });
+            }
+            return Err(error);
+        }
+    };
     metrics.end_phase();
     stop(
         request,
@@ -136,6 +160,7 @@ pub(crate) fn round(
         swapped.dead,
         false,
         Some(request.op_id),
+        Some(&scratch),
     )?;
     metrics.end_phase();
     stop(

@@ -107,7 +107,9 @@ const TERMINATE_POLLS: u32 = 1200;
 /// A recorded owner that still holds the Store's exclusive key is a live
 /// compaction: the claim that follows reports `Busy` with that backend named,
 /// and it is never terminated (§12, the runbook rule). A recorded owner that
-/// no longer holds the key is a lost reply: its `COMMIT` may or may not have
+/// no longer holds the key is a lost reply (a run that failed definitely
+/// drops its owner identity before it releases the key, so it names none):
+/// its `COMMIT` may or may not have
 /// reached the server, so the call opens a second connection, proves the role
 /// may signal it, terminates exactly `(pid, backend_start, usename,
 /// datname)`, polls until it is gone, and returns so the caller reads the
@@ -321,7 +323,15 @@ pub(crate) fn settle_leftover(
     // after the swap (AC-28) does not inflate the resumed `G + 1` report's
     // `physicalShrink`. The op carries the rest of the original report too.
     let rows = history_rows(session, schema)?;
-    cleanup(handles, session, schema, op.dead, op.totals_applied, op_id)?;
+    cleanup(
+        handles,
+        session,
+        schema,
+        op.dead,
+        op.totals_applied,
+        op_id,
+        op.artifact.as_deref(),
+    )?;
     metrics.end_phase();
     metrics.leftover_settled = true;
     let dead_bytes = u64::try_from(op.dead.stored).unwrap_or(0);
@@ -369,16 +379,21 @@ fn assert_retained_object_set(
     visited: i64,
 ) -> HistoryResult<()> {
     stage(session, |tx| {
-        let objects = scalar(
-            tx,
-            &format!("SELECT count(*) FROM {schema}.object_location"),
+        // One statement, so both counts read one snapshot: in this READ
+        // COMMITTED transaction two statements could see a save land between
+        // them and report a corruption that is not there (#776 P4).
+        let rows = tx.query(
+            &format!(
+                "SELECT count(*)::bigint, count(DISTINCT object_id)::bigint \
+                   FROM {schema}.object_location"
+            ),
             Vec::new(),
         )?;
-        let distinct = scalar(
-            tx,
-            &format!("SELECT count(DISTINCT object_id) FROM {schema}.object_location"),
-            Vec::new(),
-        )?;
+        let row = rows
+            .first()
+            .ok_or(HistoryError::Integrity("compaction retained object set"))?;
+        let objects: i64 = row.get(0)?;
+        let distinct: i64 = row.get(1)?;
         // Phase A already asserted the exact `count = count(DISTINCT) =
         // |visited|` on the scratch tables. The Store is usable at `G + 1`
         // from the swap on, so a save that lands between the swap and this
@@ -618,6 +633,45 @@ fn settle(
             "DELETE FROM {schema}.binding_hint_block;\
              DELETE FROM {schema}.kept_node;"
         ))?;
+        // The totals and the Store-wide sums come from one statement, so one
+        // snapshot: a publication adds to both in one transaction, so it is in
+        // both or neither. The `store_totals` row is not locked while they are
+        // read; every publication updates that row, so locking it first held
+        // the whole Store's publications behind these scans (#776 P3).
+        let rows = tx.query(
+            &format!(
+                "SELECT t.logical,t.canonical,t.stored,t.metadata,\
+                        (SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.\"commit\")+(SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.layer),\
+                        (SELECT COALESCE(SUM(canonical_length)::bigint,0) FROM {schema}.object_location),\
+                        (SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack),\
+                        (SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack WHERE domain=0) \
+                   FROM {schema}.store_totals t WHERE t.id=1"
+            ),
+            Vec::new(),
+        )?;
+        let row = rows
+            .first()
+            .ok_or(HistoryError::Integrity("compaction settled totals"))?;
+        // Totals not yet settled still count the dead set the swap removed.
+        let pending = match totals_applied {
+            true => DeadTotals::default(),
+            false => dead,
+        };
+        let logical = row.get::<i64>(0)? - pending.logical;
+        let canonical = row.get::<i64>(1)? - pending.canonical;
+        let stored = row.get::<i64>(2)? - pending.stored;
+        let metadata = row.get::<i64>(3)? - pending.metadata;
+        if logical != row.get::<i64>(4)?
+            || canonical != row.get::<i64>(5)?
+            || stored != row.get::<i64>(6)?
+            || metadata != row.get::<i64>(7)?
+        {
+            return Err(HistoryError::Integrity("compaction settled totals"));
+        }
+        tx.batch(&format!("DELETE FROM {schema}.gc_dead"))?;
+        // The row lock is taken last, for the few statements before COMMIT.
+        // The update is a relative delta, so a publication that landed after
+        // the read above stays counted.
         if !totals_applied {
             tx.query(
                 &format!(
@@ -631,52 +685,20 @@ fn settle(
                     Param::I64(dead.logical),
                 ],
             )?;
-            tx.query(
-                &format!("UPDATE {schema}.gc_op SET totals_applied=TRUE WHERE id=1"),
-                Vec::new(),
-            )?;
         }
-        let totals = tx.query(
-            &format!(
-                "SELECT logical,canonical,stored,metadata FROM {schema}.store_totals WHERE id=1"
-            ),
-            Vec::new(),
-        )?;
-        let logical: i64 = totals[0].get(0)?;
-        let canonical: i64 = totals[0].get(1)?;
-        let stored: i64 = totals[0].get(2)?;
-        let metadata: i64 = totals[0].get(3)?;
-        let sums = tx.query(
-            &format!(
-                "SELECT (SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.\"commit\")+(SELECT COALESCE(SUM(logical)::bigint,0) FROM {schema}.layer),\
-                        (SELECT COALESCE(SUM(canonical_length)::bigint,0) FROM {schema}.object_location),\
-                        (SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack),\
-                        (SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack WHERE domain=0)"
-            ),
-            Vec::new(),
-        )?;
-        let sum_logical: i64 = sums[0].get(0)?;
-        let sum_canonical: i64 = sums[0].get(1)?;
-        let sum_stored: i64 = sums[0].get(2)?;
-        let sum_metadata: i64 = sums[0].get(3)?;
-        if logical != sum_logical
-            || canonical != sum_canonical
-            || stored != sum_stored
-            || metadata != sum_metadata
-        {
-            return Err(HistoryError::Integrity("compaction settled totals"));
-        }
-        tx.batch(&format!(
-            "DELETE FROM {schema}.gc_dead; DELETE FROM {schema}.gc_op;"
-        ))?;
+        tx.batch(&format!("DELETE FROM {schema}.gc_op"))?;
         Ok(())
     })
 }
 
-/// Phase C: delete only the persisted `gc_dead` members, in bounded batches
-/// (one layer stack's closed closure per transaction, then the signature and
-/// digest sets), settle the totals once, and clear the op. The Store is usable
-/// at `G + 1` throughout, and the retained object set is asserted exactly.
+/// Phase C: drop the scratch schema, which holds the payload tables the swap
+/// retired (their files are unlinked here, under no Store lock), then delete
+/// only the persisted `gc_dead` members, in bounded batches (one layer
+/// stack's closed closure per transaction, then the signature and digest
+/// sets), settle the totals once, and clear the op. The Store is usable at
+/// `G + 1` throughout, and the retained object set is asserted exactly.
+/// `scratch` is the op's recorded artifact; a resumed run drops it the same
+/// way, and a scratch already dropped is no error.
 ///
 /// §8: Phase C never touches Init's three working tables. `unfinished_work`
 /// refuses a Store that already holds one, but an Init can begin after that
@@ -692,7 +714,11 @@ pub(crate) fn cleanup(
     dead: DeadTotals,
     totals_applied: bool,
     op_id: Option<[u8; 16]>,
+    scratch: Option<&str>,
 ) -> HistoryResult<()> {
+    if let Some(scratch) = scratch {
+        drop_scratch(session, scratch)?;
+    }
     let (mark_serial, mark_stamp, visited) = mark_watermarks(session, schema)?;
     assert_retained_object_set(session, schema, visited)?;
     // F50R2-3: the `cleanup` phase is its own small transaction before the

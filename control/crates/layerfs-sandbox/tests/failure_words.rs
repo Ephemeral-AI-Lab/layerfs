@@ -117,3 +117,35 @@ fn a_sandbox_whose_daemon_ended_names_its_daemon() {
     assert!(gone.message.starts_with("the daemon of Sandbox t1 is gone"));
     assert!(!gone.message.contains("container"), "{gone:?}");
 }
+
+/// A close on a worker's side goes on when the Sandbox's Store is of an
+/// older schema version this build does not open (#776): `sandbox remove`
+/// of a Sandbox of such a Store (one its machine's forced stop ended, say)
+/// would otherwise be refused by the Store it does not need, with the
+/// removal of the whole Store as its fix. Any other call, and any other
+/// open refusal, keeps the refusal.
+#[test]
+fn a_close_goes_on_without_an_old_format_store() {
+    use layerfs_home::outcome::{refused, with_fix};
+    use layerfs_sandbox::host::Op;
+    use layerfs_sandbox::route::opened_for;
+    let version = "SQLite Store schema version 2 (before each Commit recorded its attempt, \
+#776): not supported by this release and not migrated; create a new Store";
+    let old = || {
+        with_fix(
+            refused(layerfs_store::state::OLD_STORE, version),
+            "layerfs store remove shop",
+        )
+    };
+    assert_eq!(opened_for(Op::SandboxClose, Err(old())).unwrap(), None);
+    let path = std::path::PathBuf::from("/s/shop.store.sqlite");
+    assert_eq!(
+        opened_for(Op::SandboxClose, Ok(path.clone())).unwrap(),
+        Some(path)
+    );
+    let refused_for = |op| opened_for(op, Err(old())).unwrap_err().code;
+    assert_eq!(refused_for(Op::SandboxCreate), "OldStore");
+    assert_eq!(refused_for(Op::Status), "OldStore");
+    let busy = opened_for(Op::SandboxClose, Err(refused("Busy", "held")));
+    assert_eq!(busy.unwrap_err().code, "Busy");
+}

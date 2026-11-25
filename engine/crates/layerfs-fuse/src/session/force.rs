@@ -1,5 +1,7 @@
 //! Forced teardown of one connection: one abort write, the terminal fence,
-//! the local drain, then one plain detach. Nothing here is repeated.
+//! the local drain, then one plain detach. Nothing here is repeated by
+//! itself; only a later terminal call may ask again for a detach the kernel
+//! refused, never for the abort.
 use super::state::{DetachAttempt, DrainStage, Drained, ForceRefusal, KernelSession, Undrained};
 use crate::mount::{syscalls, AbortWrite};
 use std::{sync::atomic::Ordering, time::Instant};
@@ -106,5 +108,19 @@ impl Undrained {
                 Err(Box::new(self))
             }
         }
+    }
+    /// A forced teardown that stopped at its one plain detach because the
+    /// kernel refused it (#538), asked again by a later terminal call: the
+    /// holder may be gone. Only that recorded failure is a candidate; any
+    /// other stop returns the connection as it was, with no syscall. The
+    /// abort write is never repeated: a fresh local drain, then the detach.
+    pub fn retry_detach(mut self) -> Result<Box<Drained>, Box<Undrained>> {
+        if self.stage != DrainStage::Detach
+            || !matches!(self.session.forced_detach, DetachAttempt::Failed(_))
+        {
+            return Err(Box::new(self));
+        }
+        self.session.forced_detach = DetachAttempt::NotAttempted;
+        self.session.force_drain()
     }
 }

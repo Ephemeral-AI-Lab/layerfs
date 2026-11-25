@@ -1,5 +1,5 @@
 //! Bounded diagnostic admission projections; ordinary writer checks are unchanged.
-//! Normative schema-3 (2.0) columns; healthy shipped-DDL fixtures detect drift.
+//! Normative schema-4 (2.0, #776 Commit attempt) columns; healthy shipped-DDL fixtures detect drift.
 const COLUMNS: &str = r#"absorbed run bytea NO
 absorbed depth bigint NO
 absorbed height bigint NO
@@ -31,6 +31,7 @@ commit new_stored bigint NO
 commit new_metadata bigint NO
 commit lww bytea NO
 commit displaced_id bytea YES
+commit attempt bytea YES
 commit history_serial bigint NO
 commit_lineage commit_id bytea NO
 commit_lineage run bytea NO

@@ -224,6 +224,35 @@ impl Overlay {
             entry,
         )
     }
+    /// The serials of `changed` that a changed row of the active generation
+    /// overlaps: an inode row of the serial, or a name binding under it. A
+    /// row carried for an mtime-only capture ([`Self::keep_live_row`]) and
+    /// not written since is no change, as in [`Self::active_inodes`]. Two
+    /// index seeks per serial: the work follows the list, not the rows
+    /// written since the capture (#776 R3).
+    pub fn active_overlap(&self, changed: &[u64]) -> OverlayResult<Vec<u64>> {
+        let state = self.live()?;
+        let mut overlap = Vec::new();
+        for &serial in changed {
+            let key = integer(serial)?;
+            let probe = |sql: &str| -> OverlayResult<bool> {
+                let rows = self.query(
+                    StatementKind::Capture,
+                    sql,
+                    &[&state.active.0, &key],
+                    16,
+                    |_| Ok(()),
+                )?;
+                Ok(!rows.is_empty())
+            };
+            let kept = self.open.borrow().kept_live.rows.contains_key(&key);
+            if (!kept && probe(sql::INODE_IN_GENERATION)?) || probe(sql::ENTRY_UNDER_IN_GENERATION)?
+            {
+                overlap.push(serial);
+            }
+        }
+        Ok(overlap)
+    }
     pub(crate) fn checked_capture(&self, capture: Capture) -> OverlayResult<()> {
         let state = self.state()?;
         if capture.engine != self.identity

@@ -9,6 +9,12 @@
 //! `Busy`; a dead, uncertain owner is `Unresolved`, while a dead, certain one
 //! is adopted.
 //!
+//! A merge registers at project scope, so every mount, Init, removal and
+//! compaction in the project sees it. Two merges conflict only when they name
+//! the same target Branch: merges into different Branches share the project,
+//! since each publishes under the epoch fence with a compare-and-set on its
+//! target head (`HeadMoved`) or name (`NameTaken`) (#776 G3).
+//!
 //! The place adds a second authority: an intent that records a machine
 //! incarnation or a Sandbox generation is classified from the bounded
 //! `PlaceView` the control layer supplies (and, for a name the view does not
@@ -352,7 +358,9 @@ impl OwnerView {
         let Some((pid, start, Some(namespace))) = parse_runtime(runtime) else {
             return false;
         };
-        let Some(recorded_boot) = parse_boot(boot) else {
+        // A writer that could not read its boot id records `boot:unknown`
+        // (earlier builds wrote a zero id): no boot evidence, so no proof.
+        let Some(recorded_boot) = parse_boot(boot).filter(|boot| *boot != 0) else {
             return false;
         };
         let Some(here) = self.boot else {
@@ -368,8 +376,13 @@ impl OwnerView {
         if self.namespace != Some(namespace) {
             return false;
         }
+        // A start of 0 is one the writer could not read: a running process
+        // under the pid is then no proof either way (#776 G2). An absent or
+        // ended pid still proves the owner gone, whatever its start.
         match process_stat(pid) {
-            Some((state, observed)) => observed != start || matches!(state, b'Z' | b'X' | b'x'),
+            Some((state, observed)) => {
+                matches!(state, b'Z' | b'X' | b'x') || (start != 0 && observed != start)
+            }
             None => true,
         }
     }
@@ -432,7 +445,24 @@ fn query(
     tx.query(key, params)?.iter().map(intent_row).collect()
 }
 
+/// The live intents `intent` conflicts with. A merge registers at project
+/// scope, so mounts, Inits, removals and compactions in the project see it;
+/// two merges conflict only when they name the same target Branch (#776 G3).
+/// A merge into another Branch is left out before settling, so a dead one is
+/// settled by the next mount, removal or compaction instead.
 fn conflicts_for(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<Vec<GcIntent>> {
+    let mut found = scope_conflicts(tx, intent)?;
+    if intent.kind == GcIntentKind::Merge && intent.branch.is_some() {
+        found.retain(|other| {
+            other.kind != GcIntentKind::Merge
+                || other.branch.is_none()
+                || other.branch == intent.branch
+        });
+    }
+    Ok(found)
+}
+
+fn scope_conflicts(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<Vec<GcIntent>> {
     let shared = intent.kind.shared();
     match intent.scope_kind {
         GcScopeKind::Store => query(

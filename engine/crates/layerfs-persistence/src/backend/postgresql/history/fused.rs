@@ -15,7 +15,7 @@
 //!    `set_config('layerfs.epoch', .., true)`: one statement, one snapshot.
 //! 5. The publication's rows (`publish_rows`, checked; only with rows).
 //! 6. The binding hint blocks (only with hints).
-//! 7. The next serial and the Commit insert, one statement.
+//! 7. The next serial and the Commit insert with its attempt, one statement.
 //! 8. The Commit's lineage, the parent's line read in SQL.
 //! 9. The Branch advance, exactly one row.
 //! 10. `project_epoch FOR SHARE`, equal to the kept epoch.
@@ -212,11 +212,15 @@ pub(crate) fn commit(
             bound,
         );
     }
-    let mut values: Vec<Value> = crate::history::commit_insert_params(&record, 0)?
-        .into_iter()
-        .take(17)
-        .map(boxed)
-        .collect();
+    // The 17 row values, then the attempt (#776 R1): the serial is the
+    // statement's own `next_history_serial`.
+    let mut row = crate::history::commit_insert_params(&record, 0)?;
+    let commit_attempt = row
+        .pop()
+        .ok_or(HistoryError::Integrity("Commit row values"))?;
+    row.truncate(17);
+    let mut values: Vec<Value> = row.into_iter().map(boxed).collect();
+    values.push(boxed(commit_attempt));
     values.push(Box::new(nonce.clone()));
     message.statement(Step::Commit, qualified(COMMIT), values, 512);
     let id = record.id.to_bytes().to_vec();
