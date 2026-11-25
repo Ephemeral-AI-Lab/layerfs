@@ -15,13 +15,14 @@ cd "$here" || exit 2
 expected=" adm_A_orphans adm_B_sep adm_B_one adm_B_rm adm_B_excl adm_B_F1late
  adm_B_F2 adm_B_live adm_B_F1_live adm_B_reopen1 adm_B_F1_reopen1
  adm_B_F1_reach commit_mut_nobarrier commit_mut_nolanecheck commit_mut_noend
- commit_mut_nofence ids_mut_nocas "
+ commit_mut_nofence ids_mut_nocas impl_mut_noon impl_mut_lateend "
 status=0
 for cfg in "$@"; do
   cfg=${cfg%.cfg}
   case $cfg in
     adm_*) spec=Admission ;;
     commit_*|ids_*) spec=Commit ;;
+    impl_*) spec=AdmissionImpl ;;
     *) echo "unknown config $cfg"; exit 2 ;;
   esac
   start=$(date +%s)

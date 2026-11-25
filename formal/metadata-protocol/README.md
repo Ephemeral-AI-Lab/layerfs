@@ -4,8 +4,9 @@
 > and not a test gate. It models the PostgreSQL Store's metadata protocol at
 > `origin/layerfs_v2_0_0` = `ca4be0bf3c` (variant **A**) and at the unmerged
 > writer-reopen commit `1a7338ffa2` on `claude/writer-reopen` (variant
-> **B**). The source pins are those two commits. Nothing here was run against
-> a server.
+> **B**), and the implemented fix `2b0dee1a1f` on `claude/811-reopen-fix`
+> (`AdmissionImpl.tla`). The source pins are those three commits. Nothing
+> here was run against a server.
 
 ## Why TLA+ and TLC
 
@@ -33,12 +34,13 @@ kept in `~/.cache/layerfs-811/tools/` (not in the repository). Java 17.
 | File | What |
 | --- | --- |
 | `Admission.tla` | GC admission: session advisory keys (Store and Branch, shared and exclusive, levels counted per backend, released when the backend ends), `gc_intent` rows, mount (one message, or statement by statement), unmount release, `branch.remove`, compaction, the writer's quarantine (A) or reopen (B), the candidate fixes |
+| `AdmissionImpl.tla` | The implemented fix `2b0dee1a1f` (`claude/811-reopen-fix`, parent `1a7338ffa2`), turn by turn: see [Implemented fix 2b0dee1a1f](#implemented-fix-2b0dee1a1f) |
 | `Commit.tla` | Commit and id metadata: `store_lane` row and lane barrier, fused Commit with its attempt token, the lane merge with a nested write and its lane check, `force` (displaced), lost-reply resolution (`resolve_retained`, `pass_lane`), the generation fence, the id allocator (block reservation by compare-and-set, compare-and-set rewind), A and B |
 | `gen-configs.sh` | Writes every `*.cfg` (the bounds are there, one line each) |
 | `run.sh` | Runs TLC on each config (default: all), each under `~/.cache/layerfs-811/tools/to 120`; prints exit code, wall time and whether the result is the expected one; logs go to `logs/` (ignored) |
 | `trace.py` | Prints a log's counterexample compactly (action names and changed variables) |
 
-Run: `./run.sh` (all, about 4 minutes in total) or `./run.sh adm_B_sep`.
+Run: `./run.sh` (all, about 6 minutes in total) or `./run.sh adm_B_sep`.
 Exit 0 is a clean check, 12 an invariant violation, 13 a temporal
 violation, 124 the 120 s timeout. `run.sh` exits non-zero only when a result
 differs from the expectation listed in it.
@@ -275,7 +277,8 @@ including late execution of a lost request and B's reopen.
 | F2: the registering call refuses to reopen | violated (`adm_B_F2`): another thread's call reopens | - |
 | F2 session-wide: no reopen by any call while a registration is between its keys and its `hold_op` | clean (`adm_B_F2all`) | a new cross-turn registration counter; every other call of the service (Commits, unmounts) is refused while it is set after a connection loss |
 
-**Recommended: F1, done inside the turn.** It closes the known race, the
+**Recommended: F1, done inside the turn.** (Implemented, with more, as
+`2b0dee1a1f`: checked in [Implemented fix 2b0dee1a1f](#implemented-fix-2b0dee1a1f).) It closes the known race, the
 one-message window (2) and `branch.remove` (1, `adm_B_rm`) with the
 mechanism the reopen already has (step 3 re-takes everything in
 `held_ops`, all or none), and it refuses nothing new. F2 must be
@@ -316,6 +319,100 @@ With the two orphan fixes (both checked: `adm_B_F1_fixed`,
    lost backend (`state.lost` empty); otherwise keep them, and let a later
    top-level call that finds orphans waiting end the lost backends again and
    release them once all are gone (as `pass_lane` already ends them).
+
+## Implemented fix 2b0dee1a1f
+
+`AdmissionImpl.tla` models variant "B + implemented fix" exactly as
+`2b0dee1a1f` has it, one action per writer turn (or per local step between
+turns). Line numbers are at `2b0dee1a1f`, under
+`engine/crates/layerfs-persistence/src/`.
+
+| Model action | Source |
+| --- | --- |
+| `MLock`: the lock statement tries every key; all granted at the session's generation on its own backend, a new op enters `held_ops` in the turn (`fresh`); a held op's second level, or a refused statement's partial grants, are owed to a later unlock on that connection | `history/admission/session.rs:66-157` (`hold_new_op` at 112; the refused arms 128, 139, 143), `backend/postgresql/session/connection.rs:566` |
+| `MScan`, `MCommit`, `MCommitLost`, `SendDead` at `scanned`: `run_admit`; an `Unknown` notes the fresh op as an orphan before the turn ends | `history/admission.rs:950-962`, `backend/postgresql/session/transaction.rs:351`, 597-601 |
+| `MAbandon`, `MGiveBack`: `session_give_back`: `abandon_op` outside a turn, then in its turn `take_abandoned` (still held and abandoned: drop and unlock; else send nothing) | `history/admission.rs:974`, `history/admission/session.rs:250-263`, `connection.rs:592-615` |
+| `MUnlockOwed`, `MRefusedUnlock`, `MHoldingUnlock`: `session_unlock(.., Some(on))`: nothing sent when the connection count changed | `history/admission.rs:979`, `history/admission/session.rs:224-246` (the check at 234), `history/admission/mount.rs:120-129` |
+| `MOne`, `MOneLost`: the one-message admission: `Admitted` holds the op inside `decided_turn`; `Unknown` notes the orphan there for an op not held; an existing row (re-registration) or a conflict is `Holding` | `backend/postgresql/history/mount.rs:239-336` (320-323), `history/admission/mount.rs:107-130` |
+| `MReReg`: a mounted Workspace registers its op again (`register_mount`) | `history/admission/mount.rs:36-46` |
+| `MBeginRelease`, `MRelease`, `MReleaseLost`: `begin_release` outside a turn; the release message's turn deletes, unlocks and runs `end_release(op, kept && !unknown)` in its judge; a release never sent ends kept | `history/admission/authority.rs:32-52`, `backend/postgresql/history/release.rs:67-103` (99), `connection.rs:618-640` |
+| `Reopen`: settle steps 1-4: `retake_keys` drops abandoned ops, takes the rest all or none; orphans released only when step 1 left no lost backend | `backend/postgresql/session/reopen.rs:197-206` (201), 273-290 (277) |
+| `Settle`: `ready` on a serving top-level turn with orphans waiting: `release_waiting_orphans` | `reopen.rs:128-145`, 152-167 |
+| `RLock`, `RReg`, `RAbandon`, `RGiveBack`, `RRel`: `branch.remove` through the same `session_lock` / lane write / give-back | `history/admission.rs:941-985`, `store-service/src/history/removal.rs:37` |
+
+New property: **`LevelsExact`** (one level per key): on a serving
+session's connection every key's level is exactly one per held op that
+takes it, plus the levels a call still owes on that connection. Nothing is
+resent by construction: no action sends a request twice.
+
+Mutations: **`noon`** (`session_unlock` ignores `on`), **`lateend`**
+(`end_release` after the release's turn, as at `1a7338ffa2`), and a probe
+**`retakeabandoned`** (a reopen takes abandoned ops' keys again instead of
+dropping them).
+
+| Config | Actors, faults | Properties | Result | Distinct states | Wall |
+| --- | --- | --- | --- | --- | --- |
+| `impl_safety` | 1 mount (both paths, re-registers once), remove, compaction, T; 1 kill, 1 lost | 5 safety | clean | 48,666 | 4 s |
+| `impl_safety2` | 2 mounts (both, each re-registers), remove, T; 1 kill, 1 lost | 5 safety | clean | 976,900 | 34 s |
+| `impl_safety3` | 2 mounts (both), compaction, T; 1 kill, 1 lost | 5 safety | clean | 78,684 | 6 s |
+| `impl_safety_lost2` | as `impl_safety`; 1 kill, 2 lost, `MaxB` 7 | 5 safety | clean | 65,332 | 4 s |
+| `impl_safety_kill2` | as `impl_safety`; 2 kills, 1 lost, `MaxB` 7 | 5 safety | clean | 236,170 | 9 s |
+| `impl_live` | 1 mount (re-registers), compaction, T; 1 kill, 1 lost | `Termination`, `OrphansRemoved`, `Serves` | hold | 5,357 | 4 s |
+| `impl_live2` | 2 mounts, T; 1 kill, 1 lost | same | hold | 24,416 | 11 s |
+| `impl_live3` | 1 mount (re-registers), remove, compaction, T; 1 kill, 1 lost | same | hold | 48,666 | 21 s |
+| `impl_mut_noon` | 1 mount (one message, re-registers), T; 1 kill | 5 safety | violated `KeysCover` | 127 | 1 s |
+| `impl_mut_lateend` | 1 mount (one message), T; 1 kill | 5 safety | violated `LevelsExact` | 69 | 2 s |
+| `impl_mut_retakeabandoned` | 2 mounts (both, re-register), remove, T; 1 kill, 1 lost | 5 safety | clean | 885,503 | 25 s |
+
+The five safety properties are `KeyedAdmission`, `Exclusion`,
+`RemovedClean`, `KeysCover`, `LevelsExact`. A config over 120 s
+(`impl_live` with two mounts, remove and compaction: exit 124) was cut to
+`impl_live2` and `impl_live3`.
+
+**No counterexample** for `2b0dee1a1f` within these bounds: the known race,
+the one-message window, `branch.remove`'s race and both orphan findings are
+gone, and the re-registration, refused-lock and `Holding` levels stay one
+per key across a reopen.
+
+The mutations:
+
+- `noon` (`session.rs:234` removed): m1 is mounted (levels 1 on backend 1);
+  its second registration's one message is `Holding` (the row exists), so
+  backend 1 has level 2 and one is owed; backend 1 is killed; the
+  `hunlock` turn reopens on backend 4 and takes m1's held level again; the
+  unlock, now sent on backend 4, gives that level back: m1 is held with no
+  key (`KeysCover`). So the connection check is necessary.
+- `lateend` (`release.rs:99` moved after the turn, as at `1a7338ffa2`):
+  m1's release message deletes the row and unlocks; before `end_release`,
+  backend 1 is killed and T's call reopens: m1 is still in `held_ops`, so
+  its keys are taken again on backend 4; then `end_release` drops it, and
+  backend 4 keeps a level no op holds for the service's life
+  (`LevelsExact`). So moving `end_release` into the turn is necessary.
+- `retakeabandoned` checks clean: the `abandoned` flag is **not needed for
+  safety** in the model. A reopen that takes an abandoned op's keys again
+  is balanced by the give-back's unlock in its own turn (it still finds the
+  op held and abandoned). What the flag saves is a re-take, and with it a
+  reopen refused `Busy` because of keys that are about to be given back.
+
+Observation, not a bug: after a lost release reply, `2b0dee1a1f` drops the
+op from `held_ops` (`release.rs:99`, `kept && !unknown`), so a reopen does
+not take its keys again; a row the delete did not reach stays (refusing
+compaction and removal by its row) until the daemon exits. This matches
+the documented known limit ("an unmount's release whose reply is lost",
+`postgresql.md` at `2b0dee1a1f`); at `1a7338ffa2` the reopen took the keys
+again instead, and they stayed held for the service's life.
+
+Abstractions specific to `AdmissionImpl.tla`: a re-registration always
+meets its own row (the insert's `ON CONFLICT DO NOTHING` makes both paths
+refuse it), so it never succeeds; a lost reply of an unlock, a give-back, a
+lock statement, a reopen statement or `release_waiting_orphans` is not
+modelled; `release_done` (an operator's retained release) is not modelled
+separately (it uses `session_give_back`, which is); the compaction's
+`StoreClaim` runs on a session that never reopens and is not modelled;
+`branch.remove`'s release is one turn; the generation moves only by
+compaction here (a restore or upgrade with an orphan waiting is not
+modelled: `release_orphans` would then refuse the delete and drop the
+orphan).
 
 ## Abstractions and limits (stated honestly)
 
