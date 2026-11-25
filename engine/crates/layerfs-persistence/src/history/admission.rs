@@ -32,7 +32,7 @@
 use super::rows::{cell, one, unsigned};
 use super::transaction::Transaction;
 use super::{branch, layerstack, params, paths, place_evidence, place_tokens, position};
-use crate::backend::records::Param;
+use crate::backend::records::{BackendError, Param};
 use crate::backend::Engine;
 use crate::history::provider::HistoryProvider;
 use layerfs_history::error::{
@@ -49,10 +49,12 @@ use layerfs_history::{Liveness, MAXIMUM_AUDIT_PAGE};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod authority;
+mod mount;
 mod place;
 mod removal;
 mod session;
 pub(crate) use authority::{liveness, reconcile_machine, release, release_done};
+pub(crate) use mount::{one_message, register_mount, separately_refuses};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
@@ -875,7 +877,14 @@ pub(crate) fn done_intents_branch(
 }
 
 /// Registers one shared (`mount`, `init`, `merge`) or exclusive
-/// (`compaction`) intent.
+/// (`compaction`) intent. A PostgreSQL Branch mount is one message
+/// ([`register_mount`]); everything else, and every refusal that message
+/// cannot report exactly, registers as [`register_separately`] does.
+pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> HistoryResult<()> {
+    register_mount(provider, intent, None).map(drop)
+}
+
+/// Registers one intent statement by statement.
 ///
 /// On PostgreSQL the intent's advisory keys are taken first, in one
 /// statement, and kept with the op so its release needs no read. A mount's
@@ -888,7 +897,10 @@ pub(crate) fn done_intents_branch(
 /// other. Init and merge take only shared keys and refuse each other by their
 /// rows alone, so off the lane two of them could both register: they stay on
 /// the lane, and so do the rare compaction and removal registrations.
-pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> HistoryResult<()> {
+pub(crate) fn register_separately(
+    provider: &HistoryProvider,
+    intent: &GcIntent,
+) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| register_in(tx, intent, false)),
         Engine::Postgres(session) => {

@@ -425,20 +425,23 @@ impl Driver {
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
     }
-    pub(crate) fn is_valid(&mut self, timeout: Duration) -> Result<(), Error> {
+    /// Whether the connection still stands, judged locally with no round
+    /// trip (#768): the runtime is given two turns without waiting, the
+    /// first to poll the socket's readiness and the second to run the
+    /// connection task it woke, which reads what the server sent and ends
+    /// on an end of stream or an error (a server restart, a terminated
+    /// backend, an idle timeout). A peer that went silent without closing
+    /// is not seen here.
+    pub(crate) fn alive(&mut self) -> bool {
         match self {
             Self::Ordinary(client) => {
-                let check = client.client.simple_query("");
-                let check = async { tokio::time::timeout(timeout, check).await };
-                match client.runtime.block_on(check) {
-                    Ok(answer) => answer.map(drop).map_err(Into::into),
-                    // No answer in time: whether the connection still works
-                    // is unknown.
-                    Err(_) => Err(Error::Refused(BackendError::Unknown)),
+                for _ in 0..2 {
+                    client.runtime.block_on(tokio::task::yield_now());
                 }
+                !client.client.is_closed() && !client.connection.is_finished()
             }
-            Self::Diagnostic(client) => client.run(client.client.batch_execute("")),
-            Self::Closed => Err(Error::Refused(BackendError::Unknown)),
+            Self::Diagnostic(_) => true,
+            Self::Closed => false,
         }
     }
     pub(crate) fn cancellation(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {

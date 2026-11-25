@@ -12,7 +12,7 @@ use layerfs_content::filesystem::{
     FilesystemRootId, InodeScope,
 };
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
-use layerfs_history::{BranchSnapshot, HistoryName, NamedSnapshot};
+use layerfs_history::{BranchSnapshot, HistoryCatalog, HistoryName, MountMarkers, NamedSnapshot};
 use layerfs_workspace::{BaseView, CanonicalClient, Workspace};
 use std::sync::Arc;
 
@@ -111,18 +111,24 @@ impl Store {
             // The row names its project, so the operator audit finds the
             // released row by project and Branch name: a named bind knows
             // it, a bind by Branch id reads it with the snapshot.
+            // A Store that mounts on its writer (PostgreSQL, #768 step B)
+            // reads the snapshot there, in one autocommit statement, and
+            // its Workspace reader serves no round trip at mount.
             let (captured, project) = crate::telemetry::timed("bind.snapshot", |_| {
-                let reader = self.reader(Some(workspace)).map_err(|error| {
-                    BindError::Read(Arc::new(super::PortError::ReadAdmission(error)))
-                })?;
+                let source = match self.mount_on_writer {
+                    true => Source::Writer(self.history()),
+                    false => Source::Reader(self.reader(Some(workspace)).map_err(|error| {
+                        BindError::Read(Arc::new(super::PortError::ReadAdmission(error)))
+                    })?),
+                };
                 match &request {
-                    BindIntent::Id(request) => reader
+                    BindIntent::Id(request) => source
                         .snapshot(request.branch)
                         .map_err(BindError::Read)?
                         .map(|(snapshot, project)| (snapshot, project.as_str().to_owned()))
                         .ok_or(BindError::MissingBranch(request.branch)),
                     BindIntent::Named(named_request) => {
-                        named(&reader, named_request).map(|s| (s, named_request.project.clone()))
+                        named(&source, named_request).map(|s| (s, named_request.project.clone()))
                     }
                 }
             })?;
@@ -152,9 +158,15 @@ impl Store {
                 &place,
                 authority,
             );
-            match self.history().gc_register(&intent) {
-                Ok(()) => {
+            // The bound node's markers come with the registration where the
+            // provider reads them after the intent committed (PostgreSQL,
+            // #768 step B); otherwise they are read after it, below.
+            let mut markers = MountMarkers::NotRead;
+            let node = crate::removal::node_of(&captured);
+            match (self.history()).gc_register_mount(&intent, captured.branch.stack, node) {
+                Ok(read) => {
                     gc_op = Some(intent.op_id);
+                    markers = read;
                 }
                 // A catalog with no GC admission at all (a test double) cannot
                 // exclude a removal. The real provider's own `Unsupported`,
@@ -202,7 +214,11 @@ impl Store {
             // records a real deletion. The markers are read after the intent
             // committed: a removal that committed before it is seen here, and
             // one after it meets the intent and is refused.
-            if bound.materialize_removals().is_err() {
+            let known = match markers {
+                MountMarkers::Read(found) => Some(found),
+                MountMarkers::NotRead => None,
+            };
+            if bound.materialize_removals_with(known).is_err() {
                 let _ = bound.owner.close(route);
                 if let Some(op) = bound.gc_op {
                     let _ = crate::history::admission::release_or_mark(self.history(), &op);
@@ -242,20 +258,60 @@ impl Store {
         })
     }
 }
-/// The snapshot a named bind selects, read on its Workspace's reader: the
-/// project and Branch by name with the snapshot in one statement. A Branch
-/// name that cannot name one (invalid, or `main`) is looked for no further
-/// than its project, as the Store service's lookup does.
-fn named(
-    reader: &super::read_handle::ReadSession,
-    request: &NamedBindRequest,
-) -> Result<BranchSnapshot, BindError> {
+/// Where a bind reads its snapshot: its Workspace's reader, or the writer
+/// of a Store that mounts on it (#768 step B).
+enum Source<'a> {
+    Reader(Arc<super::read_handle::ReadSession>),
+    Writer(&'a dyn HistoryCatalog),
+}
+impl Source<'_> {
+    fn published<T>(
+        &self,
+        lookup: impl FnOnce(&dyn HistoryCatalog) -> layerfs_history::HistoryResult<T>,
+    ) -> Result<T, Arc<super::PortError>> {
+        match self {
+            Self::Reader(reader) => reader.published(lookup),
+            Self::Writer(history) => {
+                lookup(*history).map_err(|error| Arc::new(super::PortError::History(error)))
+            }
+        }
+    }
+    fn snapshot(
+        &self,
+        branch: layerfs_history::BranchId,
+    ) -> Result<Option<(BranchSnapshot, HistoryName)>, Arc<super::PortError>> {
+        match self {
+            Self::Reader(reader) => reader.snapshot(branch),
+            Self::Writer(_) => {
+                self.published(|history| history.branch_snapshot_with_stack_name(branch))
+            }
+        }
+    }
+    fn snapshot_named(
+        &self,
+        project: &HistoryName,
+        branch: &HistoryName,
+    ) -> Result<NamedSnapshot, Arc<super::PortError>> {
+        match self {
+            Self::Reader(reader) => reader.snapshot_named(project, branch),
+            Self::Writer(_) => {
+                self.published(|history| history.branch_snapshot_named(project, branch))
+            }
+        }
+    }
+}
+
+/// The snapshot a named bind selects: the project and Branch by name with
+/// the snapshot in one statement. A Branch name that cannot name one
+/// (invalid, or `main`) is looked for no further than its project, as the
+/// Store service's lookup does.
+fn named(source: &Source<'_>, request: &NamedBindRequest) -> Result<BranchSnapshot, BindError> {
     let project = HistoryName::new(&request.project)
         .map_err(|_| BindError::NoSuchProject(request.project.clone()))?;
     let branch = match HistoryName::new(&request.branch) {
         Ok(name) if request.branch != crate::history::MAIN => name,
         _ => {
-            let found = reader
+            let found = source
                 .published(|history| history.layer_stack_named(&project))
                 .map_err(BindError::Read)?;
             return Err(match found {
@@ -264,7 +320,7 @@ fn named(
             });
         }
     };
-    match reader
+    match source
         .snapshot_named(&project, &branch)
         .map_err(BindError::Read)?
     {

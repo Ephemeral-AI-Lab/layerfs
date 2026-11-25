@@ -108,24 +108,34 @@ const SQLITE: &[Pin] = &[
 // [1, 13, 8, 0] (its connect, light check, 7 statements and 5 prepares);
 // now the writer prepares nothing and the reader's 5 prepares are one
 // flight in its open (1 round trip, 1 transaction): 23 round trips -> 15.
+//
+// #768 step B then made a mount two writer messages and nothing on the
+// reader: the snapshot (one fenced autocommit statement on the writer), then
+// one pipelined message (`BEGIN` batch, the lock statement, the asserting
+// insert, `COMMIT`, the markers): writer [0, 2, 6, 1], the flight's five
+// requests counted as statements. The reader's empty-query check, snapshot
+// and markers ([0, 3, 2, 0] on a repeated mount) are gone: a repeated mount
+// is 9 round trips -> 2. A first mount's reader still opens (connect, light
+// check, prepare flight) and reads the root's five dependent objects: 15 ->
+// 9 (writer 6 -> 2, reader [1, 9, 8, 1] -> [1, 7, 6, 1]).
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "mount.by_id.first",
-        writer: [0, 6, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [1, 9, 8, 1],
+        workspace: [1, 7, 6, 1],
     },
     Pin {
         scenario: "mount.by_id.again",
-        writer: [0, 6, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [0, 3, 2, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "mount.by_name.first",
-        writer: [0, 6, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [1, 9, 8, 1],
+        workspace: [1, 7, 6, 1],
     },
 ];
 
@@ -266,8 +276,11 @@ const SQLITE_COMMIT: &[Pin] = &[
 // is first used here): 2 round trips once warm. The first Commit no longer
 // opens the lane connection (connects 1 -> 0; its own transaction locks
 // the lane row) and prepares the message's statements once ([1, 54, 23, 5]
-// before). The UpToDate Commit's Branch read is now that statement's first
-// use on this session (no head read before the lane), so one prepare:
+// before). The UpToDate Commit's Branch read was then that statement's
+// first use on this session (no head read before the lane), so one prepare
+// ([0, 2, 1, 0]) until #768 step B: the mount now reads its snapshot with
+// the same statement on the writer, prepared at Store open, so the UpToDate
+// Commit sends 1 round trip; before stage 2, one prepare:
 // [0, 1, 1, 0] before.
 //
 // #768 verification finding 6 (see the SQLite pins): the Store close's
@@ -291,7 +304,7 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "commit.up_to_date",
-        writer: [0, 2, 1, 0],
+        writer: [0, 1, 1, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -374,8 +387,15 @@ const SQLITE_CYCLE: &[Pin] = &[
 // whose `search_path` resolves their names ([1, 10, 5, 2]); the prefill adds
 // one flight of the reader's mount statements ([1, 2, 1, 1]); the mount and
 // the unmount then prepare nothing: 23 round trips -> 14, unmount 4 -> 2.
-// The mount after the Commit is a repeated mount: writer 6, reader 3 (the
+// The mount after the Commit was a repeated mount: writer 6, reader 3 (the
 // empty-query check, the snapshot and the markers), as `mount.by_id.again`.
+//
+// Step B then put the whole mount on the writer: the snapshot, then the
+// admission message with the markers (writer [0, 2, 6, 1]). The prefilled
+// first mount's reader no longer checks the idle reader with a round trip
+// (a local check, `PostgresStorage::usable`) and reads only the root's five
+// objects: 14 -> 7 round trips. The mount after the Commit is 9 -> 2, all
+// on the writer, as `mount.by_id.again`.
 const POSTGRESQL_CYCLE: &[Pin] = &[
     Pin {
         scenario: "store.open",
@@ -391,9 +411,9 @@ const POSTGRESQL_CYCLE: &[Pin] = &[
     },
     Pin {
         scenario: "mount.prefilled",
-        writer: [0, 6, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [0, 8, 7, 0],
+        workspace: [0, 5, 5, 0],
     },
     Pin {
         scenario: "cycle.commit",
@@ -409,9 +429,9 @@ const POSTGRESQL_CYCLE: &[Pin] = &[
     },
     Pin {
         scenario: "mount.after_commit",
-        writer: [0, 6, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [0, 3, 2, 0],
+        workspace: [0, 0, 0, 0],
     },
 ];
 

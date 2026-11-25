@@ -117,7 +117,7 @@ impl Message {
 /// A token no other transaction of this process holds: the process, a
 /// counter and the clock, hashed. It only tells this transaction from an
 /// implicit one; it is not a secret.
-fn nonce() -> String {
+pub(super) fn nonce() -> String {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/fused-commit/v1\0");

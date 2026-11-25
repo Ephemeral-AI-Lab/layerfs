@@ -32,10 +32,14 @@ impl PostgresStorage {
         }
     }
     /// Whether this idle session can still serve (#64): it was not
-    /// quarantined and its connection answers an empty query within 5 s (one
-    /// round trip, counted). A session that does not is never handed to a
-    /// mount; its caller drops it and opens a new one. This check runs
-    /// before any operation uses the session, so no operation is retried.
+    /// quarantined and its connection still stands, judged without a round
+    /// trip (#768; it answered an empty query before, one round trip at
+    /// every mount): a connection the server closed (a restart, a
+    /// terminated backend, an idle timeout) is seen, a silent peer is not,
+    /// and the first read on it then fails as that read's one attempt. A
+    /// session that cannot serve is never handed to a mount; its caller
+    /// drops it and opens a new one. This check runs before any operation
+    /// uses the session, so no operation is retried.
     pub fn usable(&self) -> bool {
         let Ok(mut state) = self.session.state.lock() else {
             return false;
@@ -43,12 +47,11 @@ impl PostgresStorage {
         if state.quarantined {
             return false;
         }
-        state.work.round_trips += 1;
-        let alive = state.client.is_valid(std::time::Duration::from_secs(5));
-        if alive.is_err() {
+        let alive = state.client.alive();
+        if !alive {
             state.quarantine();
         }
-        alive.is_ok()
+        alive
     }
     /// Prepares the statements a Workspace mount sends on this reader
     /// session in one flight (#768): one round trip when the reader opens,

@@ -356,6 +356,15 @@ impl HistoryCatalog for HistoryProvider {
         super::admission::register(self, intent)
     }
 
+    fn gc_register_mount(
+        &self,
+        intent: &GcIntent,
+        stack: LayerStackId,
+        node: NodeId,
+    ) -> HistoryResult<layerfs_history::MountMarkers> {
+        super::admission::register_mount(self, intent, Some((stack, node)))
+    }
+
     fn gc_release(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
         super::admission::release(self, op_id)
     }

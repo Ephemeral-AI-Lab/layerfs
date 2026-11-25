@@ -203,6 +203,17 @@ impl Session {
         self.pipeline_turn(requests, false, judge)
     }
 
+    /// [`Self::pipeline_judged`] that may also run inside this thread's
+    /// held lane: for a flight that never takes the lane row (a mount's
+    /// admission, an owner's release).
+    pub(crate) fn pipeline_decided<T>(
+        &self,
+        requests: &[Request<'_>],
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        self.pipeline_turn(requests, true, judge)
+    }
+
     fn pipeline_turn<T>(
         &self,
         requests: &[Request<'_>],

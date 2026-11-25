@@ -303,7 +303,8 @@ fn open_postgres(
             workspace_capacity,
         )?
         .with_merge_scratch(writer.storage.merge_scratch())
-        .with_committer(committer),
+        .with_committer(committer)
+        .with_mount_on_writer(),
     );
     Ok(OpenedStore {
         store,
