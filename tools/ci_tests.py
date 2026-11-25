@@ -135,6 +135,12 @@ SLOW = {
     ("layerfs-store-service", "verify768x_fallback_custody"): 23.9,
     ("layerfs-store-service", "verify768x_ordinal_cycles"): 11.2,
     ("layerfs-store-service", "verify768x_two_services_rounds"): 55.2,
+    # Third independent #768 round at 02059c5435, --test-threads 3, macOS host,
+    # 2026-11-25. failed_save ran in three bounded invocations (its two
+    # 6,000-file PostgreSQL halves alone); the figure is their sum.
+    ("layerfs-store-service", "verify768y_interleavings"): 33.5,
+    ("layerfs-store-service", "verify768y_release_faults"): 46.6,
+    ("layerfs-store-service", "verify768y_failed_save"): 192.5,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
