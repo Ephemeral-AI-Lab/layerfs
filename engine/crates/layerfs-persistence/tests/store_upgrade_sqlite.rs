@@ -171,7 +171,26 @@ fn upgraded_store_takes_commits_with_an_attempt_and_passes_the_doctor() {
     let path = sqlite_v2_copy(temp.path());
     run(&path, &AtomicBool::new(false), None).0.unwrap();
     let binding = binding(&path);
-    SqliteHandles::open_diagnostic(&path, &binding, [1; 32]).expect("the doctor's open admits it");
+    let doctor = SqliteHandles::open_diagnostic(&path, &binding, [1; 32])
+        .expect("the doctor's open admits it");
+    // The whole doctor, every check, passes over the upgraded Store.
+    let mut failed = Vec::new();
+    doctor
+        .diagnose(
+            layerfs_persistence::diagnostic::Options {
+                quick: false,
+                deadline: None,
+                cancelled: None,
+            },
+            &mut |o| {
+                if o.outcome == layerfs_persistence::diagnostic::Outcome::Fail {
+                    failed.push(format!("{}: {}", o.id, o.message));
+                }
+            },
+        )
+        .unwrap();
+    assert!(failed.is_empty(), "{failed:#?}");
+    drop(doctor);
     let handles = SqliteHandles::open_writable(config(&path), &binding, [1; 32]).unwrap();
     let history = &handles.history;
     let NamedSnapshot::Found(snapshot) = history
@@ -445,6 +464,7 @@ fn sqlite_exclusive_mode_fails_while_another_connection_is_open() {
         .unwrap();
     // Idle: no transaction is open on it now.
     let mine = Connection::open(&path).unwrap();
+    mine.busy_timeout(std::time::Duration::ZERO).unwrap();
     mine.execute_batch("PRAGMA locking_mode=EXCLUSIVE").unwrap();
     let error = mine
         .query_row("PRAGMA application_id", [], |r| r.get::<_, i64>(0))
@@ -463,6 +483,7 @@ fn sqlite_exclusive_mode_fails_while_another_connection_is_open() {
         .unwrap();
     // And it now keeps every new opener out.
     let late = Connection::open(&path).unwrap();
+    late.busy_timeout(std::time::Duration::ZERO).unwrap();
     assert!(late
         .query_row("SELECT 1 FROM layer", [], |r| r.get::<_, i64>(0))
         .is_err());

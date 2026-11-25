@@ -207,7 +207,23 @@ fn upgraded_store_has_the_frozen_schema_takes_commits_and_passes_the_doctor() {
         Some(Instant::now() + Duration::from_secs(20)),
         &mut resolver,
     )
-    .expect("the doctor's open admits the upgraded column order");
+    .expect("the doctor's open admits the upgraded column order")
+    .diagnose(
+        layerfs_persistence::diagnostic::Options {
+            quick: false,
+            deadline: None,
+            cancelled: None,
+        },
+        &mut |o| {
+            assert!(
+                o.outcome != layerfs_persistence::diagnostic::Outcome::Fail,
+                "{}: {}",
+                o.id,
+                o.message
+            )
+        },
+    )
+    .unwrap();
 
     let handles = PostgresHandles::open_writable(&selection(&db), &binding, [1; 32]).unwrap();
     let history = &handles.history;
