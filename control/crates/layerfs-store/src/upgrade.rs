@@ -117,19 +117,20 @@ pub fn upgrade_with(
     related: Related,
 ) -> Outcome {
     layerfs_home::names::StoreName::parse(store)?;
-    let record = StoreRecord::of(home, store)?;
-    let store_ref = record.store_ref()?.clone();
-    let postgres = matches!(store_ref, StoreRef::Postgres { .. });
-    // the worker is read before anything is marked: a stopped machine is
-    // `Unavailable`, naming its start, with nothing written
-    let mut executor = place::plan(home, &store_ref)?;
-    if let Executor::Worker(worker) = &mut executor {
+    // read before the locks only to refuse early with nothing written: a
+    // stopped machine is `Unavailable`, naming its start
+    let seen = StoreRecord::of(home, store)?;
+    let postgres = matches!(seen.store_ref()?, StoreRef::Postgres { .. });
+    if let Executor::Worker(mut worker) = place::plan(home, seen.store_ref()?)? {
         worker.ready()?;
     }
     let op = Op::begin(intent::UPGRADE, "check", SdkValue::Null)?;
-    let previous = match postgres {
-        true => crate::postgresql::family::begin(home, store, &op, related, adopt)?,
-        false => family::begin(home, store, &op, related, adopt)?,
+    // the record as re-read under the locks decides everything after:
+    // where the run goes, the URL and schema, the session closed
+    let check = |record: &StoreRecord| adopt(record).map(|previous| (previous, record.clone()));
+    let (previous, record) = match postgres {
+        true => crate::postgresql::family::begin(home, store, &op, related, check)?,
+        false => family::begin(home, store, &op, related, check)?,
     };
     let mut run = Run {
         home,
@@ -138,17 +139,26 @@ pub fn upgrade_with(
         previous,
     };
     let outcome = (|| {
-        let _lease = match postgres {
-            true => crate::postgresql::family::settle(home, &record, related)?,
-            false => family::settle(home, store, related)?,
-        };
-        if !postgres {
-            crate::compact::refuse_while_running(&paths::store_file(home, store), store)?;
+        let store_ref = record.store_ref()?;
+        let mut executor = place::plan(home, store_ref)?;
+        if let Executor::Worker(worker) = &mut executor {
+            worker.ready()?;
         }
-        match executor {
-            _ if postgres => run.postgresql(&record, events, cancel),
-            Executor::Local => run.local(events, cancel),
-            Executor::Worker(worker) => run.worker(worker, &record, events, cancel),
+        let _lease = match store_ref {
+            StoreRef::Postgres { .. } => crate::postgresql::family::settle(home, &record, related)?,
+            StoreRef::Sqlite { .. } => family::settle(home, store, related)?,
+        };
+        match (store_ref, executor) {
+            (StoreRef::Postgres { .. }, _) => run.postgresql(&record, events, cancel),
+            (StoreRef::Sqlite { .. }, Executor::Local) => {
+                // the file here: a compaction live beside it is `Busy`; a
+                // worker checks the file under its own root
+                crate::compact::refuse_while_running(&paths::store_file(home, store), store)?;
+                run.local(events, cancel)
+            }
+            (StoreRef::Sqlite { .. }, Executor::Worker(worker)) => {
+                run.worker(worker, &record, events, cancel)
+            }
         }
     })();
     run.end(&outcome);

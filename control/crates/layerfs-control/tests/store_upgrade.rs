@@ -529,3 +529,35 @@ fn a_postgresql_store_s_upgrade_is_refused_before_anything_is_dialled() {
     assert_eq!(format.get_text("status"), Some("unknown"), "{format:?}");
     assert_eq!(format.get_int("latest"), Some(4));
 }
+
+/// A compaction record beside the Store's path under the home does not
+/// refuse an upgrade routed to the Store's machine: the live file is
+/// under the worker's root, which the worker checks itself.
+#[test]
+fn a_compaction_record_under_the_home_does_not_refuse_a_worker_upgrade() {
+    let fixture = placed("worker-compact-op", |listener, root| {
+        std::thread::spawn(move || {
+            layerfs_control::worker_server::serve(listener, worker_store::SECRET.into(), root)
+        });
+    });
+    let file = paths::store_file(&fixture.home, "shop");
+    let record = format!(
+        "version=1\nop_id={}\ngeneration=1\nphase=build\nstarted_ms=1\nowner_pid={}\n\
+         owner_pid_start=\nowner_pid_boot=\ncatalog_id=00\nnext_history_serial=1\n\
+         next_pack_id=1\nnext_ordinal=1\nmark_totals=0,0,0,0\nmark_stamp=0\nhistory_rows=0\n\
+         live_heads_digest={}\n",
+        "00".repeat(16),
+        std::process::id(),
+        "00".repeat(32)
+    );
+    std::fs::write(format!("{}.compact-op", file.display()), record).unwrap();
+    // the record reads as a compaction live on this machine
+    let busy = layerfs_store::compact::refuse_while_running(&file, "shop").unwrap_err();
+    assert_eq!(busy.code, "Busy", "{busy:?}");
+    let (outcome, _) = upgrade(&fixture.home);
+    if let Err(refusal) = &outcome {
+        assert!(!refusal.message.contains("being compacted"), "{refusal:?}");
+    }
+    assert!(op_of(&fixture.home).is_none());
+    fixture.remove();
+}
