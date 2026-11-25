@@ -5,10 +5,13 @@
 //! then run on it; a connect of the connected Store keeps its login;
 //! disconnect forgets it and its password and keeps its data, and a second
 //! connect finds the project. The same database under a second name is
-//! `Exists`, by the id in its schema. Needs LAYERFS_TEST_PG_URL (a server
-//! URL with its user and no password, to a database with no `layerfs`
-//! schema; the test leaves one behind) and LAYERFS_TEST_PG_PASSWORD (the
-//! user's password); without them the test says so and passes.
+//! `Exists`, by the id in its schema. A Store of schema version 3 (#776
+//! R1) answers `Unsupported` (raised `OldStore`) with `store disconnect`
+//! as its fix, and blocks its projects `outdated`. Needs
+//! LAYERFS_TEST_PG_URL (a server URL with its user and no password, to a
+//! database with no `layerfs` schema; the test leaves one behind) and
+//! LAYERFS_TEST_PG_PASSWORD (the user's password); without them the test
+//! says so and passes.
 use layerfs_api::home::{self, paths};
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
@@ -303,4 +306,91 @@ fn a_missing_database_is_a_refused_session() {
     assert_eq!(next.get_text("step"), Some("database"), "{refusal:?}");
     assert!(!paths::store_dir(&home, "gone").exists());
     std::fs::remove_dir_all(&home).unwrap();
+}
+
+/// A PostgreSQL Store of schema version 3 (#776 R1: before each Commit
+/// recorded its attempt), in a database of its own (dropped at the end),
+/// is refused at open by its version: `store get --with stats` answers
+/// `Unsupported` (raised `OldStore`) with that refusal as its message and
+/// `store disconnect`, which keeps its data, as its fix; its project is
+/// `blocked` by it `outdated`.
+#[test]
+fn an_old_format_store_answers_outdated_with_disconnect_as_its_fix() {
+    let (Ok(url), Ok(password)) = (
+        std::env::var("LAYERFS_TEST_PG_URL"),
+        std::env::var("LAYERFS_TEST_PG_PASSWORD"),
+    ) else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_PG_URL / LAYERFS_TEST_PG_PASSWORD unset");
+        return;
+    };
+    let database = format!("lfs_outdated_{}", std::process::id());
+    let sql = |url: &str, sql: &str| {
+        let mut config: postgres::Config = url.parse().unwrap();
+        config.password(&password);
+        let mut client = config.connect(postgres::NoTls).unwrap();
+        client.batch_execute(sql).unwrap();
+    };
+    sql(
+        &url,
+        &format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)"),
+    );
+    sql(&url, &format!("CREATE DATABASE {database}"));
+    let (base, query) = url
+        .split_once('?')
+        .map_or((url.as_str(), ""), |(b, q)| (b, q));
+    let (server, _) = base.rsplit_once('/').unwrap();
+    let own = match query {
+        "" => format!("{server}/{database}"),
+        query => format!("{server}/{database}?{query}"),
+    };
+    let home = tempdir("outdated");
+    home::open(&home).unwrap();
+    let (address, login) = login(&own);
+    let mut args = vec![("store", t("old")), ("url", t(&address))];
+    args.extend(login);
+    ok(&home, "store.connect", &args);
+    let folder = tempdir("outdated-folder");
+    std::fs::write(folder.join("README.md"), "hello pg\n").unwrap();
+    let folder_text = t(&folder.display().to_string());
+    ok(
+        &home,
+        "project.init",
+        &[("project", t("old/api")), ("folder", folder_text)],
+    );
+    layerfs_api::close_idle(std::time::Duration::ZERO);
+    sql(
+        &own,
+        "ALTER TABLE layerfs.history_meta DROP CONSTRAINT history_meta_schema_version_check; \
+         ALTER TABLE layerfs.store_policy DROP CONSTRAINT store_policy_schema_version_check; \
+         UPDATE layerfs.history_meta SET schema_version=3; \
+         UPDATE layerfs.store_policy SET schema_version=3",
+    );
+    let args = SdkValue::map([
+        ("store", t("old")),
+        ("with", SdkValue::List(vec![t("stats")])),
+        ("detail", SdkValue::Bool(true)),
+    ]);
+    let stats = layerfs_api::call(Some(&home), "store.get", args, &mut |_| {}).unwrap_err();
+    assert_eq!(stats.code, "Unsupported", "{stats:?}");
+    assert!(
+        stats
+            .message
+            .starts_with("PostgreSQL Store schema version 3 (before each Commit recorded"),
+        "{stats:?}"
+    );
+    assert_eq!(stats.detail.get_text("code"), Some("OldStore"), "{stats:?}");
+    assert_eq!(
+        stats.detail.get_text("fix"),
+        Some("layerfs store disconnect old")
+    );
+    let got = ok(&home, "project.get", &[("project", t("old/api"))]);
+    let by = SdkValue::map([("store", t("old")), ("reason", t("outdated"))]);
+    assert_eq!(got.get("blocked_by"), Some(&by), "{got:?}");
+    layerfs_api::close_idle(std::time::Duration::ZERO);
+    sql(
+        &url,
+        &format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)"),
+    );
+    let _ = std::fs::remove_dir_all(home);
+    let _ = std::fs::remove_dir_all(folder);
 }

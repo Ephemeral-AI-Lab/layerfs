@@ -75,10 +75,19 @@ pub fn sqlite_identity(path: &Path, identity: &Identity) -> Result<bool, SdkRefu
 }
 
 /// A diagnostic open's refusal: `Busy` when another writer holds the file
-/// (it says nothing of its schema or id), else `Unavailable` with its text.
+/// (it says nothing of its schema or id), [`OLD_STORE`] with the version
+/// refusal for a Store of an older schema version, else `Unavailable` with
+/// its text.
+///
+/// [`OLD_STORE`]: crate::state::OLD_STORE
 fn open_refusal(error: layerfs_storage::port::PersistenceError) -> SdkRefusal {
-    let code = match error {
-        layerfs_storage::port::PersistenceError::Busy => "Busy",
+    use layerfs_storage::port::PersistenceError;
+    let code = match &error {
+        PersistenceError::Busy => "Busy",
+        PersistenceError::Refused { status } => match layerfs_persistence::outdated_store(status) {
+            Some(known) if known == status => return refused(crate::state::OLD_STORE, known),
+            _ => "Unavailable",
+        },
         _ => "Unavailable",
     };
     refused(code, crate::words::persistence(&error))

@@ -159,6 +159,15 @@ not supported by this release and not migrated; create a new Store";
 pub(crate) const POSTGRES_SCHEMA_3: &str =
     "PostgreSQL Store schema version 3 (before each Commit recorded its attempt, #776): \
 not supported by this release and not migrated; create a new Store";
+/// The refusals of a Store of an older schema version that this release
+/// neither reads nor migrates: its remedy is a new Store.
+const OUTDATED: [&str; 3] = [SCHEMA_VERSION_2, POSTGRES_SCHEMA_2, POSTGRES_SCHEMA_3];
+/// The open refusal of an older-format Store that `text` carries, if any:
+/// one of the exact statuses such a Store is refused with at open
+/// ([`OUTDATED`]), as it is or inside the text of an error that wraps it.
+pub fn outdated_store(text: &str) -> Option<&'static str> {
+    OUTDATED.into_iter().find(|status| text.contains(status))
+}
 impl From<BackendError> for layerfs_storage::port::PersistenceError {
     fn from(e: BackendError) -> Self {
         match e {
