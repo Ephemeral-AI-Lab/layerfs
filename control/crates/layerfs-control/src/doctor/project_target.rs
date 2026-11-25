@@ -71,6 +71,12 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
                         "project {handle}'s record has no complete manifest (a Sandbox on this computer cannot open it)"
                     ),
                 );
+                // no fix: only restoring the Store from a backup rebuilds the
+                // manifest, and that replaces the Store's current data
+                checks.evidence(
+                    RECORD,
+                    SdkValue::map([("manifest", SdkValue::text("incomplete"))]),
+                );
             } else {
                 checks.pass(RECORD, "the project and its Store are on record");
             }
@@ -82,8 +88,20 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
         }
         Ok((_, None)) => {
             checks.fail(RECORD, format!("the home has no record of {handle}"));
+            // no fix: no record exists to repair, and `project delete` has
+            // nothing to delete
+            checks.evidence(RECORD, SdkValue::map([("recorded", SdkValue::Bool(false))]));
         }
-        Err(refusal) => checks.fail(RECORD, refusal.message),
+        Err(refusal) => {
+            checks.fail(RECORD, refusal.message.clone());
+            // its own fix when it carries one; `project delete` is
+            // destructive and the data may be intact, so none otherwise
+            if let Some(fix) = refusal.detail.get_text("fix") {
+                checks.fix(RECORD, fix);
+            }
+            let code = SdkValue::text(refusal.code.as_str());
+            checks.evidence(RECORD, SdkValue::map([("code", code)]));
+        }
     }
     checks.fill(node, probe.checks, probe.budget.expired());
 }
@@ -291,15 +309,26 @@ impl Found {
     /// Each kept problem as one finding of `project.data`: an object the
     /// walk could not read (a corrupt pack) is as much a problem of the data
     /// as a wrong one, and is never also a `not_checked` entry (R4 F3).
+    /// No fix: replacing the whole Store can discard newer data, PostgreSQL
+    /// Stores are not restorable by `backup restore`, and an unknown outcome
+    /// does not establish corruption.
     fn fill(&self, checks: &mut Checks) {
-        for (_, message) in &self.kept {
+        for (outcome, message) in &self.kept {
             checks.fail(DATA, message.clone());
+            let word = if *outcome == Outcome::Fail {
+                "fail"
+            } else {
+                "unknown"
+            };
+            checks.evidence(DATA, SdkValue::map([("outcome", SdkValue::text(word))]));
         }
         if self.more > 0 {
             checks.fail(
                 DATA,
                 format!("{} more problems were found and are not listed", self.more),
             );
+            let more = i64::try_from(self.more).unwrap_or(i64::MAX);
+            checks.evidence(DATA, SdkValue::map([("more", SdkValue::Int(more))]));
         }
     }
 

@@ -693,6 +693,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("store.move", "layerfs store move shop docker --progress"),
     ("store.remove", "layerfs store remove shop"),
     ("store.compact", "layerfs store compact shop --progress"),
+    ("store.upgrade", "layerfs store upgrade shop --progress"),
     ("store.doctor", "layerfs store doctor shop"),
     (
         "backup.connect",

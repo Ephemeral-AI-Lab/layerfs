@@ -147,6 +147,10 @@ SLOW = {
     # The independent #768 tester's binaries, same host and day.
     ("layerfs-store-service", "tester768_stale_reader"): 9.1,
     ("layerfs-store-service", "tester768_interleave"): 7.0,
+    # `store upgrade` on the PostgreSQL fixture, one restore per case, and
+    # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
+    ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,
+    ("layerfs-persistence", "store_upgrade_postgresql_wire"): 12.16,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

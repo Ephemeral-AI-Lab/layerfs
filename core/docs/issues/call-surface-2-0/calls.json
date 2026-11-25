@@ -86,7 +86,8 @@
   "docker",
   "platforms",
   "tree",
-  "patch"
+  "patch",
+  "format"
  ],
  "global_options": [
   {
@@ -292,6 +293,16 @@
     {
      "check": "store.backups",
      "what": "no backup of it is behind: its heads against each bucket link (sqlite; a notice per bucket)",
+     "full_only": false
+    },
+    {
+     "check": "store.mount_holders",
+     "what": "live mount admissions are verified against this home's records; one that blocks removal or compaction is a warning, and the doctor never releases or settles it",
+     "full_only": false
+    },
+    {
+     "check": "store.gc_audit",
+     "what": "one bounded page of the retained done operator-audit rows, as evidence; the doctor changes nothing",
      "full_only": false
     }
    ],
@@ -805,7 +816,8 @@
     "Timeout"
    ],
    "Failed": [
-    "UnknownMethod"
+    "UnknownMethod",
+    "Cancelled"
    ]
   }
  },
@@ -7274,7 +7286,7 @@
       "store.list"
      ],
      "help": "every Store, from the home's records",
-     "cli": "layerfs store list [--machine M] [--with stats]",
+     "cli": "layerfs store list [--machine M] [--with stats,format]",
      "positionals": [],
      "options": [
       {
@@ -7291,6 +7303,13 @@
         "size"
        ],
        "help": "the bytes of the Store's file with its write-ahead log, from one stat on its machine, starting nothing; null for a PostgreSQL Store and for a machine that does not answer"
+      },
+      "format": {
+       "where": "item",
+       "keys": [
+        "format"
+       ],
+       "help": "each item's format section, {version, latest, status, fix}, as store get --with format answers it (#804)"
       }
      },
      "paging": null,
@@ -7388,7 +7407,7 @@
       "store.stats"
      ],
      "help": "a Store's record and state",
-     "cli": "layerfs store get <store> [--with live,stats]",
+     "cli": "layerfs store get <store> [--with live,stats,format]",
      "positionals": [
       {
        "name": "store",
@@ -7422,6 +7441,15 @@
         "init"
        ],
        "help": "opens the Store where it lives. size: the file with its write-ahead log (sqlite), the schema (PostgreSQL); logical_bytes, canonical_bytes, stored_bytes, metadata_bytes: the Store's publication counters; file_bytes: the database's pages; reusable_bytes: reusable pages, null for PostgreSQL; dedupe and compression: ratios as text, six decimals; init: {entries, files, size, canonical_bytes, stored_bytes, metadata_bytes, duration_ms} of the first project init, or null"
+      },
+      "format": {
+       "keys": [
+        "version",
+        "latest",
+        "status",
+        "fix"
+       ],
+       "help": "the Store's format, read without opening it and starting nothing (#804): a sqlite Store's file header on a raw read-only connection (through its machine's worker on another machine), one SELECT on a PostgreSQL Store; it answers on a Store this build refuses to open, where live and stats fail. version: the format, an integer per engine (SQLite 2, 3; PostgreSQL 3, 4), null when unrecognized; latest: the format this build writes; status: current, outdated (an upgrade path exists), unsupported (none: below the floor, transient or unrecognized) or newer (written by a newer build); fix: layerfs store upgrade <store> when outdated, layerfs store remove <store> (sqlite) or layerfs store disconnect <store> (PostgreSQL) when unsupported, else null"
       }
      },
      "paging": null,
@@ -8060,6 +8088,105 @@
         "fix"
        ],
        "fix": "layerfs store compact <store>"
+      }
+     ]
+    },
+    {
+     "call": "store.upgrade",
+     "badge": "new",
+     "today": [],
+     "help": "bring an older Store to the latest format, in place",
+     "cli": "layerfs store upgrade <store>",
+     "positionals": [
+      {
+       "name": "store",
+       "kind": "Name"
+      }
+     ],
+     "options": [],
+     "stdin": null,
+     "with": {},
+     "paging": null,
+     "progress": true,
+     "quiet": false,
+     "profile": "full",
+     "short": {
+      "always": [
+       "outcome"
+      ],
+      "sometimes": []
+     },
+     "long": [
+      "outcome",
+      "store",
+      "engine",
+      "format_before",
+      "format_after",
+      "steps",
+      "warnings"
+     ],
+     "item": null,
+     "examples": {
+      "short": [
+       "{\"outcome\":\"upgraded\"}",
+       "already at the latest format: {\"outcome\":\"current\"}"
+      ],
+      "long": "{\"outcome\":\"upgraded\",\"store\":\"shop\",\"engine\":\"sqlite\",\"format_before\":2,\"format_after\":3,\"steps\":[\"2->3\"],\"warnings\":[]}"
+     },
+     "dropped": [],
+     "new_work": "New (#804, owner 2026-11-25): the only call that converts a Store; open never does. SQLite: the exclusive op store.upgrade under the home and Store locks, locking_mode=EXCLUSIVE before the first read, Writer::try_acquire, one transaction checked before COMMIT, wal_checkpoint(TRUNCATE) after. PostgreSQL: one check SELECT, then one message that locks, converts, verifies and commits on the server. Exact frozen recognition of every source a step accepts. Cancel: the layerfs command blocks SIGINT and SIGTERM for this call and a thread sets the process-wide cancel request; a worker takes store.cancel {op} on a second connection; PostgreSQL sends its cancel request. The Cancelled refusal is folded into Failed.",
+     "refusals": [
+      {
+       "error": "InUse",
+       "when": "a Workspace of the Store is mounted, a lease is held, a Sandbox uses it, or (sqlite) another process has the file open",
+       "adds": [
+        "fix"
+       ],
+       "fix": "the call that releases it, when known"
+      },
+      {
+       "error": "Busy",
+       "when": "another Store op is running (named), the Writer lane or a lock was not granted at once, or old-build mount rows are live",
+       "adds": [
+        "op"
+       ]
+      },
+      {
+       "error": "Unresolved",
+       "when": "an earlier upgrade's outcome is not known and its owner is gone",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs store upgrade <store>"
+      },
+      {
+       "error": "Unavailable",
+       "when": "the Store's machine is stopped, or its worker is of another build",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs machine start M / layerfs machine stop M && layerfs machine start M"
+      },
+      {
+       "error": "Unsupported",
+       "when": "not a format this build can upgrade: an unrecognized source, a version with no step, a pre-2.0 Store, or one newer than this build (said as such, never as outdated)",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs store remove <store> (sqlite) / layerfs store disconnect <store> (PostgreSQL); none for a newer Store"
+      },
+      {
+       "error": "Failed",
+       "when": "a check before COMMIT failed (the message names it), or cancelled: detail.code Cancelled, message \"cancelled before COMMIT; nothing changed\"",
+       "adds": []
+      },
+      {
+       "error": "Unknown",
+       "when": "a lost reply, a killed process or a second signal: whether the Store changed is not known; it is never half converted",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs store upgrade <store>"
       }
      ]
     },

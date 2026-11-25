@@ -12,9 +12,11 @@
 //! finding: every read ignores it, and the next operation replaces it.
 use super::records::Findings;
 use super::scan::{shell, Scanned};
-use layerfs_bridge::control::SdkRefusal;
+use crate::home::Build;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
+use layerfs_home::outcome::shell_word;
 use layerfs_store::lease;
 use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;
@@ -24,14 +26,29 @@ fn built_in(machine: &str) -> bool {
     layerfs_home::names::BUILT_IN.contains(&machine)
 }
 
+/// The line that records this build's daemon for machine `machine`: only
+/// `native` runs this host's daemon, and only a daemon stamped with
+/// `build`'s commit is named (`None`: no daemon of this build is known).
+pub(super) fn daemon_fix(machine: &str, build: Build<'_>) -> Option<String> {
+    let own = (machine == "native")
+        .then(|| crate::home::own_daemon(build))
+        .flatten()?;
+    Some(format!(
+        "layerfs machine update {} --daemon {}",
+        shell_word(machine),
+        shell(&own)
+    ))
+}
+
 /// The record checks of the home's records (`home.records`): they read
 /// files of this computer only and connect to no machine.
 pub(super) fn check_local(
     home: &Path,
     scanned: &Scanned,
+    build: Build<'_>,
     findings: &mut Findings,
 ) -> Result<(), SdkRefusal> {
-    machines(scanned, findings);
+    machines(scanned, build, findings);
     for store in &scanned.stores {
         let name = store.name();
         let entity = ("store", name);
@@ -41,15 +58,25 @@ pub(super) fn check_local(
             intent(entity, op, &format!("layerfs {clear}"), findings);
         }
         match store.store_ref() {
-            Err(refusal) => findings.error(
-                entity,
-                format!(
-                    "Store {name}'s record cannot be read: {}; no call reads it: repair {} by hand",
-                    refusal.message,
-                    paths::store_record(home, name).display()
-                ),
-                String::new(),
-            ),
+            Err(refusal) => {
+                let record = paths::store_record(home, name);
+                // no fix: `store remove` needs a readable record and deletes
+                // the Store's data
+                findings.error(
+                    entity,
+                    format!(
+                        "Store {name}'s record cannot be read: {}; no call reads it: repair {} by hand",
+                        refusal.message,
+                        record.display()
+                    ),
+                    String::new(),
+                );
+                findings.evidence(SdkValue::map([
+                    ("store", SdkValue::text(name)),
+                    ("path", SdkValue::text(record.display().to_string())),
+                    ("code", SdkValue::text(&refusal.code)),
+                ]));
+            }
             Ok(StoreRef::Sqlite { machine, .. }) => {
                 if !built_in(machine) && !scanned.machine_names.contains(machine) {
                     findings.error(
@@ -57,6 +84,13 @@ pub(super) fn check_local(
                         format!("Store {name} is on machine {machine}, which has no record; no call reaches it: restore machine {machine}'s record for inspection and explicit cleanup, or delete {} by hand", paths::store_dir(home, name).display()),
                         String::new(),
                     );
+                    // no fix: restoring the record needs the machine's
+                    // platform, and deleting the folder loses the Store
+                    findings.evidence(SdkValue::map([
+                        ("store", SdkValue::text(name)),
+                        ("machine", SdkValue::text(machine)),
+                        ("machine_record", SdkValue::text("absent")),
+                    ]));
                 }
                 // a transfer running now owns its partial copy
                 let standing = op.as_ref().map(Op::standing);
@@ -80,6 +114,11 @@ pub(super) fn check_local(
                 ),
                 format!("rm {}", shell(&lease)),
             );
+            findings.evidence(SdkValue::map([
+                ("store", SdkValue::text(name)),
+                ("pid", SdkValue::Int(i64::from(pid))),
+                ("path", SdkValue::text(lease.display().to_string())),
+            ]));
         }
     }
     sandboxes(scanned, findings);
@@ -88,7 +127,7 @@ pub(super) fn check_local(
 
 /// Machines: their intents, and a built-in machine's recorded daemon that
 /// is not there.
-fn machines(scanned: &Scanned, findings: &mut Findings) {
+fn machines(scanned: &Scanned, build: Build<'_>, findings: &mut Findings) {
     for machine in &scanned.machines {
         let name = machine.name();
         let entity = ("machine", name);
@@ -97,8 +136,13 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
             findings.error(
                 entity,
                 layerfs_sandbox::deploy::missing_daemon(name, daemon),
-                String::new(),
+                daemon_fix(name, build).unwrap_or_default(),
             );
+            findings.evidence(SdkValue::map([
+                ("machine", SdkValue::text(name)),
+                ("daemon", SdkValue::text(daemon)),
+                ("present", SdkValue::Bool(false)),
+            ]));
         }
         if let Some(op) = machine.op() {
             let clear = layerfs_machine::state::settle(name, &op);
@@ -120,16 +164,27 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
         // removal is the one call left; an error, as its own doctor's
         // reference checks say (conformance R4)
         match sandbox.project().and_then(|p| p.split_once('/')) {
-            None => findings.error(
-                entity,
-                "its record names no project".to_owned(),
-                fix.clone(),
-            ),
-            Some((store, _)) if !scanned.store_names.contains(store) => findings.error(
-                entity,
-                format!("its record names Store {store}, which has no record"),
-                fix.clone(),
-            ),
+            None => {
+                findings.error(
+                    entity,
+                    "its record names no project".to_owned(),
+                    fix.clone(),
+                );
+                reference(
+                    findings,
+                    name,
+                    "project",
+                    "a project of the form store/project",
+                );
+            }
+            Some((store, _)) if !scanned.store_names.contains(store) => {
+                findings.error(
+                    entity,
+                    format!("its record names Store {store}, which has no record"),
+                    fix.clone(),
+                );
+                reference(findings, name, "store", store);
+            }
             Some((store, project))
                 if !(scanned.projects).contains(&(store.to_owned(), project.to_owned())) =>
             {
@@ -137,7 +192,8 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
                     entity,
                     format!("its record names project {store}/{project}, which has no record"),
                     fix.clone(),
-                )
+                );
+                reference(findings, name, "project", &format!("{store}/{project}"));
             }
             Some(_) => {}
         }
@@ -148,8 +204,19 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
                 format!("its record names machine {machine}, which has no record"),
                 fix,
             );
+            reference(findings, name, "machine", machine);
         }
     }
+}
+
+/// The evidence of a Sandbox's reference that has no record: which kind of
+/// thing, and which one its record names.
+fn reference(findings: &mut Findings, sandbox: &str, reference: &str, expected: &str) {
+    findings.evidence(SdkValue::map([
+        ("sandbox", SdkValue::text(sandbox)),
+        ("reference", SdkValue::text(reference)),
+        ("expected", SdkValue::text(expected)),
+    ]));
 }
 
 /// An intent whose owner is gone with its outcome not known: an error
@@ -164,6 +231,12 @@ fn intent(entity: (&str, &str), op: &Op, clear: &str, findings: &mut Findings) {
             format!("{kind} {name} has an unresolved {what}: its outcome is not known"),
             clear.to_owned(),
         );
+        findings.evidence(SdkValue::map([
+            ("op", SdkValue::text(op.name())),
+            ("phase", SdkValue::text(op.phase())),
+            ("op_id", SdkValue::text(op.id())),
+            ("standing", SdkValue::text("unresolved")),
+        ]));
     }
 }
 
@@ -190,6 +263,14 @@ fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
         ),
         String::new(),
     );
+    // no fix: only the next move of this Store deletes the copy
+    findings.evidence(SdkValue::map([
+        ("store", SdkValue::text(name)),
+        ("call", SdkValue::text(left.call)),
+        ("from", SdkValue::text(&left.from)),
+        ("to", SdkValue::text(&left.to)),
+        ("on", SdkValue::text(&left.on)),
+    ]));
 }
 
 /// A partial copy an interrupted transfer left (`store.sqlite.incoming`) on
@@ -208,5 +289,9 @@ fn incoming(home: &Path, store: &StoreRecord, findings: &mut Findings) {
             ),
             format!("rm {}", shell(&local_incoming)),
         );
+        findings.evidence(SdkValue::map([
+            ("store", SdkValue::text(name)),
+            ("path", SdkValue::text(local_incoming.display().to_string())),
+        ]));
     }
 }

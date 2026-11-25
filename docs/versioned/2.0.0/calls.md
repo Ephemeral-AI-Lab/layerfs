@@ -9,8 +9,8 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 81 calls in ten families: `home` 5, `project` 8, `branch` 6,
-`commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 11
+There are 82 calls in ten families: `home` 5, `project` 8, `branch` 6,
+`commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 12
 and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
 prints one family or one call, and `layerfs help --json` prints the whole
 table (each call's arguments and the form of its answer). Outside the table
@@ -57,7 +57,7 @@ works with, and the MCP server's default `work` profile lists only them:
 `branch.fork`, `commit.list`, `commit.diff`, `file.read`, `file.list`,
 `file.glob`, `file.grep`, `file.write`, `file.edit`, `file.rm`, `file.mv`,
 `sandbox.create`, `workspace.list`, `workspace.exec`, `workspace.cancel`,
-`workspace.commit` and `workspace.status`. The other 66 are `full`: the MCP
+`workspace.commit` and `workspace.status`. The other 65 are `full`: the MCP
 `admin` profile lists them with the 17. Every call is in the shell, Node
 and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `quiet` calls write no line to the home's call log:
 `home.get`, `home.log`, `home.clear_log`, `sandbox.files`, `sandbox.log`,
@@ -1281,12 +1281,12 @@ See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals, and
 [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
-### `store` (11)
+### `store` (12)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | `machine`, `--with stats` | every Store, from the home's records |
-| `get` | `store` | `--with live,stats` | a Store's record and state; with `--with`, read where it lives or opened for its counters |
+| `list` | — | `machine`, `--with stats,format` | every Store, from the home's records |
+| `get` | `store` | `--with live,stats,format` | a Store's record and state; with `--with`, read where it lives, opened for its counters, or its format read without opening it |
 | `create` | `name` | `machine` | an empty sqlite Store, on this computer or made on `machine` directly |
 | `connect` | `store`, `url` | `user`, `password` (`--password-stdin`; both required on a first connect), `synchronous_commit` (`local`) | connects a PostgreSQL database as a Store with its login; on a connected Store, changes its address, login or write setting |
 | `disconnect` | `store` | — | forgets a PostgreSQL Store with its saved login and attachments, its data staying |
@@ -1295,6 +1295,7 @@ refusals, and
 | `move` | `store`, `machine` | `on_progress` | moves a sqlite Store between this computer and a machine |
 | `remove` | `store` | — | deletes a sqlite Store with every project in it |
 | `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store; a sqlite Store on another machine is compacted by that machine's worker |
+| `upgrade` | `store` | `on_progress` | brings an older-format Store to the latest format, in place, in one transaction |
 | `doctor` | `store` | `machine`, `on_progress` | checks a Store, then each of its projects ([the doctors](#the-doctors)) |
 
 `store.doctor` is one of [the doctors](#the-doctors). `store.status` and `store.stats` are gone into
@@ -1459,7 +1460,20 @@ attached to the Store and dial with both.
   a PostgreSQL Store).
   `--machine M` keeps the sqlite Stores on `M`. `--with stats` adds each
   item's `size` from one stat on its machine, starting nothing; null for a
-  PostgreSQL Store and for a machine that does not answer.
+  PostgreSQL Store and for a machine that does not answer. `--with format`
+  adds each item's `format`, as `get --with format` answers it.
+- **`get --with format`** (#804) adds `format: { version, latest, status,
+  fix }`: the Store's format, one integer per engine (SQLite 2, 3;
+  PostgreSQL 3, 4; null when unrecognized), the format this build writes,
+  and `current`, `outdated` (an upgrade path exists; `fix: layerfs store
+  upgrade <store>`), `unsupported` (none; `fix: layerfs store remove
+  <store>` for sqlite, `layerfs store disconnect <store>` for PostgreSQL)
+  or `newer` (written by a newer build; no fix). It reads only the version,
+  a sqlite Store's header on a raw read-only connection (through its
+  machine's worker on another machine) or one `SELECT` on PostgreSQL, so it
+  starts nothing and answers on a Store this build refuses to open, where
+  `--with live` and `--with stats` fail. `layerfs --version --json` says
+  the formats this build writes: `formats: {"sqlite": 3, "postgresql": 4}`.
 - **`create`**, short `{"ok":true}`; long `ok, outcome: "created", store,
   engine, machine, profile, sqlite_version, created_at`. Without
   `--machine` the Store goes on the machine whose calls run in this process
@@ -1506,6 +1520,33 @@ attached to the Store and dial with both.
   owner the Store's admission proves gone, and a mount whose Sandbox this
   home no longer records still holds it. While a compaction runs on a machine, a move's or
   remove's steps there are `Busy` naming it.
+- **`upgrade`** (#804) brings a Store written in an earlier format in
+  place, in one transaction, to the latest format this build writes,
+  keeping everything it holds; nothing else converts a Store, open never
+  does. Today's steps: SQLite 2 → 3 and PostgreSQL 3 → 4. One argument and
+  nothing to choose; it runs where the Store's record says (a sqlite Store
+  on another machine in that machine's worker). Short `{ outcome }`
+  (`upgraded`, or `current` for a Store already at the latest format, which
+  is not changed); long `outcome, store, engine, format_before,
+  format_after, steps, warnings` (`steps` the steps applied, in order, as
+  `"2->3"`; `warnings` what failed after COMMIT, which never fails the
+  call). Phases: `check, convert, verify, commit` (SQLite), `check,
+  convert` (PostgreSQL); `commit` is the point of no return. Ctrl-C
+  (SIGINT) or SIGTERM cancels it before COMMIT: `Failed` with `detail.code:
+  "Cancelled"`, "cancelled before COMMIT; nothing changed"; a second signal
+  exits at once, `Unknown`. Refusals, each meaning nothing changed:
+  `InUse` (a Workspace mounted, a lease held, a Sandbox using the Store, or
+  another process with the file open), `Busy` (another Store op, the lane
+  or a lock not granted at once, live old-build mount rows), `Unresolved`
+  (an earlier upgrade's outcome unknown, its owner gone; `fix: layerfs store
+  upgrade <store>`, which adopts and settles it), `Unavailable` (the
+  machine stopped or its worker of another build, fixes as for `compact`),
+  `Unsupported` (an unrecognized source, a version with no step, a pre-2.0
+  Store, or one newer than this build; `fix: layerfs store remove <store>`
+  or `layerfs store disconnect <store>`, none for a newer Store), `Failed`
+  (a check before COMMIT, named). `Unknown` (a lost reply, a killed
+  process) does not say whether the Store changed; its fix `layerfs store
+  upgrade <store>` then answers `current` or does the work.
 
 Run (macOS, native; rerun at `61960e3f5f` on a fresh scratch home, all but
 the `--detail` line, which is from an earlier run of the same calls):
@@ -1653,6 +1694,8 @@ See [backups](machines-and-stores.md#backups).
 
 Six table calls check one thing each and change nothing: they take no
 lock, write no record, remove no stale lease and start no machine.
+
+For how to read a report and run a fix, see [the doctors, for users](doctor.md).
 
 ```bash
 layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
@@ -1881,7 +1924,7 @@ answers the public one.
 | `Capacity` | `NoSpace` |
 | `Unsupported` | `OldStore` |
 | `Unavailable` | `Denied`, `Unauthorized`, `StaleSandbox`, `StaleStore`, `Timeout` |
-| `Failed` | `UnknownMethod`, and any code this table does not name |
+| `Failed` | `UnknownMethod`, `Cancelled` (`store upgrade` cancelled before COMMIT), and any code this table does not name |
 
 Every call is one attempt. After `Unknown`, read the state with `list`,
 `get` or `status` before acting again. A refusal that carries
@@ -1898,8 +1941,8 @@ the request was sent and no answer settled it, and its message says so
 | `--json` | all | one line of JSON, also on a terminal; not with `--text` |
 | `-h`, `--help` | all | help: after a family its calls, after a call its arguments, options, answer and an example |
 | `--detail` | all | the long form of the answer, and of a refusal ([the form of an answer](#the-form-of-an-answer)) |
-| `--with <a,b>` | `home get` (`platforms`, `tree`), `project list` (`stats`), `commit diff` (`patch`), `sandbox get` (`stats`), `machine list` and `machine get` (`live`), `machine images` (`docker`), `machine stats` (`space`), `store list` (`stats`), `store get` (`live`, `stats`) | adds the named sections to the answer; a name the call does not take is exit 2 |
-| `--progress` | `home doctor`, `project init`, `project export`, `project doctor`, `sandbox create`, `sandbox remove`, `sandbox doctor`, `workspace exec`, `machine load-image`, `machine start`, `machine stop`, `machine create`, `machine remove`, `machine doctor`, `store move`, `store compact`, `store doctor`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}` (a doctor adds `node`; `workspace exec` adds `exec` to its one `start` event). On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase; `LAYERFS_PROGRESS_JSON` set keeps the JSON lines on a terminal. `backup doctor` sends no progress |
+| `--with <a,b>` | `home get` (`platforms`, `tree`), `project list` (`stats`), `commit diff` (`patch`), `sandbox get` (`stats`), `machine list` and `machine get` (`live`), `machine images` (`docker`), `machine stats` (`space`), `store list` (`stats`, `format`), `store get` (`live`, `stats`, `format`) | adds the named sections to the answer; a name the call does not take is exit 2 |
+| `--progress` | `home doctor`, `project init`, `project export`, `project doctor`, `sandbox create`, `sandbox remove`, `sandbox doctor`, `workspace exec`, `machine load-image`, `machine start`, `machine stop`, `machine create`, `machine remove`, `machine doctor`, `store move`, `store compact`, `store upgrade`, `store doctor`, `backup create`, `backup restore` | progress as one JSON line per event on stderr, the event itself: `{"phase", "done", "total", …}` (a doctor adds `node`; `workspace exec` adds `exec` to its one `start` event). On a terminal it is one status line instead: `phase: <phase>  done/total`, in byte units (with a rate) for the byte phases `send`, `snapshot`, `hash`, `upload` and `download`, plain counts for every other phase; `LAYERFS_PROGRESS_JSON` set keeps the JSON lines on a terminal. `backup doctor` sends no progress |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too), prints no result and exits with the command's code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | a text option (`--message-from`, `--old-string-from`, `--new-string-from`, `--cursor-from`, `--path-from` and the others `layerfs help --json` lists under `switches`) | reads the option's value from a file |

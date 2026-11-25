@@ -7,6 +7,7 @@ pub mod help;
 pub mod output;
 pub mod parse;
 pub mod run;
+mod signals;
 pub mod view;
 mod words;
 pub mod worker;

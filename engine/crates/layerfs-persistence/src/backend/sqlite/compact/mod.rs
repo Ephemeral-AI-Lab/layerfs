@@ -43,7 +43,7 @@ mod space;
 mod staged;
 mod types;
 mod values;
-mod verify;
+pub(crate) mod verify;
 mod window;
 
 pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};

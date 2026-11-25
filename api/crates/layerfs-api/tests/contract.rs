@@ -174,7 +174,7 @@ fn every_call_is_migrated_or_pending_and_the_table_names_no_other() {
     let spec = read(SPEC);
     let pending = read(PENDING);
     let named: Vec<&str> = rows(&spec).into_iter().map(name).collect();
-    assert_eq!(named.len(), 81);
+    assert_eq!(named.len(), 82);
     let waiting = texts(at(&pending, "calls"));
     for call in &named {
         let migrated = layerfs_api::find(call).is_some_and(|entry| entry.form.is_some());
@@ -578,7 +578,7 @@ fn a_migrated_entry_declares_what_its_row_says() {
 
 #[test]
 fn every_row_s_long_example_shapes_to_its_long_and_short_keys() {
-    // one rule, no I/O: all 81 rows, migrated or not
+    // one rule, no I/O: all 82 rows, migrated or not
     let spec = read(SPEC);
     let mut seen = 0;
     for row in rows(&spec) {
@@ -640,7 +640,7 @@ fn every_row_s_long_example_shapes_to_its_long_and_short_keys() {
         }
         seen += 1;
     }
-    assert_eq!(seen, 81);
+    assert_eq!(seen, 82);
 }
 
 fn paged(row: &SdkValue) -> bool {
@@ -1234,4 +1234,72 @@ fn the_table_s_json_carries_each_migrated_entry_s_forms() {
     // every call of calls.json that is not pending
     let pending = texts(at(&read(PENDING), "calls")).len();
     assert_eq!(migrated, rows(&read(SPEC)).len() - pending);
+}
+
+/// `store.upgrade` (#804, family N): its row in calls.json declares
+/// `PROGRESS` and the answer the table entry gives, and `--with format` is
+/// a section of `store get` (its own map) and of each `store list` item.
+#[test]
+fn store_upgrade_and_the_format_section_are_the_specification_s() {
+    let spec = read(SPEC);
+    let said = row(&spec, "store.upgrade");
+    let entry = layerfs_api::find("store.upgrade").unwrap();
+    assert!(entry.progress());
+    assert_eq!(at(said, "progress"), &SdkValue::Bool(true));
+    assert_eq!(texts(at(at(said, "short"), "always")), ["outcome"]);
+    assert_eq!(
+        texts(at(said, "long")),
+        [
+            "outcome",
+            "store",
+            "engine",
+            "format_before",
+            "format_after",
+            "steps",
+            "warnings"
+        ]
+    );
+    let names: Vec<&str> = entry.args.iter().map(|arg| arg.name).collect();
+    assert_eq!(names, ["store"]);
+    // in help order, right after compact
+    let store: Vec<String> = layerfs_api::calls()
+        .iter()
+        .filter(|call| call.family == "store")
+        .map(|call| call.call.to_owned())
+        .collect();
+    let compact = store.iter().position(|call| call == "compact").unwrap();
+    assert_eq!(store[compact + 1], "upgrade");
+    // its refusals carry the fix #804 §2 names
+    let refusals = list(at(said, "refusals"));
+    let fix = |code: &str| {
+        (refusals.iter())
+            .find(|refusal| refusal.get_text("error") == Some(code))
+            .and_then(|refusal| refusal.get_text("fix"))
+            .map(str::to_owned)
+    };
+    assert_eq!(
+        fix("Unknown").as_deref(),
+        Some("layerfs store upgrade <store>")
+    );
+    assert_eq!(
+        fix("Unresolved").as_deref(),
+        Some("layerfs store upgrade <store>")
+    );
+    // the format section
+    assert!(texts(at(&spec, "with_values")).contains(&"format".to_owned()));
+    let get = layerfs_api::find("store.get").unwrap();
+    let section = get.with.iter().find(|s| s.name == "format").unwrap();
+    assert_eq!(section.place, Place::Own);
+    assert_eq!(section.keys, ["version", "latest", "status", "fix"]);
+    let list_call = layerfs_api::find("store.list").unwrap();
+    let section = list_call.with.iter().find(|s| s.name == "format").unwrap();
+    assert_eq!(section.place, Place::Item);
+    assert_eq!(section.keys, ["format"]);
+    // the cancel refusal folds into Failed, its own code kept as detail.code
+    let folded = layerfs_api::refusal::public(layerfs_home::outcome::refused(
+        "Cancelled",
+        "cancelled before COMMIT; nothing changed",
+    ));
+    assert_eq!(folded.code, "Failed");
+    assert_eq!(folded.detail.get_text("code"), Some("Cancelled"));
 }
