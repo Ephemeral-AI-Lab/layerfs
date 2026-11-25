@@ -342,7 +342,7 @@ pub(crate) struct Session {
     /// it: its pid and, when the role may see it, its start (microseconds
     /// since the epoch), which together name it even if the pid is reused.
     /// A lost reply's resolution ends it before the lane pass
-    /// (`Session::pass_lane`).
+    /// (`Session::pass_lane`), and only when the start is known.
     pub(crate) opened_backend: OnceLock<(i64, Option<i64>)>,
     /// The `catalog_incarnation` this session opened at (spec §5.2, §10); the
     /// generation fence in [`super::transaction::Session::run_as`] compares

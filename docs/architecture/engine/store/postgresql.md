@@ -1230,8 +1230,12 @@ trip), and `Session::pass_lane` on a quarantined session first runs
 `pg_terminate_backend(pid, lock_timeout)` on that backend, if it is still
 listed, which answers true only once the process has exited; not proven
 gone is `Busy`, and a pid a session lock showed on another backend (a
-transaction-pooling proxy) is `Unknown`. A `COMMIT` the backend made is then
-found by the attempt (`commit_by_attempt`); one it had not made is aborted
+transaction-pooling proxy) is `Unknown`. A start the check could not read
+(hidden from a role set with `-c role=`, or not decoded) is also `Unknown`,
+with nothing sent: the pid alone may since name another client's backend
+(`fused_commit.rs`, `postgresql_lost_backend_without_start_is_not_terminated`).
+A `COMMIT` the backend made is then found by the attempt
+(`commit_by_attempt`); one it had not made is aborted
 (`commit_lost_before_lane.rs`).
 
 The fence statement holds `AccessShareLock` on `history_meta` until
