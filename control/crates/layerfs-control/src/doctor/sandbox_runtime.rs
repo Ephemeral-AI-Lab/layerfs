@@ -1,7 +1,8 @@
 //! Saved-route prerequisites and process-identity observations only:
 //! `sandbox.runtime`, and a forward's `sandbox.route` and
 //! `sandbox.forward_process`.
-use super::{remove_fix, Checks};
+use super::{cause, remove_fix, Checks};
+use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::process::{self, LocalProcess};
 use layerfs_home::home::paths;
 use layerfs_home::state::BlockedBy;
@@ -24,6 +25,21 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
             "its saved forward names no address, or another machine than its own",
         );
         checks.fix("sandbox.route", remove_fix(name));
+        checks.evidence(
+            "sandbox.route",
+            SdkValue::map([
+                ("cause", SdkValue::text("forward_incomplete")),
+                (
+                    "forward_machine",
+                    SdkValue::opt_text(forward.machine().map(str::to_owned)),
+                ),
+                ("sandbox_machine", SdkValue::text(record.machine())),
+                (
+                    "address_present",
+                    SdkValue::Bool(forward.address().is_some()),
+                ),
+            ]),
+        );
         return false;
     }
     if !paths::worker_record(home, record.machine()).is_file() {
@@ -52,6 +68,15 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
                 "sandbox.forward_process",
                 "its forward's process has no complete identity (pid, start time, boot): whether it runs is not known",
             );
+            // no fix: nothing to run; the doctor only observes
+            checks.evidence(
+                "sandbox.forward_process",
+                SdkValue::map([
+                    ("pid_present", SdkValue::Bool(u32::try_from(pid).is_ok())),
+                    ("start_present", SdkValue::Bool(start.is_some())),
+                    ("boot_present", SdkValue::Bool(boot.is_some())),
+                ]),
+            );
             return false;
         };
         match observed(LocalProcess {
@@ -69,6 +94,13 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
                     "its forward's process ended, or its pid was reused",
                 );
                 checks.fix("sandbox.forward_process", remove_fix(name));
+                checks.evidence(
+                    "sandbox.forward_process",
+                    SdkValue::map([
+                        ("pid", SdkValue::Int(i64::from(pid))),
+                        ("observed", SdkValue::text("ended_or_reused")),
+                    ]),
+                );
                 return false;
             }
             Observation::Unknown => {
@@ -90,33 +122,40 @@ pub(super) fn forward(home: &Path, record: &SandboxRecord, checks: &mut Checks) 
 
 /// `sandbox.runtime` of a runtime on this kernel: false when it was seen
 /// gone, so its daemon is not dialled.
-pub(super) fn local(record: &SandboxRecord, checks: &mut Checks) -> bool {
+pub(super) fn local(home: &Path, record: &SandboxRecord, checks: &mut Checks) -> bool {
     const ID: &str = "sandbox.runtime";
     let Some(daemon) = record.daemon() else {
         checks.warning(
             ID,
             "its record names no runtime process: whether it runs is not known",
         );
+        // no fix: nothing to run; the doctor only observes
+        checks.evidence(ID, cause("no_daemon_record"));
         return true;
     };
     // another runtime has no process this check can match: it does not apply
     if !matches!(daemon.runtime(), Some("native" | "namespaces")) {
         return true;
     }
-    let process = daemon
-        .pid()
-        .and_then(|p| u32::try_from(p).ok())
-        .zip(daemon.start().and_then(|s| s.parse().ok()))
-        .zip(
-            daemon
-                .boot()
-                .filter(|s| s.len() == 32)
-                .and_then(|s| u128::from_str_radix(s, 16).ok()),
-        );
+    let pid = daemon.pid().and_then(|p| u32::try_from(p).ok());
+    let start = daemon.start().and_then(|s| s.parse::<u64>().ok());
+    let boot = (daemon.boot())
+        .filter(|s| s.len() == 32)
+        .and_then(|s| u128::from_str_radix(s, 16).ok());
+    let process = pid.zip(start).zip(boot);
     let Some(((pid, start), boot)) = process else {
         checks.warning(
             ID,
             "its runtime process has no complete identity (pid, start time, boot): whether it runs is not known",
+        );
+        // no fix: nothing to run; the doctor only observes
+        checks.evidence(
+            ID,
+            SdkValue::map([
+                ("pid_present", SdkValue::Bool(pid.is_some())),
+                ("start_present", SdkValue::Bool(start.is_some())),
+                ("boot_present", SdkValue::Bool(boot.is_some())),
+            ]),
         );
         return true;
     };
@@ -133,11 +172,32 @@ pub(super) fn local(record: &SandboxRecord, checks: &mut Checks) -> bool {
             true
         }
         Observation::Gone => {
-            checks.fail(
-                ID,
-                "its runtime process ended, or its pid, start time or boot changed",
-            );
+            // removing the Sandbox discards its Workspaces' uncommitted changes
+            let recorded = super::workspace_target::recorded(&record.dir(home)).len();
+            let mut message =
+                "its runtime process ended, or its pid, start time or boot changed".to_owned();
+            if recorded > 0 {
+                message.push_str(&format!(
+                    "; removing it loses the uncommitted changes of its {recorded} recorded Workspace(s)"
+                ));
+            }
+            checks.fail(ID, message);
             checks.fix(ID, remove_fix(record.name()));
+            checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("pid", SdkValue::Int(i64::from(pid))),
+                    (
+                        "runtime",
+                        SdkValue::opt_text(daemon.runtime().map(str::to_owned)),
+                    ),
+                    ("observed", SdkValue::text("ended_or_changed")),
+                    (
+                        "workspaces_recorded",
+                        SdkValue::Int(i64::try_from(recorded).unwrap_or(i64::MAX)),
+                    ),
+                ]),
+            );
             false
         }
         Observation::Unknown => {

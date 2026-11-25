@@ -4,7 +4,7 @@
 //! Workspaces) is read into this one. A report this build does not read
 //! leaves the Sandbox `not_checked` with `reason` `lost`.
 use super::workspace_target::{Listing, Seen};
-use super::{local, read, Budget, Checks, Observed};
+use super::{cause, local, read, Budget, Checks, Observed};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::{MachineName, SandboxName};
 use layerfs_home::outcome::{refused, Outcome};
@@ -47,6 +47,10 @@ pub(super) fn remote(
                 ROUTE,
                 format!("machine {machine}'s worker record is malformed or cannot be read"),
             );
+            // findings.md: restart the machine; its stop refuses while Sandboxes
+            // are on it and names `--force` itself
+            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, 0));
+            checks.evidence(ROUTE, cause("worker_record_unreadable"));
             return;
         }
     };
@@ -66,6 +70,8 @@ pub(super) fn remote(
                 ROUTE,
                 format!("machine {machine}'s worker refused its saved secret"),
             );
+            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, 0));
+            checks.evidence(ROUTE, cause("worker_refused_secret"));
             return;
         }
         Err(_) => {
@@ -91,6 +97,18 @@ pub(super) fn remote(
         checks.fix(
             COMPATIBLE,
             layerfs_machine::state::replace_worker(machine, on),
+        );
+        checks.evidence(
+            COMPATIBLE,
+            SdkValue::map([
+                ("machine", SdkValue::text(machine)),
+                ("worker", SdkValue::text(worker.hello.describe())),
+                ("expected", SdkValue::text(expected.describe())),
+                (
+                    "sandboxes_on",
+                    SdkValue::Int(i64::try_from(on).unwrap_or(i64::MAX)),
+                ),
+            ]),
         );
         return;
     }
