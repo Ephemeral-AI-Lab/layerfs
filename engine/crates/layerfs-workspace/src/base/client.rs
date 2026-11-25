@@ -10,9 +10,9 @@ use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectI
 use std::ops::Range;
 use std::sync::Arc;
 
-const DEMAND_IDS: usize = 4096;
-const DEMAND_BYTES: usize = 32 * 1024 * 1024;
-const CANONICAL_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const DEMAND_IDS: usize = 4096;
+pub(super) const DEMAND_BYTES: usize = 32 * 1024 * 1024;
+pub(super) const CANONICAL_BYTES: usize = 16 * 1024 * 1024;
 /// Largest object a memory-only read copies. Such a read runs inside an owner
 /// job; a larger object is left to the ordinary demand outside it.
 const RESIDENT_BYTES: usize = 64 * 1024;
@@ -137,10 +137,10 @@ pub struct ClientWork {
 /// before upstream returns remains that provider's responsibility.
 pub struct CanonicalClient {
     source: Arc<dyn AuthenticatedObjects + Send + Sync>,
-    cache: Arc<CanonicalCache>,
-    lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
+    pub(super) cache: Arc<CanonicalCache>,
+    pub(super) lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
     /// Answers only from the cache: no upstream demand is ever made.
-    resident: bool,
+    pub(super) resident: bool,
 }
 /// The upstream of a memory-only client. It is never asked.
 struct NoUpstream;
@@ -384,7 +384,7 @@ impl CanonicalClient {
     }
     /// Demands the `ids` the cache lacks in one upstream batch and caches
     /// them, checked as any demanded object is; a failed batch caches none.
-    fn fetch_ahead(&self, ids: &[ObjectId]) -> ContentResult<()> {
+    pub(super) fn fetch_ahead(&self, ids: &[ObjectId]) -> ContentResult<()> {
         let wanted: Vec<ObjectId> = {
             let mut state = self.state()?;
             let wanted: Vec<ObjectId> = ids
@@ -447,7 +447,7 @@ impl CanonicalClient {
     pub(crate) const fn is_resident(&self) -> bool {
         self.resident
     }
-    fn state(&self) -> ContentResult<std::sync::MutexGuard<'_, crate::cache::State>> {
+    pub(super) fn state(&self) -> ContentResult<std::sync::MutexGuard<'_, crate::cache::State>> {
         self.cache
             .state
             .lock()

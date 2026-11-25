@@ -1,5 +1,6 @@
 //! Exact captured namespace normalization and its sealed streamed row source.
 mod cursor;
+mod files;
 mod inodes;
 mod normalize;
 mod records;

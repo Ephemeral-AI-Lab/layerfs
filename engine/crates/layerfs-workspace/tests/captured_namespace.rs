@@ -200,9 +200,16 @@ fn deleted_files_directories_and_symlinks_leave_the_result() {
     let work = built.work;
     assert_eq!(work.fresh_serials, 0);
     assert_eq!(work.symlinks, 0);
-    // Only the surviving file with a changed count reaches the file
-    // constructor, and its content is the base content.
-    assert_eq!((work.files_constructed, work.files_unchanged), (1, 1));
+    // Only the surviving file with a changed count reaches a file decision,
+    // and its content is the base content: kept with no read (#810 F5).
+    assert_eq!(
+        (
+            work.files_constructed,
+            work.files_unchanged,
+            work.files_kept
+        ),
+        (0, 0, 1)
+    );
     assert_eq!(
         value(store, built.root, 8).content_root,
         value(store, b.fixture.root, 8).content_root
@@ -351,8 +358,16 @@ fn a_deep_fresh_chain_ends_in_aliases_and_a_moved_base_directory() {
     assert_eq!(built.walked.serial(&format!("{path}/cache/state")), 8);
     let work = built.work;
     assert_eq!(work.fresh_serials, 49);
-    // The new file, and the base file whose link count changed.
-    assert_eq!((work.files_constructed, work.files_unchanged), (2, 1));
+    // The new file is constructed; the base file whose link count changed
+    // keeps its content with no read (#810 F5).
+    assert_eq!(
+        (
+            work.files_constructed,
+            work.files_unchanged,
+            work.files_kept
+        ),
+        (1, 0, 1)
+    );
     built.release(&b);
 }
 

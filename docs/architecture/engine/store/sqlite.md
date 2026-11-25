@@ -556,6 +556,13 @@ transaction per Commit and that each race and the epoch refusal wrote
 nothing. Not tested on SQLite: `Busy` from another process's writer lock
 and an epoch change during the transaction (the writer lock excludes it).
 
+A Commit's Workspace reader opens the changed base files of one captured
+inode page together and reads nothing for a file whose bytes the capture
+left (#810 F5, [Construction](../commit/construction.md#base-files-of-one-inode-page-810-f5)):
+on the kit's C4 shape (1,000 edits) its statements went from 726 to 1, on
+C3 (1,000 `chmod`/`touch`) from 318 to 0, with the same roots and stored bytes
+(`commit_batched_base_files.rs` pins the demands and roots on both backends).
+
 ## Acquisition
 
 `AcquisitionProvider` gives Project Init indexed working tables in the same

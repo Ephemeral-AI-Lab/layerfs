@@ -10,6 +10,16 @@ impl BaseView {
     /// Resolves the exact immutable serial. Only logical absence means a new
     /// file; unavailable/denied/malformed provider objects retain their cause.
     pub(crate) fn captured_file(&self, serial: u64) -> WorkspaceResult<Option<BoundFile>> {
+        self.captured_file_in(serial, None)
+    }
+    /// [`Self::captured_file`] with a window's provided lengths: a root the
+    /// window holds takes its length from there, asked of the provider for
+    /// this window, instead of from a demand of its own.
+    pub(crate) fn captured_file_in(
+        &self,
+        serial: u64,
+        window: Option<&crate::base::batch::BaseFiles>,
+    ) -> WorkspaceResult<Option<BoundFile>> {
         let value = match self.inode(serial) {
             Ok(value) => value.value,
             Err(ContentError::PathNotFound) => return Ok(None),
@@ -18,7 +28,10 @@ impl BaseView {
         if value.kind != InodeKind::RegularFile {
             return Err(ContentError::WrongLogicalRole.into());
         }
-        let length = self.client().provided_length(value.content_root)?;
+        let length = match window.and_then(|files| files.length(value.content_root)) {
+            Some(length) => length,
+            None => self.client().provided_length(value.content_root)?,
+        };
         let view = self.file(value)?;
         if view.logical_len() != length {
             return Err(WorkspaceError::Content(ContentError::LengthMismatch {
