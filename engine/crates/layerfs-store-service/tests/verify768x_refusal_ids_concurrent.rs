@@ -24,7 +24,10 @@
 //! pack id is a refused one (never reused, by either service); both counters
 //! stand past them; no duplicated allocation. A round with no other service
 //! also checks that the unused block came back: the counter stands right
-//! after the refused ordinals. At the end the Store audit and amcheck.
+//! after the refused ordinals (P0001). After a Busy refusal (40001) the
+//! handle keeps the block instead (#768 review 6b): the counter stays past
+//! it, and the follow-up Commit's values start right after the refused
+//! ordinals with no reservation. At the end the Store audit and amcheck.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it. SQLite is not run
 //! here: its triggers cannot hold a transaction open while another
@@ -263,13 +266,25 @@ fn a_refused_fused_commit_never_lends_its_ids_to_another_service() {
             "{label}: a definite refusal"
         );
         let (lo, hi) = ords.unwrap_or_else(|| panic!("{label}: the refused ordinals"));
-        if other == Other::None {
+        // A Busy refusal (40001) sends no release: its handle keeps the
+        // unused block for the Workspace's next Commit (#768 review 6b).
+        let busy = code == "40001";
+        if other == Other::None && !busy {
             // The unused block came back: the counter stands right after
             // the ordinals the refused publication assigned.
             assert_eq!(
                 after_refusal.next_ordinal,
                 hi + 1,
                 "{label}: block returned"
+            );
+        }
+        if other == Other::None && busy {
+            // Kept, not returned: the counter stands past the block, so no
+            // other handle can be lent any of it.
+            assert!(
+                after_refusal.next_ordinal > hi + 1
+                    && after_refusal.next_ordinal >= before.next_ordinal,
+                "{label}: block kept by the handle"
             );
         }
         if other != Other::None {
@@ -285,6 +300,21 @@ fn a_refused_fused_commit_never_lends_its_ids_to_another_service() {
             "{label}: follow-up {again:?}"
         );
         let blocks = verify768x::value_blocks(&store);
+        if other == Other::None && busy {
+            // The kept block served the follow-up: its values start right
+            // after the refused ordinals, and it reserved nothing (its
+            // finish may rewind the counter past its kept 128, never raise
+            // it).
+            assert!(
+                blocks.iter().any(|(first, _)| *first == hi + 1),
+                "{label}: follow-up from the kept block: {blocks:?}"
+            );
+            let follow = alloc(&store).next_ordinal;
+            assert!(
+                follow <= after_refusal.next_ordinal,
+                "{label}: follow-up reserved nothing: {follow}"
+            );
+        }
         let reused: Vec<_> = blocks
             .iter()
             .filter(|(first, last)| *first <= hi && lo <= *last)
