@@ -18,7 +18,9 @@ use layerfs_persistence::{read_heads, PersistenceConfig, SqliteHandles, SqlitePe
 use rusqlite::Connection;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use support::upgrade::{fixtures, manifest_branches, sqlite_v2_copy, store_state, unhex};
+use support::upgrade::{
+    fixtures, manifest_branches, sqlite_fixture_copy, sqlite_v2_copy, store_state, unhex, SQLITE_V2,
+};
 use support::Temp;
 
 fn run(
@@ -73,8 +75,16 @@ fn ids(path: &Path) -> Vec<Vec<u8>> {
 
 #[test]
 fn golden_upgrade_keeps_every_head_and_commit() {
+    for (variant, folder) in SQLITE_V2 {
+        golden(variant, folder);
+    }
+}
+
+fn golden(variant: &str, folder: &str) {
     let temp = Temp::new("upgrade-golden");
-    let path = sqlite_v2_copy(temp.path());
+    let path = sqlite_fixture_copy(temp.path(), folder);
+    let evidence = sqlite_format_evidence(&path).unwrap();
+    assert_eq!(evidence.variant.as_deref(), Some(variant));
     assert_eq!(sqlite_format(&path).unwrap().status, FormatStatus::Outdated);
     let heads = read_heads(&path).unwrap();
     let before_ids = ids(&path);
@@ -104,7 +114,7 @@ fn golden_upgrade_keeps_every_head_and_commit() {
     // The current build opens it and answers every head and Commit the old
     // build named at capture.
     let handles = SqliteHandles::open_read_only(config(&path), &binding(&path), [1; 32]).unwrap();
-    let manifest = manifest_branches(&fixtures().join("sqlite/v2/manifest.json"));
+    let manifest = manifest_branches(&fixtures().join(folder).join("manifest.json"));
     assert!(!manifest.is_empty());
     for (project, branch, head, commits) in manifest {
         let found = handles
@@ -167,8 +177,14 @@ fn golden_upgrade_keeps_every_head_and_commit() {
 
 #[test]
 fn upgraded_store_takes_commits_with_an_attempt_and_passes_the_doctor() {
+    for (_, folder) in SQLITE_V2 {
+        works(folder);
+    }
+}
+
+fn works(folder: &str) {
     let temp = Temp::new("upgrade-works");
-    let path = sqlite_v2_copy(temp.path());
+    let path = sqlite_fixture_copy(temp.path(), folder);
     run(&path, &AtomicBool::new(false), None).0.unwrap();
     let binding = binding(&path);
     let doctor = SqliteHandles::open_diagnostic(&path, &binding, [1; 32])
@@ -237,8 +253,14 @@ fn upgraded_store_takes_commits_with_an_attempt_and_passes_the_doctor() {
 
 #[test]
 fn the_upgraded_schema_is_the_frozen_target() {
+    for (_, folder) in SQLITE_V2 {
+        exact_schema(folder);
+    }
+}
+
+fn exact_schema(folder: &str) {
     let temp = Temp::new("upgrade-schema");
-    let path = sqlite_v2_copy(temp.path());
+    let path = sqlite_fixture_copy(temp.path(), folder);
     run(&path, &AtomicBool::new(false), None).0.unwrap();
     let c = Connection::open(&path).unwrap();
     let sql = |name: &str| -> String {
@@ -250,9 +272,9 @@ fn the_upgraded_schema_is_the_frozen_target() {
     let commit = sql("commit");
     assert!(
         commit.contains(
-            "    history_serial INTEGER NOT NULL DEFAULT 0, attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16),\n    FOREIGN KEY"
+            "history_serial INTEGER NOT NULL DEFAULT 0, attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16),\n    FOREIGN KEY"
         ),
-        "{commit}"
+        "{folder}: {commit}"
     );
     assert_eq!(
         sql("commit_attempt"),
@@ -385,9 +407,12 @@ fn another_open_connection_is_in_use_and_a_held_lane_is_busy() {
 
 #[test]
 fn a_cancel_in_each_phase_before_commit_changes_nothing_and_at_commit_is_too_late() {
-    for at in SQLITE_PHASES {
+    for ((_, folder), at) in SQLITE_V2
+        .iter()
+        .flat_map(|fixture| SQLITE_PHASES.iter().map(move |at| (*fixture, *at)))
+    {
         let temp = Temp::new("upgrade-cancel");
-        let path = sqlite_v2_copy(temp.path());
+        let path = sqlite_fixture_copy(temp.path(), folder);
         let state = store_state(&path);
         let cancel = AtomicBool::new(false);
         let request = UpgradeRequest {
@@ -411,9 +436,9 @@ fn a_cancel_in_each_phase_before_commit_changes_nothing_and_at_commit_is_too_lat
 #[test]
 fn a_failpoint_after_each_statement_before_commit_rolls_back() {
     // Statements: BEGIN, the step's eleven, COMMIT (13).
-    for n in 1..=12 {
+    for (n, (_, folder)) in (1..=12).flat_map(|n| SQLITE_V2.map(|f| (n, f))) {
         let temp = Temp::new("upgrade-failpoint");
-        let path = sqlite_v2_copy(temp.path());
+        let path = sqlite_fixture_copy(temp.path(), folder);
         let state = store_state(&path);
         let error = run(&path, &AtomicBool::new(false), Some(n)).0.unwrap_err();
         assert_eq!(error, UpgradeError::Failed(format!("failpoint {n}")));
@@ -439,6 +464,14 @@ fn format_evidence_names_the_variant() {
         (newer.version, newer.status),
         (Some(4), FormatStatus::Newer)
     );
+    raw(&path, "PRAGMA user_version=200");
+    let beyond = sqlite_format(&path).unwrap();
+    assert_eq!((beyond.version, beyond.status), (None, FormatStatus::Newer));
+    let UpgradeError::Unsupported(text) = run(&path, &AtomicBool::new(false), None).0.unwrap_err()
+    else {
+        panic!("user_version 200 is refused Unsupported")
+    };
+    assert!(text.contains(layerfs_persistence::upgrade::NEWER), "{text}");
     raw(&path, "PRAGMA user_version=22");
     assert_eq!(
         sqlite_format(&path).unwrap().status,
@@ -513,4 +546,31 @@ fn sqlite_checks_skip_check_constraints_while_they_are_ignored() {
             .unwrap();
         assert!(off.contains("CHECK constraint failed"), "{pragma}: {off}");
     }
+}
+
+/// The doctor's variant reads what the upgrade would see: a committed WAL
+/// frame that changed the recorded source (not yet checkpointed) makes the
+/// Store no longer variant (d), though the main file alone still says so.
+#[test]
+fn format_evidence_reads_through_the_wal() {
+    let temp = Temp::new("upgrade-evidence-wal");
+    let path = sqlite_v2_copy(temp.path());
+    let writer = Connection::open(&path).unwrap();
+    writer
+        .execute_batch(
+            "PRAGMA wal_autocheckpoint=0; \
+             UPDATE history_meta SET schema_source=schema_source||' '",
+        )
+        .unwrap();
+    let evidence = sqlite_format_evidence(&path).unwrap();
+    assert_eq!((evidence.raw, evidence.variant), (42, None));
+    drop(writer);
+    let reverted = sqlite_v2_copy(temp.path());
+    assert_eq!(
+        sqlite_format_evidence(&reverted)
+            .unwrap()
+            .variant
+            .as_deref(),
+        Some("d")
+    );
 }

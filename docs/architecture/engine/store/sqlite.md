@@ -569,9 +569,9 @@ It opens one raw connection (DEFENSIVE off, `busy_timeout=0`), sets
 | --- | --- | --- |
 | (before) | the first read takes the exclusive file lock: every open WAL connection holds a SHARED lock, so any other opener refuses it; then `Writer::try_acquire` | `InUse`; `Busy` |
 | `check` | `BEGIN IMMEDIATE`; `application_id` and `user_version` classified (2 upgrades, 3 answers `current` with no write, anything else `Unsupported` by name, a newer one said as newer); no live or uncertain `gc_intent` row; the before values: compaction's Commit tuple, the live-heads digest, the Commit count, `page_count`, `freelist_count` | `Unsupported`, `Busy` |
-| `convert` | the chain: step 2 → 3 recognizes source (d) exactly (the recorded source equals the frozen one for its `user_version`, the recorded definition equals the live one, each live row is the frozen (d) row or its position-migrated form) and runs `ADD COLUMN attempt`, `CREATE UNIQUE INDEX commit_attempt`, `ignore_check_constraints=ON`, the two `writable_schema` CHECK rewrites, `writable_schema=RESET`, `user_version`, `store_policy`, `history_meta` (version, frozen schema-3 source, live definition), `ignore_check_constraints=OFF` | `Unsupported`, `Failed` |
+| `convert` | the chain: step 2 → 3 recognizes source (d) exactly (the recorded source equals the frozen one for its `user_version`, the recorded definition equals the live one, each live row is the frozen (d) row, variant `d`, or its position-migrated form, variant `d-appended`) and runs `ADD COLUMN attempt`, `CREATE UNIQUE INDEX commit_attempt`, `ignore_check_constraints=ON`, the two `writable_schema` CHECK rewrites, `writable_schema=RESET`, `user_version`, `store_policy`, `history_meta` (version, frozen schema-3 source, live definition), `ignore_check_constraints=OFF` | `Unsupported`, `Failed` |
 | `verify` | §7 on the same transaction: before values unchanged; the live rows equal the frozen target (the exact rows before with the attempt text after `history_serial`, the new CHECK versions and the index); the open-time checks (`schema::check`, the `history_meta` and `store_policy` comparison against this build's source); `quick_check` of `sqlite_schema`, `history_meta` and `store_policy`; no page freed | `Failed` naming the check |
-| `commit` | the cancel watcher stops; `COMMIT`; `wal_checkpoint(TRUNCATE)`; close; release the lane; any sidecar left; `open_read_only` and `open_diagnostic` with this build | after COMMIT only warnings |
+| `commit` | the cancel watcher stops (the commit path sets its stop flag under the lock the watcher holds around each `interrupt()`, and SQLite clears an earlier interrupt when the next statement starts, so `COMMIT` cannot be interrupted); `COMMIT` (refused with the transaction still open: rolled back, `Failed`; otherwise uncertain: `Unknown`); `wal_checkpoint(TRUNCATE)`; close; release the lane; any sidecar left; `open_read_only` and `open_diagnostic` with this build | after COMMIT only warnings |
 
 Any failure before COMMIT rolls back, closes the connection (never reused
 after a `writable_schema` change) and releases the lane. A cancel flag set
@@ -581,3 +581,7 @@ A test-only failpoint (`UpgradeRequest::failpoint`, statement `n` counted
 from `BEGIN` to `COMMIT`, 13 statements for step 2 → 3) stops the run, and
 with `LAYERFS_UPGRADE_CRASH_GATE` naming a Unix socket reports there and
 blocks until the harness kills the process, as compaction's crash gate does.
+
+The doctor's evidence (`sqlite_format_evidence`) names the same variant:
+it reads the main file on an immutable connection when the WAL holds no
+committed frame, and otherwise on a read-only connection that sees the WAL.

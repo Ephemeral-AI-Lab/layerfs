@@ -9,7 +9,7 @@ use super::step::{self, literal, Context, FLOOR};
 use crate::backend::postgresql::session::connection::{Connector, Dial};
 use crate::upgrade::{
     run as run_chain, Format, FormatEvidence, FormatStatus, UpgradeError, UpgradeOutcome,
-    UpgradeReport, UpgradeRequest, UpgradeWork, POSTGRESQL_LATEST,
+    UpgradeReport, UpgradeRequest, UpgradeWork, NEWER, POSTGRESQL_LATEST,
 };
 use crate::PostgresSelection;
 use layerfs_history::CatalogId;
@@ -124,12 +124,10 @@ fn refusal(checked: &Check) -> Option<UpgradeError> {
             checked.policy_version
         ),
         v if v > POSTGRESQL_LATEST => format!(
-            "PostgreSQL Store schema version {v} is newer than this build, which writes \
+            "PostgreSQL Store schema version {v} is {NEWER}, which writes \
              schema version {POSTGRESQL_LATEST}"
         ),
-        2 => "PostgreSQL Store schema version 2 (before 2.0's ancestor lists and pack \
-              directories, #758): this build has no upgrade for it"
-            .to_owned(),
+        2 => crate::backend::records::POSTGRES_SCHEMA_2.to_owned(),
         1 => "PostgreSQL Store schema version 1: this build has no upgrade for it".to_owned(),
         v => format!("PostgreSQL Store schema version {v} is not a format this build recognizes"),
     };
@@ -199,8 +197,15 @@ pub(crate) fn upgrade(
         scope.spawn(|| {
             while !done.load(Ordering::SeqCst) {
                 if request.cancel.load(Ordering::SeqCst) {
-                    // One cancel request; the answer still follows the reply.
-                    let _ = connector.cancel(&token);
+                    // One cancel request, on a thread of its own that nobody
+                    // joins: its dial has no time limit of ours, and the
+                    // answer follows the reply, never the cancel.
+                    let (connector, token) = (connector.clone(), token.clone());
+                    let _ = std::thread::Builder::new()
+                        .name("layerfs-upgrade-cancel".to_owned())
+                        .spawn(move || {
+                            let _ = connector.cancel(&token);
+                        });
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(5));
@@ -241,7 +246,7 @@ fn prepare(
             checked.server_version_num
         )));
     }
-    if checked.gc_ops != 0 {
+    if checked.gc_ops > 0 {
         return Err(UpgradeError::Busy(
             "an unsettled gc_op row (a compaction) names this Store".to_owned(),
         ));
@@ -301,7 +306,8 @@ set_config('synchronous_commit', 'on', true);\n\
 DO $lfs_do$BEGIN IF NOT pg_try_advisory_xact_lock({key}) THEN RAISE EXCEPTION USING ERRCODE='55P03', \
 MESSAGE='the Store-wide GC key is held: a mount or GC op uses the Store'; END IF; END$lfs_do$;\n\
 LOCK TABLE \"commit\", history_meta, store_policy IN ACCESS EXCLUSIVE MODE NOWAIT;\n\
-SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE NOWAIT;\n\
+DO $lfs_do$BEGIN PERFORM 1 FROM store_lane WHERE id = 1 FOR UPDATE NOWAIT; IF NOT FOUND THEN \
+RAISE EXCEPTION USING ERRCODE='{VERIFY}', MESSAGE='check: store_lane has no row'; END IF; END$lfs_do$;\n\
 DO $lfs_do$BEGIN\n\
 IF (SELECT schema_version FROM history_meta WHERE id=1) IS DISTINCT FROM 3 \
 OR (SELECT schema_version FROM store_policy WHERE id=1) IS DISTINCT FROM 3 \

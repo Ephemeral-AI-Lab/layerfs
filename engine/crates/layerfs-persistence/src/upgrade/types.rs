@@ -5,6 +5,9 @@ use std::sync::atomic::AtomicBool;
 pub const SQLITE_LATEST: i64 = 3;
 /// The PostgreSQL format this build writes.
 pub const POSTGRESQL_LATEST: i64 = 4;
+/// The words every refusal of a Store written by a newer build carries
+/// (never "outdated"); front ends tell a newer Store by them.
+pub const NEWER: &str = "newer than this build";
 /// A SQLite upgrade's phases, in order; one event as each starts.
 pub const SQLITE_PHASES: [&str; 4] = ["check", "convert", "verify", "commit"];
 /// A PostgreSQL upgrade's phases, in order.

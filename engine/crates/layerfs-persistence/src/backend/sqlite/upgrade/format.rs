@@ -5,13 +5,17 @@
 //! writes nothing, so it works on a Store this build refuses and beside a
 //! live writer (a frame being written fails its checksum and is not used).
 use crate::backend::sqlite::schema::APPLICATION_ID;
-use crate::upgrade::{Format, FormatStatus, UpgradeError, SQLITE_LATEST};
+use crate::upgrade::{Format, FormatStatus, UpgradeError, NEWER, SQLITE_LATEST};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// The schema base of each SQLite format's `user_version` range: `+6` with
 /// the acquisition tables, `+0/1/2` for the pack layout (rule 4).
 const BASES: [(i64, i64); 3] = [(1, 16), (2, 36), (3, 56)];
+
+/// The highest `user_version` this build knows (schema 3 with acquisition
+/// tables, layout 2).
+const HIGHEST: i64 = 64;
 
 /// `(schema, acquisition * 3 + layout)` of a `user_version` this family of
 /// encodings names: schema 1, 2 and 3, and a later schema on the same `+20`
@@ -47,6 +51,9 @@ pub(crate) enum Header {
     Transient,
     /// 1–15: the retired 2.0 development versions.
     Retired,
+    /// Above every encoding this build knows (> 64) but not on the `+20`
+    /// scheme: written by a newer build all the same.
+    Beyond,
     /// Any other value.
     Unrecognized,
 }
@@ -61,6 +68,7 @@ pub(crate) fn classify(application_id: i64, user_version: i64) -> Header {
         39..=41 | 45..=47 => Header::Transient,
         _ => match decode(user_version) {
             Some((schema, _)) => Header::Schema(schema),
+            None if user_version > HIGHEST => Header::Beyond,
             None => Header::Unrecognized,
         },
     }
@@ -72,6 +80,7 @@ pub(crate) fn format(header: Header) -> Format {
         Header::Schema(SQLITE_LATEST) => (Some(SQLITE_LATEST), FormatStatus::Current),
         Header::Schema(2) => (Some(2), FormatStatus::Outdated),
         Header::Schema(v) if v > SQLITE_LATEST => (Some(v), FormatStatus::Newer),
+        Header::Beyond => (None, FormatStatus::Newer),
         Header::Schema(v) => (Some(v), FormatStatus::Unsupported),
         Header::Foreign | Header::Transient | Header::Retired | Header::Unrecognized => {
             (None, FormatStatus::Unsupported)
@@ -95,8 +104,12 @@ pub(crate) fn refusal(header: Header, user_version: i64) -> Option<UpgradeError>
              #91): this build has no upgrade for it"
         ),
         Header::Schema(v) if v > SQLITE_LATEST => format!(
-            "SQLite Store format {v} (user_version {user_version}) is newer than this build, \
-             which writes format {SQLITE_LATEST}"
+            "SQLite Store format {v} (user_version {user_version}) is {NEWER}, which writes \
+             format {SQLITE_LATEST}"
+        ),
+        Header::Beyond => format!(
+            "SQLite Store user_version {user_version} is {NEWER}, which writes format \
+             {SQLITE_LATEST}"
         ),
         Header::Schema(v) => format!("SQLite Store format {v} has no upgrade step"),
         Header::Transient => format!(
@@ -122,7 +135,7 @@ pub(crate) fn read_header(path: &Path) -> Result<(i64, i64), UpgradeError> {
     let mut file = std::fs::File::open(path).map_err(failed)?;
     let read = read_full(&mut file, &mut head).map_err(failed)?;
     let main = (read == 100 && &head[..16] == b"SQLite format 3\0").then_some(head);
-    let page = match wal_page_one(&with_suffix(path, "-wal")).map_err(failed)? {
+    let page = match wal_scan(&with_suffix(path, "-wal")).map_err(failed)?.0 {
         Some(page) => page,
         None => match main {
             Some(head) => head.to_vec(),
@@ -158,38 +171,45 @@ pub(crate) fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// Whether the WAL beside the Store at `path` holds a committed frame: the
+/// main file alone is then not the Store's state.
+pub(crate) fn wal_committed(path: &Path) -> std::io::Result<bool> {
+    Ok(wal_scan(&with_suffix(path, "-wal"))?.1)
+}
+
 /// The image of page 1 in the newest committed frame of the WAL at `path`,
-/// if any: frames are valid while their salts match the WAL header and
-/// their cumulative checksums verify (SQLite's own recovery rule), and a
-/// page image counts only once a later or same commit frame ends it.
-fn wal_page_one(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+/// if any, and whether any frame is committed: frames are valid while their
+/// salts match the WAL header and their cumulative checksums verify
+/// (SQLite's own recovery rule), and a page image counts only once a later
+/// or same commit frame ends it.
+fn wal_scan(path: &Path) -> std::io::Result<(Option<Vec<u8>>, bool)> {
     let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((None, false)),
         Err(e) => return Err(e),
     };
     let mut header = [0u8; 32];
     if read_full(&mut file, &mut header)? < 32 {
-        return Ok(None);
+        return Ok((None, false));
     }
     let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
     let magic = be(&header[0..4]);
     let big = match magic {
         0x377f_0682 => false,
         0x377f_0683 => true,
-        _ => return Ok(None),
+        _ => return Ok((None, false)),
     };
     let page_size = be(&header[8..12]) as usize;
     if !(512..=65536).contains(&page_size) || !page_size.is_power_of_two() {
-        return Ok(None);
+        return Ok((None, false));
     }
     let mut sum = checksum(&header[..24], big, (0, 0));
     if sum != (be(&header[24..28]), be(&header[28..32])) {
-        return Ok(None);
+        return Ok((None, false));
     }
     let salts = &header[16..24];
     let mut frame = vec![0u8; 24 + page_size];
-    let (mut pending, mut committed) = (None, None);
+    let (mut pending, mut committed, mut any) = (None, None, false);
     while read_full(&mut file, &mut frame)? == frame.len() {
         if &frame[8..16] != salts {
             break;
@@ -202,11 +222,14 @@ fn wal_page_one(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
         if be(&frame[0..4]) == 1 {
             pending = Some(frame[24..].to_vec());
         }
-        if be(&frame[4..8]) != 0 && pending.is_some() {
-            committed = pending.take();
+        if be(&frame[4..8]) != 0 {
+            any = true;
+            if pending.is_some() {
+                committed = pending.take();
+            }
         }
     }
-    Ok(committed)
+    Ok((committed, any))
 }
 
 /// SQLite's WAL checksum over `data` (a multiple of 8 bytes), continuing `s`.

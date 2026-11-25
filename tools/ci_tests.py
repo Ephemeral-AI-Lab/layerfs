@@ -88,6 +88,10 @@ SLOW = {
     # A provider call waits out its own 10 s and 30 s bounds (cp-platform
     # fix of tool::run's deadline), estimated from those bounds, 2026-11-23.
     ("layerfs-platform", "machine_deadline"): 31.0,
+    # `store upgrade` on the PostgreSQL fixture, one restore per case, and
+    # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
+    ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,
+    ("layerfs-persistence", "store_upgrade_postgresql_wire"): 12.16,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

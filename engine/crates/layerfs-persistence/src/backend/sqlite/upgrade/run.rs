@@ -14,7 +14,8 @@ use crate::upgrade::{
 use crate::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// [`crate::upgrade::sqlite_format_evidence`].
@@ -32,21 +33,36 @@ pub(crate) fn evidence(path: &Path) -> Result<FormatEvidence, UpgradeError> {
     })
 }
 
-/// The recorded-source variant of a schema-2 Store, read on an immutable
-/// connection (no lock, no sidecar): `"d"` when it records (d) exactly.
-/// Evidence only: an unreadable source is no variant.
+/// The recorded-source variant of a schema-2 Store, as step 2 -> 3 would
+/// recognize it (`"d"` or `"d-appended"`). When the WAL holds no committed
+/// frame the main file is the whole state and is read on an immutable
+/// connection (no lock, no sidecar); otherwise on a plain read-only
+/// connection, which sees the WAL. Evidence only: an unreadable Store is no
+/// variant.
 fn recorded_variant(path: &Path, user_version: i64) -> Option<String> {
-    let uri = crate::backend::sqlite::compact::verify::immutable_uri(path);
     let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI;
-    let connection = Connection::open_with_flags(uri, flags).ok()?;
-    let source: String = connection
+    let connection = match super::format::wal_committed(path).ok()? {
+        false => {
+            let uri = crate::backend::sqlite::compact::verify::immutable_uri(path);
+            Connection::open_with_flags(uri, flags).ok()?
+        }
+        true => Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?,
+    };
+    connection.busy_timeout(Duration::ZERO).ok()?;
+    connection.execute_batch("BEGIN").ok()?;
+    let (source, definition): (String, String) = connection
         .query_row(
-            "SELECT schema_source FROM history_meta WHERE id=1",
+            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
             [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .ok()?;
-    (source == frozen::source_v2(user_version)).then(|| "d".to_owned())
+    let live = frozen::rows(&connection).ok()?;
+    if source != frozen::source_v2(user_version) || definition != frozen::definition(&live) {
+        return None;
+    }
+    let (fresh, migrated) = frozen::rows_v2(user_version).ok()?;
+    frozen::recognize_rows(&live, &fresh, &migrated).map(str::to_owned)
 }
 
 /// The raw connection: read-write, no mutex, DEFENSIVE off (the step
@@ -107,22 +123,31 @@ pub(crate) fn upgrade(
         }
         Err(e) => return Err(UpgradeError::Failed(format!("the Writer lane: {e:?}"))),
     };
-    let stop = AtomicBool::new(false);
+    // `stopped` is held around every `interrupt()`: once the commit path
+    // has set it (under the lock) no interrupt can be in flight or follow,
+    // and one issued earlier, between statements, is cleared by SQLite when
+    // the next statement starts with none active, so COMMIT cannot be
+    // interrupted.
+    let stopped = Mutex::new(false);
     let interrupt = connection.get_interrupt_handle();
     let outcome = std::thread::scope(|scope| {
-        let watcher = scope.spawn(|| {
-            while !stop.load(Ordering::SeqCst) {
+        let watcher = scope.spawn(|| loop {
+            {
+                let stopped = stopped.lock().unwrap_or_else(|e| e.into_inner());
+                if *stopped {
+                    return;
+                }
                 if request.cancel.load(Ordering::SeqCst) {
                     interrupt.interrupt();
                 }
-                std::thread::sleep(Duration::from_millis(5));
             }
+            std::thread::sleep(Duration::from_millis(5));
         });
         let stop_watcher = || {
-            stop.store(true, Ordering::SeqCst);
+            *stopped.lock().unwrap_or_else(|e| e.into_inner()) = true;
         };
         let result = transaction(&connection, application_id, request, phase, stop_watcher);
-        stop.store(true, Ordering::SeqCst);
+        stop_watcher();
         let _ = watcher.join();
         result
     });
@@ -221,7 +246,10 @@ fn transaction(
     }
     context.user_version = user_version;
     let steps = step::steps();
-    let format_before = FLOOR;
+    let format_before = match header {
+        Header::Schema(schema) => schema,
+        _ => FLOOR,
+    };
     verify::no_live_intent(connection)?;
     let before = verify::values(connection)?;
     let rows_before = verify::rows(connection)?;
@@ -254,6 +282,12 @@ fn transaction(
             UpgradeError::Failed(text) if text.starts_with("failpoint") => {
                 UpgradeError::Unknown(text)
             }
+            // SQLite keeps the transaction open after a COMMIT it refused
+            // (autocommit still off): provably not committed, and the
+            // failure path rolls it back.
+            other if !connection.is_autocommit() => UpgradeError::Failed(format!(
+                "COMMIT was refused with the transaction still open, rolled back: {other:?}"
+            )),
             other => UpgradeError::Unknown(format!("COMMIT: {other:?}")),
         });
     }

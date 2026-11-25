@@ -13,6 +13,6 @@ pub use entry::{
 };
 pub use types::{
     Format, FormatEvidence, FormatStatus, UpgradeError, UpgradeOutcome, UpgradeReport,
-    UpgradeRequest, UpgradeWork, POSTGRESQL_LATEST, POSTGRESQL_PHASES, SQLITE_LATEST,
+    UpgradeRequest, UpgradeWork, NEWER, POSTGRESQL_LATEST, POSTGRESQL_PHASES, SQLITE_LATEST,
     SQLITE_PHASES,
 };

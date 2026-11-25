@@ -152,8 +152,10 @@ pub(crate) fn definition(rows: &[Row]) -> String {
 
 /// Which variant the live rows are: every row byte-identical to the fresh
 /// (d) row (`"d"`), or each row either that or the position-migrated form
-/// token for token (`"d+appended"`, the doctor's rule for SQLite's rewrite
-/// of an appended column). `None` for anything else.
+/// token for token (`"d-appended"`, the doctor's rule for SQLite's rewrite
+/// of an appended column: the owner's Stores, written before the position
+/// columns and brought forward by the schema-2 open migrations). `None` for
+/// anything else.
 pub(crate) fn recognize_rows(
     live: &[Row],
     fresh: &[Row],
@@ -170,7 +172,7 @@ pub(crate) fn recognize_rows(
             && l.1 == f.1
             && (l.2 == f.2 || crate::backend::sqlite::schema_diagnostic::same_schema(&l.2, &m.2))
     });
-    same.then_some("d+appended")
+    same.then_some("d-appended")
 }
 
 /// The exact rows step 2 -> 3 leaves, from the exact rows before: `commit`
