@@ -1224,9 +1224,7 @@ server message of its flight:
   the level whose largest key is at most the key before the other side's
   first unopened higher page (no page of the other side can share its
   identity), both sides in one demand when both expand. It still reads no
-  page it would skip, and holds at most 128 canonical pages (1 MiB).
-  The walk opens up to four already-fetched sibling branches together so
-  their children can share a demand across branch boundaries.
+  page it would skip, and holds at most 128 pages (1 MiB).
 - **The Save's leaf reads (F4).** A Save read of several pooled inode
   leaves (construction's base pages) rebuilt and looked up their values one
   leaf at a time; selection then read each new leaf's stored base again,

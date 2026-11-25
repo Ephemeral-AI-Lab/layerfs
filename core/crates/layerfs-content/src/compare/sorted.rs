@@ -57,10 +57,6 @@ impl DifferenceWork {
 pub const READ_AHEAD_PAGES: usize = 128;
 const _: () = assert!(READ_AHEAD_PAGES * MAXIMUM_PAGE_BYTES <= 1024 * 1024);
 
-/// Already-fetched adjacent branches opened before their first child. This
-/// bounds the frontier to at most four branch widths per level on each side.
-const BRANCHES_AHEAD: usize = 4;
-
 enum Item<K, V> {
     /// A page and the largest key its parent records for it (none for a
     /// root).
@@ -184,45 +180,21 @@ fn open<F: Format>(
         }
     };
     let wire = F::decode(&body)?;
-    let mut siblings = Vec::new();
-    if wire.level > 0 {
-        // These sibling branches are already fetched by ahead_of and are
-        // known to differ. Expose their children together so the first child
-        // demand can also cover the children across branch boundaries.
-        for _ in 1..BRANCHES_AHEAD {
-            let Some(Item::Page {
-                id, level: next, ..
-            }) = side.front()
-            else {
-                break;
-            };
-            if *next != level {
-                break;
-            }
-            let Some(body) = ahead.remove(id) else {
-                break;
-            };
-            siblings.push(F::decode(&body)?);
-            side.pop_front();
-        }
-    }
-    for wire in siblings.into_iter().rev().chain(std::iter::once(wire)) {
-        work.pages_read = work.pages_read.saturating_add(1);
-        for entry in wire.entries.into_iter().rev() {
-            let item = match (entry.child, entry.value) {
-                (Some(child), None) if wire.level > 0 => Item::Page {
-                    id: child,
-                    level: wire.level - 1,
-                    max: Some(entry.key),
-                },
-                (None, Some(value)) if wire.level == 0 => Item::Row {
-                    key: entry.key,
-                    value,
-                },
-                _ => return Err(ContentError::InvalidRecord("sorted page row")),
-            };
-            side.push_front(item);
-        }
+    work.pages_read = work.pages_read.saturating_add(1);
+    for entry in wire.entries.into_iter().rev() {
+        let item = match (entry.child, entry.value) {
+            (Some(child), None) if wire.level > 0 => Item::Page {
+                id: child,
+                level: wire.level - 1,
+                max: Some(entry.key),
+            },
+            (None, Some(value)) if wire.level == 0 => Item::Row {
+                key: entry.key,
+                value,
+            },
+            _ => return Err(ContentError::InvalidRecord("sorted page row")),
+        };
+        side.push_front(item);
     }
     Ok(())
 }
