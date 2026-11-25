@@ -728,7 +728,12 @@ measured with `log_statement=all` on the private test server, and pinned):
   mount read (`KnownRemovals`), and a Commit this Workspace published hides
   nothing: its serial is above every marker's frontier, and while the mount
   admission is registered every marker write refuses `MountsActive`. Any
-  other node, or a catalog with no admission, is read as before.
+  other node, or a catalog with no admission, is read as before. The
+  markers are kept only while they charge at most `KEPT_REMOVAL_BYTES`
+  (256 KiB: each marker's path bytes plus its 40-byte record, about 2,600
+  markers of 60-byte paths); a bound node with more keeps nothing, and each
+  Commit reads them again on the control reader, as before (1 statement on
+  PostgreSQL, 3 on SQLite, measured by `kept_removals_bound.rs`).
 - (i) The Storage handle a Workspace keeps between Commits keeps the unused
   pack ids and the first 128 unused ordinals (`KEPT_ORDINALS`) of its last
   finished Save (`save/reservation.rs`, `IdBlock`); the next Save reserves

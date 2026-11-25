@@ -118,9 +118,38 @@ pub(crate) type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
 /// bound node, and a Commit this Workspace published hides nothing: a
 /// marker's frontier is the Store high-water read in its own transaction,
 /// below the serial of any Commit published after it.
+///
+/// Kept only while they charge at most [`KEPT_REMOVAL_BYTES`]; a bound node
+/// with more is not kept, and each Commit reads its markers again on the
+/// control reader, as before #768.
 pub(crate) struct KnownRemovals {
     node: NodeId,
     found: NodeRemovals,
+}
+
+/// Bytes of one node's markers a mounted Workspace keeps ([`KnownRemovals`]),
+/// each marker charged its path bytes and its record (`PathRemovalRecord`).
+///
+/// Owner: one bound Workspace. Bound: this many bytes, one node's markers at
+/// a time; a set over it is not kept at all. Live multiplicity: one per
+/// mounted Workspace with a registered mount admission. Lifetime: until its
+/// next Commit or a materialization replaces it, or the Workspace closes.
+/// Release: replaced or dropped with the Workspace. 256 KiB is half the
+/// published-value bound a Commit's Storage handle already keeps
+/// (`layerfs_storage::policy::POOLED_VALUE_CACHE_BYTES`): about 2,600 markers
+/// of 60-byte paths, and at least 63 of the longest paths
+/// (`layerfs_history::path::MAXIMUM_PATH_BYTES`). A larger set costs each
+/// Commit the control read it had before #768 and never correctness.
+pub const KEPT_REMOVAL_BYTES: usize = 256 * 1024;
+
+/// What `found` charges against [`KEPT_REMOVAL_BYTES`].
+fn charge(found: &NodeRemovals) -> usize {
+    found.as_ref().map_or(0, |(_, markers)| {
+        markers
+            .iter()
+            .map(|marker| marker.path.len() + std::mem::size_of::<PathRemovalRecord>())
+            .sum()
+    })
 }
 
 /// The answer of one [`NodeRemovals`] read: a provider without the marker
@@ -442,7 +471,7 @@ impl BoundWorkspace {
         let (stack, node) = (snapshot.branch.stack, node_of(&snapshot));
         let found = removals(self.published(|history| history.node_path_removals(stack, node)))
             .map_err(refusal)?;
-        self.keep_removals(node, found.clone());
+        self.keep_removals(node, &found);
         let reader = self.store.ports_for(snapshot.scope, self.identity());
         let paths = hidden_in(found, &*reader, FilesystemRootId(snapshot.effective_root))
             .map_err(refusal)?;
@@ -482,16 +511,20 @@ impl BoundWorkspace {
     /// Records that this Workspace published `node`, a Commit: it hides
     /// nothing ([`KnownRemovals`]).
     pub(crate) fn published_removals(&self, node: NodeId) {
-        self.keep_removals(node, None);
+        self.keep_removals(node, &None);
     }
-    /// Keeps `found` for `node` only under a registered mount admission; a
-    /// poisoned slot keeps nothing, and the next Commit reads.
-    fn keep_removals(&self, node: NodeId, found: NodeRemovals) {
+    /// Keeps `found` for `node` only under a registered mount admission and
+    /// within [`KEPT_REMOVAL_BYTES`]; otherwise, or in a poisoned slot,
+    /// nothing is kept, and the next Commit reads.
+    fn keep_removals(&self, node: NodeId, found: &NodeRemovals) {
         if self.gc_op.is_none() {
             return;
         }
         if let Ok(mut kept) = self.removals.lock() {
-            *kept = Some(KnownRemovals { node, found });
+            *kept = (charge(found) <= KEPT_REMOVAL_BYTES).then(|| KnownRemovals {
+                node,
+                found: found.clone(),
+            });
         }
     }
 }
