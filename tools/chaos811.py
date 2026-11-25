@@ -245,11 +245,16 @@ class Run:
     def role(self, container: str, role: str, timeout: float, log: str, **extra) -> int:
         self.guard(timeout + 4)
         args = ["docker", "exec", *self.role_env(role, **extra), container, "sh", "-c"]
-        args.append(f"exec /bin811/chaos811 --exact chaos811_{role} --nocapture --test-threads=1 > /out/{log} 2>&1")
+        pid = f"/out/{log}.pid"
+        args.append(
+            f"echo $$ > {pid}; exec /bin811/chaos811 --exact chaos811_{role} --nocapture --test-threads=1 "
+            f"> /out/{log} 2>&1"
+        )
         try:
             code = sh(args, timeout=timeout, check=False).returncode
         except subprocess.TimeoutExpired:
-            sh(["docker", "exec", container, "sh", "-c", "pkill -9 -f chaos811 || true"], check=False)
+            # A role past its bound is killed (procps is not in the image).
+            sh(["docker", "exec", container, "sh", "-c", f"kill -9 $(cat {pid})"], check=False)
             code = 124
         self.note("role", role=role, container=container, code=code, log=log)
         return code
@@ -480,7 +485,7 @@ class Run:
         self.role(self.host(0), "settle", 25, "settle-final.out", CHAOS811_LABEL="final")
         self.role(self.admin(), "probe", 15, "probe-final.out", CHAOS811_LABEL="final")
         (self.dir / "stop-monitor").write_text("stop\n")
-        code = self.role(self.admin(), "dump", 40, "dump.out")
+        code = self.role(self.admin(), "dump", min(55.0, self.left() - 6), "dump.out")
         self.note("dump", code=code)
         time.sleep(0.3)
         return check(self)
@@ -924,7 +929,7 @@ def main() -> int:
     r = sub.add_parser("run")
     r.add_argument("--seed", type=int, required=True)
     r.add_argument("--nodes", type=int, default=3)
-    r.add_argument("--workload", type=float, default=32.0)
+    r.add_argument("--workload", type=float, default=28.0)
     r.add_argument("--keep", action="store_true", help="keep containers even when the run passes")
     args = parser.parse_args()
     if args.cmd == "stage":
@@ -950,7 +955,7 @@ def main() -> int:
     receipts["wall_s_total"] = round(time.monotonic() - run.started, 1)
     (run.dir / "receipts.json").write_text(json.dumps(receipts, indent=1) + "\n")
     summary = {k: receipts.get(k) for k in ("seed", "verdict", "wall_s_total", "dir", "error")}
-    summary["checks"] = {k: v["pass"] for k, v in receipts.get("checks", {}).items()}
+    summary["checks"] = {k: v["pass"] if isinstance(v, dict) else v for k, v in receipts.get("checks", {}).items()}
     print(json.dumps(summary))
     return 0 if receipts["verdict"] == "PASS" else 1
 

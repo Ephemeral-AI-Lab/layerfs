@@ -1153,6 +1153,15 @@ fn chaos811_dump() {
         .iter()
         .map(|row| (row.get(0), row.get(1)))
         .collect();
+    // The full audit runs beside the head walks, on its own session.
+    let auditing = {
+        let store = store_view(&url, &schema, &binding, store.dir.clone());
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            let failures = audit(&store, 45);
+            (failures, started.elapsed().as_millis() as u64)
+        })
+    };
     let mut heads = Vec::new();
     let walker = Service::try_open(&store, store.selection.clone());
     for (name, retired) in &names {
@@ -1198,9 +1207,9 @@ fn chaos811_dump() {
     if let Ok(service) = walker {
         service.stop();
     }
-    let started = Instant::now();
-    let audit = audit(&store, 50);
-    let audit_ms = started.elapsed().as_millis() as u64;
+    let (audit, audit_ms) = auditing
+        .join()
+        .unwrap_or_else(|_| (vec!["audit: panicked".to_owned()], 0));
     let amcheck = verify768::amcheck(&store);
     let allocation = verify768::duplicate_allocations(&store);
     let list = |items: &[String]| {
