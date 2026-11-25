@@ -144,6 +144,9 @@ SLOW = {
     # #768 review fixes, --test-threads 3, macOS host, 2026-11-25: the idle
     # reader's check waits its 5 s cap once.
     ("layerfs-store-service", "postgresql_reader_idle"): 6.6,
+    # The independent #768 tester's binaries, same host and day.
+    ("layerfs-store-service", "tester768_stale_reader"): 9.1,
+    ("layerfs-store-service", "tester768_interleave"): 7.0,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
