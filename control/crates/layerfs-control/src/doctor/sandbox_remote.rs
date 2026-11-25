@@ -14,6 +14,11 @@ use layerfs_sandbox::record::SandboxRecord;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+/// The Sandboxes on `machine`, at least the one being checked.
+fn sandboxes_on(home: &Path, machine: &str) -> usize {
+    crate::inventory::sandboxes_on(home, machine).map_or(1, |on| on.len().max(1))
+}
+
 pub(super) fn remote(
     home: &Path,
     record: &SandboxRecord,
@@ -47,9 +52,12 @@ pub(super) fn remote(
                 ROUTE,
                 format!("machine {machine}'s worker record is malformed or cannot be read"),
             );
-            // findings.md: restart the machine; its stop refuses while Sandboxes
-            // are on it and names `--force` itself
-            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, 0));
+            // findings.md: restart the machine; the Sandbox checked is on it,
+            // so the stop is forced
+            checks.fix(
+                ROUTE,
+                layerfs_machine::state::replace_worker(machine, sandboxes_on(home, machine)),
+            );
             checks.evidence(ROUTE, cause("worker_record_unreadable"));
             return;
         }
@@ -70,7 +78,10 @@ pub(super) fn remote(
                 ROUTE,
                 format!("machine {machine}'s worker refused its saved secret"),
             );
-            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, 0));
+            checks.fix(
+                ROUTE,
+                layerfs_machine::state::replace_worker(machine, sandboxes_on(home, machine)),
+            );
             checks.evidence(ROUTE, cause("worker_refused_secret"));
             return;
         }
@@ -84,7 +95,7 @@ pub(super) fn remote(
     };
     if let Some(expected) = worker.hello.expected() {
         const COMPATIBLE: &str = "sandbox.worker_compatibility";
-        let on = crate::inventory::sandboxes_on(home, machine).map_or(1, |on| on.len().max(1));
+        let on = sandboxes_on(home, machine);
         let message = format!(
             "machine {machine}'s worker is from another build ({}; this build: {}); {on} Sandbox{} on it",
             worker.hello.describe(),

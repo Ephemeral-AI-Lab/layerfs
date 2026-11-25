@@ -545,17 +545,39 @@ fn machine_record_findings_carry_evidence_and_the_fix_that_works() {
     // any check (machine_target.rs:138 is reached through the CLI only):
     // `machine remove` reads it too and refuses the same error, so no fix
     // is named there
-    // an invalid record: remove clears it
+    // an invalid record that names a VM: remove would delete the VM and its
+    // disk, so no fix
     machine_record(
         &f,
         "bad",
-        vec![("platform", t("lima")), ("cpus", SdkValue::Int(-1))],
+        vec![
+            ("platform", t("lima")),
+            ("vm_name", t("layerfs-bad")),
+            ("cpus", SdkValue::Int(-1)),
+        ],
     );
     let invalid = found(&f.report("bad"), "machine.record", "not valid");
-    assert_eq!(fix(&invalid), "layerfs machine remove bad");
+    assert_eq!(fix(&invalid), "");
     keys(&invalid, &["problem", "path"]);
-    remove_machine(&f, "bad");
-    assert!(gone(&f.report("bad"), "machine.record", "not valid"));
+    // an invalid record with no VM: remove takes records alone
+    machine_record(
+        &f,
+        "nameless",
+        vec![("platform", t("lima")), ("cpus", SdkValue::Int(-1))],
+    );
+    let nameless = found(&f.report("nameless"), "machine.record", "not valid");
+    assert_eq!(fix(&nameless), "layerfs machine remove nameless");
+    keys(&nameless, &["problem", "path"]);
+    remove_machine(&f, "nameless");
+    assert!(gone(&f.report("nameless"), "machine.record", "not valid"));
+    // built-in `docker` with invalid sizes: remove refuses it, so no fix
+    machine_record(
+        &f,
+        "docker",
+        vec![("platform", t("docker")), ("cpus", SdkValue::Int(-1))],
+    );
+    let builtin = found(&f.report("docker"), "machine.record", "not valid");
+    assert_eq!(fix(&builtin), "");
     // a removed platform: remove clears it
     machine_record(&f, "fc", vec![("platform", t("firecracker"))]);
     let removed = found(&f.report("fc"), "machine.record", "firecracker");

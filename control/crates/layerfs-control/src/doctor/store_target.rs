@@ -110,8 +110,12 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
                     error.code, error.message
                 ),
             );
-            let fix = error.detail.get_text("fix").map(str::to_owned);
-            checks.fix(RECORD, fix.unwrap_or_else(|| unread_fix(name)));
+            // the refusal's own fix, or none: an unreadable record is not
+            // an unsupported one, and `store remove` would delete the Store
+            // and its projects
+            if let Some(fix) = error.detail.get_text("fix") {
+                checks.fix(RECORD, fix.to_owned());
+            }
             checks.evidence(
                 RECORD,
                 SdkValue::map([("code", SdkValue::text(error.code.as_str()))]),
@@ -305,13 +309,25 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     operation(probe.home, record, found.get("compaction"), checks);
     let text = |key: &str| found.get_text(key).map(str::to_owned);
     if found.get("found") != Some(&SdkValue::Bool(true)) {
+        // the restore from its first backup, or the record removed when it
+        // has none (what its `broken` state says); the remove deletes
+        // records, so the message says what it deletes
+        let fix = match broken(record, Reason::Missing) {
+            State::Broken { fix, .. } => fix,
+            _ => None,
+        };
+        let removes = fix
+            .as_deref()
+            .is_some_and(|f| f.starts_with("layerfs store remove"));
+        let lost = match removes {
+            true => "; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back",
+            false => "",
+        };
         checks.fail(
             CONNECTION,
-            format!("machine {machine} has no file where its record says"),
+            format!("machine {machine} has no file where its record says{lost}"),
         );
-        // the restore from its first backup, or the record removed when it
-        // has none (what its `broken` state says)
-        if let State::Broken { fix: Some(fix), .. } = broken(record, Reason::Missing) {
+        if let Some(fix) = fix {
             checks.fix(CONNECTION, fix);
         }
         checks.evidence(
@@ -590,7 +606,7 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
             );
             // a refusal before any dial carries its own fix: a password
             // this home does not hold names `store connect` again
-            fix_of(&error, connect_fix(record, true), checks);
+            fix_of(&error, checks);
             let failed = layerfs_store::observed::Reach::failed(&error.message);
             layerfs_store::observed::record(probe.home, record.name(), None, &failed);
             false
@@ -729,11 +745,22 @@ fn fold(
             match o.outcome {
                 Outcome::Pass => checks.pass(id, message),
                 Outcome::Fail => {
+                    // no fix: backup refuses a PostgreSQL Store and restore
+                    // makes only sqlite
                     match id == IDENTITY {
-                        true => checks.fail(id, message),
-                        false => checks.fail(id, format!("{message}; {SCHEMA_HINT}")),
+                        true => checks.fail(
+                            id,
+                            format!(
+                                "{message}; reconnect to the intended database or restore it with PostgreSQL's own tools"
+                            ),
+                        ),
+                        false => checks.fail(
+                            id,
+                            format!(
+                                "{message}; {SCHEMA_HINT}; restore it with PostgreSQL's own tools"
+                            ),
+                        ),
                     }
-                    checks.fix(id, restore_fix(record));
                     checks.evidence(id, SdkValue::map([("step", SdkValue::text(step(o)))]));
                 }
                 Outcome::Unknown => checks.unknown(id, message),
@@ -773,7 +800,7 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
                     }
                     Err(refusal) => {
                         checks.fail(CONNECTION, refusal.message.clone());
-                        fix_of(&refusal, connect_fix(record, true), checks);
+                        fix_of(&refusal, checks);
                         let code = SdkValue::text(refusal.code.as_str());
                         checks.evidence(CONNECTION, SdkValue::map([("code", code)]));
                     }
@@ -784,14 +811,13 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
     }
 }
 
-/// The last `store.connection` observation with `refusal`'s own `fix`,
-/// else `fallback`.
-fn fix_of(refusal: &SdkRefusal, fallback: String, checks: &mut Checks) {
-    let fix = refusal
-        .detail
-        .get_text("fix")
-        .map_or(fallback, str::to_owned);
-    checks.fix(CONNECTION, fix);
+/// The last `store.connection` observation with `refusal`'s own `fix`, or
+/// none: a refusal without one (a record that names no user) has no command
+/// that is safe for that cause.
+fn fix_of(refusal: &SdkRefusal, checks: &mut Checks) {
+    if let Some(fix) = refusal.detail.get_text("fix") {
+        checks.fix(CONNECTION, fix.to_owned());
+    }
 }
 
 /// `store connect` for PostgreSQL Store `record`: the address `<url>`, and
