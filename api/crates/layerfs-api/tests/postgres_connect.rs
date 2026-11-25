@@ -6,8 +6,8 @@
 //! disconnect forgets it and its password and keeps its data, and a second
 //! connect finds the project. The same database under a second name is
 //! `Exists`, by the id in its schema. A Store of schema version 3 (#776
-//! R1) answers `Unsupported` (raised `OldStore`) with `store disconnect`
-//! as its fix, and blocks its projects `outdated`. Needs
+//! R1) answers `Unsupported` (raised `OldStore`) with `store upgrade`
+//! as its fix (#804), and blocks its projects `outdated`. Needs
 //! LAYERFS_TEST_PG_URL (a server URL with its user and no password, to a
 //! database with no `layerfs` schema; the test leaves one behind) and
 //! LAYERFS_TEST_PG_PASSWORD (the user's password); without them the test
@@ -312,10 +312,10 @@ fn a_missing_database_is_a_refused_session() {
 /// recorded its attempt), in a database of its own (dropped at the end),
 /// is refused at open by its version: `store get --with stats` answers
 /// `Unsupported` (raised `OldStore`) with that refusal as its message and
-/// `store disconnect`, which keeps its data, as its fix; its project is
+/// `store upgrade` as its fix (#804: schema 3 has a step); its project is
 /// `blocked` by it `outdated`.
 #[test]
-fn an_old_format_store_answers_outdated_with_disconnect_as_its_fix() {
+fn an_old_format_store_answers_outdated_with_upgrade_as_its_fix() {
     let (Ok(url), Ok(password)) = (
         std::env::var("LAYERFS_TEST_PG_URL"),
         std::env::var("LAYERFS_TEST_PG_PASSWORD"),
@@ -381,7 +381,7 @@ fn an_old_format_store_answers_outdated_with_disconnect_as_its_fix() {
     assert_eq!(stats.detail.get_text("code"), Some("OldStore"), "{stats:?}");
     assert_eq!(
         stats.detail.get_text("fix"),
-        Some("layerfs store disconnect old")
+        Some("layerfs store upgrade old")
     );
     let got = ok(&home, "project.get", &[("project", t("old/api"))]);
     let by = SdkValue::map([("store", t("old")), ("reason", t("outdated"))]);

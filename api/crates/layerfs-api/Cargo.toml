@@ -46,3 +46,6 @@ layerfs-bucket = { path = "../../../control/crates/layerfs-bucket" }
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
 # project_doctor_full damages its own PostgreSQL Store database.
 postgres = "=0.19.14"
+# the store upgrade tests (#804) compare file contents with a fixture
+# manifest's sha256
+sha2 = "=0.11.0"

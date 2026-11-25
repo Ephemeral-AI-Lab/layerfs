@@ -102,7 +102,7 @@ pub const FOLDS: [(&str, &[&str]); 9] = [
             "Timeout",
         ],
     ),
-    ("Failed", &["UnknownMethod"]),
+    ("Failed", &["UnknownMethod", "Cancelled"]),
 ];
 
 /// The public code `code` is answered as: itself when it is one of

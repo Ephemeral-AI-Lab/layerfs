@@ -1,0 +1,1234 @@
+{
+  "engine": "postgresql",
+  "format": "postgresql-schema-3",
+  "schema_version": 3,
+  "schema": "layerfs",
+  "restore": {
+    "command": "psql -v ON_ERROR_STOP=1 -d <fresh database> -f store.sql",
+    "roles": "none: dumped with --no-owner --no-privileges; any role that may create a schema restores it",
+    "extensions": "none beyond plpgsql, which every database has",
+    "server": "17.11 (Debian 17.11-1.pgdg13+2)",
+    "psql": "a psql that knows \\restrict (17.6 or later in the 17 series), as pg_dump 17.6+ writes it",
+    "search_path": "the Store lives in schema layerfs; open it with that schema as the product does"
+  },
+  "old_build": {
+    "runtime": "2.0.0-3f9c8e680bca",
+    "commit": "dcd0fa2c301b3ed5d2d712d4beef5fadfae3e186",
+    "version": "2.0.0",
+    "bundle": "linux-aarch64"
+  },
+  "captured_at": "2026-11-25T07:51:35Z",
+  "machine": "docker",
+  "scenario": {
+    "seed": 804,
+    "large_file_bytes": 1572864,
+    "store": "fx",
+    "events": {
+      "web_init": "32d273666a720b2c65b72b5f782a596cad92b68e00fb00a2c603de44811d21bb41",
+      "lib_init": "321ea8765c3fe7f88d2e5bb780ce0d6d1a0aa854d6947a9ff06c1dfb2a726cdc3b",
+      "feature_rm_dir": "12128dfc3b57a706e97c6ffa6fa5fdd676d8d42eb1ff7e6b0e4b0a97da4680ab64",
+      "merge": "1248682f7a542314f49ac1a9e79653a58788b76859c0e5d4dbd8368ee344d8430f",
+      "merge_second_parent": "12a5c0b6e4594656654da9b1b5b3ae260b5ad568132ee764d5b8f86fbc81f92f3d",
+      "publish_feature": "32b16717141ad7ffdb37af923634c31701bf1385876aec0460e60121c0b203ba57",
+      "publish_forced": "3250b23c01d25786b0369a163217dcdec1c129cf96b80bd5b288c0538ac0955ecc",
+      "publish_forced_previous": "32b16717141ad7ffdb37af923634c31701bf1385876aec0460e60121c0b203ba57",
+      "compact": {
+        "outcome": "compacted",
+        "freed_bytes": 696320,
+        "generation_before": 1,
+        "generation_after": 2
+      },
+      "ws_commit_1": "1231e1585d1e639ec1017d545834bbe7cc0281b9b00942379d3e17576a43c3ef4d",
+      "ws_commit_config_v6": "1289357db8cab5fa85ff12f979fb2bb18d9158bed607ba5e1e59e9d9a7622d344f",
+      "ws_commit_config_v7": "129423f8fd45a64927593ffdfb5acd8da0d8a7cca77e0407456b6e32e676414624",
+      "ws_moved_head": "120963e2f4e04ba180adc789e837e60fb6fa6124d3c93591be28f6c64627803123",
+      "ws_forced": "123fb61452c9d0387012a9b55fa8bfa2d967ef605a549eea514f1d5ab0090672d4",
+      "ws_forced_displaced": "120963e2f4e04ba180adc789e837e60fb6fa6124d3c93591be28f6c64627803123",
+      "lib_publish": "323fb207540f20abd91247ee151dd815bdf81f53a59f5ddc97e58e3208a42b8c1f"
+    }
+  },
+  "projects": {
+    "lib": {
+      "branches": {
+        "dev": {
+          "head": "129441358cc5f5cbdf28f2623f59865117f27c0bcfbafe6f60a399eb08009e96b3",
+          "commits": [
+            "12e180afe3501397e2fdcdac38b0918afe58dcd604251856cb918a3bb74f7f3eee",
+            "12a4c4265af532cdaddc2f5630b82087762083e5d8661f912c61d3d75a23c2ad71",
+            "1296feb8dd3a9d076961624c066f4e4be29efd6faa98f97a0d93d527ba58582272",
+            "126c6589fecad4861d6c953bb156cfac216b6265ef3990d392b3f891e7db5e0fbe",
+            "12a8bb844b229c7b4f60cfbe39d77350345c5a67085315b3b6a3af9653f6adbd0d",
+            "129441358cc5f5cbdf28f2623f59865117f27c0bcfbafe6f60a399eb08009e96b3"
+          ],
+          "files": {
+            "/include": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/include/lib.h": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "7ee525ddadf0a4bbc18efa21b20ca2cfb69d5af22ed8ed14342f4f9211f57b34",
+              "size": 14
+            },
+            "/lib.c": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "deb989dd50c20ac1254196a3ba8ee8a6f61335fac6f0bc1e303ba8ce188fbf69",
+              "size": 2220
+            },
+            "/tests": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/tools": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/tools/gen.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "86d663ece8d51af9cef174cd57cf7ebfd1a93310e24160ae2a41d64b8e1fd0a9",
+              "size": 22
+            }
+          }
+        },
+        "main": {
+          "head": "323fb207540f20abd91247ee151dd815bdf81f53a59f5ddc97e58e3208a42b8c1f",
+          "commits": [
+            "321ea8765c3fe7f88d2e5bb780ce0d6d1a0aa854d6947a9ff06c1dfb2a726cdc3b",
+            "323fb207540f20abd91247ee151dd815bdf81f53a59f5ddc97e58e3208a42b8c1f"
+          ],
+          "files": {
+            "/include": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/include/lib.h": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "7ee525ddadf0a4bbc18efa21b20ca2cfb69d5af22ed8ed14342f4f9211f57b34",
+              "size": 14
+            },
+            "/lib.c": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "deb989dd50c20ac1254196a3ba8ee8a6f61335fac6f0bc1e303ba8ce188fbf69",
+              "size": 2220
+            },
+            "/tests": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/tools": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/tools/gen.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "86d663ece8d51af9cef174cd57cf7ebfd1a93310e24160ae2a41d64b8e1fd0a9",
+              "size": 22
+            }
+          }
+        },
+        "old": {
+          "head": "1298a44ed527663cf208eb76bbccd815ec0b464249b67f75c06db0a562f142980e",
+          "commits": [
+            "1298a44ed527663cf208eb76bbccd815ec0b464249b67f75c06db0a562f142980e"
+          ],
+          "files": {
+            "/include": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/include/lib.h": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "a857289aa363321c38455284e247b30f8c8d58f446ae4385fb29e7ed69505f53",
+              "size": 29
+            },
+            "/lib.c": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "5244dfd1b0a877331e2ef3d88838ee0f32acdae6a719f0a139a07d4cd60e47af",
+              "size": 2220
+            },
+            "/tests": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/tests/test_lib.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3d6b48723e147a682ade9fd7955c738c9cc2e5180ed3c27d7b2996f3503b1c78",
+              "size": 2222
+            },
+            "/tools": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/tools/gen.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "8123eebcad9f179fdb329d41d6012c67e54ab67a8220264017da0396f66881b1",
+              "size": 19
+            }
+          }
+        }
+      },
+      "commit_count": 9
+    },
+    "web": {
+      "branches": {
+        "feature": {
+          "head": "1248682f7a542314f49ac1a9e79653a58788b76859c0e5d4dbd8368ee344d8430f",
+          "commits": [
+            "123bc34ed39be886865600de9a52f5168ded2aff5c516b9c5eb979dd3b0938d31b",
+            "12baa58402f38089e73f900059e2af5c197e6236d873684c562bb5d2c4ef11545b",
+            "125b607c7cb5c5e487122a613dbf9056bc40bead68613bdd21bf63eac9d738b95a",
+            "126b3acbecac68e69f1f1b178b35d90db3063cefc11a7b67b8d9115ac6cd6913ad",
+            "1224b75a5256a76c8f3327bdb883e49756980e26e14ab291fffa84865fbb2d0db2",
+            "12bd7a6732b81019cbb9fc5e377f85bb8926d4d8cc8da6d2532b5f03e13837d509",
+            "12e92617ed19c9ac643628bd236c4f5bafc672faf80584a498ceda346930574440",
+            "12128dfc3b57a706e97c6ffa6fa5fdd676d8d42eb1ff7e6b0e4b0a97da4680ab64",
+            "1248682f7a542314f49ac1a9e79653a58788b76859c0e5d4dbd8368ee344d8430f"
+          ],
+          "files": {
+            "/.git": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/HEAD": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "28d25bf82af4c0e2b72f50959b2beb859e3e60b9630a5e8c603dad4ddb2b6e80",
+              "size": 21
+            },
+            "/.git/config": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "850b95ebbbb9dc7827cb07d1099222cebf6e0d98f7294879fbdbb49c1fc6de64",
+              "size": 50
+            },
+            "/.git/objects": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01/23456789abcdef0123456789abcdef01234567": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "4a53117119a4c71aa6e2f5b42f0745ff02c8cf22cbc4dc4ac9542e643896d9b8",
+              "size": 300
+            },
+            "/.git/objects/pack": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads/main": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3d51eb31d2eaa0c0163e0e6e240f4370d06d484c91f4db87d14778c6140c67e3",
+              "size": 41
+            },
+            "/.gitignore": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "de5185a4083f817943cc27f76b1a5ab7060b525e2870bc4558385f441cd09566",
+              "size": 13
+            },
+            "/README.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "07cf0c0cbd08911c564eb12f3cbd6b5b509a36d227c7a3193f16d04a4ecc879c",
+              "size": 54
+            },
+            "/bin": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/bin/run.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "a4e0317eafab5cf1bc4a0041c7c8aeb6ece56fe72e7b2b3017a8a6574614cd35",
+              "size": 19
+            },
+            "/dangling-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "missing/target"
+            },
+            "/data": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/data/large.bin": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "eb56eafd30d58302cbc38130eb923794c6ac72de936ab5c8b2f06544b20fee88",
+              "size": 1572864
+            },
+            "/docs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/docs/src-dir-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "../src"
+            },
+            "/docs/ünïcødé-名前.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "f6bda4bb1378be4351d27fc74bdbe1db18866e938dbbaab07215d90a342f20d4",
+              "size": 37
+            },
+            "/données": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/données/été.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "48b1abd43f44834d24dc243de1fb8ba8a370b5975fa70ff7ae72f70b3af889fb",
+              "size": 8
+            },
+            "/empty": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/feature-empty": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/link-to-readme": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "README.md"
+            },
+            "/notes": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/notes/config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "92d91ecefe71a55e5bd96f1d7fdfd63ca9383881d5c618d5d5b3f19bd017f252",
+              "size": 7926
+            },
+            "/notes/other-config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "66ccb330059c0376e8d437da55dd9c4683e9d96b90948a015616deb39a5a7601",
+              "size": 7924
+            },
+            "/other.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "356382d2a8679573b45027111bd22debdc4d16346f8f74bc9591af1daace7408",
+              "size": 22
+            },
+            "/secret.key": {
+              "kind": "file",
+              "mode": "0600",
+              "sha256": "d7257c641d8d9492a98756b875389ee1c3de227f26c5cc5e579a36c9913b6926",
+              "size": 129
+            },
+            "/src": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/src/app-hardlink.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "81cb1424fee40b3ca5464be8f325bc9937cf94ab88c10f1c6642574061557e41",
+              "size": 2214,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/app.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "81cb1424fee40b3ca5464be8f325bc9937cf94ab88c10f1c6642574061557e41",
+              "size": 2214,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/helpers.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "9df260636b2de8419543f6373641204221b295ac7c9dbf71a0e5d8ed161a7f8c",
+              "size": 2218
+            }
+          }
+        },
+        "hotfix": {
+          "head": "1228ecc69d47e9de0b6eb79c6d05b78b40b0cb02da9c763682d5a8bd8bdb031d97",
+          "commits": [
+            "1228ecc69d47e9de0b6eb79c6d05b78b40b0cb02da9c763682d5a8bd8bdb031d97"
+          ],
+          "files": {
+            "/.git": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/HEAD": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "28d25bf82af4c0e2b72f50959b2beb859e3e60b9630a5e8c603dad4ddb2b6e80",
+              "size": 21
+            },
+            "/.git/config": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "850b95ebbbb9dc7827cb07d1099222cebf6e0d98f7294879fbdbb49c1fc6de64",
+              "size": 50
+            },
+            "/.git/objects": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01/23456789abcdef0123456789abcdef01234567": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "4a53117119a4c71aa6e2f5b42f0745ff02c8cf22cbc4dc4ac9542e643896d9b8",
+              "size": 300
+            },
+            "/.git/objects/pack": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads/main": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3d51eb31d2eaa0c0163e0e6e240f4370d06d484c91f4db87d14778c6140c67e3",
+              "size": 41
+            },
+            "/.gitignore": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "de5185a4083f817943cc27f76b1a5ab7060b525e2870bc4558385f441cd09566",
+              "size": 13
+            },
+            "/HOTFIX": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3c8573979c73a09adf425351fd34f0acc910f7ef97fe12a5e0e393cd467ea2fb",
+              "size": 7
+            },
+            "/README.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "07cf0c0cbd08911c564eb12f3cbd6b5b509a36d227c7a3193f16d04a4ecc879c",
+              "size": 54
+            },
+            "/bin": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/bin/run.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "a4e0317eafab5cf1bc4a0041c7c8aeb6ece56fe72e7b2b3017a8a6574614cd35",
+              "size": 19
+            },
+            "/build": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/build/out.o": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b354da2c1ac9e4dc04b58d168ed58c6e4e862774cd91a28a380a943019b00f7e",
+              "size": 512
+            },
+            "/dangling-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "missing/target"
+            },
+            "/data": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/data/large.bin": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "eb56eafd30d58302cbc38130eb923794c6ac72de936ab5c8b2f06544b20fee88",
+              "size": 1572864
+            },
+            "/debug.log": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b022f5b9ba5ad1d669aa607cebc31701a935d90f96ab00945a939182e31e5c21",
+              "size": 17
+            },
+            "/docs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/docs/src-dir-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "../src"
+            },
+            "/docs/ünïcødé-名前.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "f6bda4bb1378be4351d27fc74bdbe1db18866e938dbbaab07215d90a342f20d4",
+              "size": 37
+            },
+            "/données": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/données/été.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "48b1abd43f44834d24dc243de1fb8ba8a370b5975fa70ff7ae72f70b3af889fb",
+              "size": 8
+            },
+            "/empty": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/link-to-readme": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "README.md"
+            },
+            "/notes": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/notes/config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "dfe79ce00574b1e2a9add54eab30b176e40d82f0079458969365e03cfcec3622",
+              "size": 7935
+            },
+            "/secret.key": {
+              "kind": "file",
+              "mode": "0600",
+              "sha256": "d7257c641d8d9492a98756b875389ee1c3de227f26c5cc5e579a36c9913b6926",
+              "size": 129
+            },
+            "/src": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/src/app-hardlink.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/app.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/util.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "9df260636b2de8419543f6373641204221b295ac7c9dbf71a0e5d8ed161a7f8c",
+              "size": 2218
+            }
+          }
+        },
+        "main": {
+          "head": "3250b23c01d25786b0369a163217dcdec1c129cf96b80bd5b288c0538ac0955ecc",
+          "commits": [
+            "32d273666a720b2c65b72b5f782a596cad92b68e00fb00a2c603de44811d21bb41",
+            "32b16717141ad7ffdb37af923634c31701bf1385876aec0460e60121c0b203ba57",
+            "3250b23c01d25786b0369a163217dcdec1c129cf96b80bd5b288c0538ac0955ecc"
+          ],
+          "files": {
+            "/.git": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/HEAD": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "28d25bf82af4c0e2b72f50959b2beb859e3e60b9630a5e8c603dad4ddb2b6e80",
+              "size": 21
+            },
+            "/.git/config": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "850b95ebbbb9dc7827cb07d1099222cebf6e0d98f7294879fbdbb49c1fc6de64",
+              "size": 50
+            },
+            "/.git/objects": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01/23456789abcdef0123456789abcdef01234567": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "4a53117119a4c71aa6e2f5b42f0745ff02c8cf22cbc4dc4ac9542e643896d9b8",
+              "size": 300
+            },
+            "/.git/objects/pack": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads/main": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3d51eb31d2eaa0c0163e0e6e240f4370d06d484c91f4db87d14778c6140c67e3",
+              "size": 41
+            },
+            "/.gitignore": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "de5185a4083f817943cc27f76b1a5ab7060b525e2870bc4558385f441cd09566",
+              "size": 13
+            },
+            "/HOTFIX": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3c8573979c73a09adf425351fd34f0acc910f7ef97fe12a5e0e393cd467ea2fb",
+              "size": 7
+            },
+            "/README.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "07cf0c0cbd08911c564eb12f3cbd6b5b509a36d227c7a3193f16d04a4ecc879c",
+              "size": 54
+            },
+            "/bin": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/bin/run.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "a4e0317eafab5cf1bc4a0041c7c8aeb6ece56fe72e7b2b3017a8a6574614cd35",
+              "size": 19
+            },
+            "/build": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/build/out.o": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b354da2c1ac9e4dc04b58d168ed58c6e4e862774cd91a28a380a943019b00f7e",
+              "size": 512
+            },
+            "/dangling-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "missing/target"
+            },
+            "/data": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/data/large.bin": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "eb56eafd30d58302cbc38130eb923794c6ac72de936ab5c8b2f06544b20fee88",
+              "size": 1572864
+            },
+            "/debug.log": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b022f5b9ba5ad1d669aa607cebc31701a935d90f96ab00945a939182e31e5c21",
+              "size": 17
+            },
+            "/docs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/docs/src-dir-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "../src"
+            },
+            "/docs/ünïcødé-名前.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "f6bda4bb1378be4351d27fc74bdbe1db18866e938dbbaab07215d90a342f20d4",
+              "size": 37
+            },
+            "/données": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/données/été.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "48b1abd43f44834d24dc243de1fb8ba8a370b5975fa70ff7ae72f70b3af889fb",
+              "size": 8
+            },
+            "/empty": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/link-to-readme": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "README.md"
+            },
+            "/notes": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/notes/config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "dfe79ce00574b1e2a9add54eab30b176e40d82f0079458969365e03cfcec3622",
+              "size": 7935
+            },
+            "/secret.key": {
+              "kind": "file",
+              "mode": "0600",
+              "sha256": "d7257c641d8d9492a98756b875389ee1c3de227f26c5cc5e579a36c9913b6926",
+              "size": 129
+            },
+            "/src": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/src/app-hardlink.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/app.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/util.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "9df260636b2de8419543f6373641204221b295ac7c9dbf71a0e5d8ed161a7f8c",
+              "size": 2218
+            }
+          }
+        },
+        "other": {
+          "head": "12a5c0b6e4594656654da9b1b5b3ae260b5ad568132ee764d5b8f86fbc81f92f3d",
+          "commits": [
+            "127bbc9fca73b1f0739cc7a44594866339fedcc23bf1ef730ddd79b68876cf703c",
+            "12a5c0b6e4594656654da9b1b5b3ae260b5ad568132ee764d5b8f86fbc81f92f3d"
+          ],
+          "files": {
+            "/.git": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/HEAD": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "28d25bf82af4c0e2b72f50959b2beb859e3e60b9630a5e8c603dad4ddb2b6e80",
+              "size": 21
+            },
+            "/.git/config": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "850b95ebbbb9dc7827cb07d1099222cebf6e0d98f7294879fbdbb49c1fc6de64",
+              "size": 50
+            },
+            "/.git/objects": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01/23456789abcdef0123456789abcdef01234567": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "4a53117119a4c71aa6e2f5b42f0745ff02c8cf22cbc4dc4ac9542e643896d9b8",
+              "size": 300
+            },
+            "/.git/objects/pack": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads/main": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3d51eb31d2eaa0c0163e0e6e240f4370d06d484c91f4db87d14778c6140c67e3",
+              "size": 41
+            },
+            "/.gitignore": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "de5185a4083f817943cc27f76b1a5ab7060b525e2870bc4558385f441cd09566",
+              "size": 13
+            },
+            "/README.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "07cf0c0cbd08911c564eb12f3cbd6b5b509a36d227c7a3193f16d04a4ecc879c",
+              "size": 54
+            },
+            "/bin": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/bin/run.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "a4e0317eafab5cf1bc4a0041c7c8aeb6ece56fe72e7b2b3017a8a6574614cd35",
+              "size": 19
+            },
+            "/build": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/build/out.o": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b354da2c1ac9e4dc04b58d168ed58c6e4e862774cd91a28a380a943019b00f7e",
+              "size": 512
+            },
+            "/dangling-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "missing/target"
+            },
+            "/data": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/data/large.bin": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "eb56eafd30d58302cbc38130eb923794c6ac72de936ab5c8b2f06544b20fee88",
+              "size": 1572864
+            },
+            "/debug.log": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b022f5b9ba5ad1d669aa607cebc31701a935d90f96ab00945a939182e31e5c21",
+              "size": 17
+            },
+            "/docs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/docs/src-dir-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "../src"
+            },
+            "/docs/ünïcødé-名前.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "f6bda4bb1378be4351d27fc74bdbe1db18866e938dbbaab07215d90a342f20d4",
+              "size": 37
+            },
+            "/données": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/données/été.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "48b1abd43f44834d24dc243de1fb8ba8a370b5975fa70ff7ae72f70b3af889fb",
+              "size": 8
+            },
+            "/empty": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/link-to-readme": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "README.md"
+            },
+            "/notes": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/notes/config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "dfe79ce00574b1e2a9add54eab30b176e40d82f0079458969365e03cfcec3622",
+              "size": 7935
+            },
+            "/notes/other-config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "66ccb330059c0376e8d437da55dd9c4683e9d96b90948a015616deb39a5a7601",
+              "size": 7924
+            },
+            "/other.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "356382d2a8679573b45027111bd22debdc4d16346f8f74bc9591af1daace7408",
+              "size": 22
+            },
+            "/secret.key": {
+              "kind": "file",
+              "mode": "0600",
+              "sha256": "d7257c641d8d9492a98756b875389ee1c3de227f26c5cc5e579a36c9913b6926",
+              "size": 129
+            },
+            "/src": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/src/app-hardlink.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/app.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/util.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "9df260636b2de8419543f6373641204221b295ac7c9dbf71a0e5d8ed161a7f8c",
+              "size": 2218
+            }
+          }
+        },
+        "ws": {
+          "head": "123fb61452c9d0387012a9b55fa8bfa2d967ef605a549eea514f1d5ab0090672d4",
+          "commits": [
+            "1231e1585d1e639ec1017d545834bbe7cc0281b9b00942379d3e17576a43c3ef4d",
+            "1289357db8cab5fa85ff12f979fb2bb18d9158bed607ba5e1e59e9d9a7622d344f",
+            "129423f8fd45a64927593ffdfb5acd8da0d8a7cca77e0407456b6e32e676414624",
+            "123fb61452c9d0387012a9b55fa8bfa2d967ef605a549eea514f1d5ab0090672d4"
+          ],
+          "files": {
+            "/.git": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/HEAD": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "28d25bf82af4c0e2b72f50959b2beb859e3e60b9630a5e8c603dad4ddb2b6e80",
+              "size": 21
+            },
+            "/.git/config": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "c36286e3d0f906969be55fd67045a06d2ae06c3120ea19cc736dc827ecfcac18",
+              "size": 59
+            },
+            "/.git/objects": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/objects/01/23456789abcdef0123456789abcdef01234567": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "4a53117119a4c71aa6e2f5b42f0745ff02c8cf22cbc4dc4ac9542e643896d9b8",
+              "size": 300
+            },
+            "/.git/objects/pack": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/.git/refs/heads/main": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3d51eb31d2eaa0c0163e0e6e240f4370d06d484c91f4db87d14778c6140c67e3",
+              "size": 41
+            },
+            "/.gitignore": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "de5185a4083f817943cc27f76b1a5ab7060b525e2870bc4558385f441cd09566",
+              "size": 13
+            },
+            "/HOTFIX": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "3c8573979c73a09adf425351fd34f0acc910f7ef97fe12a5e0e393cd467ea2fb",
+              "size": 7
+            },
+            "/README.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "8ec995fe90e037dd31af8760f92de317a3d9840c266d4e821c741ccc39c5d3b8",
+              "size": 69
+            },
+            "/bin": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/bin/run.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "a4e0317eafab5cf1bc4a0041c7c8aeb6ece56fe72e7b2b3017a8a6574614cd35",
+              "size": 19
+            },
+            "/bin/tool.sh": {
+              "kind": "file",
+              "mode": "0755",
+              "sha256": "bf664cf84f00f6ed76164c8457fdeaf8e4dee547226e9ffcf8274e2d2246fed9",
+              "size": 20
+            },
+            "/build": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/build/out.o": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b354da2c1ac9e4dc04b58d168ed58c6e4e862774cd91a28a380a943019b00f7e",
+              "size": 512
+            },
+            "/dangling-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "missing/target"
+            },
+            "/data": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/data/large.bin": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "eb56eafd30d58302cbc38130eb923794c6ac72de936ab5c8b2f06544b20fee88",
+              "size": 1572864
+            },
+            "/debug.log": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "b022f5b9ba5ad1d669aa607cebc31701a935d90f96ab00945a939182e31e5c21",
+              "size": 17
+            },
+            "/docs": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/docs/readme-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "../README.md"
+            },
+            "/docs/src-dir-link": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "../src"
+            },
+            "/docs/ünïcødé-名前.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "f6bda4bb1378be4351d27fc74bdbe1db18866e938dbbaab07215d90a342f20d4",
+              "size": 37
+            },
+            "/docs/ワークスペース.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "0cc27c6624143e9096e542b8f8920a35603c63d91cc9b4f51d8b1b2eb2dbb12d",
+              "size": 29
+            },
+            "/données": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/données/été.md": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "48b1abd43f44834d24dc243de1fb8ba8a370b5975fa70ff7ae72f70b3af889fb",
+              "size": 8
+            },
+            "/empty": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/forced.txt": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "7e3b822bbdabebed4f2c9623d6cd4b3b8197a19a26d33b4ef9c2b9aad56929be",
+              "size": 7
+            },
+            "/link-to-readme": {
+              "kind": "symlink",
+              "mode": "0777",
+              "target": "README.md"
+            },
+            "/new.log": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "66f22f7c6281ce8dfd93723cb4adab1f7203001addeb075c41e2b80dbd9cf843",
+              "size": 8
+            },
+            "/notes": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/notes/config.json": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "17f9a5d0b4b6a505a847b176738da303a13c0c88e0102395c0c7d3d3c2cd0cc1",
+              "size": 7919
+            },
+            "/private.txt": {
+              "kind": "file",
+              "mode": "0600",
+              "sha256": "25bc6f78b121a07272cc30e64fcac1bafac8b7fe6c72fdf8526caf15a4c6b7b9",
+              "size": 8
+            },
+            "/src": {
+              "kind": "dir",
+              "mode": "0755"
+            },
+            "/src/app-hardlink.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app-link2.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/app-link2.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app-link2.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/app.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "1f1bd722ae6636c03ea589ee9bd6eacd1e63d583beea04b87b649ec2288b7685",
+              "size": 2213,
+              "hard_links": [
+                "/src/app-hardlink.py",
+                "/src/app-link2.py",
+                "/src/app.py"
+              ]
+            },
+            "/src/util.py": {
+              "kind": "file",
+              "mode": "0644",
+              "sha256": "9df260636b2de8419543f6373641204221b295ac7c9dbf71a0e5d8ed161a7f8c",
+              "size": 2218
+            },
+            "/ws-empty": {
+              "kind": "dir",
+              "mode": "0700"
+            }
+          }
+        }
+      },
+      "commit_count": 19
+    }
+  },
+  "removed_branches": {
+    "web": {
+      "scratch": "removed before the compaction, which freed it",
+      "dropped": "removed after it"
+    }
+  },
+  "notes": [
+    "the old build's `project init` imports hard-linked host files as separate files (distinct inodes); the fixture's hard links come from `ln` in a mounted Workspace (web ws)",
+    "scenario.events names notable Commits: the merge, the forced publish and the forced Workspace Commit with the heads they displaced",
+    "files: content, size and symlink targets from the old build's `project export` of each Branch head; kind and mode from its `file stat`; hard_links lists paths whose `file stat` shares one inode"
+  ]
+}

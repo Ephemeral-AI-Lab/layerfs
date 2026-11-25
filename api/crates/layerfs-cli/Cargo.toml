@@ -25,3 +25,6 @@ tls = ["layerfs-api/tls"]
 [dependencies]
 layerfs-api = { path = "../layerfs-api" }
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+# `store upgrade` blocks SIGINT and SIGTERM and waits for them on a thread
+# (#804 §6), in safe code
+nix = { version = "=0.31.3", default-features = false, features = ["signal"] }

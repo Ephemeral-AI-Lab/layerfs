@@ -12,12 +12,17 @@ use std::process::ExitCode;
 /// `detail` (`--detail`) its long form, which adds `detail`. With `text`
 /// it reads as `error: <message>  (<code>)`, then the fix and the fields.
 pub fn refusal(refusal: &SdkRefusal, detail: bool, text: bool) -> ExitCode {
+    diagnostic(&refusal_line(refusal, detail, text));
+    ExitCode::from(REFUSED)
+}
+
+/// [`refusal`]'s text, without its line end.
+pub fn refusal_line(refusal: &SdkRefusal, detail: bool, text: bool) -> String {
     let value = layerfs_api::refusal::value(refusal, detail);
     match text {
-        true => diagnostic(refusal_text(&value).trim_end()),
-        false => diagnostic(&json::print(&value)),
+        true => refusal_text(&value).trim_end().to_owned(),
+        false => json::print(&value),
     }
-    ExitCode::from(REFUSED)
 }
 
 /// A refusal's readable form: its message and code, then `fix:` and each

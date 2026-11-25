@@ -63,7 +63,8 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
     let opened = opened.map_err(|refusal| match (&args.store, refusal.code.as_str()) {
         (Some(store), crate::state::OLD_STORE) => {
             let postgresql = matches!(identity.kind, crate::identity::Kind::Postgresql { .. });
-            with_fix(refusal, crate::state::outdated_fix(store, postgresql))
+            let fix = crate::state::outdated_fix(store, postgresql, &refusal.message);
+            with_fix(refusal, fix)
         }
         _ => refusal,
     });

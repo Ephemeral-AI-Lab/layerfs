@@ -125,6 +125,20 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         Ok(scope) => scope,
         Err(refusal) => return output::refusal(&refusal, switches.detail, text),
     };
+    // `store upgrade` alone stops on Ctrl-C or SIGTERM (#804 §6): the mask
+    // goes on here, before the call starts any thread
+    let cancellable = call.name() == "store.upgrade";
+    if cancellable {
+        let store = parsed.args.get_text("store").unwrap_or("");
+        if let Err(error) = crate::signals::cancel_on_signal(store, switches.detail, text) {
+            let refusal = layerfs_api::refusal::public(layerfs_bridge::control::SdkRefusal {
+                code: "Failed".to_owned(),
+                message: format!("the signal handler could not start: {error}"),
+                detail: SdkValue::Null,
+            });
+            return output::refusal(&refusal, switches.detail, text);
+        }
+    }
     let (progress, stream) = (switches.progress, switches.stream);
     let is_term =
         std::io::stderr().is_terminal() && std::env::var_os("LAYERFS_PROGRESS_JSON").is_none();
@@ -177,6 +191,9 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         &mut send,
         layerfs_api::Client::Cli,
     );
+    // first thing after the call: a signal from now on changes nothing
+    // (signals.rs names the residual window)
+    crate::signals::answered();
     if is_term && last_progress_len > 0 {
         let mut err = std::io::stderr().lock();
         let _ = write!(err, "\r{}\r", " ".repeat(last_progress_len));

@@ -199,6 +199,9 @@ waits at most 10 s; other operations wait as long as they run
 | `worker.ping` | `{kind: "worker", version, pid}`; `args.capacity` adds `free_disk` of the root's filesystem |
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the root, holding the Store's lease there |
 | `store.compact` | one sqlite Store's compaction on `store/<name>/store.sqlite` under the root, holding the Store's lease there; `{ store, store_record }`, each phase sent as a `progress` event; an event that cannot be written does not end the run (spec S6, #42 D5) |
+| `store.upgrade` | one sqlite Store's format upgrade in place on `store/<name>/store.sqlite` under the root (#804): `{ store, store_record, op }`; it closes the worker's own open copy, is refused `InUse` while another process holds the Store's lease under the root and `Busy` while a compaction runs there, then holds the lease for the run; each phase (`check`, `convert`, `verify`, `commit`) is sent as a `progress` event as it starts, and an event that cannot be written does not end the run. Its cancel flag is registered under `op` until the run ends |
+| `store.cancel` | sets the cancel flag of the running `store.upgrade` named `{ op }` and answers `{}`; `NotFound` when none of that id runs there. The host sends it once on a second connection, after the run's first phase came back, while the first connection keeps reading the answer (no reliance on half-close through a port forwarder); a cancel at or after `commit` changes nothing |
+| `store.format` | read-only: `{ store }` → the `format` section (`version`, `latest`, `status`, `fix`) of the file under the root from its header on a raw read-only connection, `status: unknown` when it has no such file; for `store get/list --with format` |
 | `store.file` | one step of a `store.move` (either direction), `store.remove`, stat or backup, with `progress` events for hashing steps |
 | `store.reach` | the check of this machine's connection to a PostgreSQL Store with the address and login the host saved (or a new one `store.connect` checks before saving it), for `store.attach`, `store.connect` and `store.doctor`; a refusal names its connection `step` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
@@ -244,7 +247,7 @@ Nothing here is a retry: no request is read twice and none is resent.
 | Stalled caller | `store.file` and `sandbox.host` ignore the failed event and end their step; `project.export` returns at its next part, closes the Store and releases its lease; the thread then ends | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs), [`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | After the answer | the worker waits at most 30 s for the caller's close, once | `Wire::answer` |
 | Panic | `catch_unwind` around each connection. One line `<op> panicked: <message>` (300 characters at most; never arguments, a secret or a request), then the connection closes with no answer: `Unknown` (layerfs-project#179 D7) | `connection::serve` |
-| Panic, read-only | `worker.ping`, `network.inspect`, `machine.images`, `store.reach`, `doctor.sandbox`, `store.diagnose` and `inspect` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
+| Panic, read-only | `worker.ping`, `network.inspect`, `machine.images`, `store.reach`, `store.format`, `doctor.sandbox`, `store.diagnose` and `inspect` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
 
 **No connection cap, and no bound on frame memory** (decided in
 layerfs-project#177). A cap must make a connection wait, never refuse it
