@@ -210,7 +210,7 @@ fn records_checks_come_first_and_a_missing_file_stops_at_the_connection() {
     );
     assert_eq!(
         findings[1].get_text("message"),
-        Some("machine native has no file where its record says")
+        Some("machine native has no file where its record says; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back")
     );
 }
 

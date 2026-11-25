@@ -487,12 +487,12 @@ export interface MachineDoctorOptions extends CallOptions {
 /** Options of `store.list`; an unknown option is refused. */
 export interface StoreListOptions extends CallOptions {
   machine?: string;
-  with?: readonly ("stats")[];
+  with?: readonly ("stats" | "format")[];
 }
 
 /** Options of `store.get`; an unknown option is refused. */
 export interface StoreGetOptions extends CallOptions {
-  with?: readonly ("live" | "stats")[];
+  with?: readonly ("live" | "stats" | "format")[];
 }
 
 /** Options of `store.create`; an unknown option is refused. */
@@ -526,6 +526,11 @@ export interface StoreMoveOptions extends CallOptions {
 
 /** Options of `store.compact`; an unknown option is refused. */
 export interface StoreCompactOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `store.upgrade`; an unknown option is refused. */
+export interface StoreUpgradeOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
@@ -741,6 +746,8 @@ export interface StoreFamily {
   remove(store: string, options?: CallOptions): Promise<Result>;
   /** reclaim dead bytes from one Store */
   compact(store: string, options?: StoreCompactOptions): Promise<Result>;
+  /** bring an older Store to the latest format, in place */
+  upgrade(store: string, options?: StoreUpgradeOptions): Promise<Result>;
   /** check a Store, then each of its projects */
   doctor(store: string, options?: StoreDoctorOptions): Promise<Result>;
 }

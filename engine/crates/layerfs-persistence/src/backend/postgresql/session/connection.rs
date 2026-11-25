@@ -223,6 +223,14 @@ impl Connector {
             .copied()
             .unwrap_or(HANDSHAKE)
     }
+    /// Sends `token`'s cancel request with this connector's TLS: a new
+    /// connection, no login, no reply awaited beyond its close.
+    pub(crate) fn cancel(&self, token: &postgres::CancelToken) -> Result<(), postgres::Error> {
+        match &self.tls {
+            Some(tls) => token.cancel_query(tls.clone()),
+            None => token.cancel_query(NoTls),
+        }
+    }
     /// One new synchronous client (the lane, recovery and status reads).
     pub(crate) fn connect(&self) -> Result<Client, BackendError> {
         self.connect_raw().map_err(Dial::refused)

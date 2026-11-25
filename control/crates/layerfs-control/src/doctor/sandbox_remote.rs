@@ -14,6 +14,11 @@ use layerfs_sandbox::record::SandboxRecord;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+/// The Sandboxes on `machine`, at least the one being checked.
+fn sandboxes_on(home: &Path, machine: &str) -> usize {
+    crate::inventory::sandboxes_on(home, machine).map_or(1, |on| on.len().max(1))
+}
+
 pub(super) fn remote(
     home: &Path,
     record: &SandboxRecord,
@@ -43,9 +48,22 @@ pub(super) fn remote(
             return;
         }
         Err(_) => {
+            let on = sandboxes_on(home, machine);
             checks.fail(
                 ROUTE,
-                format!("machine {machine}'s worker record is malformed or cannot be read"),
+                format!("machine {machine}'s worker record is malformed or cannot be read; replacing the worker force-stops {on} Sandbox{} on it", if on == 1 { "" } else { "es" }),
+            );
+            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, on));
+            checks.evidence(
+                ROUTE,
+                SdkValue::map([
+                    ("cause", SdkValue::text("worker_record_unreadable")),
+                    ("machine", SdkValue::text(machine)),
+                    (
+                        "sandboxes_on",
+                        SdkValue::Int(i64::try_from(on).unwrap_or(i64::MAX)),
+                    ),
+                ]),
             );
             return;
         }
@@ -62,9 +80,22 @@ pub(super) fn remote(
     let worker = match diagnostic_connect(&endpoint, started + duration) {
         Ok(worker) => worker,
         Err(refusal) if refusal.code == "Denied" => {
+            let on = sandboxes_on(home, machine);
             checks.fail(
                 ROUTE,
-                format!("machine {machine}'s worker refused its saved secret"),
+                format!("machine {machine}'s worker refused its saved secret; replacing the worker force-stops {on} Sandbox{} on it", if on == 1 { "" } else { "es" }),
+            );
+            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, on));
+            checks.evidence(
+                ROUTE,
+                SdkValue::map([
+                    ("cause", SdkValue::text("worker_refused_secret")),
+                    ("machine", SdkValue::text(machine)),
+                    (
+                        "sandboxes_on",
+                        SdkValue::Int(i64::try_from(on).unwrap_or(i64::MAX)),
+                    ),
+                ]),
             );
             return;
         }
@@ -78,7 +109,7 @@ pub(super) fn remote(
     };
     if let Some(expected) = worker.hello.expected() {
         const COMPATIBLE: &str = "sandbox.worker_compatibility";
-        let on = crate::inventory::sandboxes_on(home, machine).map_or(1, |on| on.len().max(1));
+        let on = sandboxes_on(home, machine);
         let message = format!(
             "machine {machine}'s worker is from another build ({}; this build: {}); {on} Sandbox{} on it",
             worker.hello.describe(),
@@ -91,6 +122,18 @@ pub(super) fn remote(
         checks.fix(
             COMPATIBLE,
             layerfs_machine::state::replace_worker(machine, on),
+        );
+        checks.evidence(
+            COMPATIBLE,
+            SdkValue::map([
+                ("machine", SdkValue::text(machine)),
+                ("worker", SdkValue::text(worker.hello.describe())),
+                ("expected", SdkValue::text(expected.describe())),
+                (
+                    "sandboxes_on",
+                    SdkValue::Int(i64::try_from(on).unwrap_or(i64::MAX)),
+                ),
+            ]),
         );
         return;
     }

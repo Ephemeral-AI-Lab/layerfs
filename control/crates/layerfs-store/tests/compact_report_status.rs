@@ -147,6 +147,7 @@ fn live(home: &Path) -> SdkValue {
     let with = With {
         live: true,
         stats: false,
+        format: false,
     };
     layerfs_store::get::get(home, &mut Events::new(&mut sink), "s", with, &machines).unwrap()
 }

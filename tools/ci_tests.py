@@ -141,6 +141,10 @@ SLOW = {
     ("layerfs-store-service", "verify768y_interleavings"): 33.5,
     ("layerfs-store-service", "verify768y_release_faults"): 46.6,
     ("layerfs-store-service", "verify768y_failed_save"): 192.5,
+    # `store upgrade` on the PostgreSQL fixture, one restore per case, and
+    # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
+    ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,
+    ("layerfs-persistence", "store_upgrade_postgresql_wire"): 12.16,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

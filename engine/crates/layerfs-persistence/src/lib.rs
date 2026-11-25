@@ -13,20 +13,20 @@ mod store;
 pub(crate) use store::config;
 mod history;
 mod report;
+pub mod upgrade;
 pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
 pub use backend::postgresql::session::connection::HANDSHAKE as POSTGRESQL_HANDSHAKE;
 pub use backend::postgresql::status::{
     compact_status as postgresql_compact_status, status as postgresql_status,
     PostgresCompactOpStatus, PostgresStatus, PostgresStatusError,
 };
-pub use backend::records::outdated_store;
+pub use backend::records::{outdated_store, upgradable_store};
 pub use backend::sqlite::acquisition::AcquisitionProvider;
 pub use backend::sqlite::compact::{
     compact_op_status, CompactFailpoint, CompactKeptWaste, CompactOpStatus, CompactPath,
     CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason, OwnerLiveness,
     DELTA_BASE_REFERENCES_CAP,
 };
-pub use backend::sqlite::convert_v1::{convert_schema_version_1, ConvertedStore};
 pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;

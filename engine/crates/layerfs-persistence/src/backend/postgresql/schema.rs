@@ -94,6 +94,11 @@ pub(crate) fn definition(tx: &Transaction<'_>) -> Result<String, BackendError> {
     Ok(text)
 }
 
+/// [`source`], for the upgrade's schema guard.
+pub(crate) fn recorded_source(acquisition: bool) -> String {
+    source(acquisition)
+}
+
 /// The recorded schema source: the Store tables, then the acquisition tables
 /// when the schema has them.
 fn source(acquisition: bool) -> String {

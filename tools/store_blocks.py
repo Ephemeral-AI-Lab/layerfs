@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Inode value and binding hint blocks of a schema version 2 Store (#91).
 
-Diagnostic decoder and offline SQLite migration; never run against a live Store.
+Diagnostic decoder; never run against a live Store. (Its offline schema
+version 1 migration was removed with schema version 1 support, #804.)
 
   store_blocks.py attribute <closed copy.sqlite>
       Decodes every block of a closed SQLite copy (opened immutable, read only)
@@ -12,21 +13,11 @@ Diagnostic decoder and offline SQLite migration; never run against a live Store.
       `value<TAB>first<TAB>last<TAB>hex body` or `hint<TAB>grp<TAB>seq<TAB>hex body`
       (for example `psql -At -F $'\\t' -c "SELECT 'value',first_ordinal,last_ordinal,
       encode(body,'hex') FROM <schema>.inode_value_block"`).
-  store_blocks.py migrate <closed v1 copy.sqlite> <new.sqlite>
-      Writes a schema version 3 copy of a closed schema version 1 SQLite Store
-      (user_version 16-18 or 22-24): inode values and binding hints become blocks,
-      the Commit attempt column (#776) is added, empty for every Commit, the
-      version moves to 56-58 or 62-64 and the recorded schema is rewritten.
-      The source is copied first and never changed; a Store whose recorded schema
-      is not exactly one this release wrote (allowing the tables the open-time
-      additive migrations add) is refused. PostgreSQL schemas are not migrated.
 
 The block formats are documented in engine/crates/layerfs-persistence/src/blocks/.
 """
 
 import json
-import os
-import shutil
 import sqlite3
 import sys
 from collections import Counter, defaultdict
@@ -35,20 +26,6 @@ BODY_LIMIT = 4000
 VALUE_BYTES = 73
 RAW = 0xFF
 GROUP_BITS = 6
-APPLICATION_ID = 1279677264
-SQL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "engine", "crates", "layerfs-persistence", "sql")
-
-# Schema version 1 table texts, as release 2.0 wrote them before #91.
-V1_VALUES = """CREATE TABLE inode_value (
- ordinal INTEGER PRIMARY KEY CHECK(ordinal BETWEEN 1 AND 4294967295),
- value BLOB NOT NULL CHECK(length(value)=73)
-) STRICT;"""
-V1_HINTS = """CREATE TABLE binding_hint (
-    child INTEGER NOT NULL CHECK (child != 0),
-    parent INTEGER NOT NULL CHECK (parent != 0),
-    name BLOB NOT NULL CHECK (length(name) BETWEEN 1 AND 255),
-    PRIMARY KEY (child, parent, name)
-) STRICT, WITHOUT ROWID;"""
 
 
 def _crc_table():
@@ -332,139 +309,6 @@ def attribute(values, hints):
     }
 
 
-def _read_sql(*parts):
-    with open(os.path.join(SQL, *parts)) as stream:
-        return stream.read()
-
-
-# The position columns T1.2a/T1.4 appended after the schema this tool migrates;
-# a Store it converts records neither them nor the GC tables/columns added
-# later, so the first writable open still runs those additive steps.
-HISTORY_SERIAL = "    history_serial INTEGER NOT NULL DEFAULT 0,\n"
-NEXT_SERIAL = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n"
-TRACE_SALT = (
-    ",\n trace_salt BLOB NOT NULL DEFAULT "
-    "(X'0000000000000000000000000000000000000000000000000000000000000000') "
-    "CHECK(length(trace_salt)=32)"
-)
-
-
-# The Commit attempt column (#776 R1) and its index, which schema version 1 lacked.
-ATTEMPT_COLUMN = "    attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16),\n"
-ATTEMPT_INDEX = 'CREATE UNIQUE INDEX commit_attempt ON "commit"(attempt) WHERE attempt IS NOT NULL;\n'
-
-
-def without_attempt(source):
-    """`source` as schema version 1 read it: no Commit attempt column or index."""
-    return source.replace(ATTEMPT_COLUMN, "", 1).replace(ATTEMPT_INDEX, "", 1)
-
-
-def _without_position_columns(source):
-    """`source` as it read before T1.2a/T1.4 appended the position columns."""
-    return source.replace(HISTORY_SERIAL, "").replace(TRACE_SALT, "", 1).replace(NEXT_SERIAL, "")
-
-
-def _source(version, layout, tables, without=()):
-    """The schema source the engine records for a version (scripts in its order), less `without`."""
-    objects = {16: "objects.sql", 17: "objects_units.sql", 18: "objects_units.sql"}[layout]
-    scripts = [_read_sql("sqlite", objects) + (_read_sql("sqlite", "objects_units_index.sql") if layout == 18 else "")]
-    scripts += [
-        _read_sql("sqlite", n).replace("schema_version=1", f"schema_version={version}")
-        for n in ("metadata.sql", "history.sql")
-    ]
-    scripts += [_read_sql("sqlite", n) for n in ("lineage.sql", "merge_scratch.sql", "file_digest.sql")]
-    if tables:
-        scripts.append(_read_sql("sqlite", "acquisition", "schema.sql"))
-    source = _without_position_columns("".join(scripts))
-    for text in without:
-        source = source.replace(text, "", 1)
-    return source
-
-
-def _statement(script, head):
-    start = script.index(head)
-    return script[start : start + script[start:].index(";\n") + 1]
-
-
-def _definition(con):
-    rows = con.execute("SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name")
-    return "".join(f"{t}\n{n}\n{s}\n" for t, n, s in rows)
-
-
-def migrate(source_path, target_path):
-    if os.path.exists(target_path) or os.path.exists(source_path + "-wal") and os.path.getsize(source_path + "-wal"):
-        raise SystemExit("refused: target exists, or the source is not closed (non-empty WAL)")
-    shutil.copyfile(source_path, target_path)
-    con = sqlite3.connect(target_path, isolation_level=None)
-    old = con.execute("PRAGMA user_version").fetchone()[0]
-    if con.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID or old not in (16, 17, 18, 22, 23, 24):
-        raise SystemExit(f"refused: not a schema version 1 Store (user_version {old})")
-    tables, layout, new = old >= 22, old - (6 if old >= 22 else 0), old + 40
-    recorded, definition = con.execute("SELECT schema_source,schema_definition FROM history_meta").fetchone()
-    if definition != _definition(con):
-        raise SystemExit("refused: live schema differs from the recorded definition")
-    metadata, history = _read_sql("sqlite", "metadata.sql"), _read_sql("sqlite", "history.sql")
-    v2_values, v2_hints = (
-        _statement(metadata, "CREATE TABLE inode_value_block ("),
-        _statement(history, "CREATE TABLE binding_hint_block ("),
-    )
-    # The open-time additive migrations add these, newest first; a Store may lack a suffix of them.
-    optional = [_read_sql("sqlite", n) for n in ("file_digest.sql", "merge_scratch.sql", "lineage.sql")]
-    hint_table = f"{v2_hints}\n\n"
-    for missing in range(len(optional) + 2):
-        without = optional[:missing] + ([hint_table] if missing == len(optional) + 1 else [])
-        v1 = without_attempt(
-            _source(old, layout, tables, without).replace(v2_values, V1_VALUES).replace(v2_hints, V1_HINTS)
-        )
-        if recorded == v1:
-            break
-    else:
-        raise SystemExit("refused: the recorded schema is not one this release wrote")
-    con.execute("BEGIN IMMEDIATE")
-    values = encode_values(con.execute("SELECT ordinal,value FROM inode_value ORDER BY ordinal").fetchall())
-    con.execute("DROP TABLE inode_value")
-    con.execute(v2_values)
-    con.executemany("INSERT INTO inode_value_block VALUES (?,?,?)", values)
-    has_hints = "binding_hint" in {r[0] for r in con.execute("SELECT name FROM sqlite_schema WHERE type='table'")}
-    if has_hints:
-        hints = encode_hints(con.execute("SELECT child,parent,name FROM binding_hint").fetchall())
-        con.execute("DROP TABLE binding_hint")
-        con.execute(v2_hints)
-        seq = Counter()
-        for group, body in hints:
-            seq[group] += 1
-            con.execute("INSERT INTO binding_hint_block VALUES (?,?,?)", (group, seq[group], body))
-    con.execute('ALTER TABLE "commit" ADD COLUMN ' + ATTEMPT_COLUMN.strip().rstrip(","))
-    con.execute(ATTEMPT_INDEX)
-    con.execute("PRAGMA writable_schema=ON")
-    for table in ("store_policy", "history_meta"):
-        con.execute(
-            "UPDATE sqlite_schema SET sql=replace(sql,?,?) WHERE type='table' AND name=?",
-            (f"schema_version={old})", f"schema_version={new})", table),
-        )
-    con.execute("PRAGMA writable_schema=OFF")
-    con.execute("COMMIT")
-    con.close()
-    con = sqlite3.connect(target_path, isolation_level=None)
-    con.execute("BEGIN IMMEDIATE")
-    con.execute(f"PRAGMA user_version={new}")
-    con.execute("UPDATE store_policy SET schema_version=?", (new,))
-    source = _source(new, layout, tables, without)
-    con.execute(
-        "UPDATE history_meta SET schema_version=?,schema_source=?,schema_definition=?", (new, source, _definition(con))
-    )
-    con.execute("COMMIT")
-    if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-        raise SystemExit("integrity check failed; remove the target")
-    con.execute("VACUUM")
-    con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    con.close()
-    for suffix in ("-wal", "-shm"):
-        if os.path.exists(target_path + suffix) and not os.path.getsize(target_path + suffix):
-            os.remove(target_path + suffix)
-    return {"user_version": [old, new], "value_blocks": len(values), "hint_blocks": len(hints) if has_hints else 0}
-
-
 def main(argv):
     if len(argv) == 3 and argv[1] == "attribute" and argv[2] != "--rows":
         con = sqlite3.connect(f"file:{argv[2]}?immutable=1", uri=True)
@@ -478,8 +322,6 @@ def main(argv):
                 kind, a, b, body = line.rstrip("\n").split("\t")
                 (values if kind == "value" else hints).append((int(a), int(b), bytes.fromhex(body)))
         print(json.dumps(attribute(sorted(values), sorted(hints)), indent=1))
-    elif len(argv) == 4 and argv[1] == "migrate":
-        print(json.dumps(migrate(argv[2], argv[3])))
     else:
         raise SystemExit(__doc__)
 

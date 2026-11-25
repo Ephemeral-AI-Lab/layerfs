@@ -187,10 +187,23 @@ fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
         None => {
             checks.fail(MOUNTED, "on record, but its daemon does not hold it");
             checks.fix(MOUNTED, unmount_fix(handle));
+            checks.evidence(
+                MOUNTED,
+                SdkValue::map([
+                    ("recorded", SdkValue::Bool(seen.recorded)),
+                    ("listed", SdkValue::Bool(false)),
+                ]),
+            );
         }
         Some(row) => {
+            let facts = SdkValue::map([
+                ("id", SdkValue::text(&row.id)),
+                ("activity", SdkValue::text(&row.activity)),
+                ("mounted", SdkValue::Bool(row.mounted)),
+            ]);
             match (row.mounted, row.activity.as_str()) {
                 (true, _) => checks.pass(MOUNTED, "its daemon reports its mount as present"),
+                // no fix for the two notices: the mount comes or goes by itself
                 (false, "binding" | "attaching") => {
                     checks.notice(MOUNTED, "its mount is still being made")
                 }
@@ -200,6 +213,7 @@ fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
                     checks.fix(MOUNTED, unmount_fix(handle));
                 }
             }
+            checks.evidence(MOUNTED, facts.clone());
             match row.activity.as_str() {
                 "failed" => {
                     checks.fail(ACTIVITY, "a local failure stopped its writes");
@@ -211,14 +225,7 @@ fn node(sandbox: &str, seen: &Seen, listing: Listing) -> Node {
                 }
                 _ => checks.pass(ACTIVITY, "no failed or uncertain operation is kept on it"),
             }
-            checks.evidence(
-                ACTIVITY,
-                SdkValue::map([
-                    ("id", SdkValue::text(&row.id)),
-                    ("activity", SdkValue::text(&row.activity)),
-                    ("mounted", SdkValue::Bool(row.mounted)),
-                ]),
-            );
+            checks.evidence(ACTIVITY, facts);
         }
     }
     checks.fill(&mut node, CHECKS, false);

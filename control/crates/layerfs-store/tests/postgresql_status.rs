@@ -247,6 +247,7 @@ fn status(home: &Path) -> SdkValue {
     let with = With {
         live: true,
         stats: false,
+        format: false,
     };
     layerfs_store::get::get(home, &mut Events::new(&mut sink), "pgs", with, &machines).unwrap()
 }

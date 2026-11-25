@@ -27,7 +27,8 @@ use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
 use layerfs_store::identity::{self, Identity};
 use layerfs_store::intent::clearing as clearing_call;
 use layerfs_store::place::{self, Executor};
-use layerfs_store::record::{StoreRecord, StoreRef};
+use layerfs_store::record::{unread_fix, StoreRecord, StoreRef};
+use layerfs_store::state::broken;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -54,6 +55,9 @@ pub(super) const CHECKS: &[CheckId] = &[
 
 /// The worker's shallow cut, the one `cut` its `store.diagnose` takes.
 const CUT: &str = "schema";
+
+/// What a schema this build does not read is told with.
+const SCHEMA_HINT: &str = "this build does not read its schema; use the LayerFS build that wrote it, or restore a backup under a new Store name";
 
 /// Checks Store `probe.thing` into `node`: its state from the home's
 /// records (`layerfs_store::state`, with the machine family's derivation
@@ -105,6 +109,16 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
                     error.code, error.message
                 ),
             );
+            // the refusal's own fix, or none: an unreadable record is not
+            // an unsupported one, and `store remove` would delete the Store
+            // and its projects
+            if let Some(fix) = error.detail.get_text("fix") {
+                checks.fix(RECORD, fix.to_owned());
+            }
+            checks.evidence(
+                RECORD,
+                SdkValue::map([("code", SdkValue::text(error.code.as_str()))]),
+            );
             return None;
         }
     };
@@ -112,8 +126,19 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
         Some(SdkValue::Int(v)) => Some(*v),
         _ => None,
     };
-    if version != Some(layerfs_home::home::RECORD_VERSION) || record.text("name") != Some(name) {
+    let version_matches = version == Some(layerfs_home::home::RECORD_VERSION);
+    let name_matches = record.text("name") == Some(name);
+    if !version_matches || !name_matches {
+        // no fix: the record may be another build's or another Store's, and
+        // removing it could lose a Store
         checks.fail(RECORD, "its record's name or version is not this Store's");
+        checks.evidence(
+            RECORD,
+            SdkValue::map([
+                ("name_matches", SdkValue::Bool(name_matches)),
+                ("version_matches", SdkValue::Bool(version_matches)),
+            ]),
+        );
         return None;
     }
     if let Err(error) = record.kind() {
@@ -125,7 +150,11 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
             ),
         );
         // the fix its `broken` `unsupported` state gives (V20-8a)
-        checks.fix(RECORD, layerfs_store::record::unread_fix(name));
+        checks.fix(RECORD, unread_fix(name));
+        checks.evidence(
+            RECORD,
+            SdkValue::map([("reason", SdkValue::text("engine_unsupported"))]),
+        );
         return None;
     }
     match identity::identity_in(&record) {
@@ -137,6 +166,12 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
             checks.fail(
                 RECORD,
                 format!("its record's saved id is not valid: {}", error.message),
+            );
+            // no fix: the id is the Store's identity; only a backup or the
+            // authoritative copy restores it
+            checks.evidence(
+                RECORD,
+                SdkValue::map([("reason", SdkValue::text("id_invalid"))]),
             );
             None
         }
@@ -169,6 +204,13 @@ fn operation(
             );
             checks.fail(OPERATION, message);
             checks.fix(OPERATION, format!("layerfs {}", clearing_call(&op, name)));
+            checks.evidence(
+                OPERATION,
+                SdkValue::map([
+                    ("operation", SdkValue::text(op.word())),
+                    ("standing", SdkValue::text("unresolved")),
+                ]),
+            );
         }
         (Some(op), _) if op.standing() == Standing::Running => checks.pass(
             OPERATION,
@@ -183,6 +225,13 @@ fn operation(
                 OPERATION,
                 format!("layerfs store compact {name}", name = shell_word(name)),
             );
+            checks.evidence(
+                OPERATION,
+                SdkValue::map([
+                    ("operation", SdkValue::text("compaction")),
+                    ("phase", SdkValue::text(phase)),
+                ]),
+            );
         }
         _ => checks.pass(OPERATION, "no operation on it is unfinished"),
     }
@@ -196,6 +245,16 @@ fn operation(
                     stale.len(),
                     pids.join(", ")
                 ),
+            );
+            let files: Vec<String> = stale
+                .iter()
+                .map(|pid| super::scan::shell(&paths::lease_dir(home, name).join(pid.to_string())))
+                .collect();
+            checks.fix(OPERATION, format!("rm {}", files.join(" ")));
+            let stale = stale.iter().map(|pid| SdkValue::Int(i64::from(*pid)));
+            checks.evidence(
+                OPERATION,
+                SdkValue::map([("stale_pids", SdkValue::List(stale.collect()))]),
             );
         }
         Ok(_) => {}
@@ -228,23 +287,60 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         Err(error) => {
             operation(probe.home, record, None, checks);
             let message = format!("machine {machine} did not answer: {}", error.message);
+            let seen = SdkValue::map([
+                ("machine", SdkValue::text(machine.as_str())),
+                ("code", SdkValue::text(error.code.as_str())),
+            ]);
             match error.code.as_str() {
+                // busy is retried, not repaired: no fix
                 "Busy" => checks.busy(CONNECTION, message),
-                _ => checks.fail(CONNECTION, message),
+                _ => {
+                    checks.fail(
+                        CONNECTION,
+                        format!("{message}; `layerfs machine doctor {machine}` diagnoses it"),
+                    );
+                }
             }
+            checks.evidence(CONNECTION, seen);
             return;
         }
     };
     operation(probe.home, record, found.get("compaction"), checks);
     let text = |key: &str| found.get_text(key).map(str::to_owned);
     if found.get("found") != Some(&SdkValue::Bool(true)) {
+        // no in-place restore: `backup restore` protects the recorded
+        // Store from replacement it cannot prove unchanged. With no backup
+        // the broken state is the record removal, whose message says what
+        // it deletes.
+        let fix = match broken(record, Reason::Missing) {
+            State::Broken { fix, .. } => fix,
+            _ => None,
+        };
+        let removes = fix
+            .as_deref()
+            .is_some_and(|f| f.starts_with("layerfs store remove"));
+        let lost = match (removes, record.links().is_empty()) {
+            (true, _) => {
+                "; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back"
+            }
+            (false, false) => {
+                "; no single call repairs it in place - check the machine's mounts first if the file may come back, or restore a backup under a new Store name"
+            }
+            (false, true) => "",
+        };
         checks.fail(
             CONNECTION,
-            format!("machine {machine} has no file where its record says"),
+            format!("machine {machine} has no file where its record says{lost}"),
         );
+        if let Some(fix) = fix {
+            checks.fix(CONNECTION, fix);
+        }
         checks.evidence(
             CONNECTION,
-            SdkValue::map([("reason", SdkValue::text("missing"))]),
+            SdkValue::map([
+                ("reason", SdkValue::text("missing")),
+                ("machine", SdkValue::text(machine.as_str())),
+            ]),
         );
         return;
     }
@@ -252,6 +348,14 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         checks.warning(
             CONNECTION,
             format!("machine {machine} cannot open a sqlite Store: {why}"),
+        );
+        // no fix: this build or kernel cannot open it; nothing to run
+        checks.evidence(
+            CONNECTION,
+            SdkValue::map([
+                ("reason", SdkValue::text("unsupported")),
+                ("machine", SdkValue::text(machine.as_str())),
+            ]),
         );
         return;
     }
@@ -274,30 +378,50 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
             IDENTITY,
             format!("its file records another Store's id than its record: {why}"),
         );
+        // no fix: replacing this file in place can destroy the Store whose
+        // id the file really holds; restore a backup under a new name or
+        // move the right file back by hand
+        checks.evidence(
+            IDENTITY,
+            SdkValue::map([
+                ("reason", SdkValue::text("id_differs")),
+                ("machine", SdkValue::text(machine.as_str())),
+            ]),
+        );
         return;
     }
     // a file of an older schema version: outdated, with the call that
     // clears it (`state::outdated_fix`)
+    let format = found.get("format");
     if let Some(why) = text("outdated") {
         checks.pass(IDENTITY, "the id in its file is the id in its record");
         checks.fail(SCHEMA, format!("its file is of an older format: {why}"));
-        checks.evidence(
+        let reason = ("reason", SdkValue::text(Reason::Outdated.word()));
+        checks.evidence(SCHEMA, with_format(vec![reason], format));
+        checks.fix(
             SCHEMA,
-            SdkValue::map([("reason", SdkValue::text(Reason::Outdated.word()))]),
+            layerfs_store::state::outdated_fix(name, false, &why),
         );
-        checks.fix(SCHEMA, layerfs_store::state::outdated_fix(name, false));
         return;
     }
     if let Some(why) = text("schema_error") {
         checks.pass(IDENTITY, "the id in its file is the id in its record");
         checks.fail(
             SCHEMA,
-            format!("its file does not open with the schema this build reads: {why}"),
+            format!(
+                "its file does not open with the schema this build reads: {why}; {SCHEMA_HINT}"
+            ),
         );
+        // no fix: replacing this file in place can discard newer data;
+        // restore a backup under a new name or use the build that wrote it
+        let reason = ("reason", SdkValue::text("schema_unreadable"));
+        let on = ("machine", SdkValue::text(machine.as_str()));
+        checks.evidence(SCHEMA, with_format(vec![reason, on], format));
         return;
     }
     checks.pass(IDENTITY, "the id in its file is the id in its record");
     checks.pass(SCHEMA, "its schema is the one this build reads");
+    checks.evidence(SCHEMA, with_format(Vec::new(), format));
     // the live mount admissions and one bounded page of the retained done
     // audit: reported as evidence, never released or settled by a doctor
     match found.get("mount_holders") {
@@ -339,6 +463,10 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
                     bucket = shell_word(&bucket)
                 ),
             );
+            checks.evidence(
+                BACKUPS,
+                SdkValue::map([("bucket", SdkValue::text(bucket.as_str()))]),
+            );
         }
     }
     if !behind {
@@ -347,12 +475,13 @@ fn backups(record: &StoreRecord, now: Option<String>, error: Option<String>, che
 }
 
 /// The shallow cut of the sqlite file at `path`, as this process or a
-/// worker makes it: `{ found, compaction, unsupported, busy,
+/// worker makes it: `{ found, compaction, format, unsupported, busy,
 /// identity_error, outdated, schema_error, heads, heads_error }` (`busy`:
 /// another writer holds the file; `outdated`: it is of an older schema
 /// version), `compaction` the run its `<store>.compact-op` records
-/// (`report::compact_status`), its heads read only when `heads` and the
-/// schema check passed.
+/// (`report::compact_status`), `format` its format from its header
+/// ([`format_evidence`], or `{ error }`), its heads read only when `heads`
+/// and the schema check passed.
 fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     let mut fields = vec![("found", SdkValue::Bool(path.is_file()))];
     if !path.is_file() {
@@ -361,6 +490,14 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     if let Some(run) = layerfs_store::compact::recorded_run(path) {
         fields.push(("compaction", run));
     }
+    // the format from its header alone, whatever this build makes of it
+    fields.push((
+        "format",
+        match layerfs_persistence::upgrade::sqlite_format_evidence(path) {
+            Ok(evidence) => format_evidence(&evidence),
+            Err(error) => SdkValue::map([("error", SdkValue::text(upgrade_error(&error)))]),
+        },
+    ));
     match diagnostic::sqlite_schema(path, identity) {
         Err(error) if error.code == "Unsupported" => {
             fields.push(("unsupported", SdkValue::Text(error.message)))
@@ -514,7 +651,10 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
                 layerfs_store::observed::record(probe.home, record.name(), None, &failed);
                 false
             }
-            None => here(probe.home, record),
+            None => {
+                postgresql_format(record, checks);
+                here(probe.home, record)
+            }
         },
     };
     // the machines dial the same URL with the same login: when this
@@ -567,7 +707,17 @@ fn fold(
     let steps = || seen.iter().filter(|o| !bookkeeping.contains(&step(o)));
     let failed = steps().find(|o| o.outcome == Outcome::Fail);
     let unknown = steps().find(|o| o.outcome == Outcome::Unknown);
-    let evidence = |o: &Observation| SdkValue::map([("step", SdkValue::text(step(o)))]);
+    let evidence = |o: &Observation| {
+        SdkValue::map([
+            ("step", SdkValue::text(step(o))),
+            ("host", SdkValue::text(host.as_str())),
+        ])
+    };
+    // a refused login names the password; any other step the address
+    let fix = |o: &Observation| match step(o) {
+        "authentication" | "login" => layerfs_store::postgresql::login::password_fix(record),
+        _ => connect_fix(record, false),
+    };
     match (failed, unknown) {
         (Some(o), _) => {
             checks.fail(
@@ -577,6 +727,7 @@ fn fold(
                     o.message
                 ),
             );
+            checks.fix(CONNECTION, fix(o));
             checks.evidence(CONNECTION, evidence(o));
         }
         (None, Some(o)) if step(o) == "cancelled" && expired => {
@@ -588,7 +739,13 @@ fn fold(
                 "this computer cannot reach the server at {host}: it did not answer within {limit} s (connect and login)"
             );
             checks.fail(CONNECTION, message.clone());
-            let step = SdkValue::map([("step", SdkValue::text("handshake"))]);
+            checks.fix(CONNECTION, connect_fix(record, false));
+            let seconds = i64::try_from(limit).unwrap_or(i64::MAX);
+            let step = SdkValue::map([
+                ("step", SdkValue::text("handshake")),
+                ("host", SdkValue::text(host.as_str())),
+                ("seconds", SdkValue::Int(seconds)),
+            ]);
             checks.evidence(CONNECTION, step);
             return Some(message);
         }
@@ -600,6 +757,7 @@ fn fold(
                     o.message
                 ),
             );
+            checks.fix(CONNECTION, fix(o));
             checks.evidence(CONNECTION, evidence(o));
         }
         (None, None) if steps().any(|o| step(o) == "authentication") => checks.pass(
@@ -621,7 +779,25 @@ fn fold(
             let message = o.message.clone();
             match o.outcome {
                 Outcome::Pass => checks.pass(id, message),
-                Outcome::Fail => checks.fail(id, message),
+                Outcome::Fail => {
+                    // no fix: backup refuses a PostgreSQL Store and restore
+                    // makes only sqlite
+                    match id == IDENTITY {
+                        true => checks.fail(
+                            id,
+                            format!(
+                                "{message}; reconnect to the intended database or restore it with PostgreSQL's own tools"
+                            ),
+                        ),
+                        false => checks.fail(
+                            id,
+                            format!(
+                                "{message}; {SCHEMA_HINT}; restore it with PostgreSQL's own tools"
+                            ),
+                        ),
+                    }
+                    checks.evidence(id, SdkValue::map([("step", SdkValue::text(step(o)))]));
+                }
                 Outcome::Unknown => checks.unknown(id, message),
                 Outcome::Skipped => {}
             }
@@ -660,6 +836,8 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
                     Err(refusal) => {
                         checks.fail(CONNECTION, refusal.message.clone());
                         fix_of(&refusal, checks);
+                        let code = SdkValue::text(refusal.code.as_str());
+                        checks.evidence(CONNECTION, SdkValue::map([("code", code)]));
                     }
                 }
             }
@@ -668,10 +846,83 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
     }
 }
 
-/// The last `store.connection` observation with `refusal`'s `fix`, when
-/// it carries one.
+/// The last `store.connection` observation with `refusal`'s own `fix`, or
+/// none: a refusal without one (a record that names no user) has no command
+/// that is safe for that cause.
 fn fix_of(refusal: &SdkRefusal, checks: &mut Checks) {
     if let Some(fix) = refusal.detail.get_text("fix") {
-        checks.fix(CONNECTION, fix);
+        checks.fix(CONNECTION, fix.to_owned());
     }
+}
+
+/// `store connect` for PostgreSQL Store `record`: the address `<url>`, and
+/// with `login` the user and the password on stdin; never text of a URL.
+fn connect_fix(record: &StoreRecord, login: bool) -> String {
+    let login = if login {
+        " --user <user> --password-stdin"
+    } else {
+        ""
+    };
+    format!(
+        "layerfs store connect {} <url>{login}",
+        shell_word(record.name())
+    )
+}
+
+/// `store.schema`'s evidence (#804 §2): `{ version, latest, status, raw,
+/// variant }`, the format with the raw encoding (`user_version`, or
+/// `history_meta.schema_version`) and the recorded-source variant.
+fn format_evidence(evidence: &layerfs_persistence::upgrade::FormatEvidence) -> SdkValue {
+    let format = &evidence.format;
+    SdkValue::map([
+        (
+            "version",
+            format.version.map_or(SdkValue::Null, SdkValue::Int),
+        ),
+        ("latest", SdkValue::Int(format.latest)),
+        ("status", SdkValue::text(format.status.word())),
+        ("raw", SdkValue::Int(evidence.raw)),
+        ("variant", SdkValue::opt_text(evidence.variant.clone())),
+    ])
+}
+
+/// The engine's words for a format it could not read.
+fn upgrade_error(error: &layerfs_persistence::upgrade::UpgradeError) -> String {
+    use layerfs_persistence::upgrade::UpgradeError;
+    match error {
+        UpgradeError::InUse(why)
+        | UpgradeError::Busy(why)
+        | UpgradeError::Unsupported(why)
+        | UpgradeError::Failed(why)
+        | UpgradeError::Unknown(why) => why.clone(),
+        UpgradeError::Cancelled => layerfs_store::upgrade::CANCELLED.to_owned(),
+    }
+}
+
+/// `fields` with the shallow cut's `format` (`{ version, latest, status,
+/// raw, variant }` or `{ error }`) as `format` beside them.
+fn with_format(mut fields: Vec<(&str, SdkValue)>, format: Option<&SdkValue>) -> SdkValue {
+    if let Some(format) = format {
+        fields.push(("format", format.clone()));
+    }
+    map_of(fields)
+}
+
+/// PostgreSQL Store `record`'s format as `store.schema`'s evidence: one
+/// connect and one `SELECT` (`postgresql_format_evidence`).
+fn postgresql_format(record: &StoreRecord, checks: &mut Checks) {
+    let url = layerfs_store::record::url(record);
+    let schema = layerfs_store::upgrade::postgresql_schema(record);
+    let format = match (url, schema) {
+        (Ok(url), Ok(schema)) => {
+            match layerfs_persistence::upgrade::postgresql_format_evidence(&url, &schema) {
+                Ok(evidence) => format_evidence(&evidence),
+                Err(error) => SdkValue::map([("error", SdkValue::text(upgrade_error(&error)))]),
+            }
+        }
+        (Err(error), _) | (_, Err(error)) => {
+            SdkValue::map([("error", SdkValue::text(error.message))])
+        }
+    };
+    checks.evidence(SCHEMA, with_format(Vec::new(), Some(&format)));
 }

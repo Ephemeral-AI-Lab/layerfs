@@ -1,7 +1,8 @@
 //! PostgreSQL Stores: connect and disconnect, the Store's saved login
 //! (`login`), a Store URL as its client reads it (`address`), the check of a
 //! connection from the side that dials it and the machines attached to it
-//! (`check`), opening a database session
+//! (`check`), the family's exclusive operation (`family`, #804), opening a
+//! database session
 //! (`open`, the PostgreSQL URL and Store open), and the held host sessions
 //! Store calls read through (`reader`). Never imports `sqlite/`.
 #[doc(hidden)]
@@ -10,6 +11,8 @@ pub mod address;
 pub mod check;
 #[doc(hidden)]
 pub mod connect;
+#[doc(hidden)]
+pub mod family;
 #[doc(hidden)]
 pub mod login;
 #[doc(hidden)]
