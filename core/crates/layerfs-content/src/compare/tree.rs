@@ -8,7 +8,7 @@
 //! every listing is bounded by an explicit entry limit; reaching it is
 //! reported as truncation, never as a smaller complete answer.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use super::sorted::{difference, DifferenceWork};
 use crate::error::{ContentError, ContentResult};
@@ -180,6 +180,43 @@ pub fn inode_differences(
     )
 }
 
+/// The directories whose listing differs between two roots, in serial
+/// order: each one's serial, its listing on the left (none when the left
+/// lacks it as a directory) and on the right. Held for one Commit's change:
+/// one entry per changed directory.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ChangedDirectories {
+    entries: Vec<(u64, Option<ObjectId>, ObjectId)>,
+}
+
+impl ChangedDirectories {
+    /// Notes one changed inode row: kept when it is a directory on the right
+    /// whose listing differs from the left's.
+    pub fn note(&mut self, serial: u64, before: Option<&InodeValue>, after: Option<&InodeValue>) {
+        let listing = |value: Option<&InodeValue>| {
+            value
+                .filter(|value| value.kind == InodeKind::Directory)
+                .map(|value| value.content_root)
+        };
+        if let Some(now) = listing(after) {
+            let was = listing(before);
+            if was != Some(now) {
+                self.entries.push((serial, was, now));
+            }
+        }
+    }
+
+    /// Directories noted.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether none was noted.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
 /// Every name binding `right` holds that `left` does not, as `(child, parent,
 /// name)`: the new bindings of each directory whose listing changed, and every
 /// binding of a directory `left` lacks. Work follows the change; with no
@@ -188,37 +225,104 @@ pub fn new_bindings(
     reader: &dyn AuthenticatedObjects,
     left: Option<&TreeTable>,
     right: &TreeTable,
+    visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
+) -> ContentResult<()> {
+    let mut work = DifferenceWork::default();
+    let mut directories = ChangedDirectories::default();
+    inode_differences(reader, left, right, &mut work, |serial, before, after| {
+        directories.note(serial, before, after);
+        Ok(())
+    })?;
+    directory_bindings(reader, &directories, visit)
+}
+
+/// Directories one [`directory_bindings`] window reads together: both root
+/// pages of each fit one read-ahead demand.
+const DIRECTORY_WINDOW: usize = super::sorted::READ_AHEAD_PAGES / 2;
+
+/// The new bindings of every noted directory, as [`new_bindings`] visits
+/// them, in the same order. The directories are taken a window at a time:
+/// the root pages of a window's two listings are read in one demand (#810
+/// F1), and each directory's difference then reads only its deeper changed
+/// pages, with its own read-ahead. A directory the left lacks is compared
+/// with the empty listing: all of its bindings.
+pub fn directory_bindings(
+    reader: &dyn AuthenticatedObjects,
+    directories: &ChangedDirectories,
     mut visit: impl FnMut(u64, u64, &PathName) -> ContentResult<()>,
 ) -> ContentResult<()> {
     let mut work = DifferenceWork::default();
-    let mut directories = Vec::new();
-    let listing = |value: Option<&InodeValue>| {
-        value
-            .filter(|value| value.kind == InodeKind::Directory)
-            .map(|value| value.content_root)
-    };
-    inode_differences(reader, left, right, &mut work, |serial, before, after| {
-        if let Some(now) = listing(after) {
-            let was = listing(before);
-            if was != Some(now) {
-                directories.push((serial, was, now));
+    for window in directories.entries.chunks(DIRECTORY_WINDOW) {
+        let mut ids = Vec::with_capacity(window.len() * 2);
+        for (_, was, now) in window {
+            for id in was.iter().chain(std::iter::once(now)) {
+                if !ids.contains(id) {
+                    ids.push(*id);
+                }
             }
         }
-        Ok(())
-    })?;
-    for (parent, was, now) in directories {
-        match was {
-            Some(was) => {
-                binding_changes(reader, Some(was), Some(now), &mut work, |name, _, child| {
-                    child.map_or(Ok(()), |child| visit(child, parent, name))
-                })?
-            }
-            None => list_directory(reader, now, |name, child| {
-                visit(child, parent, name).map(|()| true)
-            })?,
+        let held = Held::read(reader, &ids)?;
+        for (parent, was, now) in window {
+            binding_changes(&held, *was, Some(*now), &mut work, |name, _, child| {
+                child.map_or(Ok(()), |child| visit(child, *parent, name))
+            })?;
         }
     }
     Ok(())
+}
+
+/// One window's root pages, read in one demand and kept for the window; any
+/// other page is read from `inner`, one demand per request as asked.
+struct Held<'a> {
+    inner: &'a dyn AuthenticatedObjects,
+    pages: HashMap<ObjectId, Vec<u8>>,
+}
+
+impl<'a> Held<'a> {
+    fn read(inner: &'a dyn AuthenticatedObjects, ids: &[ObjectId]) -> ContentResult<Self> {
+        let bodies = inner.read_canonical_batch(ids)?;
+        if bodies.len() != ids.len() {
+            return Err(ContentError::BatchCardinality {
+                requested: ids.len(),
+                returned: bodies.len(),
+            });
+        }
+        Ok(Self {
+            inner,
+            pages: ids.iter().copied().zip(bodies).collect(),
+        })
+    }
+}
+
+impl AuthenticatedObjects for Held<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let missing: Vec<ObjectId> = ids
+            .iter()
+            .filter(|id| !self.pages.contains_key(id))
+            .copied()
+            .collect();
+        let mut read = if missing.is_empty() {
+            Vec::new()
+        } else {
+            self.inner.read_canonical_batch(&missing)?
+        };
+        if read.len() != missing.len() {
+            return Err(ContentError::BatchCardinality {
+                requested: missing.len(),
+                returned: read.len(),
+            });
+        }
+        let mut read = read.drain(..);
+        ids.iter()
+            .map(|id| match self.pages.get(id) {
+                Some(body) => Ok(body.clone()),
+                None => read.next().ok_or(ContentError::BatchCardinality {
+                    requested: ids.len(),
+                    returned: 0,
+                }),
+            })
+            .collect()
+    }
 }
 
 /// Every name whose binding differs between two directory contents.

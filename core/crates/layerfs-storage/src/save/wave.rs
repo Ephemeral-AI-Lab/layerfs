@@ -144,8 +144,10 @@ impl State<'_> {
                     0 => end,
                     covered => index + covered,
                 };
-                self.verify_bases(&objects[index..next], &bases[index - start..next - start])?;
+                let page = &bases[index - start..next - start];
+                self.verify_bases(&objects[index..next], page)?;
                 for at in index..next {
+                    self.prepare_bases(&objects[at..next], &page[at - index..])?;
                     self.admit(&objects, at, &mut prepared)?;
                 }
                 drop(admission);
@@ -347,6 +349,115 @@ impl State<'_> {
         };
         self.candidates.flush(&view)?;
         Ok(())
+    }
+    /// Before `objects[0]` is admitted: when it is an inode leaf whose stored
+    /// base (`bases[0]`, its located predecessors) is not rebuilt ahead yet,
+    /// rebuilds ahead the stored bases of it and of the inode leaves after it
+    /// in `objects`, with their values in one lookup a window at a time
+    /// ([`Self::prepare_leaves`]): selection (`pooled_bases`) then reads each
+    /// base without a lookup of its own (#810 F4). Reads only; selection reads
+    /// and checks the same bytes either way.
+    fn prepare_bases(
+        &mut self,
+        objects: &[FinalizedObject],
+        bases: &[Vec<ObjectLocation>],
+    ) -> StorageResult<()> {
+        let leaf = |object: &FinalizedObject| object.role() == ObjectRole::InodeLeaf;
+        match (
+            objects.first(),
+            bases.first().and_then(|bases| bases.first()),
+        ) {
+            (Some(object), Some(base))
+                if leaf(object) && !self.pool.is_prepared(&base.object_id) =>
+            {
+                let ahead: Vec<ObjectId> = objects
+                    .iter()
+                    .zip(bases)
+                    .filter(|(object, _)| leaf(object))
+                    .flat_map(|(_, bases)| bases.iter().map(|base| base.object_id))
+                    .collect();
+                self.prepare_leaves(&ahead, false)
+            }
+            _ => Ok(()),
+        }
+    }
+    /// Before `ids` are read: rebuilds ahead the pooled inode leaves among
+    /// them (when `resolving` their canonical bytes, those this Save has not
+    /// resolved yet; selection reads the pooled bodies, which that cache does
+    /// not keep) and looks up their stored values together, a bounded window at a time
+    /// (`PoolReader::prepare_leaves`, as a Store reader's demand does, #95):
+    /// one value lookup per window instead of one per leaf (#810 F4). Each
+    /// leaf's own resolution still authenticates it.
+    pub(super) fn prepare_leaves(
+        &mut self,
+        ids: &[ObjectId],
+        resolving: bool,
+    ) -> StorageResult<()> {
+        let view = WaveSource {
+            fetch: &self.storage.source,
+            packer: &self.packer,
+            signatures: &self.signatures,
+            values: &self.values,
+        };
+        let mut leaves = Vec::new();
+        for id in ids {
+            if resolving && self.resolved.holds(*id) {
+                continue;
+            }
+            // Only where it is known already: sealed here, or located in the
+            // Store. A pending object is not looked up, so preparing asks
+            // the Store nothing the demand itself would not.
+            let location = match self.packer.location(*id) {
+                Some(location) => Some(location),
+                None => self.storage.source.located(std::iter::once(*id)).pop(),
+            };
+            if let Some(location) = location {
+                if location.role == ObjectRole::InodeLeaf && !leaves.contains(&location) {
+                    leaves.push(location);
+                }
+            }
+        }
+        if leaves.len() < 2 {
+            return Ok(());
+        }
+        // The stored leaves' delta chains are located a level at a time for
+        // all of them together, as a Store reader's demand does
+        // (`read/prefetch.rs`), instead of one locate per leaf and level. A
+        // stale chain hint only drops the hints: the rebuild below walks the
+        // chains from authoritative locates, as without them.
+        let stored: Vec<ObjectLocation> = leaves
+            .iter()
+            .filter(|leaf| self.packer.location(leaf.object_id).is_none())
+            .copied()
+            .collect();
+        if stored.len() > 1 {
+            match crate::read::prefetch_chains(
+                &self.storage.source,
+                &stored,
+                &mut self.packs,
+                &mut self.decode,
+                &mut self.groups,
+            ) {
+                Err(error) if hint_failure(&error) => {
+                    self.storage.source.drop_hints(&[])?;
+                }
+                other => {
+                    other?;
+                }
+            }
+        }
+        let capacities = self.storage.capacities();
+        self.pool.prepare_leaves(
+            &view,
+            &capacities,
+            i64::MAX,
+            &mut self.decode,
+            &leaves,
+            Some(crate::encoding::pool::read::PooledCaches {
+                encoded: &mut self.packs,
+                decoded: &mut self.groups,
+            }),
+        )
     }
     pub(super) fn resolve(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
         if let Some(value) = self.resolved.get(id) {

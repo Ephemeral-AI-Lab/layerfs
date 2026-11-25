@@ -80,6 +80,54 @@ pub enum Flight {
     /// read before (`/one`, `/two`): their root pages are one grouped read,
     /// one locate message for both (#810 F3).
     Spread,
+    /// A warm Commit over a wide seed ([`WIDE_DIRECTORIES`] directories of
+    /// [`WIDE_FILES`] files) that also rewrites one file and adds one in
+    /// every directory: its reads before the lane go in batched windows
+    /// (#810: the Save's leaf reads, the difference walk's read-ahead, the
+    /// directory windows of the binding hints).
+    Wide,
+}
+
+/// Directories of the [`Flight::Wide`] seed.
+const WIDE_DIRECTORIES: usize = 12;
+/// Files in each of them.
+const WIDE_FILES: usize = 10;
+
+/// The seed of `flight`'s Store.
+fn seed(flight: Flight) -> Vec<(String, Vec<u8>)> {
+    let files = if flight == Flight::Spread {
+        SPREAD_SEED
+    } else {
+        SEED
+    };
+    let mut out: Vec<(String, Vec<u8>)> = files
+        .iter()
+        .map(|(path, bytes)| ((*path).to_owned(), bytes.to_vec()))
+        .collect();
+    if flight == Flight::Wide {
+        for d in 0..WIDE_DIRECTORIES {
+            for f in 0..WIDE_FILES {
+                let path = format!("/w/d{d:02}/f{f:02}");
+                out.push((path.clone(), format!("{path} seed\n").into_bytes()));
+            }
+        }
+    }
+    out
+}
+
+/// The armed Commit's change besides `/fault`: in a [`Flight::Wide`] one,
+/// a rewrite of `f05` and a new file in every directory.
+fn wide_change(flight: Flight) -> Vec<(String, Vec<u8>)> {
+    if flight != Flight::Wide {
+        return Vec::new();
+    }
+    (0..WIDE_DIRECTORIES)
+        .flat_map(|d| [format!("/w/d{d:02}/f05"), format!("/w/d{d:02}/new")])
+        .map(|path| {
+            let bytes = format!("{path} changed\n").into_bytes();
+            (path, bytes)
+        })
+        .collect()
 }
 
 impl Flight {
@@ -118,6 +166,17 @@ fn expected(flight: Flight, fault: &[u8]) -> Tree {
     }
     if flight == Flight::Raced {
         tree.insert("/other".into(), Node::File(b"other\n".to_vec()));
+    }
+    if flight == Flight::Wide {
+        tree.insert("/w".into(), Node::Dir);
+        for (path, bytes) in seed(flight).into_iter().skip(SEED.len()) {
+            let directory = path.rsplit_once('/').unwrap().0.to_owned();
+            tree.insert(directory, Node::Dir);
+            tree.insert(path, Node::File(bytes));
+        }
+        for (path, bytes) in wide_change(flight) {
+            tree.insert(path, Node::File(bytes));
+        }
     }
     tree.insert("/fault".into(), Node::File(fault.to_vec()));
     if flight == Flight::Similar {
@@ -229,6 +288,9 @@ fn run(
         mover.unmount(other);
         mover.stop();
     }
+    for (path, bytes) in wide_change(flight) {
+        write(&workspace, &path, &bytes);
+    }
     write(&workspace, "/fault", &content(name));
     if flight == Flight::Similar {
         for (path, bytes) in similar_files(&content(name)) {
@@ -311,7 +373,7 @@ fn check(
         "{label}: one fused Commit or one fallback"
     );
     match flight {
-        Flight::Warm | Flight::First | Flight::Similar | Flight::Spread => {
+        Flight::Warm | Flight::First | Flight::Similar | Flight::Spread | Flight::Wide => {
             assert_eq!(fallbacks, 0, "{label}: nothing raced")
         }
         Flight::Forced => assert_eq!(run.counts, (0, 0), "{label}: a forced Commit is not fused"),
@@ -391,12 +453,12 @@ pub enum Positions {
 /// The sweep: `fault` at every server message of the `flight` Commit that
 /// `positions` selects.
 pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
-    let seed = if flight == Flight::Spread {
-        SPREAD_SEED
-    } else {
-        SEED
-    };
-    let Some(store) = TestStore::postgres(tag, seed) else {
+    let seeded = seed(flight);
+    let seeded: Vec<(&str, &[u8])> = seeded
+        .iter()
+        .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+        .collect();
+    let Some(store) = TestStore::postgres(tag, &seeded) else {
         return;
     };
     let started = Instant::now();
@@ -441,7 +503,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     if flight != Flight::Raced {
         let fused = u64::from(matches!(
             flight,
-            Flight::Warm | Flight::First | Flight::Similar | Flight::Spread
+            Flight::Warm | Flight::First | Flight::Similar | Flight::Spread | Flight::Wide
         ));
         assert_eq!(clean.counts, (fused, 0), "the clean Commit's path");
     }

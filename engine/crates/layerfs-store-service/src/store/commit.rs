@@ -4,6 +4,7 @@ use super::{
     CommitSuccess, MergeReport,
 };
 use crate::telemetry::phase;
+use layerfs_content::compare::ChangedDirectories;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
     error::MovedState, BranchSnapshot, CommitAttempt, CommitOutcome, CommitVia, HistoryError,
@@ -352,16 +353,27 @@ impl BoundWorkspace {
                 // One reader continues the Save for both phases, so they
                 // share its caches and the bodies and values it published.
                 let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
+                // One difference walk counts the logical size and notes the
+                // directories whose listing changed; the hints then read
+                // only those directories (#810).
+                let mut directories = ChangedDirectories::default();
                 let logical = phase(timing, "logical.count", || {
-                    self.logical_after(&reader, current.effective_root, root, known)
+                    self.logical_after(
+                        &reader,
+                        current.effective_root,
+                        root,
+                        known,
+                        Some(&mut directories),
+                    )
                 })?;
-                let left = Some(FilesystemRootId(current.effective_root));
                 let hints = phase(timing, "bindings", || match fused {
-                    true => super::hints::collect_new_bindings(&reader, left, root),
-                    false => {
-                        super::hints::record_new_bindings(&reader, &*self.store.history, left, root)
-                            .map(|_| None)
-                    }
+                    true => super::hints::collect_directory_bindings(&reader, &directories),
+                    false => super::hints::record_directory_bindings(
+                        &reader,
+                        &*self.store.history,
+                        &directories,
+                    )
+                    .map(|_| None),
                 })?;
                 drop(reader);
                 // Rows written since the capture are checked first here,
@@ -388,11 +400,10 @@ impl BoundWorkspace {
                         retained.saved = Some(saved);
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         phase(timing, "bindings", || {
-                            super::hints::record_new_bindings(
+                            super::hints::record_directory_bindings(
                                 &reader,
                                 &*self.store.history,
-                                left,
-                                root,
+                                &directories,
                             )
                         })?;
                         None
@@ -533,15 +544,21 @@ impl BoundWorkspace {
                             super::commit_fused::add_saved(saved, &step_saved);
                         }
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
+                        let mut directories = ChangedDirectories::default();
                         let logical = phase(timing, "logical.lane", || {
-                            self.logical_after(&reader, root.0, stepped, logical)
+                            self.logical_after(
+                                &reader,
+                                root.0,
+                                stepped,
+                                logical,
+                                Some(&mut directories),
+                            )
                         })?;
                         phase(timing, "bindings.lane", || {
-                            super::hints::record_new_bindings(
+                            super::hints::record_directory_bindings(
                                 &reader,
                                 &*self.store.history,
-                                Some(root),
-                                stepped,
+                                &directories,
                             )
                         })?;
                         let step_changed = phase(timing, "merge.lane.changed", || {
@@ -816,16 +833,19 @@ impl BoundWorkspace {
     /// Logical size of `after`, from `before`'s known size and the change
     /// between them. File lengths come from the Store catalogue a window at
     /// a time (`Reader::file_lengths`), never from reading file payloads; a
-    /// Storage refusal keeps its original error.
+    /// Storage refusal keeps its original error. The same walk notes in
+    /// `directories` the directories whose listing changed, for the binding
+    /// hints (`hints::record_directory_bindings`).
     pub(super) fn logical_after(
         &self,
         reader: &layerfs_storage::Reader<'_>,
         before: layerfs_content::ObjectId,
         after: FilesystemRootId,
         known: u64,
+        directories: Option<&mut ChangedDirectories>,
     ) -> Result<u64, CommitError> {
         let mut refused = None;
-        let counted = layerfs_content::filesystem::statistics::logical_size_after_with(
+        let counted = layerfs_content::filesystem::statistics::logical_size_and_directories(
             reader,
             FilesystemRootId(before),
             after,
@@ -836,6 +856,7 @@ impl BoundWorkspace {
                     layerfs_content::ContentError::OutputRejected
                 })
             },
+            directories,
         );
         match (counted, refused) {
             (Ok(size), _) => Ok(size),

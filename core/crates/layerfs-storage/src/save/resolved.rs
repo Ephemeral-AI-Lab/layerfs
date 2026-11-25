@@ -46,6 +46,11 @@ impl Resolved {
         Some(value.clone())
     }
 
+    /// Whether `id`'s value is kept, without marking it read.
+    pub(super) fn holds(&self, id: ObjectId) -> bool {
+        self.values.contains_key(&id)
+    }
+
     /// Keeps `value` as `id`'s canonical bytes; a value larger than the whole
     /// bound is not kept.
     pub(super) fn keep(&mut self, id: ObjectId, value: &[u8]) {
