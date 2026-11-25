@@ -105,6 +105,13 @@ SLOW = {
     # Fused Commits of 8,000 new files and of 400 rewrites over a 20,000-file
     # seed on both backends (#768 stage 2b review), macOS host, 2026-11-25.
     ("layerfs-store-service", "commit_fused_held"): 45.1,
+    # Fused-versus-forced size-boundary matrix on both backends (#768 stage
+    # 2b), slowest of the a36e9b997c runs, macOS host, 2026-11-25.
+    ("layerfs-store-service", "commit_fused_sizes"): 38.0,
+    ("layerfs-store-service", "commit_fused_sizes_bytes"): 23.5,
+    ("layerfs-store-service", "commit_fused_sizes_moves"): 47.0,
+    ("layerfs-store-service", "commit_fused_sizes_rounds"): 22.5,
+    ("layerfs-store-service", "commit_fused_sizes_seeded"): 60.6,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
