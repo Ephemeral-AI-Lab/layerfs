@@ -144,6 +144,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let with = With {
         live: context.with("live"),
         stats: context.with("stats"),
+        format: false,
     };
     let (home, events) = context.parts();
     let reads = layerfs_control::store::reads();

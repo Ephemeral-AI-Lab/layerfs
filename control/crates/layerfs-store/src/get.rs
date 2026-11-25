@@ -31,6 +31,8 @@ pub struct With {
     pub live: bool,
     /// `--with stats`: its counters, opening it.
     pub stats: bool,
+    /// `--with format`: its format, read without opening it (#804).
+    pub format: bool,
 }
 
 /// `ms` since 1970 as an answer's time, null when unknown.

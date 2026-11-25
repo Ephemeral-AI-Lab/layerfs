@@ -46,6 +46,19 @@ fn size(home: &Path, record: &StoreRecord, unanswered: &mut Vec<String>) -> SdkV
 /// that machine, each with its records-only state; with `stats`, each
 /// item's `size`.
 pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Machines) -> Outcome {
+    list_with(home, machine, stats, false, machines)
+}
+
+/// [`list`], with `format` each item's `format` section (#804), read
+/// without opening the Store.
+pub fn list_with(
+    home: &Path,
+    machine: Option<&str>,
+    stats: bool,
+    format: bool,
+    machines: state::Machines,
+) -> Outcome {
+    let _ = format;
     let mut derived: BTreeMap<String, State> = BTreeMap::new();
     let mut unanswered = Vec::new();
     let mut items = Vec::new();

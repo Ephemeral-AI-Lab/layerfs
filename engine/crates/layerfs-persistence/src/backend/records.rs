@@ -168,6 +168,14 @@ const OUTDATED: [&str; 3] = [SCHEMA_VERSION_2, POSTGRES_SCHEMA_2, POSTGRES_SCHEM
 pub fn outdated_store(text: &str) -> Option<&'static str> {
     OUTDATED.into_iter().find(|status| text.contains(status))
 }
+/// Whether older-format refusal `text` names a Store `store upgrade` brings
+/// to the latest format (SQLite 2, PostgreSQL 3), as against one whose
+/// remedy is `store remove` / `store disconnect` (#804).
+pub fn upgradable_store(text: &str) -> bool {
+    [SCHEMA_VERSION_2, POSTGRES_SCHEMA_3]
+        .into_iter()
+        .any(|status| text.contains(status))
+}
 impl From<BackendError> for layerfs_storage::port::PersistenceError {
     fn from(e: BackendError) -> Self {
         match e {
