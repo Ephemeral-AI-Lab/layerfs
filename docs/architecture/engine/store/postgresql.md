@@ -199,7 +199,10 @@ A mount, a compaction claim and their registrations keep session advisory
 keys (Store, project and Branch) across statements
 ([`admission/session.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/session.rs)).
 The lock and the unlock are each one autocommit `Bare` statement for all of
-an intent's keys, outside the generation fence (#776 P2): a fenced
+an intent's keys (since #768 steps B and C a Branch mount's lock is a
+statement of its admission message and an owner release's unlock rides in
+the release's message, [GC admission](#gc-admission)), outside the
+generation fence (#776 P2): a fenced
 statement would take or drop a key and then answer `Stale`, leaving it held
 with no intent row behind it. The lock statement checks the generation
 itself and tries no key when it moved. No key outlives a failed lock: a
@@ -496,18 +499,34 @@ and decides each refusal that message cannot report exactly
    COMMIT                                1
    keys kept with the op in the session (held_ops)
 
- release (the owner's)
+ release (the owner's), one pipelined message since #768 step C
    gc_intent_release_owner: DELETE ...   1   one fenced autocommit statement;
-     RETURNING (Bare)                        refused, deleting nothing, when
+     RETURNING                               refused, deleting nothing, when
                                              the generation moved
-   gc_unlock_session: the op's kept      1   only when this session holds
-     keys, one statement (Bare)              the op; always after the delete
+   mount/unlock.sql: the op's kept       (same  only when this session holds
+     keys, one statement, given back      flight) the op; after the delete, in
+     only when no live row of the op             its own Sync; gives nothing
+     remains at the session's generation         back after a refused or stale
+                                                 delete
 ```
+
+The release's two statements go in one flight
+([`release.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/release.rs)).
+Each has its own `Sync`, so the unlock runs whatever the delete answered;
+its own condition (the generation, and no live row of the op) makes it give
+the keys back exactly when the statement-by-statement release would have
+sent its unlock: after a delete that ran or found the row already gone
+(another session, a reconcile, an operator's retained `done` row). After a
+stale or refused delete it gives nothing back and the session keeps the
+keys with the op, so a later release still can. A lost delete reply is
+`UnknownOutcome` and quarantines the session; a refused or lost unlock
+quarantines it too, while the release answers its delete, as before.
 
 `postgresql_gc_sessions` pins the counts of one warm mount register and
 release: register 1 round trip since step B (the one message; 6 before it,
 statement by statement as above: 4 counted statements plus the `BEGIN` batch
-and `COMMIT`), release 2 (2 statements, no transaction). Before #768 each was
+and `COMMIT`), release 1 since step C (2 statements in one flight, no
+transaction; 2 round trips before it). Before #768 each was
 8 round trips: register took one fenced lock statement per key, then a lane
 write; release was a lane write that read the row to rebuild its keys (and
 the Branch's project, on every unmount, because a decoded row carries no
@@ -540,8 +559,8 @@ Why the mount's register and release need no lane:
   in its own snapshot and tries no key when it moved; the release's `DELETE`
   deletes nothing when it moved. A session that holds a registered mount
   still meets the fence on every later call (`a_registered_mount_still_meets_the_generation_fence`).
-- `lock_timeout` stays on the `Admit` transaction. The release's single
-  autocommit statement runs without it: it can wait only for its own op's
+- `lock_timeout` stays on the `Admit` transaction. The release's
+  autocommit statements run without it: it can wait only for its own op's
   row (held by another short admission transaction) or for a swap's brief
   `ACCESS EXCLUSIVE` on `history_meta`.
 - An operator's `release_done` stays on the lane: its done stamp relies on
@@ -790,6 +809,14 @@ session cannot run the fallback.
  gc_register (postgresql_gc_sessions)  6 RT       1 RT
 ```
 
+Step C then made the owner release one message (the delete and the
+conditional unlock, above): an unmount 2 RT -> 1 (`mount_round_trips`
+`unmount`, `cycle.unmount`: writer [0, 2, 2, 0] -> [0, 1, 2, 0];
+`postgresql_gc_sessions` release 2 -> 1). A per-tool-call cycle on a
+prefilled reader is now: Store open 10 RT, the idle reader's prefill 2,
+mount 7 (2 on the writer), unmount 1; a later mount, after a Commit or not,
+2.
+
 The reader's idle check is now local (`PostgresStorage::usable`: two
 runtime turns, then whether the client or its connection task has ended),
 not an empty-query round trip, so a reader whose server end died silently
@@ -797,8 +824,8 @@ is found by its next read, which fails as that read's one attempt.
 
 | Test | Checks |
 | --- | --- |
-| [`postgresql_mount_pipeline.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_mount_pipeline.rs) | the random equivalence and edge cases above; a mount racing a compaction or a project removal on another session is never both admitted; two sessions mounting one Branch are both admitted; a backend terminated while the insert waits on a table lock is an unknown outcome with no row and no key, and the session refuses further calls; an insert reaching the lock timeout gives its keys back and the fallback reports `Busy` |
-| [`mount_fault_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_drop.rs), [`mount_fault_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_kill.rs) | a dropped connection, and a terminated backend, at every server message of a repeated mount (`support/mount_sweep.rs`): an answered mount holds its row and three keys (unless the backend ended after every reply); a failed one whose service still mounts left nothing; an unknown one closed the writer's connection, so no key, at most its row; a fresh service mounts; no backend is left in a transaction |
+| [`postgresql_mount_pipeline.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_mount_pipeline.rs) | the random equivalence and edge cases above; a mount racing a compaction or a project removal on another session is never both admitted; two sessions mounting one Branch are both admitted; a backend terminated while the insert waits on a table lock is an unknown outcome with no row and no key, and the session refuses further calls; an insert reaching the lock timeout gives its keys back and the fallback reports `Busy`; a release whose delete the server refuses keeps its row and keys, and the next release frees both in one round trip |
+| [`mount_fault_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_drop.rs), [`mount_fault_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_kill.rs) | a dropped connection, and a terminated backend, at every server message of a repeated mount and of an unmount (`support/mount_sweep.rs`): an answered mount holds its row and three keys (unless the backend ended after every reply); an answered unmount left neither; a failed call whose service still works left nothing (a mount) or kept both (an unmount); an unknown one closed the writer's connection, so no key, at most its row; a fresh service mounts; no backend is left in a transaction |
 
 ### Commit round trips
 

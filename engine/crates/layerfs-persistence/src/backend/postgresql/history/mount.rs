@@ -98,7 +98,7 @@ fn qualified(key: &str, schema: &str) -> Result<String, BackendError> {
 /// snapshot by Branch id or by name and the message's lock, insert and
 /// markers; the statement-by-statement registration a refusal falls back to
 /// (the session keys taken and given back, the Branch probe, the conflict
-/// scan, the intent insert); and the release's `DELETE`.
+/// scan, the intent insert); and the release's `DELETE` and its unlock.
 fn writer_texts(schema: &str) -> Result<Vec<String>, BackendError> {
     let mut texts = Vec::new();
     for key in [
@@ -125,6 +125,7 @@ fn writer_texts(schema: &str) -> Result<Vec<String>, BackendError> {
     ] {
         texts.push(statements::statement(key)?.to_owned());
     }
+    texts.push(super::release::unlock_sql(schema));
     Ok(texts)
 }
 

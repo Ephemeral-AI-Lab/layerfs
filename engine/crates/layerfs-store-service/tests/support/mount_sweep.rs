@@ -230,7 +230,7 @@ fn check(store: &TestStore, name: &str, flight: Flight, run: &Run) -> &'static s
             if rebound {
                 "released"
             } else {
-                "released, then killed"
+                "released, session closed"
             }
         }
         (Flight::Mount, false, true) => {

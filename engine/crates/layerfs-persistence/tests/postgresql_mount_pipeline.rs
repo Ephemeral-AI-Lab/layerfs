@@ -1,4 +1,4 @@
-//! #768 step B: a Branch mount's registration on PostgreSQL as one pipelined
+//! #768 steps B and C: a Branch mount's registration on PostgreSQL as one pipelined
 //! message (the session keys, the Branch probe, the conflict scan, the
 //! insert and `COMMIT`), checked against the statement-by-statement
 //! registration it replaces.
@@ -21,6 +21,8 @@
 //!   the backend ends with every key and the session refuses further calls.
 //! * A message whose insert reaches the session's lock timeout is a definite
 //!   refusal: its keys are given back and the fallback reports `Busy`.
+//! * Step C: an owner release whose delete the server refuses keeps its row
+//!   and its keys; the next release frees both in one message.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 mod support;
@@ -638,4 +640,59 @@ fn an_insert_reaching_the_lock_timeout_gives_its_keys_back() {
     assert_eq!(rows(&mut admin), 0);
     handles.history.gc_register(&intent).unwrap();
     handles.history.gc_release(&intent.op_id).unwrap();
+}
+
+/// #768 step C: the owner release's delete and unlock are one message, and
+/// the unlock gives the keys back only when no live row of the op remains.
+/// A delete the server refuses (here a trigger raises) keeps the row and the
+/// keys, held with the op; the next release, once the delete can run, frees
+/// both in one round trip.
+#[test]
+fn a_refused_release_keeps_its_row_and_its_keys() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "release_refused");
+    let binding = binding("release_refused");
+    let handles = open(&schema, &binding, LOCK_TIMEOUT_MS, true);
+    let (stack, branch, _) = project(&handles.history, 1);
+    let intent = mount(stack, branch, MOUNT);
+    handles.history.gc_register(&intent).unwrap();
+    let mut admin = schema.admin();
+    admin
+        .batch_execute(
+            "CREATE FUNCTION refuse_delete() RETURNS trigger LANGUAGE plpgsql AS \
+             $$ BEGIN RAISE EXCEPTION 'release refused'; END $$; \
+             CREATE TRIGGER refuse_delete BEFORE DELETE ON gc_intent \
+             FOR EACH ROW EXECUTE FUNCTION refuse_delete();",
+        )
+        .unwrap();
+    let refusal = handles.history.gc_release(&intent.op_id).unwrap_err();
+    assert!(
+        !matches!(refusal, HistoryError::UnknownOutcome),
+        "{refusal:?}"
+    );
+    assert_eq!(rows(&mut admin), 1, "the refused delete kept the row");
+    assert!(
+        !keys_free(&mut admin, &binding, stack, branch),
+        "the refused release kept the keys"
+    );
+
+    admin
+        .batch_execute("DROP TRIGGER refuse_delete ON gc_intent")
+        .unwrap();
+    let before = handles.diagnostics().unwrap();
+    handles.history.gc_release(&intent.op_id).unwrap();
+    let after = handles.diagnostics().unwrap();
+    assert_eq!(
+        (
+            after.round_trips - before.round_trips,
+            after.statements - before.statements
+        ),
+        (1, 2),
+        "one message: the delete and the unlock"
+    );
+    assert_eq!(rows(&mut admin), 0);
+    assert!(
+        keys_free(&mut admin, &binding, stack, branch),
+        "the keys were given back"
+    );
 }

@@ -237,7 +237,8 @@ const SQLITE_COMMIT: &[Pin] = &[
 // The unmount is the owner's release on the writer: `postgresql_gc_sessions`
 // pins it at 2 round trips, 8 before #768's admission change. Its two
 // statements were prepared here (4 round trips) until #768 step A prepared
-// them at Store open.
+// them at Store open. Since #768 step C its delete and unlock are one
+// pipelined message: [0, 2, 2, 0] -> [0, 1, 2, 0].
 //
 // #768's Commit cuts then took 11 round trips off the first Commit's writer
 // (65 before) and 10 off the second's (42 before; 40 of them warm): the
@@ -310,7 +311,7 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "unmount",
-        writer: [0, 2, 2, 0],
+        writer: [0, 1, 2, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -396,6 +397,9 @@ const SQLITE_CYCLE: &[Pin] = &[
 // (a local check, `PostgresStorage::usable`) and reads only the root's five
 // objects: 14 -> 7 round trips. The mount after the Commit is 9 -> 2, all
 // on the writer, as `mount.by_id.again`.
+//
+// Step C made the unmount one message (the fenced delete and the
+// conditional unlock, pipelined): [0, 2, 2, 0] -> [0, 1, 2, 0].
 const POSTGRESQL_CYCLE: &[Pin] = &[
     Pin {
         scenario: "store.open",
@@ -423,7 +427,7 @@ const POSTGRESQL_CYCLE: &[Pin] = &[
     },
     Pin {
         scenario: "cycle.unmount",
-        writer: [0, 2, 2, 0],
+        writer: [0, 1, 2, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },

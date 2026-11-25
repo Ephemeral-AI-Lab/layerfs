@@ -12,7 +12,6 @@ use std::sync::{atomic::Ordering, Arc};
 
 const LOCK_SESSION: &str = "gc_lock_session";
 const UNLOCK_SESSION: &str = "gc_unlock_session";
-const RELEASE_OWNER: &str = "gc_intent_release_owner";
 
 /// The refusal a transaction-pooled connection gets for a session lock.
 const POOLED: &str = "transaction-pooled PostgreSQL connection";
@@ -126,27 +125,6 @@ pub(super) fn session_lock(
         )?);
     }
     Ok(held)
-}
-
-/// The owner's release (#768): one autocommit statement deletes the live row
-/// of `op_id` only while the Store is still at this session's generation,
-/// outside the publication lane. A stale session is `StaleStore` with nothing
-/// deleted. A retained `done` row is never deleted, and an absent row is no
-/// error: the caller then unlocks the keys this session holds for the op.
-pub(super) fn release_owned(session: &Arc<Session>, op_id: &[u8; 16]) -> HistoryResult<()> {
-    let expected = expected(session)?;
-    let generation = session.run_bare(|tx| -> Result<i64, BackendError> {
-        let sql = bare(tx, RELEASE_OWNER)?;
-        let found = tx.typed(&sql, &[&op_id.as_slice(), &expected], 24)?;
-        // The statement may already have deleted the row: a reply that
-        // cannot be read is an unknown outcome.
-        let row = found.first().ok_or(BackendError::Unknown)?;
-        row.try_get(0).map_err(|_| BackendError::Unknown)
-    })?;
-    if expected != 0 && generation != expected {
-        return Err(HistoryError::StaleStore);
-    }
-    Ok(())
 }
 
 /// The refusal a failed session key reports: the intents at its scope, or the

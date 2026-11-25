@@ -58,7 +58,7 @@ pub(crate) use mount::{one_message, register_mount, separately_refuses};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
-use session::{release_owned, session_lock, session_unlock};
+use session::{session_lock, session_unlock};
 
 const INSERT: &str = "gc_intent_insert";
 const RELEASE: &str = "gc_intent_release";
