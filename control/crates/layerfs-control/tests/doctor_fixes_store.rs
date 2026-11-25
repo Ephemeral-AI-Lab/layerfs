@@ -102,6 +102,12 @@ fn a_missing_file_fails_with_the_restore_or_remove_fix() {
     let out = report(&f.root, Kind::Store, "one");
     let found = finding(&out, "store.connection");
     assert_eq!(fix_of(&found), "layerfs store remove one", "{found:?}");
+    let message = found.get_text("message").unwrap_or("");
+    assert!(
+        message
+            .contains("`layerfs store remove` deletes its record and every project record in it"),
+        "{found:?}"
+    );
     assert_eq!(ev_text(&found, "reason"), Some("missing"));
     assert_eq!(ev_text(&found, "machine"), Some("native"));
     // with a backup link the file is restored, not the Store removed
@@ -115,6 +121,18 @@ fn a_missing_file_fails_with_the_restore_or_remove_fix() {
         "layerfs backup restore r2-main one one",
         "{found:?}"
     );
+}
+
+#[test]
+fn an_unreadable_record_has_no_fix_and_never_a_store_remove() {
+    let f = Fixture::new();
+    write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
+    std::fs::write(paths::store_record(&f.root, "one"), b"{ not json").unwrap();
+    let out = report(&f.root, Kind::Store, "one");
+    let found = finding(&out, "store.record");
+    assert_eq!(found.get_text("severity"), Some("error"), "{found:?}");
+    assert_eq!(fix_of(&found), "", "{found:?}");
+    assert!(ev_text(&found, "code").is_some(), "{found:?}");
 }
 
 #[test]

@@ -184,10 +184,16 @@ fn record(
             ID,
             "its record is not valid: its version, name, state, operation or sizes",
         );
-        checks.fix(
-            ID,
-            format!("layerfs machine remove {name}", name = shell_word(name)),
-        );
+        // `machine remove` of a record that names a VM deletes the VM and its
+        // disk, and refuses a built-in machine: offer it only when it takes
+        // records alone
+        let records_only = record.nameless() || record.removed().is_some();
+        if records_only && !layerfs_home::names::BUILT_IN.contains(&name) {
+            checks.fix(
+                ID,
+                format!("layerfs machine remove {name}", name = shell_word(name)),
+            );
+        }
         checks.evidence(
             ID,
             SdkValue::map([

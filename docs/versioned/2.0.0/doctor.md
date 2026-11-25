@@ -8,8 +8,10 @@ DECISIONS.md V22, and the per-check catalogue in
 [doctor findings](../../architecture/control/doctor/findings.md).
 
 A doctor checks something and tells you what it found. It never fixes
-anything: it takes no lock, writes no record, removes no lease and starts no
-machine. When it knows a command that would repair a problem, it prints it as
+anything: it takes no lock, removes no lease and starts no machine, and it
+writes no state you own. Two exceptions: `backup doctor --full` writes and
+deletes one test object in the bucket, and a PostgreSQL Store's check records
+what it observed of the connection. When it knows a command that would repair a problem, it prints it as
 `fix`, and you decide whether to run it.
 
 ## The six doctors
