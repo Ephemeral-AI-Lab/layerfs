@@ -1205,8 +1205,8 @@ server message of its flight:
 
 - **Binding hints (F1).** The inode difference walk notes the directories
   whose listing changed (`ChangedDirectories`); their difference then runs
-  64 directories at a time, both root pages of each window read in one
-  demand (`directory_bindings`, at most 128 pages), so a window is one
+  128 directories at a time, both root pages of each window read in one
+  demand (`directory_bindings`, at most 256 pages or 2 MiB), so a window is one
   locate, its delta chains' levels and one pack read instead of one locate
   per page and chain level. A directory the left root lacks is diffed
   against the empty listing, with the same bindings in the same order.
@@ -1224,7 +1224,9 @@ server message of its flight:
   the level whose largest key is at most the key before the other side's
   first unopened higher page (no page of the other side can share its
   identity), both sides in one demand when both expand. It still reads no
-  page it would skip, and holds at most 128 pages (1 MiB).
+  page it would skip, and holds at most 128 canonical pages (1 MiB).
+  The walk opens up to four already-fetched sibling branches together so
+  their children can share a demand across branch boundaries.
 - **The Save's leaf reads (F4).** A Save read of several pooled inode
   leaves (construction's base pages) rebuilt and looked up their values one
   leaf at a time; selection then read each new leaf's stored base again,

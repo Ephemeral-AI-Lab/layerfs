@@ -238,7 +238,10 @@ pub fn new_bindings(
 
 /// Directories one [`directory_bindings`] window reads together: both root
 /// pages of each fit one read-ahead demand.
-const DIRECTORY_WINDOW: usize = super::sorted::READ_AHEAD_PAGES / 2;
+const DIRECTORY_WINDOW: usize = 128;
+const _: () = assert!(
+    DIRECTORY_WINDOW * 2 * crate::filesystem::limits::MAXIMUM_PAGE_BYTES <= 2 * 1024 * 1024
+);
 
 /// The new bindings of every noted directory, as [`new_bindings`] visits
 /// them, in the same order. The directories are taken a window at a time:
