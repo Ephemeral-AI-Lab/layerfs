@@ -51,7 +51,11 @@ pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
     let outcome = layerfs_store::upgrade::upgrade_with(home, events, store, cancel, RELATED);
     layerfs_home::cancel::clear();
     outcome.map_err(|refusal| {
-        if refusal.code != "Unsupported" || refusal.message.contains("newer than this build") {
+        if refusal.code != "Unsupported"
+            || refusal
+                .message
+                .contains(layerfs_persistence::upgrade::NEWER)
+        {
             return with_store_fix(home, store, refusal, "upgrade");
         }
         let kind = StoreRecord::read(home, store).ok().flatten();
