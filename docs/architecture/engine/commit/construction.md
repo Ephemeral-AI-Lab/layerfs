@@ -55,12 +55,40 @@ Commit acquires them, one capture at a time, so it is unique.
 | --- | --- | --- | --- |
 | Fresh file whose digest names a saved root | That root, reused | none | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Fresh file | New file root from captured runs; a rename predecessor, else the base file at the same path, is offered as delta base | `construct_runs_with_predecessor` | [`captured/owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
-| Changed base file | Indexed edits over the retained `FileView` | `apply_indexed_edits_view_backed` | [`captured/owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Base file whose bytes the capture left (mode, mtime or link count only) | Base content root kept: no Store read, no construction (`files_kept`) | none | [`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs), [`captured/kept.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/kept.rs) |
+| Changed base file | Indexed edits over the retained `FileView`; its length and root come from its page's window | `apply_indexed_edits_view_backed` | [`captured/owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | Fresh symlink | Target from the capture | `emit_symlink` | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Fresh directory | Page built by Content from its header | streamed update | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Base inode whose only change is mtime | Base row kept; live row carried past install (`keep_live_row`) | none | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Changed mode or time | Fresh metadata tree, or base tree patched | attribute build or patch | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Non-root row with `nlink` 0 | Skipped (tombstone) | none | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
+
+### Base files of one inode page (#810 F5)
+
+Before its rows are built, each captured inode page (at most `PAGE_ROWS` =
+1,024 rows) decides its live base regular files together
+([`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs)):
+
+```text
+ page rows + their base records (one lookup_inodes demand, as before)
+   for each live base regular file:
+     kept::inherited(overlay)  one shapes-only captured run step from 0
+       Gap{Inherited, 0, size}, no pieces  and  size == base length -> kept
+   base length: remembered for that root, else in the one length demand
+   one length demand  (FileLengths::file_lengths: undecided + to open)
+   BaseView::base_files: their roots fetched into the cache in batches
+     of at most 4 MiB (and 1/4 of the allowance) by the lengths' bound
+   per row: kept -> base content root; opened -> captured_file_in(window)
+```
+
+| Rule | Detail | Source |
+| --- | --- | --- |
+| When a file is kept | Every byte of `[0, size)` is the lower view's byte at the same offset (one inherited gap from offset 0: no live cell in any retained layer, no cutoff or end making a byte zero, no reference piece) **and** `size` equals the base file's length. A shrink leaves an inherited gap over the shorter size, so the length check is what rejects it; any other overlay state is constructed as before | [`captured/kept.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/kept.rs) |
+| Why it is exact | With those facts the existing path normalizes zero edits and returns the base root; keeping that root gives the same value, and mode and mtime are still decided by the row (`unchanged`, `metadata`) | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
+| Base length | A pure function of the immutable content root: the cache's remembered length (only provider answers and a published Commit's own whole-file objects are remembered), else the window's provided length | [`base/batch.rs`](../../../../engine/crates/layerfs-workspace/src/base/batch.rs) |
+| Opened files | One length demand per page (the provider's answer, checked against the opened view as before) and one or more bounded prefetch batches; a root over the batch bound is read on its own when opened | same |
+| Failures | One attempt. A failed overlay question is that file's custody (as a failed preparation keeps it); a failed length demand or batch is the namespace's original failure | [`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs) |
+| Memory | One page's lengths and at most one batch in flight; fetched roots live in the existing bounded cache allowance | [`base/batch.rs`](../../../../engine/crates/layerfs-workspace/src/base/batch.rs) |
 
 Every read goes through the captured reader, the attempt's sealed records or
 the immutable base bound to the reader's root; current active state is never

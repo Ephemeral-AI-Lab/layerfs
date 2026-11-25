@@ -378,7 +378,15 @@ pub(crate) fn values<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Si
         let mut saved = saved.into_iter();
         let mut digests = followed.into_iter().zip(digests).peekable();
         add(&mut shared.borrow_mut().work.inode_page_ns, nanos(started));
-        let mut bases = demanded.iter().copied().zip(records);
+        // The page's base files: kept, or opened from one length demand and
+        // fetched ahead together (#810 F5).
+        let paired: Vec<_> = demanded
+            .iter()
+            .copied()
+            .zip(records.iter().copied())
+            .collect();
+        let window = super::files::window(builder, &rows, &paired)?;
+        let mut bases = paired.into_iter();
         for inode in &rows {
             add(&mut shared.borrow_mut().work.inode_rows, 1);
             let root = inode.serial == facts.root_serial;
@@ -423,8 +431,16 @@ pub(crate) fn values<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Si
             if predecessor.is_some() && inode.kind == InodeKind::File && reuse.is_none() {
                 add(&mut shared.borrow_mut().work.predecessors_offered, 1);
             }
-            let value =
-                builder.value(inode, record, fresh, reuse, predecessor, consumer, timing)?;
+            let value = builder.value(
+                inode,
+                record,
+                fresh,
+                reuse,
+                predecessor,
+                &window,
+                consumer,
+                timing,
+            )?;
             // A root built from all of this file's bytes is recorded.
             if let (Some(captured), None) = (captured, reuse) {
                 pending.push(FileDigestRow {

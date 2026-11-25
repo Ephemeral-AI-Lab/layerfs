@@ -48,6 +48,15 @@ pub struct CapturedNamespaceWork {
     pub files_constructed: u64,
     /// Constructions that returned the retained base file root unchanged.
     pub files_unchanged: u64,
+    /// Base files whose bytes the capture left as the base holds them
+    /// (#810 F5): their base content root is kept with no Store read and no
+    /// construction. They are not counted as constructed.
+    pub files_kept: u64,
+    /// Length demands for the base files of a captured inode page that are
+    /// opened, one per page that has any (#810 F5).
+    pub base_file_demands: u64,
+    /// Batches that fetched those files' content roots ahead of opening.
+    pub base_file_prefetches: u64,
     /// Successful bounded shifted-file edge comparison windows.
     pub file_edge_windows: u64,
     /// Logical bytes acquired from both sources for those windows.
