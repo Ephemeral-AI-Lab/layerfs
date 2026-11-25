@@ -125,8 +125,11 @@ impl FaultProxy {
         std::thread::spawn(move || {
             for client in listener.incoming() {
                 let Ok(client) = client else { return };
+                // An upstream that refuses (a server restarting, #811 V2)
+                // ends this client only; the proxy keeps accepting.
                 let Ok(server) = TcpStream::connect(upstream) else {
-                    return;
+                    drop(client);
+                    continue;
                 };
                 let _ = client.set_nodelay(true);
                 let _ = server.set_nodelay(true);
