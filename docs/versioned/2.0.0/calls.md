@@ -1695,6 +1695,8 @@ See [backups](machines-and-stores.md#backups).
 Six table calls check one thing each and change nothing: they take no
 lock, write no record, remove no stale lease and start no machine.
 
+For how to read a report and run a fix, see [the doctors, for users](doctor.md).
+
 ```bash
 layerfs home doctor                 # the home, then each machine, PostgreSQL Store and bucket, shallowly
 layerfs machine doctor <machine>    # the machine, then each Store and Sandbox on it
