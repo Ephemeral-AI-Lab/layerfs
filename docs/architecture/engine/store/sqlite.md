@@ -556,6 +556,19 @@ transaction per Commit and that each race and the epoch refusal wrote
 nothing. Not tested on SQLite: `Busy` from another process's writer lock
 and an epoch change during the transaction (the writer lock excludes it).
 
+### Commit reads before the publication (#810)
+
+The reads a Commit makes before its transaction are batched the same way on
+both backends ([PostgreSQL: Commit reads before the lane](postgresql.md#commit-reads-before-the-lane-810)):
+the binding hints read the changed directories a window at a time, one
+difference walk serves the logical count and the hints, the walk's
+read-ahead sees past the other side's unopened pages, and the Save rebuilds
+the inode leaves of a demand (and selection's base leaves) a window at a
+time with one value lookup each. On SQLite a lookup is a statement, not a
+round trip; what it saves is statements and decoding the same pages twice:
+C4 6,138 -> 1,725 statements, C4s4 31,822 -> 9,585, C1 652 -> 253 (shape
+kit, 2026-11-26), every root and Save outcome identical.
+
 ## Acquisition
 
 `AcquisitionProvider` gives Project Init indexed working tables in the same

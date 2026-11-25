@@ -1151,7 +1151,11 @@ Checked and not done:
 
 A wide change used to pay one round trip per changed directory, file or
 inode page it read before the lane. The reads are now collected first and
-sent a window at a time (campaign #810; Lane A fixes):
+sent a window at a time (campaign #810; Lane A fixes). A failed window read
+fails the Commit with the provider's own error before the lane; nothing is
+retried. The drop and kill sweeps of a wide Commit
+(`commit_fault_wide_{drop,kill}_{0..3}.rs`, `Flight::Wide`) fault every
+server message of its flight:
 
 - **Binding hints (F1).** The inode difference walk notes the directories
   whose listing changed (`ChangedDirectories`); their difference then runs
@@ -1162,6 +1166,39 @@ sent a window at a time (campaign #810; Lane A fixes):
   against the empty listing, with the same bindings in the same order.
   C4s4 (10,000 new files over 3,942 directories): `bindings` 11,403 -> 2,056
   round trips, the same root and stored bytes.
+
+- **One walk, read ahead past the other side (F4).** The logical count and
+  the binding hints walked the same two inode tables apart, and the walk's
+  read-ahead gave up whenever the other side still held a page above the
+  level it opened: every changed leaf was then a point read and a value
+  lookup, twice (C4: 1,190 and 1,326 round trips). Now `logical.count`
+  walks once (`logical_size_and_directories`) and notes the changed
+  directories for `bindings`; and each frontier page carries the largest
+  key its parent records, so the walk reads ahead every following page at
+  the level whose largest key is at most the key before the other side's
+  first unopened higher page (no page of the other side can share its
+  identity), both sides in one demand when both expand. It still reads no
+  page it would skip, and holds at most 128 pages (1 MiB).
+- **The Save's leaf reads (F4).** A Save read of several pooled inode
+  leaves (construction's base pages) rebuilt and looked up their values one
+  leaf at a time; selection then read each new leaf's stored base again,
+  one value lookup each (`pooled_bases`). The Save now rebuilds the leaves
+  of a demand ahead, their chains located a level at a time for all of them
+  (`read/prefetch.rs`), and looks up their values in one lookup per window
+  (`PoolReader::prepare_leaves`: at most 128 leaves, 1 MiB of bodies and the
+  unchanged 512 KiB `POOLED_VALUE_CACHE_BYTES` of values); and before a
+  wave page's inode leaves are admitted, their stored bases the same way.
+  Only leaves already sealed or located are prepared, so preparing asks the
+  Store nothing the demand would not.
+
+Measured with the shape kit (PostgreSQL round trips, base `e11d8c8d0f` ->
+F1+F4; every root, `stored`, `inserted`, `reused` and `packs` identical on
+both backends): C4 4,848 -> 950 (writer 4,122 -> 224; its 726 Workspace
+reader round trips are #810 F5's), C4s4 26,734 -> 7,585 (`construct`'s
+7,246 are mostly the directory rewrites, #810 F3), B1 5,309 -> 4,621
+(publication waves, #810 F2), C1 454 -> 56, C3 823 -> 417 and B5e 897 ->
+467 (their remaining are mostly Workspace reader reads, F5); B3 37 -> 13;
+A3 18, A5 15, C2 8 and D2 3 unchanged.
 
 The pins are in
 [`commit_batched_reads.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_batched_reads.rs):

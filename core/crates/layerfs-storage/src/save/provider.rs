@@ -80,6 +80,7 @@ impl Save<'_> {
                 actual: declared as u64,
             });
         }
+        state.prepare_leaves(ids, true)?;
         let mut out = Vec::with_capacity(ids.len());
         let mut bytes = 0usize;
         for id in ids {

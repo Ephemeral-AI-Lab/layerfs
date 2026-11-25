@@ -82,7 +82,13 @@ cover is not installed at all, clean or conflicted (`LiveConflict`,
 An opened page is read in one demand with the pages after it at the same level
 that the walk will certainly open too, leaving out any ID the other frontier
 shows; at most `READ_AHEAD_PAGES` = 128 (1 MiB) are held, and each is opened
-exactly once. `same_inode` compares decoded portable metadata, so a root-form
+exactly once. Each frontier page carries the largest key its parent records:
+when the other frontier still holds a page above the level, the walk takes
+only the following pages whose largest key is at most the key before that
+page (its hidden pages hold only larger keys, so none can share an
+identity); when both fronts open at one level, both sides' pages go in one
+demand (#810). `logical_size_and_directories` counts a root's logical size
+and notes its changed directories in the same walk. `same_inode` compares decoded portable metadata, so a root-form
 and an inline row of equal metadata are equal.
 
 ### Naming changed inodes

@@ -27,17 +27,6 @@ pub fn record_new_bindings(
     record_directory_bindings(reader, catalog, &directories)
 }
 
-/// [`record_new_bindings`] for a fused Commit (#768), recording nothing;
-/// see [`collect_directory_bindings`].
-pub fn collect_new_bindings(
-    reader: &dyn AuthenticatedObjects,
-    left: Option<FilesystemRootId>,
-    right: FilesystemRootId,
-) -> Result<Option<Vec<BindingHint>>, CommitError> {
-    let directories = changed_directories(reader, left, right)?;
-    collect_directory_bindings(reader, &directories)
-}
-
 /// The directories whose listing differs between `left` and `right`, from
 /// the difference of their inode tables.
 fn changed_directories(
@@ -66,8 +55,10 @@ fn changed_directories(
 }
 
 /// Records the new bindings of the changed `directories`, read a window of
-/// directories at a time (#810 F1, `directory_bindings`).
-fn record_directory_bindings(
+/// directories at a time (#810 F1, `directory_bindings`). A Commit takes
+/// them from its logical count's walk (`logical_after`, #810 F4), so the
+/// two inode tables are walked once.
+pub(super) fn record_directory_bindings(
     reader: &dyn AuthenticatedObjects,
     catalog: &dyn HistoryCatalog,
     directories: &ChangedDirectories,
@@ -109,7 +100,7 @@ fn record_directory_bindings(
 /// publish its Save first and record them then, as the separate path does,
 /// and attempt the Commit alone.
 /// A hint row is never written before the objects of the tree it describes.
-fn collect_directory_bindings(
+pub(super) fn collect_directory_bindings(
     reader: &dyn AuthenticatedObjects,
     directories: &ChangedDirectories,
 ) -> Result<Option<Vec<BindingHint>>, CommitError> {

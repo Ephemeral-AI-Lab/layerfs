@@ -3,15 +3,18 @@
 //! `bindings`), for small shapes of the measured cells, on SQLite and on
 //! PostgreSQL, with the Save's storage outcome and the resulting root.
 //!
-//! A one-file Init, then a Commit of a tree of 4 x 4 x 4 x 4 = 256 leaf directories,
-//! four levels deep, with 64 files each (16,384 files) of 109-byte names. After a warm-up
-//! Commit on the bound Workspace, each scenario changes the Workspace
-//! outside the count and Commits once, counted:
+//! A one-file Init; then, on one Store open, a Commit of a tree of
+//! 4 x 4 x 4 x 4 = 256 leaf directories, four levels deep, with 64 files
+//! each (16,384 files) of 109-byte names, and three Commits that each add
+//! one file to every leaf directory (so each directory page has a delta
+//! chain). Each scenario then runs on a newly opened Store (cold caches, as
+//! a fresh daemon) with a newly bound Workspace: a warm-up Commit, then its
+//! change, outside the count, and one counted Commit:
 //!
-//! - `edits` (C4): two files rewritten in every leaf directory, 512 edits
+//! - `edits` (C4): one file rewritten in every leaf directory, 256 edits
 //!   spread over the inode table; no directory listing changes.
 //! - `adds` (C4 setup 4): one new file in every leaf directory, 256
-//!   changed directories, after three uncounted Commits of the same kind.
+//!   changed directories.
 //! - `one` (B3/D2): one file rewritten, the cheap shape.
 //!
 //! Counts come from the writer session's own counters (`SqlWork`), read at
@@ -74,19 +77,28 @@ struct Measured {
     root: String,
 }
 
-// #810 F1 (directory windows): these shapes' directory pages are all
-// served from the Save's caches, so F1 changed none of these counts; its
-// effect is on cold directories (the C4s4 cell). Base (e11d8c8d0f) = F1.
+// Base (e11d8c8d0f), PostgreSQL writer round trips [construct, finish,
+// logical.count, bindings, total]: edits [803, 3, 263, 393, 1463], adds
+// [1421, 261, 200, 201, 2085], one [10, 4, 3, 0, 18]; SQLite statements:
+// edits [1540, 3, 264, 393, 2219], adds [2717, 262, 203, 209, 3414], one
+// [26, 5, 13, 0, 58]. #810 F1 (directory windows) left them unchanged: these
+// shapes' directory pages are served from the Save's caches (its effect is
+// on cold directories, the C4s4 cell). #810 F4: one difference walk with
+// key-bounded read-ahead for the logical count and the hints, and the
+// Save's leaf reads and selection's base leaves rebuilt a window at a time
+// with one value lookup each. The Workspace readers' reads are Lane C's
+// (#810 F5); `adds`' remaining construct reads are the directory rewrites
+// (#810 F3).
 const SQLITE: &[Pin] = &[
     Pin {
         scenario: "edits",
-        work: [[0, 1540], [0, 3], [0, 264], [0, 393], [0, 2219], [0, 200]],
+        work: [[0, 365], [0, 2], [0, 12], [0, 0], [0, 398], [0, 200]],
         saved: [519, 0, 5, 38478],
         root: "9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533",
     },
     Pin {
         scenario: "adds",
-        work: [[0, 2717], [0, 262], [0, 203], [0, 209], [0, 3414], [0, 0]],
+        work: [[0, 1498], [0, 10], [0, 14], [0, 12], [0, 1557], [0, 0]],
         saved: [782, 0, 53, 52968],
         root: "35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4",
     },
@@ -100,27 +112,13 @@ const SQLITE: &[Pin] = &[
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "edits",
-        work: [
-            [803, 788],
-            [3, 3],
-            [263, 263],
-            [393, 393],
-            [1463, 1457],
-            [200, 200],
-        ],
+        work: [[79, 64], [2, 2], [10, 10], [0, 0], [92, 86], [200, 200]],
         saved: [519, 0, 5, 38478],
         root: "9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533",
     },
     Pin {
         scenario: "adds",
-        work: [
-            [1421, 1272],
-            [261, 259],
-            [200, 200],
-            [201, 201],
-            [2085, 1943],
-            [0, 0],
-        ],
+        work: [[925, 776], [9, 7], [10, 10], [4, 4], [950, 808], [0, 0]],
         saved: [782, 0, 53, 52968],
         root: "35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4",
     },
