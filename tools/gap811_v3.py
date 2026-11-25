@@ -17,6 +17,7 @@ appended to `driver.log` there.
   up-pgbouncer RUN --pool-mode transaction|session [--pool-size N]
   pooled RUN --arm NAME [--pin]
   lane RUN --writers N --seconds S [--lock-ms MS] [--shared]
+  lane-multi RUN --containers N --seconds S [--lock-ms MS] [--shared]   one writer per container
   lost-release RUN
   down                            remove every lfs-811-v3-* container and network
 """
@@ -351,6 +352,62 @@ def cmd_lane(run, args):
     sys.exit(result.returncode)
 
 
+def cmd_lane_multi(run, args):
+    """One writer process per container, all on one Store: the Store and its
+    Branches come from phase `setup`; container 0 samples `pg_locks`."""
+    network(run)
+    if run.sh("docker", "inspect", PREFIX + "pg1", check=False, quiet=True).returncode != 0:
+        primary(run, "pg1")
+    branches = 1 if args.shared else args.containers
+    result = test(
+        run,
+        "failover",
+        {"GAP811_PHASE": "setup", "GAP811_BRANCHES": str(branches), "LAYERFS_TEST_POSTGRES_URL": url(PREFIX + "pg1")},
+        f"lane-multi-{args.arm}-setup",
+    )
+    if result.returncode != 0:
+        sys.exit("setup failed")
+    run.state["setup"] = records(run, f"lane-multi-{args.arm}-setup")[-1]
+    run.save()
+    processes = []
+    for index in range(args.containers):
+        env = {
+            **store_env(run),
+            "GAP811_WRITERS": "1",
+            "GAP811_WRITER_BASE": str(index),
+            "GAP811_SECONDS": str(args.seconds),
+            "GAP811_LOCK_TIMEOUT_MS": str(args.lock_ms),
+            "GAP811_ARM": f"{args.arm}-c{index}",
+            "GAP811_SAMPLE": "1" if index == 0 else "0",
+        }
+        if args.shared:
+            env["GAP811_SHARED"] = "1"
+        processes.append(test(run, "lane_contention", env, f"lane-multi-{args.arm}-c{index}", background=True))
+    deadline = time.time() + args.seconds + 40
+    codes = []
+    for process in processes:
+        try:
+            codes.append(process.wait(timeout=max(1, deadline - time.time())))
+        except subprocess.TimeoutExpired:
+            process.kill()
+            codes.append("timeout")
+    run.note(f"containers exit {codes}")
+    rows = [r for i in range(args.containers) for r in records(run, f"lane-multi-{args.arm}-c{i}")]
+    summary = {
+        "arm": args.arm,
+        "containers": args.containers,
+        "exit": codes,
+        "per_container_committed": [r["per_writer_committed"][0] for r in rows],
+        "classes": [r["classes"] for r in rows],
+        "commit_p50_p99_max": [(r["commit_ms"]["p50"], r["commit_ms"]["p99"], r["commit_ms"]["max"]) for r in rows],
+        "busy_min_ms": [r["busy_min_ms"] for r in rows],
+        "server_lock_waits_ms": rows[0]["server_lock_waits_ms"] if rows else None,
+    }
+    (run.dir / f"lane-multi-{args.arm}-summary.json").write_text(json.dumps(summary, indent=2))
+    run.note("SUMMARY " + json.dumps(summary))
+    sys.exit(0 if all(code == 0 for code in codes) else 1)
+
+
 def cmd_lost_release(run, args):
     network(run)
     if run.sh("docker", "inspect", PREFIX + "pg1", check=False, quiet=True).returncode != 0:
@@ -398,6 +455,12 @@ def main():
     p.add_argument("--arm", required=True)
     p.add_argument("--writers", type=int, default=8)
     p.add_argument("--seconds", type=int, default=60)
+    p.add_argument("--lock-ms", type=int, default=30000)
+    p.add_argument("--shared", action="store_true")
+    p = sub.add_parser("lane-multi")
+    p.add_argument("--arm", required=True)
+    p.add_argument("--containers", type=int, default=8)
+    p.add_argument("--seconds", type=int, default=45)
     p.add_argument("--lock-ms", type=int, default=30000)
     p.add_argument("--shared", action="store_true")
     sub.add_parser("lost-release")

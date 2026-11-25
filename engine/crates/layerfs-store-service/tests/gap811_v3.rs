@@ -101,7 +101,13 @@ fn attach() -> ManuallyDrop<TestStore> {
     let schema = env("GAP811_SCHEMA").unwrap();
     let mut selection = layerfs_persistence::PostgresSelection::new(&url, &schema);
     selection.synchronous_commit = sync_setting();
-    let dir = std::env::temp_dir().join(format!("gap811-{}", std::process::id()));
+    // Containers share the target's temporary folder and all run as pid 1.
+    let dir = std::env::temp_dir().join(format!(
+        "gap811-{}-{}-{}",
+        env("HOSTNAME").unwrap_or_default(),
+        std::process::id(),
+        nonce()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     ManuallyDrop::new(TestStore {
         kind: adversary::Kind::Postgres,
@@ -184,7 +190,7 @@ fn failover() {
     }
     match phase.as_str() {
         "setup" => {
-            setup("fo", 2);
+            setup("fo", env_or("GAP811_BRANCHES", 2) as usize);
         }
         "commit" => {
             let store = attach();
@@ -624,18 +630,34 @@ fn lane_contention() {
     let lock_ms = env_or("GAP811_LOCK_TIMEOUT_MS", 30_000) as u32;
     let shared = env("GAP811_SHARED").is_some();
     let arm = env("GAP811_ARM").unwrap_or_default();
-    let Some(store) = TestStore::postgres("lane", &[("/seed", b"seed\n")]) else {
-        return;
+    // With `GAP811_SCHEMA` this process is one of several (containers) on
+    // a Store made by phase `setup`: its writers use Branches
+    // `b{GAP811_WRITER_BASE + n + 1}` (all `b1` when shared).
+    let attached = env("GAP811_SCHEMA").is_some();
+    let base = env_or("GAP811_WRITER_BASE", 0) as usize;
+    let store = if attached {
+        attach()
+    } else {
+        let Some(store) = TestStore::postgres("lane", &[("/seed", b"seed\n")]) else {
+            return;
+        };
+        ManuallyDrop::new(store)
     };
     let names: Vec<String> = (0..writers)
-        .map(|n| if shared { "shared".into() } else { format!("w{n}") })
+        .map(|n| match (attached, shared) {
+            (true, true) => "b1".into(),
+            (true, false) => format!("b{}", base + n + 1),
+            (false, true) => "shared".into(),
+            (false, false) => format!("w{n}"),
+        })
         .collect();
     let mut forked = std::collections::BTreeSet::new();
     for name in &names {
-        if forked.insert(name.clone()) {
+        if !attached && forked.insert(name.clone()) {
             store.fork(name);
         }
     }
+    let sample = env("GAP811_SAMPLE").as_deref() != Some("0");
     let selection = store.with_lock_timeout(&with_sync(&store.selection), lock_ms);
     let services: Vec<Service> = (0..writers)
         .map(|_| Service::open(&store, selection.clone()))
@@ -649,7 +671,7 @@ fn lane_contention() {
         let (stop, waits, samples) = (stop.clone(), waits.clone(), samples.clone());
         let mut admin = store.admin();
         std::thread::spawn(move || {
-            while !stop.load(Ordering::SeqCst) {
+            while sample && !stop.load(Ordering::SeqCst) {
                 let rows = admin
                     .query(
                         "SELECT pid, waitstart::text, locktype, \
@@ -761,8 +783,9 @@ fn lane_contention() {
     }
     let deadlocks = classes.keys().filter(|k| k.contains("40P01") || k.to_lowercase().contains("deadlock")).count();
     let busy_min = busy_ms.iter().cloned().fold(f64::INFINITY, f64::min);
+    let busy_min_out = if busy_ms.is_empty() { -1.0 } else { busy_min };
     record(format!(
-        "{{\"arm\":\"{arm}\",\"writers\":{writers},\"shared\":{shared},\"lock_timeout_ms\":{lock_ms},\"seconds\":{wall:.1},\"sync\":\"{:?}\",\"per_writer_committed\":{per_writer:?},\"classes\":\"{}\",\"commit_ms\":{},\"busy_ms\":{},\"server_lock_waits_ms\":{},\"wait_kinds\":\"{}\",\"samples\":{},\"deadlocks\":{deadlocks}}}",
+        "{{\"arm\":\"{arm}\",\"writers\":{writers},\"shared\":{shared},\"lock_timeout_ms\":{lock_ms},\"seconds\":{wall:.1},\"sync\":\"{:?}\",\"per_writer_committed\":{per_writer:?},\"classes\":\"{}\",\"commit_ms\":{},\"busy_ms\":{},\"server_lock_waits_ms\":{},\"wait_kinds\":\"{}\",\"samples\":{},\"deadlocks\":{deadlocks},\"busy_min_ms\":{busy_min_out:.1},\"writer_base\":{base},\"host\":\"{}\"}}",
         sync_setting(),
         esc(&format!("{classes:?}")),
         percentiles(committed_ms.clone()),
@@ -770,6 +793,7 @@ fn lane_contention() {
         percentiles(lock_waits),
         esc(&format!("{kinds:?}")),
         samples.load(Ordering::Relaxed),
+        env("HOSTNAME").unwrap_or_default(),
     ));
     assert_eq!(deadlocks, 0, "no deadlock");
     assert!(
@@ -781,6 +805,9 @@ fn lane_contention() {
         "a Busy before lock_timeout: {busy_min} ms < {lock_ms}"
     );
     assert!(per_writer.iter().all(|n| *n > 0), "a starved writer: {per_writer:?}");
+    if !attached {
+        drop(ManuallyDrop::into_inner(store));
+    }
 }
 
 /// `numeric` read as f64 without a decimal crate: the text form parsed.
