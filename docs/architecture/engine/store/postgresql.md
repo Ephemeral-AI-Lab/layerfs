@@ -1147,6 +1147,28 @@ Checked and not done:
 | [`postgresql_aborted_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_aborted_commit.rs) | `… --test postgresql_aborted_commit` | A body that ignores a refused statement is answered with that refusal, writes nothing and leaves the session usable. Before the `SELECT 1; COMMIT` guard it answered `Ok(())` |
 | [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `… --test postgresql_lane_liveness` | A nested write after its lane connection was terminated fails `Closed` and writes nothing: now through `pg_xact_status` |
 
+### Commit reads before the lane (#810)
+
+A wide change used to pay one round trip per changed directory, file or
+inode page it read before the lane. The reads are now collected first and
+sent a window at a time (campaign #810; Lane A fixes):
+
+- **Binding hints (F1).** The inode difference walk notes the directories
+  whose listing changed (`ChangedDirectories`); their difference then runs
+  64 directories at a time, both root pages of each window read in one
+  demand (`directory_bindings`, at most 128 pages), so a window is one
+  locate, its delta chains' levels and one pack read instead of one locate
+  per page and chain level. A directory the left root lacks is diffed
+  against the empty listing, with the same bindings in the same order.
+  C4s4 (10,000 new files over 3,942 directories): `bindings` 11,403 -> 2,056
+  round trips, the same root and stored bytes.
+
+The pins are in
+[`commit_batched_reads.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_batched_reads.rs):
+each scenario's writer round trips and statements for `construct`,
+`finish`, `logical.count` and `bindings`, and its Save's `inserted`,
+`reused` and `packs`.
+
 ### Fused Commit
 
 A Workspace Commit over its bound head is one write transaction

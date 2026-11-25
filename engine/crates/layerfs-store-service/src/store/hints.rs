@@ -1,7 +1,9 @@
 //! Name bindings a new saved tree adds, recorded as path hints for readers
 //! (the daemon's Commit and merge; host Init records its own tree's).
 use super::commit_types::CommitError;
-use layerfs_content::compare::{new_bindings, BindingHints, TreeTable};
+use layerfs_content::compare::{
+    directory_bindings, inode_differences, BindingHints, ChangedDirectories, TreeTable,
+};
 use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
@@ -21,13 +23,57 @@ pub fn record_new_bindings(
     left: Option<FilesystemRootId>,
     right: FilesystemRootId,
 ) -> Result<u64, CommitError> {
+    let directories = changed_directories(reader, left, right)?;
+    record_directory_bindings(reader, catalog, &directories)
+}
+
+/// [`record_new_bindings`] for a fused Commit (#768), recording nothing;
+/// see [`collect_directory_bindings`].
+pub fn collect_new_bindings(
+    reader: &dyn AuthenticatedObjects,
+    left: Option<FilesystemRootId>,
+    right: FilesystemRootId,
+) -> Result<Option<Vec<BindingHint>>, CommitError> {
+    let directories = changed_directories(reader, left, right)?;
+    collect_directory_bindings(reader, &directories)
+}
+
+/// The directories whose listing differs between `left` and `right`, from
+/// the difference of their inode tables.
+fn changed_directories(
+    reader: &dyn AuthenticatedObjects,
+    left: Option<FilesystemRootId>,
+    right: FilesystemRootId,
+) -> Result<ChangedDirectories, CommitError> {
     let left = left
         .map(|root| TreeTable::open(reader, root))
         .transpose()
         .map_err(CommitError::from)?;
     let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
+    let mut directories = ChangedDirectories::default();
+    inode_differences(
+        reader,
+        left.as_ref(),
+        &right,
+        &mut Default::default(),
+        |serial, before, after| {
+            directories.note(serial, before, after);
+            Ok(())
+        },
+    )
+    .map_err(CommitError::from)?;
+    Ok(directories)
+}
+
+/// Records the new bindings of the changed `directories`, read a window of
+/// directories at a time (#810 F1, `directory_bindings`).
+fn record_directory_bindings(
+    reader: &dyn AuthenticatedObjects,
+    catalog: &dyn HistoryCatalog,
+    directories: &ChangedDirectories,
+) -> Result<u64, CommitError> {
     let (mut rows, mut recorded, mut failure) = (Vec::new(), 0u64, None);
-    let walked = new_bindings(reader, left.as_ref(), &right, |child, parent, name| {
+    let walked = directory_bindings(reader, directories, |child, parent, name| {
         rows.push(BindingHint {
             child,
             parent,
@@ -56,25 +102,19 @@ pub fn record_new_bindings(
     Ok(recorded)
 }
 
-/// [`record_new_bindings`] for a fused Commit (#768), recording nothing:
-/// the rows, when they fit one write transaction ([`BATCH`]), for the
-/// Commit's own transaction. `None` when they do not: the walk stops at the
-/// first row past [`BATCH`] and nothing is recorded, so the caller can
-/// publish its Save first and record them then (`record_new_bindings`), as
-/// the separate path does, and attempt the Commit alone.
+/// [`record_directory_bindings`] for a fused Commit (#768), recording
+/// nothing: the rows, when they fit one write transaction ([`BATCH`]), for
+/// the Commit's own transaction. `None` when they do not: the walk stops at
+/// the first row past [`BATCH`] and nothing is recorded, so the caller can
+/// publish its Save first and record them then, as the separate path does,
+/// and attempt the Commit alone.
 /// A hint row is never written before the objects of the tree it describes.
-pub fn collect_new_bindings(
+fn collect_directory_bindings(
     reader: &dyn AuthenticatedObjects,
-    left: Option<FilesystemRootId>,
-    right: FilesystemRootId,
+    directories: &ChangedDirectories,
 ) -> Result<Option<Vec<BindingHint>>, CommitError> {
-    let left = left
-        .map(|root| TreeTable::open(reader, root))
-        .transpose()
-        .map_err(CommitError::from)?;
-    let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
     let (mut rows, mut spilled) = (Vec::new(), false);
-    let walked = new_bindings(reader, left.as_ref(), &right, |child, parent, name| {
+    let walked = directory_bindings(reader, directories, |child, parent, name| {
         if rows.len() == BATCH {
             spilled = true;
             return Err(ContentError::OutputRejected);

@@ -20,6 +20,7 @@ pub use text::{
     MAXIMUM_TEXT_BYTES,
 };
 pub use tree::{
-    binding_changes, inode_changes, inode_differences, list_directory, locate, new_bindings,
-    root_changes, same_value, subtree, ChangeKind, EntryFacts, PathChange, RootChanges, TreeTable,
+    binding_changes, directory_bindings, inode_changes, inode_differences, list_directory, locate,
+    new_bindings, root_changes, same_value, subtree, ChangeKind, ChangedDirectories, EntryFacts,
+    PathChange, RootChanges, TreeTable,
 };

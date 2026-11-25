@@ -76,6 +76,7 @@ cover is not installed at all, clean or conflicted (`LiveConflict`,
 | `TreeTable::open` | one root decoded once: its `FilesystemRoot` and inode table | [`tree.rs`](../../../../core/crates/layerfs-content/src/compare/tree.rs) |
 | `inode_changes` / `inode_differences` | inodes whose value differs, ignoring / including reference count and metadata form | same |
 | `binding_changes`, `new_bindings` | names whose binding differs; bindings only `right` holds | same |
+| `ChangedDirectories`, `directory_bindings` | the directories whose listing an inode difference shows changed; their new bindings, 64 directories a window with both root pages of a window read in one demand (#810) | same |
 | `root_changes` | a bounded list of `Added`, `Removed`, `Modified` paths with a `truncated` flag; a hard-linked file at its first breadth-first path | same |
 
 An opened page is read in one demand with the pages after it at the same level
