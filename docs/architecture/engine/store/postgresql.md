@@ -510,8 +510,8 @@ suites run the rollback statement on every definite failure.
 
 | `SynchronousCommit` | Write acknowledged after |
 | --- | --- |
-| `Off` (default) | the server accepts it, before the WAL flush |
-| `Local` | the local WAL flush |
+| `Off` | the server accepts it, before the WAL flush |
+| `Local` (default since 2026-11-17, `store/config.rs` `PostgresSelection::new`) | the local WAL flush |
 | `RemoteWrite` | standbys receive the WAL |
 | `On` | local and synchronous-standby flush |
 | `RemoteApply` | synchronous standbys apply the WAL |
@@ -1352,6 +1352,133 @@ Not done: the fused transaction and a held lane assume one server, as the
 lane barrier does. A writer whose route reaches another server than another
 writer's lane connection is the multi-host case #768 records; the fused
 transaction does not use the lane connection, so it adds no new pairing.
+
+## Distributed verification
+
+\#811 checked the metadata protocol (lane, optimistic heads, exactly-once
+Commit attempts, generation fence, lane liveness, GC admission, ids and
+writer reopen) for many daemons on many hosts sharing one Store, at
+`ca4be0bf3c` (current) and at the unmerged writer-reopen commit `1a7338ffa2`.
+Everything here is verification evidence; none of it is a CI gate.
+
+| Part | What | Where |
+| --- | --- | --- |
+| V1 | TLA+ model, checked exhaustively by TLC 2.19 over bounded instances | [`formal/metadata-protocol/`](../../../../formal/metadata-protocol/README.md) |
+| V2 | Seeded chaos runs: three host containers and one `postgres:17` | [`tools/chaos811.py`](../../../../tools/chaos811.py), [`chaos811.rs`](../../../../engine/crates/layerfs-store-service/tests/chaos811.rs) |
+| V3 | Experiments on the known gaps | [`tools/gap811_v3.py`](../../../../tools/gap811_v3.py), [`gap811_v3.rs`](../../../../engine/crates/layerfs-store-service/tests/gap811_v3.rs) |
+
+### V1: model
+
+Bounds: up to two mounts (both admission paths), one `branch.remove`, one
+compaction and one other caller of the same service; two Workspaces with up
+to three Commits each, one of them forced; two allocator handles; one or two
+of each fault (backend kill, lost reply whose statement may still run
+later, lane connection death, generation bump). Every configuration runs in
+under 60 s; the largest has 1.9 million distinct states.
+
+- **Current protocol (A):** every safety property holds: total order,
+  no lost update, `force` recorded as `displaced`, an attempt installed at
+  most once, a reported Commit installed, the fence, the nested lane check,
+  keyed admission and mutual exclusion with removal and compaction, and no
+  reused id. Liveness also holds: every quarantined call ends definitely.
+  An orphaned mount row (admission reply lost) stays until the process exits,
+  the documented limit.
+- **Mutations:** removing the barrier, the lane check, the end of a lost
+  backend, the fence or the compare-and-set rewind each breaks its property,
+  so these checks are not vacuous.
+- **Writer reopen (B, `1a7338ffa2`):** the Commit and id parts hold. The
+  admission part has the known race and three more problems:
+
+| # | Finding at `1a7338ffa2` | Kind |
+| --- | --- | --- |
+| 1 | A reopen between `session_lock` and the admit turn of `register_separately` (`history/admission.rs:944-961`; also `branch.remove` through it) inserts the row with no keys held; a removal or compaction on another service can then register beside the live mount | safety, the known race |
+| 2 | The one-message mount's `hold_op` (`history/admission/mount.rs:124`) runs after its turn ends: a kill and another caller's reopen in between serve a mount with no keys | safety |
+| 4 | `note_orphan` (`history/admission/mount.rs:46-49`) runs after the turn that saw `Unknown`: a reopen in between misses the orphan, whose row stays until the process exits | liveness |
+| 5 | `settle` (`session/reopen.rs:164-168`) deletes orphan rows when a lost backend is not proven gone; that backend's admission may still commit afterwards | liveness |
+
+Candidate fixes: "reopen refused mid-registration" is safe only if it is
+service-wide, and then it refuses unrelated calls. "Keys in `held_ops`
+before the second turn" is safe only inside the turn that takes the keys.
+The fix on `claude/811-reopen-fix` (`2b0dee1a1f`) holds the op in that turn
+on both paths, notes orphans in the turn that saw `Unknown`, releases them
+only once no lost backend remains, and adds:
+
+- an unlock of a later turn sends nothing when the connection changed;
+- a failed registration gives its op back in one turn;
+- the owner release's `end_release` runs in its message's turn.
+
+`AdmissionImpl.tla` models it turn by turn: safety and liveness hold. Without
+the connection check `KeysCover` fails, and with `end_release` after the
+turn `LevelsExact` fails.
+
+Wording the model makes exact:
+
+- A reopen happens at most once per writer turn, not once per SDK call: one
+  mount can reopen twice (a kill, then a lost reply), and nothing is resent.
+- The lane check and the nested write's `COMMIT` are two statements of one
+  round trip. A nested write may commit just after its lane connection died,
+  but only when its lane was in progress at its check. The barrier still
+  keeps the next lane holder from reading before that write ends.
+
+### V2: chaos runs
+
+Each node is a daemon's in-process Store service (mount admission, fused
+Commit, unmount release, `branch.*`, compaction), built as a test binary.
+The Store path is the daemon's, without FUSE or a Sandbox.
+
+**Workload, per run (28 s):** concurrent Commits on one shared Branch and on
+own Branches, plain, `--expected` and `force`; mount and unmount churn; fork,
+`branch.remove` and compaction.
+
+**Faults, inside the run's own containers:**
+
+- one or two `kill -9`;
+- three `pg_terminate_backend` (lane holder, busy or idle);
+- an iptables partition and a netem loss window inside the hosts' network
+  namespaces;
+- a PostgreSQL restart;
+- reply drops through the fault proxy.
+
+**Seven checks per run:**
+
+1. acknowledged Commits on their first-parent chain or `displaced`;
+2. unique attempt tokens;
+3. heads, roots and the full audit;
+4. `gc_intent` rows and advisory keys against live mounts;
+5. no removal or compaction during a live mount;
+6. allocators monotone;
+7. every `Unknown` resolved to exactly one outcome.
+
+Results:
+
+- **20 runs pass all seven checks:** seeds 2 and 4–22, each one command of
+  47.7–67.3 s.
+- **Seeds 1 and 3 failed on harness defects,** preserved and not rerun: rows
+  read after a settling compaction, and an audit past its bound.
+- **Unknowns:** of 569 uncertain Commits, 567 were not installed and 2 were
+  installed on their chain.
+- **Writer reopen was not exercised:** V2 ran `ca4be0bf3c`, since
+  `claude/writer-reopen` is not merged.
+
+### V3: known gaps
+
+| Gap | Answer | Evidence |
+| --- | --- | --- |
+| Failover, `synchronous_commit = local` | **Measured loss.** A Commit acknowledged in 24 ms while the async standby was partitioned is absent after promotion. With a synchronous standby and `on` or `remote_apply`, the Commit does not answer while the standby is unreachable, and an acknowledged one survives promotion. HA deployments set the Store's `synchronous_commit` to `on` or `remote_apply` and name synchronous standbys, `ANY 1 (s1, s2)` with at least two: with none answering, every Commit waits without bound while it holds the lane, and the other writers answer `Busy` | `gap811_v3.rs` `failover` |
+| Multi-host connection strings | **Proven for one writable server:** with `target_session_attrs=read-write` every connection reached the primary. **Broken with two writable servers** (split brain, a restored copy): the writer and its lane dial separately, and with aligned transaction ids a forced Commit published on server A while its lane row was held on B. Filed as #812, proposing to refuse multi-host URLs for writers | `gap811_v3.rs` `multihost` |
+| Transaction pooler (pgbouncer 1.26.1, transaction mode) | **Not a definite refusal.** The pooled check fires only when two lock statements land on different backends: one reused backend admits every path. Two services behind one pooler: one's unmount released the other's live mount's keys and leaked its own. Rows still refused every removal and compaction (`MountsActive`). Session pooling works. Filed as #813 | `gap811_v3.rs` `pooled` |
+| Lane contention | **Holds.** 8 writers on own Branches for 60 s: 11,336 Commits (1,412–1,422 each), 0 `Busy`, Commit p50/p90/p99/max 40.7/53.7/83.4/149 ms, lock-wait p50/p90/p99/max 7.9/29.4/44.6/96.4 ms. 8 containers: 465–471 each, p99 188–242 ms. A shared Branch: 170–177 each, p99 1,144 ms. With `lock_timeout` 50 ms and 16 writers every `Busy` came after at least 50 ms, and no writer was starved. No deadlock or `Unknown` in any arm | `gap811_v3.rs` `lane_contention` |
+| Lost unmount reply | **Holds as documented, no worse.** Dropped before the delete or at its reply: `UnknownOutcome` (row kept or deleted). Dropped at the unlock or after: `Ok`. In every case the writer's backend ends, no key survives, and a kept row refuses `branch.remove` and compaction until an operator release | `gap811_v3.rs` `lost_unmount_reply` |
+| Writer reopen | V1 checks the fixed variant clean. V2 did not run it, since it is not merged | above |
+
+### Issues found
+
+| Finding | Status |
+| --- | --- |
+| Reopen findings 1, 2, 4 and 5 | Fixed on `claude/811-reopen-fix` (`2b0dee1a1f`, for the writer-reopen branch), with three tests that fail on `1a7338ffa2` |
+| Writer and lane on different servers | #812 |
+| Transaction pooler: reused backend, cross-backend unlock | #813 |
+| A refused GC registration rolls back its own dead-row adoption, so orphans from two hosts are cleared only by an operator (V2, 19 of 20 runs) | #814 |
 
 ## Delta chains
 
