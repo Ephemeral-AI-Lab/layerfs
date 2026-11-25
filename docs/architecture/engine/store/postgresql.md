@@ -39,7 +39,7 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 | Object locations | narrow rows; no unique key on the id but a B-tree `object_location_prefix` on its first eight bytes, with the full id compared in the heap; a location is inserted only when its id is absent, which is unique because every location insert holds the lane, including a nested one whose lane connection dies (see [the lane barrier](#lane-barrier)); each row also carries `ancestors`, its record's delta chain as a physical list (see [delta chains](#delta-chains)) | [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs), [`metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 | Short values | bounded `bytea`/`text` columns and both block bodies are `STORAGE PLAIN` (column storage in `CREATE TABLE`, PostgreSQL 16 or newer), so those tables have no TOAST relation | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Merge records | `pg_temp` tables of the writer connection: outside the checked schema, seen by that connection only, gone with it; writes are `Stage` transactions | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
-| Schema version | `SCHEMA_VERSION = 4` (version 3's ancestor lists and pack directories, #758, plus each Commit's attempt, `commit.attempt` with the partial unique index `commit_attempt`, #776 R1); 27 tables, or 30 with acquisition; version 1 is refused (`Integrity`); versions 2 and 3 are refused as `Refused`, each by its own name ("PostgreSQL Store schema version 2 …" or "… 3 …: not supported by this release and not migrated; create a new Store") by the Full, Light and diagnostic checks before any source comparison; nothing is converted, and an open runs no in-place migration first, so a version 2 Store that predates the GC, `kept_node` or position additions gets the same named refusal (#776); the checks read `store_policy.trace_salt` through the row's JSON form, so a Store without that column still reaches the version check | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Schema version | `SCHEMA_VERSION = 4` (version 3's ancestor lists and pack directories, #758, plus each Commit's attempt, `commit.attempt` with the partial unique index `commit_attempt`, #776 R1); 27 tables, or 30 with acquisition; version 1 is refused (`Integrity`); versions 2 and 3 are refused as `Refused`, each by its own name ("PostgreSQL Store schema version 2 …: not supported by this release and not migrated; create a new Store", "… 3 …: not opened by this release; upgrade it in place with `layerfs store upgrade <store>`") by the Full, Light and diagnostic checks before any source comparison; an open converts nothing (only `store upgrade` converts version 3, see [Format upgrade](#format-upgrade)), and runs no in-place migration first, so a version 2 Store that predates the GC, `kept_node` or position additions gets the same named refusal (#776); the checks read `store_policy.trace_salt` through the row's JSON form, so a Store without that column still reaches the version check | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | File operations | none: no seal, snapshot, heads digest, checkpoint or reclamation (`Handles::file` is `None`) | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/store/selection.rs) |
 
 ## Authority and access
@@ -713,3 +713,26 @@ nothing.
 - [SQLite](sqlite.md): the tables these mirror.
 - [Diagnostics](diagnostics.md): the PostgreSQL audit and its physical checks.
 - [Control: Stores and projects](../../control/stores-and-projects/sqlite-and-postgresql.md): how a home connects, updates and checks a PostgreSQL Store.
+
+## Format upgrade
+
+`upgrade_postgresql` (#804 §5.2) brings a schema-3 Store to schema 4 in
+place ([`backend/postgresql/upgrade/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/upgrade)).
+It uses one raw client from the connector's `connect_raw` (not a Session,
+whose open refuses version 3) and simple-protocol text only: one connect
+and two messages, so no prepared statement and no lock across a round trip.
+
+| Message | Phase | What runs |
+| --- | --- | --- |
+| 1 | `check` | one `SELECT`, no transaction, no locks, every `history_meta` and `store_policy` cell read through the row's JSON form (so a version 1 or 2 Store missing a column is still refused by its version name): `server_version_num`, both version cells, the recorded source's sha256, the recorded and live column definitions, `catalog_id`, the binding, `catalog_incarnation` G, the `gc_op` row count, whether `commit_attempt` exists and the two version CHECKs. Rust matches them against the frozen list: version 4 answers `current` (no second message), anything but 3 is `Unsupported` by name, an unsettled `gc_op` is `Busy` |
+| 2 | `convert` | one text: `BEGIN`; `search_path`, `lock_timeout` (2 s) and `synchronous_commit=on` for the transaction; `pg_try_advisory_xact_lock` of the Store-wide GC key (compaction's and mounts' key) or 55P03; `LOCK TABLE "commit", history_meta, store_policy IN ACCESS EXCLUSIVE MODE NOWAIT`; `store_lane FOR UPDATE NOWAIT` in a `DO` that refuses a missing lane row (`LFU02`); a `DO` assert that nothing message 1 read changed (`LFU01`), which also stores the heads, Commit count and totals in `layerfs.before`; step 3 → 4 (`ADD COLUMN attempt`, `CREATE UNIQUE INDEX commit_attempt`, each version CHECK dropped, its row updated and the CHECK re-added, `catalog_incarnation + 1` so a session opened before fails `Stale`, the frozen schema-4 source and target definition recorded); a `DO` verify (`LFU02`: before values, live columns equal the frozen target, the schema-4 record, `pg_index` and `pg_constraint` for the index and the three CHECKs); `COMMIT` |
+
+An `Ok` reply is `upgraded`, even if a cancel request was sent meanwhile
+(the answer follows the server). A reply with a SQLSTATE means the server
+stopped the text and rolled back, and the client closes instead of sending
+`ROLLBACK`: 55P03, 40P01 and `LFU01` are `Busy`, 57014 is `Cancelled`,
+`LFU02` and any other refusal `Failed`; a connection-class or shutdown
+SQLSTATE, or no reply, is `Unknown`. A cancel during message 2 sends the
+client's cancel token from a thread nobody joins (its dial is not waited for); before message 2 the flag
+refuses it. The run keeps its own counters: 1 connect, 2 round trips and 1
+write transaction when upgraded; 1, 1, 0 when current.

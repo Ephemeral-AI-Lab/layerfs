@@ -60,6 +60,11 @@ pub mod worker {
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;
+/// The process-wide cancel request a front end sets on a signal (#804 §6).
+pub use layerfs_home::cancel;
+/// The Store formats this build writes, per engine, as `layerfs --version
+/// --json` shows them (#804).
+pub use layerfs_store::upgrade::FORMATS;
 
 /// The ten families, in the order help lists them, the same from the
 /// `layerfs` binary, Node and Python.

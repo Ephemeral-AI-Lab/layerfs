@@ -596,6 +596,13 @@ fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>, boo
     }
     keys
 }
+/// The Store-wide GC advisory key of `catalog`: compaction takes it
+/// exclusively, every mount and other intent shared, so a transaction-level
+/// exclusive take succeeds only while no GC op uses the Store (#804 §5.2).
+pub(crate) fn store_advisory_key(catalog: CatalogId) -> i64 {
+    let id = catalog.as_slice().to_vec();
+    advisory_key(catalog, 1, &id)
+}
 fn advisory_key(catalog: CatalogId, kind: u8, id: &[u8]) -> i64 {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/advisory/v1\0");

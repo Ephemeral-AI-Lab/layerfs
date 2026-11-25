@@ -17,6 +17,8 @@ layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 # Store backup to a bucket (#535).
 layerfs-bucket = { path = "../layerfs-bucket" }
+# The Store format `store doctor` reports (#804).
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 # The errno names of the worker's accept loop (constants only).
 libc = "=0.2.189"
 
@@ -35,7 +37,6 @@ worker-fault = []
 [dev-dependencies]
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
-layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }

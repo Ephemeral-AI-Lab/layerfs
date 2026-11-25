@@ -223,13 +223,24 @@ fn projection() -> String {
         base_columns.push_str(line);
         base_columns.push('\n');
     }
+    // A Store `store upgrade` brought from schema 3 (#804) has `attempt`
+    // after `history_serial`, where `ADD COLUMN` appends it; its recorded
+    // definition follows that real order, and both orders are admitted.
+    let upgraded = |text: &str| {
+        text.replace("commit attempt bytea YES\n", "").replace(
+            "commit history_serial bigint NO\n",
+            "commit history_serial bigint NO\ncommit attempt bytea YES\n",
+        )
+    };
+    let base_upgraded = upgraded(&base_columns);
+    let full_upgraded = upgraded(COLUMNS);
     let mut full = [TABLES.as_slice(), ACQUISITION_TABLES.as_slice()].concat();
     full.sort_unstable();
     let full = full.join(",");
     let tables="SELECT string_agg(c.relname,',' ORDER BY c.relname) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind IN ('r','p')";
     let columns="SELECT string_agg(c.relname||' '||a.attname||' '||pg_catalog.format_type(a.atttypid,a.atttypmod)||' '||CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END||chr(10),'' ORDER BY c.relname,a.attnum) FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid=a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind IN ('r','p') AND a.attnum>0 AND NOT a.attisdropped";
     let meta=meta_columns("").replace("encode(h.catalog_id,'hex')","encode(CASE WHEN octet_length(h.catalog_id)=32 THEN h.catalog_id END,'hex')").replace("encode(h.binding_key,'hex')","encode(CASE WHEN octet_length(h.binding_key) BETWEEN 1 AND 128 THEN h.binding_key END,'hex')");
-    format!("SELECT CASE WHEN ({tables})='{base}' THEN 0 WHEN ({tables})='{full}' THEN 1 ELSE -1 END,CASE WHEN (({tables})='{base}' AND h.schema_source=$doctor_source${SCHEMA}$doctor_source$ AND h.schema_definition=$doctor_columns${base_columns}$doctor_columns$) OR (({tables})='{full}' AND h.schema_source=$doctor_source${SCHEMA}{ACQUISITION}$doctor_source$ AND h.schema_definition=$doctor_columns${COLUMNS}$doctor_columns$) THEN CASE WHEN h.schema_definition=({columns}) THEN 1 ELSE 0 END ELSE 0 END,{meta} AND ((({tables})='{base}' AND ({columns})=$doctor_columns${base_columns}$doctor_columns$) OR (({tables})='{full}' AND ({columns})=$doctor_columns${COLUMNS}$doctor_columns$))")
+    format!("SELECT CASE WHEN ({tables})='{base}' THEN 0 WHEN ({tables})='{full}' THEN 1 ELSE -1 END,CASE WHEN (({tables})='{base}' AND h.schema_source=$doctor_source${SCHEMA}$doctor_source$ AND h.schema_definition IN ($doctor_columns${base_columns}$doctor_columns$,$doctor_columns${base_upgraded}$doctor_columns$)) OR (({tables})='{full}' AND h.schema_source=$doctor_source${SCHEMA}{ACQUISITION}$doctor_source$ AND h.schema_definition IN ($doctor_columns${COLUMNS}$doctor_columns$,$doctor_columns${full_upgraded}$doctor_columns$)) THEN CASE WHEN h.schema_definition=({columns}) THEN 1 ELSE 0 END ELSE 0 END,{meta} AND ((({tables})='{base}' AND ({columns}) IN ($doctor_columns${base_columns}$doctor_columns$,$doctor_columns${base_upgraded}$doctor_columns$)) OR (({tables})='{full}' AND ({columns}) IN ($doctor_columns${COLUMNS}$doctor_columns$,$doctor_columns${full_upgraded}$doctor_columns$)))")
 }
 
 pub(super) fn row(session: &Session) -> Result<(SimpleQueryRow, bool), BackendError> {

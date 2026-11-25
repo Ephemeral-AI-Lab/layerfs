@@ -63,6 +63,7 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     let live = With {
         live: true,
         stats: false,
+        format: false,
     };
     let seen = get(
         &home,

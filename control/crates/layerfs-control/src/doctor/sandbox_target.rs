@@ -17,6 +17,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::names::{self, MachineName, SandboxName};
 use layerfs_home::op::Standing;
+use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{BlockedBy, Reason, State};
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_sandbox::state::remove_fix;
@@ -119,6 +120,11 @@ pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
     node.children = workspace_target::nodes(name, &seen.workspaces, seen.listing);
 }
 
+/// Evidence naming only the cause word of a finding.
+fn cause(word: &str) -> SdkValue {
+    SdkValue::map([("cause", SdkValue::text(word))])
+}
+
 /// `blocked_by` the Sandbox `sandbox`, for `reason`.
 fn on(sandbox: &str, reason: &'static str) -> BlockedBy {
     BlockedBy {
@@ -218,12 +224,19 @@ fn diagnose(
             reason: Reason::Missing,
             ..
         } => {
-            let message = match record.machine_stopped() {
-                true => "its runtime was stopped",
-                false => "it has no runtime: its create never recorded one",
+            let (message, runtime) = match record.machine_stopped() {
+                true => ("its runtime was stopped", "stopped"),
+                false => (
+                    "it has no runtime: its create never recorded one",
+                    "none_recorded",
+                ),
             };
             checks.fail("sandbox.runtime", message);
             checks.fix("sandbox.runtime", remove_fix(name));
+            checks.evidence(
+                "sandbox.runtime",
+                SdkValue::map([("runtime", SdkValue::text(runtime))]),
+            );
             seen.gate = Some(on(name, "missing"));
             return (Route::None, machine);
         }
@@ -252,6 +265,7 @@ fn read(home: &Path, name: &str, checks: &mut Checks) -> Option<SandboxRecord> {
     const ID: &str = "sandbox.record";
     if SandboxName::parse(name).is_err() {
         checks.fail(ID, "its name is not a Sandbox name");
+        checks.evidence(ID, cause("invalid_name"));
         return None;
     }
     match read_record(&paths::sandbox_record(home, name)) {
@@ -261,13 +275,33 @@ fn read(home: &Path, name: &str, checks: &mut Checks) -> Option<SandboxRecord> {
         }
         Ok(None) => {
             checks.fail(ID, "it has no record");
+            checks.evidence(ID, cause("absent"));
             None
         }
-        _ => {
+        Ok(Some(value)) => {
             checks.fail(
                 ID,
                 "its record cannot be read, is malformed or has an unsupported version",
             );
+            checks.evidence(
+                ID,
+                SdkValue::map([
+                    ("cause", SdkValue::text("unsupported_version")),
+                    (
+                        "v",
+                        value.get_int("v").map_or(SdkValue::Null, SdkValue::Int),
+                    ),
+                    ("expected_v", SdkValue::Int(RECORD_VERSION)),
+                ]),
+            );
+            None
+        }
+        Err(_) => {
+            checks.fail(
+                ID,
+                "its record cannot be read, is malformed or has an unsupported version",
+            );
+            checks.evidence(ID, cause("unreadable"));
             None
         }
     }
@@ -286,9 +320,16 @@ fn readable(file: &Path) -> Option<SdkValue> {
 /// removing the Sandbox.
 fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
     let sandbox = record.name();
-    let fail = |checks: &mut Checks, id: &str, message: String| {
+    let fail = |checks: &mut Checks, id: &str, message: String, evidence: SdkValue| {
         checks.fail(id, message);
         checks.fix(id, remove_fix(sandbox));
+        checks.evidence(id, evidence);
+    };
+    let named = |cause: &str, key: &str, value: &str| {
+        SdkValue::map([
+            ("cause", SdkValue::text(cause)),
+            (key, SdkValue::text(value)),
+        ])
     };
     let machine = record.machine();
     const MACHINE: &str = "sandbox.machine_reference";
@@ -297,6 +338,7 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
             checks,
             MACHINE,
             format!("its machine `{machine}` is not a machine name"),
+            named("invalid_name", "machine", machine),
         );
     } else if layerfs_home::names::BUILT_IN.contains(&machine) {
         checks.pass(MACHINE, "its machine is built in");
@@ -307,11 +349,13 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
             checks,
             MACHINE,
             format!("its machine {machine} has no readable record"),
+            named("no_readable_record", "machine", machine),
         );
     }
     let Some((store, project)) = record.project().and_then(|p| names::project(p).ok()) else {
         let message = "its record names no project, or a malformed one".to_owned();
-        fail(checks, "sandbox.project_reference", message);
+        let evidence = cause("malformed_or_absent");
+        fail(checks, "sandbox.project_reference", message, evidence);
         return;
     };
     const STORE: &str = "sandbox.store_reference";
@@ -320,6 +364,7 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
             checks,
             STORE,
             format!("its Store {store} has no readable record"),
+            named("no_readable_record", "store", store),
         );
         return;
     };
@@ -330,6 +375,7 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
             checks,
             STORE,
             format!("its Store {store}'s record names no kind this build reads"),
+            named("unknown_kind", "store", store),
         ),
     }
     const PROJECT: &str = "sandbox.project_reference";
@@ -342,6 +388,7 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
             checks,
             PROJECT,
             format!("its project {store}/{project} has no record"),
+            named("no_record", "project", &format!("{store}/{project}")),
         ),
     }
     const PLACEMENT: &str = "sandbox.store_placement";
@@ -349,11 +396,31 @@ fn references(home: &Path, record: &SandboxRecord, checks: &mut Checks) {
         Ok(StoreRef::Sqlite { machine: on, .. }) if on == machine => {
             checks.pass(PLACEMENT, "its sqlite Store is on its machine")
         }
-        Ok(StoreRef::Sqlite { machine: on, .. }) => fail(
-            checks,
-            PLACEMENT,
-            format!("its sqlite Store {store} is on machine {on}, not on its machine {machine}"),
-        ),
+        Ok(StoreRef::Sqlite { machine: on, .. }) => {
+            checks.fail(
+                PLACEMENT,
+                format!(
+                    "its sqlite Store {store} is on machine {on}, not on its machine {machine}"
+                ),
+            );
+            // findings.md: move the Store to the Sandbox's machine
+            checks.fix(
+                PLACEMENT,
+                format!(
+                    "layerfs store move {} {}",
+                    shell_word(store),
+                    shell_word(machine)
+                ),
+            );
+            checks.evidence(
+                PLACEMENT,
+                SdkValue::map([
+                    ("store", SdkValue::text(store)),
+                    ("store_machine", SdkValue::text(on.as_str())),
+                    ("sandbox_machine", SdkValue::text(machine)),
+                ]),
+            );
+        }
         Ok(StoreRef::Postgres { .. }) => {
             checks.pass(PLACEMENT, "its PostgreSQL Store is on no machine")
         }
@@ -369,18 +436,30 @@ fn operation(record: &SandboxRecord, checks: &mut Checks) {
         return;
     };
     let what = format!("{} (phase {})", op.name(), op.phase());
+    let seen = |standing: &str| {
+        SdkValue::map([
+            ("op", SdkValue::text(op.name())),
+            ("phase", SdkValue::text(op.phase())),
+            ("standing", SdkValue::text(standing)),
+        ])
+    };
     match op.standing() {
         Standing::Running => checks.pass(ID, format!("its {what} has a running owner")),
-        Standing::Stale => checks.notice(
-            ID,
-            format!("its record keeps the {what} of a process that ended; it holds nothing"),
-        ),
+        Standing::Stale => {
+            // no fix: it holds nothing, and the next call on the Sandbox clears it
+            checks.notice(
+                ID,
+                format!("its record keeps the {what} of a process that ended; it holds nothing"),
+            );
+            checks.evidence(ID, seen("stale"));
+        }
         Standing::Unresolved => {
             checks.fail(
                 ID,
                 format!("the outcome of its {what} is not known: its process ended"),
             );
             checks.fix(ID, remove_fix(record.name()));
+            checks.evidence(ID, seen("unresolved"));
         }
     }
 }
@@ -398,7 +477,7 @@ fn local(
     seen: &mut Observed,
 ) {
     let name = record.name();
-    if !forwarded && !runtime::local(record, checks) {
+    if !forwarded && !runtime::local(home, record, checks) {
         return;
     }
     if !forwarded {
@@ -420,6 +499,7 @@ fn local(
                 "its daemon's saved keys are missing or cannot be read",
             );
             checks.fix(KEYS, remove_fix(name));
+            checks.evidence(KEYS, cause("missing_or_unreadable"));
             return;
         }
     };
@@ -432,6 +512,20 @@ fn local(
     if forwarded && forward_endpoint != saved_endpoint {
         checks.fail(KEYS, "its daemon's saved endpoint is not its forward's");
         checks.fix(KEYS, remove_fix(name));
+        checks.evidence(
+            KEYS,
+            SdkValue::map([
+                ("cause", SdkValue::text("endpoint_not_forwards")),
+                (
+                    "forward_address",
+                    SdkValue::opt_text(forward_endpoint.map(|a| a.to_string())),
+                ),
+                (
+                    "saved_address",
+                    SdkValue::opt_text(saved_endpoint.map(|a| a.to_string())),
+                ),
+            ]),
+        );
         return;
     }
     let (listing, rows) = channel::observe(name, &keys, budget, checks);
