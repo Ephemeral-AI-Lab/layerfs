@@ -292,6 +292,8 @@ fn postgresql_open_costs_on_the_wire() {
             ReservationBlocks::default(),
         )
         .unwrap();
+        // the daemon prepares its writer's mount statements at open (#768)
+        opened.prepare_mounts().unwrap();
         row("daemon Store open", &wire);
         let ws = |n: u8| layerfs_history::WorkspaceId::from_authority([n; 32]).unwrap();
         opened.store.mount_reader(ws(1)).unwrap();
@@ -371,6 +373,8 @@ fn postgresql_open_costs_on_the_wire() {
             ReservationBlocks::default(),
         )
         .unwrap();
+        // the daemon prepares its writer's mount statements at open (#768)
+        opened.prepare_mounts().unwrap();
         row("daemon Store open (eager reader daemon)", &wire);
         assert!(matches!(opened.store.prefill_reader(), Some(Ok(()))));
         row("idle reader after readiness", &wire);

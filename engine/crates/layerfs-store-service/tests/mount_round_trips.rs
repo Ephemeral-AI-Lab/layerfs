@@ -99,24 +99,43 @@ const SQLITE: &[Pin] = &[
 // the mount outside the publication lane: 2 round trips and 2 statements
 // fewer on the writer than the 12/6 (first) and 8/6 (again) it had after the
 // read changes alone.
+//
+// #768 step A then prepared the mount's statements before the mount: the
+// writer's admission and release statements in one flight at Store open
+// (`store.open` in the cycle pins: 1 round trip and 1 read transaction
+// more), and a Workspace reader's mount statements in one flight when it
+// opens. A first mount was writer [0, 10, 4, 1] (its 4 prepares) and reader
+// [1, 13, 8, 0] (its connect, light check, 7 statements and 5 prepares);
+// now the writer prepares nothing and the reader's 5 prepares are one
+// flight in its open (1 round trip, 1 transaction): 23 round trips -> 15.
+//
+// #768 step B then made a mount two writer messages and nothing on the
+// reader: the snapshot (one fenced autocommit statement on the writer), then
+// one pipelined message (`BEGIN` batch, the lock statement, the asserting
+// insert, `COMMIT`, the markers): writer [0, 2, 6, 1], the flight's five
+// requests counted as statements. The reader's empty-query check, snapshot
+// and markers ([0, 3, 2, 0] on a repeated mount) are gone: a repeated mount
+// is 9 round trips -> 2. A first mount's reader still opens (connect, light
+// check, prepare flight) and reads the root's five dependent objects: 15 ->
+// 9 (writer 6 -> 2, reader [1, 9, 8, 1] -> [1, 7, 6, 1]).
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "mount.by_id.first",
-        writer: [0, 10, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [1, 13, 8, 0],
+        workspace: [1, 7, 6, 1],
     },
     Pin {
         scenario: "mount.by_id.again",
-        writer: [0, 6, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [0, 3, 2, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "mount.by_name.first",
-        writer: [0, 10, 4, 1],
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
-        workspace: [1, 13, 8, 0],
+        workspace: [1, 7, 6, 1],
     },
 ];
 
@@ -215,9 +234,11 @@ const SQLITE_COMMIT: &[Pin] = &[
 // on the second (a fenced autocommit statement, then a Read transaction:
 // `BEGIN` batch, statement, `COMMIT`); the one statement is now 4 and 3
 // round trips fewer. The writer's first Commit opens the lane connection.
-// The unmount is the owner's release on the writer, cold on this session (2
-// statements, each prepared once): `postgresql_gc_sessions` pins the warm
-// release at 2 round trips, 8 before #768's admission change.
+// The unmount is the owner's release on the writer: `postgresql_gc_sessions`
+// pins it at 2 round trips, 8 before #768's admission change. Its two
+// statements were prepared here (4 round trips) until #768 step A prepared
+// them at Store open. Since #768 step C its delete and unlock are one
+// pipelined message: [0, 2, 2, 0] -> [0, 1, 2, 0].
 //
 // #768's Commit cuts then took 11 round trips off the first Commit's writer
 // (65 before) and 10 off the second's (42 before; 40 of them warm): the
@@ -256,8 +277,11 @@ const SQLITE_COMMIT: &[Pin] = &[
 // is first used here): 2 round trips once warm. The first Commit no longer
 // opens the lane connection (connects 1 -> 0; its own transaction locks
 // the lane row) and prepares the message's statements once ([1, 54, 23, 5]
-// before). The UpToDate Commit's Branch read is now that statement's first
-// use on this session (no head read before the lane), so one prepare:
+// before). The UpToDate Commit's Branch read was then that statement's
+// first use on this session (no head read before the lane), so one prepare
+// ([0, 2, 1, 0]) until #768 step B: the mount now reads its snapshot with
+// the same statement on the writer, prepared at Store open, so the UpToDate
+// Commit sends 1 round trip; before stage 2, one prepare:
 // [0, 1, 1, 0] before.
 //
 // #768 verification finding 6 (see the SQLite pins): the Store close's
@@ -281,19 +305,166 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "commit.up_to_date",
-        writer: [0, 2, 1, 0],
+        writer: [0, 1, 1, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "unmount",
-        writer: [0, 4, 2, 0],
+        writer: [0, 1, 2, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "close",
         writer: [0, 5, 2, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+];
+
+// The per-tool-call shape on one service ([`cycle_scenarios`]), measured
+// before #768's mount pipeline: the idle reader opened after readiness
+// (`Store::prefill_reader`, SQLite keeps no idle reader), the first mount
+// that takes it, a one-file Commit, the unmount, and a mount of the moved
+// head. The mount after the Commit does not pay the content-read chain: the
+// Commit's install put the new root's objects in the shared object cache, so
+// its Workspace reader sends what a repeated mount of an unmoved root sends.
+//
+// The SQLite open was writer [0, 0, 66, 12] before #776 (58427de3f0): a
+// current Store now skips the nine additive migration steps, each its own
+// write transaction (BEGIN IMMEDIATE, the probe, COMMIT), after one read
+// transaction of three statements (`needs_migration`): 66 - 27 + 3 = 42
+// statements, 12 - 9 + 1 = 4 transactions.
+const SQLITE_CYCLE: &[Pin] = &[
+    Pin {
+        scenario: "store.open",
+        writer: [0, 0, 42, 4],
+        control: [0, 0, 36, 2],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "store.prepare",
+        writer: [0, 0, 0, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "reader.prefill",
+        writer: [0, 0, 0, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "mount.prefilled",
+        writer: [0, 0, 5, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 47, 4],
+    },
+    Pin {
+        scenario: "cycle.commit",
+        writer: [0, 0, 35, 5],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "cycle.unmount",
+        writer: [0, 0, 3, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "mount.after_commit",
+        writer: [0, 0, 5, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 42, 4],
+    },
+];
+
+// `store.open` is every session's work from its connect to the opened
+// Store; the SQLite control reader opens at start, a PostgreSQL one at its
+// first use.
+//
+// On PostgreSQL, measured before #768 step A: the Store open was writer
+// [1, 9, 5, 1]; the prefill the idle reader's connect and its light check
+// (reader [1, 1, 1, 0]); the mount that takes it checks it with an empty
+// query (1 round trip, no statement), so it sent one round trip more than a
+// first mount that opens its own reader, and one statement fewer (the light
+// check): writer [0, 10, 4, 1] (the admission's 6 and its 4 prepares),
+// reader [0, 13, 7, 0] (the check, 7 statements: the snapshot, the five
+// dependent content reads and the markers, and 5 prepares: the three locates
+// share one text). The unmount was [0, 4, 2, 0] (its two prepares).
+//
+// Step A prepares those statements ahead: the Store open adds one flight of
+// the writer's admission and release statements, in one read transaction
+// whose `search_path` resolves their names ([1, 10, 5, 2]); the prefill adds
+// one flight of the reader's mount statements ([1, 2, 1, 1]); the mount and
+// the unmount then prepare nothing: 23 round trips -> 14, unmount 4 -> 2.
+// The mount after the Commit was a repeated mount: writer 6, reader 3 (the
+// empty-query check, the snapshot and the markers), as `mount.by_id.again`.
+//
+// Step B then put the whole mount on the writer: the snapshot, then the
+// admission message with the markers (writer [0, 2, 6, 1]). The prefilled
+// first mount's reader no longer checks the idle reader with a round trip
+// (a local check, `PostgresStorage::usable`) and reads only the root's five
+// objects: 14 -> 7 round trips. The mount after the Commit is 9 -> 2, all
+// on the writer, as `mount.by_id.again`.
+//
+// Step C made the unmount one message (the fenced delete and the
+// conditional unlock, pipelined): [0, 2, 2, 0] -> [0, 1, 2, 0].
+//
+// Review fix: only the daemon prepares the writer's mount statements at its
+// open (`OpenedStore::prepare_mounts`, `store.prepare`: one flight, one read
+// transaction, [0, 1, 0, 1]); a Store open for an SDK call, an install or
+// a restore is back at [1, 9, 5, 1]. The daemon's open plus prepare
+// is the [1, 10, 5, 2] of step A.
+//
+// #776 (9f84e467b6) then deleted the four unreachable in-place migrations a
+// writable open probed, each with one autocommit `information_schema`
+// statement (its prepare and its execution, 2 round trips, no
+// transaction): the Store open is [1, 9, 5, 1] - 4 x [0, 2, 1, 0] =
+// [1, 1, 1, 1], the open check alone, and the daemon's open plus prepare
+// [1, 2, 1, 2].
+const POSTGRESQL_CYCLE: &[Pin] = &[
+    Pin {
+        scenario: "store.open",
+        writer: [1, 1, 1, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "store.prepare",
+        writer: [0, 1, 0, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "reader.prefill",
+        writer: [0, 0, 0, 0],
+        control: [0, 0, 0, 0],
+        workspace: [1, 2, 1, 1],
+    },
+    Pin {
+        scenario: "mount.prefilled",
+        writer: [0, 2, 6, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 5, 5, 0],
+    },
+    Pin {
+        scenario: "cycle.commit",
+        writer: [0, 23, 21, 3],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "cycle.unmount",
+        writer: [0, 1, 2, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "mount.after_commit",
+        writer: [0, 2, 6, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -324,6 +495,22 @@ fn sqlite_commit_counts() {
 fn postgresql_commit_counts() {
     if let Some(measured) = on_postgresql("postgresql-commit", "commit", commit_scenarios) {
         check("postgresql", &measured, POSTGRESQL_COMMIT);
+    }
+}
+
+#[test]
+fn sqlite_cycle_counts() {
+    check(
+        "sqlite",
+        &on_sqlite("sqlite-cycle", cycle_scenarios),
+        SQLITE_CYCLE,
+    );
+}
+
+#[test]
+fn postgresql_cycle_counts() {
+    if let Some(measured) = on_postgresql("postgresql-cycle", "cycle", cycle_scenarios) {
+        check("postgresql", &measured, POSTGRESQL_CYCLE);
     }
 }
 
@@ -453,7 +640,15 @@ struct Opened {
     owner: Owner,
 }
 impl Opened {
+    /// The daemon's open: the Store, then the writer's mount statements
+    /// (`OpenedStore::prepare_mounts`, #768).
     fn open(dir: &Path, selection: StoreSelection, tag: &str) -> Self {
+        let opened = Self::open_plain(dir, selection, tag);
+        opened.service.opened.prepare_mounts().unwrap();
+        opened
+    }
+    /// The Store open alone, as an SDK call opens it.
+    fn open_plain(dir: &Path, selection: StoreSelection, tag: &str) -> Self {
         let opened = open_store_observed(
             selection,
             BINDING,
@@ -635,6 +830,55 @@ fn commit_scenarios(
     measure(&opened, "close", &mut out, || {
         opened.service.store.release_producer()
     });
+    opened.stop();
+    out
+}
+
+/// The per-tool-call shape on one newly opened service: the idle reader
+/// opened after readiness, the first mount (it takes that reader), a
+/// one-file Commit, the unmount, then a mount of the head the Commit moved.
+fn cycle_scenarios(
+    dir: &Path,
+    selection: &dyn Fn() -> StoreSelection,
+    branch: BranchId,
+) -> Vec<Measured> {
+    let mut out = Vec::new();
+    let opened = Opened::open_plain(dir, selection(), "e");
+    // The Store open itself, as an SDK call opens it: every session's work
+    // since it connected.
+    let open = opened.work();
+    out.push(Measured {
+        scenario: "store.open",
+        counts: [counts(&open[0]), counts(&open[1]), counts(&open[2])],
+    });
+    // What the daemon adds to its open (#768).
+    measure(&opened, "store.prepare", &mut out, || {
+        opened.service.opened.prepare_mounts().unwrap()
+    });
+    measure(&opened, "reader.prefill", &mut out, || {
+        if let Some(prefilled) = opened.service.store.prefill_reader() {
+            prefilled.unwrap();
+        }
+    });
+    let first = measure(&opened, "mount.prefilled", &mut out, || {
+        opened.by_id(7, branch)
+    });
+    let mut change = Mutation::new(&first).unwrap();
+    change.write("/cycle", b"cycle\n", None).unwrap();
+    change.finish().unwrap();
+    let outcome = measure(&opened, "cycle.commit", &mut out, || opened.commit(&first));
+    assert!(
+        matches!(outcome, CommitOutcome::Committed { .. }),
+        "{outcome:?}"
+    );
+    measure(&opened, "cycle.unmount", &mut out, || opened.unmount(first));
+    let moved = measure(&opened, "mount.after_commit", &mut out, || {
+        opened.by_id(8, branch)
+    });
+    let view = Mutation::new(&moved).unwrap();
+    assert!(view.optional("/cycle").unwrap().is_some(), "the moved head");
+    view.finish().unwrap();
+    opened.unmount(moved);
     opened.stop();
     out
 }

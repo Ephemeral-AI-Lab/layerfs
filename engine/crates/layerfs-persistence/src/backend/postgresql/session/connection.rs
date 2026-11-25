@@ -78,10 +78,15 @@ impl State {
     /// trip, however many), each counted in `prepares`; every reply is
     /// collected, and the first failure is returned once the others are
     /// cached. A prepare the client never sent (unencodable, or after one
-    /// that was) fails definitely ([`super::driver::Error::unsent`]).
-    pub(crate) fn statements(
+    /// that was) fails definitely ([`super::driver::Error::unsent`]). With
+    /// `begin`, it is sent before the prepares and `COMMIT` after them in the
+    /// same flight: a read transaction whose `SET LOCAL search_path` resolves
+    /// the unqualified names of the texts, counted as one read transaction
+    /// when it is sent; its `begin` or `COMMIT` failing fails the call.
+    pub(crate) fn statements_in(
         &mut self,
         sqls: &[&str],
+        begin: Option<&str>,
     ) -> Result<Vec<Statement>, super::driver::Error> {
         // Resolve cached statements first: inserting may clear the cache.
         let mut found: Vec<Option<Statement>> = sqls
@@ -100,7 +105,13 @@ impl State {
         }
         self.work.prepares += missing.len() as u64;
         self.work.round_trips += 1;
-        let (sent, replies) = self.client.prepare_all(&missing)?;
+        let answered = self.client.prepare_all(&missing, begin)?;
+        if begin.is_some() {
+            self.work.transactions += 1;
+            self.work.commits += u64::from(answered.around.is_ok());
+        }
+        answered.around?;
+        let (sent, replies) = (answered.sent, answered.statements);
         let mut prepared = HashMap::with_capacity(missing.len());
         let mut failed = None;
         for (index, (sql, reply)) in missing.into_iter().zip(replies).enumerate() {

@@ -182,8 +182,9 @@ impl ReadSet {
                 false => None,
             }
         };
-        // An idle reader is checked outside the lock (a PostgreSQL one with
-        // one round trip, #64); one that cannot serve is dropped, never
+        // An idle reader is checked outside the lock (a PostgreSQL one
+        // locally, and with one round trip once its connection has been
+        // silent 30 s, #64/#768); one that cannot serve is dropped, never
         // handed to this Workspace, and a new reader opens instead.
         let (index, result) = match candidate.filter(|(_, reader)| reader.usable()) {
             Some((index, reader)) => {

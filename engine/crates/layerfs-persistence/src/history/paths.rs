@@ -131,7 +131,13 @@ pub(crate) fn node_markers(
     stack: LayerStackId,
     node: NodeId,
 ) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
-    let rows = tx.query(NODE_MARKERS, [node.as_slice(), stack.as_slice()])?;
+    node_markers_of(tx.query(NODE_MARKERS, [node.as_slice(), stack.as_slice()])?)
+}
+
+/// [`node_markers`] from the rows its statement returned.
+pub(crate) fn node_markers_of(
+    rows: Vec<crate::backend::records::Record>,
+) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
     let Some(first) = rows.first() else {
         return Ok(None);
     };

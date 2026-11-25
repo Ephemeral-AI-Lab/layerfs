@@ -119,6 +119,36 @@ pub fn fused_commit_at(
     committer.commit_at(tail, stack, request, &[], Some(time_ms))
 }
 
+/// One PostgreSQL mount registration as the one message alone (#768 step
+/// B): `true` when it admitted (the keys held with the op), `false` when it
+/// refused with nothing written and no key held, where the registration
+/// continues statement by statement.
+pub fn mount_one_message(
+    history: &crate::HistoryProvider,
+    intent: &layerfs_history::records::GcIntent,
+) -> layerfs_history::HistoryResult<bool> {
+    crate::history::admission::one_message(history, intent, None).map(|read| read.is_some())
+}
+
+/// Whether the statement-by-statement registration's checks refuse
+/// `intent` before settling anything (the Branch probe and the conflict
+/// scan the one message encodes).
+pub fn mount_separately_refuses(
+    history: &crate::HistoryProvider,
+    intent: &layerfs_history::records::GcIntent,
+) -> layerfs_history::HistoryResult<bool> {
+    crate::history::admission::separately_refuses(history, intent)
+}
+
+/// One registration statement by statement, as a refusal of the one
+/// message continues.
+pub fn register_separately(
+    history: &crate::HistoryProvider,
+    intent: &layerfs_history::records::GcIntent,
+) -> layerfs_history::HistoryResult<()> {
+    crate::history::admission::register_separately(history, intent)
+}
+
 /// The PostgreSQL chain's steps, oldest first, and its floor.
 pub fn postgresql_upgrade_steps() -> (Vec<StepData>, i64) {
     let steps = crate::backend::postgresql::upgrade::step::steps();

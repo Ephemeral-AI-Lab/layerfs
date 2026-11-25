@@ -69,6 +69,18 @@ pub enum NamedSnapshot {
     Found(Box<BranchSnapshot>),
 }
 
+/// What a mount's registration read beside its intent
+/// ([`HistoryCatalog::gc_register_mount`]).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MountMarkers {
+    /// Nothing: the caller reads the bound node's removals itself, after the
+    /// registration, as [`HistoryCatalog::node_path_removals`].
+    NotRead,
+    /// The bound node's [`HistoryCatalog::node_path_removals`], read after
+    /// the intent committed, on the same connection.
+    Read(Option<(u64, Vec<PathRemovalRecord>)>),
+}
+
 /// Every semantic history operation, portable over its provider.
 pub trait HistoryCatalog: Send + Sync {
     /// Identity this catalog was created or opened with.
@@ -558,6 +570,21 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported(
             crate::error::NO_ADMISSION,
         ))
+    }
+
+    /// Registers a Workspace mount's intent, as [`Self::gc_register`], and
+    /// may read the bound `node`'s removals in `stack` with it: a provider
+    /// that answers both in one message reads them after the intent
+    /// committed, which keeps the order a separate read after the
+    /// registration has (a removal that committed first is seen, one after
+    /// meets the intent). The default registers and reads nothing.
+    fn gc_register_mount(
+        &self,
+        intent: &GcIntent,
+        _stack: LayerStackId,
+        _node: NodeId,
+    ) -> HistoryResult<MountMarkers> {
+        self.gc_register(intent).map(|()| MountMarkers::NotRead)
     }
 
     /// Releases one admission intent, deleting its row.

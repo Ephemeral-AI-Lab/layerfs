@@ -199,7 +199,10 @@ A mount, a compaction claim and their registrations keep session advisory
 keys (Store, project and Branch) across statements
 ([`admission/session.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/session.rs)).
 The lock and the unlock are each one autocommit `Bare` statement for all of
-an intent's keys, outside the generation fence (#776 P2): a fenced
+an intent's keys (since #768 steps B and C a Branch mount's lock is a
+statement of its admission message and an owner release's unlock rides in
+the release's message, [GC admission](#gc-admission)), outside the
+generation fence (#776 P2): a fenced
 statement would take or drop a key and then answer `Stale`, leaving it held
 with no intent row behind it. The lock statement checks the generation
 itself and tries no key when it moved. No key outlives a failed lock: a
@@ -522,13 +525,18 @@ Chosen per Store in `PostgresSelection` and applied with `SET LOCAL` to every
 A mount registers a shared `gc_intent` row and holds advisory keys on the
 writer session for the Workspace's life; its unmount releases both (GC spec
 §5.2). Since #768 both run outside the publication lane, and the keys are
-taken and given back in one statement each
-([`admission.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission.rs) `register`,
+taken and given back in one statement each. Since #768 step B a Branch
+mount's whole registration is one pipelined message
+([Mount admission in one message](#mount-admission-in-one-message)); the
+statement-by-statement registration below remains for every other intent
+and decides each refusal that message cannot report exactly
+([`admission.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission.rs) `register_separately`,
 [`authority.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/authority.rs) `release`,
 [`session.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/session.rs)):
 
 ```text
- register (mount)                        round trips
+ register_separately (a mount's         round trips
+   fallback; other intents on the lane)
    gc_lock_session: every key in one     1   Store, project, Branch; all tried,
      statement (Bare), after its own         none when the generation moved
      generation check
@@ -539,17 +547,42 @@ taken and given back in one statement each
    COMMIT                                1
    keys kept with the op in the session (held_ops)
 
- release (the owner's)
+ release (the owner's), one pipelined message since #768 step C
    gc_intent_release_owner: DELETE ...   1   one fenced autocommit statement;
-     RETURNING (Bare)                        refused, deleting nothing, when
-                                             the generation moved
-   gc_unlock_session: the op's kept      1   only when this session holds
-     keys, one statement (Bare)              the op; always after the delete
+     RETURNING; records the attempt's        refused, deleting nothing, when
+     token in `layerfs.released` when it     the generation moved
+     ran at the session's generation
+   mount/unlock.sql: the op's kept       (same  only when this session holds
+     keys, one statement, given back      flight) the op; after the delete, in
+     only when it finds that token               its own Sync; gives nothing
+                                                 back after a refused or stale
+                                                 delete
 ```
 
+The release's two statements go in one flight
+([`release.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/release.rs)).
+Each has its own `Sync`, so the unlock runs whatever the delete answered.
+The delete, when it completes at the session's generation, sets the session
+setting `layerfs.released` to this attempt's token (rolled back with the
+statement if it fails), and the unlock gives the keys back only when it
+finds that token. So it gives them back exactly when the
+statement-by-statement release answered success and sent its unlock: after
+a delete that ran or found the row already gone (another session, a
+reconcile, an operator's retained `done` row), even when the generation
+moves between the delete and the unlock. (The first step-C text checked the
+generation again in the unlock; a generation that moved in between then
+left an `Ok` unmount's keys held with no later release to give them back,
+a review finding, fixed by the token.) After a
+stale or refused delete it gives nothing back and the session keeps the
+keys with the op, so a later release still can. A lost delete reply is
+`UnknownOutcome` and quarantines the session; a refused or lost unlock
+quarantines it too, while the release answers its delete, as before.
+
 `postgresql_gc_sessions` pins the counts of one warm mount register and
-release: register 6 round trips (4 counted statements plus the `BEGIN` batch
-and `COMMIT`), release 2 (2 statements, no transaction). Before #768 each was
+release: register 1 round trip since step B (the one message; 6 before it,
+statement by statement as above: 4 counted statements plus the `BEGIN` batch
+and `COMMIT`), release 1 since step C (2 statements in one flight, no
+transaction; 2 round trips before it). Before #768 each was
 8 round trips: register took one fenced lock statement per key, then a lane
 write; release was a lane write that read the row to rebuild its keys (and
 the Branch's project, on every unmount, because a decoded row carries no
@@ -582,10 +615,13 @@ Why the mount's register and release need no lane:
   in its own snapshot and tries no key when it moved; the release's `DELETE`
   deletes nothing when it moved. A session that holds a registered mount
   still meets the fence on every later call (`a_registered_mount_still_meets_the_generation_fence`).
-- `lock_timeout` stays on the `Admit` transaction. The release's single
-  autocommit statement runs without it: it can wait only for its own op's
+- `lock_timeout` stays on the `Admit` transaction. The release's
+  autocommit statements run without it: it can wait only for its own op's
   row (held by another short admission transaction) or for a swap's brief
-  `ACCESS EXCLUSIVE` on `history_meta`.
+  `ACCESS EXCLUSIVE` on `history_meta`. Known limit (accepted, predates
+  #768's release changes): it also waits, without `lock_timeout`, for any
+  lock an operator or another session holds on `gc_intent` (an independent
+  check saw an unmount wait 2 s behind such a lock).
 - An operator's `release_done` stays on the lane: its done stamp relies on
   retaining releases being serialized. The owner's delete never writes or
   deletes a `done` row.
@@ -617,6 +653,14 @@ Keys and their custody:
 - §5.2 item 34 is kept: the lock and unlock statements return
   `pg_backend_pid()`, compared with the session's recorded backend, and a
   transaction-pooled connection is `Unsupported`.
+- An unmount releases the intent on the writer even when closing the
+  Workspace's reader failed (`BoundWorkspace::close`, #768 review): a
+  reader whose backend was terminated fails its reads and the unmount
+  still reports that failure, but the healthy writer deletes the row and
+  gives back the keys instead of keeping them until the service exits.
+  The release runs once, after the local close succeeded; nothing with an
+  unknown outcome is sent again (`tester768_stale_reader`
+  `a_mounted_workspace_reader_terminated`).
 
 **Not done, and why.** #768 proposed two more cuts that the source does
 not support:
@@ -639,10 +683,12 @@ not support:
   [Mount reads](#mount-reads) now replaces. Skipping the open check would
   leave a reader at generation 0, which is unfenced.
 
-The register body (Branch probe, conflict scan and insert) could become one
-PostgreSQL-only statement and save 2 more round trips, but it would duplicate
-the conflict scan for three scope kinds beside `register_in`, which SQLite's
-mount and compaction mark share; it is left as is.
+The register body (Branch probe, conflict scan and insert) is one
+PostgreSQL-only statement since step B, for a Branch mount only, and it
+does not duplicate the rule: it composes the shipped `branch_branch_by_id`
+and `gc_intent_ops_branch` texts that `register_in` runs
+([Mount admission in one message](#mount-admission-in-one-message)).
+Project- and Store-scoped intents keep `register_in`.
 
 **Waits that remain.** Every Workspace a daemon mounts shares that daemon's
 one writer session, whose in-process FIFO admission
@@ -660,18 +706,37 @@ the same writer lock is the compaction fence
 
 ### Mount reads
 
-A Workspace mount reads only on its own Workspace reader and writes only
-its admission on the writer; it never opens or uses the control reader
-(#768, [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs)):
+Since #768 step B a PostgreSQL mount sends two messages, both on the
+writer, and none on a reader; it never opens or uses the control reader
+([`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs),
+`Opened::with_mount_on_writer`, set by `bootstrap.rs` for PostgreSQL only):
+
+```text
+ writer  branch_snapshot or branch_snapshot_named            1 RT  one fenced autocommit
+         (a bind by Branch id takes the project name for            statement
+         the intent from the same row)
+ writer  gc_register_mount: BEGIN batch, the session keys,    1 RT  one pipelined message
+         the asserting insert, COMMIT, then paths_node_markers       (Mount admission in one
+         (the bound node's serial and every path_removed             message)
+         marker of its project)
+```
+
+The Workspace reader is still opened at a first mount (or prefilled after
+readiness) for the Workspace's own reads; a first mount on a new reader
+pays its open and the root's first demand there, a repeated mount nothing.
+SQLite keeps the earlier route: the snapshot and the markers on the
+Workspace reader, the registration on the writer, as below:
 
 ```text
  Workspace reader  branch_snapshot or branch_snapshot_named     1 autocommit statement
-                   (a bind by Branch id takes the project name for the
-                   intent from the same row)
  writer            gc_register: the mount intent                 admission (history/admission.rs)
  Workspace reader  paths_node_markers: the bound node's serial   1 autocommit statement
                    and every path_removed marker of its project
 ```
+
+The snapshot moved to the writer, so it now also waits behind another
+Workspace's Commit holding the same daemon's writer admission, as the
+registration already did ([Waits that remain](#gc-admission)).
 
 The markers are read after the intent commits, never with the snapshot. A
 path removal takes the project key exclusively in its marker transaction and
@@ -680,7 +745,10 @@ before its registration (on SQLite the single writer orders the two
 transactions instead): a removal that committed before the intent is seen
 by the marker read, and one after it is refused `MountsActive`. A marker read
 before the registration would miss a removal that commits in between. Both
-reads are fenced autocommit statements (`read_statement`).
+reads are fenced autocommit statements (`read_statement`); on PostgreSQL
+the marker read is the message's last request, sent after its `COMMIT` on
+the same connection, so it reads in a snapshot taken after the intent
+committed.
 
 The mount refuses when `gc_register` refuses, `Unsupported` included: on a
 transaction-pooled connection the session key cannot mean presence, so the
@@ -694,6 +762,204 @@ intent; merge, Init and the removals follow the same rule
 | --- | --- | --- |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test mount_round_trips` | Pinned connects, round trips, statements and transactions of a first and a repeated mount by Branch id and a mount by name, per session, on SQLite and PostgreSQL; the control reader is untouched. Also a mounted Workspace's first and second one-file Commit, an UpToDate Commit and the unmount: no Commit reads on the control or Workspace reader (whiteout facts kept from the mount, validation from the built objects). A merge Commit reads the merged root back through the Workspace reader, and the Commit after it reads nothing there |
 | [`admission.rs`](../../../../engine/crates/layerfs-store-service/tests/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test admission` | `a_pooled_registration_refuses_the_mount`: a pooled refusal reaches the caller of a mount; a catalog without admission still mounts. `a_pooled_connection_refuses_a_shared_intent`: the same for a merge |
+
+### Mount statements prepared at open
+
+A statement is prepared once per connection, on its first use, at one round
+trip each (`State::statement`). Since #768 step A the mount's statements are
+prepared before the mount, in one flight each
+([`mount.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/mount.rs),
+[`prepare.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/prepare.rs)):
+
+- **The writer**, when the daemon opens its Store
+  ([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)
+  `OpenedStore::prepare_mounts`, called by the daemon's owner after
+  `open_store_observed`): the mount admission's and the owner release's
+  statements. Some name tables without the schema, as the transactions that
+  run them resolve them through `SET LOCAL search_path`, so the flight is
+  one read transaction: its `BEGIN` batch, the prepares and `COMMIT`, one
+  round trip. Step A ran it in every Store open; since the review only the
+  daemon, which mounts, pays it: a Store opened for an SDK call, an install
+  or a restore does not (`mount_round_trips` `store.open` [1, 1, 1, 1] and
+  `store.prepare` [0, 1, 0, 1]; the open was [1, 9, 5, 1] until #776
+  deleted the four in-place migration probes, 2 round trips each). A mount on a service that did not prepare
+  them prepares the message's statements at first use, in the message's
+  own turn ([Mount admission in one message](#mount-admission-in-one-message)).
+- **A Workspace reader**, when it opens (at the mount that opens it, or
+  after readiness for the idle reader, `Store::prefill_reader`): the
+  snapshot by Branch id and by name, the markers, and the root's first
+  demand (the chain locate, the pack ranges, the inode value blocks), each
+  in its fenced autocommit form. The control reader prepares none.
+- **Since step B** the snapshot (by id and by name) and the markers run on
+  the writer, so the writer's open flight prepares them with the admission
+  message's lock and insert statements and the separate path's texts; a
+  Workspace reader prepares only the root's first demand.
+
+A prepare changes nothing on the server: a refused one fails the open as
+its one attempt, and one whose reply is lost quarantines the session.
+
+```text
+                                  before step A    after step A
+ Store open (writer, daemon)      9 RT, 1 tx       10 RT, 2 tx
+ idle reader (prefill)            1 RT             2 RT
+ first mount, own reader          23 RT            15 RT   (writer 10 -> 6, reader 13 -> 9)
+ first mount, prefilled reader    23 RT            14 RT   (writer 10 -> 6, reader 13 -> 8)
+ repeated mount                   9 RT             9 RT
+ unmount, first on the session    4 RT             2 RT
+```
+
+The counts are `mount_round_trips.rs`'s session counters (connects are not
+round trips); `postgresql_open_cost.rs` sees the same +1 on the wire (a
+daemon Store open 10 -> 11, which that test now makes with
+`prepare_mounts` as the daemon does, a reader open 2 -> 3); its host open
+pays no prepare.
+
+### Mount admission in one message
+
+Since #768 step B a PostgreSQL Branch mount's registration is one pipelined
+writer message, one round trip, after the snapshot read
+([`history/mount.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/mount.rs),
+[`admission/mount.rs`](../../../../engine/crates/layerfs-persistence/src/history/admission/mount.rs),
+`HistoryCatalog::gc_register_mount`):
+
+```text
+ 1  BEGIN READ COMMITTED; SET LOCAL search_path, synchronous_commit,
+    lock_timeout; set_config('layerfs.attempt', nonce, true); the
+    generation fence                                 (simple text, as Fused)
+ 2  mount/lock.sql: every key tried; any refused, the granted ones given
+    back in the same statement, which then fails (all or none)
+ 3  mount/insert.sql: INSERT ... SELECT ... WHERE the Branch exists
+    (branch_branch_by_id) AND no live operation conflicts
+    (gc_intent_ops_branch) ON CONFLICT DO NOTHING; fails unless one row
+ 4  COMMIT
+ 5  paths_node_markers, fenced autocommit, only when the mount asks
+```
+
+Statements 2 and 3 check the attempt token, so if `BEGIN` failed and a
+statement ran on its own it takes no key and writes no row. Each request
+ends in its own `Sync`: after a refusal the rest of the transaction answers
+`25P02` and its `COMMIT` rolls back. The first refusal decides; the keys
+are session locks, so they outlive the rolled-back transaction:
+
+| Refused at | SQLSTATE | Keys | Outcome |
+| --- | --- | --- | --- |
+| 1 | `22012` | none taken | `StaleStore` |
+| 1 | `55P03` (the lock timeout, waiting on `history_meta`) | none taken | `Busy`, as before step B: the fallback's key statement runs without `lock_timeout` and would wait as long as the lock is held |
+| 1 | another definite one | none taken | the statement-by-statement registration, once |
+| 2 | `22012` (a key refused) | none held | the statement-by-statement registration, once |
+| 2 | `22003` (another backend) | none taken | `Unsupported("transaction-pooled PostgreSQL connection")` |
+| 3, 4 | a definite one (`rows::sqlstate`) | held | one unlock statement (+1 RT), then the statement-by-statement registration, once |
+| 5 | a definite one | held with the op | admitted; the markers are read separately |
+| any | none, `25P02` first, or a SQLSTATE without a definite rule | unknown | the session is quarantined (its connection closes, so the server holds none of its keys); `UnknownOutcome`, never sent again |
+| none | — | held with the op | admitted (`held_ops`), with the markers |
+
+The message admits only what the statement-by-statement registration admits
+with nothing to settle: it refuses whenever any live operation row
+conflicts, dead or not, and never revives or replaces a row of its own op
+(a retained `done` row, or a live re-registration). Each such refusal is
+decided by `register_separately`, which settles provably dead rows,
+classifies the holders (`MountsActive`, `BusyOp`, `Unresolved`) or
+registers. So for every state the message reads with all its replies
+received, the fast path changes the cost of an admission, not its answer;
+the exceptions are a lost reply (below) and the cases it reports itself
+(`StaleStore` and a pooled connection, which that registration would also
+report, and a lock timeout in the `BEGIN` batch, which answers `Busy`
+within about the session's `lock_timeout`). Any other definite error of
+the fast path, a statement that does not prepare included, falls back the
+same way, once; an unknown outcome
+still quarantines the session and is never sent again. A statement the
+message needs and the connection has not cached (evicted from the
+256-entry statement cache, or a service that did not prepare it at open)
+is prepared in the message's own turn inside a read transaction with the
+Store's `search_path` (`Session::pipeline_decided`), so its unqualified
+names resolve and nothing can evict it before the flight.
+`postgresql_mount_pipeline.rs` checks this over seeded random sets
+of intents (every kind; Store, project and Branch scopes of the mount's
+project and another; live, uncertain and done; with and without owners):
+the message admits exactly when `validate_mount` and `conflicts_for`
+refuse nothing, and the whole registration answers exactly as
+`register_separately` alone, holders included; a missing and a retired
+Branch and both same-op rows are checked the same way. No refusal leaves a
+key held.
+
+A refusal on a session that also lost a later reply is a definite
+`Conflict`: the transaction aborted at the refusal, and the quarantined
+session cannot run the fallback.
+
+**Known limit: a reply lost after the message's `COMMIT`.** If the
+connection is lost after the `COMMIT` went out, the markers' reply
+included, the mount answers `UnknownOutcome` and the writer is quarantined,
+but the intent may have committed: its live row stays (`mount_fault_*`
+"unknown, row kept"). Nothing releases it until the daemon exits and the
+owner is settled (`gc_mark_uncertain`, an owner reconcile, or an operator's
+release), and meanwhile it refuses `branch.remove` and compaction
+(`MountsActive`). Before step B the markers were read on the Workspace
+reader, so a lost markers reply left a healthy writer that could release
+the row. This stays within the one-attempt rule (no resend, no guessed
+delete) and has the same root cause as the existing limit that a
+quarantined writer stops the daemon's admissions: reopening the writer
+session after a quarantine is the follow-up that would clear both.
+
+```text
+                                  after step A    after step B
+ Store open (writer, daemon)      10 RT, 2 tx     10 RT, 2 tx  (the message's texts join the open flight)
+ first mount, own reader          15 RT           9 RT    (writer 6 -> 2, reader 9 -> 7: open and root reads)
+ first mount, prefilled reader    14 RT           7 RT    (writer 6 -> 2, reader 8 -> 5: the root's reads)
+ repeated mount                   9 RT            2 RT    (writer 6 -> 2, reader 3 -> 0)
+ mount after a Commit             9 RT            2 RT    (as a repeated mount; no content chain)
+ UpToDate Commit                  2 RT            1 RT    (its Branch read was prepared by the mount's
+                                                           snapshot at open)
+ gc_register (postgresql_gc_sessions)  6 RT       1 RT
+```
+
+Step C then made the owner release one message (the delete and the
+conditional unlock, above): an unmount 2 RT -> 1 (`mount_round_trips`
+`unmount`, `cycle.unmount`: writer [0, 2, 2, 0] -> [0, 1, 2, 0];
+`postgresql_gc_sessions` release 2 -> 1). A per-tool-call cycle on a
+prefilled reader is now: the daemon's Store open 10 RT (9 plus the
+prepare), the idle reader's prefill 2, mount 7 (2 on the writer), unmount
+1; a later mount, after a Commit or not, 2.
+
+**The idle reader's check** (`PostgresStorage::usable`, called when a mount
+takes a pooled reader) is local first: two runtime turns, then whether the
+client or its connection task has ended, which catches a connection the
+server closed (a restart, a terminated backend, an idle timeout) with no
+round trip. A reader whose connection has been silent at least
+`READER_IDLE_CHECK_MS` (30 s, the selection's `reader_idle_check_ms`) must
+also answer an empty query within
+`READER_CHECK_TIMEOUT` (5 s, one counted round trip), as every reuse did
+before step B: a path that ends an idle connection without telling the
+client (a load balancer or NAT that resets it at the next packet, a cloud
+path that drops it silently, where a read would wait for the TCP
+retransmission timeout) is found here, and the mount gets a fresh reader
+instead of a failed or stalled first read. This is a readiness check
+before the reader serves anything, not a retry. Silence counts from the
+connection's last reply from the server (a result or a server error, kept
+in the session, `Driver::silent`), not from the reader's return to the
+pool: a Workspace that held the reader for minutes without reading leaves
+it as silent as one that sat in the pool, and its next checkout checks it.
+Back-to-back per-tool-call mounts reuse a reader that heard the server well
+under 30 s ago and send nothing for it (step B first made the check local
+only; the 30 s query and the reply clock are review fixes).
+`postgresql_reader_idle.rs` checks a fresh reader (nothing sent), an aged
+one whose path resets (replaced), one that went silent while a Workspace
+held it and was handed back just before the next mount (checked, replaced)
+and an aged one whose backend was terminated behind a silent path
+(replaced after the 5 s bound).
+
+**Known limit: a reader close that fails leaves its session entry.**
+`ReadService::close` (`read_service.rs`) returns the error of
+`session.release()?` before it removes the Workspace's session entry, so a
+reader whose close fails stays listed under that Workspace (its counters
+are not retired either). The unmount still releases its intent (step C's
+custody fix in the daemon); only the read service's bookkeeping keeps the
+entry. Recorded by review, not fixed in #768.
+
+| Test | Checks |
+| --- | --- |
+| [`postgresql_mount_pipeline.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_mount_pipeline.rs) | the random equivalence and edge cases above; a mount racing a compaction or a project removal on another session is never both admitted; two sessions mounting one Branch are both admitted; a backend terminated while the insert waits on a table lock is an unknown outcome with no row and no key, and the session refuses further calls; an insert reaching the lock timeout gives its keys back and the fallback reports `Busy`; a release whose delete the server refuses keeps its row and keys, and the next release frees both in one round trip; a release whose generation moves after its delete gives its keys back; a `BEGIN` batch that meets the lock timeout answers `Busy` within about the lock timeout, with no row and no key; a `BEGIN` batch cancelled while it waits (`57014`) falls back once and the mount is admitted when the lock goes |
+| [`postgresql_reader_idle.rs`](../../../../engine/crates/layerfs-store-service/tests/postgresql_reader_idle.rs) | the idle reader's check: under the threshold nothing is sent; past it, a reset path and a silently dead backend both get the mount a fresh reader, the second within the 5 s bound; a reader silent past the threshold while checked out is checked at its next checkout, however short its time in the pool |
+| [`mount_fault_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_drop.rs), [`mount_fault_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_fault_kill.rs) | a dropped connection, and a terminated backend, at every server message of a repeated mount and of an unmount (`support/mount_sweep.rs`): an answered mount holds its row and three keys (unless the backend ended after every reply); an answered unmount left neither; a failed call whose service still works left nothing (a mount) or kept both (an unmount); an unknown one closed the writer's connection, so no key, at most its row; a fresh service mounts; no backend is left in a transaction |
 
 ### Commit round trips
 

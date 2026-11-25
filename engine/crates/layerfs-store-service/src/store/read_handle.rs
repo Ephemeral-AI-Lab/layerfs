@@ -27,7 +27,8 @@ impl StoreReader {
         }
     }
     /// Says whether an idle reader can still serve before a mount takes it:
-    /// a PostgreSQL reader whose connection closed or was quarantined cannot.
+    /// a PostgreSQL reader whose connection closed or was quarantined, or
+    /// (silent 30 s) does not answer, cannot.
     pub fn with_usable(mut self, usable: impl Fn() -> bool + Send + Sync + 'static) -> Self {
         self.usable = Some(Box::new(usable));
         self

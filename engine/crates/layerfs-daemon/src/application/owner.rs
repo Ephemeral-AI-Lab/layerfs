@@ -551,6 +551,14 @@ impl Application {
                 ReservationBlocks::default(),
             ) {
                 Ok(mut opened) => {
+                    // #768: the daemon mounts, so its writer prepares the
+                    // mount and unmount statements now, in one flight.
+                    if let Err(cause) = opened.prepare_mounts() {
+                        return Err(ApplicationError::AfterOverlay {
+                            owner: Box::new(owner),
+                            cause: Box::new(store_failure(&setup.store, cause)),
+                        });
+                    }
                     if matches!(setup.store, layerfs_bridge::DaemonStore::Postgres { .. }) {
                         // the status carries one printable word: `postgresql/17.6`
                         opened.sqlite_version = opened
@@ -566,28 +574,9 @@ impl Application {
                     Some(opened)
                 }
                 Err(cause) => {
-                    let closed = matches!(
-                        &cause,
-                        layerfs_storage::StorageError::Io(io)
-                            if matches!(
-                                io.get_ref().and_then(|e| {
-                                    e.downcast_ref::<layerfs_storage::port::PersistenceError>()
-                                }),
-                                Some(layerfs_storage::port::PersistenceError::Refused { status })
-                                    if status == "Closed"
-                            )
-                    );
-                    let cause = match (&setup.store, closed) {
-                        (layerfs_bridge::DaemonStore::Postgres { url, .. }, true) => {
-                            ApplicationError::PostgresUnreachable {
-                                host: postgres_host(url),
-                            }
-                        }
-                        _ => ApplicationError::Store(cause),
-                    };
                     return Err(ApplicationError::AfterOverlay {
                         owner: Box::new(owner),
-                        cause: Box::new(cause),
+                        cause: Box::new(store_failure(&setup.store, cause)),
                     });
                 }
             },
@@ -722,6 +711,34 @@ impl Application {
     pub fn connection_slots(&self) -> Result<SlotCounts, ApplicationError> {
         let state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
         Ok(state.slots.counts())
+    }
+}
+
+/// A failed Store open or mount prepare: a PostgreSQL connection that is
+/// gone (`Closed`) names the server's host; anything else is the Store's own
+/// error.
+fn store_failure(
+    store: &layerfs_bridge::DaemonStore,
+    cause: layerfs_storage::StorageError,
+) -> ApplicationError {
+    let closed = matches!(
+        &cause,
+        layerfs_storage::StorageError::Io(io)
+            if matches!(
+                io.get_ref().and_then(|e| {
+                    e.downcast_ref::<layerfs_storage::port::PersistenceError>()
+                }),
+                Some(layerfs_storage::port::PersistenceError::Refused { status })
+                    if status == "Closed"
+            )
+    );
+    match (store, closed) {
+        (layerfs_bridge::DaemonStore::Postgres { url, .. }, true) => {
+            ApplicationError::PostgresUnreachable {
+                host: postgres_host(url),
+            }
+        }
+        _ => ApplicationError::Store(cause),
     }
 }
 

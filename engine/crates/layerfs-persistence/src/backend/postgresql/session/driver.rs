@@ -74,6 +74,17 @@ impl Error {
     }
 }
 
+/// What one prepare flight answered ([`Driver::prepare_all`]).
+pub(crate) struct Prepared {
+    /// Prepares sent: a prefix of them.
+    pub(crate) sent: usize,
+    /// One reply per prepare, in order.
+    pub(crate) statements: Vec<Result<Statement, Error>>,
+    /// The `begin` text's and the `COMMIT`'s answers, the first failure of
+    /// the two (`Ok` without `begin`).
+    pub(crate) around: Result<(), Error>,
+}
+
 pub(crate) enum Driver {
     Ordinary(Ordinary),
     Diagnostic(Diagnostic),
@@ -92,6 +103,10 @@ pub(crate) struct Ordinary {
     pub(super) client: tokio_postgres::Client,
     connection: tokio::task::JoinHandle<()>,
     pub(super) runtime: tokio::runtime::Runtime,
+    /// When the server last answered on this connection (a reply or a
+    /// server error; set at the connect): how long the connection has been
+    /// silent, which the idle reader's check reads (#768).
+    heard: std::cell::Cell<Instant>,
 }
 
 pub(crate) struct Diagnostic {
@@ -349,20 +364,54 @@ impl Driver {
         }
     }
     /// Prepares every statement of `sqls` in one flight: each Parse/Describe
-    /// is sent before any reply is awaited, and every reply is collected.
-    /// Prepares `sqls` in one flight ([`pipeline::in_order`]): how many
-    /// were sent, and every reply in order.
+    /// is sent before any reply is awaited, and every reply is collected
+    /// ([`pipeline::in_order`]): how many were sent, and every reply in
+    /// order. With `begin`, the flight is that text, the prepares and
+    /// `COMMIT`: statements whose names resolve through the `search_path`
+    /// its `SET LOCAL` gives, and the answers of `begin` and `COMMIT`.
     pub(crate) fn prepare_all(
         &mut self,
         sqls: &[&str],
-    ) -> Result<(usize, Vec<Result<Statement, Error>>), Error> {
+        begin: Option<&str>,
+    ) -> Result<Prepared, Error> {
+        type Answer = Option<Statement>;
         match self {
             Self::Ordinary(client) => {
-                let pending = sqls
-                    .iter()
-                    .map(|sql| Box::pin(client.client.prepare(sql)) as Pin<Box<_>>)
-                    .collect();
-                Ok(client.runtime.block_on(pipeline::in_order(pending)))
+                let c = &client.client;
+                let mut pending: Vec<pipeline::Pending<'_, Answer>> =
+                    Vec::with_capacity(sqls.len() + 2);
+                if let Some(begin) = begin {
+                    pending.push(Box::pin(async move {
+                        c.batch_execute(begin).await.map(|()| None)
+                    }));
+                }
+                for sql in sqls {
+                    pending.push(Box::pin(async move { c.prepare(sql).await.map(Some) }));
+                }
+                if begin.is_some() {
+                    pending.push(Box::pin(async move {
+                        c.batch_execute("COMMIT").await.map(|()| None)
+                    }));
+                }
+                let (sent, mut replies) = client.runtime.block_on(pipeline::in_order(pending));
+                client.heard_from(&replies);
+                let around = |reply: Result<Answer, Error>| reply.map(drop);
+                let (opened, closed) = match begin {
+                    Some(_) => {
+                        let closed = replies.pop().map_or(Err(Error::Unsent), around);
+                        (around(replies.remove(0)), closed)
+                    }
+                    None => (Ok(()), Ok(())),
+                };
+                let skip = usize::from(begin.is_some());
+                Ok(Prepared {
+                    sent: sent.saturating_sub(skip).min(sqls.len()),
+                    statements: replies
+                        .into_iter()
+                        .map(|reply| reply.and_then(|answer| answer.ok_or(Error::Unsent)))
+                        .collect(),
+                    around: opened.and(closed),
+                })
             }
             Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
@@ -374,27 +423,60 @@ impl Driver {
     /// driver.
     pub(crate) fn pipeline(&mut self, requests: &[Bound<'_>]) -> Result<Flight, Error> {
         match self {
-            Self::Ordinary(client) => Ok(client
-                .runtime
-                .block_on(pipeline::flight(&client.client, requests))),
+            Self::Ordinary(client) => {
+                let flight = client
+                    .runtime
+                    .block_on(pipeline::flight(&client.client, requests));
+                client.heard_from(&flight.replies);
+                Ok(flight)
+            }
             Self::Diagnostic(_) => Err(Error::Refused(BackendError::ReadOnly)),
             Self::Closed => Err(Error::Refused(BackendError::Unknown)),
         }
     }
-    pub(crate) fn is_valid(&mut self, timeout: Duration) -> Result<(), Error> {
+    /// Whether the connection still stands, judged locally with no round
+    /// trip (#768): the runtime is given two turns without waiting, the
+    /// first to poll the socket's readiness and the second to run the
+    /// connection task it woke, which reads what the server sent and ends
+    /// on an end of stream or an error (a server restart, a terminated
+    /// backend, an idle timeout). A peer that went silent without closing
+    /// is not seen here.
+    pub(crate) fn alive(&mut self) -> bool {
+        match self {
+            Self::Ordinary(client) => {
+                for _ in 0..2 {
+                    client.runtime.block_on(tokio::task::yield_now());
+                }
+                !client.client.is_closed() && !client.connection.is_finished()
+            }
+            Self::Diagnostic(_) => true,
+            Self::Closed => false,
+        }
+    }
+    /// Whether the server answers an empty query within `timeout` (one round
+    /// trip): a readiness check of an idle session, never a retry.
+    pub(crate) fn answers(&mut self, timeout: std::time::Duration) -> bool {
         match self {
             Self::Ordinary(client) => {
                 let check = client.client.simple_query("");
                 let check = async { tokio::time::timeout(timeout, check).await };
-                match client.runtime.block_on(check) {
-                    Ok(answer) => answer.map(drop).map_err(Into::into),
-                    // No answer in time: whether the connection still works
-                    // is unknown.
-                    Err(_) => Err(Error::Refused(BackendError::Unknown)),
+                // No answer in time: whether the connection works is unknown.
+                let answered = matches!(client.runtime.block_on(check), Ok(Ok(_)));
+                if answered {
+                    client.heard.set(Instant::now());
                 }
+                answered
             }
-            Self::Diagnostic(client) => client.run(client.client.batch_execute("")),
-            Self::Closed => Err(Error::Refused(BackendError::Unknown)),
+            Self::Diagnostic(client) => client.run(client.client.batch_execute("")).is_ok(),
+            Self::Closed => false,
+        }
+    }
+    /// How long the server has not answered on this connection: zero for
+    /// the diagnostic driver and a closed one.
+    pub(crate) fn silent(&self) -> Duration {
+        match self {
+            Self::Ordinary(client) => client.heard.get().elapsed(),
+            Self::Diagnostic(_) | Self::Closed => Duration::ZERO,
         }
     }
     pub(crate) fn cancellation(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
@@ -470,6 +552,7 @@ impl Ordinary {
                 client,
                 connection,
                 runtime,
+                heard: std::cell::Cell::new(Instant::now()),
             }),
             Ok(Err(error)) => Err(Dial::Driver(error)),
             Err(_) => {
@@ -481,7 +564,19 @@ impl Ordinary {
         }
     }
     fn run<T>(&self, future: impl Future<Output = Result<T, postgres::Error>>) -> Result<T, Error> {
-        self.runtime.block_on(future).map_err(Into::into)
+        let answer = self.runtime.block_on(future).map_err(Error::from);
+        self.heard_from(std::slice::from_ref(&answer));
+        answer
+    }
+    /// Notes that the server answered when any of `replies` is its reply or
+    /// a server error.
+    fn heard_from<T>(&self, replies: &[Result<T, Error>]) {
+        if replies.iter().any(|reply| match reply {
+            Ok(_) => true,
+            Err(error) => error.code().is_some(),
+        }) {
+            self.heard.set(Instant::now());
+        }
     }
     /// Drops the client, which lets the connection task send `Terminate`
     /// when no reply is outstanding and shut the socket, then aborts the
@@ -492,6 +587,7 @@ impl Ordinary {
             client,
             mut connection,
             runtime,
+            ..
         } = self;
         drop(client);
         // The timer is made inside the runtime, which owns the clock.

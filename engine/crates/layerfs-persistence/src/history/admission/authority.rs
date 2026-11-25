@@ -7,6 +7,7 @@
 //! placement and is settled; one that is equal is current, and one that is
 //! newer can only come from a restore, so it stays uncertain, never dead.
 use super::*;
+use crate::backend::postgresql::history::release::release as released;
 
 /// Deletes one intent, and on PostgreSQL releases the session keys it held.
 ///
@@ -24,16 +25,21 @@ use super::*;
 /// The delete is one fenced autocommit statement outside the publication
 /// lane (#768), and runs strictly before the unlock: until the row is gone
 /// the keys still exclude a removal or compaction. A failed delete unlocks
-/// nothing and keeps the op held, so a later release still can.
+/// nothing and keeps the op held, so a later release still can. Since #768
+/// step C both go in one pipelined message, one round trip
+/// (`backend/postgresql/history/release.rs`): the unlock gives the keys back
+/// only when no live row of the op remains at the session's generation.
 pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryResult<()> {
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| release_in(tx, op_id)),
         Engine::Postgres(session) => {
-            release_owned(session, op_id)?;
-            if let Some(keys) = session.take_op(op_id) {
-                let _ = session_unlock(session, &keys);
+            let keys = session.take_op(op_id).unwrap_or_default();
+            let released = released(session, op_id, &keys);
+            let kept = released.as_ref().map_or(true, |released| released.kept);
+            if kept && !keys.is_empty() {
+                session.hold_op(*op_id, keys);
             }
-            Ok(())
+            released?.answer
         }
     }
 }

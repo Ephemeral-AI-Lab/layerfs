@@ -467,10 +467,23 @@ impl BoundWorkspace {
     /// With a registered mount admission the answer is kept for this
     /// Workspace's Commits ([`KnownRemovals`]).
     pub fn materialize_removals(&self) -> Result<(), SdkRefusal> {
+        self.materialize_removals_with(None)
+    }
+    /// [`Self::materialize_removals`] with the bound node's removals when
+    /// the mount's registration read them after the intent committed
+    /// (`HistoryCatalog::gc_register_mount`, #768 step B); `None` reads them
+    /// here, on the Workspace reader, as before.
+    pub(crate) fn materialize_removals_with(
+        &self,
+        known: Option<NodeRemovals>,
+    ) -> Result<(), SdkRefusal> {
         let snapshot = self.snapshot().map_err(crate::write::mutation::failure)?;
         let (stack, node) = (snapshot.branch.stack, node_of(&snapshot));
-        let found = removals(self.published(|history| history.node_path_removals(stack, node)))
-            .map_err(refusal)?;
+        let found = match known {
+            Some(found) => found,
+            None => removals(self.published(|history| history.node_path_removals(stack, node)))
+                .map_err(refusal)?,
+        };
         self.keep_removals(node, &found);
         let reader = self.store.ports_for(snapshot.scope, self.identity());
         let paths = hidden_in(found, &*reader, FilesystemRootId(snapshot.effective_root))

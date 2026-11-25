@@ -101,6 +101,10 @@ pub struct Store {
     /// Fused Commits made, and fused attempts refused by a race that went on
     /// the separate path.
     pub(super) fused: super::commit_fused::FusedCounts,
+    /// A mount reads its snapshot on the writer, not its Workspace reader
+    /// (#768 step B, PostgreSQL): with its admission and markers it is then
+    /// two writer messages and no reader round trip.
+    pub(super) mount_on_writer: bool,
 }
 impl Store {
     /// Takes the control reader and a mount-time factory under explicit capacity.
@@ -192,6 +196,7 @@ impl Store {
             merge_work: Mutex::default(),
             committer: None,
             fused: Default::default(),
+            mount_on_writer: false,
         })
     }
     /// Makes each Workspace Commit over an unmoved head in one write
@@ -199,6 +204,14 @@ impl Store {
     #[must_use]
     pub fn with_committer(mut self, committer: layerfs_persistence::Committer) -> Self {
         self.committer = Some(committer);
+        self
+    }
+    /// Reads each mount's snapshot on the writer session (#768 step B): a
+    /// PostgreSQL Store, whose writer registers the mount and reads its
+    /// markers in one more message.
+    #[must_use]
+    pub fn with_mount_on_writer(mut self) -> Self {
+        self.mount_on_writer = true;
         self
     }
     /// Merge build records over the Store's writable session (#355).

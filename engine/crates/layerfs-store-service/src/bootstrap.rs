@@ -112,6 +112,19 @@ pub struct StoreDiagnostics {
     pub readers: Vec<SqlWork>,
 }
 impl OpenedStore {
+    /// Prepares the writer's mount and unmount statements in one flight
+    /// (#768): on PostgreSQL one round trip and one read transaction, so a
+    /// mount's admission and an unmount's release prepare nothing. Only a
+    /// service that mounts calls it, the daemon at its Store open; an SDK
+    /// call, an install or a restore does not pay it, and a mount on such a
+    /// service prepares its statements at first use instead. Nothing on
+    /// SQLite.
+    pub fn prepare_mounts(&self) -> StorageResult<()> {
+        match &self.writer {
+            Writer::Sqlite(_) => Ok(()),
+            Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
+        }
+    }
     /// The Store-file operations of a SQLite session (`None` for a
     /// PostgreSQL Store, which has no file).
     pub fn file(&self) -> Option<&dyn layerfs_persistence::StoreFile> {
@@ -277,6 +290,12 @@ fn open_postgres(
     let registry = observations.clone();
     let factory: crate::store::ReaderFactory = Arc::new(move |index| {
         let opened = PostgresHandles::open_read_only(&selection, &binding, cursor_key)?;
+        // #768: a Workspace reader (the control reader is index 0) prepares
+        // its mount statements in one flight when it opens: at the mount
+        // that opens it, or after readiness for the idle reader.
+        if index != 0 {
+            opened.storage.prepare_mount_reads()?;
+        }
         let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
         let session = opened.storage.clone();
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
@@ -294,7 +313,8 @@ fn open_postgres(
             workspace_capacity,
         )?
         .with_merge_scratch(writer.storage.merge_scratch())
-        .with_committer(committer),
+        .with_committer(committer)
+        .with_mount_on_writer(),
     );
     Ok(OpenedStore {
         store,

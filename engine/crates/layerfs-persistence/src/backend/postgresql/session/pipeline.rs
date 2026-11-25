@@ -81,7 +81,7 @@ pub(crate) struct Flight {
     pub(crate) replies: Vec<Result<Reply, Error>>,
 }
 
-type Pending<'a, T> = Pin<Box<dyn Future<Output = Result<T, postgres::Error>> + 'a>>;
+pub(crate) type Pending<'a, T> = Pin<Box<dyn Future<Output = Result<T, postgres::Error>> + 'a>>;
 
 /// Polls `pending` in order until every one has answered, never stopping at
 /// an error. A future that answers on its first poll was never sent (a sent
@@ -183,7 +183,7 @@ impl Session {
         &self,
         requests: &[Request<'_>],
     ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
-        self.pipeline_turn(requests, true, None, |replies, _| (replies, false))
+        self.pipeline_turn(requests, true, false, None, |replies, _| (replies, false))
     }
 
     /// [`Self::pipeline`] refused (`Integrity`, nothing sent) inside this
@@ -209,13 +209,29 @@ impl Session {
         release: &str,
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
-        self.pipeline_turn(requests, false, Some(release), judge)
+        self.pipeline_turn(requests, false, false, Some(release), judge)
+    }
+
+    /// [`Self::pipeline_judged`] that may also run inside this thread's
+    /// held lane: for a flight that never takes the lane row (a mount's
+    /// admission, an owner's release). Statements not yet prepared on the
+    /// connection are prepared inside a read transaction whose `SET LOCAL
+    /// search_path` resolves their unqualified names (one round trip and one
+    /// read transaction, counted), in the same turn as the flight, so no
+    /// other caller can evict them from the cache in between.
+    pub(crate) fn pipeline_decided<T>(
+        &self,
+        requests: &[Request<'_>],
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        self.pipeline_turn(requests, true, true, None, judge)
     }
 
     fn pipeline_turn<T>(
         &self,
         requests: &[Request<'_>],
         nested: bool,
+        scoped: bool,
         release: Option<&str>,
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
@@ -239,7 +255,8 @@ impl Session {
                 Request::Simple(_) => None,
             })
             .collect();
-        let statements = match state.statements(&texts) {
+        let begin = scoped.then(|| self.settings.read_begin());
+        let statements = match state.statements_in(&texts, begin.as_deref()) {
             Ok(statements) => statements,
             Err(e) => {
                 state.work.statement_ns += start.elapsed().as_nanos() as u64;

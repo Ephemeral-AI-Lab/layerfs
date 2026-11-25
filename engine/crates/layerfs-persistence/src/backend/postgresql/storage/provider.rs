@@ -31,11 +31,23 @@ impl PostgresStorage {
             ),
         }
     }
-    /// Whether this idle session can still serve (#64): it was not
-    /// quarantined and its connection answers an empty query within 5 s (one
-    /// round trip, counted). A session that does not is never handed to a
-    /// mount; its caller drops it and opens a new one. This check runs
-    /// before any operation uses the session, so no operation is retried.
+    /// Whether this idle session can still serve a mount (#64): it was not
+    /// quarantined and its connection still stands, judged locally (#768: a
+    /// connection the server closed, by a restart, a terminated backend or
+    /// an idle timeout, is seen with no round trip). A connection on which
+    /// the server has not answered for at least the selection's
+    /// `reader_idle_check_ms` ([`crate::READER_IDLE_CHECK_MS`], 30 s by
+    /// default) must also answer an empty query within
+    /// [`crate::READER_CHECK_TIMEOUT`] (one round trip, counted). The silence
+    /// is the connection's own, counted from the server's last reply, not
+    /// the time the reader spent among the idle readers: a Workspace that
+    /// read nothing for long before its unmount hands back a silent
+    /// connection. A path that ended it without telling the client (reset at
+    /// the next packet, or dropped silently, where a read would wait for the
+    /// TCP retransmission timeout) is found here, not by the mount's first
+    /// read. A session that cannot serve is quarantined and never handed to
+    /// a mount; its caller opens a new one. The check runs before any
+    /// operation uses the session, so no operation is retried.
     pub fn usable(&self) -> bool {
         let Ok(mut state) = self.session.state.lock() else {
             return false;
@@ -43,12 +55,29 @@ impl PostgresStorage {
         if state.quarantined {
             return false;
         }
-        state.work.round_trips += 1;
-        let alive = state.client.is_valid(std::time::Duration::from_secs(5));
-        if alive.is_err() {
+        let threshold = u64::from(self.session.settings.reader_idle_check_ms);
+        let quiet = state.client.silent() < std::time::Duration::from_millis(threshold);
+        let alive = state.client.alive()
+            && (quiet || {
+                state.work.round_trips += 1;
+                state.client.answers(crate::READER_CHECK_TIMEOUT)
+            });
+        if !alive {
             state.quarantine();
         }
-        alive.is_ok()
+        alive
+    }
+    /// Prepares the statements a Workspace mount sends on this reader
+    /// session in one flight (#768): one round trip when the reader opens,
+    /// so the mount prepares none.
+    pub fn prepare_mount_reads(&self) -> Result<(), PersistenceError> {
+        self.session.prepare_mount_reads().map_err(Into::into)
+    }
+    /// Prepares the writer session's mount admission and owner release
+    /// statements in one flight (#768): one round trip when the Store opens,
+    /// so neither call prepares one.
+    pub fn prepare_mount_writes(&self) -> Result<(), PersistenceError> {
+        self.session.prepare_mount_writes().map_err(Into::into)
     }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {

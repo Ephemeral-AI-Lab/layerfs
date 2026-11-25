@@ -12,6 +12,7 @@ pub(crate) struct Settings {
     pub(crate) schema: String,
     pub(crate) synchronous_commit: SynchronousCommit,
     pub(crate) lock_timeout_ms: u32,
+    pub(crate) reader_idle_check_ms: u32,
 }
 
 impl Settings {
@@ -31,6 +32,7 @@ impl Settings {
             schema: schema.clone(),
             synchronous_commit: selection.synchronous_commit,
             lock_timeout_ms: selection.lock_timeout_ms,
+            reader_idle_check_ms: selection.reader_idle_check_ms,
         })
     }
 

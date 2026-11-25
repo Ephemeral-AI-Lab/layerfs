@@ -87,7 +87,9 @@ mod held {
         );
     }
 
-    /// The held session, checked with one empty query, or a new one.
+    /// The held session, checked locally and, once its connection has been
+    /// silent as long as `PostgresStorage::usable` says (30 s by default),
+    /// with one empty query; or a new one.
     pub fn session(
         key_path: &Path,
         record: &StoreRecord,

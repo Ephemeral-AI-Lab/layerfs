@@ -243,26 +243,32 @@ fn a_mount_register_and_release_are_pinned_on_both_engines() {
     );
     assert_eq!(register.prepares, 0, "{register:?}");
     assert_eq!(release.prepares, 0, "{release:?}");
-    // One lock statement for all three keys; one write outside the lane:
-    // BEGIN (settings, fence), the Branch probe, the conflict scan, the
-    // insert, COMMIT.
+    // #768 step B: one pipelined message, one round trip: the BEGIN batch
+    // (settings, attempt token, fence), the lock statement for all three
+    // keys, the insert that probes the Branch and scans for conflicts, and
+    // COMMIT, the four counted as statements of the flight. It was 6 round
+    // trips before: the lock statement, then a write outside the lane
+    // (BEGIN, the Branch probe, the conflict scan, the insert, COMMIT).
     assert_eq!(
         (
             register.round_trips,
             register.statements,
             register.transactions
         ),
-        (6, 4, 1),
+        (1, 4, 1),
         "{register:?}"
     );
-    // One fenced DELETE … RETURNING, then one unlock statement for all keys.
+    // #768 step C: one pipelined message, one round trip: the fenced
+    // DELETE … RETURNING and the unlock of all keys, which gives them back
+    // only when no live row of the op remains at the session's generation.
+    // It was 2 round trips before: the DELETE, then the unlock statement.
     assert_eq!(
         (
             release.round_trips,
             release.statements,
             release.transactions
         ),
-        (2, 2, 0),
+        (1, 2, 0),
         "{release:?}"
     );
 }

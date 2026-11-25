@@ -141,6 +141,12 @@ SLOW = {
     ("layerfs-store-service", "verify768y_interleavings"): 33.5,
     ("layerfs-store-service", "verify768y_release_faults"): 46.6,
     ("layerfs-store-service", "verify768y_failed_save"): 192.5,
+    # #768 review fixes, --test-threads 3, macOS host, 2026-11-25: the idle
+    # reader's check waits its 5 s cap once.
+    ("layerfs-store-service", "postgresql_reader_idle"): 6.6,
+    # The independent #768 tester's binaries, same host and day.
+    ("layerfs-store-service", "tester768_stale_reader"): 9.1,
+    ("layerfs-store-service", "tester768_interleave"): 7.0,
     # `store upgrade` on the PostgreSQL fixture, one restore per case, and
     # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
     ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,
