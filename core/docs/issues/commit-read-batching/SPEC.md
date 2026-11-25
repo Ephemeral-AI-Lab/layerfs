@@ -1,6 +1,6 @@
 # Commit read batching: per-file and per-directory round trips
 
-> **Status:** Spec, not built. 2026-11-26. Issue [#810](https://github.com/Ephemeral-AI-Lab/layerfs/issues/810). Local copy of the doc https://claude.ai/artifact/HV5FkH17y4w1SmuGk5WyYB; if the two differ, this file wins.
+> **Status:** Integrated candidate with open qualification gates. 2026-11-26. Issue [#810](https://github.com/Ephemeral-AI-Lab/layerfs/issues/810). Local copy of the doc https://claude.ai/artifact/HV5FkH17y4w1SmuGk5WyYB; if the two differ, this file wins.
 
 ## Summary
 
@@ -197,3 +197,29 @@ Start from the current tip of `layerfs_v2_0_0`. All receipts were taken at `ca4b
 ## Handoff prompt
 
 The prompt for the next agent is in [HANDOFF-PROMPT.md](HANDOFF-PROMPT.md), the same text as the doc's "Handoff prompt" section. It runs four implementation lanes in parallel, then verifies, then loops on fixes until the terminal pass condition holds.
+
+
+## Pickup results (2026-11-26)
+
+The pickup branch integrates F1–F5. The measured product is `0e88f73f4b`
+with the shape binary built at `66f325cd10`. PostgreSQL and SQLite Normal
+used matched Phase 0 fixtures and statement logging off.
+
+| Cell | PostgreSQL round trips | PostgreSQL Commit | SQLite Commit | Disposition |
+| --- | ---: | ---: | ---: | --- |
+| B2 | 1,722 → 93 | 1.601 → 0.904 s | 0.838 → 0.768 s | PostgreSQL latency miss |
+| C4 | 4,848 → 146 | 4.295 → 1.137 s | 0.859 → 0.602 s | PostgreSQL count and latency miss |
+| C4s4 | 568 candidate | 3.541 s candidate | 3.515 → 2.656 s | PostgreSQL base exceeded the 25 s command cap. Pair incomplete |
+| B1 | 5,309 → 713 | 4.935 → 2.771 s | 2.040 → 1.907 s | PostgreSQL latency miss |
+
+C4 spends 79 trips in construction, 5 in finish, 61 in logical counting
+and 1 in fused publication. The source-pinned logged diagnostic attributes
+logical counting to 37 locates, 17 value reads and 7 span reads. Its
+observed count remains 21 trips above the spec ceiling.
+
+The count pins, seeded backend equivalence, concurrent shared-Branch case,
+binding-overflow boundary, 4,200-directory correctness case and 13
+PostgreSQL fault binaries passed. The matrix, per-phase traces, additional
+regression rows, build hashes and outstanding qualification checks are
+recorded in the local campaign's `PICKUP-REPORT.md` under
+`~/.cache/layerfs-measure/2026-11-26-commit-batching/`.
