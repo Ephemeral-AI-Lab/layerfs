@@ -4,22 +4,25 @@ use super::{
     unsupported,
 };
 use layerfs_overlay::WRITE_WINDOW;
-use layerfs_workspace::{Operation, Refusal, Time};
+use layerfs_workspace::{Operation, Position, Refusal, Time};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Permission and special bits a mode request can carry; the file type bits
 /// the kernel includes are not part of the change.
 const MODE_BITS: u32 = 0o7777;
 
-/// One WRITE window, copied once. The offset is always the kernel's, which has
-/// already resolved `O_APPEND` under its inode lock; the engine never chooses
-/// an end position on this path. `cached` marks a shared-mapping store.
-pub fn write(offset: u64, data: &[u8], cached: bool) -> Result<MutationInput, Declined> {
-    if data.len() > WRITE_WINDOW {
+/// One WRITE window, copied once. `Position::End` is a write through an
+/// `O_APPEND` descriptor: the kernel computed its offset from the size it
+/// caches, which a merged install can leave behind the Workspace's, so the
+/// engine places the bytes at the file's end inside the job instead. Every
+/// other write keeps the kernel's offset. `cached` marks a shared-mapping
+/// store, which always names its offset.
+pub fn write(position: Position, data: &[u8], cached: bool) -> Result<MutationInput, Declined> {
+    if data.len() > WRITE_WINDOW || (cached && position == Position::End) {
         return Err(Declined::Refused(Refusal::Invalid));
     }
     Ok(MutationInput::Write {
-        offset,
+        position,
         data: data.into(),
         cached,
     })

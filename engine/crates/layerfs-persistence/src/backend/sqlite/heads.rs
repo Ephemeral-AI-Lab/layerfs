@@ -17,8 +17,14 @@
 //! database read-only while it has no `-shm` (a Store no process holds), so
 //! the connection opens read-write but is `query_only`: it reads in one
 //! transaction and writes nothing. When it is the last connection, closing
-//! it removes the sidecars its open made, as any last opener does. A busy
-//! Store is reported, never waited on or retried.
+//! it checkpoints and removes the sidecars, as any last writable close does,
+//! so the whole read holds the Store's writer lane from before the open to
+//! after the close, like a writable session's open and close. Without it,
+//! an open during a compaction's install left `-wal`/`-shm` beside the file
+//! the rename installed, and the close tore them down unadmitted (#776 C3,
+//! C4). The lane is waited for, as any writer waits; a Store busy once it
+//! is held is reported, never retried.
+use super::lane::writer_admission::Writer;
 use super::session::rows;
 use layerfs_storage::port::PersistenceError;
 use rusqlite::{Connection, OpenFlags};
@@ -38,6 +44,8 @@ fn hex(bytes: &[u8]) -> String {
 /// The sorted heads lines of the Store file at `path`, which must exist.
 pub fn read_heads(path: &Path) -> Result<Vec<String>, PersistenceError> {
     let failed = |error: rusqlite::Error| PersistenceError::from(rows::error(error));
+    // Declared first, so every exit closes the connection before the lane.
+    let _lane = Writer::acquire(path).map_err(PersistenceError::from)?;
     let connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,

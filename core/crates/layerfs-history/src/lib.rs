@@ -35,7 +35,8 @@ pub use error::{
     GcHolder, HistoryError, HistoryResult, MountHolders, OpConflict, UnknownOutcomeState,
 };
 pub use identity::{
-    BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId, WorkspaceId,
+    BranchId, CatalogId, CommitAttempt, CommitId, HistoryName, LayerId, LayerStackId, NodeId,
+    WorkspaceId,
 };
 pub use records::{
     AddLayerOutcome, AddLayerRequest, BindingHint, BranchMergeRequest, BranchRecord,

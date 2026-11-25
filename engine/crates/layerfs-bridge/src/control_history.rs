@@ -208,6 +208,9 @@ pub(crate) fn meta(input: &mut Reader<'_>) -> Result<CommitMeta, ControlError> {
             new_metadata: u64::from_be_bytes(input.array()?),
         },
         displaced: head(input)?,
+        // A publisher's attempt stays in the Store: no reader of this record
+        // derives a Commit identity from it (#776 R1).
+        attempt: None,
         lww: Vec::new(),
         lww_truncated: boolean(input)?,
         // Like the decisions, the unit list stays in the Store.

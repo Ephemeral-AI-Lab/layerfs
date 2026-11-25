@@ -47,17 +47,41 @@ pub enum OpenRefusal {
     /// Another writer held the Store at open, before any effect. The call is
     /// a definite refusal the caller may repeat; nothing was changed.
     Busy(String),
+    /// The Store is of an older schema version that this release neither
+    /// reads nor migrates (#776): the persistence refusal's own status,
+    /// which names the version. Nothing was opened or changed.
+    Outdated(String),
     /// The Store or the overlay template failed to open.
     Failed(String),
 }
 
 /// The refusal for a Store open that failed: a Busy open is a definite
-/// pre-effect refusal, every other open failure is not.
+/// pre-effect refusal, a Store of an older schema version is [`Outdated`]
+/// with its status, every other open failure is not.
+///
+/// [`Outdated`]: OpenRefusal::Outdated
 fn open_refusal(error: layerfs_storage::StorageError) -> OpenRefusal {
+    if let Some(status) = outdated(&error) {
+        return OpenRefusal::Outdated(status.to_owned());
+    }
     let reason = format!("Store open: {error}");
     match error {
         layerfs_storage::StorageError::Busy => OpenRefusal::Busy(reason),
         _ => OpenRefusal::Failed(reason),
+    }
+}
+
+/// The status of a persistence refusal of an older-format Store, carried
+/// as the storage error's I/O source (`From<PersistenceError>`).
+fn outdated(error: &layerfs_storage::StorageError) -> Option<&'static str> {
+    let layerfs_storage::StorageError::Io(io) = error else {
+        return None;
+    };
+    match io.get_ref()?.downcast_ref()? {
+        layerfs_storage::port::PersistenceError::Refused { status } => {
+            layerfs_persistence::outdated_store(status).filter(|known| known == status)
+        }
+        _ => None,
     }
 }
 

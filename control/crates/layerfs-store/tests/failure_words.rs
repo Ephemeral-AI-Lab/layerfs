@@ -68,3 +68,33 @@ fn a_history_failure_keeps_the_history_crates_words() {
         "busy"
     );
 }
+
+/// An older-format Store's refusal (#776): `OldStore` carries the version
+/// refusal as its message; a daemon's `Store open: ...` text wrapping it
+/// is read back to it, as `sandbox remove` reads a refusal; any other
+/// refusal carries none. Its fix removes a sqlite Store and disconnects a
+/// PostgreSQL one, which keeps its data.
+#[test]
+fn an_old_format_store_is_named_by_its_version_refusal() {
+    use layerfs_home::outcome::refused;
+    use layerfs_store::state::{outdated_fix, outdated_status, OLD_STORE};
+    let version = "SQLite Store schema version 2 (before each Commit recorded its attempt, \
+#776): not supported by this release and not migrated; create a new Store";
+    let raised = refused(OLD_STORE, version);
+    assert_eq!(outdated_status(&raised).as_deref(), Some(version));
+    let wrapped = format!(
+        "Store open: physical Store I/O: pack persistence: Refused {{ status: {version:?} }}"
+    );
+    let daemon = refused("Failed", wrapped);
+    assert_eq!(outdated_status(&daemon).as_deref(), Some(version));
+    let other = refused(
+        "Failed",
+        "Store open: pack persistence: Refused { status: \"Closed\" }",
+    );
+    assert_eq!(outdated_status(&other), None);
+    assert_eq!(outdated_fix("shop", false), "layerfs store remove shop");
+    assert_eq!(
+        outdated_fix("my pg", true),
+        "layerfs store disconnect 'my pg'"
+    );
+}

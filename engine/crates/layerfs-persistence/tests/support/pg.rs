@@ -91,7 +91,7 @@ impl Drop for Schema {
     }
 }
 
-/// The live column definition, as `postgresql_position_columns.rs` uses it.
+/// The live column definition, as the Store records it.
 pub const DEFINITION: &str = "SELECT string_agg(table_name::text||' '||column_name::text||' '||data_type::text||' '||is_nullable::text, chr(10) ORDER BY table_name, ordinal_position)||chr(10) FROM information_schema.columns WHERE table_schema=current_schema()";
 
 pub fn catalog(binding: &[u8], cursor: [u8; 32], incarnation: u64) -> HistoryCatalogConfig {

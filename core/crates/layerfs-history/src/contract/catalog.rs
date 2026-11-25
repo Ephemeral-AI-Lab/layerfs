@@ -233,6 +233,18 @@ pub trait HistoryCatalog: Send + Sync {
     /// One Commit by identity.
     fn commit(&self, id: CommitId) -> HistoryResult<Option<CommitRecord>>;
 
+    /// The Commit the publication of `attempt` made, if one did and it is
+    /// still stored (#776 R1). One indexed read; the default refuses.
+    fn commit_by_attempt(
+        &self,
+        attempt: crate::identity::CommitAttempt,
+    ) -> HistoryResult<Option<CommitRecord>> {
+        let _ = attempt;
+        Err(crate::error::HistoryError::Unsupported(
+            "Commit attempt lookup",
+        ))
+    }
+
     /// One Layer by identity.
     fn layer(&self, id: LayerId) -> HistoryResult<Option<LayerRecord>>;
 

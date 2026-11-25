@@ -13,9 +13,10 @@ Diagnostic decoder and offline SQLite migration; never run against a live Store.
       (for example `psql -At -F $'\\t' -c "SELECT 'value',first_ordinal,last_ordinal,
       encode(body,'hex') FROM <schema>.inode_value_block"`).
   store_blocks.py migrate <closed v1 copy.sqlite> <new.sqlite>
-      Writes a schema version 2 copy of a closed schema version 1 SQLite Store
+      Writes a schema version 3 copy of a closed schema version 1 SQLite Store
       (user_version 16-18 or 22-24): inode values and binding hints become blocks,
-      the version moves to 36-38 or 42-44 and the recorded schema is rewritten.
+      the Commit attempt column (#776) is added, empty for every Commit, the
+      version moves to 56-58 or 62-64 and the recorded schema is rewritten.
       The source is copied first and never changed; a Store whose recorded schema
       is not exactly one this release wrote (allowing the tables the open-time
       additive migrations add) is refused. PostgreSQL schemas are not migrated.
@@ -348,6 +349,16 @@ TRACE_SALT = (
 )
 
 
+# The Commit attempt column (#776 R1) and its index, which schema version 1 lacked.
+ATTEMPT_COLUMN = "    attempt BLOB CHECK(attempt IS NULL OR length(attempt)=16),\n"
+ATTEMPT_INDEX = 'CREATE UNIQUE INDEX commit_attempt ON "commit"(attempt) WHERE attempt IS NOT NULL;\n'
+
+
+def without_attempt(source):
+    """`source` as schema version 1 read it: no Commit attempt column or index."""
+    return source.replace(ATTEMPT_COLUMN, "", 1).replace(ATTEMPT_INDEX, "", 1)
+
+
 def _without_position_columns(source):
     """`source` as it read before T1.2a/T1.4 appended the position columns."""
     return source.replace(HISTORY_SERIAL, "").replace(TRACE_SALT, "", 1).replace(NEXT_SERIAL, "")
@@ -388,7 +399,7 @@ def migrate(source_path, target_path):
     old = con.execute("PRAGMA user_version").fetchone()[0]
     if con.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID or old not in (16, 17, 18, 22, 23, 24):
         raise SystemExit(f"refused: not a schema version 1 Store (user_version {old})")
-    tables, layout, new = old >= 22, old - (6 if old >= 22 else 0), old + 20
+    tables, layout, new = old >= 22, old - (6 if old >= 22 else 0), old + 40
     recorded, definition = con.execute("SELECT schema_source,schema_definition FROM history_meta").fetchone()
     if definition != _definition(con):
         raise SystemExit("refused: live schema differs from the recorded definition")
@@ -402,7 +413,9 @@ def migrate(source_path, target_path):
     hint_table = f"{v2_hints}\n\n"
     for missing in range(len(optional) + 2):
         without = optional[:missing] + ([hint_table] if missing == len(optional) + 1 else [])
-        v1 = _source(old, layout, tables, without).replace(v2_values, V1_VALUES).replace(v2_hints, V1_HINTS)
+        v1 = without_attempt(
+            _source(old, layout, tables, without).replace(v2_values, V1_VALUES).replace(v2_hints, V1_HINTS)
+        )
         if recorded == v1:
             break
     else:
@@ -421,6 +434,8 @@ def migrate(source_path, target_path):
         for group, body in hints:
             seq[group] += 1
             con.execute("INSERT INTO binding_hint_block VALUES (?,?,?)", (group, seq[group], body))
+    con.execute('ALTER TABLE "commit" ADD COLUMN ' + ATTEMPT_COLUMN.strip().rstrip(","))
+    con.execute(ATTEMPT_INDEX)
     con.execute("PRAGMA writable_schema=ON")
     for table in ("store_policy", "history_meta"):
         con.execute(

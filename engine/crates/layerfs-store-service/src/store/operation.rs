@@ -37,14 +37,15 @@ impl BoundWorkspace {
     /// the mount admission intent on the writer. A failed boundary retains
     /// its original cause and permits no replay.
     ///
-    /// The intent is released once the local close succeeded, even when
-    /// closing the reader failed (#768 review): the reader only reads, and a
-    /// read with an unknown outcome changes nothing, so it is no reason to
-    /// keep the intent row and its keys on a healthy writer, where they
-    /// would refuse removals and compaction until the service exits. The
-    /// reader's failure is still returned (before the intent's, which a
-    /// refused release has already marked uncertain), and nothing with an
-    /// unknown outcome is sent again.
+    /// Once the owner has closed, the mount is no longer live, so its intent
+    /// is released (or marked uncertain) even when the reader close fails
+    /// (#776 G5, #768 review): no later unmount passes the closed owner
+    /// again, so nothing else would release the row, and its keys would
+    /// refuse removals and compaction for the daemon's lifetime. The reader
+    /// only reads, so a read with an unknown outcome is no reason to keep
+    /// them. The reader's failure is still returned (before the intent's,
+    /// which a refused release has already marked uncertain), and nothing
+    /// with an unknown outcome is sent again.
     pub fn close(&self) -> Result<(), super::CloseError> {
         if let Err(error) = self.owner.close(self.route()) {
             // The Workspace stays bound; its idle producer handle stays too,

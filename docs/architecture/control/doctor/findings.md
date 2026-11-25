@@ -52,7 +52,7 @@ This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`hom
 | `store.operation` | Unresolved `op` in home record, stale `<store>.compact-op`, or stale lease | — | `layerfs store compact <s>`, `layerfs store move <s> <to>`, `layerfs store remove <s>`, or `layerfs store get <s> --with live` | `safe` |
 | `store.connection` | SQLite file missing/unreadable; or PG auth (`28P01`), transport/TLS, or 5 s silent handshake failure (per-machine probes carry `from`) | `step` (`login`, `transport`, `handshake`, `authentication`) | Change the login or URL (`layerfs store connect <s> <url> [--user <user>] --password-stdin`), attach a machine (`layerfs store attach <s> --machine <m>`), or restore PostgreSQL server/TLS trust | `safe` |
 | `store.identity` | Database/file binding ID does not match saved record `binding` | — | Reconnect to the intended Store or restore the authoritative Store copy; never delete | `read` |
-| `store.schema` | Schema version or layout incompatible with this build | — | Use the matching LayerFS build or migrate/restore from backup | `read` |
+| `store.schema` | Schema version or layout incompatible with this build; an older schema version this release does not migrate (#776) carries `reason: outdated` | `reason` (`outdated`) | Use the matching LayerFS build or migrate/restore from backup; for `outdated` the fix is `layerfs store remove <s>` (a new Store takes its place) | `read` |
 | `store.backups` | SQLite Store heads are ahead of recorded bucket link heads (notice per bucket) | — | `layerfs backup create <s> <bucket>` | `safe` |
 
 ## 4. `project.doctor` (`project.*`, 3 checks)

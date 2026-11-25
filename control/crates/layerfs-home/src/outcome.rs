@@ -54,7 +54,7 @@ pub const CODES: [&str; 13] = [
 
 /// The codes the control and engine crates refuse with that are not public:
 /// each public code and the codes folded into it at the call boundary.
-pub const FOLDS: [(&str, &[&str]); 8] = [
+pub const FOLDS: [(&str, &[&str]); 9] = [
     (
         "NotFound",
         &[
@@ -91,6 +91,7 @@ pub const FOLDS: [(&str, &[&str]); 8] = [
         ],
     ),
     ("Capacity", &["NoSpace"]),
+    ("Unsupported", &["OldStore"]),
     (
         "Unavailable",
         &[

@@ -71,14 +71,14 @@ fn init(stack: layerfs_history::LayerStackId, tag: u8) -> GcIntent {
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
 
-fn merge(stack: layerfs_history::LayerStackId, tag: u8) -> GcIntent {
+fn merge(stack: layerfs_history::LayerStackId, branch: &str, tag: u8) -> GcIntent {
     GcIntent::shared(
         op(tag),
         GcIntentKind::Merge,
         GcScopeKind::Project,
         stack.as_slice(),
     )
-    .named(Some("proj"), Some("merged"))
+    .named(Some("proj"), Some(branch))
     .with_phase(Some("merge"))
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
@@ -436,7 +436,10 @@ fn init_and_merge_are_project_holders() {
     assert_eq!(state.phase.as_deref(), Some("init"));
     handles.history.gc_release(&op(5)).unwrap();
 
-    handles.history.gc_register(&merge(project_id, 7)).unwrap();
+    handles
+        .history
+        .gc_register(&merge(project_id, "merged", 7))
+        .unwrap();
     let refusal = handles
         .history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
@@ -452,6 +455,37 @@ fn init_and_merge_are_project_holders() {
         .history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
         .unwrap();
+}
+
+/// #776 G3 on PostgreSQL: merges into different Branches share the project;
+/// a second merge into the same Branch and an Init stay `Busy`.
+#[test]
+fn merges_into_different_branches_share_the_project() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "admission_merges");
+    let binding = binding("admission_merges");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, _branch, _genesis) = project(&handles.history, 1);
+    let history = &handles.history;
+
+    history.gc_register(&merge(project_id, "a", 9)).unwrap();
+    history
+        .gc_register(&merge(project_id, "b", 10))
+        .expect("a merge into another Branch shares the project");
+    let refusal = history
+        .gc_register(&merge(project_id, "a", 11))
+        .unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("a second merge into the same Branch is Busy: {refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Merge);
+    let refusal = history.gc_register(&init(project_id, 12)).unwrap_err();
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("an Init during a live merge is Busy: {refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Merge);
+    history.gc_release(&op(9)).unwrap();
+    history.gc_release(&op(10)).unwrap();
 }
 
 #[test]
@@ -955,6 +989,62 @@ fn a_read_from_a_session_opened_before_the_swap_is_stale() {
     assert!(fresh.history.branch_snapshot(work).unwrap().is_some());
 }
 
+/// #776: a REPEATABLE READ snapshot is fixed when the first statement that
+/// needs one is analysed, before that statement waits for its
+/// `AccessShareLock`. A read that queued behind the swap's ACCESS EXCLUSIVE
+/// lock would otherwise pass the fence at `G` from a snapshot older than the
+/// swap's `G + 1` and then resolve the installed tables. The read takes
+/// `LOCK TABLE history_meta IN ACCESS SHARE MODE` first (no snapshot), so its
+/// fence read sees `G + 1` and answers `StaleStore`.
+#[test]
+fn a_read_whose_snapshot_waits_on_the_swap_lock_is_stale() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_swap_lock");
+    let binding = binding("fence_swap_lock");
+    let handles = schema.create(&binding, CURSOR);
+    let (shop, work, _) = project(&handles.history, 1);
+    commit(&handles.history, work, 5);
+
+    // Stand in for compaction's Phase B swap: hold every reader out, then
+    // install `G + 1` in the same transaction.
+    let mut admin = schema.admin();
+    admin
+        .batch_execute(
+            "BEGIN; LOCK TABLE history_meta IN ACCESS EXCLUSIVE MODE; \
+             UPDATE history_meta SET catalog_incarnation=catalog_incarnation+1 WHERE id=1",
+        )
+        .expect("hold the swap lock");
+    let history = &handles.history;
+    let read = std::thread::scope(|scope| {
+        let reader = scope.spawn(|| history.layer_stack(shop));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let waiting: i64 = admin
+                .query_one(
+                    "SELECT count(*) FROM pg_locks l \
+                      WHERE l.relation = 'history_meta'::regclass AND NOT l.granted",
+                    &[],
+                )
+                .expect("lock waiters")
+                .get(0);
+            if waiting > 0 {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the read never queued behind the swap lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        admin.batch_execute("COMMIT").expect("install G + 1");
+        reader.join().expect("the reader thread")
+    });
+    assert!(
+        matches!(read, Err(HistoryError::StaleStore)),
+        "a read queued behind the swap is StaleStore: {read:?}"
+    );
+}
+
 /// Two concurrent `branch.remove` calls in one project take the same epoch
 /// row. The marker transaction locks it `FOR UPDATE` first, so the second
 /// waits for the first and then bumps the value it read; both removals land
@@ -1223,4 +1313,50 @@ fn a_release_behind_a_concurrent_writer_is_stamped_after_its_row() {
     assert_eq!(second.items[0].updated_ms, ahead + 1);
     assert!(second.next.is_none());
     assert!(waited, "the release waited for the writer's lane row");
+}
+
+/// #776 P7: a write whose generation fence cannot be read (here the
+/// `history_meta` row is gone) is refused, and the transaction its `BEGIN`
+/// opened ends with it: a write that left it open on a live pooled
+/// connection kept the lane row locked and every later writer waiting.
+#[test]
+fn an_unreadable_generation_fence_ends_its_transaction() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_unreadable");
+    let binding = binding("fence_unreadable");
+    let handles = schema.create(&binding, CURSOR);
+    let (_shop, work, _genesis) = project(&handles.history, 1);
+    let first = commit(&handles.history, work, 5);
+    let request = commit_request(&handles.history, work, root(6));
+    let mut admin = schema.admin();
+    admin
+        .batch_execute(
+            "CREATE TABLE lfs_saved_meta AS SELECT * FROM history_meta; \
+             DELETE FROM history_meta",
+        )
+        .unwrap();
+    let refused = handles.history.commit_branch(&request).unwrap_err();
+    admin
+        .batch_execute(
+            "INSERT INTO history_meta SELECT * FROM lfs_saved_meta; DROP TABLE lfs_saved_meta",
+        )
+        .unwrap();
+    assert!(matches!(refused, HistoryError::Integrity(_)), "{refused:?}");
+    let fence_read = format!("%{}.history_meta%", schema.selection().schema);
+    let idle: i64 = admin
+        .query_one(
+            "SELECT count(*) FROM pg_stat_activity \
+              WHERE datname=current_database() AND state LIKE 'idle in transaction%' \
+                AND query LIKE $1",
+            &[&fence_read],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(idle, 0, "the refused write left its transaction open");
+    admin
+        .batch_execute("BEGIN; SELECT 1 FROM store_lane WHERE id=1 FOR UPDATE NOWAIT; ROLLBACK")
+        .expect("the lane row is free for the next writer");
+    let snapshot = handles.history.branch_snapshot(work).unwrap().unwrap();
+    assert_eq!(snapshot.branch.head_commit, Some(first.id));
+    let _next = commit(&handles.history, work, 7);
 }

@@ -19,6 +19,7 @@ pub use backend::postgresql::status::{
     compact_status as postgresql_compact_status, status as postgresql_status,
     PostgresCompactOpStatus, PostgresStatus, PostgresStatusError,
 };
+pub use backend::records::outdated_store;
 pub use backend::sqlite::acquisition::AcquisitionProvider;
 pub use backend::sqlite::compact::{
     compact_op_status, CompactFailpoint, CompactKeptWaste, CompactOpStatus, CompactPath,

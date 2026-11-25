@@ -330,10 +330,16 @@ const POSTGRESQL_COMMIT: &[Pin] = &[
 // head. The mount after the Commit does not pay the content-read chain: the
 // Commit's install put the new root's objects in the shared object cache, so
 // its Workspace reader sends what a repeated mount of an unmoved root sends.
+//
+// The SQLite open was writer [0, 0, 66, 12] before #776 (58427de3f0): a
+// current Store now skips the nine additive migration steps, each its own
+// write transaction (BEGIN IMMEDIATE, the probe, COMMIT), after one read
+// transaction of three statements (`needs_migration`): 66 - 27 + 3 = 42
+// statements, 12 - 9 + 1 = 4 transactions.
 const SQLITE_CYCLE: &[Pin] = &[
     Pin {
         scenario: "store.open",
-        writer: [0, 0, 66, 12],
+        writer: [0, 0, 42, 4],
         control: [0, 0, 36, 2],
         workspace: [0, 0, 0, 0],
     },
@@ -412,10 +418,17 @@ const SQLITE_CYCLE: &[Pin] = &[
 // transaction, [0, 1, 0, 1]); a Store open for an SDK call, an install or
 // a restore is back at [1, 9, 5, 1]. The daemon's open plus prepare
 // is the [1, 10, 5, 2] of step A.
+//
+// #776 (9f84e467b6) then deleted the four unreachable in-place migrations a
+// writable open probed, each with one autocommit `information_schema`
+// statement (its prepare and its execution, 2 round trips, no
+// transaction): the Store open is [1, 9, 5, 1] - 4 x [0, 2, 1, 0] =
+// [1, 1, 1, 1], the open check alone, and the daemon's open plus prepare
+// [1, 2, 1, 2].
 const POSTGRESQL_CYCLE: &[Pin] = &[
     Pin {
         scenario: "store.open",
-        writer: [1, 9, 5, 1],
+        writer: [1, 1, 1, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },

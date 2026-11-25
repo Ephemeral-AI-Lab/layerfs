@@ -12,7 +12,7 @@ use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
 use layerfs_workspace::{
     BaseView, CanonicalClient, JobOutcome, KernelDirectoryRead, KernelDirectoryWindow, KernelInput,
     KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest,
-    KernelWindow, Recognition, RecognizeWork, VisitFacts, WorkspaceError, WriteData,
+    KernelWindow, Position, Recognition, RecognizeWork, VisitFacts, WorkspaceError, WriteData,
     RECOGNIZE_BYTES,
 };
 use std::sync::Arc;
@@ -270,9 +270,10 @@ impl RequestServices for FilesystemPort {
             return Box::pin(async move { Err(fenced) });
         }
         // The bytes of an examined write, for the chunk it may have carried.
+        // An appending write was not examined.
         let written = match &request.input {
             KernelInput::Write {
-                offset,
+                position: Position::At(offset),
                 data,
                 cached: false,
             } if data.len() >= RECOGNIZE_BYTES => {

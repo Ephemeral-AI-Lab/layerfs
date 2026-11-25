@@ -8,8 +8,10 @@
 //! before the connect: server messages per connection and the number of
 //! `ReadyForQuery` among them (one per simple query or `Sync`). The test
 //! prints `T768_OPEN_COST` lines and asserts one writer connect, no reader
-//! connect at open, and the PostgreSQL writer's open at [1, 9, 5, 1] (no
-//! mount statements prepared outside the daemon).
+//! connect at open, and the PostgreSQL writer's open at [1, 1, 1, 1] (no
+//! mount statements prepared outside the daemon; the open check alone since
+//! #776 deleted the four in-place migration probes, 9f84e467b6, which made
+//! it [1, 9, 5, 1]).
 //!
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #[path = "support/adversary.rs"]
@@ -109,8 +111,9 @@ fn postgresql_open_alone() {
     assert_eq!(open[2][0], 0, "no Workspace reader at open");
     // #768 review: only the daemon prepares the writer's mount statements
     // (`OpenedStore::prepare_mounts`); an SDK-style open is back at its
-    // cost before step A.
-    assert_eq!(open[0], [1, 9, 5, 1], "the SDK-style writer open");
+    // cost before step A, less the four migration probes #776 deleted
+    // (each [0, 2, 1, 0]: [1, 9, 5, 1] -> [1, 1, 1, 1]).
+    assert_eq!(open[0], [1, 1, 1, 1], "the SDK-style writer open");
 
     let before = work(&service);
     proxy.arm(None);

@@ -141,6 +141,12 @@ pub(crate) const DIRECTORY_ENTRY_CAPTURE: &str = concat!(
     AND (parent,name)>(?2,?3) ORDER BY parent,name LIMIT ",
     page_limit!()
 );
+/// Whether one serial has an inode row in a generation: one index seek.
+pub(crate) const INODE_IN_GENERATION: &str =
+    "SELECT 1 FROM fs_inode INDEXED BY fs_inode_capture WHERE generation=?1 AND inode=?2";
+/// Whether a generation binds any name under one directory: one index seek.
+pub(crate) const ENTRY_UNDER_IN_GENERATION: &str = "SELECT 1 FROM fs_entry
+    INDEXED BY fs_entry_capture WHERE generation=?1 AND parent=?2 LIMIT 1";
 pub(crate) const SOURCE_NAMES: &str = concat!(
     "SELECT parent,name,inode,inherited FROM fs_entry INDEXED BY fs_entry_capture
     WHERE generation=?1 AND parent=?2 AND name>?3 ORDER BY name LIMIT ",

@@ -794,6 +794,9 @@
    "Capacity": [
     "NoSpace"
    ],
+   "Unsupported": [
+    "OldStore"
+   ],
    "Unavailable": [
     "Denied",
     "Unauthorized",

@@ -34,7 +34,8 @@ use super::{
 use crate::telemetry::phase;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
-    BindingHint, BranchSnapshot, CommitMeta, CommitOutcome, CommitRequest, CommitVia, NodeId,
+    BindingHint, BranchSnapshot, CommitAttempt, CommitMeta, CommitOutcome, CommitRequest,
+    CommitVia, NodeId,
 };
 use layerfs_persistence::Fused;
 use layerfs_storage::{PreparedTail, Storage, WriteOutcome};
@@ -85,7 +86,10 @@ impl super::Store {
 
 /// The publication request of one Commit of `snapshot`'s Workspace over
 /// `target`, as the separate path's `commit_branch` and the fused
-/// transaction both receive it.
+/// transaction both receive it. Both carry the Commit's one `attempt`
+/// (#776 R1): a fused race wrote nothing, so the separate path publishes
+/// under the same attempt, and a lost reply on either is settled by looking
+/// that attempt up, never by publishing again.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn commit_request(
     snapshot: &BranchSnapshot,
@@ -96,6 +100,7 @@ pub(super) fn commit_request(
     merge: Option<&MergeReport>,
     options: &CommitOptions,
     via: CommitVia,
+    attempt: CommitAttempt,
 ) -> CommitRequest {
     CommitRequest {
         branch: snapshot.branch.id,
@@ -127,6 +132,7 @@ pub(super) fn commit_request(
                     .unwrap_or(NodeId::Layer(snapshot.branch.base_layer))
             }),
             lww: merge.map_or_else(Vec::new, |report| report.lww.clone()),
+            attempt: Some(attempt),
             ..CommitMeta::new(via)
         },
         // The transaction reads the head in the lane: forced over whatever
@@ -244,6 +250,7 @@ impl BoundWorkspace {
         hints: Option<Vec<BindingHint>>,
         options: &CommitOptions,
         via: CommitVia,
+        attempt: CommitAttempt,
         retained: &mut CommitFailure,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Option<CommitOutcome>, CommitError> {
@@ -269,32 +276,32 @@ impl BoundWorkspace {
         let mut tail = tail;
         let mut hints = hints;
         let stack = snapshot.branch.stack;
-        let attempt = loop {
+        let sent = loop {
             let outcome = match (&saved, &tail) {
                 (Some(saved), _) => *saved,
                 (None, Some(tail)) => tail.prospective(),
                 (None, None) => return Err(CommitError::Context("fused Commit without a Save")),
             };
             let request = commit_request(
-                snapshot, snapshot, candidate, logical, &outcome, None, options, via,
+                snapshot, snapshot, candidate, logical, &outcome, None, options, via, attempt,
             );
             retained.phase = CommitPhase::Publish;
             retained.intent = Some(request.clone());
             let publication = tail.as_ref().and_then(|tail| tail.publication());
             let rows = hints.as_deref().unwrap_or(&[]);
-            let attempt = phase(timing, "publish.fused", || {
+            let reply = phase(timing, "publish.fused", || {
                 committer.commit(publication, stack, &request, rows)
             });
             // Too large for one message: the tail and the hints go first,
             // each on its own as the separate path sends them, then the
             // Commit alone.
-            if matches!(attempt, Err(Fused::Overflow)) && saved.is_none() {
+            if matches!(reply, Err(Fused::Overflow)) && saved.is_none() {
                 saved = self.publish_apart(tail.take(), hints.take(), retained)?;
                 continue;
             }
-            break attempt;
+            break reply;
         };
-        match attempt {
+        match sent {
             Ok(outcome) => {
                 retained.published = Some(outcome.clone());
                 if let Some(tail) = tail {

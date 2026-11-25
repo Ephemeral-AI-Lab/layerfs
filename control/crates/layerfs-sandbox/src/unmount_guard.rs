@@ -18,6 +18,11 @@
 //!   never forceable: the only step that could destroy unknown custody is the
 //!   one this version does not take. Every reader keeps answering version-0
 //!   records exactly as before.
+//!
+//! A published `Retained` result keeps the daemon's refusal detail. Where
+//! that detail says a forced abort was written and its detach refused
+//! `Busy` at `Detach`, the record is [`retryable`]: a later unmount or force
+//! is sent again rather than answered from the record (#538).
 use crate::files as discovery;
 use crate::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
@@ -270,6 +275,26 @@ pub fn forceable(value: &SdkValue) -> bool {
 /// an NFS export kept because its client unmount was not established
 /// (`ExportKept::forceable` in the daemon). Any other stage keeps its answer.
 const FORCEABLE_STAGE: &str = "Detach";
+/// Whether a later unmount or force may send the record's Workspace to the
+/// daemon again instead of answering the record (#538): a forced teardown
+/// whose abort was written and whose one detach the kernel refused `EBUSY`
+/// while a process held the mount. The daemon then asks only for that
+/// detach again (`Kept::retryable` there); its own guard stays the gate.
+pub fn retryable(value: &SdkValue) -> bool {
+    let original = value.get("detail");
+    let detail = |key| original.and_then(|detail| detail.get_text(key));
+    value.get_text("state") == Some("Retained")
+        && value.get_int("v") == Some(VERSION)
+        && value.get_text("code") == Some("Failed")
+        && value.get_text("stage") == Some(FORCEABLE_STAGE)
+        && detail("abort") == Some("Written")
+        && detail("detach") == Some("Busy")
+}
+/// Whether an unmount (`force` when forced) is sent for a Workspace that
+/// has a terminal record `value`, instead of answering that record.
+pub fn admits(value: &SdkValue, force: bool) -> bool {
+    retryable(value) || (force && forceable(value))
+}
 
 /// Called under the Sandbox guard, after all before-effect checks.
 pub fn begin(

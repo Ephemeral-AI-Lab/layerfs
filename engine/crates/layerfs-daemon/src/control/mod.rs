@@ -19,6 +19,8 @@ mod observation;
 mod operations;
 mod registry;
 mod resolve;
+#[cfg(target_os = "linux")]
+mod retry;
 mod serve;
 #[cfg(target_os = "linux")]
 mod serving;
