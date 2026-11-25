@@ -6,7 +6,10 @@ current Store. `capture` runs one deterministic scenario with an old `layerfs`
 command in a fresh scratch home under the temporary folder, saves the Store
 (SQLite: the closed `store.sqlite`; PostgreSQL: a plain `pg_dump` of the
 Store's schema) with a `manifest.json` of what the old build answered, and
-refreshes `fixtures/store-formats/SHA256SUMS`. `verify-hashes` checks that
+refreshes `fixtures/store-formats/SHA256SUMS`. With `--create-cli` an older
+build creates the (native) Store and writes the first half of the history; the
+`--cli` build then opens it, which runs its open-time migrations, and writes the
+rest. `verify-hashes` checks that
 list; a fixture is never edited once committed. `new-step` freezes the current
 schema text before a format change and captures its fixture with the parent
 build.
@@ -14,6 +17,8 @@ build.
 Usage:
   store_format.py capture --engine sqlite --cli OLD/bin/layerfs --out fixtures/store-formats/sqlite/v2
   store_format.py capture --engine postgresql --cli OLD/bin/layerfs --out fixtures/store-formats/postgresql/v3
+  store_format.py capture --engine sqlite --create-cli OLDER/layerfs --cli OLD/bin/layerfs \
+      --out fixtures/store-formats/sqlite/v2/d-appended
   store_format.py verify-hashes
   store_format.py new-step --engine sqlite --version 3 --cli PARENT/bin/layerfs
 """
@@ -66,14 +71,15 @@ def log(msg: str) -> None:
 class Cli:
     """One old `layerfs` command against one scratch home; one attempt per call."""
 
-    def __init__(self, path: Path, home: Path, bundle: Path | None) -> None:
+    def __init__(self, path: Path, home: Path, bundle: Path | None, flags: tuple = ("--detail", "--json")) -> None:
         self.path = path
+        self.flags = flags
         self.env = dict(os.environ, LAYERFS_HOME=str(home))
         if bundle is not None:
             self.env["LAYERFS_BUNDLE"] = str(bundle)
 
     def __call__(self, *args: str, stdin: bytes | None = None, ok: bool = True) -> dict:
-        cmd = [str(self.path), *args, "--detail", "--json"]
+        cmd = [str(self.path), *args, *self.flags]
         p = subprocess.run(cmd, input=stdin, capture_output=True, env=self.env, timeout=CALL_TIMEOUT, check=False)
         if ok and p.returncode != 0:
             raise SystemExit(f"layerfs {' '.join(args)} failed ({p.returncode}): {p.stderr.decode(errors='replace')}")
@@ -170,35 +176,49 @@ def sh_quote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
-def scenario(cli: Cli, store: str, machine: str, work: Path, seed: int) -> dict:
-    """Run the history; returns notable Commits by name."""
+def commit_id(answer: dict) -> str:
+    """A Commit's id from either build: `commit` (a dict in the older one) or an init's `layer`."""
+    c = answer.get("commit") or answer["layer"]
+    return c["id"] if isinstance(c, dict) else c
+
+
+def scenario(cli: Cli, store: str, machine: str, work: Path, seed: int, first: Cli | None = None) -> dict:
+    """Run the history; returns notable Commits by name. `first`, an older build, writes up to the merge."""
     ev: dict = {}
     web, lib = f"{store}/web", f"{store}/lib"
     make_web(work / "web", seed)
     make_lib(work / "lib", seed)
-    ev["web_init"] = cli("project", "init", web, str(work / "web"))["commit"]
-    ev["lib_init"] = cli("project", "init", lib, str(work / "lib"))["commit"]
+    a = first or cli
+    ev["web_init"] = commit_id(a("project", "init", web, str(work / "web")))
+    ev["lib_init"] = commit_id(a("project", "init", lib, str(work / "lib")))
 
-    def fw(project: str, branch: str, path: str, data: bytes, msg: str, mode: str | None = None) -> str:
+    def fw(project: str, branch: str, path: str, data: bytes, msg: str, mode: str | None = None, by: Cli = cli) -> str:
         extra = ["--mode", mode] if mode else []
-        return cli("file", "write", project, branch, path, *extra, "-m", msg, stdin=data)["commit"]
+        return commit_id(by("file", "write", project, branch, path, *extra, "-m", msg, stdin=data))
+
+    def fork(project: str, name: str) -> None:
+        a("branch", "fork", project, name, *(["main"] if first else []))
 
     # web: feature with small-file versions, a move, a mkdir and deletes
-    cli("branch", "fork", web, "feature")
+    fork(web, "feature")
     for v in (2, 3, 4):
-        fw(web, "feature", "/notes/config.json", config_text(v, seed), f"config v{v}")
-    fw(web, "feature", "/src/app.py", source_text("app", 2, seed), "app v2")
-    cli("file", "mv", web, "feature", "/src/util.py", "/src/helpers.py", "-m", "rename util")
-    cli("file", "mkdir", web, "feature", "/feature-empty", "-m", "empty folder")
-    cli("file", "rm", web, "feature", "/debug.log", "-m", "drop ignored log")
-    ev["feature_rm_dir"] = cli("file", "rm", web, "feature", "/build", "--recursive", "-m", "drop build")["commit"]
+        fw(web, "feature", "/notes/config.json", config_text(v, seed), f"config v{v}", by=a)
+    fw(web, "feature", "/src/app.py", source_text("app", 2, seed), "app v2", by=a)
+    a("file", "mv", web, "feature", "/src/util.py", "/src/helpers.py", "-m", "rename util")
+    a("file", "mkdir", web, "feature", "/feature-empty", "-m", "empty folder")
+    a("file", "rm", web, "feature", "/debug.log", "-m", "drop ignored log")
+    recursive = [] if first else ["--recursive"]  # the older build removes a folder without the flag
+    ev["feature_rm_dir"] = commit_id(a("file", "rm", web, "feature", "/build", *recursive, "-m", "drop build"))
     # web: other diverges, then merges into feature (two parents)
-    cli("branch", "fork", web, "other")
-    fw(web, "other", "/other.txt", b"from the other Branch\n", "other file")
-    fw(web, "other", "/notes/other-config.json", config_text(5, seed), "other config")
+    fork(web, "other")
+    fw(web, "other", "/other.txt", b"from the other Branch\n", "other file", by=a)
+    fw(web, "other", "/notes/other-config.json", config_text(5, seed), "other config", by=a)
+    # from here on `cli` writes; its first call opens the older build's Store and migrates it
     merge = cli("branch", "merge", web, "feature", "other", "-m", "merge other into feature")
     ev["merge"] = merge["commit"]
     ev["merge_second_parent"] = merge.get("second_parent")
+    if first:
+        cli("store", "move", store, machine)  # its Sandbox needs the Store on the machine
     ev["publish_feature"] = cli("branch", "publish", web, "feature")["commit"]
     # web: a forced publish displaces main's head
     init = ev["web_init"]
@@ -361,6 +381,14 @@ def old_build(cli_path: Path) -> dict:
     }
 
 
+def created_by(cli_path: Path) -> dict:
+    """The older build of a two-build capture: a cargo build inside its source checkout."""
+    p = cli_path.expanduser().resolve()
+    head = subprocess.run(["git", "-C", str(p.parent), "rev-parse", "HEAD"], capture_output=True, check=False)
+    version = subprocess.run([str(p), "--version"], capture_output=True, check=False).stdout.decode().split()
+    return {"commit": head.stdout.decode().strip() or None, "version": version[-1] if version else None}
+
+
 def release(cli: Cli, home: Path) -> list[str]:
     """Stop the scratch home's machine and remove the Docker resources named with its id, and only those."""
     prefix = "layerfs-" + json.loads((home / "layerfs.json").read_text())["id"][:8] + "-"
@@ -402,7 +430,21 @@ def capture(args: argparse.Namespace) -> None:
             "with the heads they displaced"
         ),
     ]
-    if args.engine == "sqlite":
+    first = None
+    if args.create_cli:
+        # the older build writes into the home the newer one made: it names machines as the newer one reads
+        first = Cli(Path(args.create_cli).expanduser().resolve(), home, None, flags=())
+        if args.engine != "sqlite":
+            raise SystemExit("--create-cli captures a sqlite Store only")
+        first("store", "create", store)
+        notes += [
+            (
+                "the Store was created and written up to the merge by the older build in created_by, its only "
+                "Store kind a sqlite Store on native; old_build opened it (its open-time migrations append the "
+                "columns the older source lacks), moved it to the machine and wrote the rest"
+            ),
+        ]
+    elif args.engine == "sqlite":
         cli("store", "create", store, "--machine", machine)
     else:
         if not args.pg_url:
@@ -410,7 +452,7 @@ def capture(args: argparse.Namespace) -> None:
         cli("store", "connect", store, args.pg_url, "--user", "postgres", "--password-stdin", stdin=b"trust\n")
         cli("store", "attach", store, "--machine", machine)
     t0 = time.time()
-    events = scenario(cli, store, machine, scratch / "work", args.seed)
+    events = scenario(cli, store, machine, scratch / "work", args.seed, first)
     log(f"scenario done in {time.time() - t0:.0f}s")
     projects = describe(cli, store, scratch)
     out.mkdir(parents=True, exist_ok=True)
@@ -425,7 +467,15 @@ def capture(args: argparse.Namespace) -> None:
         con = sqlite3.connect(f"file:{out / 'store.sqlite'}?immutable=1", uri=True)
         version = con.execute("PRAGMA user_version").fetchone()[0]
         journal = con.execute("PRAGMA journal_mode").fetchone()[0]
+        source, definition = con.execute("SELECT schema_source, schema_definition FROM history_meta").fetchone()
         con.close()
+        hashes = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in (("source", source), ("definition", definition))}
+        log(f"schema_source sha256 {hashes['source']}, schema_definition sha256 {hashes['definition']}")
+        if first:
+            notes.append(
+                f"history_meta: sha256(schema_source) {hashes['source']}, sha256(schema_definition) "
+                f"{hashes['definition']}"
+            )
         manifest |= {"format": "sqlite-schema-2", "user_version": version, "journal_mode": journal}
         notes.append(
             f"store.sqlite is the file the old build's `store move {store} native` left: closed, no -wal or -shm, "
@@ -462,6 +512,7 @@ def capture(args: argparse.Namespace) -> None:
             raise SystemExit(f"schema_version {version} is not PostgreSQL schema 3")
     manifest |= {
         "old_build": old_build(cli_path),
+        **({"created_by": created_by(Path(args.create_cli))} if args.create_cli else {}),
         "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "machine": machine,
         "scenario": {"seed": args.seed, "large_file_bytes": LARGE_SIZE, "store": store, "events": events},
@@ -554,6 +605,7 @@ def main() -> None:
     def capture_options(p: argparse.ArgumentParser, cli_required: bool) -> None:
         p.add_argument("--engine", choices=("sqlite", "postgresql"), required=True)
         p.add_argument("--cli", required=cli_required, help="the old build's layerfs command")
+        p.add_argument("--create-cli", help="an older sqlite build that creates the Store and writes up to the merge")
         p.add_argument("--bundle", help="its Linux bundle; beside the command's runtime when left out")
         p.add_argument("--machine", default="docker", help="the machine that runs the Store or its Sandbox")
         p.add_argument(
