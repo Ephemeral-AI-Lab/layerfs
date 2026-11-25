@@ -58,7 +58,10 @@ impl Producer {
         self.idle.lock().ok().and_then(|mut idle| idle.take())
     }
     /// Its idle handle, if any, returns its kept ordinals and stays idle
-    /// (its next Save reserves ordinals again).
+    /// (its next Save reserves ordinals again). No Commit of this Workspace
+    /// runs meanwhile, so `keep` finds the slot empty: the daemon admits a
+    /// close and a Commit only from an idle entry, returns it to idle after
+    /// `close` returns, and closes at shutdown only once every worker ended.
     pub(super) fn release_ordinals(&self) {
         if let Some(storage) = self.idle() {
             let _ = storage.release_kept_ordinals();

@@ -26,8 +26,10 @@ use crate::{
 /// release that rewinds the ordinal counter only while it still ends this
 /// block: a PostgreSQL compaction swaps only the pack and locator tables and
 /// abandons when `store_policy` moved after its mark, a SQLite compaction
-/// copies both counters, and a write on a handle whose session is fenced to
-/// an older generation fails, which drops the block.
+/// copies both counters. A handle whose session is fenced to an older
+/// generation keeps its block after that definite refusal, which is safe:
+/// a fenced session fails every later write, so the block is never spent,
+/// and the Commit path drops the handle on every failure but `Busy`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct IdBlock {
     next_pack: i64,
