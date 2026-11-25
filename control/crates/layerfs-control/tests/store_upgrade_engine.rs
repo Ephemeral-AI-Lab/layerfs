@@ -236,7 +236,10 @@ fn needs_w1_a_schema_version_1_backup_is_refused_by_name() {
     let binding = layerfs_bucket::bucket::pieces::hex(&identity.binding);
     let metadata = Metadata::from([(layerfs_bucket::backup::create::BINDING.to_owned(), binding)]);
     pieces::upload(&driver, "old/store.sqlite", &copy, &metadata).unwrap();
-    let destination = home.join("restored");
+    let restored = home.join("restored");
+    std::fs::create_dir_all(&restored).unwrap();
+    std::fs::set_permissions(&restored, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let destination = restored.join("store.sqlite");
     let failure = layerfs_bucket::backup::load(&driver, "old", &destination, identity.cursor_key)
         .unwrap_err();
     assert!(
@@ -245,7 +248,7 @@ fn needs_w1_a_schema_version_1_backup_is_refused_by_name() {
         failure.cause
     );
     assert!(!failure.cause.contains("store_blocks"), "{}", failure.cause);
-    assert!(!destination.join("store.sqlite").exists());
+    assert!(!destination.exists());
 }
 
 /// PostgreSQL (needs W1 and `LAYERFS_TEST_POSTGRES_URL`, the URL form): a
@@ -297,4 +300,81 @@ fn needs_w1_a_current_postgresql_store_answers_current() {
     let format = get_format(&home);
     assert_eq!(format.get_text("status"), Some("current"), "{format:?}");
     assert_eq!(format.get_int("version"), Some(4));
+}
+
+/// The captured schema 2 SQLite fixture (`fixtures/store-formats`), never
+/// edited: tests copy it.
+fn fixture_v2() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../fixtures/store-formats/sqlite/v2/store.sqlite")
+}
+
+/// The binding key the closed SQLite file at `path` records, read with the
+/// system `sqlite3` (test-only; `None` where it is not installed).
+fn binding_of(path: &Path) -> Option<Vec<u8>> {
+    let uri = format!("file:{}?immutable=1", path.display());
+    let out = std::process::Command::new("sqlite3")
+        .args([&uri, "SELECT hex(binding_key) FROM history_meta"])
+        .output()
+        .ok()?;
+    let hex = String::from_utf8(out.stdout).ok()?;
+    let hex = hex.trim();
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect()
+}
+
+/// M with the captured fixture (needs W1): a real schema 2 Store reads
+/// `outdated`, version 2, fix `layerfs store upgrade shop`.
+#[test]
+fn needs_w1_the_captured_schema_2_store_reads_outdated() {
+    let Some(home) = home_with_shop("fixture-format") else {
+        return;
+    };
+    std::fs::copy(fixture_v2(), paths::store_file(&home, "shop")).unwrap();
+    let format = get_format(&home);
+    assert_eq!(format.get_text("status"), Some("outdated"), "{format:?}");
+    assert_eq!(format.get_int("version"), Some(2));
+    assert_eq!(format.get_text("fix"), Some("layerfs store upgrade shop"));
+}
+
+/// K (needs W1): a backup of the captured schema 2 Store restores through
+/// the chain: the download is upgraded (`2->3`) before it opens, and the
+/// installed Store is current.
+#[test]
+fn needs_w1_a_schema_2_backup_restores_through_the_chain() {
+    use layerfs_bucket::bucket::local_folder::LocalFolder;
+    use layerfs_bucket::bucket::{pieces, Limits, Metadata};
+    let scratch = scratch("restore-v2");
+    let Some(binding) = binding_of(&fixture_v2()) else {
+        eprintln!("NOT RUN: no sqlite3 to read the fixture's binding");
+        return;
+    };
+    let copy = scratch.join("copy.sqlite");
+    std::fs::copy(fixture_v2(), &copy).unwrap();
+    let remote = scratch.join("remote");
+    std::fs::create_dir_all(&remote).unwrap();
+    let limits = Limits {
+        max_file: 1 << 30,
+        max_request: 1 << 30,
+        piece_size: 1 << 30,
+    };
+    let driver = LocalFolder::new(&remote, limits).unwrap();
+    let metadata = Metadata::from([(
+        layerfs_bucket::backup::create::BINDING.to_owned(),
+        pieces::hex(&binding),
+    )]);
+    pieces::upload(&driver, "fx/store.sqlite", &copy, &metadata).unwrap();
+    let restored = scratch.join("restored");
+    std::fs::create_dir_all(&restored).unwrap();
+    std::fs::set_permissions(&restored, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let destination = restored.join("store.sqlite");
+    let loaded = layerfs_bucket::backup::load(&driver, "fx", &destination, [5; 32])
+        .unwrap_or_else(|failure| panic!("{failure}"));
+    assert_eq!(loaded.upgrade.outcome.word(), "upgraded");
+    assert_eq!(loaded.upgrade.steps, ["2->3"]);
+    assert!(loaded.heads.is_some());
+    let format = layerfs_persistence::upgrade::sqlite_format(&destination).unwrap();
+    assert_eq!(format.version, Some(3));
 }
