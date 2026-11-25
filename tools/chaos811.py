@@ -924,7 +924,7 @@ def main() -> int:
     r = sub.add_parser("run")
     r.add_argument("--seed", type=int, required=True)
     r.add_argument("--nodes", type=int, default=3)
-    r.add_argument("--workload", type=float, default=40.0)
+    r.add_argument("--workload", type=float, default=32.0)
     r.add_argument("--keep", action="store_true", help="keep containers even when the run passes")
     args = parser.parse_args()
     if args.cmd == "stage":
