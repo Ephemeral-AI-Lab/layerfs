@@ -119,6 +119,12 @@ jobs in FIFO order. The final pass shares each level’s base reads across up
 to 128 rows and emits final rows in serial order. Descendant release
 advances its frontier after each page.
 
+Validation keeps the consecutive suffix of the fresh inode serials whose
+absence was checked against the base. Binding classification reuses that proof
+for children in the suffix, charging the same logical demand without reading
+the inode table again. The proof holds two serials across allocation batches
+and leaves the classification window and memo bounds in place.
+
 Every read goes through the captured reader, the attempt's sealed records or
 the immutable base bound to the reader's root; current active state is never
 read, so mutations made after the capture are absent from this root and

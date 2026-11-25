@@ -261,13 +261,16 @@ pub(crate) fn check_operation(
     // The allocator precondition is checked before anything else: a serial the
     // caller calls new must not already exist in the base it addresses.
     let allocation_before = work.inode_pages_read;
-    check_new_identities(reader, input, topology, work)?;
+    let verified_fresh = check_new_identities(reader, input, topology, work)?;
     charge_site(work, allocation_before, |sites| &mut sites.allocation);
-    let mut state = ValidationState::new(if resident {
-        resident_limit(input)
-    } else {
-        BACKED_MEMO_RECORDS
-    });
+    let mut state = ValidationState::new(
+        if resident {
+            resident_limit(input)
+        } else {
+            BACKED_MEMO_RECORDS
+        },
+        verified_fresh,
+    );
     let classification_before = work.inode_pages_read;
     let mut prefetched = 0;
     if let (true, Some(table)) = (resident, topology.table) {
@@ -293,7 +296,7 @@ pub(crate) fn check_operation(
             for change in update.changes()? {
                 let (_, binding) = change?;
                 if let Some(child) = binding {
-                    if child != input.root_serial() {
+                    if child != input.root_serial() && !state.verified_fresh(child) {
                         demanded.push(child);
                     }
                 }
@@ -377,15 +380,22 @@ struct ValidationState {
     records: BTreeMap<u64, InodeValue>,
     absent: BTreeSet<u64>,
     limit: usize,
+    verified_fresh: Option<(u64, u64)>,
 }
 
 impl ValidationState {
-    fn new(limit: usize) -> Self {
+    fn new(limit: usize, verified_fresh: Option<(u64, u64)>) -> Self {
         Self {
             records: BTreeMap::new(),
             absent: BTreeSet::new(),
             limit: limit.max(1),
+            verified_fresh,
         }
+    }
+
+    fn verified_fresh(&self, serial: u64) -> bool {
+        self.verified_fresh
+            .is_some_and(|(first, last)| first <= serial && serial <= last)
     }
 
     fn make_room(&mut self) {
@@ -464,7 +474,7 @@ impl ValidationState {
             work.inode_demands = work.inode_demands.saturating_add(1);
             return Ok(Some(*value));
         }
-        if self.absent.contains(&serial) {
+        if self.verified_fresh(serial) || self.absent.contains(&serial) {
             // The same charge a descent would have made for a serial the base does
             // not hold (`lookup_many` charges one demand per serial answered at a
             // leaf, absence included), so the physical read is what this removes
@@ -524,16 +534,17 @@ fn check_new_identities(
     input: &dyn OperationInput,
     topology: FilesystemTopology,
     work: &mut ValidationWork,
-) -> ContentResult<()> {
+) -> ContentResult<Option<(u64, u64)>> {
     if input.new_rows() == 0 {
-        return Ok(());
+        return Ok(None);
     }
     let Some(table) = topology.table else {
-        return Ok(());
+        return Ok(None);
     };
     // One declared wave of serials is read at a time: the batch the allocator
     // precondition already charged, and no more.
     let mut waves = input.new_inodes()?;
+    let mut verified_fresh: Option<(u64, u64)> = None;
     loop {
         let mut wave = Vec::with_capacity(ALLOCATION_CHECK_BATCH);
         while wave.len() < ALLOCATION_CHECK_BATCH {
@@ -551,8 +562,17 @@ fn check_new_identities(
         if found.iter().any(Option::is_some) {
             return Err(ContentError::InvalidRecord("reused inode serial"));
         }
+        // Keep the consecutive end of the verified sequence. It costs two
+        // serials even for a large allocation, and cannot include gaps.
+        for serial in wave {
+            let first = match verified_fresh {
+                Some((first, last)) if last.checked_add(1) == Some(serial) => first,
+                _ => serial,
+            };
+            verified_fresh = Some((first, serial));
+        }
     }
-    Ok(())
+    Ok(verified_fresh)
 }
 
 fn check_root_invariants(input: &dyn OperationInput) -> ContentResult<()> {

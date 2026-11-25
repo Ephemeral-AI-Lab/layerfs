@@ -167,7 +167,7 @@ impl<'c, 's, 'b> Classifier<'c, 's, 'b> {
                 }
                 Some((_, child)) => {
                     root_binds |= row.parent == root;
-                    if *child != root {
+                    if *child != root && !self.state.verified_fresh(*child) {
                         serials.push(*child);
                     }
                 }
