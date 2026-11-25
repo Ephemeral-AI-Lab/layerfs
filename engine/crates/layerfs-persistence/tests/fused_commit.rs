@@ -780,3 +780,231 @@ fn postgresql_lost_reply_is_unknown() {
         },
     );
 }
+
+/// A TCP proxy to the test server that, once armed, rewrites the next
+/// fused lane request (simple query text with the attempt check and the
+/// barrier) so its barrier statement sleeps between the lock and the
+/// unlock: `pg_advisory_lock(..), pg_sleep(30)` inside the fenced
+/// subquery. Server bytes pass through unchanged.
+struct BarrierPause {
+    url: String,
+    armed: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl BarrierPause {
+    fn start(url: &str) -> Self {
+        use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+        let config: layerfs_persistence::PostgresConfig = url.parse().unwrap();
+        let layerfs_persistence::PostgresHost::Tcp(host) = &config.get_hosts()[0] else {
+            panic!("the test server must be reached over TCP");
+        };
+        let port = config.get_ports().first().copied().unwrap_or(5432);
+        let upstream = (host.as_str(), port)
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut proxied = format!(
+            "host=127.0.0.1 port={} user={} dbname={} sslmode=disable",
+            listener.local_addr().unwrap().port(),
+            config.get_user().unwrap(),
+            config.get_dbname().unwrap_or(config.get_user().unwrap()),
+        );
+        if let Some(password) = config.get_password() {
+            proxied.push_str(&format!(
+                " password={}",
+                String::from_utf8(password.to_vec()).unwrap()
+            ));
+        }
+        let armed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = armed.clone();
+        std::thread::spawn(move || {
+            for client in listener.incoming() {
+                let Ok(client) = client else { return };
+                let Ok(server) = TcpStream::connect(upstream) else {
+                    return;
+                };
+                let (mut back_from, mut back_to) =
+                    (server.try_clone().unwrap(), client.try_clone().unwrap());
+                std::thread::spawn(move || {
+                    let _ = std::io::copy(&mut back_from, &mut back_to);
+                    let _ = back_to.shutdown(std::net::Shutdown::Write);
+                });
+                let flag = flag.clone();
+                std::thread::spawn(move || {
+                    let _ = rewrite(client, server, &flag);
+                });
+            }
+        });
+        Self {
+            url: proxied,
+            armed,
+        }
+    }
+}
+
+/// Client to server, message by message: the untyped startup (after any
+/// SSL or GSS request), then typed messages; the armed lane query is
+/// rewritten once.
+fn rewrite(
+    mut client: std::net::TcpStream,
+    mut server: std::net::TcpStream,
+    armed: &std::sync::atomic::AtomicBool,
+) -> std::io::Result<()> {
+    use std::io::{Read, Write};
+    use std::sync::atomic::Ordering;
+    let mut untyped = true;
+    loop {
+        let mut kind = [0u8; 1];
+        if !untyped {
+            client.read_exact(&mut kind)?;
+        }
+        let mut length = [0u8; 4];
+        client.read_exact(&mut length)?;
+        let mut body = vec![0u8; u32::from_be_bytes(length) as usize - 4];
+        client.read_exact(&mut body)?;
+        if untyped {
+            let code = body
+                .get(..4)
+                .map(|c| u32::from_be_bytes(c.try_into().unwrap()));
+            // SSLRequest and GSSENCRequest are followed by another startup.
+            untyped = matches!(code, Some(80_877_103 | 80_877_104));
+            server.write_all(&length)?;
+            server.write_all(&body)?;
+            continue;
+        }
+        let text = String::from_utf8_lossy(&body);
+        if kind[0] == b'Q'
+            && text.contains("layerfs.attempt")
+            && text.contains("pg_advisory_lock(")
+            && armed.swap(false, Ordering::SeqCst)
+        {
+            let paused = text.replace(
+                " OFFSET 0) AS barrier",
+                ", pg_sleep(30) OFFSET 0) AS barrier",
+            );
+            assert_ne!(paused, text, "the lane request carries the barrier");
+            body = paused.into_bytes();
+        }
+        server.write_all(&kind)?;
+        server.write_all(&(body.len() as u32 + 4).to_be_bytes())?;
+        server.write_all(&body)?;
+    }
+}
+
+/// #776 P6 on the fused path: the message's barrier statement is cancelled
+/// after its lock and before its unlock (`pg_cancel_backend` while it
+/// sleeps between them). The refusal is definite, so the session stays
+/// open; the barrier must not stay held on it: `pg_locks` shows no
+/// advisory lock on that backend, and another writer, whose barrier takes
+/// the key exclusively, commits afterwards instead of waiting until its
+/// `lock_timeout`.
+#[test]
+fn postgresql_cancelled_barrier_is_released() {
+    let Some(pg) = Pg::new("cancel") else { return };
+    let proxy = BarrierPause::start(&pg.url);
+    let mut selection = PostgresSelection::new(&proxy.url, &pg.schema);
+    selection.lock_timeout_ms = 30_000;
+    let handles = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
+    let fixture = Fixture::new(
+        handles.storage.clone(),
+        &handles.history,
+        Box::new(|| handles.diagnostics().unwrap()),
+    );
+    // Warm the message's statements with two Commits (the second has a
+    // parent line), so the cancelled attempt sends no prepares.
+    for seed in [1, 2] {
+        let over = fixture.snapshot();
+        let (tail, candidate) = held(&fixture.storage, seed);
+        fixture
+            .fused(tail.publication(), &fixture.request(&over, candidate), &[])
+            .unwrap();
+        tail.acknowledged().unwrap();
+    }
+
+    let over = fixture.snapshot();
+    let (tail, candidate) = held(&fixture.storage, 81);
+    let held_ids = ids(&tail);
+    proxy.armed.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut observer = pg.admin();
+    let canceller = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let row = observer
+                .query_opt(
+                    "SELECT pid FROM pg_stat_activity \
+                      WHERE wait_event = 'PgSleep' AND query LIKE '%pg_advisory_lock(%' LIMIT 1",
+                    &[],
+                )
+                .unwrap();
+            if let Some(row) = row {
+                let writer: i32 = row.get(0);
+                observer
+                    .execute("SELECT pg_cancel_backend($1)", &[&writer])
+                    .unwrap();
+                return (writer, observer);
+            }
+            assert!(Instant::now() < deadline, "the barrier never paused");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    });
+    let before = handles.diagnostics().unwrap();
+    let attempt = fixture.fused(tail.publication(), &fixture.request(&over, candidate), &[]);
+    let after = handles.diagnostics().unwrap();
+    let (writer, mut observer) = canceller.join().unwrap();
+    assert!(
+        matches!(
+            attempt,
+            Err(Fused::History(HistoryError::OwnershipUnavailable))
+        ),
+        "a cancelled statement is a definite refusal: {attempt:?}"
+    );
+    fixture.nothing_written("cancelled", &over, &held_ids);
+    tail.refused();
+    let barriers: i64 = observer
+        .query_one(
+            "SELECT count(*) FROM pg_locks \
+              WHERE locktype = 'advisory' AND pid = $1 AND granted AND objsubid = 2",
+            &[&writer],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        barriers, 0,
+        "no barrier is left held on the writer's backend"
+    );
+    // The message, then the leftover release on its failure path.
+    assert_eq!(
+        delta(&before, &after)[..2],
+        [2, 0],
+        "{before:?} -> {after:?}"
+    );
+
+    // Another writer takes the barrier exclusively; the leftover would make
+    // it wait until its lock_timeout (`Busy`).
+    let other = pg.open(2_000);
+    let storage = Storage::new(other.storage.clone()).unwrap();
+    let over = fixture.snapshot();
+    let (tail, candidate) = held(&storage, 82);
+    let outcome = other.history.committer().commit(
+        tail.publication(),
+        fixture.stack,
+        &fixture.request(&over, candidate),
+        &[],
+    );
+    assert!(
+        matches!(outcome, Ok(CommitOutcome::Committed { .. })),
+        "{outcome:?}"
+    );
+    tail.acknowledged().unwrap();
+    // The cancelled writer's session is still usable.
+    let over = fixture.snapshot();
+    let (tail, candidate) = held(&fixture.storage, 83);
+    let again = fixture.fused(tail.publication(), &fixture.request(&over, candidate), &[]);
+    assert!(
+        matches!(again, Ok(CommitOutcome::Committed { .. })),
+        "{again:?}"
+    );
+    tail.acknowledged().unwrap();
+}

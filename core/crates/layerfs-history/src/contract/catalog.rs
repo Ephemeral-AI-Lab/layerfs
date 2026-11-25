@@ -386,7 +386,9 @@ pub trait HistoryCatalog: Send + Sync {
     /// own: a lost `COMMIT` reply may leave the server still applying it, and
     /// nothing may judge that publication's outcome before then (#776 C2). It
     /// takes and releases the lane, writes nothing and keeps nothing; a wait
-    /// that reaches the provider's lock timeout is `Busy`. The default returns
+    /// that reaches the provider's lock timeout is `Busy`. A provider whose
+    /// lost publication may still run outside the lane (a PostgreSQL message
+    /// that sends its packs before the lane row) first ends that work. The default returns
     /// at once: a provider whose publications cannot complete after their
     /// caller gave up (an in-process SQLite file, a test double) has none.
     fn pass_publication_lane(&self) -> HistoryResult<()> {

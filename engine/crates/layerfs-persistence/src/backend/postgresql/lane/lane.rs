@@ -151,9 +151,24 @@ impl Session {
     /// under `lock_timeout`. Then it rolls back and closes the connection: it
     /// writes and keeps nothing, needs no turn and works on a session an
     /// unknown outcome quarantined. A wait that reaches the timeout is `Busy`.
+    ///
+    /// On a quarantined session the lane alone proves nothing: a fused
+    /// Commit sends its packs before it takes the lane row, so a backend
+    /// still inserting them when the reply was lost would take the lane and
+    /// commit after this pass. So first its backend is ended
+    /// ([`Self::end_lost_backend`]); a `COMMIT` it already made is then
+    /// found by the caller's read, and one it had not made is aborted.
     pub(crate) fn pass_lane(&self) -> Result<(), BackendError> {
+        let lost = self
+            .state
+            .lock()
+            .map_err(|_| BackendError::Unknown)?
+            .quarantined;
         let mut client = self.connector.connect()?;
         self.lane_work.add(1, 1);
+        if lost {
+            self.end_lost_backend(&mut client)?;
+        }
         let passed = client
             .simple_query(&self.settings.lane_begin())
             .map(|_| ())
@@ -161,6 +176,41 @@ impl Session {
         // Closing the connection ends the transaction even if this fails.
         let _ = client.batch_execute("ROLLBACK");
         passed
+    }
+
+    /// Terminates the backend of this quarantined session's connection, if
+    /// it is still there, and waits until it is gone, bounded by
+    /// `lock_timeout` (30 s when that is 0): `pg_terminate_backend` with a
+    /// timeout answers true only once the process has exited, after its
+    /// transaction ended. Waiting for it is not a retry. One round trip on
+    /// `client`. Not proven gone within the bound is `Busy`; a backend the
+    /// open did not name, or one a session lock showed on another backend
+    /// (a transaction-pooling proxy), is `Unknown`: the outcome stays
+    /// unknown either way.
+    fn end_lost_backend(&self, client: &mut Client) -> Result<(), BackendError> {
+        let (pid, start) = *self.opened_backend.get().ok_or(BackendError::Unknown)?;
+        let noted = self.backend_pid.load(std::sync::atomic::Ordering::SeqCst);
+        let pid = i32::try_from(pid).map_err(|_| BackendError::Unknown)?;
+        if noted != 0 && noted != i64::from(pid) {
+            return Err(BackendError::Unknown);
+        }
+        let bound = match self.settings.lock_timeout_ms {
+            0 => 30_000,
+            ms => i64::from(ms),
+        };
+        self.lane_work.add(0, 1);
+        let rows = client
+            .query(
+                "SELECT pg_terminate_backend(pid, $3) FROM pg_catalog.pg_stat_activity \
+                  WHERE pid = $1 AND ($2::bigint IS NULL \
+                    OR (extract(epoch FROM backend_start) * 1000000)::bigint = $2)",
+                &[&pid, &start, &bound],
+            )
+            .map_err(|error| rows::error(&error))?;
+        match rows.first().map(|row| row.get::<_, bool>(0)) {
+            None | Some(true) => Ok(()),
+            Some(false) => Err(BackendError::Busy),
+        }
     }
 }
 
