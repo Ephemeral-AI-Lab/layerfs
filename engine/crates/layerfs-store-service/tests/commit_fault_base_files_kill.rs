@@ -13,5 +13,18 @@ mod fault_proxy;
 
 #[test]
 fn a_backend_killed_at_any_message_of_a_batched_base_file_commit() {
-    base_file_sweep::sweep("f5_kill", fault_proxy::Fault::HoldKill);
+    base_file_sweep::sweep(
+        "f5_kill",
+        fault_proxy::Fault::HoldKill,
+        base_file_sweep::Lengths::Stated,
+    );
+}
+
+#[test]
+fn a_backend_killed_at_any_message_of_a_commit_whose_lengths_are_not_located() {
+    base_file_sweep::sweep(
+        "f5_kill_cold",
+        fault_proxy::Fault::HoldKill,
+        base_file_sweep::Lengths::Elsewhere,
+    );
 }
