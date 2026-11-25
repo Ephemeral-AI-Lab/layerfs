@@ -105,7 +105,9 @@ one page at a time:
 One grouped demand is one attempt. Its failure is the provider's original
 error and ends the operation at the group's first row. Save reads begin
 with locator hint binding disabled. The pooled leaf preparation reuses the
-grouped chain walk for the same demand. Wave selection walks the chains of
+grouped chain walk for the same demand and prepares another window when
+it reaches the first unresolved leaf outside the current one. The retained
+value budget stays 512 KiB. Wave selection walks the chains of
 its own stored leaf bases after the guarded base verification has ended.
 The reads preserve the resulting roots and stored objects. `commit_batched_directories.rs` pins the counts and
 `commit_fault_directories.rs` faults every message of a grouped read

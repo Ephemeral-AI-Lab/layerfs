@@ -109,10 +109,9 @@ impl Save<'_> {
                 actual: declared as u64,
             });
         }
-        state.prepare_leaves(ids, true)?;
         let mut out = Vec::with_capacity(ids.len());
         let mut bytes = 0usize;
-        for id in ids {
+        for (at, id) in ids.iter().enumerate() {
             let value = if let Some(canonical) = state
                 .pending
                 .pending_canonical(*id)
@@ -120,7 +119,7 @@ impl Save<'_> {
             {
                 canonical.to_vec()
             } else {
-                state.resolve(*id)?
+                state.resolve_demand(*id, &ids[at..])?
             };
             bytes = bytes
                 .checked_add(value.len())

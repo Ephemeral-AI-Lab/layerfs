@@ -407,12 +407,8 @@ impl State<'_> {
             // Only where it is known already: sealed here, or located in the
             // Store. A pending object is not looked up, so preparing asks
             // the Store nothing the demand itself would not.
-            let location = match self.packer.location(*id) {
-                Some(location) => Some(location),
-                None => self.storage.source.located(std::iter::once(*id)).pop(),
-            };
-            if let Some(location) = location {
-                if location.role == ObjectRole::InodeLeaf && !leaves.contains(&location) {
+            if let Some(location) = self.leaf_location(*id) {
+                if !leaves.contains(&location) {
                     leaves.push(location);
                 }
             }
@@ -453,6 +449,28 @@ impl State<'_> {
             }),
         )
     }
+    fn leaf_location(&self, id: ObjectId) -> Option<ObjectLocation> {
+        self.packer
+            .location(id)
+            .or_else(|| self.storage.source.located(std::iter::once(id)).pop())
+            .filter(|location| location.role == ObjectRole::InodeLeaf)
+    }
+
+    /// Prepares the next value window as its first unresolved leaf is read.
+    pub(super) fn resolve_demand(
+        &mut self,
+        id: ObjectId,
+        remaining: &[ObjectId],
+    ) -> StorageResult<Vec<u8>> {
+        if !self.resolved.holds(id)
+            && !self.pool.is_prepared(&id)
+            && self.leaf_location(id).is_some()
+        {
+            self.prepare_leaves(remaining, true)?;
+        }
+        self.resolve(id)
+    }
+
     pub(super) fn resolve(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
         if let Some(value) = self.resolved.get(id) {
             return Ok(value);
