@@ -589,18 +589,9 @@ fn path_race(store: TestStore, label: &str) {
                     cycle.start
                 );
             }
-            if cycle.ok + 1.0 < call.start {
-                assert!(
-                    cycle.present.contains(&call.what)
-                        || admitted
-                            .iter()
-                            .any(|c| c.what == call.what && c.end < cycle.start),
-                    "{label}: {} shown missing before its removal",
-                    call.what
-                );
-            }
         }
     }
+    check_hidden(&cycles, &admitted, label);
     if store.kind == Kind::Postgres {
         let mut admin = store.admin();
         assert!(live_rows(&mut admin).is_empty());
@@ -608,6 +599,41 @@ fn path_race(store: TestStore, label: &str) {
     }
     let failures = store.integrity_failures();
     assert!(failures.is_empty(), "audit: {failures:#?}");
+}
+
+/// Every victim a mount's tree hid is explained by an admitted removal of
+/// it that could have landed before the mount read its markers: one that
+/// completed before the mount answered (its markers are read before that),
+/// or one that overlapped the mount's admission (a removal may correctly
+/// land while the admission is in flight). Both started before the mount
+/// answered (`cycle.ok`); a removal that started after it cannot explain a
+/// hidden path, and a hidden path no admitted removal names fails.
+fn check_hidden(cycles: &[Cycle], admitted: &[&Timed], label: &str) {
+    for cycle in cycles {
+        for n in 0..VICTIMS {
+            let victim = format!("/v{n}");
+            if cycle.present.contains(&victim) {
+                continue;
+            }
+            let explained = admitted.iter().any(|c| {
+                let completed = c.end < cycle.ok;
+                let overlapped = c.start < cycle.ok && c.end > cycle.start;
+                c.what == victim && (completed || overlapped)
+            });
+            assert!(
+                explained,
+                "{label}: {victim} hidden in the mount at [{:.1}, {:.1}] with no removal \
+                 that could explain it: {:?}",
+                cycle.start,
+                cycle.ok,
+                admitted
+                    .iter()
+                    .filter(|c| c.what == victim)
+                    .map(|c| (c.start, c.end))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
 }
 
 fn check_race_margin(cycles: &[Cycle], calls: &[Timed], label: &str, margin: f64) {
