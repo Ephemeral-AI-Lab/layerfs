@@ -354,10 +354,8 @@ fn run_body<'b>(
         // One window of rows is resident at a time: whole base-read batches
         // of the caller's, about `PAGES_AHEAD` rows, so the resident cost of
         // reading the prepared namespace does not grow with the number of rows
-        // in it. Each batch keeps its own grouped inode demand; every base
-        // directory root the window rewrites is then read in grouped demands
-        // of at most `PAGES_AHEAD` pages (`directory::ahead`, #810 F3), not
-        // one read per directory.
+        // in it. Read the window's parents together at each inode level,
+        // then group the base directory roots with `directory::ahead` (#810).
         let window = batch.saturating_mul((PAGES_AHEAD / batch).max(1));
         let mut waves = input.directories()?;
         loop {
@@ -371,35 +369,37 @@ fn run_body<'b>(
             if rows.is_empty() {
                 break;
             }
-            let mut looked = Vec::with_capacity(rows.len().div_ceil(batch));
-            let mut wanted = Vec::with_capacity(rows.len());
+            let mut parents = Vec::with_capacity(rows.len());
+            let mut batches = Vec::with_capacity(rows.len().div_ceil(batch));
             for updates in rows.chunks(batch) {
-                let mut parents = Vec::with_capacity(updates.len());
-                let mut rewrites = Vec::with_capacity(updates.len());
+                let first = parents.len();
                 for update in updates {
-                    let stored = topology.table.is_some()
+                    if topology.table.is_some()
                         && !dropped.contains(update.header.parent)?
-                        && !input.is_new(update.header.parent)?;
-                    if stored {
+                        && !input.is_new(update.header.parent)?
+                    {
                         parents.push(update.header.parent);
                     }
-                    rewrites.push(stored && update.header.change_rows != 0);
                 }
-                let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
-                for (update, rewrite) in updates.iter().zip(rewrites) {
-                    let root = parents
-                        .binary_search(&update.header.parent)
-                        .ok()
-                        .and_then(|index| bases[index])
-                        .filter(|record| rewrite && record.kind == InodeKind::Directory)
-                        .map(|record| record.content_root);
-                    wanted.push(root);
-                }
-                looked.push((parents, bases));
+                batches.push(first..parents.len());
             }
+            let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
+            let wanted = rows
+                .iter()
+                .map(|update| {
+                    let index = parents.binary_search(&update.header.parent).ok()?;
+                    bases[index]
+                        .filter(|record| {
+                            update.header.change_rows != 0 && record.kind == InodeKind::Directory
+                        })
+                        .map(|record| record.content_root)
+                })
+                .collect();
             let mut ahead = RootsAhead::new(wanted);
             let mut at = 0;
-            for (updates, (parents, bases)) in rows.chunks(batch).zip(looked) {
+            for (updates, range) in rows.chunks(batch).zip(batches) {
+                let parents = &parents[range.clone()];
+                let bases = &bases[range];
                 for update in updates {
                     let row = at;
                     at += 1;
@@ -506,8 +506,10 @@ fn run_body<'b>(
                     contents.insert(update.header.parent, content_root)?;
                 }
                 if !parents.is_empty() {
-                    retained_parents = parents;
-                    retained_bases = bases;
+                    retained_parents.clear();
+                    retained_parents.extend_from_slice(parents);
+                    retained_bases.clear();
+                    retained_bases.extend_from_slice(bases);
                 }
             }
         }
