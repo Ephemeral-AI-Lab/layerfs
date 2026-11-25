@@ -36,9 +36,13 @@ impl BoundWorkspace {
     /// Terminal local close, then the Workspace's opened Store reader.
     /// A failed boundary retains its original cause and permits no replay.
     pub fn close(&self) -> Result<(), super::CloseError> {
-        self.owner
-            .close(self.route())
-            .map_err(super::CloseError::Owner)?;
+        if let Err(error) = self.owner.close(self.route()) {
+            // The Workspace stays bound; its idle producer handle stays too,
+            // but returns its kept ordinals first, as it would at a close
+            // that finds the Store's idle slot taken (#768).
+            self.producer.release_ordinals();
+            return Err(super::CloseError::Owner(error));
+        }
         self.producer.hand_to(&self.store.idle_producer);
         self.store
             .close_reader(self.identity)

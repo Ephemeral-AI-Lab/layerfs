@@ -55,6 +55,14 @@ impl Producer {
     fn idle(&self) -> Option<Storage> {
         self.idle.lock().ok().and_then(|mut idle| idle.take())
     }
+    /// Its idle handle, if any, returns its kept ordinals and stays idle
+    /// (its next Save reserves ordinals again).
+    pub(super) fn release_ordinals(&self) {
+        if let Some(storage) = self.idle() {
+            let _ = storage.release_kept_ordinals();
+            self.keep(storage);
+        }
+    }
     /// Moves this Workspace's idle handle to `to` when `to` has none;
     /// otherwise the handle returns its kept ordinals and is dropped.
     pub(super) fn hand_to(&self, to: &Self) {

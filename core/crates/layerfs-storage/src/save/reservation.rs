@@ -12,9 +12,10 @@ use crate::{
 /// the tail past them; on any other handle it releases every unused
 /// ordinal), kept on the handle when the Save finished, so the next Save on
 /// it reserves only when a range runs out (#768). Ids are never reused: a
-/// Save that fails, refuses or ends uncertain drops the block (except a
-/// held tail whose transaction was refused definitely,
-/// [`super::PreparedTail::refused`]: its unused rest is kept), and a handle
+/// Save that ends uncertain (a write with an unknown outcome, or a held tail
+/// whose carrying transaction's outcome is unknown) drops the block; one
+/// that fails definitely or is dropped unfinished leaves its unused rest on
+/// the handle (`State::unused_rest`; [`super::PreparedTail::refused`]), and a handle
 /// dropped with it leaks its rest (at most one pack refill and
 /// `KEPT_ORDINALS` ordinals). The owner of a keeping handle returns its kept
 /// ordinals before an orderly drop ([`crate::Storage::release_kept_ordinals`]);
@@ -69,7 +70,8 @@ impl State<'_> {
         let allocation = self.storage.source.metadata.reserve(Reserve {
             packs: blocks.packs,
             ordinals: blocks.ordinals,
-        })?;
+        });
+        let allocation = self.written(allocation)?;
         if allocation.first_pack_id <= 0 || allocation.first_ordinal == 0 {
             return Err(StorageError::Integrity("initial Save reservation"));
         }
@@ -90,21 +92,42 @@ impl State<'_> {
             ordinal_end: self.ordinal_end,
         }));
     }
-    /// After a definite refusal of the transaction that carried this Save's
-    /// held last publication (`release`: that publication's ordinal
-    /// release, which was not applied either): every id from the first one
-    /// the Save did not assign, up to its reserved ends. Ids the refused
-    /// publication assigned stay below it and are never reused.
-    pub(super) fn unused_after_refusal(&self, release: Option<(u32, usize)>) -> IdBlock {
-        let ordinal_end = release.map_or(self.ordinal_end, |(first, count)| {
-            u64::from(first) + count as u64
-        });
-        IdBlock {
+    /// The answer of one of this Save's writes; an unknown outcome
+    /// ([`crate::port::PersistenceError::Uncertain`], the one class
+    /// [`StorageError::is_unknown_outcome`] reports) marks the Save
+    /// uncertain, so it never hands its ids on. Every other class is a
+    /// definite refusal: the provider's transaction rolled back.
+    pub(super) fn written<T>(
+        &mut self,
+        result: Result<T, crate::port::PersistenceError>,
+    ) -> StorageResult<T> {
+        result.map_err(|error| {
+            if error == crate::port::PersistenceError::Uncertain {
+                self.write_uncertain = true;
+            }
+            error.into()
+        })
+    }
+    /// What an unfinished Save leaves the handle when none of its writes
+    /// ended uncertain: every id from the first one it did not assign up to
+    /// its reserved ends (the ordinal end of a release not applied yet).
+    /// Ids it assigned, published or not, stay below them and are never
+    /// reused.
+    pub(super) fn unused_rest(&self) -> Option<IdBlock> {
+        if self.write_uncertain {
+            return None;
+        }
+        let ordinal_end = self
+            .unapplied_release
+            .map_or(self.ordinal_end, |(first, count)| {
+                u64::from(first) + count as u64
+            });
+        Some(IdBlock {
             next_pack: self.next_pack,
             pack_end: self.pack_end,
             next_ordinal: self.next_ordinal,
             ordinal_end: ordinal_end.max(self.next_ordinal),
-        }
+        })
     }
     pub(super) fn reserve_ordinals(&mut self, block: usize) -> StorageResult<()> {
         self.storage.source.note(|c| {
@@ -116,7 +139,8 @@ impl State<'_> {
         let allocation = self.storage.source.metadata.reserve(Reserve {
             packs: 0,
             ordinals: block,
-        })?;
+        });
+        let allocation = self.written(allocation)?;
         self.ordinal_range(allocation.first_ordinal, block)
     }
     fn ordinal_range(&mut self, first: u32, count: usize) -> StorageResult<()> {

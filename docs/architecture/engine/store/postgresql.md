@@ -747,17 +747,24 @@ measured with `log_statement=all` on the private test server, and pinned):
   every orderly drop the kept handle returns its kept ordinals
   (`Storage::release_kept_ordinals`: one publication of the same
   conditional rewind, one attempt, never repeated): a Workspace close that
-  finds the Store's idle slot taken, a Store close (`StoreService::close`,
-  the daemon's `close_bound`) and a Commit that failed definitely; after an
-  unknown outcome it is not sent, and a quarantined session refuses it.
+  finds the Store's idle slot taken or whose overlay close fails, a Store
+  close (`StoreService::close`, the daemon's `close_bound`) and a Commit
+  that failed definitely; after an unknown outcome it is not sent, and a
+  quarantined session refuses it.
   Only a crash, an unknown outcome or a refused release loses them (at most
   128 per handle), and a dropped handle loses at most 4,096 pack ids (ids
-  are never reused; gaps are allowed). The release is never on a Commit's
-  path: measured by `mount_round_trips.rs`, the Store close costs [0, 5, 2,
-  1] (cold) and a steady Commit stays [0, 3, 12, 1]; a handle keeping pack
-  ids only would send nothing at close but make the second Commit [0, 6, 13,
-  2] (it reserves ordinals again). A Save that fails or does not finish
-  drops the block.
+  are never reused; gaps are allowed). A successful Commit never sends the
+  release: measured by `mount_round_trips.rs`, the Store close costs [0, 5,
+  2, 1] (cold) and a steady Commit stays [0, 3, 12, 1]; a handle keeping
+  pack ids only would send nothing at close but make the second Commit [0,
+  6, 13, 2] (it reserves ordinals again). A Commit that failed definitely
+  sends it on its exit, before it settles; that write takes the lane row,
+  bounded by the lock timeout. A Commit refused for a lane or lock wait
+  (`Busy`, a lock timeout, another live operation) sends none and keeps its
+  handle and block for the Workspace's next Commit (`failed_save_ids.rs`).
+  A Save that fails definitely or does not finish (an in-lane step Save, a
+  fallback's merge Save) leaves its unused rest on the handle, which that
+  release returns; one whose write had an unknown outcome drops the block.
 - (j) A Save reads the metadata pack bodies and inode values earlier Saves
   of its handle published (bounded: 2 MiB of bodies, 512 KiB of values,
   cleared when a Save does not finish), and the pool reader's chain walk
@@ -907,7 +914,8 @@ does not finish, but `PreparedTail::refused` puts its unused pack ids and
 ordinals (from the first ones it did not assign to its reserved ends) on
 the handle, and the failed Commit returns the ordinals
 (`release_kept_ordinals`, the conditional rewind; refused by a quarantined
-session). The ids the refused publication assigned stay below them and are
+session), except after a `Busy`, when the handle keeps them for the
+Workspace's next Commit. The ids the refused publication assigned stay below them and are
 never reused. After an unknown outcome the tail is dropped and the Save's
 whole remaining block is lost (`fused_refusal_ids.rs`).
 

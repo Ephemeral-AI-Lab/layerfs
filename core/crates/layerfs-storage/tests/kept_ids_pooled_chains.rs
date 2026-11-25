@@ -124,7 +124,7 @@ fn a_kept_block_serves_later_saves_and_a_failed_save_drops_it() {
     let counter = state.next_ordinal;
     drop(state);
 
-    // A Save that fails at publication drops the block.
+    // A Save whose publication ends with an unknown outcome drops the block.
     let published = memory.state.lock().unwrap().registrations.len();
     memory.state.lock().unwrap().fail_register = Some(PersistenceError::Uncertain);
     let failed = version(3, last.as_ref());
@@ -151,12 +151,71 @@ fn a_kept_block_serves_later_saves_and_a_failed_save_drops_it() {
         "{values:?}"
     );
     drop(state);
-    // A Save dropped before it finishes drops the block too.
+    // A Save dropped before it finishes wrote nothing uncertain: its unused
+    // rest stays on the handle and the next Save uses it, no reservation
+    // (#768 review 6a; before, the block was dropped and the next Save
+    // reserved a third one).
     let open = storage.begin_save().unwrap();
     open.accept(version(5, Some(&object))).unwrap();
     drop(open);
     save(&storage, &[version(6, Some(&object))]).unwrap();
-    assert_eq!(storage.diagnostics().initial_reservations, 3);
+    assert_eq!(storage.diagnostics().initial_reservations, 2);
+    assert_eq!(storage.diagnostics().reserve, 2);
+}
+
+#[test]
+fn a_save_that_fails_definitely_leaves_its_unused_rest_and_assigns_nothing_twice() {
+    let memory = Arc::new(metadata::MemoryMetadata::default());
+    let storage = Storage::new(memory.clone()).unwrap().keeping_ordinals();
+    save(&storage, &[leaf(1, 0)]).unwrap();
+    let kept = KEPT_ORDINALS as u64;
+    let next = |memory: &metadata::MemoryMetadata| memory.state.lock().unwrap().next_ordinal;
+    assert_eq!(next(&memory), ROWS + 1 + kept);
+    // A definite refusal (Busy) of the next Save's publication: nothing
+    // applied. Its values took ordinals ROWS + 1 ..= 2 * ROWS; the rest of
+    // the kept block stays on the handle.
+    memory.state.lock().unwrap().fail_register = Some(PersistenceError::Busy);
+    assert!(save(&storage, &[leaf(100, 0)]).is_err());
+    assert_eq!(next(&memory), ROWS + 1 + kept, "nothing applied");
+    // The owner returns it: one release from the first unassigned ordinal.
+    let before = calls(&memory, "register");
+    storage.release_kept_ordinals().unwrap();
+    assert_eq!(calls(&memory, "register"), before + 1);
+    assert_eq!(
+        next(&memory),
+        2 * ROWS + 1,
+        "rewound past the refused values"
+    );
+    // The refused Save's ordinals are never assigned again.
+    save(&storage, &[leaf(200, 0)]).unwrap();
+    let state = memory.state.lock().unwrap();
+    let values: Vec<u32> = state.values.keys().copied().collect();
+    assert_eq!(
+        values[..ROWS as usize],
+        (1..=ROWS as u32).collect::<Vec<_>>()
+    );
+    assert!(
+        values[ROWS as usize..]
+            .iter()
+            .all(|ordinal| u64::from(*ordinal) > 2 * ROWS),
+        "{values:?}"
+    );
+    drop(state);
+
+    // A definite refusal of a Save's last publication, which also carried
+    // the release of its unused tail: the whole unused block, from the first
+    // unassigned ordinal to the reserved end, stays on the handle.
+    let one_shot = Storage::new(memory.clone()).unwrap().keeping_ordinals();
+    let reserved = next(&memory);
+    memory.state.lock().unwrap().fail_register = Some(PersistenceError::Busy);
+    assert!(save(&one_shot, &[leaf(300, 0)]).is_err());
+    assert_eq!(next(&memory), reserved + 16_384, "the block stays reserved");
+    one_shot.release_kept_ordinals().unwrap();
+    assert_eq!(
+        next(&memory),
+        reserved + ROWS,
+        "only the refused values stay"
+    );
 }
 
 #[test]
@@ -400,7 +459,9 @@ fn a_kept_handle_reads_the_bodies_and_values_it_published_without_a_call() {
     drop(open);
     let log = memory.calls.lock().unwrap().clone();
     assert!(log.iter().all(|(call, _)| *call == "signatures"), "{log:?}");
-    // That Save was dropped unfinished, so the next one reads the Store.
+    // That Save was dropped unfinished, so the next one reads the Store; it
+    // takes the unused rest the dropped Save left on the handle (#768
+    // review 6a), so it reserves nothing.
     memory.calls.lock().unwrap().clear();
     let open = storage.begin_save().unwrap();
     assert_eq!(
@@ -408,5 +469,5 @@ fn a_kept_handle_reads_the_bodies_and_values_it_published_without_a_call() {
         vec![last.canonical().to_vec()]
     );
     assert!(calls(&memory, "inode_values") == 1);
-    assert!(calls(&memory, "reserve") == 1);
+    assert!(calls(&memory, "reserve") == 0);
 }

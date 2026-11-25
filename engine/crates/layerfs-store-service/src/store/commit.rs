@@ -28,6 +28,22 @@ pub(super) fn answered(snapshot: &BranchSnapshot) -> NodeId {
         .map_or(NodeId::Layer(snapshot.branch.base_layer), NodeId::Commit)
 }
 
+/// A definite refusal for a lane or lock wait: a lock timeout, a busy lane
+/// or another live operation.
+fn busy(error: &CommitError) -> bool {
+    match error {
+        CommitError::History(error) => {
+            matches!(error.cause(), HistoryError::Busy | HistoryError::BusyOp(_))
+        }
+        CommitError::Storage(layerfs_storage::StorageError::Busy)
+        | CommitError::Construction {
+            storage: layerfs_storage::StorageError::Busy,
+            ..
+        } => true,
+        _ => false,
+    }
+}
+
 /// `HeadMoved` for a Branch whose head is not the `expected` one.
 pub(super) fn expected_moved(expected: NodeId, current: &BranchSnapshot) -> CommitError {
     let (expected_head, expected_base) = match expected {
@@ -590,6 +606,7 @@ impl BoundWorkspace {
             } else {
                 retained.phase = CommitPhase::Publish;
                 let intent = retained.intent.as_ref().expect("checked intent");
+                let fused = fused_outcome.is_some();
                 let outcome = match fused_outcome.take() {
                     Some(outcome) => Ok(outcome),
                     None => phase(timing, "publish", || {
@@ -614,6 +631,13 @@ impl BoundWorkspace {
                     self.published_removals(NodeId::Commit(record.id));
                 }
                 retained.published = Some(outcome);
+                // Unreachable after a fused publication: its record's root is
+                // the candidate it was sent with. Were it reached there, this
+                // Context error in phase Publish with `published` set would
+                // keep the Workspace refusing InFlight, as the fused
+                // settlement once did (#768 verification finding 8): such a
+                // check must move to phase Install first.
+                debug_assert!(!fused || root == candidate.0, "fused record root");
                 if root != candidate.0 {
                     return Err(CommitError::Context(
                         "publication differs from saved candidate",
@@ -646,11 +670,20 @@ impl BoundWorkspace {
         if let Err(error) = result {
             retained.error = error;
             // A failed Commit drops its handle: on a definite failure the
-            // ordinals it kept from a finished Save go back to the Store
-            // first (#768); after an unknown outcome they are left lost.
+            // ordinals it kept (from a finished Save, or the unused rest of
+            // one that failed definitely) go back to the Store first, one
+            // write on the writer (#768); after an unknown outcome they are
+            // left lost. After a lane Busy or lock timeout that write could
+            // wait again before the Workspace settles: the handle is kept
+            // for the Workspace's next Commit instead, with its block, and
+            // returns it at unmount or Store close if unused.
             if let Some(storage) = producer.take() {
                 if !retained.uncertain() && !retained.error.uncertain() {
-                    let _ = storage.release_kept_ordinals();
+                    if busy(&retained.error) {
+                        self.producer.keep(storage);
+                    } else {
+                        let _ = storage.release_kept_ordinals();
+                    }
                 }
             }
             return Err(self.settle_failure(retained));

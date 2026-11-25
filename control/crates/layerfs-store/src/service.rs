@@ -86,7 +86,9 @@ pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
 
 /// One client less; the last one closes the Store and removes its overlay
 /// directory. A call still running keeps the service alive until it
-/// returns, and the service closes when it is dropped then.
+/// returns, and the service closes when it is dropped then: its idle
+/// producer handle's kept ordinals are returned here, and only a handle
+/// that running call gives back later is dropped without that release.
 pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let mut stores = lock(&STORES)?;
@@ -101,7 +103,13 @@ pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
     drop(stores);
     let closed = match Arc::try_unwrap(opened.service) {
         Ok(service) => service.close().map_err(failed),
-        Err(_) => Ok(()),
+        // A call still running holds the service; its idle producer handle
+        // returns its kept ordinals now (#768). A handle that call hands
+        // back after this is dropped with the service, unreleased.
+        Err(service) => {
+            service.store.release_producer();
+            Ok(())
+        }
     };
     let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
     closed.and(removed)

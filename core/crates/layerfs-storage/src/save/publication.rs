@@ -236,6 +236,8 @@ impl State<'_> {
             ));
             // Whether or not the rewind applies, only the kept prefix stays
             // this handle's: a tail that was not rewound is lost, as before.
+            // Until the release is acknowledged the block still ends there.
+            self.unapplied_release = batch.release_ordinals;
             self.ordinal_end = kept_end;
         }
         let mut held = None;
@@ -274,8 +276,12 @@ impl State<'_> {
         self.storage.source.note(|c| c.publish += 1);
         let result = {
             let _work = self.storage.work.span(super::Stage::Metadata);
-            self.storage.source.metadata.publish(batch)?
+            self.storage.source.metadata.publish(batch)
         };
+        let result = self.written(result)?;
+        if batch.release_ordinals.is_some() {
+            self.unapplied_release = None;
+        }
         self.settle(batch, members, &result.lost)
     }
     /// What an acknowledged publication of `batch` leaves: `lost` (ids a

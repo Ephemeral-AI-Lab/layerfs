@@ -27,7 +27,8 @@ impl State<'_> {
         let reserved = self.storage.source.metadata.reserve(crate::port::Reserve {
             packs: count,
             ordinals: 0,
-        })?;
+        });
+        let reserved = self.written(reserved)?;
         if reserved.first_pack_id <= 0 {
             return Err(StorageError::Integrity("pack reservation"));
         }

@@ -75,6 +75,7 @@ impl<'a> Save<'a> {
         Ok(PreparedTail {
             save: Some(self),
             held,
+            handed_out: std::cell::Cell::new(false),
         })
     }
     /// Seals the remaining output and registers it; with `hold`, the last
@@ -166,10 +167,12 @@ impl Drop for Save<'_> {
             let state = self.state.get_mut();
             state.candidates.invalidate();
             state.storage.source.invalidate_signatures();
-            // A Save that failed, refused or never finished keeps nothing for
-            // the next: no id block (State::new took it) and no published
-            // bodies or values (#768).
-            state.storage.kept.set(None);
+            // A Save that failed, refused or never finished keeps no
+            // published bodies or values for the next (#768). Unless one of
+            // its writes ended uncertain, its unused ids (from the first it
+            // did not assign) go back to the handle: its next Save uses them,
+            // or its owner returns the ordinals before an orderly drop.
+            state.storage.kept.set(state.unused_rest());
             state.storage.source.forget_published();
         }
     }
@@ -179,16 +182,21 @@ impl Drop for Save<'_> {
 /// caller published [`Self::publication`] in its own transaction, nothing
 /// lost) and [`Self::publish`] (publish it now, as `finish` does) completes
 /// the Save. Dropped without either, the Save did not finish: its held
-/// locations are forgotten with the handle's kept ids and bodies
-/// ([`Self::refused`], after a definite refusal, keeps the unused ids).
+/// locations and the handle's published bodies are forgotten. Its unused
+/// ids go to the handle when its publication was never handed out, or after
+/// [`Self::refused`]; once handed out, a drop is an unknown outcome and they
+/// are lost.
 pub struct PreparedTail<'a> {
     save: Option<Save<'a>>,
     held: Option<super::publication::Held>,
+    /// [`Self::publication`] was handed to a caller that may have sent it.
+    handed_out: std::cell::Cell<bool>,
 }
 impl PreparedTail<'_> {
     /// The publication still to send: `None` when everything was already
     /// published (or nothing was new).
     pub fn publication(&self) -> Option<&crate::port::Publication> {
+        self.handed_out.set(self.held.is_some());
         self.held.as_ref().map(|held| &held.batch)
     }
     /// The Save's outcome once [`Self::publication`] is acknowledged with
@@ -217,7 +225,8 @@ impl PreparedTail<'_> {
     pub fn acknowledged(mut self) -> StorageResult<WriteOutcome> {
         if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_ref()) {
             let mut state = save.state.borrow_mut();
-            // The Store has the batch now.
+            // The Store has the batch now, its ordinal release included.
+            state.unapplied_release = None;
             state.storage.source.release_held();
             state.storage.source.note(|c| c.publish += 1);
             state.settle(&held.batch, &held.members, &[])?;
@@ -229,6 +238,10 @@ impl PreparedTail<'_> {
     /// Publishes [`Self::publication`] on its own, as `finish` does (lost
     /// locations compared with their winners), and completes the Save.
     pub fn publish(mut self) -> StorageResult<WriteOutcome> {
+        // Sent here: this Save's own write decides whether a failure is
+        // uncertain (`State::written`); a caller that was handed the
+        // publication had nothing applied (`Fused::Overflow`, a race).
+        self.handed_out.set(false);
         if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_mut()) {
             let mut state = save.state.borrow_mut();
             let storage = state.storage;
@@ -243,40 +256,37 @@ impl PreparedTail<'_> {
         Ok(save.complete())
     }
 }
-impl<'a> PreparedTail<'a> {
+impl PreparedTail<'_> {
     /// The caller's transaction carrying [`Self::publication`] was refused
-    /// definitely: it was rolled back and none of it applied. The Save does
-    /// not finish (as when the tail is dropped), but its unused pack ids and
-    /// ordinals, from the first ones it did not assign up to its reserved
-    /// ends, go to the handle's kept block, so the handle's next Save uses
-    /// them or its owner returns the ordinals
-    /// ([`crate::Storage::release_kept_ordinals`]). The ids the refused
-    /// publication assigned are below them and never reused. Never call it
-    /// after an unknown outcome: dropping the tail loses the block.
+    /// definitely: it was rolled back and none of it applied, its ordinal
+    /// release included. The Save does not finish (as when the tail is
+    /// dropped), but its unused pack ids and ordinals, from the first ones
+    /// it did not assign up to its reserved ends, go to the handle's kept
+    /// block, so the handle's next Save uses them or its owner returns the
+    /// ordinals ([`crate::Storage::release_kept_ordinals`]). The ids the
+    /// refused publication assigned are below them and never reused. Never
+    /// call it after an unknown outcome: dropping the tail loses the block.
     pub fn refused(self) {
-        let Some(save) = self.save.as_ref() else {
-            return;
-        };
-        let (storage, block): (&'a crate::Storage, _) = {
-            let state = save.state.borrow();
-            let release = self
-                .held
-                .as_ref()
-                .and_then(|held| held.batch.release_ordinals);
-            (state.storage, state.unused_after_refusal(release))
-        };
-        drop(self);
-        storage.kept.set(Some(block));
+        self.handed_out.set(false);
     }
 }
 impl Drop for PreparedTail<'_> {
     fn drop(&mut self) {
+        let Some(save) = self.save.as_ref() else {
+            return;
+        };
+        let mut state = save.state.borrow_mut();
         // Not acknowledged: the held locations were never the Store's.
-        if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_ref()) {
+        if let Some(held) = self.held.as_ref() {
             let ids: Vec<_> = held.batch.objects.iter().map(|row| row.object_id).collect();
-            let state = save.state.borrow();
             state.storage.source.release_held();
             state.storage.source.invalidate(&ids);
+        }
+        // Handed out and neither acknowledged nor refused: whether the
+        // caller's transaction applied it is unknown, so the Save (dropped
+        // next) keeps no id for the handle.
+        if self.handed_out.get() {
+            state.write_uncertain = true;
         }
     }
 }
