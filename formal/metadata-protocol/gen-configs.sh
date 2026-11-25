@@ -66,3 +66,26 @@ mkc commit_mut_noend       B noend       "$W" '{}' '{}' 2 1 0 0 1 0 6 "Mutation:
 mkc commit_mut_nofence     B nofence     "$W" '{}' '{}' 2 1 0 0 0 1 6 "Mutation: no generation fence."
 mkc ids_mut_nocas          B nocas       '{}' '{}' "$K" 1 2 0 0 0 0 6 "Mutation: the rewind sets the highwater without compare-and-set."
 FIXLATE=TRUE mk adm_B_F1_reach Spec INVARIANTS B F1 TRUE "$M1" sep FALSE FALSE TRUE 1 0 6 "Reachability probe (must be violated): under F1 a registration that reopened mid-call is mounted." NoMountAfterReopen
+
+# The implemented fix 2b0dee1a1f (AdmissionImpl.tla).
+mki() { # name spec kind mutation mounts paths rereg R C T kills losts maxb comment props...
+  n=$1 sp=$2 kd=$3 mu=$4 m=$5 o=$6 rr=$7 r=$8 c=$9; shift 9
+  t=$1 k=$2 l=$3 b=$4 cm=$5; shift 5
+  { echo "\\* $cm"; echo "SPECIFICATION $sp"; echo CONSTANTS
+    echo "  Mut = \"$mu\""; echo "  Mounts = $m"; echo "  OneMsg = \"$o\""
+    echo "  ReReg = $rr"; echo "  WithR = $r"; echo "  WithC = $c"; echo "  WithT = $t"
+    echo "  MaxKill = $k"; echo "  MaxLost = $l"; echo "  MaxB = $b"; echo "$kd"
+    for p in "$@"; do echo "  $p"; done; } > "$n.cfg"
+}
+IS="KeyedAdmission Exclusion RemovedClean KeysCover LevelsExact"
+mki impl_safety     Spec INVARIANTS none "$M1" both TRUE  TRUE  TRUE  TRUE 1 1 6 "2b0dee1a1f: a mount (both paths, re-registers once), remove, compaction, another caller; 1 kill, 1 lost." $IS
+mki impl_safety2    Spec INVARIANTS none "$M2" both TRUE TRUE  FALSE TRUE 1 1 6 "2b0dee1a1f: two mounts (both paths, each re-registers once), remove, another caller; 1 kill, 1 lost." $IS
+mki impl_safety3    Spec INVARIANTS none "$M2" both FALSE FALSE TRUE TRUE 1 1 6 "2b0dee1a1f: two mounts (both paths), compaction, another caller; 1 kill, 1 lost." $IS
+mki impl_safety_lost2 Spec INVARIANTS none "$M1" both TRUE TRUE TRUE TRUE 1 2 7 "2b0dee1a1f: a mount (re-registers), remove, compaction, another caller; 1 kill, 2 lost." $IS
+mki impl_safety_kill2 Spec INVARIANTS none "$M1" both TRUE TRUE TRUE TRUE 2 1 7 "2b0dee1a1f: a mount (re-registers), remove, compaction, another caller; 2 kills, 1 lost." $IS
+mki impl_live       FairSpec PROPERTIES none "$M1" both TRUE FALSE TRUE TRUE 1 1 6 "2b0dee1a1f, liveness: a mount (re-registers), compaction, another caller; 1 kill, 1 lost." Termination OrphansRemoved Serves
+mki impl_live2      FairSpec PROPERTIES none "$M2" both FALSE FALSE FALSE TRUE 1 1 6 "2b0dee1a1f, liveness: two mounts, another caller; 1 kill, 1 lost." Termination OrphansRemoved Serves
+mki impl_live3      FairSpec PROPERTIES none "$M1" both TRUE TRUE TRUE TRUE 1 1 6 "2b0dee1a1f, liveness: a mount (re-registers), remove, compaction, another caller; 1 kill, 1 lost." Termination OrphansRemoved Serves
+mki impl_mut_noon   Spec INVARIANTS noon "$M1" one TRUE FALSE FALSE TRUE 1 0 6 "Mutation: session_unlock ignores its connection (on)." $IS
+mki impl_mut_retakeabandoned Spec INVARIANTS retakeabandoned "$M2" both TRUE TRUE FALSE TRUE 1 1 6 "Probe: a reopen takes abandoned ops' keys again too (is the abandoned flag needed?)." $IS
+mki impl_mut_lateend Spec INVARIANTS lateend "$M1" one FALSE FALSE FALSE TRUE 1 0 6 "Mutation: the release's end_release after its turn (as at 1a7338ffa2)." $IS
