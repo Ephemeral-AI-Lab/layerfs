@@ -42,6 +42,41 @@ impl Save<'_> {
             })
             .collect();
         state.storage.source.locate(&stored)?;
+        if stored.len() > 1 {
+            // The chains of a grouped demand's stored objects are located a
+            // level at a time, one locate per level for all of them, as the
+            // Store's own reads do (`read::prefetch`, #810 F3); rebuilding
+            // each object on its own would locate every chain step apart.
+            let roots = stored
+                .iter()
+                .map(|id| {
+                    state
+                        .storage
+                        .source
+                        .location(*id, i64::MAX)?
+                        .ok_or(StorageError::ObjectMissing(*id))
+                })
+                .collect::<StorageResult<Vec<_>>>()?;
+            let State {
+                storage,
+                packs,
+                decode,
+                groups,
+                ..
+            } = &mut *state;
+            let source = &storage.source;
+            let mut walk = || crate::read::prefetch::chains(source, &roots, packs, decode, groups);
+            // A walk a stale hint broke runs once more without hints, as the
+            // Store's reads and each object's own resolution do (#758).
+            match walk() {
+                Err(error) if crate::read::hint_failure(&error) && source.drop_hints(&[])? => {
+                    walk()?;
+                }
+                other => {
+                    other?;
+                }
+            }
+        }
         if ids.iter().any(|id| state.packer.pending(*id)) {
             let required = state.packer.finish_pack_bound();
             state.reserve_packs(required)?;

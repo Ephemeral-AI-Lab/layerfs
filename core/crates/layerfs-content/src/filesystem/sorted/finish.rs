@@ -19,6 +19,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     pub(crate) fn apply_root(
         objects: &'o mut FilesystemObjects<'e>,
         root: Option<ObjectId>,
+        fetched: Option<Vec<u8>>,
         source: impl Iterator<Item = ContentResult<(F::Key, Option<F::Value>)>>,
         scratch_limit: usize,
         observe: &mut dyn FnMut(Option<F::Value>, Option<F::Value>) -> ContentResult<()>,
@@ -31,9 +32,12 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             };
         }
         let mut engine = Engine::<F>::new(objects, observe, scratch_limit);
-        let read = match root {
-            Some(root) => engine.read(root, true)?,
-            None => {
+        let read = match (root, fetched) {
+            // A root page the caller already read in a grouped demand is
+            // decoded and checked exactly as a point read's.
+            (Some(_), Some(canonical)) => engine.fetched_root(&canonical)?,
+            (Some(root), None) => engine.read(root, true)?,
+            (None, _) => {
                 let lease = engine.budget.reserve(std::mem::size_of::<
                     crate::filesystem::sorted::format::Wire<F::Key, F::Value>,
                 >())?;
@@ -151,9 +155,30 @@ pub fn apply_directory_changes(
     scratch_limit: usize,
     observe: &mut dyn FnMut(Option<u64>, Option<u64>) -> ContentResult<()>,
 ) -> ContentResult<(DirectoryRoot, SortedWork)> {
+    apply_directory_root(
+        objects,
+        base.map(|root| (root, None)),
+        changes,
+        scratch_limit,
+        observe,
+    )
+}
+
+/// [`apply_directory_changes`] over a base whose root page the caller may
+/// already have read (`directory::ahead`): those bytes are decoded in place
+/// of a point read; a base without them is read as before.
+pub(crate) fn apply_directory_root(
+    objects: &mut FilesystemObjects<'_>,
+    base: Option<(DirectoryRoot, Option<Vec<u8>>)>,
+    changes: impl Iterator<Item = ContentResult<(crate::filesystem::path::PathName, Option<u64>)>>,
+    scratch_limit: usize,
+    observe: &mut dyn FnMut(Option<u64>, Option<u64>) -> ContentResult<()>,
+) -> ContentResult<(DirectoryRoot, SortedWork)> {
+    let (root, fetched) = base.map_or((None, None), |(root, fetched)| (Some(root.0), fetched));
     let (root, work) = Engine::<CompactDirectory>::apply_root(
         objects,
-        base.map(|root| root.0),
+        root,
+        fetched,
         changes,
         scratch_limit,
         observe,
@@ -168,7 +193,9 @@ pub fn apply_inode_changes(
     changes: impl Iterator<Item = ContentResult<(u64, Option<crate::object::inode_leaf::InodeValue>)>>,
     scratch_limit: usize,
 ) -> ContentResult<(ObjectId, SortedWork)> {
-    Engine::<CompactInodes>::apply_root(objects, base, changes, scratch_limit, &mut |_, _| Ok(()))
+    Engine::<CompactInodes>::apply_root(objects, base, None, changes, scratch_limit, &mut |_, _| {
+        Ok(())
+    })
 }
 
 /// Emits the canonical empty directory page as a real, final result.

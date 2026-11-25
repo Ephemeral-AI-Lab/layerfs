@@ -7,7 +7,7 @@
 //! listed serials. A serial's kind never changes, so the answer is a pure
 //! function of the directory's content root and is remembered under it.
 use crate::BaseView;
-use layerfs_content::filesystem::directory::root_shape;
+use layerfs_content::filesystem::directory::root_shapes;
 use layerfs_content::filesystem::directory::{list_after, DirectoryReadWork};
 use layerfs_content::filesystem::inode::{lookup_many, InodeReadWork};
 use layerfs_content::filesystem::{DirectoryRoot, FilesystemRead, FilesystemRootId, PathName};
@@ -148,15 +148,23 @@ impl BaseView {
         }
         let serials: Vec<u64> = rows.iter().map(|(serial, ..)| *serial).collect();
         let values = FilesystemRead::new(objects, root)?.lookup_inodes(&serials)?;
-        let client = self.client();
+        let mut kept = Vec::with_capacity(rows.len());
         for (&(_, entries, subdirs), value) in rows.iter().zip(values) {
             let Some(value) = value.filter(|v| v.kind == InodeKind::Directory) else {
                 continue;
             };
-            if subdirs <= entries
-                && root_shape(objects, DirectoryRoot(value.content_root))?.1 == entries
-            {
-                client.remember_constructed_count(value.content_root, subdirs)?;
+            if subdirs <= entries {
+                kept.push((DirectoryRoot(value.content_root), entries, subdirs));
+            }
+        }
+        // Every kept root page in one grouped demand (#810 F3): at most
+        // REMEMBERED_DIRECTORIES pages, not one read per directory.
+        let roots: Vec<DirectoryRoot> = kept.iter().map(|(root, ..)| *root).collect();
+        let shapes = root_shapes(objects, &roots)?;
+        let client = self.client();
+        for ((root, entries, subdirs), (_, count)) in kept.into_iter().zip(shapes) {
+            if count == entries {
+                client.remember_constructed_count(root.0, subdirs)?;
             }
         }
         Ok(())

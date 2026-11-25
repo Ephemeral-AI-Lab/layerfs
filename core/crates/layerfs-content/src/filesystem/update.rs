@@ -10,7 +10,7 @@
 //! consumer's.
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::directory::update::apply_bindings;
+use crate::filesystem::directory::ahead::{RootsAhead, PAGES_AHEAD};
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::filesystem::inode::update::apply_inode_values;
 use crate::filesystem::objects::{
@@ -23,7 +23,7 @@ use crate::filesystem::references::OperationReducer;
 use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::view::{OperationInput, ResidentInput, StreamedInput};
 use crate::filesystem::rows::{check_operation_input, PreparedDirectoryStreams, PreparedRows};
-use crate::filesystem::sorted::finish::DirectoryRoot;
+use crate::filesystem::sorted::finish::{apply_directory_root, DirectoryRoot};
 use crate::filesystem::sorted::SortedWork;
 use crate::filesystem::state::{DroppedParents, InitialRows, RebuiltRoots, SerialState};
 use crate::filesystem::validate::{self, ValidationWork};
@@ -351,135 +351,164 @@ fn run_body<'b>(
     phases.phase("directories", || -> ContentResult<()> {
         // Validation already proved parent ordering and uniqueness. Only one
         // final batch is retained for reuse after every binding effect is known.
-        // One declared batch of rows is resident at a time: the window is the
-        // caller's own base-read batch, so the resident cost of reading the
-        // prepared namespace does not grow with the number of rows in it.
+        // One window of rows is resident at a time: whole base-read batches
+        // of the caller's, about `PAGES_AHEAD` rows, so the resident cost of
+        // reading the prepared namespace does not grow with the number of rows
+        // in it. Each batch keeps its own grouped inode demand; every base
+        // directory root the window rewrites is then read in grouped demands
+        // of at most `PAGES_AHEAD` pages (`directory::ahead`, #810 F3), not
+        // one read per directory.
+        let window = batch.saturating_mul((PAGES_AHEAD / batch).max(1));
         let mut waves = input.directories()?;
         loop {
-            let mut updates = Vec::with_capacity(batch);
-            while updates.len() < batch {
+            let mut rows = Vec::with_capacity(window);
+            while rows.len() < window {
                 match waves.next_row()? {
-                    Some(row) => updates.push(row),
+                    Some(row) => rows.push(row),
                     None => break,
                 }
             }
-            if updates.is_empty() {
+            if rows.is_empty() {
                 break;
             }
-            let mut parents = Vec::with_capacity(updates.len());
-            for update in &updates {
-                if topology.table.is_some()
-                    && !dropped.contains(update.header.parent)?
-                    && !input.is_new(update.header.parent)?
-                {
-                    parents.push(update.header.parent);
-                }
-            }
-            let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
-            for update in &updates {
-                if dropped.contains(update.header.parent)? {
-                    // No reachable name binds this fresh directory, so none of
-                    // its children can contribute a namespace reference. Do not
-                    // publish an inflated count for an inode that also has a
-                    // reachable alias. Empty dropped headers remain harmless.
-                    for change in update.changes()? {
-                        let (_, binding) = change?;
-                        if binding.is_some() {
-                            return Err(ContentError::InvalidRecord(
-                                "binding in dropped directory",
-                            ));
-                        }
+            let mut looked = Vec::with_capacity(rows.len().div_ceil(batch));
+            let mut wanted = Vec::with_capacity(rows.len());
+            for updates in rows.chunks(batch) {
+                let mut parents = Vec::with_capacity(updates.len());
+                let mut rewrites = Vec::with_capacity(updates.len());
+                for update in updates {
+                    let stored = topology.table.is_some()
+                        && !dropped.contains(update.header.parent)?
+                        && !input.is_new(update.header.parent)?;
+                    if stored {
+                        parents.push(update.header.parent);
                     }
-                    continue;
+                    rewrites.push(stored && update.header.change_rows != 0);
                 }
-                let base = parents
-                    .binary_search(&update.header.parent)
-                    .ok()
-                    .and_then(|index| bases[index]);
-                let content_root = if update.header.change_rows == 0 {
-                    // An unchanged directory retains its root; a new directory
-                    // needs one actual empty page.
-                    if input.is_new(update.header.parent)? || topology.table.is_none() {
-                        crate::filesystem::directory::update::empty_directory(objects)?.0
-                    } else {
-                        base.ok_or(ContentError::InvalidRecord("directory parent record"))?
-                            .content_root
-                    }
-                } else {
-                    let base_directory = if input.is_new(update.header.parent)? {
-                        None
-                    } else if topology.table.is_some() {
-                        let record =
-                            base.ok_or(ContentError::InvalidRecord("directory parent record"))?;
-                        if record.kind != InodeKind::Directory {
-                            return Err(ContentError::InvalidRecord("directory parent kind"));
-                        }
-                        Some(DirectoryRoot(record.content_root))
-                    } else {
-                        None
-                    };
-                    let mut observe = |before: Option<u64>,
-                                       after: Option<u64>|
-                     -> ContentResult<()> {
-                        if before == after {
-                            return Ok(());
-                        }
-                        // Additions precede removals, so a move never drops an
-                        // inode to a spurious zero between its two bindings.
-                        if let Some(next) = after {
-                            note_retained_binding(
-                                &mut reducer,
-                                initial.then_some(state),
-                                input,
-                                next,
-                            )?;
-                            counters.bindings_added = counters.bindings_added.saturating_add(1);
-                        }
-                        if let Some(previous) = before {
-                            reducer.note_removed_binding(previous)?;
-                            counters.bindings_removed = counters.bindings_removed.saturating_add(1);
-                        }
-                        Ok(())
-                    };
-                    let (root, work) = apply_bindings(
-                        objects,
-                        base_directory,
-                        update.changes()?,
-                        resources.scratch_bytes,
-                        &mut observe,
-                    )?;
-                    counters.directories.pages_read = counters
-                        .directories
-                        .pages_read
-                        .saturating_add(work.pages_read);
-                    counters.directories.pages_created = counters
-                        .directories
-                        .pages_created
-                        .saturating_add(work.pages_created);
-                    counters.directories.pages_reused = counters
-                        .directories
-                        .pages_reused
-                        .saturating_add(work.pages_reused);
-                    counters.directories.change_keys = counters
-                        .directories
-                        .change_keys
-                        .saturating_add(work.change_keys);
-                    counters.directories.untouched_subtrees = counters
-                        .directories
-                        .untouched_subtrees
-                        .saturating_add(work.untouched_subtrees);
-                    counters.directories.peak_scratch_bytes = counters
-                        .directories
-                        .peak_scratch_bytes
-                        .max(work.peak_scratch_bytes);
-                    counters.directory_updates = counters.directory_updates.saturating_add(1);
-                    root.0
-                };
-                contents.insert(update.header.parent, content_root)?;
+                let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
+                for (update, rewrite) in updates.iter().zip(rewrites) {
+                    let root = parents
+                        .binary_search(&update.header.parent)
+                        .ok()
+                        .and_then(|index| bases[index])
+                        .filter(|record| rewrite && record.kind == InodeKind::Directory)
+                        .map(|record| record.content_root);
+                    wanted.push(root);
+                }
+                looked.push((parents, bases));
             }
-            if !parents.is_empty() {
-                retained_parents = parents;
-                retained_bases = bases;
+            let mut ahead = RootsAhead::new(wanted);
+            let mut at = 0;
+            for (updates, (parents, bases)) in rows.chunks(batch).zip(looked) {
+                for update in updates {
+                    let row = at;
+                    at += 1;
+                    if dropped.contains(update.header.parent)? {
+                        // No reachable name binds this fresh directory, so none of
+                        // its children can contribute a namespace reference. Do not
+                        // publish an inflated count for an inode that also has a
+                        // reachable alias. Empty dropped headers remain harmless.
+                        for change in update.changes()? {
+                            let (_, binding) = change?;
+                            if binding.is_some() {
+                                return Err(ContentError::InvalidRecord(
+                                    "binding in dropped directory",
+                                ));
+                            }
+                        }
+                        continue;
+                    }
+                    let base = parents
+                        .binary_search(&update.header.parent)
+                        .ok()
+                        .and_then(|index| bases[index]);
+                    let content_root = if update.header.change_rows == 0 {
+                        // An unchanged directory retains its root; a new directory
+                        // needs one actual empty page.
+                        if input.is_new(update.header.parent)? || topology.table.is_none() {
+                            crate::filesystem::directory::update::empty_directory(objects)?.0
+                        } else {
+                            base.ok_or(ContentError::InvalidRecord("directory parent record"))?
+                                .content_root
+                        }
+                    } else {
+                        let base_directory = if input.is_new(update.header.parent)? {
+                            None
+                        } else if topology.table.is_some() {
+                            let record =
+                                base.ok_or(ContentError::InvalidRecord("directory parent record"))?;
+                            if record.kind != InodeKind::Directory {
+                                return Err(ContentError::InvalidRecord("directory parent kind"));
+                            }
+                            Some(DirectoryRoot(record.content_root))
+                        } else {
+                            None
+                        };
+                        let mut observe = |before: Option<u64>,
+                                           after: Option<u64>|
+                         -> ContentResult<()> {
+                            if before == after {
+                                return Ok(());
+                            }
+                            // Additions precede removals, so a move never drops an
+                            // inode to a spurious zero between its two bindings.
+                            if let Some(next) = after {
+                                note_retained_binding(
+                                    &mut reducer,
+                                    initial.then_some(state),
+                                    input,
+                                    next,
+                                )?;
+                                counters.bindings_added = counters.bindings_added.saturating_add(1);
+                            }
+                            if let Some(previous) = before {
+                                reducer.note_removed_binding(previous)?;
+                                counters.bindings_removed =
+                                    counters.bindings_removed.saturating_add(1);
+                            }
+                            Ok(())
+                        };
+                        let fetched = ahead.take(objects, row)?;
+                        let (root, work) = apply_directory_root(
+                            objects,
+                            base_directory.map(|root| (root, fetched)),
+                            update.changes()?,
+                            resources.scratch_bytes,
+                            &mut observe,
+                        )?;
+                        counters.directories.pages_read = counters
+                            .directories
+                            .pages_read
+                            .saturating_add(work.pages_read);
+                        counters.directories.pages_created = counters
+                            .directories
+                            .pages_created
+                            .saturating_add(work.pages_created);
+                        counters.directories.pages_reused = counters
+                            .directories
+                            .pages_reused
+                            .saturating_add(work.pages_reused);
+                        counters.directories.change_keys = counters
+                            .directories
+                            .change_keys
+                            .saturating_add(work.change_keys);
+                        counters.directories.untouched_subtrees = counters
+                            .directories
+                            .untouched_subtrees
+                            .saturating_add(work.untouched_subtrees);
+                        counters.directories.peak_scratch_bytes = counters
+                            .directories
+                            .peak_scratch_bytes
+                            .max(work.peak_scratch_bytes);
+                        counters.directory_updates = counters.directory_updates.saturating_add(1);
+                        root.0
+                    };
+                    contents.insert(update.header.parent, content_root)?;
+                }
+                if !parents.is_empty() {
+                    retained_parents = parents;
+                    retained_bases = bases;
+                }
             }
         }
         Ok(())

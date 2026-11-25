@@ -524,6 +524,15 @@ only. The group-row layouts and PostgreSQL ask for exact ranges
 (`Mechanics::pack_range_fill` is 0): there every byte read is a byte
 transferred.
 
+## Commit reads
+
+A Commit's construction reads the base root pages of the directories it
+rewrites 256 to a demand and the remembered directories' new roots in one
+demand (#810 F3, [Construction](../commit/construction.md#base-directory-reads-810-f3)),
+so each such demand is one locator statement for all its objects instead of
+one per directory: the "delete `node_modules`" shape (B2) runs 332
+statements instead of 1,732, with the same roots and stored bytes.
+
 ## Fused Commit
 
 A Workspace Commit over its bound head is one `BEGIN IMMEDIATE` transaction
