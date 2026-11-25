@@ -7,7 +7,10 @@
 //!
 //! The command is held at a known point by a full standard error: its
 //! write of the refusal (or of the first progress event) waits until the
-//! test reads the pipe, so signals land while it is held there.
+//! test reads the pipe, so signals land while it is held there. The test
+//! sends them only on evidence that it is held: the home the call opens
+//! exists or the process has its signal thread, and it has used no CPU
+//! over several samples (bounded by a deadline).
 //!
 //! The tests marked INTEGRATION need the store upgrade engine and control
 //! halves (#804 W1, W2) and the frozen fixture
@@ -117,20 +120,90 @@ fn last_json(bytes: &[u8]) -> SdkValue {
     json::parse(line).unwrap()
 }
 
+/// The number of threads of process `pid`.
+fn threads(pid: u32) -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_dir(format!("/proc/{pid}/task")).map_or(0, |dir| dir.count())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let out = Command::new("ps")
+            .args(["-M", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        text(&out.stdout).lines().count().saturating_sub(1)
+    }
+}
+
+/// The CPU time process `pid` has used so far, as the system writes it.
+fn cpu(pid: u32) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
+        // utime and stime, after the parenthesized command name
+        let rest = stat.rsplit_once(')').map_or("", |(_, rest)| rest);
+        rest.split_whitespace()
+            .skip(11)
+            .take(2)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let out = Command::new("ps")
+            .args(["-o", "time=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        text(&out.stdout).trim().to_owned()
+    }
+}
+
+/// Waits until `child` is held: `ready()` holds, it has at least
+/// `min_threads` threads, and its CPU time stayed the same over four
+/// samples 50 ms apart. Panics past the deadline or when it ended.
+fn wait_held(child: &mut Child, min_threads: usize, ready: impl Fn() -> bool) {
+    let until = Instant::now() + DEADLINE;
+    let mut last = String::new();
+    let mut steady = 0;
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("layerfs ended before it was held: {status:?}");
+        }
+        assert!(
+            Instant::now() < until,
+            "layerfs was not held within {DEADLINE:?} (threads {}, cpu {last})",
+            threads(child.id())
+        );
+        let now = cpu(child.id());
+        if ready() && threads(child.id()) >= min_threads && now == last {
+            steady += 1;
+            if steady == 3 {
+                return;
+            }
+        } else {
+            steady = 0;
+        }
+        last = now;
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Holds `layerfs <words>` at its write of a refusal to a full standard
-/// error (a home that does not exist), then sends `signals`.
-fn held(tag: &str, words: &[&str], signals: &[Signal]) -> (Child, File) {
+/// error (a home that does not exist and that the call creates), then
+/// sends `signals`; `min_threads` is 2 for a call with the signal thread.
+fn held(tag: &str, words: &[&str], min_threads: usize, signals: &[Signal]) -> (Child, File) {
     let home = tempdir(tag).join("missing");
     // the first run of a fresh binary waits on the system's check of it
     let _ = common::run(&mut layerfs(&home, &["--version"]));
     let (stderr, reader) = full_pipe(tag);
-    let child = layerfs(&home, words)
+    let mut child = layerfs(&home, words)
         .stdout(Stdio::null())
         .stderr(stderr)
         .spawn()
         .unwrap();
-    // long enough to be past the mask and blocked in the write
-    std::thread::sleep(Duration::from_millis(700));
+    // past dispatch (the call made the home) and blocked in the write
+    wait_held(&mut child, min_threads, || home.exists());
     for which in signals {
         signal(&child, *which);
         std::thread::sleep(Duration::from_millis(100));
@@ -142,7 +215,7 @@ fn held(tag: &str, words: &[&str], signals: &[Signal]) -> (Child, File) {
 fn another_call_keeps_the_default_a_signal_ends_it() {
     for (which, tag) in [(Signal::SIGINT, "int"), (Signal::SIGTERM, "term")] {
         let tag = format!("default-{tag}");
-        let (child, reader) = held(&tag, &["store", "get", "shop", "--json"], &[which]);
+        let (child, reader) = held(&tag, &["store", "get", "shop", "--json"], 1, &[which]);
         let (status, _) = drain(reader, child);
         assert_eq!(status.signal(), Some(which as i32), "{status:?}");
     }
@@ -154,7 +227,7 @@ fn store_upgrade_blocks_both_signals_and_after_its_answer_they_change_nothing() 
     // process neither dies nor exits Unknown; it prints the call's own
     // refusal (no home here) and exits 125
     let words = ["store", "upgrade", "shop", "--json"];
-    let (mut child, reader) = held("answered", &words, &[Signal::SIGINT, Signal::SIGTERM]);
+    let (mut child, reader) = held("answered", &words, 2, &[Signal::SIGINT, Signal::SIGTERM]);
     std::thread::sleep(Duration::from_millis(200));
     let early = child.try_wait().unwrap();
     let (status, stderr) = drain(reader, child);
@@ -244,16 +317,7 @@ fn one_signal_at_check_cancels_and_changes_nothing() {
         }
         let before = file_bytes(&home);
         let (stderr, reader) = full_pipe(&format!("cancel-{tag}"));
-        let child = layerfs(
-            &home,
-            &["store", "upgrade", "fx", "--json", "--progress", "--detail"],
-        )
-        .env("LAYERFS_PROGRESS_JSON", "1")
-        .stdout(Stdio::null())
-        .stderr(stderr)
-        .spawn()
-        .unwrap();
-        std::thread::sleep(Duration::from_millis(700));
+        let child = held_at_check(&home, stderr);
         signal(&child, which);
         std::thread::sleep(Duration::from_millis(200));
         let (status, stderr) = drain(reader, child);
@@ -275,22 +339,57 @@ fn one_signal_at_check_cancels_and_changes_nothing() {
     }
 }
 
+/// `layerfs store upgrade fx --progress` with standard error `stderr` (a
+/// full pipe), held at its write of the first progress event (`check`),
+/// which it makes holding the standard error's lock.
+fn held_at_check(home: &Path, stderr: Stdio) -> Child {
+    let _ = common::run(&mut layerfs(home, &["--version"]));
+    let mut child = layerfs(
+        home,
+        &["store", "upgrade", "fx", "--json", "--progress", "--detail"],
+    )
+    .env("LAYERFS_PROGRESS_JSON", "1")
+    .stdout(Stdio::null())
+    .stderr(stderr)
+    .spawn()
+    .unwrap();
+    wait_held(&mut child, 2, || true);
+    child
+}
+
 /// A Unix socket the engine's failpoint gate connects to (INTERFACES §1):
-/// returns the path and a thread that answers once the readiness line came.
+/// returns the path and what receives the connection once its readiness
+/// line came, each step bounded by the deadline.
 fn gate(
     dir: &Path,
 ) -> (
     PathBuf,
-    std::thread::JoinHandle<std::os::unix::net::UnixStream>,
+    std::sync::mpsc::Receiver<std::os::unix::net::UnixStream>,
 ) {
     let path = dir.join("gate.sock");
     let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
-    let ready = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let (sent, ready) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let until = Instant::now() + DEADLINE;
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    if Instant::now() > until {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("the gate's accept: {error}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
+        stream.set_read_timeout(Some(DEADLINE)).unwrap();
         let mut byte = [0u8; 1];
         // one readiness line
-        while stream.read(&mut byte).unwrap() == 1 && byte[0] != b'\n' {}
-        stream
+        while matches!(stream.read(&mut byte), Ok(1)) && byte[0] != b'\n' {}
+        let _ = sent.send(stream);
     });
     (path, ready)
 }
@@ -310,7 +409,9 @@ fn at_failpoint(home: &Path, tag: &str, n: u32) -> (Child, std::os::unix::net::U
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let stream = ready.join().unwrap();
+    let stream = ready.recv_timeout(DEADLINE).unwrap_or_else(|_| {
+        panic!("the failpoint gate {n} was not reached (or sent no readiness line) within {DEADLINE:?}")
+    });
     (child, stream)
 }
 
@@ -345,6 +446,43 @@ fn a_second_signal_exits_at_once_unknown_and_the_next_upgrade_converges() {
         "{}",
         text(&next.stderr)
     );
+}
+
+/// INTEGRATION. The second signal exits at once even while the call's
+/// thread holds the standard error's lock, blocked writing its first
+/// progress event to a full pipe: the refusal is written without that lock
+/// (best effort; a full pipe may never take it) and the process exits 125.
+/// On a build whose exit path takes the lock, the process never ends.
+#[test]
+fn a_second_signal_exits_while_the_call_blocks_on_a_full_standard_error() {
+    let Some(home) = fixture_home("second-full") else {
+        return;
+    };
+    if !built(&home) {
+        return;
+    }
+    let before = file_bytes(&home);
+    let (stderr, reader) = full_pipe("second-full");
+    let mut child = held_at_check(&home, stderr);
+    // two different signals, so the second is never merged into the first
+    signal(&child, Signal::SIGINT);
+    signal(&child, Signal::SIGTERM);
+    let until = Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if Instant::now() > until {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the second signal did not end layerfs while its stderr was full");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(status.code(), Some(125), "{status:?}");
+    drop(reader);
+    // the call stopped before its check ran: nothing changed
+    assert!(file_bytes(&home) == before, "the file changed");
 }
 
 /// INTEGRATION. A killed command (SIGKILL at the failpoint) leaves the Store

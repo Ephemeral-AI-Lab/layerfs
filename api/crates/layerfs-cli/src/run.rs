@@ -191,9 +191,9 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         &mut send,
         layerfs_api::Client::Cli,
     );
-    if cancellable {
-        crate::signals::answered();
-    }
+    // first thing after the call: a signal from now on changes nothing
+    // (signals.rs names the residual window)
+    crate::signals::answered();
     if is_term && last_progress_len > 0 {
         let mut err = std::io::stderr().lock();
         let _ = write!(err, "\r{}\r", " ".repeat(last_progress_len));

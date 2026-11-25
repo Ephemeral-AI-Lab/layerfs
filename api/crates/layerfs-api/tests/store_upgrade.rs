@@ -9,8 +9,7 @@
 //!   compaction, and a second upgrade answers `current` with nothing done;
 //! - M, format display: `store get --with format` and each `store list`
 //!   item for current, outdated, unsupported and newer Stores, including a
-//!   Store this build refuses to open, where `--with stats` and `--with
-//!   live` fail.
+//!   Store this build refuses to open, where `--with stats` fails.
 //!
 //! INTEGRATION: these need the engine and control halves (#804 W1, W2); on a
 //! build without them each test says NOT_RUN and passes. The PostgreSQL
@@ -299,14 +298,12 @@ fn the_format_section_reads_each_status_from_the_header_alone() {
         } else {
             assert_eq!(have, want, "user_version {version}");
         }
-        // the Store does not open: stats and live fail, format answers
+        // the Store does not open: stats fails, format answers. (`--with
+        // live` on a native sqlite Store reads the file's presence and the
+        // leases without opening it, so it answers `ready` here, as on the
+        // base build; it is not asserted.)
         let stats = call(&home, "store.get", &[("store", t("fx")), with(&["stats"])]);
         assert!(stats.is_err(), "user_version {version}: stats {stats:?}");
-        let live = call(&home, "store.get", &[("store", t("fx")), with(&["live"])]);
-        assert!(
-            live.is_err() || live.as_ref().unwrap().get_text("state") != Some("ready"),
-            "user_version {version}: live {live:?}"
-        );
         // a newer Store is never called outdated
         if version == 70 {
             let refused = stats.unwrap_err();
