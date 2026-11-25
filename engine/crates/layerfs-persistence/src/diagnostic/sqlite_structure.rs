@@ -1,8 +1,11 @@
 //! Raw engine evidence when schema/authority validation could not open handles.
 use super::{emit, Observation, Options, Outcome};
-use crate::backend::{records::BackendError, sqlite::session::rows};
+use crate::backend::{
+    records::BackendError,
+    sqlite::session::{connection::open_admitted_read_only, rows},
+};
 use layerfs_storage::port::PersistenceError;
-use rusqlite::{Connection, Error, ErrorCode, OpenFlags};
+use rusqlite::{Error, ErrorCode};
 use std::{path::Path, time::Duration};
 
 /// Audits SQLite structure without assuming a supported LayerFS schema.
@@ -15,14 +18,14 @@ pub fn sqlite_structure(
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), PersistenceError> {
     options.check()?;
-    let connection = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(|error| classify(error, observer))?;
-    connection
-        .busy_timeout(Duration::ZERO)
-        .map_err(|error| classify(error, observer))?;
+    // The Store open rule: with no `-shm` (no connection holds the Store),
+    // the lane is waited for and held through the first read, which creates
+    // the sidecars, then released before the check runs.
+    let (connection, writer, _) =
+        open_admitted_read_only(path, &mut |error| evidence(error, observer))?;
+    if let Some(writer) = writer {
+        writer.release().map_err(|_| BackendError::Unknown)?;
+    }
     let interrupt = connection.get_interrupt_handle();
     let (done, ended) = std::sync::mpsc::channel::<()>();
     std::thread::scope(|scope| {
@@ -100,6 +103,10 @@ pub fn sqlite_structure(
     })
 }
 fn classify(error: Error, observer: &mut dyn FnMut(Observation)) -> PersistenceError {
+    evidence(error, observer).into()
+}
+/// The engine error, after emitting a structural failure SQLite confirmed.
+fn evidence(error: Error, observer: &mut dyn FnMut(Observation)) -> BackendError {
     if let Error::SqliteFailure(code, _) = &error {
         let message=match code.code {
             ErrorCode::DatabaseCorrupt=>Some("SQLite reported SQLITE_CORRUPT while reading the original Store"),
@@ -110,6 +117,5 @@ fn classify(error: Error, observer: &mut dyn FnMut(Observation)) -> PersistenceE
             emit(observer, "store.database.structure", Outcome::Fail, format!("supplemental physical observation: {message}; original logical snapshot unverified"));
         }
     }
-    let converted: BackendError = rows::error(error);
-    converted.into()
+    rows::error(error)
 }

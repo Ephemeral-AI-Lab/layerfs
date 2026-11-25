@@ -38,7 +38,9 @@ def _old_store(path, version=16, layout=16, tables=False):
     metadata, history = sb._read_sql("sqlite", "metadata.sql"), sb._read_sql("sqlite", "history.sql")
     v2_values = sb._statement(metadata, "CREATE TABLE inode_value_block (")
     v2_hints = sb._statement(history, "CREATE TABLE binding_hint_block (")
-    source = sb._source(version, layout, tables).replace(v2_values, sb.V1_VALUES).replace(v2_hints, sb.V1_HINTS)
+    source = sb.without_attempt(
+        sb._source(version, layout, tables).replace(v2_values, sb.V1_VALUES).replace(v2_hints, sb.V1_HINTS)
+    )
     con = sqlite3.connect(path, isolation_level=None)
     con.executescript(source)
     con.execute(f"PRAGMA application_id={sb.APPLICATION_ID}")
@@ -96,14 +98,16 @@ class StoreBlocksTest(unittest.TestCase):
             target = os.path.join(temp, "new.sqlite")
             old_source = _old_store(source)
             result = sb.migrate(source, target)
-            self.assertEqual(result["user_version"], [16, 36])
+            self.assertEqual(result["user_version"], [16, 56])
             con = sqlite3.connect(f"file:{target}?immutable=1", uri=True)
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 36)
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 56)
             self.assertEqual(con.execute("PRAGMA integrity_check").fetchone()[0], "ok")
             tables = {r[0] for r in con.execute("SELECT name FROM sqlite_schema WHERE type='table'")}
             self.assertIn("inode_value_block", tables)
             self.assertIn("binding_hint_block", tables)
             self.assertNotIn("inode_value", tables)
+            # The Commit attempt column (#776) is added, empty for every Commit.
+            self.assertIn("attempt", {r[1] for r in con.execute('PRAGMA table_info("commit")')})
             # The position columns and GC tables are still absent: the first
             # writable open adds them. The recorded source is the current
             # pre-position schema, so that open recognizes it.
@@ -111,8 +115,8 @@ class StoreBlocksTest(unittest.TestCase):
             source_now, definition_now, version_now = con.execute(
                 "SELECT schema_source,schema_definition,schema_version FROM history_meta"
             ).fetchone()
-            self.assertEqual(version_now, 36)
-            self.assertEqual(source_now, sb._source(36, 16, False))
+            self.assertEqual(version_now, 56)
+            self.assertEqual(source_now, sb._source(56, 16, False))
             self.assertNotEqual(source_now, old_source)
             self.assertEqual(
                 definition_now,

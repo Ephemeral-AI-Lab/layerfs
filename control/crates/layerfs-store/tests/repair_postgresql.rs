@@ -136,12 +136,18 @@ fn holders(value: &SdkValue) -> &[SdkValue] {
     }
 }
 
-#[test]
-fn operator_repair_round_trips_on_postgresql() {
-    let Some(source) = url() else {
-        return;
-    };
-    let database = Database::create(&source);
+/// A PostgreSQL Store `pgs` in a fresh database and home, with project
+/// `app` initialized on it, and its `main` Branch and project ids.
+fn initialized(
+    source: &str,
+) -> (
+    Database,
+    PathBuf,
+    OpenArgs,
+    layerfs_history::BranchId,
+    layerfs_history::LayerStackId,
+) {
+    let database = Database::create(source);
     let url = database.url();
     // The Store schema the PostgreSQL engine writes, with this test's own
     // catalog identity.
@@ -202,6 +208,16 @@ fn operator_repair_round_trips_on_postgresql() {
         Ok(layerfs_store_service::history::lookup::project(&service.store, "app")?.id)
     })
     .unwrap();
+
+    (database, home, open, branch, stack)
+}
+
+#[test]
+fn operator_repair_round_trips_on_postgresql() {
+    let Some(source) = url() else {
+        return;
+    };
+    let (_database, home, open, branch, stack) = initialized(&source);
 
     let live = mount(branch.as_slice(), stack.as_slice(), 0x21)
         .placed(Some([0x22; 32]), Some("sandbox"), Some("box"))
@@ -283,5 +299,84 @@ fn operator_repair_round_trips_on_postgresql() {
         assert_eq!(item.get_text("op").map(str::len), Some(32));
     }
 
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// #776 G1: a merge's project-scope intent left by an owner this process
+/// cannot judge (another PID namespace or host; a shared Store never proves
+/// it gone) holds every mount of the project. The repair lists it with its
+/// kind, settles it only when forced, and releases it, and the project can
+/// be mounted again.
+#[test]
+fn an_orphaned_operation_row_is_repaired_on_postgresql() {
+    let Some(source) = url() else {
+        return;
+    };
+    let (_database, home, open, branch, stack) = initialized(&source);
+    let merge = GcIntent::shared(
+        [0x41; 16],
+        GcIntentKind::Merge,
+        GcScopeKind::Project,
+        stack.as_slice().to_vec(),
+    )
+    .in_project(stack.as_slice().to_vec())
+    .named(Some("app"), None)
+    .owned(Some("pid:1@1@ns:4000000000"), Some("boot:1:op:41"));
+    with_service(&open, |service| {
+        service.store.history().gc_register(&merge).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let refused = with_service(&open, |service| {
+        Ok(service
+            .store
+            .history()
+            .gc_register(&mount(branch.as_slice(), stack.as_slice(), 0x42)))
+    })
+    .unwrap()
+    .unwrap_err();
+    assert!(
+        matches!(refused, layerfs_history::HistoryError::BusyOp(_)),
+        "the orphaned merge holds the project: {refused:?}"
+    );
+
+    let repair = |action: &str, op: Option<u8>, force: bool| {
+        repair_at(
+            &open,
+            &Repair {
+                project: "app".to_owned(),
+                branch: "main".to_owned(),
+                action: action.to_owned(),
+                op: op.map(|op| [op; 16]),
+                force,
+                operator: "alice".to_owned(),
+                limit: 100,
+                ..Repair::default()
+            },
+        )
+    };
+    let preview = repair("preview", None, false).expect("preview");
+    let rows = holders(&preview);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].get_text("op"), Some("41".repeat(16).as_str()));
+    assert_eq!(rows[0].get_text("kind"), Some("merge"));
+    assert_eq!(rows[0].get_text("liveness"), Some("live"));
+    assert_eq!(rows[0].get("legacy"), Some(&SdkValue::Bool(false)));
+    // `settle_legacy` never marks an operation row
+    let settled = repair("settle_legacy", None, false).expect("settle_legacy");
+    assert_eq!(settled.get_int("settled"), Some(0));
+    let refused = repair("settle", Some(0x41), false).unwrap_err();
+    assert_eq!(refused.code, "InUse", "{refused:?}");
+    repair("settle", Some(0x41), true).expect("a forced settle");
+    repair("release", Some(0x41), false).expect("release");
+    assert!(holders(&repair("preview", None, false).unwrap()).is_empty());
+
+    let mounted = mount(branch.as_slice(), stack.as_slice(), 0x43);
+    with_service(&open, |service| {
+        service.store.history().gc_register(&mounted).unwrap();
+        service.store.history().gc_release(&mounted.op_id).unwrap();
+        Ok(())
+    })
+    .unwrap();
     let _ = std::fs::remove_dir_all(&home);
 }

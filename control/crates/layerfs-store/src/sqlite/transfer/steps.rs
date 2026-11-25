@@ -110,9 +110,18 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
     ) {
         crate::compact::refuse_while_running(&file, store)?;
     }
+    // An unstaged `read` opens the Store file itself: closing that
+    // descriptor would cancel every POSIX lock this process's SQLite holds
+    // on it, so an open copy (a call may have reopened it since the
+    // snapshot) is closed first, as for the steps that replace the file
+    // (#776 S7).
     if matches!(
         frame.step,
-        StoreStep::Snapshot | StoreStep::Install | StoreStep::Retire | StoreStep::Remove
+        StoreStep::Snapshot
+            | StoreStep::Install
+            | StoreStep::Retire
+            | StoreStep::Remove
+            | StoreStep::Read { staged: false, .. }
     ) {
         crate::open::close(&file)?;
     }

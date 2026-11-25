@@ -29,7 +29,7 @@ use layerfs_mount_ports::operations::{
 /// Pre- and post-operation attributes of one inode or directory.
 pub type Wcc = (Option<ViewStat>, Option<ViewStat>);
 use layerfs_overlay::WRITE_WINDOW;
-use layerfs_workspace::{Time, ViewStat};
+use layerfs_workspace::{Position, Time, ViewStat};
 use std::{io, sync::atomic::Ordering, time::SystemTime};
 
 /// The page a client reads a symlink target into; a longer target could not
@@ -776,7 +776,7 @@ impl Kernel {
                 None,
                 Expect::Stat(Some(serial)),
                 tickets,
-                |_| write::write(at, window, false),
+                |_| write::write(Position::At(at), window, false),
             );
             match published {
                 Ok(published) => {

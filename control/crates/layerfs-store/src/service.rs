@@ -18,7 +18,7 @@
 use crate::open_args::{OpenArgs, ROUTING};
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -51,6 +51,7 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
                     OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
                     OpenRefusal::Missing(reason) => refused("NoStore", reason),
                     OpenRefusal::Busy(reason) => refused("Busy", reason),
+                    OpenRefusal::Outdated(status) => refused(crate::state::OLD_STORE, status),
                     OpenRefusal::Failed(reason) => refused("Failed", reason),
                 })
         }
@@ -58,6 +59,14 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
             crate::postgresql::open::open_postgres(args.postgresql.as_ref(), &identity, &template)
         }
     };
+    // an older-format Store names the call that clears it (`state::outdated_fix`)
+    let opened = opened.map_err(|refusal| match (&args.store, refusal.code.as_str()) {
+        (Some(store), crate::state::OLD_STORE) => {
+            let postgresql = matches!(identity.kind, crate::identity::Kind::Postgresql { .. });
+            with_fix(refusal, crate::state::outdated_fix(store, postgresql))
+        }
+        _ => refusal,
+    });
     match opened {
         Ok(service) => Ok(Opened {
             service: Arc::new(service),

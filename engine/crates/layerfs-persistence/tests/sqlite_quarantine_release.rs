@@ -167,3 +167,22 @@ fn a_quarantined_write_inside_a_held_lane_closes_before_the_lane_is_released() {
     drop(lane);
     check_released(stores);
 }
+
+/// #776 S4: a quarantined Session is refused the publication lane before it
+/// waits for the writer lock, as every other write on it is. Waiting there
+/// with its own writer still held would never end.
+#[test]
+fn a_quarantined_session_is_refused_the_publication_lane() {
+    let stores = stores("sqlite-quarantine-lane-refused");
+    assert!(matches!(
+        stores.first.storage.reserve(reserve()),
+        Err(PersistenceError::Uncertain)
+    ));
+    let refused = stores
+        .first
+        .history
+        .publish_lane()
+        .expect_err("a quarantined Session is refused the lane");
+    assert!(refused.unknown(), "{refused:?}");
+    check_released(stores);
+}

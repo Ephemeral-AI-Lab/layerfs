@@ -29,19 +29,25 @@ pub struct StoreOperation {
 impl BoundWorkspace {
     /// Terminal local close, then the Workspace's opened Store reader.
     /// A failed boundary retains its original cause and permits no replay.
+    ///
+    /// Once the owner has closed, the mount is no longer live, so its intent
+    /// is released (or marked uncertain) even when the reader close fails:
+    /// no later unmount passes the closed owner again, so nothing else would
+    /// ever release the row, and it would hold the Branch against removal
+    /// for the daemon's lifetime (#776 G5). The reader's failure is still the
+    /// answer.
     pub fn close(&self) -> Result<(), super::CloseError> {
         self.owner
             .close(self.route())
             .map_err(super::CloseError::Owner)?;
         self.producer.hand_to(&self.store.idle_producer);
-        self.store
-            .close_reader(self.identity)
-            .map_err(super::CloseError::Reader)?;
-        if let Some(op) = self.gc_op {
-            crate::history::admission::release_or_mark(self.store.history(), &op)
-                .map_err(super::CloseError::Intent)?;
-        }
-        Ok(())
+        let reader = self.store.close_reader(self.identity);
+        let intent = match self.gc_op {
+            Some(op) => crate::history::admission::release_or_mark(self.store.history(), &op),
+            None => Ok(()),
+        };
+        reader.map_err(super::CloseError::Reader)?;
+        intent.map_err(super::CloseError::Intent)
     }
     pub fn operation(&self) -> WorkspaceResult<StoreOperation> {
         let ports = self.store.ports_for(self.snapshot()?.scope, self.identity);

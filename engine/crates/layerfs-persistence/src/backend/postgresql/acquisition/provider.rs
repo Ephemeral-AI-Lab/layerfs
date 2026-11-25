@@ -8,7 +8,6 @@
 use super::{cleanup, reads, writes};
 use crate::backend::{
     postgresql::session::{connection::Session, transaction::Transaction},
-    records::BackendError,
     sqlite::acquisition::statements::Failure,
 };
 use layerfs_content::ObjectId;
@@ -17,17 +16,14 @@ use layerfs_storage::port::acquisition::{
     Discarded, Disposal, Entry, EntryKey, FileRoot, Job, Limits, NewEntry, Owner, Phase, Placed,
     Unplaced, READ_WINDOW_ROWS, WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{path::PathBuf, sync::Arc};
 
 /// Acquisition working state of one opened PostgreSQL Store.
 pub struct PostgresAcquisition {
     session: Arc<Session>,
     /// Identity of this session among all that ever began an operation: the
     /// identity of its own first acquired operation, zero until then.
-    epoch: Mutex<u64>,
+    epoch: crate::backend::epoch::Epoch,
     /// The schema has the acquisition tables.
     tables: bool,
 }
@@ -36,15 +32,8 @@ impl PostgresAcquisition {
     pub(crate) fn new(session: Arc<Session>, tables: bool) -> Self {
         Self {
             session,
-            epoch: Mutex::new(0),
+            epoch: Default::default(),
             tables,
-        }
-    }
-
-    fn epoch(&self) -> Result<u64, Failure> {
-        match self.epoch.try_lock() {
-            Ok(epoch) => Ok(*epoch),
-            Err(_) => Err(Failure::Backend(BackendError::Busy)),
         }
     }
 
@@ -64,7 +53,7 @@ impl PostgresAcquisition {
         body: impl FnOnce(&Transaction<'_>, AcquisitionWork) -> Result<T, Failure>,
     ) -> AcquisitionResult<T> {
         self.available()?;
-        if owner.epoch == 0 || owner.epoch != self.epoch()? {
+        if owner.epoch == 0 || owner.epoch != self.epoch.get() {
             return Err(Failure::Stale.into());
         }
         Ok(self.session.run(writable, |tx| {
@@ -97,18 +86,13 @@ fn budget(rows: usize) -> i64 {
 impl Acquisition for PostgresAcquisition {
     fn begin(&self, facts: &Begin) -> AcquisitionResult<Owner> {
         self.available()?;
-        // Held across the transaction so two first operations cannot both
-        // name the session's epoch; set only after the commit is known.
-        let mut epoch = self
-            .epoch
-            .try_lock()
-            .map_err(|_| Failure::Backend(BackendError::Busy))?;
-        let known = *epoch;
-        let owner = self
-            .session
-            .run(true, |tx| writes::begin(tx, known, facts))?;
-        *epoch = owner.epoch;
-        Ok(owner)
+        // A first operation claims the session's epoch; no lock a live
+        // owner's read needs is held across the lane wait.
+        self.epoch.begin(|known| {
+            Ok(self
+                .session
+                .run(true, |tx| writes::begin(tx, known, facts))?)
+        })
     }
 
     /// A PostgreSQL Store has no host directory the source could contain.
@@ -252,7 +236,7 @@ impl Acquisition for PostgresAcquisition {
 
     fn abandoned(&self, after: Option<u64>, limit: usize) -> AcquisitionResult<Vec<Abandoned>> {
         self.available()?;
-        let current = self.epoch()?;
+        let current = self.epoch.settled();
         let limit = limit.clamp(1, READ_WINDOW_ROWS) as i64;
         Ok(self
             .session
@@ -262,7 +246,7 @@ impl Acquisition for PostgresAcquisition {
     fn discard_abandoned(&self, abandoned: Owner, rows: usize) -> AcquisitionResult<Discarded> {
         self.available()?;
         // A live operation of this session is never abandoned.
-        if abandoned.epoch == self.epoch()? {
+        if abandoned.epoch == self.epoch.settled() {
             return Err(Failure::Stale.into());
         }
         Ok(self.session.run(true, |tx| {

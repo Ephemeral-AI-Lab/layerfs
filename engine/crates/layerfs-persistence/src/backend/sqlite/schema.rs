@@ -413,6 +413,28 @@ impl super::session::connection::Session {
             Ok(())
         })
     }
+    /// Whether a writable open has an additive migration to run, read in one
+    /// read transaction. A Store that recorded this build's source and has
+    /// `history_meta.next_history_serial` is current: every step below would
+    /// find its feature present or its source not accepted, so the open skips
+    /// them and takes no write transaction for them. Any other Store (a
+    /// converted schema version 1 Store, one an interrupted open left after
+    /// `add_gc` recorded the current source but before `add_position_state`
+    /// appended the column, or one without a `history_meta` row) runs them.
+    pub(crate) fn needs_migration(&self) -> Result<bool, BackendError> {
+        self.run::<_, BackendError>(false, |tx| {
+            let rows = tx.query(
+                "SELECT COALESCE(schema_source=?1,0) AND EXISTS(SELECT 1 FROM \
+                 pragma_table_info('history_meta') WHERE name='next_history_serial') \
+                 FROM history_meta WHERE id=1",
+                vec![Param::Text(source((self.layout, self.acquisition)))],
+            )?;
+            match rows.first() {
+                Some(row) => Ok(row.get::<i64>(0)? == 0),
+                None => Ok(true),
+            }
+        })
+    }
     /// Adds the three position columns T1.2a introduced to a Store written
     /// before them: `commit.history_serial`, `layer.history_serial` (default 0)
     /// and `store_policy.trace_salt` (32 random bytes). Because it runs before

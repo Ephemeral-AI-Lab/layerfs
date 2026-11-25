@@ -480,7 +480,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let state = sandbox(host)?;
     let path = required(path, "path")?;
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        if !(force && crate::unmount_guard::forceable(&value)) {
+        if !crate::unmount_guard::admits(&value, force) {
             return crate::unmount_guard::repeat(&value);
         }
     }
@@ -488,7 +488,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        if !(force && crate::unmount_guard::forceable(&value)) {
+        if !crate::unmount_guard::admits(&value, force) {
             return crate::unmount_guard::repeat(&value);
         }
     }
