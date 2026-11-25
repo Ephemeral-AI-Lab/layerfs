@@ -1,18 +1,17 @@
 -- The owner release's unlock (#768 step C), sent in one message after the
 -- release's DELETE (`gc_intent_release_owner`), each request in its own
 -- Sync: $1 the op's session keys, $2 whether each was taken shared, $3 the
--- op, $4 the generation the session opened at (0 before its open set one).
--- The keys are given back only when the Store is still at that generation
--- and no live row of the op remains: the DELETE before it ran, or the row
--- was already gone (another session, a reconcile, or an operator's retained
--- `done` row). A refused or stale DELETE keeps its row, so its keys stay
--- held. One row per key given back, with the backend that ran it (spec
--- §5.2 item 34); no row when nothing was given back.
+-- release attempt's token. The keys are given back only when that DELETE
+-- completed at the session's generation, which it records by setting
+-- `layerfs.released` to the token: exactly when the statement-by-statement
+-- release answered success and sent its unlock, whether the delete removed
+-- the row or found it already gone (another session, a reconcile, an
+-- operator's retained `done` row), and whatever the generation does after
+-- it. A stale or refused DELETE records nothing, so its keys stay held. One
+-- row per key given back, with the backend that ran it (spec §5.2 item 34);
+-- no row when nothing was given back.
 WITH g AS MATERIALIZED (
-    SELECT ($4::bigint = 0
-            OR (SELECT catalog_incarnation FROM {s}.history_meta WHERE id = 1) = $4::bigint)
-       AND NOT EXISTS (SELECT 1 FROM {s}.gc_intent
-                        WHERE op_id = $3::bytea AND state <> 'done') AS go
+    SELECT current_setting('layerfs.released', true) IS NOT DISTINCT FROM $3::text AS go
 )
 SELECT CASE WHEN k.shared THEN pg_advisory_unlock_shared(k.key)
             ELSE pg_advisory_unlock(k.key) END AS released,

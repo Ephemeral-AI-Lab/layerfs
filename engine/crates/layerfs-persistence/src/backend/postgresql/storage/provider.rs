@@ -31,23 +31,33 @@ impl PostgresStorage {
             ),
         }
     }
-    /// Whether this idle session can still serve (#64): it was not
-    /// quarantined and its connection still stands, judged without a round
-    /// trip (#768; it answered an empty query before, one round trip at
-    /// every mount): a connection the server closed (a restart, a
-    /// terminated backend, an idle timeout) is seen, a silent peer is not,
-    /// and the first read on it then fails as that read's one attempt. A
-    /// session that cannot serve is never handed to a mount; its caller
-    /// drops it and opens a new one. This check runs before any operation
-    /// uses the session, so no operation is retried.
-    pub fn usable(&self) -> bool {
+    /// Whether this session, idle for `idle`, can still serve a mount
+    /// (#64): it was not quarantined and its connection still stands, judged
+    /// locally (#768: a connection the server closed, by a restart, a
+    /// terminated backend or an idle timeout, is seen with no round trip).
+    /// A session idle at least the selection's `reader_idle_check_ms`
+    /// ([`crate::READER_IDLE_CHECK_MS`], 30 s by default) must also answer an
+    /// empty query within [`crate::READER_CHECK_TIMEOUT`] (one round trip,
+    /// counted): a path that ended the idle connection without telling the
+    /// client (reset at the next packet, or dropped silently, where a read
+    /// would wait for the TCP retransmission timeout) is found here, not by
+    /// the mount's first read. A session that cannot serve is quarantined
+    /// and never handed to a mount; its caller opens a new one. The check
+    /// runs before any operation uses the session, so no operation is
+    /// retried.
+    pub fn usable(&self, idle: std::time::Duration) -> bool {
         let Ok(mut state) = self.session.state.lock() else {
             return false;
         };
         if state.quarantined {
             return false;
         }
-        let alive = state.client.alive();
+        let threshold = u64::from(self.session.settings.reader_idle_check_ms);
+        let alive = state.client.alive()
+            && (idle < std::time::Duration::from_millis(threshold) || {
+                state.work.round_trips += 1;
+                state.client.answers(crate::READER_CHECK_TIMEOUT)
+            });
         if !alive {
             state.quarantine();
         }

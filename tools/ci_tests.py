@@ -141,6 +141,9 @@ SLOW = {
     ("layerfs-store-service", "verify768y_interleavings"): 33.5,
     ("layerfs-store-service", "verify768y_release_faults"): 46.6,
     ("layerfs-store-service", "verify768y_failed_save"): 192.5,
+    # #768 review fixes, --test-threads 3, macOS host, 2026-11-25: the idle
+    # reader's check waits its 5 s cap once.
+    ("layerfs-store-service", "postgresql_reader_idle"): 6.6,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

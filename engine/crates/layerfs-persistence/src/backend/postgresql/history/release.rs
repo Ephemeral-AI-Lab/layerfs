@@ -1,20 +1,23 @@
 //! A mounted Workspace's owner release on PostgreSQL as one pipelined
 //! message (#768 step C): the fenced `DELETE … RETURNING`
-//! (`gc_intent_release_owner`, unchanged) and, when this session holds the
-//! op's keys, the unlock (`sql/postgresql/mount/unlock.sql`), each request
-//! in its own `Sync`, one round trip.
+//! (`gc_intent_release_owner`) and, when this session holds the op's keys,
+//! the unlock (`sql/postgresql/mount/unlock.sql`), each request in its own
+//! `Sync`, one round trip.
 //!
-//! The unlock gives the keys back only when the Store is still at the
-//! session's generation and no live row of the op remains, so it runs
-//! exactly when the statement-by-statement release would have unlocked:
-//! after a delete that ran, or one that found the row already gone. A
-//! refused or stale delete keeps its row, and the unlock then gives nothing
+//! The delete, when it completes at the session's generation, records this
+//! attempt's token in the session setting `layerfs.released`; the unlock
+//! gives the keys back only when it finds that token. So it gives them back
+//! exactly when the statement-by-statement release answered success and
+//! then unlocked: after a delete that ran, or one that found the row
+//! already gone, even if the generation moves before the unlock runs. A
+//! refused or stale delete records nothing, and the unlock gives nothing
 //! back, so the caller keeps the keys with the op as before.
 //!
 //! | Delete | Unlock | Answer | Keys |
 //! | --- | --- | --- | --- |
 //! | ran (generation matches) | one row per key | `Ok` | given back |
 //! | ran, row already gone | one row per key | `Ok` | given back |
+//! | ran, then the generation moved | one row per key | `Ok` | given back |
 //! | stale (generation moved) | no row | `StaleStore` | kept with the op |
 //! | a definite SQLSTATE | no row | that refusal | kept with the op |
 //! | answered | refused, or a reply lost | the delete's answer | unknown: the session is quarantined, its connection closes with every key |
@@ -22,7 +25,7 @@
 //!
 //! Nothing is resent: an unknown outcome quarantines the session while its
 //! lock is still held (`Session::pipeline_decided`).
-use super::statements;
+use super::{fused::nonce, statements};
 use crate::backend::postgresql::session::{
     connection::{Session, SessionKey},
     pipeline::{Refusal, Reply, Request},
@@ -69,19 +72,20 @@ pub(crate) fn release(
     let delete = delete_sql(schema)?;
     let unlock = unlock_sql(schema);
     let op = op_id.as_slice();
+    let token = nonce();
     let (ids, modes): (Vec<i64>, Vec<bool>) = keys.iter().copied().unzip();
-    let delete_params: [&(dyn ToSql + Sync); 2] = [&op, &expected];
-    let unlock_params: [&(dyn ToSql + Sync); 4] = [&ids, &modes, &op, &expected];
+    let delete_params: [&(dyn ToSql + Sync); 3] = [&op, &expected, &token];
+    let unlock_params: [&(dyn ToSql + Sync); 3] = [&ids, &modes, &token];
     let mut requests = vec![Request::Statement {
         sql: &delete,
         params: &delete_params,
-        bytes: 24,
+        bytes: 24 + token.len() as u64,
     }];
     if !keys.is_empty() {
         requests.push(Request::Statement {
             sql: &unlock,
             params: &unlock_params,
-            bytes: 9 * ids.len() as u64 + 24,
+            bytes: 9 * ids.len() as u64 + token.len() as u64,
         });
     }
     session.pipeline_decided(&requests, |replies, trusted| {

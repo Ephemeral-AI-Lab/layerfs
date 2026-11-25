@@ -112,6 +112,19 @@ pub struct StoreDiagnostics {
     pub readers: Vec<SqlWork>,
 }
 impl OpenedStore {
+    /// Prepares the writer's mount and unmount statements in one flight
+    /// (#768): on PostgreSQL one round trip and one read transaction, so a
+    /// mount's admission and an unmount's release prepare nothing. Only a
+    /// service that mounts calls it, the daemon at its Store open; an SDK
+    /// call, an install or a restore does not pay it, and a mount on such a
+    /// service prepares its statements at first use instead. Nothing on
+    /// SQLite.
+    pub fn prepare_mounts(&self) -> StorageResult<()> {
+        match &self.writer {
+            Writer::Sqlite(_) => Ok(()),
+            Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
+        }
+    }
     /// The Store-file operations of a SQLite session (`None` for a
     /// PostgreSQL Store, which has no file).
     pub fn file(&self) -> Option<&dyn layerfs_persistence::StoreFile> {
@@ -270,9 +283,6 @@ fn open_postgres(
 ) -> StorageResult<OpenedStore> {
     use layerfs_persistence::PostgresHandles;
     let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
-    // #768: the mount's admission and the unmount's release, prepared now in
-    // one flight, so neither call prepares a statement.
-    writer.storage.prepare_mount_writes()?;
     let version = format!("postgresql {}", writer.storage.server_version());
     let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
     let binding = binding.to_vec();
@@ -289,7 +299,7 @@ fn open_postgres(
         let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
         let session = opened.storage.clone();
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
-            .with_usable(move || session.usable());
+            .with_usable(move |idle| session.usable(idle));
         observe(&registry, index, provider, reader)
     });
     let committer = writer.history.committer();

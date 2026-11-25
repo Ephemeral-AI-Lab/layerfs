@@ -6,6 +6,7 @@ use std::{
     collections::BTreeMap,
     fmt,
     sync::{atomic::Ordering, Arc, Mutex},
+    time::Instant,
 };
 
 pub type ReaderFactory = Arc<dyn Fn(usize) -> StorageResult<StoreReader> + Send + Sync>;
@@ -53,8 +54,9 @@ struct State {
     opening_failures: BTreeMap<WorkspaceId, (usize, Arc<PortError>)>,
     /// Readers that served a closed Workspace without failure, with the
     /// identity each was opened under; reads take a fresh transaction each
-    /// call, so a kept reader carries no Workspace state.
-    idle: Vec<(usize, StoreReader)>,
+    /// call, so a kept reader carries no Workspace state; and since when it
+    /// is idle.
+    idle: Vec<(usize, StoreReader, Instant)>,
     /// Workspaces whose reader goes back to `idle` at close.
     pooled: std::collections::BTreeSet<WorkspaceId>,
 }
@@ -148,7 +150,7 @@ impl ReadSet {
         };
         // a reader the set cannot keep closes with its drop
         if !state.stopping && state.idle.len() < IDLE_READERS {
-            state.idle.push((index, reader));
+            state.idle.push((index, reader, Instant::now()));
             self.counts
                 .readers_prefilled
                 .fetch_add(1, Ordering::Relaxed);
@@ -182,11 +184,13 @@ impl ReadSet {
                 false => None,
             }
         };
-        // An idle reader is checked outside the lock (a PostgreSQL one with
-        // one round trip, #64); one that cannot serve is dropped, never
-        // handed to this Workspace, and a new reader opens instead.
-        let (index, result) = match candidate.filter(|(_, reader)| reader.usable()) {
-            Some((index, reader)) => {
+        // An idle reader is checked outside the lock (a PostgreSQL one
+        // locally, and with one round trip once idle 30 s, #64/#768); one
+        // that cannot serve is dropped, never handed to this Workspace, and a
+        // new reader opens instead.
+        let candidate = candidate.filter(|(_, reader, since)| reader.usable(since.elapsed()));
+        let (index, result) = match candidate {
+            Some((index, reader, _)) => {
                 self.counts.readers_reused.fetch_add(1, Ordering::Relaxed);
                 let session = ReadSession::new(index, reader, self.counts.clone());
                 (index, Ok(Arc::new(session)))
@@ -336,7 +340,7 @@ impl ReadSet {
                 .saturating_add(session.wait_ns.load(Ordering::Relaxed));
             if let Some(reader) = reader.filter(|_| pooled) {
                 if !state.stopping && state.idle.len() < IDLE_READERS {
-                    state.idle.push((session.index, reader));
+                    state.idle.push((session.index, reader, Instant::now()));
                 }
             }
         }

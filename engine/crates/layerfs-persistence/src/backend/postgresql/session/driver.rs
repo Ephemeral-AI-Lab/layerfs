@@ -444,6 +444,20 @@ impl Driver {
             Self::Closed => false,
         }
     }
+    /// Whether the server answers an empty query within `timeout` (one round
+    /// trip): a readiness check of an idle session, never a retry.
+    pub(crate) fn answers(&mut self, timeout: std::time::Duration) -> bool {
+        match self {
+            Self::Ordinary(client) => {
+                let check = client.client.simple_query("");
+                let check = async { tokio::time::timeout(timeout, check).await };
+                // No answer in time: whether the connection works is unknown.
+                matches!(client.runtime.block_on(check), Ok(Ok(_)))
+            }
+            Self::Diagnostic(client) => client.run(client.client.batch_execute("")).is_ok(),
+            Self::Closed => false,
+        }
+    }
     pub(crate) fn cancellation(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
         match self {
             Self::Ordinary(_) => None,

@@ -338,6 +338,12 @@ const SQLITE_CYCLE: &[Pin] = &[
         workspace: [0, 0, 0, 0],
     },
     Pin {
+        scenario: "store.prepare",
+        writer: [0, 0, 0, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
         scenario: "reader.prefill",
         writer: [0, 0, 0, 0],
         control: [0, 0, 0, 0],
@@ -400,10 +406,22 @@ const SQLITE_CYCLE: &[Pin] = &[
 //
 // Step C made the unmount one message (the fenced delete and the
 // conditional unlock, pipelined): [0, 2, 2, 0] -> [0, 1, 2, 0].
+//
+// Review fix: only the daemon prepares the writer's mount statements at its
+// open (`OpenedStore::prepare_mounts`, `store.prepare`: one flight, one read
+// transaction, [0, 1, 0, 1]); a Store open for an SDK call, an install or
+// a restore is back at [1, 9, 5, 1]. The daemon's open plus prepare
+// is the [1, 10, 5, 2] of step A.
 const POSTGRESQL_CYCLE: &[Pin] = &[
     Pin {
         scenario: "store.open",
-        writer: [1, 10, 5, 2],
+        writer: [1, 9, 5, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "store.prepare",
+        writer: [0, 1, 0, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -609,7 +627,15 @@ struct Opened {
     owner: Owner,
 }
 impl Opened {
+    /// The daemon's open: the Store, then the writer's mount statements
+    /// (`OpenedStore::prepare_mounts`, #768).
     fn open(dir: &Path, selection: StoreSelection, tag: &str) -> Self {
+        let opened = Self::open_plain(dir, selection, tag);
+        opened.service.opened.prepare_mounts().unwrap();
+        opened
+    }
+    /// The Store open alone, as an SDK call opens it.
+    fn open_plain(dir: &Path, selection: StoreSelection, tag: &str) -> Self {
         let opened = open_store_observed(
             selection,
             BINDING,
@@ -804,12 +830,17 @@ fn cycle_scenarios(
     branch: BranchId,
 ) -> Vec<Measured> {
     let mut out = Vec::new();
-    let opened = Opened::open(dir, selection(), "e");
-    // The Store open itself: every session's work since it connected.
+    let opened = Opened::open_plain(dir, selection(), "e");
+    // The Store open itself, as an SDK call opens it: every session's work
+    // since it connected.
     let open = opened.work();
     out.push(Measured {
         scenario: "store.open",
         counts: [counts(&open[0]), counts(&open[1]), counts(&open[2])],
+    });
+    // What the daemon adds to its open (#768).
+    measure(&opened, "store.prepare", &mut out, || {
+        opened.service.opened.prepare_mounts().unwrap()
     });
     measure(&opened, "reader.prefill", &mut out, || {
         if let Some(prefilled) = opened.service.store.prefill_reader() {

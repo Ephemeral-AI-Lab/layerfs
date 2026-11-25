@@ -5,8 +5,10 @@
 //!
 //! The message admits only what the statement-by-statement registration
 //! would admit with nothing to settle: it refuses whenever a live operation
-//! row conflicts, dead or not. Every refusal it cannot report exactly is
-//! classified by that registration, once: a refusal after the keys were
+//! row conflicts, dead or not. Every definite refusal it does not report
+//! itself (only `StaleStore` and a pooled connection, which that
+//! registration would report too) is decided by that registration, once,
+//! whatever its cause: a refusal after the keys were
 //! granted first gives back exactly those keys (one statement), and a
 //! refused key leaves none held. That registration then settles provably
 //! dead rows and reports `MountsActive`, `Busy` or `Unresolved` with the
@@ -36,9 +38,12 @@ pub(crate) fn register_mount(
 }
 
 /// The one-message registration alone: `Some` when it admitted (the keys
-/// held with the op), `None` when it does not apply or refused with
-/// nothing written and no key held, for [`register_separately`] to decide;
-/// `Err` for a refusal it reports as it is or an unknown outcome.
+/// held with the op), `None` when it does not apply or met any definite
+/// refusal, with nothing written and no key held (keys it held are given
+/// back first), for [`register_separately`] to decide once; `Err` only for
+/// `StaleStore`, a pooled connection (the answers that registration would
+/// give itself), a refusal on a session that lost a reply, and an unknown
+/// outcome, which quarantined the session and is never sent again.
 pub(crate) fn one_message(
     provider: &HistoryProvider,
     intent: &GcIntent,
@@ -89,7 +94,15 @@ pub(crate) fn one_message(
     let asked = asked
         .as_ref()
         .map(|(node, stack)| (node.as_slice(), stack.as_slice()));
-    match admit(session, &keys, &row, asked)? {
+    let admission = match admit(session, &keys, &row, asked) {
+        Ok(admission) => admission,
+        // An unknown outcome quarantined the session: never sent again.
+        Err(BackendError::Unknown) => return Err(BackendError::Unknown.into()),
+        // A definite refusal before anything was sent (a statement that did
+        // not prepare, among others): nothing written, no key held.
+        Err(_) => return Ok(None),
+    };
+    match admission {
         Admission::Admitted(found) => {
             // A second registration of a held op keeps one level per key.
             if let Some(earlier) = session.hold_op(intent.op_id, keys) {

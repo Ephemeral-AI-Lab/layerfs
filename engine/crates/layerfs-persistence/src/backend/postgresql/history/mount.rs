@@ -30,13 +30,22 @@
 //! | Request | Refusal | Outcome |
 //! | --- | --- | --- |
 //! | 1 | `22012` (generation moved) | `StaleStore`, no key taken |
-//! | 1 | another definite SQLSTATE | that refusal, no key taken |
+//! | 1 | another definite SQLSTATE | [`Admission::Released`]: no key taken |
 //! | 2 | `22012` (a key refused) | [`Admission::Released`]: no key held |
 //! | 2 | `22003` (another backend, §5.2 item 34) | `Unsupported`, no key taken |
 //! | 2 | any other | unknown: the keys it took are unknown |
 //! | 3, 4 | a definite SQLSTATE (`rows::sqlstate`) | [`Admission::Holding`]: the keys are held |
 //! | 5 | a definite SQLSTATE | admitted, markers not read |
 //! | any | a SQLSTATE without a definite rule, `25P02` first, or no reply | unknown, the session quarantined |
+//!
+//! Known limit: a reply lost after the `COMMIT` went out, the markers'
+//! included, is an unknown outcome although the intent may have committed.
+//! The writer is quarantined and nothing is resent, so a committed live row
+//! stays until the daemon exits and its owner is settled, and meanwhile
+//! refuses `branch.remove` and compaction (`MountsActive`). Before step B a
+//! lost markers reply was the reader's and left the writer able to release
+//! the row. Reopening the writer after a quarantine would clear this and
+//! the existing writer-quarantine limit alike.
 //!
 //! A refusal whose session lost a later reply (quarantined, its connection
 //! closed, so the server holds none of its keys) is a definite `Conflict`:
@@ -182,10 +191,13 @@ pub(crate) enum Admission {
     /// A definite refusal after the keys were granted: nothing was written
     /// and the session still holds every key.
     Holding,
-    /// The lock statement refused a key and gave back its grants: nothing
-    /// was written and no key is held.
+    /// A definite refusal before any key was held (the lock statement
+    /// refused a key and gave back its grants, or the transaction's `BEGIN`
+    /// batch failed): nothing was written and no key is held.
     Released,
-    /// A definite refusal, nothing written, no key held.
+    /// A refusal reported as it is: `StaleStore`, a pooled connection, or a
+    /// refusal on a session that lost a later reply. Nothing written, no
+    /// key held.
     Refused(HistoryError),
     /// Unknown; the session is quarantined.
     Unknown,
@@ -227,10 +239,9 @@ pub(crate) fn admit(
     let insert = insert_sql()?;
     let markers_sql = qualified("paths_node_markers", schema)?;
     // The insert names its tables as the transaction's `search_path`
-    // resolves them, so a statement not yet prepared (a session the Store
-    // service did not open) is prepared in a read transaction first, one
-    // round trip; none when all are.
-    session.prepare(&[LOCK.to_owned(), insert.clone(), markers_sql.clone()])?;
+    // resolves them: `pipeline_decided` prepares a statement not yet cached
+    // inside a read transaction with that `search_path`, in the flight's own
+    // turn (one round trip; none when all are cached).
     let lock_params: [&(dyn ToSql + Sync); 4] = [&ids, &modes, &pid, &nonce];
     let insert_params: [&(dyn ToSql + Sync); 18] = [
         &row.project_id,
@@ -331,7 +342,7 @@ fn decide(
             return match (definite, step) {
                 (true, Step::Markers) => Admission::Admitted(None),
                 (true, _) if locked => Admission::Holding,
-                (true, _) => Admission::Refused(refusal.error.into()),
+                (true, _) => Admission::Released,
                 (false, _) => Admission::Unknown,
             };
         };
@@ -349,7 +360,7 @@ fn decide(
             Step::Lock if range => Admission::Refused(HistoryError::Unsupported(POOLED)),
             Step::Lock => Admission::Unknown,
             _ if !definite => Admission::Unknown,
-            Step::Begin => Admission::Refused(rows::sqlstate(code.code()).into()),
+            Step::Begin => Admission::Released,
             Step::Insert | Step::Commit => Admission::Holding,
             Step::Markers => Admission::Admitted(None),
         };

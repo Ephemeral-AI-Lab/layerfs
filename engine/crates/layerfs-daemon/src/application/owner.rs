@@ -551,6 +551,14 @@ impl Application {
                 ReservationBlocks::default(),
             ) {
                 Ok(mut opened) => {
+                    // #768: the daemon mounts, so its writer prepares the
+                    // mount and unmount statements now, in one flight.
+                    if let Err(cause) = opened.prepare_mounts() {
+                        return Err(ApplicationError::AfterOverlay {
+                            owner: Box::new(owner),
+                            cause: Box::new(ApplicationError::Store(cause)),
+                        });
+                    }
                     if matches!(setup.store, layerfs_bridge::DaemonStore::Postgres { .. }) {
                         // the status carries one printable word: `postgresql/17.6`
                         opened.sqlite_version = opened

@@ -40,7 +40,7 @@ pub use backend::sqlite::storage::merge_records::{
 };
 pub use config::{
     PersistenceConfig, PostgresCheck, PostgresSelection, SqliteAcquisitionSchema, SqlitePackLayout,
-    SqlitePersistenceProfile, SynchronousCommit,
+    SqlitePersistenceProfile, SynchronousCommit, READER_CHECK_TIMEOUT, READER_IDLE_CHECK_MS,
 };
 pub use history::admission::{has_place_view, with_place_view};
 pub use history::{

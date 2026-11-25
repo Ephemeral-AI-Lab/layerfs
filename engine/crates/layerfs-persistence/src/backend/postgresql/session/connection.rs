@@ -78,19 +78,11 @@ impl State {
     /// trip, however many), each counted in `prepares`; every reply is
     /// collected, and the first failure is returned once the others are
     /// cached. A prepare the client never sent (unencodable, or after one
-    /// that was) fails definitely ([`super::driver::Error::unsent`]).
-    pub(crate) fn statements(
-        &mut self,
-        sqls: &[&str],
-    ) -> Result<Vec<Statement>, super::driver::Error> {
-        self.statements_in(sqls, None)
-    }
-
-    /// [`Self::statements`], with `begin` sent before the prepares and
-    /// `COMMIT` after them in the same flight: a read transaction whose
-    /// `SET LOCAL search_path` resolves the unqualified names of the texts.
-    /// Counted as one read transaction when it is sent. Its `begin` or
-    /// `COMMIT` failing fails the call.
+    /// that was) fails definitely ([`super::driver::Error::unsent`]). With
+    /// `begin`, it is sent before the prepares and `COMMIT` after them in the
+    /// same flight: a read transaction whose `SET LOCAL search_path` resolves
+    /// the unqualified names of the texts, counted as one read transaction
+    /// when it is sent; its `begin` or `COMMIT` failing fails the call.
     pub(crate) fn statements_in(
         &mut self,
         sqls: &[&str],

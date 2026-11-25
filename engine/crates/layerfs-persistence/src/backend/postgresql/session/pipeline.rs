@@ -183,7 +183,7 @@ impl Session {
         &self,
         requests: &[Request<'_>],
     ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
-        self.pipeline_turn(requests, true, |replies, _| (replies, false))
+        self.pipeline_turn(requests, true, false, |replies, _| (replies, false))
     }
 
     /// [`Self::pipeline`] refused (`Integrity`, nothing sent) inside this
@@ -200,24 +200,29 @@ impl Session {
         requests: &[Request<'_>],
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
-        self.pipeline_turn(requests, false, judge)
+        self.pipeline_turn(requests, false, false, judge)
     }
 
     /// [`Self::pipeline_judged`] that may also run inside this thread's
     /// held lane: for a flight that never takes the lane row (a mount's
-    /// admission, an owner's release).
+    /// admission, an owner's release). Statements not yet prepared on the
+    /// connection are prepared inside a read transaction whose `SET LOCAL
+    /// search_path` resolves their unqualified names (one round trip and one
+    /// read transaction, counted), in the same turn as the flight, so no
+    /// other caller can evict them from the cache in between.
     pub(crate) fn pipeline_decided<T>(
         &self,
         requests: &[Request<'_>],
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
-        self.pipeline_turn(requests, true, judge)
+        self.pipeline_turn(requests, true, true, judge)
     }
 
     fn pipeline_turn<T>(
         &self,
         requests: &[Request<'_>],
         nested: bool,
+        scoped: bool,
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
         if !self.writable {
@@ -240,7 +245,8 @@ impl Session {
                 Request::Simple(_) => None,
             })
             .collect();
-        let statements = match state.statements(&texts) {
+        let begin = scoped.then(|| self.settings.read_begin());
+        let statements = match state.statements_in(&texts, begin.as_deref()) {
             Ok(statements) => statements,
             Err(e) => {
                 state.work.statement_ns += start.elapsed().as_nanos() as u64;

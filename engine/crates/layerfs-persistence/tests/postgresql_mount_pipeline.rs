@@ -22,7 +22,10 @@
 //! * A message whose insert reaches the session's lock timeout is a definite
 //!   refusal: its keys are given back and the fallback reports `Busy`.
 //! * Step C: an owner release whose delete the server refuses keeps its row
-//!   and its keys; the next release frees both in one message.
+//!   and its keys; the next release frees both in one message. A release
+//!   whose generation moves after its delete still gives its keys back.
+//! * A definite refusal of the one message before any key is held is
+//!   decided by the statement-by-statement registration, once.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 mod support;
@@ -695,4 +698,109 @@ fn a_refused_release_keeps_its_row_and_its_keys() {
         keys_free(&mut admin, &binding, stack, branch),
         "the keys were given back"
     );
+}
+
+/// Review fix (#768 step C): the unlock gives the keys back whenever the
+/// release's delete answered success, even when the Store's generation moves
+/// between the delete and the unlock (here a trigger bumps it as the delete
+/// commits), as the statement-by-statement release did; the unmount answers
+/// `Ok` and no key stays held.
+#[test]
+fn a_release_whose_generation_moves_after_its_delete_gives_its_keys_back() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "release_moved");
+    let binding = binding("release_moved");
+    let handles = open(&schema, &binding, LOCK_TIMEOUT_MS, true);
+    let (stack, branch, _) = project(&handles.history, 1);
+    let intent = mount(stack, branch, MOUNT);
+    handles.history.gc_register(&intent).unwrap();
+    let mut admin = schema.admin();
+    let generation = |admin: &mut postgres::Client| -> i64 {
+        admin
+            .query_one(
+                "SELECT catalog_incarnation::bigint FROM history_meta WHERE id = 1",
+                &[],
+            )
+            .unwrap()
+            .get(0)
+    };
+    let before = generation(&mut admin);
+    admin
+        .batch_execute(&format!(
+            // Qualified: the release's statements run outside a transaction
+            // and its `SET LOCAL search_path`.
+            "CREATE FUNCTION bump_generation() RETURNS trigger LANGUAGE plpgsql AS \
+             $$ BEGIN UPDATE {name}.history_meta \
+             SET catalog_incarnation = catalog_incarnation + 1 \
+             WHERE id = 1; RETURN NULL; END $$; \
+             CREATE TRIGGER bump_generation AFTER DELETE ON gc_intent \
+             FOR EACH ROW EXECUTE FUNCTION bump_generation();",
+            name = schema.name
+        ))
+        .unwrap();
+    handles.history.gc_release(&intent.op_id).unwrap();
+    assert_eq!(generation(&mut admin), before + 1, "the generation moved");
+    assert_eq!(rows(&mut admin), 0, "the delete ran");
+    assert!(
+        keys_free(&mut admin, &binding, stack, branch),
+        "an Ok release leaves no key held"
+    );
+}
+
+/// Review fix (#768 step B): a definite refusal of the one message before
+/// any key is held (here its `BEGIN` batch meets the session's lock timeout
+/// on `history_meta`, which an operator holds) is not reported: the
+/// statement-by-statement registration decides, once. Its key statement
+/// waits for the operator (it has no lock timeout), and once the lock goes
+/// the mount is admitted.
+#[test]
+fn a_definite_refusal_of_the_one_message_falls_back_once() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "mount_fallback");
+    let binding = binding("fallback");
+    drop(open(&schema, &binding, LOCK_TIMEOUT_MS, true));
+    let handles = open(&schema, &binding, 300, false);
+    let (stack, branch, _) = project(&handles.history, 1);
+    // Warm both registrations' statements.
+    let warm = mount(stack, branch, 1);
+    handles.history.gc_register(&warm).unwrap();
+    handles.history.gc_release(&warm.op_id).unwrap();
+    register_separately(&handles.history, &warm).unwrap();
+    handles.history.gc_release(&warm.op_id).unwrap();
+
+    let mut locker = schema.admin();
+    let mut admin = schema.admin();
+    locker
+        .batch_execute("BEGIN; LOCK TABLE history_meta IN ACCESS EXCLUSIVE MODE")
+        .unwrap();
+    let intent = mount(stack, branch, MOUNT);
+    let held = Duration::from_millis(1_000);
+    let answered = std::sync::atomic::AtomicBool::new(false);
+    let (registered, took) = std::thread::scope(|scope| {
+        let call = scope.spawn(|| {
+            let start = Instant::now();
+            let registered = handles.history.gc_register(&intent);
+            answered.store(true, std::sync::atomic::Ordering::SeqCst);
+            (registered, start.elapsed())
+        });
+        std::thread::sleep(held);
+        let early = answered.load(std::sync::atomic::Ordering::SeqCst);
+        locker.batch_execute("ROLLBACK").unwrap();
+        let answer = call.join().expect("the call");
+        assert!(
+            !early,
+            "the one message's Busy was reported, not decided again: {:?}",
+            answer.0
+        );
+        answer
+    });
+    registered.unwrap();
+    assert!(took >= held, "{took:?}");
+    assert_eq!(rows(&mut admin), 1, "the fallback registered the mount");
+    assert!(
+        !keys_free(&mut admin, &binding, stack, branch),
+        "its keys are held"
+    );
+    handles.history.gc_release(&intent.op_id).unwrap();
+    assert!(keys_free(&mut admin, &binding, stack, branch));
 }
