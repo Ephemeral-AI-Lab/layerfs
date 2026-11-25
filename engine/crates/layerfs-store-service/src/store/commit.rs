@@ -447,9 +447,8 @@ impl BoundWorkspace {
                             // The fallback's merge gets the same unheld check
                             // before the lane as a first merge (#776 R3).
                             if !changed.is_empty() {
-                                let overlap = phase(timing, "live.early", || {
-                                    self.live_overlap(&changed)
-                                })?;
+                                let overlap =
+                                    phase(timing, "live.early", || self.live_overlap(&changed))?;
                                 if !overlap.is_empty() {
                                     return Err(self.live_conflict(
                                         snapshot.scope,

@@ -564,7 +564,8 @@ impl Session {
                             // (after a refused COMMIT the ROLLBACK finds no
                             // transaction and only warns).
                             let error = e.backend();
-                            if error == BackendError::Unknown || rollback(state, &leftover).is_err() {
+                            if error == BackendError::Unknown || rollback(state, &leftover).is_err()
+                            {
                                 state.quarantine();
                                 return Err(BackendError::Unknown.into());
                             }
