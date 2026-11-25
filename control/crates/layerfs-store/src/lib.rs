@@ -16,6 +16,7 @@ pub mod call;
 pub mod calls;
 pub mod compact;
 pub mod diagnostic;
+pub mod formats;
 pub mod get;
 #[doc(hidden)]
 pub mod identity;

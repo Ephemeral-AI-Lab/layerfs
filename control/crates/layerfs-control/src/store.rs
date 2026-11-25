@@ -30,50 +30,84 @@ pub use layerfs_store::close_idle;
 /// same `store compact` after a lost reply or an unresolved earlier run.
 pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
     let store = name.as_str();
-    layerfs_store::compact::compact(home, events, store).map_err(|refusal| {
-        if refusal
-            .detail
-            .get(FIX)
-            .is_some_and(|fix| *fix != SdkValue::Null)
-        {
-            return refusal;
-        }
-        let machine = || {
-            let record = StoreRecord::read(home, store).ok().flatten()?;
-            let machine = record.machine().ok()?;
-            let worker = !layerfs_machine::runs_here(home, &machine).unwrap_or(false);
-            (record.kind().ok()? == StoreKind::Sqlite && worker).then_some(machine)
-        };
-        let fix = match refusal.code.as_str() {
-            "Unavailable" => match machine() {
-                Some(machine) if layerfs_machine::worker::is_mismatch(&refusal) => {
-                    let on = inventory::sandboxes_on(home, &machine).map_or(0, |on| on.len());
-                    Some(layerfs_machine::state::replace_worker(&machine, on))
-                }
-                Some(machine) => Some(format!(
-                    "layerfs machine start {machine}",
-                    machine = shell_word(&machine)
-                )),
-                None => None,
-            },
-            "Unknown" | "Unresolved" => Some(format!(
-                "layerfs store compact {store}",
-                store = shell_word(store)
-            )),
-            _ => None,
-        };
-        match fix {
-            Some(fix) => with_fix(refusal, fix),
-            None => refusal,
-        }
-    })
+    layerfs_store::compact::compact(home, events, store)
+        .map_err(|refusal| with_store_fix(home, store, refusal, "compact"))
 }
 
 /// `store.upgrade`: brings an older-format Store to the latest format in
-/// place (#804), reading the process-wide cancel flag; a refusal gets the
-/// call that clears it as its `fix` (W2 implements).
+/// place (#804), reading the process-wide cancel flag, refused `InUse`
+/// while a Sandbox of one of its projects is recorded ([`RELATED`]). A
+/// refusal gets the call that clears it as its `fix`: the machine start or
+/// worker replacement compaction names, the same `store upgrade` after a
+/// lost reply or an unresolved earlier run, and for a format this build
+/// cannot upgrade (not one newer than this build) the Store's `store
+/// remove` (sqlite) or `store disconnect` (PostgreSQL, which keeps its data).
+/// The process-wide cancel request is cleared when the call returns.
 pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
-    layerfs_store::upgrade::upgrade(home, events, name.as_str(), layerfs_home::cancel::flag())
+    let store = name.as_str();
+    let cancel = layerfs_home::cancel::flag();
+    // a cancel asked for before the run still stops it; once the answer is
+    // decided the request is dropped, so it does not cancel a later call
+    let outcome = layerfs_store::upgrade::upgrade_with(home, events, store, cancel, RELATED);
+    layerfs_home::cancel::clear();
+    outcome.map_err(|refusal| {
+        if refusal.code != "Unsupported" || refusal.message.contains("newer than this build") {
+            return with_store_fix(home, store, refusal, "upgrade");
+        }
+        let kind = StoreRecord::read(home, store).ok().flatten();
+        let call = match kind.and_then(|record| record.kind().ok()) {
+            Some(StoreKind::Postgresql) => "disconnect",
+            Some(StoreKind::Sqlite) => "remove",
+            None => return refusal,
+        };
+        with_fix(
+            refusal,
+            format!("layerfs store {call} {}", shell_word(store)),
+        )
+    })
+}
+
+/// `refusal` of Store call `call` (`compact`, `upgrade`) on Store `store`
+/// with the fix that clears it, when it carries none (spec v19): starting a
+/// sqlite Store's machine whose worker was not reached, or replacing a
+/// worker of another build (the stop forced when Sandboxes are on the
+/// machine); the same call after a lost reply or an unresolved earlier run.
+fn with_store_fix(home: &Path, store: &str, refusal: SdkRefusal, call: &str) -> SdkRefusal {
+    if refusal
+        .detail
+        .get(FIX)
+        .is_some_and(|fix| *fix != SdkValue::Null)
+    {
+        return refusal;
+    }
+    let machine = || {
+        let record = StoreRecord::read(home, store).ok().flatten()?;
+        let machine = record.machine().ok()?;
+        let worker = !layerfs_machine::runs_here(home, &machine).unwrap_or(false);
+        (record.kind().ok()? == StoreKind::Sqlite && worker).then_some(machine)
+    };
+    let fix = match refusal.code.as_str() {
+        "Unavailable" => match machine() {
+            Some(machine) if layerfs_machine::worker::is_mismatch(&refusal) => {
+                let on = inventory::sandboxes_on(home, &machine).map_or(0, |on| on.len());
+                Some(layerfs_machine::state::replace_worker(&machine, on))
+            }
+            Some(machine) => Some(format!(
+                "layerfs machine start {machine}",
+                machine = shell_word(&machine)
+            )),
+            None => None,
+        },
+        "Unknown" | "Unresolved" => Some(format!(
+            "layerfs store {call} {store}",
+            store = shell_word(store)
+        )),
+        _ => None,
+    };
+    match fix {
+        Some(fix) => with_fix(refusal, fix),
+        None => refusal,
+    }
 }
 
 /// `store.repair_mount_holders(project, branch, action, { op, legacy,

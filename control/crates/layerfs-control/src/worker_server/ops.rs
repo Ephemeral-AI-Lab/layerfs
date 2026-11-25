@@ -21,8 +21,9 @@ use std::path::Path;
 /// any other operation's panic closes the connection, so its caller
 /// reports `Unknown` (layerfs-project#179 D7). A new read-only operation
 /// is added here.
-const READ_ONLY: [&str; 9] = [
+const READ_ONLY: [&str; 10] = [
     "worker.ping",
+    layerfs_store::upgrade::FORMAT_OP,
     crate::doctor::NETWORK_OP,
     layerfs_sandbox::inspect::OP,
     "machine.images",
@@ -243,6 +244,14 @@ pub(super) fn run(
         // compacts a sqlite Store on this machine (spec S6, #42 D5):
         // `{ store, store_record }`; its phases go out as events
         layerfs_store::compact::WORKER_OP => layerfs_store::compact::in_worker(root, &args, events),
+        // upgrades a sqlite Store on this machine in place (#804):
+        // `{ store, store_record, op }`; its phases go out as events, and
+        // `store.cancel { op }`, on another connection, stops it before
+        // its commit
+        layerfs_store::upgrade::WORKER_OP => layerfs_store::upgrade::in_worker(root, &args, events),
+        layerfs_store::upgrade::CANCEL_OP => layerfs_store::upgrade::cancel_in_worker(&args),
+        // a sqlite Store's format, from its header (`--with format`)
+        layerfs_store::upgrade::FORMAT_OP => layerfs_store::upgrade::format_in_worker(root, &args),
         // a Sandbox image copied to this machine (`sandbox.create --image`,
         // `machine.load_image`), one step at a time
         "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),

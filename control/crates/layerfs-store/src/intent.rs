@@ -1,10 +1,12 @@
 //! The one operation a Store's record holds (`op`, #536 §7.1; call surface
-//! 2.0): a move, a remove, a compaction, a backup or a restore, recorded so
+//! 2.0): a move, a remove, a compaction, an upgrade, a backup or a restore,
+//! recorded so
 //! every client reads the Store as `busy` while it runs and as `broken`,
 //! `unresolved` once a gone owner left its outcome unknown.
 //!
-//! A move and a remove hold the Store to themselves and are written by
-//! their own calls (`sqlite::family::begin`). The others record a marker
+//! A move, a remove and an upgrade hold the Store to themselves and are
+//! written by their own calls (`sqlite::family::begin`, and
+//! `postgresql::family::begin` for an upgrade of a PostgreSQL Store). The others record a marker
 //! with the functions here: [`begin`] (refused while another operation
 //! holds the Store) or [`mark`] (never refused: the Store's own admission
 //! decides), then [`advance`] as the phases go, and [`clear`] when the
@@ -48,11 +50,12 @@ pub fn exclusive(name: &str) -> bool {
 }
 
 /// The word a state's `op.name` shows for operation `name`: `move`,
-/// `remove`, `compact`, `backup` or `restore` (`create` while a Store is
-/// made on a machine); any other name by its last word.
+/// `remove`, `compact`, `upgrade`, `backup` or `restore` (`create` while a
+/// Store is made on a machine); any other name by its last word.
 pub fn word(name: &str) -> &str {
     match name {
         _ if is_move(name) => "move",
+        UPGRADE => "upgrade",
         BACKUP => "backup",
         RESTORE => "restore",
         other => other.rsplit('.').next().unwrap_or(other),
@@ -82,23 +85,26 @@ pub fn shown_as(name: &str, phase: &str, started: Option<i64>) -> SdkValue {
 /// The call that clears Store `store`'s operation `op` once its owner is
 /// gone and its outcome unknown, with its arguments and without `layerfs`:
 /// the same `store move <store> <machine>` for a move, `store remove` for a
-/// remove or a create, `store compact` for a compaction (the next run
-/// adopts and settles what the earlier one left), and for anything else
+/// remove or a create, `store compact` for a compaction and `store upgrade`
+/// for an upgrade (the next run adopts and settles what the earlier one
+/// left, #804), and for anything else
 /// the live read that settles it, `store get <store> --with live`.
 pub fn clearing(op: &Op, store: &str) -> String {
     match (op.name(), op.args().get_text("to")) {
         (name, Some(to)) if is_move(name) => format!("store move {store} {to}"),
         (REMOVE | CREATE, _) => format!("store remove {store}"),
         (COMPACT, _) => format!("store compact {store}"),
+        (UPGRADE, _) => format!("store upgrade {store}"),
         _ => format!("store get {store} --with live"),
     }
 }
 
 /// Whether a live read settles Store operation `name` once its owner is
 /// gone: every operation but those a call of their own clears (a move, a
-/// remove, a create and a compaction).
+/// remove, a create, a compaction and an upgrade, whose Store a read cannot
+/// tell wholly old from wholly new by its record).
 pub fn settled_by_read(name: &str) -> bool {
-    !is_move(name) && !matches!(name, REMOVE | CREATE | COMPACT)
+    !is_move(name) && !matches!(name, REMOVE | CREATE | COMPACT | UPGRADE)
 }
 
 /// Records operation `name` of this process on Store `store`, at `phase`,
