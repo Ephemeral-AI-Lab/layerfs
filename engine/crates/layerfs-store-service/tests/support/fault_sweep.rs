@@ -7,7 +7,9 @@
 //! the Commit: a warm or first one (fused since #768 stage 2), a forced one
 //! (the separate path with its held-lane connection), or one whose head
 //! another Workspace moved first (the fused attempt's race refusal and the
-//! fallback on the separate path, in one call).
+//! fallback on the separate path, in one call), or a warm one that also adds
+//! families of similar files (#810: the Save's publication of the families'
+//! first members before the fused message).
 //!
 //! After each run, from fresh sessions that do not go through the proxy:
 //!
@@ -60,6 +62,10 @@ pub enum Flight {
     /// A second Commit after another Workspace moved the head: the fused
     /// attempt is refused as a race and the separate path merges.
     Raced,
+    /// A warm Commit that also adds families of similar files: its Save
+    /// holds each family's later members until one publication of the
+    /// families' first members, before the fused message (#810).
+    Similar,
 }
 
 impl Flight {
@@ -93,11 +99,58 @@ fn expected(flight: Flight, fault: &[u8]) -> Tree {
     if flight.warm() {
         tree.insert("/warm".into(), Node::File(b"warm\n".to_vec()));
     }
+    if flight == Flight::Similar {
+        tree.insert("/warm_ring".into(), Node::File(ring_warming(fault)));
+    }
     if flight == Flight::Raced {
         tree.insert("/other".into(), Node::File(b"other\n".to_vec()));
     }
     tree.insert("/fault".into(), Node::File(fault.to_vec()));
+    if flight == Flight::Similar {
+        for (path, bytes) in similar_files(fault) {
+            tree.insert(path, Node::File(bytes));
+        }
+    }
     tree
+}
+
+/// The `Similar` flight's warm-up file: 400 bytes unique to the run, whose
+/// selection loads the Store's similarity ring before the armed Commit, so
+/// the armed flight never reads the ring table (which grows run by run).
+fn ring_warming(fault: &[u8]) -> Vec<u8> {
+    let mut warm = fault.to_vec();
+    warm.extend_from_slice(b"warm");
+    similar_files(&warm).swap_remove(0).1
+}
+
+/// Families of similar files of the `Similar` flight, unique to the run
+/// whose `/fault` holds `fault`: three families of three 400-byte members
+/// sharing all but their last line.
+fn similar_files(fault: &[u8]) -> Vec<(String, Vec<u8>)> {
+    let seed = fault.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
+    });
+    let mut files = Vec::new();
+    for family in 0..3_u64 {
+        let mut state = (seed ^ family).wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1;
+        let shared: Vec<u8> = (0..400)
+            .map(|n| {
+                if n % 64 == 63 {
+                    return b'\n';
+                }
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                b'a' + (state % 26) as u8
+            })
+            .collect();
+        for member in 0..3 {
+            let mut bytes = shared.clone();
+            bytes.extend_from_slice(format!("member {member}\n").as_bytes());
+            files.push((format!("/similar_{family}_{member}"), bytes));
+        }
+    }
+    files
 }
 
 fn content(name: &str) -> Vec<u8> {
@@ -131,6 +184,9 @@ fn run(
     let workspace = service.bind(branch);
     let mut old = if flight.warm() {
         write(&workspace, "/warm", b"warm\n");
+        if flight == Flight::Similar {
+            write(&workspace, "/warm_ring", &ring_warming(&content(name)));
+        }
         match verdict(&commit(&workspace)) {
             Verdict::Committed(id) => Some(id),
             other => panic!("{name}: warm-up Commit: {other:?}"),
@@ -150,6 +206,11 @@ fn run(
         mover.stop();
     }
     write(&workspace, "/fault", &content(name));
+    if flight == Flight::Similar {
+        for (path, bytes) in similar_files(&content(name)) {
+            write(&workspace, &path, &bytes);
+        }
+    }
     let before = service.service.store.fused_counts();
     proxy.arm(target);
     let first = verdict(&commit(&workspace));
@@ -222,7 +283,9 @@ fn check(
         "{label}: one fused Commit or one fallback"
     );
     match flight {
-        Flight::Warm | Flight::First => assert_eq!(fallbacks, 0, "{label}: nothing raced"),
+        Flight::Warm | Flight::First | Flight::Similar => {
+            assert_eq!(fallbacks, 0, "{label}: nothing raced")
+        }
         Flight::Forced => assert_eq!(run.counts, (0, 0), "{label}: a forced Commit is not fused"),
         Flight::Raced => {
             assert_eq!(fused, 0, "{label}: a moved head never commits fused");
@@ -343,7 +406,10 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     });
     let race_refusal = raced.map(|raced| raced.refusal);
     if flight != Flight::Raced {
-        let fused = u64::from(matches!(flight, Flight::Warm | Flight::First));
+        let fused = u64::from(matches!(
+            flight,
+            Flight::Warm | Flight::First | Flight::Similar
+        ));
         assert_eq!(clean.counts, (fused, 0), "the clean Commit's path");
     }
     check(&store, "clean", flight, raced, &clean);

@@ -38,6 +38,7 @@ impl Save<'_> {
             .filter(|id| {
                 !state.packer.pending(*id)
                     && state.pending.pending_canonical(*id).is_none()
+                    && !state.deferred.holds(*id)
                     && state.packer.location(*id).is_none()
             })
             .collect();
@@ -56,7 +57,11 @@ impl Save<'_> {
         }
         use crate::source::Source;
         let declared = ids.iter().try_fold(0usize, |bytes, id| {
-            let length = if let Some(value) = state.pending.pending_canonical(*id) {
+            let length = if let Some(value) = state
+                .pending
+                .pending_canonical(*id)
+                .or_else(|| state.deferred.canonical(*id))
+            {
                 value.len()
             } else {
                 match state.packer.location(*id) {
@@ -83,7 +88,11 @@ impl Save<'_> {
         let mut out = Vec::with_capacity(ids.len());
         let mut bytes = 0usize;
         for id in ids {
-            let value = if let Some(canonical) = state.pending.pending_canonical(*id) {
+            let value = if let Some(canonical) = state
+                .pending
+                .pending_canonical(*id)
+                .or_else(|| state.deferred.canonical(*id))
+            {
                 canonical.to_vec()
             } else {
                 state.resolve(*id)?

@@ -1,4 +1,5 @@
 //! Bounded immutable-pack saves through the bounded persistence port.
+mod deferred;
 mod operation;
 mod pooled;
 mod provider;
