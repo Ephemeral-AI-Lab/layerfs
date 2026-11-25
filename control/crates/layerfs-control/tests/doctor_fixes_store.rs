@@ -128,6 +128,47 @@ fn a_missing_file_fails_with_remove_only_when_there_is_no_backup() {
 }
 
 #[test]
+fn a_store_whose_machine_does_not_answer_has_no_fix_and_names_machine_doctor_in_prose() {
+    let f = Fixture::new();
+    let record = with_field(fields("remote"), "machine", SdkValue::text("box"));
+    write_entity(&paths::store_record(&f.root, "remote"), &record).unwrap();
+    write_entity(
+        &paths::machine_record(&f.root, "box"),
+        &SdkValue::map([
+            ("name", SdkValue::text("box")),
+            ("platform", SdkValue::text("lima")),
+            ("vm_name", SdkValue::text("layerfs-test-box")),
+            ("state", SdkValue::text("running")),
+        ]),
+    )
+    .unwrap();
+    // a worker endpoint nothing listens on: the machine does not answer
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = closed.local_addr().unwrap();
+    drop(closed);
+    write_entity(
+        &paths::worker_record(&f.root, "box"),
+        &SdkValue::map([
+            ("address", SdkValue::text(address.to_string())),
+            ("secret", SdkValue::text("k")),
+        ]),
+    )
+    .unwrap();
+    let out = report(&f.root, Kind::Store, "remote");
+    let found = finding(&out, "store.connection");
+    // a diagnostic is not a repair: the fix stays empty and the machine
+    // doctor is named in the message as the next step
+    assert_eq!(fix_of(&found), "", "{found:?}");
+    let message = found.get_text("message").unwrap_or("");
+    assert!(message.contains("machine box did not answer"), "{found:?}");
+    assert!(
+        message.contains("`layerfs machine doctor box` diagnoses it"),
+        "{found:?}"
+    );
+    assert_eq!(ev_text(&found, "machine"), Some("box"));
+}
+
+#[test]
 fn an_unreadable_record_has_no_fix_and_never_a_store_remove() {
     let f = Fixture::new();
     write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();

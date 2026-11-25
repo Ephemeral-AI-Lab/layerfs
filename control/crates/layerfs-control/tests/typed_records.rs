@@ -294,6 +294,12 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
         .unwrap(),
         State::broken(Reason::Missing, None)
     );
+    // an unreachable server has no fix either: no command makes it answer,
+    // and re-running the doctor only observes it again
+    assert_eq!(
+        recorded(&home, &on("native", r#","broken":"unreachable""#), machines).unwrap(),
+        State::broken(Reason::Unreachable, None)
+    );
     // a live operation (this process) wins over everything, named by its
     // call word; a gone one's uncertain outcome is unresolved with the call
     // that clears it, its certain one is ignored

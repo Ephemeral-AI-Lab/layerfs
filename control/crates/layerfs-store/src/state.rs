@@ -60,16 +60,15 @@ pub fn held(record: &StoreRecord) -> Option<State> {
 /// `broken` for `reason` on Store `record`, with its fix: a missing file
 /// has no in-place restore (`backup restore` protects the recorded Store
 /// from replacement it cannot prove unchanged), or the Store removed when
-/// it has no backup; an unreachable server is the doctor's to explain; an
-/// unsettled compaction is settled by the next one.
+/// it has no backup; an unsettled compaction is settled by the next one.
+/// An unreachable server has no fix: no command makes it answer, and
+/// re-running the doctor only observes it again.
 pub fn broken(record: &StoreRecord, reason: Reason) -> State {
     let store = record.name();
     let fix = match reason {
         Reason::Missing if record.links().is_empty() => {
             format!("layerfs store remove {store}", store = shell_word(store))
         }
-        Reason::Missing => return State::broken(reason, None),
-        Reason::Unreachable => format!("layerfs store doctor {store}", store = shell_word(store)),
         Reason::Unresolved => format!("layerfs store compact {store}", store = shell_word(store)),
         _ => return State::broken(reason, None),
     };

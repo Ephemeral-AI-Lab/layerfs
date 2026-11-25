@@ -136,6 +136,7 @@ impl Env {
             "DOCKER_HOST",
             "LAYERFS_BUNDLE",
             "LAYERFS_TOOL_FALLBACKS",
+            "XDG_CACHE_HOME",
         ]
         .map(|k| (k, std::env::var_os(k)));
         Self {
@@ -294,9 +295,12 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     let mut env = Env::new();
     let home = home(3);
     env.roots.push(home.clone());
-    // this build's daemon, found in the bundle folder
-    let bundle = env.dir("bundle");
-    std::env::set_var("LAYERFS_BUNDLE", &bundle);
+    // this build's daemon, found in this os' bundle folder: the cache
+    // place (XDG_CACHE_HOME), LAYERFS_BUNDLE naming the Linux bundle only
+    let cache = env.dir("cache");
+    std::env::set_var("XDG_CACHE_HOME", &cache);
+    let bundle = layerfs_machine::bundle_dir(std::env::consts::OS).unwrap();
+    std::fs::create_dir_all(&bundle).unwrap();
     let ours = bundle.join("layerfs-daemon");
     daemon_file(&ours, OURS, 0o755);
     // built-in `docker` configured with a daemon that is not there, and

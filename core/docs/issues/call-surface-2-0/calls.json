@@ -293,6 +293,16 @@
      "check": "store.backups",
      "what": "no backup of it is behind: its heads against each bucket link (sqlite; a notice per bucket)",
      "full_only": false
+    },
+    {
+     "check": "store.mount_holders",
+     "what": "live mount admissions are verified against this home's records; one that blocks removal or compaction is a warning, and the doctor never releases or settles it",
+     "full_only": false
+    },
+    {
+     "check": "store.gc_audit",
+     "what": "one bounded page of the retained done operator-audit rows, as evidence; the doctor changes nothing",
+     "full_only": false
     }
    ],
    "project": [
