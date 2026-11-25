@@ -267,6 +267,63 @@ fn run(engine: &Engine<'_>, branch: BranchId) -> Vec<(&'static str, Delta)> {
     out.push(("save 200 similar 200 B files", delta));
     let (_, delta) = engine.measure("lane + head + commit_branch", || commit(hundred));
     out.push(("lane + head + commit_branch", delta));
+    // #768: the Workspace Commit's form, where taking the lane also checks
+    // the head the caller read before it; the head read follows only when
+    // the provider did not check it (SQLite) or found it moved.
+    let unmoved_commit = |candidate: ObjectId, now: layerfs_history::BranchSnapshot| {
+        let (lane, unmoved) = engine
+            .history
+            .publish_lane_unmoved(branch, now.branch.head_commit, now.branch.base_layer)
+            .unwrap();
+        let now = match unmoved {
+            true => now,
+            false => engine.history.branch_snapshot(branch).unwrap().unwrap(),
+        };
+        let outcome = engine
+            .history
+            .commit_branch(&CommitRequest {
+                branch,
+                expected_head: now.branch.head_commit,
+                expected_base: now.branch.base_layer,
+                expected_root: now.effective_root,
+                candidate_root: candidate,
+                profile: root(201),
+                scope: root(200),
+                second_parent: None,
+                meta: CommitMeta::new(CommitVia::Files),
+                force: false,
+                required_head: None,
+            })
+            .unwrap();
+        drop(lane);
+        assert!(matches!(outcome, CommitOutcome::Committed { .. }));
+        unmoved
+    };
+    let third = save(&engine.storage, &[bytes(10, 5000)]);
+    // The head read before the lane is the caller's, outside the count.
+    let before = engine.history.branch_snapshot(branch).unwrap().unwrap();
+    let (unmoved, delta) = engine.measure("lane with head check + commit_branch", || {
+        unmoved_commit(third, before.clone())
+    });
+    assert_eq!(unmoved, engine.label == "postgresql");
+    out.push(("lane with head check + commit_branch", delta));
+    // A head that moved since the caller read it, and a Branch that is not
+    // there, are never answered unmoved: the caller then reads the Branch.
+    for (probe, head) in [
+        (branch, before.branch.head_commit),
+        (branch_id(99), before.branch.head_commit),
+    ] {
+        let (lane, unmoved) = engine
+            .history
+            .publish_lane_unmoved(probe, head, before.branch.base_layer)
+            .unwrap();
+        drop(lane);
+        assert!(
+            !unmoved,
+            "{}: a moved or absent head is not unmoved",
+            engine.label
+        );
+    }
     let (_, delta) = engine.measure("snapshot + 1 file save", || {
         let now = engine.history.branch_snapshot(branch).unwrap().unwrap();
         let again = save(&engine.storage, &[bytes(9, 5000)]);
@@ -362,16 +419,19 @@ fn commit_store_calls_are_counted_on_both_engines() {
     assert_eq!((snapshot.round_trips, snapshot.transactions), (1, 0));
     // A reservation is BEGIN, one UPDATE … RETURNING, COMMIT.
     assert_eq!(pg("reserve").round_trips, 3);
-    // The lane: its BEGIN, the head read, commit_branch's BEGIN, the Branch
-    // probe, the post-fence re-read, Commit insert, parent line, lineage
-    // insert, the position read, advance and COMMIT, the T6.5 epoch READ and
-    // its FOR SHARE re-check, the lane check on the lane connection before
-    // commit_branch's COMMIT (finding #10), and the lane's ROLLBACK. The
-    // second Branch read is the spec §5 fence window: the probe learns the
-    // project, the fence opens, and the re-read sees a removal that committed
-    // in between. The lane barrier rides in the lane's BEGIN and the nested
-    // write's BEGIN, so it adds no round trip.
-    assert_eq!(pg("lane + head + commit_branch").round_trips, 15);
+    // The lane: its BEGIN, the head read, commit_branch's BEGIN, one read of
+    // the Branch, its roots and its project epoch (spec §5: one snapshot),
+    // the position read, Commit insert, parent line, lineage insert, advance,
+    // the epoch's FOR SHARE re-check, and the lane check with COMMIT in one
+    // round trip (finding #10: `pg_xact_status` of the lane transaction on
+    // the writer), then the lane's ROLLBACK. The lane barrier rides in the
+    // lane's BEGIN and the nested write's BEGIN, so it adds no round trip.
+    // Before #768's Commit cuts: 15 (a Branch probe, the epoch read and a
+    // re-read; the lane check on the lane connection).
+    assert_eq!(pg("lane + head + commit_branch").round_trips, 12);
+    // The Workspace Commit's form: the head check rides in the lane's BEGIN
+    // batch, so an unmoved head costs no read in the lane.
+    assert_eq!(pg("lane with head check + commit_branch").round_trips, 11);
     // #70: descriptors and bodies in one statement, found or missing.
     assert_eq!(pg("read_packs 2").round_trips, 1);
     assert_eq!(pg("read_packs missing").round_trips, 1);

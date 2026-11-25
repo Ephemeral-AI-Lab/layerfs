@@ -11,6 +11,10 @@ mod installed;
 mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::filesystem::FilesystemRootId;
+use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};
+use layerfs_store_service::store::{BindRequest, CommitOptions};
+use layerfs_store_service::write::mutation::Mutation;
 use std::fs;
 use support::{paths, write, Change, Fixture};
 
@@ -360,5 +364,68 @@ fn a_removed_directory_is_absent_and_can_be_recreated() {
     );
     assert_eq!(stat.get_text("type"), Some("dir"), "{stat:?}");
     absent(&fixture, "mkdir", "/d/f");
+    fixture.cleanup();
+}
+
+#[test]
+fn a_mount_keeps_its_markers_for_every_commit_it_makes() {
+    // A Workspace bound below the frontier keeps the markers its mount read
+    // and gives them to its Commits; a Commit it published hides nothing
+    // (#768). The first Commit's constructor returns the bound root itself,
+    // ignoring the overlay's whiteout, so `/a` can only be absent from it if
+    // the Commit's own whiteout step removed it with the kept markers. The
+    // second Commit, over the Workspace's own Commit, keeps `/a` absent and
+    // its new file visible.
+    let fixture = Fixture::new("t55-workspace-kept", |source| {
+        fs::write(source.join("a"), "a\n").unwrap();
+        fs::write(source.join("b"), "b\n").unwrap();
+        2
+    });
+    fixture.fork("work");
+    remove(&fixture, "/a");
+    let workspace = fixture
+        .service
+        .store
+        .bind(
+            fixture.owner.client(),
+            BindRequest {
+                workspace: WorkspaceId::from_authority([34; 32]).unwrap(),
+                branch: BranchId::named(
+                    LayerStackId::from_authority([23; 16]),
+                    &HistoryName::new("work").unwrap(),
+                ),
+            },
+        )
+        .unwrap()
+        .workspace;
+    let first = workspace
+        .commit(|_, _, snapshot| Ok(FilesystemRootId(snapshot.effective_root)))
+        .unwrap_or_else(|failure| panic!("first Commit: {failure:?}"));
+    assert!(
+        matches!(first.history, Some(CommitOutcome::Committed { .. })),
+        "{:?}",
+        first.history
+    );
+    absent(&fixture, "work", "/a");
+    assert_eq!(visible(&fixture, "work", "/b"), "b\n");
+    let mut change = Mutation::new(&workspace).unwrap();
+    change.write("/x", b"x\n", None).unwrap();
+    change.finish().unwrap();
+    let second = workspace
+        .commit_captured(&CommitOptions {
+            force: false,
+            message: Some("over its own Commit".into()),
+            expected: None,
+        })
+        .unwrap_or_else(|failure| panic!("second Commit: {failure:?}"));
+    assert!(
+        matches!(second.history, Some(CommitOutcome::Committed { .. })),
+        "{:?}",
+        second.history
+    );
+    absent(&fixture, "work", "/a");
+    assert_eq!(visible(&fixture, "work", "/b"), "b\n");
+    assert_eq!(visible(&fixture, "work", "/x"), "x\n");
+    workspace.close().unwrap();
     fixture.cleanup();
 }

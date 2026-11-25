@@ -91,7 +91,7 @@ impl State<'_> {
             .any(|id| self.packer.location(*id).is_some())
         {
             self.flush_signatures()?;
-            self.register_ready()?;
+            self.register_ready(false)?;
         }
         let view = WaveSource {
             fetch: &self.storage.source,

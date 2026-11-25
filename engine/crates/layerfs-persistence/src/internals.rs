@@ -10,6 +10,9 @@ pub use crate::backend::postgresql::compact::{
 pub use crate::backend::postgresql::probe::{
     reads as postgresql_reads, Outcome as PostgresReadOutcome, Read as PostgresRead,
 };
+pub use crate::backend::postgresql::session::pipeline::{
+    Refusal as PipelineRefusal, Reply as PipelineReply, Request as PipelineRequest,
+};
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{
@@ -71,6 +74,49 @@ pub fn decode_hint_block(
     body: &[u8],
 ) -> Result<Vec<layerfs_history::records::BindingHint>, BackendError> {
     crate::blocks::hints::decode(group, body)
+}
+
+/// One pipelined flight on the session of `handles`
+/// (`postgresql::session::pipeline`): every request sent before any reply is
+/// awaited, every reply returned in order. Stage 2 of #768 sends a Commit
+/// this way; until then only the pipeline's own test calls it.
+pub fn postgresql_pipeline(
+    handles: &crate::PostgresHandles,
+    requests: &[PipelineRequest<'_>],
+) -> Result<Vec<Result<PipelineReply, PipelineRefusal>>, BackendError> {
+    handles.storage.session.pipeline(requests)
+}
+
+/// One write transaction on the session of `handles` whose body runs
+/// `scripts` in order and ignores every refusal, then answers success: what
+/// the session reports when a body leaves its transaction aborted (#768).
+pub fn postgresql_write_ignoring(
+    handles: &crate::PostgresHandles,
+    scripts: &[&str],
+) -> Result<(), BackendError> {
+    use crate::backend::postgresql::session::transaction::Mode;
+    handles
+        .storage
+        .session
+        .run_as(Mode::Write, |tx| -> Result<(), BackendError> {
+            for script in scripts {
+                let _ = tx.batch(script);
+            }
+            Ok(())
+        })
+}
+
+/// A fused Commit made at `time_ms` (`Committer::commit_at`): the
+/// PostgreSQL identity is then the same for the same request, so a test can
+/// make one that already exists.
+pub fn fused_commit_at(
+    committer: &crate::Committer,
+    tail: Option<&layerfs_storage::port::Publication>,
+    stack: layerfs_history::LayerStackId,
+    request: &layerfs_history::records::CommitRequest,
+    time_ms: i64,
+) -> Result<layerfs_history::records::CommitOutcome, crate::Fused> {
+    committer.commit_at(tail, stack, request, &[], Some(time_ms))
 }
 
 /// The PostgreSQL chain's steps, oldest first, and its floor.

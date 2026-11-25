@@ -495,7 +495,11 @@ group, so a selected group is read without the rest of the pack. Publication
 writes the pack (or its control and unit rows), `object_location ... ON
 CONFLICT DO NOTHING RETURNING`, `store_totals` when bytes were added,
 `inode_value_block` only where no stored block overlaps, the released ordinal
-tail and the signature upserts, in one write transaction
+tail (since #768 the tail past the 128 ordinals a keeping Storage handle
+keeps for its next Save; a publication of the kept ordinals alone, `BEGIN
+IMMEDIATE`, the conditional `UPDATE store_policy`, `COMMIT`, returns them
+before the handle's orderly drop; the measured burn per Commit is in the
+physical-storage reservation row) and the signature upserts, in one write transaction
 ([`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/publish.rs),
 [`units_publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_publish.rs),
 [`units_read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs)).
@@ -519,6 +523,38 @@ than the fill is still skipped, so a pack of large records costs its headers
 only. The group-row layouts and PostgreSQL ask for exact ranges
 (`Mechanics::pack_range_fill` is 0): there every byte read is a byte
 transferred.
+
+## Fused Commit
+
+A Workspace Commit over its bound head is one `BEGIN IMMEDIATE` transaction
+under the writer lock (#768 stage 2, `Committer`,
+[`history/fused.rs`](../../../../engine/crates/layerfs-persistence/src/history/fused.rs)):
+the Save's held last publication (`backend::publish::run`, the same
+statements as a publication on its own), the binding hints
+(`hints::record`) and `commit_branch`, exactly as they run apart. A lost
+object identity in the publication, a moved head (`HeadMoved`) or an
+`UpToDate` answer rolls the transaction back and is `Fused::Race`: nothing
+was written, and the Store service publishes the tail and the hints on
+their own and continues on the separate path, once. Any other refusal is
+the Commit's own (`Conflict` for a missing or moved epoch, `Busy` for the
+lane), with no fallback; its Save's unused ids go back to the handle and
+its ordinals to the Store, as on PostgreSQL. Before the transaction the tail is checked against
+SQLite's publication bound (`TRANSACTION_CANONICAL_BYTES_LIMIT`, 4 MiB − 1),
+the unit layout and the file system's headroom, as a publication on its own
+is; one that does not fit is `Fused::Overflow`, and the tail and the hints
+are published first. The held publication is served to the Commit's own
+reads from the batch itself, as on PostgreSQL
+([Fused Commit](postgresql.md#fused-commit)). An identical Commit identity
+follows `commit_branch`'s own rule on both paths (it reuses the verified
+row; PostgreSQL's message refuses it as a race and the separate path makes
+the Commit at a new time), and a retired or missing bound Branch is
+`Missing(Branch)` (on PostgreSQL a race, then `Context("bound Branch is
+absent")`); neither is reachable while the Workspace is mounted. `mount_round_trips.rs` pins the second one-file
+Commit of a mounted Workspace at 16 statements in 1 transaction (28 in 5
+before) and the first at 35 in 5 (46 in 9); `fused_commit.rs` checks one
+transaction per Commit and that each race and the epoch refusal wrote
+nothing. Not tested on SQLite: `Busy` from another process's writer lock
+and an epoch change during the transaction (the writer lock excludes it).
 
 ## Acquisition
 

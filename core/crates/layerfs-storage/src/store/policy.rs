@@ -40,7 +40,7 @@ pub const BATCH_OBJECT_LIMIT: usize = 512;
 /// **The wave is bounded by the transaction it runs in.** A preparation wave
 /// holds the Store's arbitration for its whole duration, every seal inside it
 /// joins the one transaction the wave opened, and that transaction is
-/// acknowledged at the wave's end - so the transaction's own declared capacity is
+/// acknowledged at the wave's end (a Save's last wave with its sealed tail) - so the transaction's own declared capacity is
 /// the bound that describes a wave, and this is that capacity rather than a
 /// second, smaller figure with no stated relation to it.
 ///
@@ -106,6 +106,23 @@ pub const CHAIN_ENCODED_CUTOFFS: u64 = 2;
 /// bounded by READ_OBJECT_LIMIT. Released bytes are acquired again when needed;
 /// the bound costs work and never correctness.
 pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 2 * 1024 * 1024;
+/// Unused pooled ordinals a keeping Storage handle keeps after a finished
+/// Save, for its next Save (#768, `Storage::keeping_ordinals`).
+///
+/// Owner: one Storage handle its owner keeps between Saves (the Store
+/// service's Commit producers). At every acknowledged finish the Save
+/// releases its unused ordinal tail past `next + KEPT_ORDINALS`: the Store's
+/// counter is rewound there when nothing was reserved after the block, and
+/// the handle keeps `[next, next + KEPT_ORDINALS)`, so a small next Save
+/// assigns its new values without a reservation; a larger one refills as
+/// before. A handle that does not keep ordinals releases every unused one at
+/// finish, as before #768. Release: the owner returns the kept ordinals
+/// before it drops the handle in order (`Storage::release_kept_ordinals`,
+/// the same conditional rewind, one attempt), so only a crash or an unknown
+/// outcome loses them: at most this many per lost handle (plus, as before,
+/// a tail whose rewind did not apply). Saves on separate handles leave gaps
+/// of at most this many ordinals between their values.
+pub const KEPT_ORDINALS: usize = 128;
 /// Canonical bytes one Save keeps of the objects it resolved (#364).
 ///
 /// Owner: one Save. Bound: this many canonical bytes plus a small charge per

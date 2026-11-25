@@ -6,9 +6,7 @@ use super::{
 };
 use crate::backend::records::{BackendError, OutcomeError, Param, Record};
 use layerfs_telemetry::timer::waits::Wait;
-use postgres::{
-    binary_copy::BinaryCopyInWriter, types::ToSql, types::Type, Row, SimpleQueryMessage,
-};
+use postgres::{types::ToSql, types::Type, Row, SimpleQueryMessage};
 use std::{
     cell::{Cell, RefCell},
     sync::atomic::Ordering,
@@ -57,6 +55,9 @@ pub(crate) enum Mode {
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
     uncertain: Cell<bool>,
+    /// The first statement the server refused with a SQLSTATE: what a
+    /// `COMMIT` of the aborted transaction it left reports (#768).
+    refused: Cell<Option<BackendError>>,
     diagnostic: bool,
     /// `Mode::Statement`: whether its one statement was already sent.
     single: Option<Cell<bool>>,
@@ -130,6 +131,8 @@ impl Transaction<'_> {
             };
             if error == BackendError::Unknown {
                 self.uncertain.set(true);
+            } else if e.code().is_some() && self.refused.get().is_none() {
+                self.refused.set(Some(error));
             }
             error
         })
@@ -216,7 +219,7 @@ impl Transaction<'_> {
         &self,
         sql: &str,
         types: &[Type],
-        rows: impl FnOnce(&mut BinaryCopyInWriter<'_>) -> Result<(), postgres::Error>,
+        rows: impl FnOnce(&mut super::driver::CopyRows<'_>) -> Result<(), postgres::Error>,
     ) -> Result<u64, BackendError> {
         self.admit()?;
         let start = Instant::now();
@@ -226,8 +229,7 @@ impl Transaction<'_> {
             // (CopyInResponse) and the finish; the rows stream between them.
             let statement = state.statement(sql)?;
             state.work.round_trips += 2;
-            let writer = state.client.copy_in(&statement)?;
-            let mut writer = BinaryCopyInWriter::new(writer, types);
+            let mut writer = state.client.copy_in(&statement, types)?;
             rows(&mut writer).map_err(super::driver::Error::from)?;
             writer.finish().map_err(super::driver::Error::from)
         })();
@@ -379,7 +381,7 @@ impl Session {
         let autocommit = generation.filter(|_| matches!(mode, Mode::Immutable | Mode::Statement));
         // A write nested in this thread's held lane relies on the lane
         // connection's row lock: it holds the lane barrier shared and checks
-        // that lane transaction before its COMMIT (finding #10).
+        // that lane transaction in its COMMIT round trip (finding #10).
         let in_lane = turn.nested && matches!(mode, Mode::Write | Mode::Publish);
         // A write or publication outside a held lane takes the lane row and
         // passes the barrier itself; its rollback also releases a barrier a
@@ -479,11 +481,12 @@ impl Session {
             if mode != Mode::Read {
                 state.work.write_transactions += 1;
             }
-            let (result, uncertain) = {
+            let (result, uncertain, refused) = {
                 let tx = Transaction {
                     diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
                     state: RefCell::new(&mut *state),
                     uncertain: Cell::new(false),
+                    refused: Cell::new(None),
                     single: None,
                     lane: Cell::new(mode == Mode::Publish && !turn.nested),
                     fence: None,
@@ -495,26 +498,34 @@ impl Session {
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
                     || result.as_ref().err().is_some_and(OutcomeError::uncertain);
-                (result, uncertain)
+                (result, uncertain, tx.refused.get())
             };
             if uncertain {
                 state.quarantine();
                 return Err(BackendError::Unknown.into());
             }
+            // A nested write's lane check rides in its COMMIT round trip.
+            // Either way a statement runs before the `COMMIT` in the same
+            // text: in a transaction the server aborted (a refused statement
+            // the body did not propagate) it fails `25P02` and the `COMMIT`
+            // is skipped. A `COMMIT` of an aborted transaction rolls it back
+            // and answers like success (its tag, `ROLLBACK`, is not read),
+            // so it is never sent as one (#768).
+            let commit_sql = match in_lane && result.is_ok() {
+                true => self.lane_commit().ok(),
+                false => Some(GUARDED_COMMIT.to_owned()),
+            };
             match result {
-                Ok(_) if in_lane && self.lane_still_held().is_err() => {
-                    // The lane was lost: nothing of this write is kept.
-                    if rollback(state, &leftover).is_err() {
-                        state.quarantine();
-                        return Err(BackendError::Unknown.into());
-                    }
-                    state.work.rollbacks += 1;
-                    Err(BackendError::Closed.into())
+                Ok(_) if commit_sql.is_none() => {
+                    // No lane transaction is recorded: nothing is kept.
+                    lost_lane(state, &leftover)
                 }
                 Ok(value) => {
                     let commit = Instant::now();
                     state.work.round_trips += 1;
-                    let outcome = state.client.batch_execute("COMMIT");
+                    let outcome = state
+                        .client
+                        .batch_execute(commit_sql.as_deref().unwrap_or("COMMIT"));
                     state.work.commit_ns += commit.elapsed().as_nanos() as u64;
                     match outcome {
                         Ok(()) => {
@@ -524,15 +535,41 @@ impl Session {
                             }
                             Ok(value)
                         }
+                        Err(e) if aborted(&e) => {
+                            // The transaction was already aborted: nothing
+                            // was committed. It reports the statement the
+                            // server refused first.
+                            if rollback(state, &leftover).is_err() {
+                                state.quarantine();
+                                return Err(BackendError::Unknown.into());
+                            }
+                            state.work.rollbacks += 1;
+                            Err(refused.unwrap_or(BackendError::Integrity).into())
+                        }
+                        Err(e) if in_lane && lane_lost(&e) => {
+                            // The check failed and the server skipped the
+                            // COMMIT: the lane was lost, nothing is kept.
+                            self.close_lane();
+                            lost_lane(state, &leftover)
+                        }
                         Err(e) => {
                             // A COMMIT whose reply was lost is uncertain; one
-                            // the server refused (a deferred constraint) rolled back.
+                            // the server refused (a deferred constraint) rolled
+                            // back. The statement before it in the same text
+                            // (the guard `SELECT`, or a nested write's lane
+                            // check) may have failed with another definite
+                            // error (a `statement_timeout`, a cancel): the
+                            // server then skipped the COMMIT and left the
+                            // transaction aborted, so it is rolled back
+                            // (after a refused COMMIT the ROLLBACK finds no
+                            // transaction and only warns).
                             let error = e.backend();
-                            if error == BackendError::Unknown {
+                            if error == BackendError::Unknown || rollback(state, &leftover).is_err()
+                            {
                                 state.quarantine();
-                            } else {
-                                state.work.rollbacks += 1;
+                                return Err(BackendError::Unknown.into());
                             }
+                            state.work.rollbacks += 1;
                             Err(error.into())
                         }
                     }
@@ -629,6 +666,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
             diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
             state: RefCell::new(&mut *state),
             uncertain: Cell::new(false),
+            refused: Cell::new(None),
             single,
             lane: Cell::new(false),
             fence,
@@ -646,6 +684,38 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
         return Err(BackendError::Unknown.into());
     }
     result
+}
+
+/// A transaction's `COMMIT`, after a statement that fails `25P02` when the
+/// transaction is aborted, so the `COMMIT` of an aborted transaction is
+/// never sent ([`aborted`]).
+const GUARDED_COMMIT: &str = "SELECT 1; COMMIT";
+
+/// Whether a `COMMIT` batch found its transaction already aborted.
+fn aborted(error: &super::driver::Error) -> bool {
+    error
+        .code()
+        .is_some_and(|code| *code == postgres::error::SqlState::IN_FAILED_SQL_TRANSACTION)
+}
+
+/// Whether a nested write's COMMIT batch failed its lane check: division by
+/// zero (the lane transaction is not in progress) or an id the server does
+/// not know (a different server).
+fn lane_lost(error: &super::driver::Error) -> bool {
+    error.code().is_some_and(|code| {
+        *code == postgres::error::SqlState::DIVISION_BY_ZERO
+            || *code == postgres::error::SqlState::INVALID_PARAMETER_VALUE
+    })
+}
+
+/// Rolls back a nested write whose lane was lost: a definite `Closed`.
+fn lost_lane<T, E: From<BackendError>>(state: &mut State, leftover: &str) -> Result<T, E> {
+    if rollback(state, leftover).is_err() {
+        state.quarantine();
+        return Err(BackendError::Unknown.into());
+    }
+    state.work.rollbacks += 1;
+    Err(BackendError::Closed.into())
 }
 
 fn rollback(state: &mut State, leftover: &str) -> Result<(), super::driver::Error> {

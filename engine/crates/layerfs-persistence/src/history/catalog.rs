@@ -25,6 +25,11 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| hints::of(tx, child))
     }
     fn record_file_digests(&self, rows: &[layerfs_history::FileDigest]) -> HistoryResult<()> {
+        // A window of only small files records nothing: no write transaction,
+        // so no lane row and no round trips (#768).
+        if rows.iter().all(|row| row.length < self.digest_floor) {
+            return Ok(());
+        }
         self.write(|tx| super::digests::record(tx, rows, self.digest_floor))
     }
     fn file_roots(&self, contents: &[([u8; 32], u64)]) -> HistoryResult<Vec<Option<[u8; 32]>>> {
@@ -243,6 +248,27 @@ impl HistoryCatalog for HistoryProvider {
             crate::backend::Engine::Postgres(session) => {
                 Ok(PublishLane::new(Box::new(session.hold_lane()?)))
             }
+        }
+    }
+
+    fn publish_lane_unmoved(
+        &self,
+        branch: BranchId,
+        head: Option<CommitId>,
+        base: LayerId,
+    ) -> HistoryResult<(PublishLane, bool)> {
+        match &self.engine {
+            // On PostgreSQL the check rides in the lane's BEGIN batch (#768).
+            crate::backend::Engine::Postgres(session) => {
+                let probe = (
+                    branch.as_slice(),
+                    head.as_ref().map(|id| id.as_slice()),
+                    base.as_slice(),
+                );
+                let (hold, unmoved) = session.hold_lane_unmoved(Some(probe))?;
+                Ok((PublishLane::new(Box::new(hold)), unmoved))
+            }
+            crate::backend::Engine::Sqlite(_) => Ok((self.publish_lane()?, false)),
         }
     }
 

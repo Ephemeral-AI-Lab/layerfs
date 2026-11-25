@@ -8,8 +8,8 @@ use super::{
 };
 use crate::OwnerError;
 use layerfs_content::{
-    filesystem::FilesystemRootId, ContentError, ContentResult, FilesystemResult, FinalizedConsumer,
-    FinalizedObject,
+    filesystem::FilesystemRootId, AuthenticatedObjects, ContentError, ContentResult,
+    FilesystemResult, FinalizedConsumer, FinalizedObject, ObjectId,
 };
 use layerfs_overlay::Capture;
 use layerfs_storage::{Save, SaveSink};
@@ -56,7 +56,9 @@ impl BoundWorkspace {
         let held = RefCell::new(None);
         // What construction staged for the shared cache. It is placed there
         // only by the publication callback; every other path drops it.
-        let constructed = RefCell::new(None);
+        // Before that, validation reads the candidate's own objects from it
+        // (`Built`), never through the shared cache.
+        let constructed: RefCell<Option<Arc<ConstructedObjects>>> = RefCell::new(None);
         let result = crate::telemetry::timed("commit", |timing| {
             self.commit_admitted(
                 |save, capture, _| {
@@ -68,12 +70,16 @@ impl BoundWorkspace {
                         slot.insert(CapturedConstruction::default()),
                         staged.as_mut(),
                     )?;
-                    *constructed.borrow_mut() = staged;
+                    *constructed.borrow_mut() = staged.map(Arc::new);
                     Ok(root)
                 },
+                || constructed.borrow().clone(),
                 || {
-                    if let Some(staged) = constructed.borrow_mut().take() {
-                        // Cache policy can lose a hit, never fail a known Commit.
+                    // Validation has dropped its reader of the set by now; a
+                    // set still shared is not admitted. Cache policy can lose
+                    // a hit, never fail a known Commit.
+                    let staged = constructed.borrow_mut().take().map(Arc::try_unwrap);
+                    if let Some(Ok(staged)) = staged {
                         let _ = self.store.cache.admit_constructed(staged);
                     }
                 },
@@ -281,6 +287,51 @@ impl BoundWorkspace {
                 false
             }
         }
+    }
+}
+
+/// A Commit's validation source: the canonical objects its construction
+/// built, then the ordinary Workspace client for anything else (an inherited
+/// base object, or one a merge or whiteout step built). The reading client
+/// checks every identity, whichever answered.
+pub(super) struct Built {
+    pub(super) objects: Arc<ConstructedObjects>,
+    pub(super) store: Arc<layerfs_workspace::CanonicalClient>,
+}
+impl AuthenticatedObjects for Built {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let mut values: Vec<Option<Vec<u8>>> = ids
+            .iter()
+            .map(|id| self.objects.object(*id).map(<[u8]>::to_vec))
+            .collect();
+        let missing: Vec<ObjectId> = ids
+            .iter()
+            .zip(&values)
+            .filter(|(_, value)| value.is_none())
+            .map(|(id, _)| *id)
+            .collect();
+        if !missing.is_empty() {
+            let fetched = self.store.read_canonical_batch(&missing)?;
+            if fetched.len() != missing.len() {
+                return Err(ContentError::BatchCardinality {
+                    requested: missing.len(),
+                    returned: fetched.len(),
+                });
+            }
+            let mut fetched = fetched.into_iter();
+            for value in values.iter_mut().filter(|value| value.is_none()) {
+                *value = fetched.next();
+            }
+        }
+        values
+            .into_iter()
+            .map(|value| {
+                value.ok_or(ContentError::BatchCardinality {
+                    requested: ids.len(),
+                    returned: 0,
+                })
+            })
+            .collect()
     }
 }
 

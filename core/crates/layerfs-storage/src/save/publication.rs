@@ -21,7 +21,12 @@ impl State<'_> {
         }
         Ok(cost)
     }
-    pub(super) fn register_ready(&mut self) -> StorageResult<()> {
+    /// Registers every ready pack. With `hold`, the last batch is not
+    /// published: it is returned, and its locations, metadata bodies and
+    /// values are kept as published ones are, so this handle's reads see
+    /// them while its caller carries the batch in a transaction of its own
+    /// ([`super::PreparedTail`], #768). An empty last batch is not held.
+    pub(super) fn register_ready(&mut self, hold: bool) -> StorageResult<Option<Held>> {
         let _work = self.storage.work.span(super::Stage::Publication);
         // Every reference to an unframed member forces its owning lane to seal.
         // Repeating this bounded closure walk discovers prerequisites of those seals;
@@ -50,7 +55,7 @@ impl State<'_> {
                 break;
             }
         }
-        let members: BTreeMap<_, _> = self
+        let members: Members = self
             .packer
             .ready
             .iter()
@@ -151,7 +156,11 @@ impl State<'_> {
                 (0, 0)
             };
             let canonical_cost = location.canonical_length as u64;
-            if (!batch.objects.is_empty() || !batch.packs.is_empty())
+            // Values alone can fill a batch: finish publishes its last wave's
+            // values with the sealed tail (#768).
+            if (!batch.objects.is_empty()
+                || !batch.packs.is_empty()
+                || !batch.inode_values.is_empty())
                 && (canonical_bytes.saturating_add(canonical_cost) > limits.transaction_bytes
                     || physical_bytes.saturating_add(body_bytes)
                         > limits.transaction_physical_bytes
@@ -202,38 +211,88 @@ impl State<'_> {
             }
             batch.signatures.push(row);
         }
-        if self.finishing && self.next_ordinal < self.ordinal_end {
+        // A keeping handle keeps the first KEPT_ORDINALS unused ordinals for
+        // its next Save (#768, `IdBlock`); the tail past them, or on any
+        // other handle every unused ordinal, is released, which rewinds the
+        // Store's counter when nothing was reserved after it.
+        let keep = match self.storage.keeps_ordinals {
+            true => crate::policy::KEPT_ORDINALS as u64,
+            false => 0,
+        };
+        let kept_end = self.next_ordinal.saturating_add(keep);
+        if self.finishing && kept_end < self.ordinal_end {
+            // The release is a row of the publication too.
+            if batch.objects.len() + pack_rows + batch.inode_values.len() + batch.signatures.len()
+                >= limits.transaction_rows as usize
+            {
+                self.acknowledge(&mut batch, &members)?;
+                batch = Publication::default();
+            }
             batch.release_ordinals = Some((
-                u32::try_from(self.next_ordinal)
+                u32::try_from(kept_end)
                     .map_err(|_| StorageError::Integrity("unused ordinal tail"))?,
-                usize::try_from(self.ordinal_end - self.next_ordinal)
+                usize::try_from(self.ordinal_end - kept_end)
                     .map_err(|_| StorageError::Integrity("unused ordinal count"))?,
             ));
+            // Whether or not the rewind applies, only the kept prefix stays
+            // this handle's: a tail that was not rewound is lost, as before.
+            // Until the release is acknowledged the block still ends there.
+            self.unapplied_release = batch.release_ordinals;
+            self.ordinal_end = kept_end;
         }
+        let mut held = None;
         if !batch.objects.is_empty()
             || !batch.signatures.is_empty()
             || !batch.packs.is_empty()
             || !batch.inode_values.is_empty()
             || batch.release_ordinals.is_some()
         {
-            self.acknowledge(&mut batch, &members)?;
+            if hold {
+                // Served whole to this handle's reads until it is published
+                // or dropped (`read/held.rs`): the Store does not have it.
+                let sealed = self
+                    .packer
+                    .ready
+                    .iter()
+                    .map(|ready| (ready.pack.info().pack_id, ready.pack.info()))
+                    .collect();
+                self.storage.source.hold(&batch, &sealed)?;
+                held = Some(Held { batch, members });
+            } else {
+                self.acknowledge(&mut batch, &members)?;
+            }
         }
         self.packer.ready.clear();
         // Ordinary dependency bodies name sealed immutable packs. Publication
         // changes locator winners, not these bytes; keep bounded bodies across
         // waves. The private pooled tail still releases its own cache on append.
-        Ok(())
+        Ok(held)
     }
-    fn acknowledge(
+    pub(super) fn acknowledge(
         &mut self,
         batch: &mut Publication,
-        members: &BTreeMap<ObjectId, (ObjectLocation, Vec<ObjectId>, bool)>,
+        members: &Members,
     ) -> StorageResult<()> {
         self.storage.source.note(|c| c.publish += 1);
         let result = {
             let _work = self.storage.work.span(super::Stage::Metadata);
-            self.storage.source.metadata.publish(batch)?
+            self.storage.source.metadata.publish(batch)
         };
+        let result = self.written(result)?;
+        if batch.release_ordinals.is_some() {
+            self.unapplied_release = None;
+        }
+        self.settle(batch, members, &result.lost)
+    }
+    /// What an acknowledged publication of `batch` leaves: `lost` (ids a
+    /// location of which was already stored) compared with the winners, the
+    /// rest kept as this Save's, and the outcome counted.
+    pub(super) fn settle(
+        &mut self,
+        batch: &Publication,
+        members: &Members,
+        lost_ids: &[ObjectId],
+    ) -> StorageResult<()> {
         self.storage.source.note(|c| {
             c.pack_write_bytes += batch
                 .packs
@@ -243,7 +302,7 @@ impl State<'_> {
             c.pooled_groups += batch.inode_values.len() as u64;
         });
         let mut lost = BTreeSet::new();
-        for id in &result.lost {
+        for id in lost_ids {
             if !batch.objects.iter().any(|row| row.object_id == *id) || !lost.insert(*id) {
                 return Err(StorageError::Integrity("registration lost identities"));
             }
@@ -274,34 +333,54 @@ impl State<'_> {
             }
         }
         self.storage.source.published(batch, &lost)?;
-        for row in &batch.objects {
-            if lost.contains(&row.object_id) {
-                self.outcome.reused += 1;
-            } else {
-                self.outcome.inserted += 1;
-                self.outcome.canonical_bytes += row.canonical_length as u64;
-                if members[&row.object_id].2 {
-                    self.outcome.prefix_records += 1;
-                } else {
-                    self.outcome.full_records += 1;
-                }
-            }
-        }
-        self.outcome.metadata_bytes += batch
-            .packs
-            .iter()
-            .filter(|pack| pack.info().domain == crate::location::PackDomain::Metadata)
-            .map(|pack| pack.info().length as u64)
-            .sum::<u64>();
-        self.outcome.packs += batch.packs.len() as u64;
-        self.outcome.stored_bytes += batch
-            .packs
-            .iter()
-            .map(|pack| pack.info().length as u64)
-            .sum::<u64>();
+        counted(&mut self.outcome, batch, members, &lost);
         for row in &batch.signatures {
             self.signatures.borrow_mut().remove(&row.slot);
         }
         Ok(())
     }
+}
+
+/// Each registered member's location, references and whether it is a
+/// prefix record.
+pub(super) type Members = BTreeMap<ObjectId, (ObjectLocation, Vec<ObjectId>, bool)>;
+
+/// A sealed batch held from publication, and its members.
+pub(super) struct Held {
+    pub(super) batch: Publication,
+    pub(super) members: Members,
+}
+
+/// Adds one acknowledged publication of `batch`, `lost` reused, to `outcome`.
+pub(super) fn counted(
+    outcome: &mut super::WriteOutcome,
+    batch: &Publication,
+    members: &Members,
+    lost: &BTreeSet<ObjectId>,
+) {
+    for row in &batch.objects {
+        if lost.contains(&row.object_id) {
+            outcome.reused += 1;
+        } else {
+            outcome.inserted += 1;
+            outcome.canonical_bytes += row.canonical_length as u64;
+            if members.get(&row.object_id).is_some_and(|member| member.2) {
+                outcome.prefix_records += 1;
+            } else {
+                outcome.full_records += 1;
+            }
+        }
+    }
+    outcome.metadata_bytes += batch
+        .packs
+        .iter()
+        .filter(|pack| pack.info().domain == crate::location::PackDomain::Metadata)
+        .map(|pack| pack.info().length as u64)
+        .sum::<u64>();
+    outcome.packs += batch.packs.len() as u64;
+    outcome.stored_bytes += batch
+        .packs
+        .iter()
+        .map(|pack| pack.info().length as u64)
+        .sum::<u64>();
 }

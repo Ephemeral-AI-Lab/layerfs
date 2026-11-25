@@ -268,7 +268,7 @@ AC-51 does not depend on the projection alone.
   `branch_removal` (4), `project_delete` (4), `epoch_fence` (7),
   `gc_backfill` (5), `kept_objects` (11); the Store-service path suites
   `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),
-  `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (3),
+  `sdk_path_whiteouts` (8), `sdk_path_hidden_semantics` (3),
   `sdk_path_removal` (5); and the `layerfs-control
   project_delete_worker` (14), the `layerfs-store
   project_delete` (18), `compact_report_status` (6) and the

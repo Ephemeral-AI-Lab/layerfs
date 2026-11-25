@@ -25,7 +25,11 @@
 //! Before the history is read the attempt passes the Store's publication
 //! lane (`pass_publication_lane`): a lost PostgreSQL `COMMIT` may still be
 //! applying on the server, and its row lock or barrier key holds until it
-//! ends (#776 C2). Nothing is resent: the history is read through the control
+//! ends (#776 C2). A fused Commit inserts its packs before it takes the lane
+//! row, so on PostgreSQL the pass first ends the quarantined writer's
+//! backend and waits until it is gone (bounded): a `COMMIT` it made is then
+//! found by the attempt, and one it had not made is aborted; not proven
+//! gone, the outcome stays undetermined. Nothing is resent: the history is read through the control
 //! reader (a connection of its own, unaffected by a writer session the
 //! unknown outcome quarantined), and the install or fold-back runs once. A
 //! record whose publication outcome this attempt could not determine is put
@@ -217,7 +221,7 @@ impl BoundWorkspace {
             .base()
             .map_err(|error| unresolved(known(), format!("base: {error}")))?;
         let mut prepared = self
-            .validate_candidate(&target, candidate, kept.capture, &base)
+            .validate_candidate(&target, candidate, kept.capture, &base, None)
             .map_err(|error| unresolved(known(), format!("validate: {error:?}")))?;
         let held = match &kept.merged_over {
             Some((ours, changed)) => {

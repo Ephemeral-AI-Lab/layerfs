@@ -391,11 +391,15 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
         // Workspace keeps its handle between its Commits (issue 320), and the
         // first mount's unmount hands it to the Store's idle slot, which the
         // second mount takes (#352 F-025 fix 4). So only round 1 opens one
-        // and reads the writer's policy.
+        // and reads the writer's policy. The kept handle also keeps its
+        // unused pack ids and the first 256 unused ordinals (#768,
+        // `KEPT_ORDINALS`), and no round assigns more new values than that,
+        // so only round 1 reserves (before: one initial reservation every
+        // round).
         let opens = u64::from(round == 1);
         let storage = commit.storage;
         assert_eq!(storage.policy, opens, "{storage:?}");
-        assert_eq!(storage.initial_reservations, 1, "{storage:?}");
+        assert_eq!(storage.initial_reservations, opens, "{storage:?}");
         assert!(storage.publish >= 1, "{storage:?}");
         drop(done);
         // The shared writer saw one producer handle open, and one thread.
@@ -407,7 +411,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
         );
         assert_eq!(count(Port::Publish), storage.publish, "{calls:?}");
         assert_eq!(count(Port::Reserve), storage.reserve, "{calls:?}");
-        assert!(count(Port::Reserve) >= 1);
+        assert!(count(Port::Reserve) >= opens);
         assert!(
             calls.iter().all(|seen| seen.thread == me),
             "{name}: every writer call of the Commit is on the calling thread: {calls:?}"

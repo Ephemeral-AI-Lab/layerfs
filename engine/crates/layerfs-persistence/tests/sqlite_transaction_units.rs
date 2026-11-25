@@ -46,10 +46,11 @@ fn canonical_and_shared_physical_bytes_are_bounded_independently() {
     }
     assert_eq!(save.finish().unwrap().inserted, 60);
     let after = h.diagnostics().unwrap();
-    // One reservation, one wave publication and one final open-group publication.
-    // Each side is below4MiB; adding the shared representations would need an
-    // additional wave publication. Finishing keeps its existing separate boundary.
-    assert_eq!(after.write_commits - before.write_commits, 3);
+    // One reservation and one publication: the last wave and the sealed tail
+    // publish together at finish (#768; two publications before). Each side
+    // is below 4 MiB; adding the shared representations would need an
+    // additional publication.
+    assert_eq!(after.write_commits - before.write_commits, 2);
     assert!(after.sealed_body_bytes - before.sealed_body_bytes > 2500000);
     assert!(
         after.sealed_body_bytes - before.sealed_body_bytes
@@ -68,7 +69,7 @@ fn canonical_and_shared_physical_bytes_are_bounded_independently() {
     );
 }
 #[test]
-fn each_save_owns_a_new_combined_range_without_recycling_used_ids() {
+fn one_kept_range_serves_every_save_without_recycling_used_ids() {
     let t = support::Temp::new("reservation-tail");
     let h = create(&t.join("db"));
     let storage = Storage::new(h.storage.clone()).unwrap();
@@ -80,7 +81,9 @@ fn each_save_owns_a_new_combined_range_without_recycling_used_ids() {
         save.finish().unwrap();
         expected.push(o);
     }
-    assert_eq!(storage.diagnostics().reserve, 3);
+    // The handle keeps its unused ids between Saves (#768): one reservation
+    // serves all three (before: one per Save, 3).
+    assert_eq!(storage.diagnostics().reserve, 1);
     let sql = rusqlite::Connection::open(t.join("db")).unwrap();
     let (rows, distinct): (i64, i64) = sql
         .query_row(
@@ -384,7 +387,8 @@ fn queued_chunk_groups_use_the_acknowledged_pack_tail() {
     let t = support::Temp::new("queued-group-reservation-tail");
     let h = create(&t.join("db"));
     let storage = Storage::new(h.storage.clone()).unwrap();
-    // Each Save owns its own block; queued groups still share complete packs.
+    // The first Save's kept block serves the second (#768); queued groups
+    // still share complete packs.
     let initial = object(9000, 16);
     let save = storage.begin_save().unwrap();
     save.accept(initial).unwrap();
@@ -411,10 +415,12 @@ fn queued_chunk_groups_use_the_acknowledged_pack_tail() {
         "QUEUED_PACK_RESERVATION before={before} after={after} chunks={}",
         chunks.len()
     );
+    // Before #768 the second Save reserved one new combined block
+    // (`before + 1`); now the first Save's kept block covers it. Either way
+    // the 128 groups need no pack id each.
     assert_eq!(
-        after,
-        before + 1,
-        "one new combined block covers this Save; groups are not packs"
+        after, before,
+        "the kept block covers this Save; groups are not packs"
     );
     let ids = chunks.iter().map(FinalizedObject::id).collect::<Vec<_>>();
     assert_eq!(

@@ -194,6 +194,8 @@ impl Store {
                 producer: Default::default(),
                 pending: std::sync::Mutex::new(None),
                 retained: std::sync::Mutex::new(None),
+                logical: std::sync::Mutex::new(None),
+                removals: std::sync::Mutex::new(None),
             };
             // §4.3: a mount of a node at or below a marker frontier applies
             // the whiteout, so its view hides the path and its next Commit

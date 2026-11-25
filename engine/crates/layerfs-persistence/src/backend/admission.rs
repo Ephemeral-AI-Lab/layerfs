@@ -118,17 +118,20 @@ impl Admission {
 
 impl Turn<'_> {
     /// Keeps this turn for the calling thread until `release_hold`: its later
-    /// SQL work enters as nested turns, and every other caller queues.
-    pub(crate) fn hold(self) -> Result<(), BackendError> {
+    /// SQL work enters as nested turns, and every other caller queues. It
+    /// cannot fail: a lane holder calls it after its lane transaction began,
+    /// and a failure there left that transaction (and the lane row) held
+    /// with no `LaneHold` to end it (#768). A poisoned queue is taken as
+    /// `release_hold` and `Drop` take it; `enter` still refuses one.
+    pub(crate) fn hold(self) {
         let mut queue = self
             .admission
             .queue
             .lock()
-            .map_err(|_| BackendError::Unknown)?;
+            .unwrap_or_else(|error| error.into_inner());
         queue.holder = Some(std::thread::current().id());
         drop(queue);
         std::mem::forget(self);
-        Ok(())
     }
 }
 

@@ -7,7 +7,8 @@
 //! The Commit scenarios run on a third Store open, after one mount: the
 //! first and the second Commit of a one-file change, an UpToDate Commit,
 //! then the unmount (`BoundWorkspace::close` and the overlay namespace's
-//! retirement). They cover the whole Store-service Commit, the pre-lane
+//! retirement) and the Store's part of an orderly close (its idle producer
+//! handle returning its kept ordinals). They cover the whole Store-service Commit, the pre-lane
 //! whiteout read (`materialize_commit`) included; the lane itself is pinned
 //! by persistence `postgresql_commit_round_trips.rs`.
 //! Counts come from the sessions' own counters (`SqlWork`), split into the
@@ -128,18 +129,65 @@ const POSTGRESQL: &[Pin] = &[
 // Commit; now it is one read (3 statements, 1 transaction). The writer and
 // the Workspace reader are unchanged by it, and an UpToDate Commit never
 // reaches the whiteout step.
+//
+// #768's Commit cuts then took 6 statements and 2 transactions off each real
+// Commit's writer (first 52/11, second 44/9 before): no write transaction
+// for a digest window of only small files (BEGIN IMMEDIATE, COMMIT), one
+// statement for the Branch, its roots and its project epoch in
+// `commit_branch` (three before), and one publication at a Save's finish
+// for its last wave and its sealed tail (two before).
+//
+// #768's stage-1 cuts then took three reads off a real Commit. Validation
+// checks the candidate from the objects its construction built, not read
+// back through the Workspace reader (5 statements before, on both Commits).
+// The whiteout step uses the bound node's markers read at mount, and a
+// Commit this Workspace published hides nothing: no control read (3
+// statements, 1 transaction before, on both). `logical.known` answers the
+// size of the Commit this Workspace published from memory: the second
+// Commit's writer drops its Read transaction (38/7 before); the first still
+// reads the base Layer's, which the bind snapshot does not carry.
+//
+// The stage-1 storage cuts then took 7 statements and 1 transaction off the
+// second Commit's writer (35/6 before). A finished Save leaves its unused
+// pack ids and the first `KEPT_ORDINALS` (128) unused ordinals on the kept
+// Storage handle, so the second Commit reserves nothing (`BEGIN IMMEDIATE`,
+// `UPDATE … RETURNING`, `COMMIT`) and, its kept prefix covering the block,
+// releases no ordinal tail (`UPDATE store_policy`). Its Save also reads the
+// base inode leaf's pack and values from what the first Save published
+// instead of fetching them back. The first Commit's new handle reserves and
+// releases the tail past its kept prefix, as before.
+//
+// #768 stage 2 then made each Commit over an unmoved head one write
+// transaction (`commit_fused.rs`, `layerfs_persistence::Committer`): the
+// sealed tail's publication, the binding hints and `commit_branch` in one
+// `BEGIN IMMEDIATE`, and no head read before it (its transaction checks the
+// bound head). The Save's handle also keeps the inode values its Saves
+// read, beside the ones they published, so a base leaf's values are read
+// once, not by construction and again by the logical count. Second Commit:
+// 28 statements in 5 transactions before, now 16 in 1 (the fused
+// transaction); first: 46/9 before, now 35/5 (the new handle's
+// reservation, its first reads and the fused transaction).
+//
+// #768 verification finding 6: the producer handle's kept ordinals go back
+// to the Store before every orderly drop, never on a Commit's path. The
+// Commits and the unmount (whose handle takes the Store's free idle slot)
+// are unchanged; the Store close's release is one publication (`BEGIN
+// IMMEDIATE`, the conditional `UPDATE store_policy`, `COMMIT`). Measured
+// alternative, not taken: a producer handle that keeps no ordinal (pack ids
+// only) sends nothing at close, but its second Commit reserves ordinals
+// again: 21 statements in 2 transactions instead of 16 in 1.
 const SQLITE_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
-        writer: [0, 0, 52, 11],
-        control: [0, 0, 3, 1],
-        workspace: [0, 0, 5, 0],
+        writer: [0, 0, 35, 5],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 0, 44, 9],
-        control: [0, 0, 3, 1],
-        workspace: [0, 0, 5, 0],
+        writer: [0, 0, 16, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.up_to_date",
@@ -149,6 +197,12 @@ const SQLITE_COMMIT: &[Pin] = &[
     },
     Pin {
         scenario: "unmount",
+        writer: [0, 0, 3, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "close",
         writer: [0, 0, 3, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
@@ -164,28 +218,82 @@ const SQLITE_COMMIT: &[Pin] = &[
 // The unmount is the owner's release on the writer, cold on this session (2
 // statements, each prepared once): `postgresql_gc_sessions` pins the warm
 // release at 2 round trips, 8 before #768's admission change.
+//
+// #768's Commit cuts then took 11 round trips off the first Commit's writer
+// (65 before) and 10 off the second's (42 before; 40 of them warm): the
+// empty digest write (2), the last wave's own publication (4), the probe,
+// epoch read and re-read as one statement (2), the lane check in the
+// COMMIT round trip (1) and the head check in the lane's BEGIN batch (1).
+// The first Commit also prepares the new joined statement once fewer than
+// the three it replaces. Ledger and rules: `docs/architecture/engine/store/
+// postgresql.md`, "Commit round trips".
+//
+// The stage-1 cuts (see the SQLite pins) then took the validation read-back
+// (5 round trips, 5 statements before, on both Commits) and the whiteout
+// read (first [1, 3, 2, 0] with the control reader's connect, second
+// [0, 1, 1, 0]) off both Commits, so no Commit here opens the control
+// reader; and `logical.known` off the second Commit's writer ([0, 32, 19,
+// 4] before: that read was the Commit-row statement's first use on this
+// session, a prepare and its execution, so 2 round trips; 1 once warm).
+//
+// The stage-1 storage cuts then took 5 round trips, 3 statements and 1
+// transaction off the second Commit's writer ([0, 30, 18, 4] before): the
+// kept handle's id block needs no reservation (`BEGIN` with the lane row,
+// `UPDATE store_policy … RETURNING`, `COMMIT`: 3), and construct reads the
+// base inode leaf's pack and its values from the bodies and values the first
+// Save published (2). The first Commit's handle is new: it reserves and
+// reads as before, and its ordinal release, now of the tail past the
+// `KEPT_ORDINALS` it keeps, rides in the sealed tail's statement as before.
+//
+// #768 stage 2 (see the SQLite pins) then sent each Commit over an unmoved
+// head as one pipelined message, one transaction and one round trip
+// (`backend/postgresql/history/fused.rs`). The second Commit's writer was
+// [0, 25, 15, 3]: the base leaf's values read by construction and again by
+// the logical count (2), the head read (1), the membership locate (1), the
+// sealed tail's publication (6), the hint write (3) and the lane (11), with
+// one cold prepare. Now it is the membership locate (1) and the message (1),
+// plus one cold prepare (the lineage statement for a Commit with a parent
+// is first used here): 2 round trips once warm. The first Commit no longer
+// opens the lane connection (connects 1 -> 0; its own transaction locks
+// the lane row) and prepares the message's statements once ([1, 54, 23, 5]
+// before). The UpToDate Commit's Branch read is now that statement's first
+// use on this session (no head read before the lane), so one prepare:
+// [0, 1, 1, 0] before.
+//
+// #768 verification finding 6 (see the SQLite pins): the Store close's
+// release of the idle handle's kept ordinals is one publication (the lane
+// row and the rows statement, in one transaction), cold on this session:
+// the Commits were fused, so its statements are first prepared here. Measured alternative, not taken: a
+// handle that keeps no ordinal sends nothing at close, but its second Commit
+// reserves again: [0, 6, 13, 2] instead of [0, 3, 12, 1].
 const POSTGRESQL_COMMIT: &[Pin] = &[
     Pin {
         scenario: "commit.first",
-        writer: [1, 65, 28, 7],
-        control: [1, 3, 2, 0],
-        workspace: [0, 5, 5, 0],
+        writer: [0, 23, 21, 3],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.second",
-        writer: [0, 42, 24, 6],
-        control: [0, 1, 1, 0],
-        workspace: [0, 5, 5, 0],
+        writer: [0, 3, 12, 1],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "commit.up_to_date",
-        writer: [0, 1, 1, 0],
+        writer: [0, 2, 1, 0],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
     Pin {
         scenario: "unmount",
         writer: [0, 4, 2, 0],
+        control: [0, 0, 0, 0],
+        workspace: [0, 0, 0, 0],
+    },
+    Pin {
+        scenario: "close",
+        writer: [0, 5, 2, 1],
         control: [0, 0, 0, 0],
         workspace: [0, 0, 0, 0],
     },
@@ -216,6 +324,18 @@ fn sqlite_commit_counts() {
 fn postgresql_commit_counts() {
     if let Some(measured) = on_postgresql("postgresql-commit", "commit", commit_scenarios) {
         check("postgresql", &measured, POSTGRESQL_COMMIT);
+    }
+}
+
+#[test]
+fn sqlite_merge_commit_validates_through_the_reader() {
+    check_merge("sqlite", &on_sqlite("sqlite-merge", merge_scenarios));
+}
+
+#[test]
+fn postgresql_merge_commit_validates_through_the_reader() {
+    if let Some(measured) = on_postgresql("postgresql-merge", "merge", merge_scenarios) {
+        check_merge("postgresql", &measured);
     }
 }
 
@@ -510,8 +630,115 @@ fn commit_scenarios(
         "{outcome:?}"
     );
     measure(&opened, "unmount", &mut out, || opened.unmount(workspace));
+    // The Store's part of an orderly close (`StoreService::close`): the idle
+    // producer handle, the unmounted Workspace's, returns its kept ordinals.
+    measure(&opened, "close", &mut out, || {
+        opened.service.store.release_producer()
+    });
     opened.stop();
     out
+}
+
+/// Two Workspaces on Branch `work`: the first Commits `/a`; the second,
+/// bound before it, Commits `/b` over the moved head. Its merge builds the
+/// root it publishes outside construction, so validation reads that root
+/// through the Workspace reader (the fallback for objects construction did
+/// not build) and the install still succeeds with both files. The second
+/// Workspace's next Commit, over the merge it published, validates from
+/// what it built again.
+fn merge_scenarios(
+    dir: &Path,
+    selection: &dyn Fn() -> StoreSelection,
+    branch: BranchId,
+) -> Vec<Measured> {
+    let mut out = Vec::new();
+    let opened = Opened::open(dir, selection(), "d");
+    let first = opened.by_id(5, branch);
+    let second = opened.by_id(6, branch);
+    let write = |workspace: &BoundWorkspace, path: &str| {
+        let mut change = Mutation::new(workspace).unwrap();
+        change.write(path, b"merged\n", None).unwrap();
+        change.finish().unwrap();
+    };
+    let commit = |workspace: &BoundWorkspace| {
+        workspace
+            .commit_captured(&CommitOptions {
+                force: false,
+                message: Some("merge validation".to_owned()),
+                expected: None,
+            })
+            .unwrap_or_else(|failure| panic!("commit: {failure}"))
+    };
+    // #768 stage 2: `(fused Commits, race refusals that went on the
+    // separate path)` the Store counted for each Commit.
+    let fused = |since: (u64, u64)| {
+        let now = opened.service.store.fused_counts();
+        (now.0 - since.0, now.1 - since.1)
+    };
+    write(&first, "/a");
+    let start = opened.service.store.fused_counts();
+    commit(&first);
+    assert_eq!(fused(start), (1, 0), "an unmoved head: one fused Commit");
+    write(&second, "/b");
+    let start = opened.service.store.fused_counts();
+    let merged = measure(&opened, "commit.merge", &mut out, || commit(&second));
+    // The second Workspace's bound head moved: its fused attempt is refused
+    // as a race, which wrote nothing, and the Commit goes on the separate
+    // path exactly once: the head read, the merge before the lane, then the
+    // lane and the publication.
+    assert_eq!(fused(start), (0, 1), "one race refusal, one fallback");
+    assert!(merged.merge.is_some(), "the head moved: a merge runs");
+    assert!(
+        matches!(merged.history, Some(CommitOutcome::Committed { .. })),
+        "{:?}",
+        merged.history
+    );
+    let view = Mutation::new(&second).unwrap();
+    for path in ["/a", "/b", "/seed"] {
+        assert!(view.optional(path).unwrap().is_some(), "{path} installed");
+    }
+    // Its base source is released only by `finish`; a held one would keep
+    // the next install waiting.
+    view.finish().unwrap();
+    write(&second, "/c");
+    let start = opened.service.store.fused_counts();
+    let after = measure(&opened, "commit.after_merge", &mut out, || commit(&second));
+    assert_eq!(fused(start), (1, 0), "over its own head: fused again");
+    assert!(after.merge.is_none(), "over its own head: no merge");
+    assert!(
+        matches!(after.history, Some(CommitOutcome::Committed { .. })),
+        "{:?}",
+        after.history
+    );
+    opened.unmount(first);
+    opened.unmount(second);
+    opened.stop();
+    out
+}
+
+/// The merge's validation read through the Workspace reader; the Commit
+/// after it read nothing there.
+fn check_merge(backend: &str, measured: &[Measured]) {
+    for m in measured {
+        println!(
+            "MERGE_COUNTS {{\"backend\":\"{backend}\",\"scenario\":\"{}\",\"writer\":{:?},\"control\":{:?},\"workspace\":{:?}}}",
+            m.scenario, m.counts[0], m.counts[1], m.counts[2]
+        );
+    }
+    let [merge, after] = measured else {
+        panic!("two scenarios");
+    };
+    assert_eq!(merge.scenario, "commit.merge");
+    assert!(
+        merge.counts[2][2] > 0,
+        "{backend}: the merged root is read back through the Workspace reader"
+    );
+    assert_eq!(after.scenario, "commit.after_merge");
+    assert_eq!(
+        after.counts[2],
+        [0, 0, 0, 0],
+        "{backend}: validated from the built objects"
+    );
 }
 
 /// Prints every scenario, then compares each with its pin.

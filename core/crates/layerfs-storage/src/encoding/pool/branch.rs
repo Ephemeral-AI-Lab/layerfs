@@ -257,6 +257,11 @@ impl PoolReader {
             }
             let record = self.record(connection, workspace, &current, caches.as_mut())?;
             let base = stored_base(&record)?;
+            if let Some(base) = base {
+                // Unless this walk binds members (a Save's check of its
+                // bases), the deeper bases join this level's locate (#768).
+                self.locate_ahead(connection, workspace, &current, base, caches.as_ref())?;
+            }
             // Only a Save's check of its bases binds a program page's chain
             // member here (#758, `Fetch::bind`); every element below is still
             // hashed to the id its child's record names.

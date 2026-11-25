@@ -20,7 +20,8 @@ impl<'a> Save<'a> {
     pub(crate) fn new(storage: &'a Storage) -> StorageResult<Self> {
         let work_start = storage.work.snapshot().total;
         let _work = storage.work.span(super::Stage::Begin);
-        storage.source.forget_published();
+        // The bodies and values earlier Saves on this handle published stay
+        // (bounded) for this Save's reads (#768).
         Ok(Self {
             work_start,
             state: RefCell::new(State::new(storage)?),
@@ -36,6 +37,8 @@ impl<'a> Save<'a> {
         }
         let result = (|| {
             let mut state = self.state.borrow_mut();
+            let storage = state.storage;
+            let _published = storage.source.serving_published();
             if let Some(objects) = state.pending.push(object)? {
                 state.wave(objects)?;
             }
@@ -52,6 +55,32 @@ impl<'a> Save<'a> {
     }
     /// Seals and registers the remaining reference-closed output once.
     pub fn finish(self) -> StorageResult<WriteOutcome> {
+        let held = self.seal(false)?;
+        if held.is_some() {
+            return Err(StorageError::Integrity("held finish batch"));
+        }
+        Ok(self.complete())
+    }
+    /// [`Self::finish`], except that the last publication is prepared and
+    /// not sent: the tail carries it for its caller to publish in a
+    /// transaction of its own (a fused Commit, #768), or to publish as
+    /// `finish` would ([`PreparedTail::publish`]). Earlier batches that
+    /// reached a publication bound are published here, as `finish` would.
+    /// While the tail lives, every read of the handle (readers continuing
+    /// this Save, [`crate::Storage::reader_after_save`], included) sees the
+    /// held batch's locations, pack bodies and values whole, from the batch
+    /// itself (`read/held.rs`), not from the bounded caches.
+    pub fn finish_prepared(self) -> StorageResult<PreparedTail<'a>> {
+        let held = self.seal(true)?;
+        Ok(PreparedTail {
+            save: Some(self),
+            held,
+            handed_out: std::cell::Cell::new(false),
+        })
+    }
+    /// Seals the remaining output and registers it; with `hold`, the last
+    /// batch is returned instead of published.
+    fn seal(&self, hold: bool) -> StorageResult<Option<super::publication::Held>> {
         if let Some(error) = self.failure.borrow_mut().take() {
             return Err(error);
         }
@@ -59,8 +88,11 @@ impl<'a> Save<'a> {
             return Err(StorageError::Aborted);
         }
         let mut state = self.state.borrow_mut();
+        let storage = state.storage;
+        let _published = storage.source.serving_published();
         let objects = state.pending.drain();
-        state.wave(objects)?;
+        // The last wave is published below, with the sealed tail.
+        state.prepare(objects)?;
         let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;
         if state.packer.unfinished() {
@@ -88,13 +120,19 @@ impl<'a> Save<'a> {
         }
         state.flush_signatures()?;
         drop(closing);
-        state.register_ready()?;
+        state.register_ready(hold)
+    }
+    /// After every batch was acknowledged: the unused pack ids and the kept
+    /// ordinal prefix stay with the handle (#768).
+    fn complete(&self) -> WriteOutcome {
+        let mut state = self.state.borrow_mut();
+        state.keep_rest();
         state.outcome.pool = state.pool_stats;
         state.outcome.delta = state.delta;
         state.profile.group_ns += state.packer.group_ns;
         state.storage.work.close(self.work_start, state.profile);
         self.finished.set(true);
-        Ok(state.outcome)
+        state.outcome
     }
     /// Takes the original error retained by a C1 sink before abandoning a save.
     pub fn take_failure(&self) -> Option<StorageError> {
@@ -129,6 +167,126 @@ impl Drop for Save<'_> {
             let state = self.state.get_mut();
             state.candidates.invalidate();
             state.storage.source.invalidate_signatures();
+            // A Save that failed, refused or never finished keeps no
+            // published bodies or values for the next (#768). Unless one of
+            // its writes ended uncertain, its unused ids (from the first it
+            // did not assign) go back to the handle: its next Save uses them,
+            // or its owner returns the ordinals before an orderly drop.
+            state.storage.kept.set(state.unused_rest());
+            state.storage.source.forget_published();
+        }
+    }
+}
+/// A finished Save's last publication, prepared and not yet sent
+/// ([`Save::finish_prepared`]). Exactly one of [`Self::acknowledged`] (its
+/// caller published [`Self::publication`] in its own transaction, nothing
+/// lost) and [`Self::publish`] (publish it now, as `finish` does) completes
+/// the Save. Dropped without either, the Save did not finish: its held
+/// locations and the handle's published bodies are forgotten. Its unused
+/// ids go to the handle when its publication was never handed out, or after
+/// [`Self::refused`]; once handed out, a drop is an unknown outcome and they
+/// are lost.
+pub struct PreparedTail<'a> {
+    save: Option<Save<'a>>,
+    held: Option<super::publication::Held>,
+    /// [`Self::publication`] was handed to a caller that may have sent it.
+    handed_out: std::cell::Cell<bool>,
+}
+impl PreparedTail<'_> {
+    /// The publication still to send: `None` when everything was already
+    /// published (or nothing was new).
+    pub fn publication(&self) -> Option<&crate::port::Publication> {
+        self.handed_out.set(self.held.is_some());
+        self.held.as_ref().map(|held| &held.batch)
+    }
+    /// The Save's outcome once [`Self::publication`] is acknowledged with
+    /// nothing lost, without completing it: the counts a Commit records.
+    pub fn prospective(&self) -> WriteOutcome {
+        let Some(save) = self.save.as_ref() else {
+            return WriteOutcome::default();
+        };
+        let state = save.state.borrow();
+        let mut outcome = state.outcome;
+        if let Some(held) = &self.held {
+            super::publication::counted(
+                &mut outcome,
+                &held.batch,
+                &held.members,
+                &Default::default(),
+            );
+        }
+        outcome.pool = state.pool_stats;
+        outcome.delta = state.delta;
+        outcome
+    }
+    /// The caller's transaction published [`Self::publication`] exactly,
+    /// every location inserted (none lost), and committed: the Save
+    /// completes as an acknowledged `finish`.
+    pub fn acknowledged(mut self) -> StorageResult<WriteOutcome> {
+        if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_ref()) {
+            let mut state = save.state.borrow_mut();
+            // The Store has the batch now, its ordinal release included.
+            state.unapplied_release = None;
+            state.storage.source.release_held();
+            state.storage.source.note(|c| c.publish += 1);
+            state.settle(&held.batch, &held.members, &[])?;
+        }
+        self.held = None;
+        let save = self.save.take().ok_or(StorageError::Aborted)?;
+        Ok(save.complete())
+    }
+    /// Publishes [`Self::publication`] on its own, as `finish` does (lost
+    /// locations compared with their winners), and completes the Save.
+    pub fn publish(mut self) -> StorageResult<WriteOutcome> {
+        // Sent here: this Save's own write decides whether a failure is
+        // uncertain (`State::written`); a caller that was handed the
+        // publication had nothing applied (`Fused::Overflow`, a race).
+        self.handed_out.set(false);
+        if let (Some(save), Some(held)) = (self.save.as_ref(), self.held.as_mut()) {
+            let mut state = save.state.borrow_mut();
+            let storage = state.storage;
+            let _published = storage.source.serving_published();
+            // A lost location's winner must be read from the Store, not
+            // from the held batch.
+            storage.source.release_held();
+            state.acknowledge(&mut held.batch, &held.members)?;
+        }
+        self.held = None;
+        let save = self.save.take().ok_or(StorageError::Aborted)?;
+        Ok(save.complete())
+    }
+}
+impl PreparedTail<'_> {
+    /// The caller's transaction carrying [`Self::publication`] was refused
+    /// definitely: it was rolled back and none of it applied, its ordinal
+    /// release included. The Save does not finish (as when the tail is
+    /// dropped), but its unused pack ids and ordinals, from the first ones
+    /// it did not assign up to its reserved ends, go to the handle's kept
+    /// block, so the handle's next Save uses them or its owner returns the
+    /// ordinals ([`crate::Storage::release_kept_ordinals`]). The ids the
+    /// refused publication assigned are below them and never reused. Never
+    /// call it after an unknown outcome: dropping the tail loses the block.
+    pub fn refused(self) {
+        self.handed_out.set(false);
+    }
+}
+impl Drop for PreparedTail<'_> {
+    fn drop(&mut self) {
+        let Some(save) = self.save.as_ref() else {
+            return;
+        };
+        let mut state = save.state.borrow_mut();
+        // Not acknowledged: the held locations were never the Store's.
+        if let Some(held) = self.held.as_ref() {
+            let ids: Vec<_> = held.batch.objects.iter().map(|row| row.object_id).collect();
+            state.storage.source.release_held();
+            state.storage.source.invalidate(&ids);
+        }
+        // Handed out and neither acknowledged nor refused: whether the
+        // caller's transaction applied it is unknown, so the Save (dropped
+        // next) keeps no id for the handle.
+        if self.handed_out.get() {
+            state.write_uncertain = true;
         }
     }
 }

@@ -1,0 +1,55 @@
+//! #768: a dropped connection (the proxy discards message `N` and everything
+//! after it and shuts both sockets of that connection)
+//! at every server message of a Workspace Commit whose head another
+//! Workspace moved first, on PostgreSQL: the fused attempt (refused as a
+//! race, nothing written) and the fallback on the separate path that merges
+//! and publishes in the same call. Besides `support/fault_sweep.rs`'s
+//! invariants, the call falls back at most once, and never when the fault
+//! came at or before the race refusal reached the client. Needs
+//! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
+#[path = "support/adversary.rs"]
+#[allow(dead_code)]
+mod adversary;
+#[path = "support/fault_proxy.rs"]
+#[allow(dead_code)]
+mod fault_proxy;
+#[path = "support/fault_sweep.rs"]
+#[allow(dead_code)]
+mod fault_sweep;
+
+use fault_proxy::Fault;
+use fault_sweep::{Flight, Positions};
+
+/// The flight is long (the fused attempt, then the separate path), so
+/// four tests sweep a quarter of its positions each, in parallel, each on
+/// its own Store; together they cover every position.
+const PARTS: u64 = 4;
+
+fn part(part: u64) {
+    fault_sweep::sweep(
+        &format!("drop_raced_{part}"),
+        Fault::Drop,
+        Flight::Raced,
+        Positions::Share(part, PARTS),
+    );
+}
+
+#[test]
+fn a_connection_dropped_at_any_message_of_a_raced_commit_part_0() {
+    part(0);
+}
+
+#[test]
+fn a_connection_dropped_at_any_message_of_a_raced_commit_part_1() {
+    part(1);
+}
+
+#[test]
+fn a_connection_dropped_at_any_message_of_a_raced_commit_part_2() {
+    part(2);
+}
+
+#[test]
+fn a_connection_dropped_at_any_message_of_a_raced_commit_part_3() {
+    part(3);
+}

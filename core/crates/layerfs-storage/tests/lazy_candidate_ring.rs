@@ -113,13 +113,51 @@ impl Arm {
     }
 }
 
+/// The packs, in id order, and the locators with each pack id replaced by
+/// that pack's rank. A kept handle keeps its unused pack ids for its next
+/// Save while a fresh handle reserves new ones (#768), so the two arms
+/// number the same packs differently; their order, bytes and every locator's
+/// position in them must still agree.
+type Ranked = (
+    Vec<(layerfs_storage::location::PackDomain, Vec<u8>)>,
+    Vec<(layerfs_storage::location::ObjectLocation, usize)>,
+);
+fn ranked(state: &metadata::MetadataState) -> Ranked {
+    let rank: std::collections::BTreeMap<i64, usize> = state
+        .packs
+        .keys()
+        .enumerate()
+        .map(|(rank, id)| (*id, rank))
+        .collect();
+    let packs = state
+        .packs
+        .values()
+        .map(|pack| {
+            assert_eq!(pack.info.length, pack.body.len());
+            (pack.info.domain, pack.body.as_ref().clone())
+        })
+        .collect();
+    let objects = state
+        .objects
+        .values()
+        .map(|row| {
+            // Every field but the pack id, which is compared by rank.
+            let row = layerfs_storage::location::ObjectLocation { pack_id: 0, ..*row };
+            (row, rank[&state.objects[&row.object_id].pack_id])
+        })
+        .collect();
+    (packs, objects)
+}
+
 fn same_store(lazy: &Arm, loaded: &Arm, step: &str) {
     let (lazy, loaded) = (
         lazy.metadata.state.lock().unwrap(),
         loaded.metadata.state.lock().unwrap(),
     );
-    assert_eq!(lazy.packs, loaded.packs, "{step}: packs");
-    assert_eq!(lazy.objects, loaded.objects, "{step}: locators");
+    let (lazy_packs, lazy_objects) = ranked(&lazy);
+    let (loaded_packs, loaded_objects) = ranked(&loaded);
+    assert_eq!(lazy_packs, loaded_packs, "{step}: packs");
+    assert_eq!(lazy_objects, loaded_objects, "{step}: locators");
     assert_eq!(lazy.signatures, loaded.signatures, "{step}: ring rows");
 }
 

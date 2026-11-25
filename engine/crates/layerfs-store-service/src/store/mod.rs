@@ -2,6 +2,7 @@
 pub mod bind;
 pub mod captured;
 pub mod commit;
+mod commit_fused;
 pub mod commit_merge;
 pub mod commit_types;
 pub mod digests;

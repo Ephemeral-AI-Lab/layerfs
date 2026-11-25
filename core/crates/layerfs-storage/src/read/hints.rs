@@ -204,12 +204,7 @@ impl Fetch {
     /// ([`Self::binding_pages`]), and it walks them again from authoritative
     /// locates when the check fails.
     pub(super) fn bind(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
-        if !self.bind_hints.get()
-            || !self.trust_hints.get()
-            || child.role == ObjectRole::InodeLeaf
-            || (crate::encoding::pool::branch::is_program_role(child.role)
-                && !self.bind_pages.get())
-        {
+        if !self.binds(child.role) {
             return Ok(());
         }
         let mut hints = self.hints.borrow_mut();
@@ -248,6 +243,40 @@ impl Fetch {
         self.absent.borrow_mut().remove(&base);
         self.note(|c| c.chain_hinted_bases += 1);
         Ok(())
+    }
+    /// Whether [`Self::bind`] binds a member under a child of `role` now.
+    fn binds(&self, role: ObjectRole) -> bool {
+        self.bind_hints.get()
+            && self.trust_hints.get()
+            && role != ObjectRole::InodeLeaf
+            && (!crate::encoding::pool::branch::is_program_role(role) || self.bind_pages.get())
+    }
+    /// A walk that binds no member under `child` (a pooled leaf; a program
+    /// page outside a Save's check of its bases; any walk of a Save's own
+    /// demand) is about to locate `base`, which `child`'s record names (#768):
+    /// the deeper base ids its chain lets cached bytes name
+    /// ([`Self::chain_ahead`]) join that locate, so the walk's later levels
+    /// find their bases located. Nothing happens when `base` is already
+    /// cached, when the walk binds, or when there is nothing to guess: the
+    /// walk then locates as before. The rows are authoritative and every
+    /// level still takes its base id from the record at its base's location.
+    pub(crate) fn locate_ahead(
+        &self,
+        child: &ObjectLocation,
+        base: ObjectId,
+        packs: &PackCache,
+        workspace: &mut crate::encoding::codec::DecompressionWorkspace,
+    ) -> StorageResult<()> {
+        if self.binds(child.role) {
+            return Ok(());
+        }
+        let groups = crate::encoding::GroupCache::new();
+        let ahead = self.chain_ahead(&[base], &[(*child, base)], packs, &groups, workspace);
+        if ahead.is_empty() {
+            return Ok(());
+        }
+        self.absent.borrow_mut().remove(&base);
+        self.locate(&[&[base][..], &ahead].concat())
     }
     /// A member whose pack descriptor does not contradict a known one.
     fn known(&self, member: &ChainMember) -> bool {
@@ -495,7 +524,9 @@ impl Fetch {
             let mut trial: Vec<Planned> = Vec::new();
             let mut keep = BTreeMap::new();
             for (info, group, own) in needs {
-                if self.serve_published.get() && self.published_has(info.pack_id) {
+                // A held body is served to every read; a published one
+                // only while serving published bodies (`published_has`).
+                if self.published_has(info.pack_id) {
                     continue;
                 }
                 if packs.group(self, info.pack_id, group)?.is_some() {

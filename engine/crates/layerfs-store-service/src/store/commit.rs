@@ -6,22 +6,43 @@ use super::{
 use crate::telemetry::phase;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
-    error::MovedState, BranchSnapshot, CommitAttempt, CommitMeta, CommitOutcome, CommitRequest,
-    CommitVia, HistoryError, NodeId,
+    error::MovedState, BranchSnapshot, CommitAttempt, CommitOutcome, CommitVia, HistoryError,
+    NodeId,
 };
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::{Active, TimingScope};
-use layerfs_workspace::WorkspaceError;
+use layerfs_workspace::{CanonicalCache, CanonicalClient, ConstructedObjects, WorkspaceError};
 use std::sync::{atomic::Ordering, Arc};
+
+/// The private cache allowance of one validation over a built set: the
+/// candidate's root, the pages down to its root inode and that directory's
+/// first page and attributes.
+const VALIDATION_CACHE_BYTES: usize = 4 * 1024 * 1024;
 
 /// The node a Branch answers as its head: its head Commit, else its base
 /// Layer (`branch get`, `--expected`).
-fn answered(snapshot: &BranchSnapshot) -> NodeId {
+pub(super) fn answered(snapshot: &BranchSnapshot) -> NodeId {
     snapshot
         .branch
         .head_commit
         .map_or(NodeId::Layer(snapshot.branch.base_layer), NodeId::Commit)
+}
+
+/// A definite refusal for a lane or lock wait: a lock timeout, a busy lane
+/// or another live operation.
+fn busy(error: &CommitError) -> bool {
+    match error {
+        CommitError::History(error) => {
+            matches!(error.cause(), HistoryError::Busy | HistoryError::BusyOp(_))
+        }
+        CommitError::Storage(layerfs_storage::StorageError::Busy)
+        | CommitError::Construction {
+            storage: layerfs_storage::StorageError::Busy,
+            ..
+        } => true,
+        _ => false,
+    }
 }
 
 /// A fresh Commit attempt (#776 R1): 16 bytes from the kernel's random
@@ -36,7 +57,7 @@ fn fresh_attempt() -> Result<CommitAttempt, CommitError> {
 }
 
 /// `HeadMoved` for a Branch whose head is not the `expected` one.
-fn expected_moved(expected: NodeId, current: &BranchSnapshot) -> CommitError {
+pub(super) fn expected_moved(expected: NodeId, current: &BranchSnapshot) -> CommitError {
     let (expected_head, expected_base) = match expected {
         NodeId::Commit(id) => (Some(id), current.branch.base_layer),
         NodeId::Layer(layer) => (None, layer),
@@ -83,6 +104,7 @@ impl BoundWorkspace {
         let result = crate::telemetry::timed("commit", |timing| {
             self.commit_admitted(
                 construct,
+                || None,
                 || (),
                 &CommitOptions::default(),
                 CommitVia::Workspace,
@@ -124,6 +146,10 @@ impl BoundWorkspace {
     /// publishes nothing: the merge, with marker blocks, is installed as the
     /// Workspace's local base and its history binding moves to the head.
     /// Each phase is a child of `timing`; untraced, it records nothing.
+    ///
+    /// `staged` lends validation what `construct` built, if it kept it
+    /// (`captured.rs`); its candidate is then checked from those bytes, not
+    /// read back from the Store.
     pub(super) fn commit_admitted(
         &self,
         construct: impl FnOnce(
@@ -131,6 +157,7 @@ impl BoundWorkspace {
             Capture,
             &BranchSnapshot,
         ) -> Result<FilesystemRootId, CommitError>,
+        staged: impl Fn() -> Option<Arc<ConstructedObjects>>,
         published: impl FnOnce(),
         options: &CommitOptions,
         via: CommitVia,
@@ -233,14 +260,17 @@ impl BoundWorkspace {
                     };
                 // §4.3: the candidate is a new node above the frontier, so
                 // an entry inherited unchanged from the bound base must be
-                // removed explicitly; a re-creation keeps its new inode.
+                // removed explicitly; a re-creation keeps its new inode. The
+                // bound node's markers are read only when this Workspace
+                // does not already know them (`removal.rs`).
                 let candidate = phase(timing, "removals", || {
+                    let found = self
+                        .commit_removals(snapshot.branch.stack, crate::removal::node_of(&snapshot))
+                        .map_err(crate::removal::commit_error)?;
                     crate::removal::materialize_commit(
-                        &self.store,
-                        snapshot.branch.stack,
                         &save,
                         FilesystemRootId(local),
-                        crate::removal::node_of(&snapshot),
+                        found,
                         candidate,
                     )
                     .map_err(crate::removal::commit_error)
@@ -250,8 +280,18 @@ impl BoundWorkspace {
                 // whole build stay outside it. In the lane the head is read
                 // again: if it moved meanwhile, only what landed in between
                 // is merged into the result, in memory, then published.
+                // A fused Commit reads no head: its transaction asserts the
+                // bound one (#768 stage 2, `commit_fused.rs`). Its last
+                // publication is held until then, so its validation must
+                // read none of this Commit's objects from the Store: only a
+                // candidate whose built set covers it is fused.
+                let fused = self.fused_eligible(&snapshot, options)
+                    && staged().is_some_and(|built| built.covers(candidate.0));
                 let current = phase(timing, "head", || {
                     self.refuse_markers(&save, candidate)?;
+                    if fused {
+                        return Ok(snapshot.clone());
+                    }
                     self.store
                         .history
                         .branch_snapshot(snapshot.branch.id)
@@ -290,14 +330,23 @@ impl BoundWorkspace {
                     .map(layerfs_history::NodeId::Commit)
                     .unwrap_or(layerfs_history::NodeId::Layer(current.branch.base_layer));
                 let known = phase(timing, "logical.known", || {
-                    self.store.logical_size(node).map_err(CommitError::History)
+                    self.known_logical(node).map_err(CommitError::History)
                 })?;
                 retained.phase = CommitPhase::Finish;
-                let saved = phase(timing, "finish", || {
-                    save.finish().map_err(CommitError::Storage)
-                })?;
-                self.store.note_save(&saved);
-                retained.saved = Some(saved);
+                // A fused Commit holds the Save's last publication for its
+                // own transaction; its reads below still see it.
+                let tail = if fused {
+                    Some(phase(timing, "finish", || {
+                        save.finish_prepared().map_err(CommitError::Storage)
+                    })?)
+                } else {
+                    let saved = phase(timing, "finish", || {
+                        save.finish().map_err(CommitError::Storage)
+                    })?;
+                    self.store.note_save(&saved);
+                    retained.saved = Some(saved);
+                    None
+                };
                 // Count only after finish has proved the root's references
                 // closed, so a missing dependency stays a Storage refusal.
                 // One reader continues the Save for both phases, so they
@@ -306,13 +355,13 @@ impl BoundWorkspace {
                 let logical = phase(timing, "logical.count", || {
                     self.logical_after(&reader, current.effective_root, root, known)
                 })?;
-                phase(timing, "bindings", || {
-                    super::hints::record_new_bindings(
-                        &reader,
-                        &*self.store.history,
-                        Some(FilesystemRootId(current.effective_root)),
-                        root,
-                    )
+                let left = Some(FilesystemRootId(current.effective_root));
+                let hints = phase(timing, "bindings", || match fused {
+                    true => super::hints::collect_new_bindings(&reader, left, root),
+                    false => {
+                        super::hints::record_new_bindings(&reader, &*self.store.history, left, root)
+                            .map(|_| None)
+                    }
                 })?;
                 drop(reader);
                 // Rows written since the capture are checked first here,
@@ -325,6 +374,31 @@ impl BoundWorkspace {
                         return Err(self.live_conflict(snapshot.scope, candidate, root, &overlap));
                     }
                 }
+                // New bindings past one transaction's rows: the Save is
+                // published and then every binding recorded, as on the
+                // separate path, so no hint row is written before the
+                // objects it describes; then the Commit alone is attempted
+                // fused, as after an overflow.
+                let tail = match (tail, &hints) {
+                    (Some(tail), None) => {
+                        let saved = phase(timing, "finish.tail", || {
+                            tail.publish().map_err(CommitError::Storage)
+                        })?;
+                        self.store.note_save(&saved);
+                        retained.saved = Some(saved);
+                        let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
+                        phase(timing, "bindings", || {
+                            super::hints::record_new_bindings(
+                                &reader,
+                                &*self.store.history,
+                                left,
+                                root,
+                            )
+                        })?;
+                        None
+                    }
+                    (tail, _) => tail,
+                };
                 // The candidate is validated and its install prepared before
                 // the lane: they read only immutable published objects. Only
                 // an in-lane merge step, which changes the candidate, is
@@ -332,28 +406,102 @@ impl BoundWorkspace {
                 retained.phase = CommitPhase::Validate;
                 let early_target = if merge.is_some() { &current } else { &snapshot };
                 let early = phase(timing, "validate", || {
-                    self.validate_candidate(early_target, root, capture, &original_base)
+                    self.validate_candidate(early_target, root, capture, &original_base, staged())
                 })?;
                 let early = (Self::target_key(early_target, root), early);
+                let mut fused_outcome = None;
+                if fused {
+                    retained.phase = CommitPhase::Publish;
+                    fused_outcome = self.publish_fused(
+                        tail,
+                        &snapshot,
+                        root,
+                        logical,
+                        hints,
+                        options,
+                        via,
+                        attempt,
+                        &mut retained,
+                        timing,
+                    )?;
+                }
+                let fused_published = fused_outcome.is_some();
+                // A fused attempt that published no Commit (a race, or no
+                // change against the bound root) continues on today's path
+                // from its head read, before the lane: a moved head is
+                // merged with there, in a Save of its own.
+                let (current, root, logical, early) = if fused && !fused_published {
+                    let again = self.reread_after_fused(
+                        &storage,
+                        &snapshot,
+                        root,
+                        logical,
+                        options,
+                        &mut retained,
+                        timing,
+                    )?;
+                    let early = match again.merge {
+                        Some(report) => {
+                            merge = Some(report);
+                            changed = again.changed;
+                            // The fallback's merge gets the same unheld check
+                            // before the lane as a first merge (#776 R3).
+                            if !changed.is_empty() {
+                                let overlap =
+                                    phase(timing, "live.early", || self.live_overlap(&changed))?;
+                                if !overlap.is_empty() {
+                                    return Err(self.live_conflict(
+                                        snapshot.scope,
+                                        root,
+                                        again.root,
+                                        &overlap,
+                                    ));
+                                }
+                            }
+                            retained.phase = CommitPhase::Validate;
+                            let checked = phase(timing, "validate", || {
+                                self.validate_candidate(
+                                    &again.current,
+                                    again.root,
+                                    capture,
+                                    &original_base,
+                                    staged(),
+                                )
+                            })?;
+                            (Self::target_key(&again.current, again.root), checked)
+                        }
+                        None => early,
+                    };
+                    (again.current, again.root, again.logical, early)
+                } else {
+                    (current, root, logical, early)
+                };
                 retained.phase = CommitPhase::Finish;
                 // A conflicted merge publishes nothing, so it never takes the
                 // lane.
                 let conflicted = merge
                     .as_ref()
                     .is_some_and(|report: &MergeReport| !report.conflicts.is_empty());
-                let lane = if conflicted {
-                    None
+                // Taking the lane also checks, in the same round trip where
+                // the provider can, that the head is still `current` (#768).
+                let (lane, unmoved) = if conflicted || fused_published {
+                    (None, false)
                 } else {
-                    Some(phase(timing, "lane", || {
-                        self.store
-                            .history
-                            .publish_lane()
-                            .map_err(CommitError::History)
-                    })?)
+                    let (lane, unmoved) = phase(timing, "lane", || match force {
+                        true => Ok((self.store.history.publish_lane()?, false)),
+                        false => self.store.history.publish_lane_unmoved(
+                            snapshot.branch.id,
+                            current.branch.head_commit,
+                            current.branch.base_layer,
+                        ),
+                    })
+                    .map_err(CommitError::History)?;
+                    (Some(lane), unmoved)
                 };
                 // A forced Commit is decided by the publication itself,
                 // which reads the head inside the lane.
-                let (current, root, logical) = if force || conflicted {
+                let (current, root, logical) = if force || conflicted || unmoved || fused_published
+                {
                     (current, root, logical)
                 } else {
                     let now = phase(timing, "head.lane", || {
@@ -382,9 +530,7 @@ impl BoundWorkspace {
                         })?;
                         self.store.note_save(&step_saved);
                         if let Some(saved) = retained.saved.as_mut() {
-                            saved.canonical_bytes += step_saved.canonical_bytes;
-                            saved.stored_bytes += step_saved.stored_bytes;
-                            saved.metadata_bytes += step_saved.metadata_bytes;
+                            super::commit_fused::add_saved(saved, &step_saved);
                         }
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         let logical = phase(timing, "logical.lane", || {
@@ -413,14 +559,25 @@ impl BoundWorkspace {
                         (now, stepped, logical)
                     }
                 };
-                Ok((root, candidate, current, logical, lane, early, changed))
+                Ok((
+                    root,
+                    candidate,
+                    current,
+                    logical,
+                    lane,
+                    early,
+                    changed,
+                    fused_outcome,
+                ))
             })();
             retained.storage = Some(super::producer::since(storage.diagnostics(), before));
-            let (candidate, ours, current, logical, lane, early, changed) = built?;
+            // Held here from now on, so a failure below still has it.
+            producer = Some(storage);
+            let (candidate, ours, current, logical, lane, early, changed, mut fused_outcome) =
+                built?;
             if candidate != ours {
                 replaced = Some((ours.0, candidate.0));
             }
-            producer = Some(storage);
             let conflicted = merge
                 .as_ref()
                 .is_some_and(|report: &MergeReport| !report.conflicts.is_empty());
@@ -430,57 +587,22 @@ impl BoundWorkspace {
             // A merge is published against the head it merged with; a forced
             // or unmoved Commit against the head the Workspace bound.
             let target = if merge.is_some() { &current } else { &snapshot };
-            if !conflicted {
-                retained.intent = Some(CommitRequest {
-                    branch: snapshot.branch.id,
-                    expected_head: target.branch.head_commit,
-                    expected_base: target.branch.base_layer,
-                    expected_root: target.effective_root,
-                    candidate_root: candidate.0,
-                    profile: snapshot.profile,
-                    scope: snapshot.scope,
-                    second_parent: None,
-                    meta: CommitMeta {
-                        message: Some(
-                            options
-                                .message
-                                .clone()
-                                .unwrap_or_else(|| "Commit Workspace changes".into()),
-                        ),
-                        statistics: {
-                            let saved = retained
-                                .saved
-                                .as_ref()
-                                .ok_or(CommitError::Context("finished Save"))?;
-                            layerfs_history::CommitStatistics {
-                                logical,
-                                new_canonical: saved.canonical_bytes,
-                                new_stored: saved.stored_bytes,
-                                new_metadata: saved.metadata_bytes,
-                            }
-                        },
-                        merged_from: merge.as_ref().map(|_| {
-                            snapshot
-                                .branch
-                                .head_commit
-                                .map(layerfs_history::NodeId::Commit)
-                                .unwrap_or(layerfs_history::NodeId::Layer(
-                                    snapshot.branch.base_layer,
-                                ))
-                        }),
-                        lww: merge
-                            .as_ref()
-                            .map_or_else(Vec::new, |report| report.lww.clone()),
-                        // The retained intent holds it: a lost reply is
-                        // settled by looking it up, never by publishing again.
-                        attempt: Some(attempt),
-                        ..CommitMeta::new(via)
-                    },
-                    // The transaction reads the head in the lane: forced
-                    // over whatever head it finds there, unless `expected`.
-                    force,
-                    required_head: options.expected,
-                });
+            if !conflicted && fused_outcome.is_none() {
+                let saved = retained
+                    .saved
+                    .as_ref()
+                    .ok_or(CommitError::Context("finished Save"))?;
+                retained.intent = Some(super::commit_fused::commit_request(
+                    &snapshot,
+                    target,
+                    candidate,
+                    logical,
+                    saved,
+                    merge.as_ref(),
+                    options,
+                    via,
+                    attempt,
+                ));
             }
             retained.phase = CommitPhase::Validate;
             let mut next = target.clone();
@@ -489,7 +611,7 @@ impl BoundWorkspace {
                 early.1
             } else {
                 phase(timing, "validate.lane", || {
-                    self.validate_candidate(target, candidate, capture, &original_base)
+                    self.validate_candidate(target, candidate, capture, &original_base, staged())
                 })?
             });
             // A merge installs a root other than our own. Rows written since
@@ -525,19 +647,38 @@ impl BoundWorkspace {
             } else {
                 retained.phase = CommitPhase::Publish;
                 let intent = retained.intent.as_ref().expect("checked intent");
-                let outcome = phase(timing, "publish", || {
-                    self.store
-                        .history
-                        .commit_branch(intent)
-                        .map_err(CommitError::History)
-                });
+                let fused = fused_outcome.is_some();
+                let outcome = match fused_outcome.take() {
+                    Some(outcome) => Ok(outcome),
+                    None => phase(timing, "publish", || {
+                        self.store
+                            .history
+                            .commit_branch(intent)
+                            .map_err(CommitError::History)
+                    }),
+                };
                 drop(lane);
                 let outcome = outcome?;
                 let (head, root) = match &outcome {
                     CommitOutcome::Committed { record, .. } => (Some(record.id), record.root),
                     CommitOutcome::UpToDate { head, root } => (*head, *root),
                 };
+                if let CommitOutcome::Committed { record, .. } = &outcome {
+                    // Facts of the published Commit, kept for the next one.
+                    self.remember_logical(
+                        NodeId::Commit(record.id),
+                        record.meta.statistics.logical,
+                    );
+                    self.published_removals(NodeId::Commit(record.id));
+                }
                 retained.published = Some(outcome);
+                // Unreachable after a fused publication: its record's root is
+                // the candidate it was sent with. Were it reached there, this
+                // Context error in phase Publish with `published` set would
+                // keep the Workspace refusing InFlight, as the fused
+                // settlement once did (#768 verification finding 8): such a
+                // check must move to phase Install first.
+                debug_assert!(!fused || root == candidate.0, "fused record root");
                 if root != candidate.0 {
                     return Err(CommitError::Context(
                         "publication differs from saved candidate",
@@ -573,6 +714,23 @@ impl BoundWorkspace {
         })();
         if let Err(error) = result {
             retained.error = error;
+            // A failed Commit drops its handle: on a definite failure the
+            // ordinals it kept (from a finished Save, or the unused rest of
+            // one that failed definitely) go back to the Store first, one
+            // write on the writer (#768); after an unknown outcome they are
+            // left lost. After a lane Busy or lock timeout that write could
+            // wait again before the Workspace settles: the handle is kept
+            // for the Workspace's next Commit instead, with its block, and
+            // returns it at unmount or Store close if unused.
+            if let Some(storage) = producer.take() {
+                if !retained.uncertain() && !retained.error.uncertain() {
+                    if busy(&retained.error) {
+                        self.producer.keep(storage);
+                    } else {
+                        let _ = storage.release_kept_ordinals();
+                    }
+                }
+            }
             return Err(self.settle_failure(retained));
         }
         if let Some(storage) = producer {
@@ -590,20 +748,37 @@ impl BoundWorkspace {
     }
 
     /// Checks the candidate root as the next base of `target` and prepares
-    /// its local install; reads only immutable published objects, through
+    /// its local install; reads only immutable objects. What `built` holds
+    /// (the objects this Commit's construction built, which its Save has
+    /// finished) is checked from those bytes; anything else is read through
     /// the Workspace's own reader, opened at bind (#95: a Commit opens no
-    /// control reader for them).
+    /// control reader for them). The checks are the same either way, and the
+    /// install gets the ordinary client: the built set is not kept.
     pub(super) fn validate_candidate(
         &self,
         target: &BranchSnapshot,
         candidate: FilesystemRootId,
         capture: Capture,
         original_base: &layerfs_workspace::BaseView,
+        built: Option<Arc<ConstructedObjects>>,
     ) -> Result<layerfs_workspace::PreparedBase, CommitError> {
         let mut next = target.clone();
         next.effective_root = candidate.0;
         let ports = self.store.ports_for(target.scope, self.identity);
-        let client = ports.client();
+        let ordinary = ports.client();
+        // A private allowance: the built bytes reach the shared cache only
+        // once the Commit is published (`admit_constructed`).
+        let client = match built {
+            Some(objects) => Arc::new(CanonicalClient::with_cache(
+                Arc::new(super::captured::Built {
+                    objects,
+                    store: ordinary.clone(),
+                }),
+                Some(ports.clone()),
+                Arc::new(CanonicalCache::new(VALIDATION_CACHE_BYTES)),
+            )),
+            None => ordinary.clone(),
+        };
         let checked =
             checked_base(client.clone(), &next).map_err(|error| CommitError::Content {
                 error,
@@ -616,11 +791,13 @@ impl BoundWorkspace {
                 "candidate changes root inode identity",
             ));
         }
-        self.workspace
+        let prepared = self
+            .workspace
             .scoped(client)
             .map_err(CommitError::Workspace)?
             .prepare_base_install(capture, candidate)
-            .map_err(CommitError::Workspace)
+            .map_err(CommitError::Workspace)?;
+        Ok(prepared.with_client(ordinary))
     }
 
     /// What a validation depends on: the target's head, base, root, scope
@@ -640,7 +817,7 @@ impl BoundWorkspace {
     /// between them. File lengths come from the Store catalogue a window at
     /// a time (`Reader::file_lengths`), never from reading file payloads; a
     /// Storage refusal keeps its original error.
-    fn logical_after(
+    pub(super) fn logical_after(
         &self,
         reader: &layerfs_storage::Reader<'_>,
         before: layerfs_content::ObjectId,

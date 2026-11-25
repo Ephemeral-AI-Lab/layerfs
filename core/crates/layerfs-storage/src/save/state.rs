@@ -151,6 +151,8 @@ pub(super) struct State<'a> {
     pub(super) pool_stats: crate::save::PoolCounters,
     pub(super) next_ordinal: u64,
     pub(super) ordinal_end: u64,
+    /// Set by `Save::finish`: the last publication releases the ordinal
+    /// tail past the prefix the handle keeps.
     pub(super) finishing: bool,
     pub(super) depths: DepthCache,
     pub(super) losing: LosingBases,
@@ -161,6 +163,12 @@ pub(super) struct State<'a> {
     pub(super) outcome: WriteOutcome,
     pub(super) next_pack: i64,
     pub(super) pack_end: i64,
+    /// The ordinal release attached to a publication not acknowledged yet:
+    /// its end is the block's while the release has not applied.
+    pub(super) unapplied_release: Option<(u32, usize)>,
+    /// A write of this Save (a reservation or a publication) ended with an
+    /// unknown outcome: an unfinished Save then keeps no id for the handle.
+    pub(super) write_uncertain: bool,
 }
 impl<'a> State<'a> {
     pub(super) fn new(storage: &'a Storage) -> StorageResult<Self> {
@@ -196,6 +204,8 @@ impl<'a> State<'a> {
             delta: DeltaCounters::default(),
             profile: SaveProfile::default(),
             outcome: WriteOutcome::default(),
+            unapplied_release: None,
+            write_uncertain: false,
             next_pack: 0,
             pack_end: 0,
         };

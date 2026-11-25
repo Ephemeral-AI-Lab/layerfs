@@ -249,6 +249,7 @@ impl PoolReader {
             if chain.len() > usize::from(capacities.metadata_delta_max_depth) {
                 return Err(StorageError::Integrity("pooled chain depth"));
             }
+            self.locate_ahead(connection, workspace, &current, base, caches.as_ref())?;
             let location = connection
                 .base_location(base, ceiling)?
                 .ok_or(StorageError::ObjectMissing(base))?;
@@ -543,7 +544,27 @@ impl PoolReader {
         mut caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<Option<ObjectId>> {
         let record = self.record(connection, workspace, location, caches.as_mut())?;
-        pooled_base(&record)
+        let base = pooled_base(&record)?;
+        if let Some(base) = base {
+            // The depth walk locates `base` next (`DepthCache::cost_of`).
+            self.locate_ahead(connection, workspace, location, base, caches.as_ref())?;
+        }
+        Ok(base)
+    }
+
+    /// Before the walk locates `base`, the base `child`'s record names: lets
+    /// the source locate the deeper bases with it (#768,
+    /// [`Source::locate_ahead`]), from the walk's own pack cache.
+    pub(super) fn locate_ahead(
+        &self,
+        connection: &dyn Source,
+        workspace: &mut DecompressionWorkspace,
+        child: &ObjectLocation,
+        base: ObjectId,
+        caches: Option<&PooledCaches<'_>>,
+    ) -> StorageResult<()> {
+        let packs = caches.map_or(&self.packs, |caches| &*caches.encoded);
+        connection.locate_ahead(child, base, packs, workspace)
     }
 
     pub(super) fn record(
@@ -563,6 +584,16 @@ impl PoolReader {
                 Some(caches) => (&mut *caches.encoded, Some(&mut *caches.decoded)),
                 None => (&mut self.packs, None),
             };
+            // A group the walk has to fetch comes with the groups of its
+            // recorded chain, in one read where the source batches chains
+            // (#768), as the ordinary walk's `group_of` does. A held group
+            // asks nothing, so a walk that a known base stops reads no more.
+            if packs
+                .held(location.pack_id, location.group_number)
+                .is_none()
+            {
+                connection.prefetch_chain(location, packs)?;
+            }
             let (fetched, bytes) =
                 packs.acquire_groups(connection, location.pack_id, &[location.group_number])?;
             if fetched {

@@ -105,7 +105,52 @@ pub fn node_of(snapshot: &BranchSnapshot) -> NodeId {
 /// A node's `history_serial` with its stack's markers
 /// ([`layerfs_history::HistoryCatalog::node_path_removals`]), read in one
 /// statement; none for an absent node or a provider that keeps no markers.
-type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
+pub(crate) type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
+
+/// The whiteout facts of one node a mounted Workspace knows without a read.
+///
+/// They hold while its mount admission is registered: every marker write
+/// (`project.remove_file`, `branch.remove`, `project.delete`) scans the
+/// project's live intents in its own write transaction, after its locks, and
+/// refuses `MountsActive` (persistence `admission/removal.rs`,
+/// `gc_intent_all_project`), and markers are deleted only with their
+/// project's stack. So the markers read at mount stay the markers of the
+/// bound node, and a Commit this Workspace published hides nothing: a
+/// marker's frontier is the Store high-water read in its own transaction,
+/// below the serial of any Commit published after it.
+///
+/// Kept only while they charge at most [`KEPT_REMOVAL_BYTES`]; a bound node
+/// with more is not kept, and each Commit reads its markers again on the
+/// control reader, as before #768.
+pub(crate) struct KnownRemovals {
+    node: NodeId,
+    found: NodeRemovals,
+}
+
+/// Bytes of one node's markers a mounted Workspace keeps ([`KnownRemovals`]),
+/// each marker charged its path bytes and its record (`PathRemovalRecord`).
+///
+/// Owner: one bound Workspace. Bound: this many bytes, one node's markers at
+/// a time; a set over it is not kept at all. Live multiplicity: one per
+/// mounted Workspace with a registered mount admission. Lifetime: until its
+/// next Commit or a materialization replaces it, or the Workspace closes.
+/// Release: replaced or dropped with the Workspace. 256 KiB is half the
+/// published-value bound a Commit's Storage handle already keeps
+/// (`layerfs_storage::policy::POOLED_VALUE_CACHE_BYTES`): about 2,600 markers
+/// of 60-byte paths, and at least 63 of the longest paths
+/// (`layerfs_history::path::MAXIMUM_PATH_BYTES`). A larger set costs each
+/// Commit the control read it had before #768 and never correctness.
+pub const KEPT_REMOVAL_BYTES: usize = 256 * 1024;
+
+/// What `found` charges against [`KEPT_REMOVAL_BYTES`].
+fn charge(found: &NodeRemovals) -> usize {
+    found.as_ref().map_or(0, |(_, markers)| {
+        markers
+            .iter()
+            .map(|marker| marker.path.len() + std::mem::size_of::<PathRemovalRecord>())
+            .sum()
+    })
+}
 
 /// The answer of one [`NodeRemovals`] read: a provider without the marker
 /// reads sees none; any other failure refuses.
@@ -346,18 +391,18 @@ pub fn derive_root(
 
 /// A Commit's candidate root with every entry it inherited unchanged from
 /// the bound base removed. A path whose inode serial or value differs from
-/// the base was re-created after the binding, so it stays visible.
-pub fn materialize_commit(
-    store: &Arc<Store>,
-    stack: LayerStackId,
+/// the base was re-created after the binding, so it stays visible. `found`
+/// is the bound node's position and markers
+/// ([`BoundWorkspace::commit_removals`]).
+pub(crate) fn materialize_commit(
     save: &Save<'_>,
     base: FilesystemRootId,
-    node: NodeId,
+    found: NodeRemovals,
     candidate: FilesystemRootId,
 ) -> Result<FilesystemRootId, RemovalError> {
     // The candidate's objects are this Save's, not yet published: the Save
     // serves them, falling back to the Store for inherited ones.
-    let paths = hidden_paths(store, stack, save, base, node)?;
+    let paths = hidden_in(found, save, base)?;
     if paths.is_empty() {
         return Ok(candidate);
     }
@@ -418,11 +463,15 @@ impl BoundWorkspace {
     /// overlay is absent from the base view lookup and is left alone. The
     /// bound node's serial and the markers are one statement, and the tree
     /// lookups are demands, all on this Workspace's own reader (#768).
+    ///
+    /// With a registered mount admission the answer is kept for this
+    /// Workspace's Commits ([`KnownRemovals`]).
     pub fn materialize_removals(&self) -> Result<(), SdkRefusal> {
         let snapshot = self.snapshot().map_err(crate::write::mutation::failure)?;
         let (stack, node) = (snapshot.branch.stack, node_of(&snapshot));
         let found = removals(self.published(|history| history.node_path_removals(stack, node)))
             .map_err(refusal)?;
+        self.keep_removals(node, &found);
         let reader = self.store.ports_for(snapshot.scope, self.identity());
         let paths = hidden_in(found, &*reader, FilesystemRootId(snapshot.effective_root))
             .map_err(refusal)?;
@@ -437,5 +486,45 @@ impl BoundWorkspace {
             }
         }
         mutation.finish()
+    }
+    /// The position and markers a Commit's whiteout step needs for `node`:
+    /// kept ones when this Workspace knows them for that node under its
+    /// mount admission ([`KnownRemovals`]); otherwise, and for a catalog
+    /// with no admission, read as before, on the control reader.
+    pub(crate) fn commit_removals(
+        &self,
+        stack: LayerStackId,
+        node: NodeId,
+    ) -> Result<NodeRemovals, RemovalError> {
+        if self.gc_op.is_some() {
+            if let Ok(kept) = self.removals.lock() {
+                if let Some(known) = kept.as_ref().filter(|known| known.node == node) {
+                    return Ok(known.found.clone());
+                }
+            }
+        }
+        removals(
+            self.store
+                .published(|history| history.node_path_removals(stack, node)),
+        )
+    }
+    /// Records that this Workspace published `node`, a Commit: it hides
+    /// nothing ([`KnownRemovals`]).
+    pub(crate) fn published_removals(&self, node: NodeId) {
+        self.keep_removals(node, &None);
+    }
+    /// Keeps `found` for `node` only under a registered mount admission and
+    /// within [`KEPT_REMOVAL_BYTES`]; otherwise, or in a poisoned slot,
+    /// nothing is kept, and the next Commit reads.
+    fn keep_removals(&self, node: NodeId, found: &NodeRemovals) {
+        if self.gc_op.is_none() {
+            return;
+        }
+        if let Ok(mut kept) = self.removals.lock() {
+            *kept = (charge(found) <= KEPT_REMOVAL_BYTES).then(|| KnownRemovals {
+                node,
+                found: found.clone(),
+            });
+        }
     }
 }

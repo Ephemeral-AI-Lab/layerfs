@@ -5,14 +5,26 @@
 //! Commit reads the policy row and the content-hint table again; the handle
 //! of a Commit that completed is kept and its next Save does not. A Commit
 //! that did not complete drops its handle, and the next one starts from the
-//! Store as before. Inode values need no such memory: they are stored rows,
-//! and a Save reads only those of the leaves its change reaches.
+//! Store as before. The kept handle also holds its unused pack ids and a
+//! small prefix of unused ordinals, so a small Commit reserves nothing, and
+//! the metadata pack bodies and inode values its Saves published (bounded),
+//! so the next Save reads its bases' recent chains without fetching them
+//! (#768, `layerfs-storage`).
 //!
 //! The Store keeps one more idle handle (#352 F-025 fix 4). A closing
 //! Workspace hands its idle handle there, and a Workspace without one takes
 //! it, so an SDK file call (a private Workspace per call) does not reload
 //! the policy row and content hints each time. One Save per handle at a
 //! time still holds: a taken handle is in no slot.
+//!
+//! A handle dropped in order returns its kept ordinals first
+//! (`Storage::release_kept_ordinals`, one write, never repeated): a closing
+//! Workspace whose handle finds the Store's slot taken (of the two, the one
+//! whose kept ordinals end later is released, the only one whose rewind can
+//! still apply; the other takes the slot), a Store closed in
+//! order ([`Store::release_producer`]) and a Commit that failed definitely
+//! (`commit.rs`). Only a crash, a Workspace dropped without its close or an
+//! unknown outcome leaves them lost; a steady Commit sends nothing for it.
 use super::Store;
 use layerfs_storage::{Diagnostics, Storage, StorageResult};
 use std::sync::Mutex;
@@ -32,7 +44,7 @@ impl Producer {
                 let before = storage.diagnostics();
                 Ok((storage, before))
             }
-            None => Ok((store.producer()?, Diagnostics::default())),
+            None => Ok((store.producer()?.keeping_ordinals(), Diagnostics::default())),
         }
     }
     /// Keeps the handle of a completed Commit. Admission makes this the only
@@ -45,13 +57,65 @@ impl Producer {
     fn idle(&self) -> Option<Storage> {
         self.idle.lock().ok().and_then(|mut idle| idle.take())
     }
+    /// Its idle handle, if any, returns its kept ordinals and stays idle
+    /// (its next Save reserves ordinals again). No Commit of this Workspace
+    /// runs meanwhile, so `keep` finds the slot empty: the daemon admits a
+    /// close and a Commit only from an idle entry, returns it to idle after
+    /// `close` returns, and closes at shutdown only once every worker ended.
+    pub(super) fn release_ordinals(&self) {
+        if let Some(storage) = self.idle() {
+            let _ = storage.release_kept_ordinals();
+            self.keep(storage);
+        }
+    }
     /// Moves this Workspace's idle handle to `to` when `to` has none.
+    /// Otherwise one of the two returns its kept ordinals and is dropped:
+    /// the one whose kept ordinals end later (or that keeps none), the only
+    /// one whose release can still rewind the Store's counter; the other
+    /// stays in `to` with its block, for a later Commit.
     pub(super) fn hand_to(&self, to: &Self) {
         let Some(storage) = self.idle() else { return };
-        if let Ok(mut idle) = to.idle.lock() {
-            if idle.is_none() {
-                *idle = Some(storage);
-            }
+        let left = match to.idle.lock() {
+            Ok(mut idle) => match idle.take() {
+                None => {
+                    *idle = Some(storage);
+                    None
+                }
+                Some(held) if releases_first(&storage, &held) => {
+                    *idle = Some(held);
+                    Some(storage)
+                }
+                Some(held) => {
+                    *idle = Some(storage);
+                    Some(held)
+                }
+            },
+            Err(_) => Some(storage),
+        };
+        if let Some(storage) = left {
+            let _ = storage.release_kept_ordinals();
+        }
+    }
+}
+
+/// Of two idle handles, whether `a` is the one to release: it keeps no
+/// ordinals, or its kept ordinals end after `b`'s (reserved later, so only
+/// it can still end the Store's counter).
+fn releases_first(a: &Storage, b: &Storage) -> bool {
+    match (a.kept_ordinal_end(), b.kept_ordinal_end()) {
+        (None, _) => true,
+        (Some(_), None) => false,
+        (Some(a), Some(b)) => a > b,
+    }
+}
+
+impl Store {
+    /// Before an orderly close: the Store's idle producer handle returns its
+    /// kept ordinals and is dropped (one write when it kept any). A refused
+    /// or uncertain release leaves them lost; nothing is retried.
+    pub fn release_producer(&self) {
+        if let Some(storage) = self.idle_producer.idle() {
+            let _ = storage.release_kept_ordinals();
         }
     }
 }

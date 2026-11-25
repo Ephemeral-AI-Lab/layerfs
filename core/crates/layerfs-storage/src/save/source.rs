@@ -130,6 +130,18 @@ impl Source for WaveSource<'_> {
             None => self.fetch.prefetch_chain(location, packs),
         }
     }
+    fn locate_ahead(
+        &self,
+        child: &ObjectLocation,
+        base: ObjectId,
+        packs: &crate::encoding::PackCache,
+        workspace: &mut crate::encoding::codec::DecompressionWorkspace,
+    ) -> StorageResult<()> {
+        match self.packer.location(child.object_id) {
+            Some(_) => Ok(()),
+            None => self.fetch.locate_ahead(child, base, packs, workspace),
+        }
+    }
     fn bind_base(&self, child: &ObjectLocation, base: Option<ObjectId>) -> StorageResult<()> {
         self.fetch.bind_base(child, base)
     }

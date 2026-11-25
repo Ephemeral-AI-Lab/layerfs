@@ -95,6 +95,12 @@ pub struct Store {
     merge_scratch: Option<layerfs_persistence::MergeScratch>,
     /// Merge record work of every merge so far, including writer holds.
     merge_work: Mutex<layerfs_persistence::MergeRecordsWork>,
+    /// The writer session's fused Commit (#768 stage 2); a Store without one
+    /// makes every Commit on the separate path.
+    pub(super) committer: Option<layerfs_persistence::Committer>,
+    /// Fused Commits made, and fused attempts refused by a race that went on
+    /// the separate path.
+    pub(super) fused: super::commit_fused::FusedCounts,
 }
 impl Store {
     /// Takes the control reader and a mount-time factory under explicit capacity.
@@ -184,7 +190,16 @@ impl Store {
             serial_pool: Mutex::default(),
             merge_scratch: None,
             merge_work: Mutex::default(),
+            committer: None,
+            fused: Default::default(),
         })
+    }
+    /// Makes each Workspace Commit over an unmoved head in one write
+    /// transaction of the writer session (#768 stage 2).
+    #[must_use]
+    pub fn with_committer(mut self, committer: layerfs_persistence::Committer) -> Self {
+        self.committer = Some(committer);
+        self
     }
     /// Merge build records over the Store's writable session (#355).
     #[must_use]

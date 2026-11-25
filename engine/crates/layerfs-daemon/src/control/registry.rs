@@ -183,7 +183,8 @@ fn check(value: &Binding, token: WorkspaceToken) -> Result<(), Failure> {
 impl Service {
     /// A daemon that ends normally gives every bound Workspace back before
     /// its process goes: the unmount path releases the Store-side mount
-    /// intent, so a stopped daemon cannot leave a permanent `MountsActive`.
+    /// intent, so a stopped daemon cannot leave a permanent `MountsActive`,
+    /// and the Store's producer handle returns its kept ordinals.
     pub(crate) fn close_bound(&self) {
         let workspaces: Vec<Arc<BoundWorkspace>> = match self.entries.lock() {
             Ok(mut entries) => std::mem::take(&mut *entries)
@@ -198,6 +199,8 @@ impl Service {
         for workspace in workspaces {
             let _ = workspace.close();
         }
+        // Their last producer handle returns its kept ordinals (#768).
+        self.store.release_producer();
     }
 }
 

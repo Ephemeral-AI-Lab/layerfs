@@ -41,7 +41,7 @@ impl Session {
             }
             Ok(())
         })?;
-        turn.hold()?;
+        turn.hold();
         Ok(LaneHold {
             session: self.clone(),
             writer: Some(writer),

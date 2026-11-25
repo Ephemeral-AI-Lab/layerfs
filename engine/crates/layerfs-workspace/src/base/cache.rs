@@ -120,6 +120,7 @@ impl CanonicalCache {
             order: VecDeque::new(),
             charged: 0,
             limit: state.cache.capacity / CONSTRUCTED_SHARE,
+            dropped: false,
         })
     }
 }
@@ -162,6 +163,8 @@ pub struct ConstructedObjects {
     order: VecDeque<ObjectId>,
     charged: usize,
     limit: usize,
+    /// Whether an object it would keep was dropped or evicted.
+    dropped: bool,
 }
 impl ConstructedObjects {
     /// Copies one constructed object's bytes if it is kept. The identity is
@@ -182,7 +185,11 @@ impl ConstructedObjects {
             Some(_) => LENGTH_CHARGE,
             None => bytes.len().saturating_add(OBJECT_CHARGE),
         };
-        if charge > self.limit || self.objects.contains_key(&object.id()) {
+        if self.objects.contains_key(&object.id()) {
+            return;
+        }
+        if charge > self.limit {
+            self.dropped = true;
             return;
         }
         while self.charged > self.limit - charge {
@@ -191,6 +198,7 @@ impl ConstructedObjects {
             };
             if let Some(dropped) = self.objects.remove(&oldest) {
                 self.charged -= dropped.charge();
+                self.dropped = true;
             }
         }
         self.charged += charge;
@@ -200,6 +208,21 @@ impl ConstructedObjects {
         };
         self.objects.insert(object.id(), staged);
         self.order.push_back(object.id());
+    }
+    /// The canonical bytes staged under `id`, if this set kept them: a
+    /// Commit's validation reads its own root here before the Store. Their
+    /// identity is the one construction computed; a reader checks it again.
+    pub fn object(&self, id: ObjectId) -> Option<&[u8]> {
+        match self.objects.get(&id)? {
+            Constructed::Object(value) => Some(value),
+            Constructed::Length(_) => None,
+        }
+    }
+    /// Whether this set holds `root` and every object it was offered and
+    /// would keep: a validation of `root` then reads none of this Commit's
+    /// own objects from the Store (#768 stage 2).
+    pub fn covers(&self, root: ObjectId) -> bool {
+        !self.dropped && self.object(root).is_some()
     }
     /// Objects and lengths currently staged.
     pub fn len(&self) -> usize {

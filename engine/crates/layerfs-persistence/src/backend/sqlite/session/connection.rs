@@ -142,11 +142,13 @@ pub struct SqlWork {
     /// PostgreSQL only (zero on SQLite): client-server exchanges that waited
     /// for the server's reply: each prepare, execution, simple-query script
     /// (`BEGIN` with its settings, `COMMIT`, `ROLLBACK`), and a binary COPY's
-    /// start and finish. A new connection's handshake is not included; it is
-    /// counted in `connects`.
+    /// start and finish. A pipelined flight is one, however many requests it
+    /// sends, and so are the prepares sent together before it. A new
+    /// connection's handshake is not included; it is counted in `connects`.
     pub round_trips: u64,
     /// PostgreSQL only: statements prepared on the server (statement-cache
-    /// misses, and each COPY's unnamed statement), each one round trip.
+    /// misses, and each COPY's unnamed statement), each one round trip
+    /// except those a pipeline prepares together in one.
     pub prepares: u64,
     /// PostgreSQL only: new server connections opened by the session,
     /// including its publication-lane connection.

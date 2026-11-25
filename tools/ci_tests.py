@@ -88,6 +88,59 @@ SLOW = {
     # A provider call waits out its own 10 s and 30 s bounds (cp-platform
     # fix of tool::run's deadline), estimated from those bounds, 2026-11-23.
     ("layerfs-platform", "machine_deadline"): 31.0,
+    # #768 adversarial Commit tests against the private PostgreSQL test
+    # server (each skips its PostgreSQL half without one), macOS host,
+    # 2026-11-25: a fault at every server message of one Commit's flight.
+    # Re-measured on stage 2b (fused Commit), slowest of three runs; the
+    # raced sweeps run four shares of the flight in parallel.
+    ("layerfs-store-service", "commit_fault_drop"): 16.0,
+    ("layerfs-store-service", "commit_fault_kill"): 16.7,
+    ("layerfs-store-service", "commit_fault_first_drop"): 25.2,
+    ("layerfs-store-service", "commit_fault_first_kill"): 26.5,
+    ("layerfs-store-service", "commit_fault_race_drop"): 37.4,
+    ("layerfs-store-service", "commit_fault_race_kill"): 40.0,
+    # The raced flight's fused replies after its refusal and the fallback's
+    # writer messages, dropped and killed (#768 verification fixes).
+    ("layerfs-store-service", "commit_fault_race_custody"): 22.2,
+    ("layerfs-store-service", "commit_lane_kill"): 15.4,
+    ("layerfs-store-service", "commit_random_model"): 8.4,
+    ("layerfs-store-service", "commit_stress"): 6.7,
+    # Fused Commits of 8,000 new files and of 400 rewrites over a 20,000-file
+    # seed on both backends (#768 stage 2b review), macOS host, 2026-11-25.
+    ("layerfs-store-service", "commit_fused_held"): 45.1,
+    # A 4,200-file Commit refused after its hints spilled, both backends
+    # (#768 verification fixes), macOS host, 2026-11-25.
+    ("layerfs-store-service", "commit_fused_hint_spill"): 16.4,
+    # Fused-versus-forced size-boundary matrix on both backends (#768 stage
+    # 2b), slowest of the a36e9b997c runs, macOS host, 2026-11-25.
+    ("layerfs-store-service", "commit_fused_sizes"): 38.0,
+    ("layerfs-store-service", "commit_fused_sizes_bytes"): 23.5,
+    ("layerfs-store-service", "commit_fused_sizes_moves"): 47.0,
+    ("layerfs-store-service", "commit_fused_sizes_rounds"): 22.5,
+    ("layerfs-store-service", "commit_fused_sizes_seeded"): 60.6,
+    # Independent verification suite of the fused Commit (#768), serial runs on
+    # the macOS host, 2026-11-25.
+    ("layerfs-store-service", "verify_unknown_allocators"): 52.0,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_a"): 45.2,
+    ("layerfs-store-service", "verify_unknown_allocators_raced_b"): 44.3,
+    ("layerfs-store-service", "verify_paused_commit_sweeps"): 69.5,
+    ("layerfs-store-service", "verify_paused_commit_sweeps_third_a"): 45.6,
+    ("layerfs-store-service", "verify_paused_commit_sweeps_third_b"): 45.9,
+    ("layerfs-store-service", "verify_generation_and_kept_ids"): 29.7,
+    ("layerfs-store-service", "verify_differential_faults"): 16.1,
+    ("layerfs-store-service", "verify_fused_injected_aborts"): 10.8,
+    ("layerfs-store-service", "verify_history_readback"): 10.0,
+    ("layerfs-store-service", "verify_two_daemons_one_branch"): 7.7,
+    ("layerfs-store-service", "verify_edge_commits"): 7.3,
+    ("layerfs-store-service", "verify768x_fallback_custody"): 23.9,
+    ("layerfs-store-service", "verify768x_ordinal_cycles"): 11.2,
+    ("layerfs-store-service", "verify768x_two_services_rounds"): 55.2,
+    # Third independent #768 round at 02059c5435, --test-threads 3, macOS host,
+    # 2026-11-25. failed_save ran in three bounded invocations (its two
+    # 6,000-file PostgreSQL halves alone); the figure is their sum.
+    ("layerfs-store-service", "verify768y_interleavings"): 33.5,
+    ("layerfs-store-service", "verify768y_release_faults"): 46.6,
+    ("layerfs-store-service", "verify768y_failed_save"): 192.5,
     # `store upgrade` on the PostgreSQL fixture, one restore per case, and
     # the cut at each of its 42 server messages (#804), macOS host, 2026-11-25.
     ("layerfs-persistence", "store_upgrade_postgresql"): 5.0,
