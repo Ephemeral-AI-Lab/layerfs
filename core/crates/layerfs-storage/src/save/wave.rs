@@ -49,10 +49,50 @@ impl State<'_> {
         self.prepare(objects)?;
         let flush = self.storage.work.span(super::Stage::Flush);
         // Keep the existing bounded partial queues until pressure, dependency
-        // closure or finish requires them. Ready packs still publish this wave.
+        // closure or finish requires them. Ready packs still publish this wave,
+        // with the bases the held objects wait for (#810).
+        self.seal_deferred_bases()?;
         self.flush_signatures()?;
         drop(flush);
-        self.register_ready(false).map(|_| ())
+        self.register_ready(false)?;
+        self.readmit_deferred()
+    }
+    /// Seals the lanes that hold the bases of the held objects, so the next
+    /// publication publishes them (`save/deferred.rs`).
+    pub(super) fn seal_deferred_bases(&mut self) -> StorageResult<()> {
+        if self.deferred.is_empty() {
+            return Ok(());
+        }
+        let bases = self.deferred.bases();
+        let required = self.packer.finish_pack_bound();
+        self.reserve_packs(required)?;
+        self.packer.seal_pending(
+            &bases,
+            &mut self.compression,
+            &mut self.next_pack,
+            self.pack_end,
+        )?;
+        Ok(())
+    }
+    /// Selects every held object, once a publication published its base:
+    /// located together first, then each admitted as `admit` would.
+    pub(super) fn readmit_deferred(&mut self) -> StorageResult<()> {
+        if self.deferred.is_empty() {
+            return Ok(());
+        }
+        let held = self.deferred.take();
+        let ids: BTreeSet<ObjectId> = held
+            .iter()
+            .flat_map(|(object, base)| [object.id(), *base])
+            .collect();
+        let ids: Vec<ObjectId> = ids.into_iter().collect();
+        for slice in ids.chunks(READ_OBJECT_LIMIT / 2) {
+            self.storage.source.locate(slice)?;
+        }
+        for (object, base) in &held {
+            self.place(object, Some(*base))?;
+        }
+        Ok(())
     }
     /// One wave's membership, exact reuse and selection, without publishing
     /// it: `Save::finish` publishes its last wave with the sealed tail, in
@@ -134,8 +174,21 @@ impl State<'_> {
             return Ok(());
         }
         prepared.insert(object.id(), index);
+        // A held object is this Save's, as a pending one is (#810).
+        if let Some(held) = self.deferred.canonical(object.id()) {
+            if held != object.canonical() {
+                return Err(StorageError::Collision(object.id()));
+            }
+            self.outcome.reused += 1;
+            return Ok(());
+        }
         // Keep the allocation block, but check the operation that can consume
         // IDs rather than replacing a tail for an entire hypothetical wave.
+        self.place(object, None)
+    }
+    /// Places `object`, not seen before in its wave: an exact reuse, or a new
+    /// object offered for selection (with `base`, a held one: `offer`).
+    fn place(&mut self, object: &FinalizedObject, base: Option<ObjectId>) -> StorageResult<()> {
         if self.packer.pending(object.id()) {
             let required = self.packer.finish_pack_bound();
             self.reserve_packs(required)?;
@@ -168,7 +221,7 @@ impl State<'_> {
             // One new object group plus every currently unfinished group/queue.
             let required = self.packer.finish_pack_bound() + 1;
             self.reserve_packs(required)?;
-            self.offer(object)?;
+            self.offer(object, base)?;
         }
         Ok(())
     }

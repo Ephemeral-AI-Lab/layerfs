@@ -135,6 +135,39 @@ When no PREFIX can be narrower than FULL (`prefix_cannot_win`: the base id
 plus a zstd frame of at least 14 bytes), the ring proposal is dropped and no
 seal is forced ([`delta/record.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/record.rs)).
 
+A ring proposal the Save itself stored FULL and has not published is never
+published early for its trial (#810,
+[`save/select.rs`](../../../../core/crates/layerfs-storage/src/save/select.rs),
+[`save/deferred.rs`](../../../../core/crates/layerfs-storage/src/save/deferred.rs)).
+Selection may use a base only once its first-wins representation is
+acknowledged, so the Save used to publish the proposal at once: one
+transaction, reservation and pack per similar file (614 of them for an npm
+install of 10,002 files). Now:
+
+- an object whose declared predecessor selection acquires never asks the
+  ring (the declared list is tried first), so its proposal is dropped;
+- otherwise the trial runs first against the base's canonical bytes, which
+  the Save keeps for the whole-file objects it stored FULL
+  (`SAVE_PENDING_BASE_BYTES`, 256 KiB). A PREFIX that does not beat FULL
+  stores FULL at once, counted as the trial and loss it is: tiny
+  near-identical files, where the 32-byte base id alone outweighs the
+  saving, end here;
+- a PREFIX that wins holds the object (`SAVE_DEFERRED_BYTES`, 1 MiB) until
+  the end of its preparation wave. The wave seals the held objects' bases
+  with its own publication, then selects each held object as before, its
+  proposal now tried after its declared candidates. A file root is named by
+  inode values only, so holding one delays no other object; same-Save reads
+  and exact reuse see it in the hold. The last wave publishes once more
+  before the sealed tail when it holds any.
+
+Every selection, depth and budget is the one the old order made: the trial
+of a held object runs after the publication, against whatever
+representation won, so a concurrent winner is re-based as before. Measured
+at e11d8c8d0f (one sample per cell, SQLite and PostgreSQL alike): records,
+roots and depth histograms are identical in B1, B4, B6, B6e, B6n and A2;
+fewer packs leave stored bytes equal or lower (B1 −16,144 B, B6e −18%, B6n
+−22%, B4 −64 B, B6 and A2 equal).
+
 **Decoding** ([`delta/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/read.rs)):
 
 ```text

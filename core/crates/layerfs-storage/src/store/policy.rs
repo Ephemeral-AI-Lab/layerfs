@@ -130,6 +130,27 @@ pub const KEPT_ORDINALS: usize = 128;
 /// least recently read first, and everything with the Save. A released value is
 /// resolved again from the Store, so the bound costs work and never correctness.
 pub const SAVE_RESOLVED_CACHE_BYTES: usize = 4 * 1024 * 1024;
+/// Canonical bytes one Save keeps of the whole-file objects it stored FULL
+/// (#810).
+///
+/// Owner: one Save. Bound: this many canonical bytes plus a small charge per
+/// value. Live multiplicity: one per open Save. Lifetime: the Save. Release:
+/// least recently kept first, and everything with the Save. The similarity
+/// ring proposes such an object as a delta base while it may still be
+/// unpublished; a kept copy lets selection try it first and publish it early
+/// only when the trial wins. A released copy publishes it as before, so the
+/// bound costs round trips and never storage or correctness.
+pub const SAVE_PENDING_BASE_BYTES: usize = 256 * 1024;
+/// Canonical bytes one Save holds of whole-file objects waiting for their
+/// delta base's publication (#810).
+///
+/// Owner: one Save. Bound: this many canonical bytes plus a small charge per
+/// object. Live multiplicity: one per open Save. Lifetime: from the object's
+/// selection to the end of its preparation wave, whose publication publishes
+/// the bases. Release: at that wave's end, and everything with the Save. An
+/// object that would cross the bound publishes its base first, as before, so
+/// the bound costs round trips and never storage or correctness.
+pub const SAVE_DEFERRED_BYTES: usize = 1024 * 1024;
 /// Decoded values one pooled reader may retain across one wave.
 ///
 /// Owner: one pooled reader. Bound: this many canonical decoded value bytes. Live

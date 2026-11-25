@@ -1147,6 +1147,38 @@ Checked and not done:
 | [`postgresql_aborted_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_aborted_commit.rs) | `… --test postgresql_aborted_commit` | A body that ignores a refused statement is answered with that refusal, writes nothing and leaves the session usable. Before the `SELECT 1; COMMIT` guard it answered `Ok(())` |
 | [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `… --test postgresql_lane_liveness` | A nested write after its lane connection was terminated fails `Closed` and writes nothing: now through `pg_xact_status` |
 
+### Similar files publish once per wave
+
+A Save used to publish a similar whole file's ring proposal before trying
+it, when the proposal was an object the same Save had not published yet: one
+write transaction, a reservation and a pack per similar file, about 6 round
+trips each, plus a pack body read for every later trial against those packs
+(#810). The Save now decides first and publishes such a base only with its
+preparation wave
+([encoding](../../core/physical-storage/encoding.md)). Measured at
+e11d8c8d0f with the #810 shape kit, one sample per cell on this Mac's
+Docker loopback (`log_statement` off; host load 10 to 43, so times are
+indicative): the Commit's PostgreSQL round trips and packs, with records,
+roots and depth histograms unchanged:
+
+| Cell | Change | Round trips before → after | Packs before → after | Stored bytes before → after | Time before → after |
+| --- | --- | --- | --- | --- | --- |
+| B1 | npm install, 10,002 files | 5,309 → 1,405 | 663 → 141 | 18,651,828 → 18,635,820 | 16.7 s → 3.4 s |
+| B6e | overwrite 1,000 ~60 B near-identical files | 4,508 → 891 | 605 → 3 | 106,581 → 87,317 | 13.6 s → 1.8 s |
+| B6n | add 1,000 ~60 B similar files | 3,863 → 21 | 552 → 4 | 80,512 → 62,976 | 4.2 s → 0.36 s |
+| B4 | add 1,843 build-output files | 222 → 157 | 243 → 241 | 29,264,275 → 29,264,219 | 13.7 s → 1.7 s |
+| B6 | add 1,000 similar 0.1–4 KB files | 28 → 28 | 6 → 6 | 239,281 → 239,281 | 0.45 s → 0.43 s |
+| A2 | add ten 50 MB files | 395 → 395 | 2,200 → 2,200 | 525,798,458 → 525,798,458 | 7.7 s → 13.3 s (load) |
+
+The round trips left in B1 and B6e are other per-file reads (#810 F1, F3–F5).
+[`commit_similar_tiny_files.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_similar_tiny_files.rs)
+pins three small shapes' round trips, publications, records and payload
+bytes on both backends;
+[`commit_fault_similar_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_fault_similar_drop.rs)
+and [`commit_fault_similar_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_fault_similar_kill.rs)
+drop the connection or kill the backend at each of the 100 server messages of
+a warm Commit whose Save holds similar files for that publication.
+
 ### Fused Commit
 
 A Workspace Commit over its bound head is one write transaction

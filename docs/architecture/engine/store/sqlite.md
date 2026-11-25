@@ -524,6 +524,15 @@ only. The group-row layouts and PostgreSQL ask for exact ranges
 (`Mechanics::pack_range_fill` is 0): there every byte read is a byte
 transferred.
 
+A similar whole file's ring proposal that its own Save has not published is
+tried before anything is published, and published only with its preparation
+wave (#810, [encoding](../../core/physical-storage/encoding.md)): a
+Save of 1,000 tiny near-identical files used to run one write transaction and
+write one pack per file. Measured at e11d8c8d0f (one sample per cell): B6e's
+statements 4,724 → 1,052 and packs 605 → 3, B6n's 3,971 → 65 and 552 → 4,
+B1's 7,077 → 2,588 and 662 → 134, with the same records, roots and depths
+([PostgreSQL](postgresql.md#similar-files-publish-once-per-wave)).
+
 ## Fused Commit
 
 A Workspace Commit over its bound head is one `BEGIN IMMEDIATE` transaction

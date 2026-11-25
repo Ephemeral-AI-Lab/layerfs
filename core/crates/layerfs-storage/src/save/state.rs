@@ -12,7 +12,8 @@ use crate::{
     },
     error::StorageResult,
     location::SignatureRow,
-    save::{PendingBatch, SaveProfile},
+    policy::{SAVE_PENDING_BASE_BYTES, SAVE_RESOLVED_CACHE_BYTES},
+    save::{resolved::Resolved, PendingBatch, SaveProfile},
     storage::Storage,
 };
 use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
@@ -142,7 +143,13 @@ pub(super) struct State<'a> {
     pub(super) packs: crate::encoding::PackCache,
     pub(super) pool: PoolReader,
     /// Canonical bytes this Save resolved, within a byte bound.
-    pub(super) resolved: super::resolved::Resolved,
+    pub(super) resolved: Resolved,
+    /// Canonical bytes of whole-file objects this Save stored FULL, within
+    /// [`crate::store::policy::SAVE_PENDING_BASE_BYTES`]: the bases the
+    /// similarity ring may propose before they are published (#810).
+    pub(super) stored_full: Resolved,
+    /// Whole-file objects waiting for this Save to publish their delta base.
+    pub(super) deferred: super::deferred::Deferred,
     /// Values this Save assigned and has not published yet, by ordinal.
     pub(super) values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
     /// Fingerprint of each value this Save assigned and the ordinal it got.
@@ -190,7 +197,9 @@ impl<'a> State<'a> {
             groups: GroupCache::new(),
             packs: crate::encoding::PackCache::new(),
             pool: PoolReader::new(),
-            resolved: Default::default(),
+            resolved: Resolved::new(SAVE_RESOLVED_CACHE_BYTES),
+            stored_full: Resolved::new(SAVE_PENDING_BASE_BYTES),
+            deferred: Default::default(),
             values: BTreeMap::new(),
             value_memo: BTreeMap::new(),
             pool_stats: crate::save::PoolCounters::default(),
