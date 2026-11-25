@@ -183,7 +183,7 @@ impl Session {
         &self,
         requests: &[Request<'_>],
     ) -> Result<Vec<Result<Reply, Refusal>>, BackendError> {
-        self.pipeline_turn(requests, true, |replies, _| (replies, false))
+        self.pipeline_turn(requests, true, None, |replies, _| (replies, false))
     }
 
     /// [`Self::pipeline`] refused (`Integrity`, nothing sent) inside this
@@ -195,18 +195,28 @@ impl Session {
     /// flight's outcome is unknown: the session is then quarantined before
     /// the lock is released, so no other caller uses the connection between
     /// the flight and that verdict.
+    ///
+    /// `release` (statements, each after `; `) runs on the flight's failure
+    /// path only: when any request was refused or not sent and no reply was
+    /// lost, after the flight (appended to its `ROLLBACK` when it was partly
+    /// sent) and before `judge`, so before the session is used again: one
+    /// more round trip. If it fails the session is quarantined and `judge`
+    /// sees it untrusted. A lost reply quarantines and closes the
+    /// connection, which ends every session-level lock, so it runs nothing.
     pub(crate) fn pipeline_judged<T>(
         &self,
         requests: &[Request<'_>],
+        release: &str,
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
-        self.pipeline_turn(requests, false, judge)
+        self.pipeline_turn(requests, false, Some(release), judge)
     }
 
     fn pipeline_turn<T>(
         &self,
         requests: &[Request<'_>],
         nested: bool,
+        release: Option<&str>,
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
         if !self.writable {
@@ -298,9 +308,17 @@ impl Session {
                 Err(_) => 0,
             })
             .sum::<u64>();
-        if !lost_reply && flight.sent > 0 && flight.sent < requests.len() {
+        let partial = flight.sent < requests.len();
+        let failed = replies.iter().any(Result::is_err);
+        let ending = match (partial, release.filter(|_| failed)) {
+            _ if lost_reply || flight.sent == 0 => None,
+            (true, release) => Some(format!("ROLLBACK{}", release.unwrap_or_default())),
+            (false, Some(release)) => Some(release.trim_start_matches("; ").to_owned()),
+            (false, None) => None,
+        };
+        if let Some(ending) = ending {
             work.round_trips += 1;
-            lost_reply = state.client.batch_execute("ROLLBACK").is_err();
+            lost_reply = state.client.batch_execute(&ending).is_err();
         }
         state.work.statement_ns += start.elapsed().as_nanos() as u64;
         if lost_reply {

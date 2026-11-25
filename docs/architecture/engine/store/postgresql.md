@@ -499,8 +499,11 @@ key waited for it. A statement cancelled after its lock and before its
 release can still leave it, so the `ROLLBACK` of every non-nested `Write` or
 `Publish`, and of a failed `hold_lane`, also releases a granted exclusive
 barrier of its own backend (no barrier is held past its statement, so such a
-lock is always a leftover). No test injects that cancellation; the suites
-run the rollback statement on every definite failure.
+lock is always a leftover). A [fused Commit](#fused-commit) runs the same
+release on its message's failure path only. `fused_commit.rs`
+(`postgresql_cancelled_barrier_is_released`) injects that cancellation into
+a fused message through a rewriting proxy; for the other transactions the
+suites run the rollback statement on every definite failure.
 
 | `SynchronousCommit` | Write acknowledged after |
 | --- | --- |
@@ -874,7 +877,7 @@ Checked and not done:
 | --- | --- | --- |
 | [`postgresql_commit_round_trips.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_commit_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_commit_round_trips` | The lane with a head read and `commit_branch` is 12 round trips (15 before), with the head check in the lane's `BEGIN` 11; a moved head and an absent Branch are never answered unmoved |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | see [Mount reads](#mount-reads) | A real Commit's writer: first 23 round trips (54 before stage 2), second 3 (25), UpToDate 2 (1); SQLite 35/5 and 16/1 statements/transactions (46/9, 28/5). A merge Commit is exactly one race refusal and one fallback (`Store::fused_counts`); the Commits around it are fused |
-| [`fused_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/fused_commit.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test fused_commit` | The message is 1 round trip and 1 transaction warm (2 with its prepares); a moved head, an object stored meanwhile and an existing Commit identity are `Fused::Race`; a generation change `StaleStore`; a lane wait past `lock_timeout` `Busy`; a missing epoch row and a removal committed while the message waits `Conflict`; a lost reply `UnknownOutcome` with the session quarantined. Each refusal wrote nothing (head, locators, packs and hints checked with admin SQL). SQLite: one transaction per Commit, the race and epoch cases |
+| [`fused_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/fused_commit.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test fused_commit` | The message is 1 round trip and 1 transaction warm (2 with its prepares); a moved head, an object stored meanwhile and an existing Commit identity are `Fused::Race`; a generation change `StaleStore`; a lane wait past `lock_timeout` `Busy`; a missing epoch row and a removal committed while the message waits `Conflict`; a lost reply `UnknownOutcome` with the session quarantined; a barrier cancelled between its lock and unlock a definite refusal whose failure path releases the leftover (one more round trip; no advisory lock left on the backend, another writer commits). Each refusal wrote nothing (head, locators, packs and hints checked with admin SQL). SQLite: one transaction per Commit, the race and epoch cases |
 | [`postgresql_aborted_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_aborted_commit.rs) | `… --test postgresql_aborted_commit` | A body that ignores a refused statement is answered with that refusal, writes nothing and leaves the session usable. Before the `SELECT 1; COMMIT` guard it answered `Ok(())` |
 | [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `… --test postgresql_lane_liveness` | A nested write after its lane connection was terminated fails `Closed` and writes nothing: now through `pg_xact_status` |
 
@@ -940,6 +943,18 @@ its `COMMIT` nor the end of the connection can apply anything; when a later
 reply of the message was lost, the separate path would start on a writer
 that answers every call unknown, so the race is answered as the definite
 refusal it is instead.
+
+A message refused or cancelled after its barrier lock and before the unlock
+(step 3) leaves the key held at session level, which the message's `COMMIT`
+(a rollback after a refusal) does not end. So when any reply is a refusal or
+a request was not sent, and no reply was lost, the session runs the
+[barrier leftover release](#lane-barrier) before the verdict and before the
+session is used again, also before a race's fallback: one more round trip on
+the failure path only (appended to the pipeline's `ROLLBACK` when the
+message was partly sent), never a `pg_locks` scan on an accepted Commit. A
+failed release quarantines the session, so the verdict sees it untrusted. A
+lost reply needs none: the quarantine closes the connection, which ends
+every session-level lock.
 
 The fence statement holds `AccessShareLock` on `history_meta` until
 `COMMIT`; the lane row and the barrier are taken by the transaction itself,

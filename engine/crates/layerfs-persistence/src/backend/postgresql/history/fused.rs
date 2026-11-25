@@ -49,9 +49,16 @@
 //! the race is answered `Conflict` (definite, nothing written) instead. The
 //! outcome is decided, and an unknown one quarantines the session, while
 //! the session's lock is still held (`Session::pipeline_judged`).
+//!
+//! A refusal or cancel after the barrier's lock and before its unlock leaves
+//! the key held at session level (#776 P6), which the `COMMIT` does not end:
+//! on the failure path only, before the verdict and any fallback, the
+//! session releases such a leftover (`barrier_leftover`, one more round
+//! trip). An accepted message runs no such scan.
 use crate::backend::postgresql::session::{
     connection::Session,
     pipeline::{Reply, Request},
+    profile::barrier_leftover,
     rows,
 };
 use crate::backend::records::BackendError;
@@ -274,8 +281,11 @@ pub(crate) fn commit(
     let steps = &message.steps;
     // Decided while the session's lock is held: an unknown outcome
     // quarantines it before any other caller can use the connection.
+    // A refused or cancelled message may have stopped between the barrier's
+    // lock and unlock (#776 P6): its failure path releases a leftover key.
+    let release = barrier_leftover(schema);
     let outcome = session
-        .pipeline_judged(&requests, |replies, trusted| {
+        .pipeline_judged(&requests, &release, |replies, trusted| {
             let outcome = decided(decide(steps, &replies, trusted), trusted);
             let unknown = matches!(outcome, Err(Decision::Unknown));
             (outcome, unknown)
