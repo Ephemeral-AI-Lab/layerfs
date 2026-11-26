@@ -322,6 +322,8 @@ impl HostServer {
             }
             Operation::Drain => {
                 self.drain(&mut activity);
+                drop(activity);
+                self.close_drained_stores();
                 Ok(SdkValue::map([("state", SdkValue::text("draining"))]))
             }
             Operation::CloseStore => {
@@ -471,8 +473,14 @@ pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
     })?;
     let run = (|| {
         let hello = HostHello::own(&paths)?;
-        let ordinary = paths.bind(false, &guard)?;
-        let control = paths.bind(true, &guard)?;
+        let (ordinary, control) = {
+            let _home = layerfs_home::home::lock::take(home)?;
+            layerfs_machine::record::MachineRecord::admit_host(
+                home,
+                layerfs_home::names::HOST_MACHINE,
+            )?;
+            (paths.bind(false, &guard)?, paths.bind(true, &guard)?)
+        };
         run(
             ordinary,
             control,

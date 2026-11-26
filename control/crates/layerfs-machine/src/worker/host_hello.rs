@@ -43,8 +43,47 @@ pub(super) fn executable() -> std::io::Result<PathBuf> {
     }
 }
 
+pub(super) fn management_cli() -> Result<Option<(PathBuf, String)>, SdkRefusal> {
+    if RUNNING_BUILD.get().is_some() {
+        return Ok(None);
+    }
+    let commit = option_env!("LAYERFS_BUILD_COMMIT")
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| {
+            refused(
+                "Unavailable",
+                "the SDK build identity is unavailable for host worker management",
+            )
+        })?;
+    let dirty = option_env!("LAYERFS_BUILD_DIRTY").unwrap_or("false");
+    let path = std::env::var_os("PATH")
+        .and_then(|paths| {
+            std::env::split_paths(&paths)
+                .map(|dir| dir.join("layerfs"))
+                .find(|path| path.is_file())
+        })
+        .ok_or_else(|| {
+            refused(
+                "Unavailable",
+                "host worker management requires the matching layerfs CLI on PATH",
+            )
+        })?;
+    let path = path
+        .canonicalize()
+        .map_err(|e| refused("Unavailable", format!("host CLI: {e}")))?;
+    let build = identity(fs::metadata(&path), &format!("{commit}/{dirty}"))?;
+    Ok(Some((path, build)))
+}
+
 pub(super) fn build_identity() -> Result<String, SdkRefusal> {
-    let executable = executable().and_then(fs::metadata).map_err(|error| {
+    identity(
+        executable().and_then(fs::metadata),
+        RUNNING_BUILD.get().copied().unwrap_or("unmarked"),
+    )
+}
+
+fn identity(metadata: std::io::Result<fs::Metadata>, source: &str) -> Result<String, SdkRefusal> {
+    let executable = metadata.map_err(|error| {
         refused(
             "Unavailable",
             format!("cannot identify the host worker executable: {error}"),
@@ -53,7 +92,7 @@ pub(super) fn build_identity() -> Result<String, SdkRefusal> {
     Ok(format!(
         "{}/{}@{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
         env!("CARGO_PKG_VERSION"),
-        RUNNING_BUILD.get().copied().unwrap_or("unmarked"),
+        source,
         executable.dev(),
         executable.ino(),
         executable.len(),

@@ -141,6 +141,7 @@ pub fn create_on(
         (None, _) => only_attached(&target.store, target.record.attached())?,
     };
     let machine = machine.as_str();
+    layerfs_machine::record::MachineRecord::admit_host(&home, machine)?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {

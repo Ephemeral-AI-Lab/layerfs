@@ -175,6 +175,11 @@ pub(super) fn directory(home: &Path, checks: &mut Checks) {
 pub(crate) fn live(home: &Path, answer: SdkValue) -> SdkValue {
     let probe = observe(home, TIMEOUT);
     let live = answer.get("live").cloned().unwrap_or_default();
-    let live = with_field(live, "machine_state", SdkValue::text("enabled"));
+    let state = if answer.get_text("state") == Some("stopped") {
+        "stopped"
+    } else {
+        "enabled"
+    };
+    let live = with_field(live, "machine_state", SdkValue::text(state));
     with_field(answer, "live", with_field(live, "worker", evidence(&probe)))
 }

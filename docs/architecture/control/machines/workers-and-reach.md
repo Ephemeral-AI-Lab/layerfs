@@ -421,3 +421,15 @@ through listener shutdown, Store close, and socket removal. Incompatible
 builds receive a definite refusal before operation bytes, with idle exit as
 the replacement path. Transport loss after an operation send begins has
 outcome `Unknown` with the request ID and no automatic replay.
+
+## Host power and admission
+
+Host start and stop serialize on the machine lifecycle lock. The built-in
+host's record defaults to enabled. Stop atomically records stopped under
+the home lock used by Sandbox creation and worker socket publication.
+Each SQLite lease claim and reused worker Store checks the machine record
+under its Store lock. After fencing admission, stop drains the worker and
+inspects holders under each Store lock. This ordering lets earlier leases
+finish and exposes the process identities still holding the Store.
+Force uses the existing per-Sandbox stop with its recorded runtime identity.
+The machine remains stopped when a holder or teardown refusal is reported.

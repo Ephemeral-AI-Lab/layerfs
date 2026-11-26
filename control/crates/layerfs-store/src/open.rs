@@ -392,6 +392,7 @@ fn enter_host(home: &Path, store: &str, project: &str) -> Result<(OpenArgs, Runn
                 "host worker Store calls require local SQLite",
             ));
         };
+        layerfs_machine::record::MachineRecord::admit_host(home, machine)?;
         if layerfs_machine::in_process() != Some(machine) {
             return Err(refused(
                 "Unavailable",

@@ -24,16 +24,30 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
     phases.begin("check");
     force_record(&home, name)?;
     let _start = layerfs_machine::force_stop_lock(&home, name)?;
+    stop_locked(&home, name, phases)
+}
+
+pub(crate) fn host_locked(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
+    let mut phases = Phases::new(events, &STOP_PHASES);
+    phases.begin("check");
+    stop_locked(home, name.as_str(), phases)
+}
+
+fn stop_locked(home: &Path, name: &str, mut phases: Phases<'_, '_>) -> Outcome {
     let intent = Op::begin(
         "machine.stop",
         "stop",
         SdkValue::map([("force", SdkValue::Bool(true))]),
     )?;
     let (spec, hosted, sandboxes) = {
-        let _home = lock::take(&home)?;
-        let machine = force_record(&home, name)?;
-        let hosted = inventory::hosted_on(&home, name)?;
-        let sandboxes = inventory::sandboxes(&home)?
+        let _home = lock::take(home)?;
+        let machine = force_record(home, name)?;
+        let hosted = if name == layerfs_home::names::HOST_MACHINE {
+            Vec::new()
+        } else {
+            inventory::hosted_on(home, name)?
+        };
+        let sandboxes = inventory::sandboxes(home)?
             .into_iter()
             .filter(|sandbox| {
                 sandbox.machine() == name || hosted.iter().any(|child| sandbox.machine() == child)
@@ -53,13 +67,13 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                 ));
             }
         }
-        let spec = machine_spec(&home, &machine)
-            .map_err(|r| crate::machine::RELATED.nameless_fix(&home, name, r))?;
+        let spec = machine_spec(home, &machine)
+            .map_err(|r| crate::machine::RELATED.nameless_fix(home, name, r))?;
         for child in &hosted {
-            force_record(&home, child)?;
+            force_record(home, child)?;
         }
         for machine in std::iter::once(name).chain(hosted.iter().map(String::as_str)) {
-            update(&home, machine, |record| record.with_op(&intent))?;
+            update(home, machine, |record| record.with_op(&intent))?;
         }
         (spec, hosted, sandboxes)
     };
@@ -77,7 +91,7 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                 // A refusal before the signal leaves this runtime as it was,
                 // so the stop goes on to the next Sandbox: only a sent stop
                 // makes an outcome uncertain.
-                let runtime = match native_runtime(&home, sandbox) {
+                let runtime = match native_runtime(home, sandbox) {
                     Ok(runtime) => runtime,
                     Err(refusal) => {
                         skipped.push(sandbox.name().to_owned());
@@ -93,7 +107,7 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                         // its running commands are each marked and cancelled
                         // first (D-10), as a forced close does, so they answer
                         // `cancelled`, not the exit of the runtime's kill
-                        if let Err(refusal) = settle(&home, sandbox) {
+                        if let Err(refusal) = settle(home, sandbox) {
                             skipped.push(sandbox.name().to_owned());
                             first_refusal.get_or_insert(refusal);
                             continue;
@@ -104,10 +118,10 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
                             .map_err(layerfs_sandbox::daemon::values::wire)?;
                     }
                 }
-                mark(&home, sandbox, true)?;
+                mark(home, sandbox, true)?;
                 native_attempt = None;
                 stopped.push(sandbox.name().to_owned());
-                unknown.extend(workspaces(&home, sandbox)?);
+                unknown.extend(workspaces(home, sandbox)?);
             }
             if let Some(refusal) = first_refusal {
                 return Err(refusal);
@@ -115,9 +129,9 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
         } else {
             adapters::stop_force(&spec).map_err(refusal)?;
             for sandbox in &sandboxes {
-                mark(&home, sandbox, true)?;
+                mark(home, sandbox, true)?;
                 stopped.push(sandbox.name().to_owned());
-                let observed = workspaces(&home, sandbox)?;
+                let observed = workspaces(home, sandbox)?;
                 if observed.is_empty() {
                     unknown.push(format!("{}:*", sandbox.name()));
                 } else {
@@ -146,9 +160,9 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
             }
         };
         keep((|| {
-            let _home = lock::take(&home)?;
+            let _home = lock::take(home)?;
             for machine in std::iter::once(name).chain(hosted.iter().map(String::as_str)) {
-                update(&home, machine, |record| {
+                update(home, machine, |record| {
                     if uncertain {
                         record.with_op(&intent.clone().as_uncertain())
                     } else {
@@ -163,12 +177,12 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
         if spec.kind.provided() && error.code != "Unsupported" {
             for sandbox in &sandboxes {
                 if !stopped.iter().any(|name| name == sandbox.name()) {
-                    keep(mark(&home, sandbox, false));
+                    keep(mark(home, sandbox, false));
                 }
             }
         } else if let Some(sandbox) = native_attempt {
             if !stopped.iter().any(|name| name == sandbox.name()) {
-                keep(mark(&home, sandbox, false));
+                keep(mark(home, sandbox, false));
             }
         }
         for (key, list) in [
@@ -193,19 +207,16 @@ pub(crate) fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName) -> 
         return Err(error);
     }
     {
-        let _home = lock::take(&home)?;
+        let _home = lock::take(home)?;
         for machine in std::iter::once(name).chain(hosted.iter().map(String::as_str)) {
-            match std::fs::remove_file(paths::worker_record(&home, machine)) {
+            match std::fs::remove_file(paths::worker_record(home, machine)) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
             }
-            update(&home, machine, |record| {
-                // a machine no provider holds (`native`) is never stopped
-                let state = match record.provided() {
-                    false => "ready",
-                    true => "stopped",
-                };
+            update(home, machine, |record| {
+                // The recorded stop applies to local and provider machines.
+                let state = "stopped";
                 // a worker that was outdated or did not answer is gone with it
                 (record.without_op().with("state", SdkValue::text(state))).mended()
             })?;

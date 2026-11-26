@@ -68,6 +68,10 @@ pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
 /// the token fails before any settle; a Store the reconcile cannot reach is
 /// left for the next start.
 pub fn start(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
+    #[cfg(unix)]
+    if name.as_str() == layerfs_home::names::HOST_MACHINE {
+        return crate::host_power::start(home, name);
+    }
     let started = layerfs_machine::start(home, name, RELATED, events)?;
     let incarnation = record_start(home, name)?;
     let _ = reconcile_stores(home, name, incarnation.as_deref());
@@ -163,6 +167,10 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
 /// `machine.stop`, with its phases on `events`; `force` stops it and this
 /// home's Sandboxes on it without asking its worker.
 pub fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName, force: bool) -> Outcome {
+    #[cfg(unix)]
+    if name.as_str() == layerfs_home::names::HOST_MACHINE {
+        return crate::host_power::stop(home, events, name, force);
+    }
     match force {
         true => crate::machine_force::stop(home, events, name),
         false => layerfs_machine::stop(home, name, RELATED, events),

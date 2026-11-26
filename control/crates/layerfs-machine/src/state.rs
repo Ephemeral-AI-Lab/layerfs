@@ -185,7 +185,9 @@ impl MachineRecord {
             let fix = fix(name, Reason::Unsupported, true, sandboxes);
             return State::broken(Reason::Unsupported, fix.as_deref());
         }
-        // a machine no provider holds runs on the host's own OS: never stopped
+        if name == layerfs_home::names::HOST_MACHINE && self.recorded_state() == Some("stopped") {
+            return State::Stopped;
+        }
         if !self.provided() {
             return State::Ready;
         }

@@ -80,7 +80,7 @@ fn forced_stop(home: &Path) -> SdkValue {
     ))
     .unwrap()
     .unwrap();
-    assert_eq!(record.get_text("state"), Some("ready"));
+    assert_eq!(record.get_text("state"), Some("stopped"));
     stopped
 }
 fn live_case(home: &Path, name: &str, machine: bool) {
@@ -172,6 +172,16 @@ fn live_case(home: &Path, name: &str, machine: bool) {
     );
     assert!(paths::store_file(home, "shop").exists());
     assert!(paths::machine_record(home, layerfs_home::names::HOST_MACHINE).exists());
+    if machine {
+        let cli =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../target/debug/layerfs");
+        let status = Command::new(cli)
+            .env("LAYERFS_HOME", home)
+            .args(["machine", "start", layerfs_home::names::HOST_MACHINE])
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
     let saved = call(
         home,
         "file.read",

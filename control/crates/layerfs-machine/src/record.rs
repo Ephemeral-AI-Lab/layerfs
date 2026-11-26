@@ -95,6 +95,21 @@ pub struct MachineRecord {
 }
 
 impl MachineRecord {
+    /// Checks recorded host power before a local Store or Sandbox is admitted.
+    pub fn admit_host(home: &Path, name: &str) -> Result<()> {
+        if name == layerfs_home::names::HOST_MACHINE
+            && !layerfs_home::home::guest::is_root(home)
+            && Self::read(home, name)?
+                .is_some_and(|record| record.recorded_state() == Some("stopped"))
+        {
+            return Err(layerfs_home::outcome::with_fix(
+                refused("Unavailable", format!("host machine {name} is stopped")),
+                format!("layerfs machine start {name}"),
+            ));
+        }
+        Ok(())
+    }
+
     /// Machine `name`'s record `value`, as read.
     pub fn from_record(name: &str, value: SdkValue) -> Self {
         Self {

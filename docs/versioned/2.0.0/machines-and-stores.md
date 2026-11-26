@@ -31,8 +31,8 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   Sandbox runs; the kind decides.
 - `machine list` and `machine get` answer every machine from the home's
   records, starting and probing nothing: its `platform`, its `state` (`ready`,
-  `busy` with `op`, `stopped`, or `broken` with `reason` and `fix`; `native`
-  is always `ready`, the built-in `docker` `stopped` until `machine start
+  `busy` with `op`, `stopped`, or `broken` with `reason` and `fix`; the host
+  starts enabled, the built-in `docker` `stopped` until `machine start
   docker`) and, in the long form, `supports` (`sqlite`, `postgresql_sandbox`,
   and `log` when the machine has a worker whose log can be read, never on
   `native`), its sizes, image, Stores and Sandboxes. `--with live` probes the
@@ -189,7 +189,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 
 ### Starting and stopping (manual, #535 D11)
 
-- A machine runs only between `machine start <name>` and `machine stop
+- A guest machine runs only between `machine start <name>` and `machine stop
   <name>`. Nothing starts or stops one by itself: no call starts a stopped
   machine, and a running machine, its worker and its Sandboxes stay up
   however long they are unused. A Store is still closed after a quiet
@@ -221,7 +221,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   once. `machine stop <name>` stops the worker and, where there is one, the
   VM (`docker`: its worker container);
   disks and Stores stay. It is `InUse` while Sandboxes run on the machine
-  (`detail.related` names them). `native` answers both at once (#535 P1).
+  (`detail.related` names them).
 - No list, get, status or doctor call starts a machine (#535 P4): they
   answer from records and live probes. A stopped machine reads `stopped`,
   and what is on it `blocked` with `blocked_by {machine, reason: stopped}`
@@ -240,6 +240,15 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   `broken` `unresolved`, which `machine get <m> --with live` settles by
   observing. There is no change event; callers poll `home get`'s
   `generation`.
+
+The OS host is enabled on a new home. Starting it explicitly enables it and verifies
+the host worker. Idle worker exit leaves the host enabled. Stopping records
+`stopped` before the worker drains. New local SQLite Store calls and new Sandboxes
+on this host then receive `Unavailable` with a start command. A previously admitted
+call finishes. If holders remain, stop reports `InUse` with the Sandbox names
+and Store process IDs, and the host stays stopped. A later stop checks again.
+A forced stop performs the host Sandbox teardown and records its outcomes.
+Direct PostgreSQL calls continue while the host is stopped.
 
 ### Routes
 

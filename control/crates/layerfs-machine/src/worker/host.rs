@@ -25,6 +25,7 @@ const READY_POLL: Duration = Duration::from_millis(15);
 
 /// Canonical home authority and its two endpoints.
 pub struct HostPaths {
+    cli: Option<(PathBuf, String)>,
     /// Canonical pathname of the existing home.
     pub home: PathBuf,
     /// Identity from the authoritative home record.
@@ -114,6 +115,7 @@ impl HostPaths {
             }
         };
         Ok(Self {
+            cli: None,
             socket: paths::host_worker_socket(&canonical),
             control: paths::host_worker_control(&canonical),
             home_id: file.id,
@@ -251,6 +253,18 @@ impl HostPaths {
             .is_ok()
     }
 
+    /// Selects the matching CLI for a lifecycle operation issued by an SDK.
+    pub fn for_management(mut self) -> Result<Self, SdkRefusal> {
+        self.cli = super::host_hello::management_cli()?;
+        Ok(self)
+    }
+
+    /// Starts the host worker if needed and verifies its management endpoint.
+    pub fn start(&self) -> Outcome {
+        self.exchange(true, true, "ping", SdkValue::map([]), None, |_| true)?
+            .ok_or_else(|| unavailable("start", "no accepting host endpoint"))
+    }
+
     /// Makes one ordinary call, launching a worker only if the home has
     /// no live owner. Callers choose this route before invoking it.
     pub fn call(&self, op: &str, args: SdkValue) -> Outcome {
@@ -313,7 +327,10 @@ impl HostPaths {
         let request = request(op, args, &id, &"0".repeat(CORRELATION_LEN));
         let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
         host_frame::encode(&request, max)?;
-        let build = build_identity()?;
+        let build = match &self.cli {
+            Some((_, build)) => build.clone(),
+            None => build_identity()?,
+        };
         trace::step("route");
         let Some((stream, startup)) = self.acquire(path, start, end)? else {
             trace::connection(&path.to_string_lossy(), op, false, began);
@@ -379,6 +396,12 @@ impl HostPaths {
         start: bool,
         end: Instant,
     ) -> Result<Option<(UnixStream, Option<File>)>, SdkRefusal> {
+        if start {
+            crate::record::MachineRecord::admit_host(
+                &self.home,
+                layerfs_home::names::HOST_MACHINE,
+            )?;
+        }
         let mut observed = probe(path, end)?;
         let startup_path = paths::host_worker_startup_lock(&self.home);
         let mut startup = None;
@@ -419,6 +442,10 @@ impl HostPaths {
             } else if startup.is_some() && matches!(observed, Probe::Absent) {
                 if let Some(unowned) = self.try_hold()? {
                     drop(unowned);
+                    crate::record::MachineRecord::admit_host(
+                        &self.home,
+                        layerfs_home::names::HOST_MACHINE,
+                    )?;
                     child = Some(self.spawn()?);
                 }
             }
@@ -448,7 +475,10 @@ impl HostPaths {
         let stderr = log
             .try_clone()
             .map_err(|error| unavailable("worker log", error))?;
-        let executable = executable().map_err(|error| unavailable("startup", error))?;
+        let executable = match &self.cli {
+            Some((path, _)) => path.clone(),
+            None => executable().map_err(|error| unavailable("startup", error))?,
+        };
         Command::new(executable)
             .args(["worker", "--host"])
             .env("LAYERFS_HOME", &self.home)

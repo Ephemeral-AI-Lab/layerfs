@@ -10,6 +10,8 @@ pub mod backup;
 pub mod doctor;
 pub mod home;
 mod home_tree;
+#[cfg(all(feature = "machine", unix))]
+mod host_power;
 #[doc(hidden)]
 pub mod inventory;
 #[cfg(feature = "machine")]
