@@ -5,7 +5,10 @@ use super::{
     state::{self, SerialState},
 };
 use crate::object::inode_leaf::{InodeKind, InodeValue};
-use crate::{ContentError, ContentResult, IndexedConstructionBacking, ObjectId};
+use crate::{
+    ConstructionRecordChange, ContentError, ContentResult, IndexedConstructionBacking,
+    IndexedRecordPage, ObjectId,
+};
 
 const PROVISIONAL: u32 = 0x4653_0031;
 const CERTIFIED: u32 = 0x4653_0032;
@@ -13,8 +16,11 @@ const BLOCK_ROWS: usize = 64;
 const HINT_HEADER: usize = 17;
 const MARKER_BYTES: usize = 41;
 const BLOCK_BYTES: usize = BLOCK_ROWS * (HINT_HEADER + MAXIMUM_NAME_BYTES);
-const _: () =
-    assert!(BLOCK_BYTES + std::mem::size_of::<crate::ConstructionRecordChange>() <= 65_536);
+const APPLY_BLOCKS: usize = 3;
+const PAGE_BYTES: usize = 65_536;
+const _: () = assert!(
+    APPLY_BLOCKS * (BLOCK_BYTES + std::mem::size_of::<ConstructionRecordChange>()) <= PAGE_BYTES
+);
 
 /// Certified binding rows of the captured namespace, held in its operation records.
 #[derive(Debug, Default)]
@@ -41,7 +47,10 @@ impl BindingChanges {
         visit: &mut dyn FnMut(u64, u64, &PathName) -> ContentResult<()>,
     ) -> ContentResult<()> {
         let mut cursor = Cursor::new(self.blocks);
-        let mut load = |block| records.get(state::key(CERTIFIED, block));
+        let mut load = |block, after| match records.entries_after(CERTIFIED, after)? {
+            Some(page) => Ok(page),
+            None => point(CERTIFIED, block, self.blocks, |key| records.get(key)),
+        };
         let mut previous = None;
         let mut seen = 0;
         while let Some(row) = cursor.next(&mut load)? {
@@ -68,7 +77,7 @@ pub(super) struct BindingTransitions {
     certified: Blocks,
     cursor: Cursor,
     first: Option<Event>,
-    group_has_rows: bool,
+    unproven: bool,
     rows: u64,
 }
 
@@ -84,7 +93,6 @@ impl BindingTransitions {
         if let Some(child) = after.filter(|value| Some(*value) != before) {
             self.provisional
                 .binding(state, PROVISIONAL, parent, child, name)?;
-            self.group_has_rows = true;
         }
         Ok(())
     }
@@ -95,17 +103,10 @@ impl BindingTransitions {
         parent: u64,
         root: ObjectId,
     ) -> ContentResult<()> {
-        if self.group_has_rows {
-            self.provisional.marker(state, parent, root)?;
-            self.group_has_rows = false;
-        }
-        Ok(())
+        self.provisional.marker(state, parent, root)
     }
 
     pub(super) fn begin_proof(&mut self, state: &SerialState<'_>) -> ContentResult<()> {
-        if self.group_has_rows {
-            return Err(integrity());
-        }
         self.provisional.flush(state, PROVISIONAL)?;
         self.cursor = Cursor::new(self.provisional.written);
         Ok(())
@@ -115,19 +116,23 @@ impl BindingTransitions {
         &mut self,
         state: &SerialState<'_>,
         serial: u64,
+        before: Option<InodeValue>,
         final_value: Option<InodeValue>,
     ) -> ContentResult<()> {
-        let mut load = |block| state.read(PROVISIONAL, block);
+        let mut load =
+            |block, after| provisional_page(state, block, after, self.provisional.written);
         if self.first.is_none() {
             self.first = self.cursor.next(&mut load)?;
         }
-        let Some(first) = &self.first else {
+        let parent = self.first.as_ref().map(Event::parent);
+        if parent.is_some_and(|parent| parent < serial) {
+            return Err(integrity());
+        }
+        if parent != Some(serial) {
+            let old = directory_root(before);
+            let new = directory_root(final_value);
+            self.unproven |= new.is_some() && new != old;
             return Ok(());
-        };
-        match first.parent().cmp(&serial) {
-            std::cmp::Ordering::Greater => return Ok(()),
-            std::cmp::Ordering::Less => return Err(integrity()),
-            std::cmp::Ordering::Equal => (),
         }
         let mut previous = None;
         let mut current = self.first.take();
@@ -142,7 +147,7 @@ impl BindingTransitions {
                         seen = seen.checked_add(1).ok_or(ContentError::LengthOverflow)?;
                     }
                 }
-                Event::Parent(parent, root) if parent == serial && previous.is_some() => {
+                Event::Parent(parent, root) if parent == serial => {
                     if final_value.is_some_and(|value| {
                         value.kind != InodeKind::Directory || value.content_root != root
                     }) {
@@ -160,20 +165,28 @@ impl BindingTransitions {
         }
     }
 
-    pub(super) fn finish(&mut self, state: &SerialState<'_>) -> ContentResult<BindingChanges> {
+    pub(super) fn finish(
+        &mut self,
+        state: &SerialState<'_>,
+    ) -> ContentResult<Option<BindingChanges>> {
         if self.first.is_some()
             || self
                 .cursor
-                .next(&mut |block| state.read(PROVISIONAL, block))?
+                .next(&mut |block, after| {
+                    provisional_page(state, block, after, self.provisional.written)
+                })?
                 .is_some()
         {
             return Err(integrity());
         }
+        if self.unproven {
+            return Ok(None);
+        }
         self.certified.flush(state, CERTIFIED)?;
-        Ok(BindingChanges {
+        Ok(Some(BindingChanges {
             blocks: self.certified.written,
             rows: self.rows,
-        })
+        }))
     }
 }
 
@@ -182,6 +195,7 @@ struct Blocks {
     bytes: Vec<u8>,
     rows: usize,
     written: u64,
+    pending: Vec<ConstructionRecordChange>,
 }
 
 impl Blocks {
@@ -194,7 +208,7 @@ impl Blocks {
         name: &PathName,
     ) -> ContentResult<()> {
         if self.rows == BLOCK_ROWS {
-            self.flush(state, kind)?;
+            self.stage(state, kind)?;
         }
         self.bytes.extend_from_slice(&[name.as_bytes().len() as u8]);
         self.bytes.extend_from_slice(&parent.to_be_bytes());
@@ -211,7 +225,7 @@ impl Blocks {
         root: ObjectId,
     ) -> ContentResult<()> {
         if self.rows == BLOCK_ROWS {
-            self.flush(state, PROVISIONAL)?;
+            self.stage(state, PROVISIONAL)?;
         }
         self.bytes.push(0);
         self.bytes.extend_from_slice(&parent.to_be_bytes());
@@ -221,7 +235,18 @@ impl Blocks {
     }
 
     fn flush(&mut self, state: &SerialState<'_>, kind: u32) -> ContentResult<()> {
+        self.stage(state, kind)?;
+        if !self.pending.is_empty() {
+            state.apply(std::mem::take(&mut self.pending))?;
+        }
+        Ok(())
+    }
+
+    fn stage(&mut self, state: &SerialState<'_>, kind: u32) -> ContentResult<()> {
         if self.rows != 0 {
+            if self.pending.capacity() == 0 {
+                self.pending = Vec::with_capacity(APPLY_BLOCKS);
+            }
             let index = self
                 .written
                 .checked_add(1)
@@ -229,7 +254,10 @@ impl Blocks {
             let value = std::mem::take(&mut self.bytes)
                 .into_boxed_slice()
                 .into_vec();
-            state.apply(vec![state::change(kind, index, None, value)])?;
+            self.pending.push(state::change(kind, index, None, value));
+            if self.pending.len() == APPLY_BLOCKS {
+                state.apply(std::mem::take(&mut self.pending))?;
+            }
             self.written = index;
             self.rows = 0;
         }
@@ -241,6 +269,8 @@ impl Blocks {
 struct Cursor {
     blocks: u64,
     taken: u64,
+    page: std::vec::IntoIter<([u8; 32], Vec<u8>)>,
+    after: Option<[u8; 32]>,
     rows: usize,
     bytes: Vec<u8>,
     at: usize,
@@ -256,17 +286,27 @@ impl Cursor {
 
     fn next(
         &mut self,
-        load: &mut impl FnMut(u64) -> ContentResult<Option<Vec<u8>>>,
+        load: &mut impl FnMut(u64, Option<[u8; 32]>) -> ContentResult<IndexedRecordPage>,
     ) -> ContentResult<Option<Event>> {
         if self.at == self.bytes.len() {
             if self.taken == self.blocks {
                 return Ok(None);
             }
-            self.taken += 1;
-            self.bytes = load(self.taken)?.ok_or_else(integrity)?;
-            if self.bytes.is_empty() || self.bytes.capacity() > BLOCK_BYTES {
-                return Err(integrity());
+            if self.page.len() == 0 {
+                self.bytes = Vec::new();
+                let (mut page, ended) = load(self.taken + 1, self.after)?;
+                self.validate(&page, ended)?;
+                for (_, bytes) in &mut page {
+                    if bytes.capacity() > bytes.len() {
+                        *bytes = std::mem::take(bytes).into_boxed_slice().into_vec();
+                    }
+                }
+                self.page = page.into_boxed_slice().into_vec().into_iter();
             }
+            let (key, bytes) = self.page.next().ok_or_else(integrity)?;
+            self.taken += 1;
+            self.after = Some(key);
+            self.bytes = bytes;
             self.rows = 0;
             self.at = 0;
         }
@@ -295,6 +335,60 @@ impl Cursor {
         self.rows += 1;
         Ok(Some(event))
     }
+
+    fn validate(&self, page: &[([u8; 32], Vec<u8>)], ended: bool) -> ContentResult<()> {
+        if page.is_empty()
+            || page.len() > BLOCK_ROWS
+            || page.len() as u64 > self.blocks - self.taken
+        {
+            return Err(integrity());
+        }
+        let last = page.len() as u64 == self.blocks - self.taken;
+        // The Overlay keyset uses LIMIT 64. A full final page therefore
+        // does not affirm EOF, even when the sealed count covers it exactly.
+        if ended && !last || !ended && last && page.len() != BLOCK_ROWS {
+            return Err(integrity());
+        }
+        let mut bytes = 0;
+        for (offset, (key, value)) in page.iter().enumerate() {
+            if state::serial(*key)? != self.taken + 1 + offset as u64
+                || value.is_empty()
+                || value.len() > BLOCK_BYTES
+            {
+                return Err(integrity());
+            }
+            bytes += value.len();
+        }
+        if bytes > PAGE_BYTES {
+            return Err(integrity());
+        }
+        Ok(())
+    }
+}
+
+fn provisional_page(
+    state: &SerialState<'_>,
+    block: u64,
+    after: Option<[u8; 32]>,
+    total: u64,
+) -> ContentResult<IndexedRecordPage> {
+    match state.entries_after(PROVISIONAL, after)? {
+        Some(page) => Ok(page),
+        None => point(PROVISIONAL, block, total, |_| {
+            state.raw_record(PROVISIONAL, block)
+        }),
+    }
+}
+
+fn point(
+    kind: u32,
+    block: u64,
+    total: u64,
+    read: impl FnOnce(crate::ConstructionRecordKey) -> ContentResult<Option<Vec<u8>>>,
+) -> ContentResult<IndexedRecordPage> {
+    let key = state::key(kind, block);
+    let value = read(key)?.ok_or_else(integrity)?;
+    Ok((vec![(key.key, value)], block == total))
 }
 
 enum Event {
@@ -307,6 +401,12 @@ impl Event {
             Self::Binding(parent, ..) | Self::Parent(parent, _) => *parent,
         }
     }
+}
+
+fn directory_root(value: Option<InodeValue>) -> Option<ObjectId> {
+    value
+        .filter(|value| value.kind == InodeKind::Directory)
+        .map(|value| value.content_root)
 }
 
 fn number(bytes: &[u8]) -> ContentResult<u64> {

@@ -150,15 +150,17 @@ A record or length refusal ends that attempt before history publication.
 The wide PostgreSQL capture route records each new or changed name binding
 as the canonical directory merge consumes it. The final inode merge checks
 each contributing parent's rebuilt root against its surviving directory
-value. A parent with a final tombstone contributes no binding hints. A
-missing final parent transition or a mismatched surviving root fails the
-capture. The operation owner keeps the provisional and certified records in
+value. A parent with a final tombstone contributes no binding hints. A mismatched proof fails the capture. If a final inode replaces a
+directory listing without an observed directory merge, Commit uses the
+canonical binding comparison for that root pair. The operation owner keeps the provisional and certified records in
 its existing Overlay database until reclamation.
 
 One record holds at most 64 events and 17,408 bytes of encoded payload.
 A binding uses 17 bytes plus the full name in each stream. A provisional
 end-of-parent marker uses 41 bytes. The reader checks order across records
-and carries one write batch of at most 4,096 hints. An exact root-pair match
+and carries one write batch of at most 4,096 hints. An indexed keyset
+read holds up to 64 record blocks and 64 KiB of encoded bytes. Writes group
+up to three record blocks under the existing operation envelope. An exact root-pair match
 allows Commit to use the certified rows after Save completion. For a larger
 batch, Commit acknowledges the held Save before opening the ordered record
 reader. A different root pair selects the canonical directory comparison.

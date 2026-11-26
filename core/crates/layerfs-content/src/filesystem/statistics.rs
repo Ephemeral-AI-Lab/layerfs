@@ -120,7 +120,7 @@ pub fn logical_size_and_directories(
 /// final partial window and the existing bounded directory hints stay local.
 #[derive(Debug)]
 pub struct LogicalChanges {
-    bindings: super::binding_changes::BindingChanges,
+    bindings: Option<super::binding_changes::BindingChanges>,
     before: FilesystemRootId,
     after: FilesystemRootId,
     directories: ChangedDirectories,
@@ -130,8 +130,8 @@ pub struct LogicalChanges {
 
 impl LogicalChanges {
     /// Transfers certified bindings after the caller checks the root pair.
-    pub fn take_bindings(&mut self) -> super::binding_changes::BindingChanges {
-        std::mem::take(&mut self.bindings)
+    pub fn take_bindings(&mut self) -> Option<super::binding_changes::BindingChanges> {
+        self.bindings.take()
     }
 
     /// Whether this result measures exactly the roots chosen for publication.
@@ -171,7 +171,7 @@ impl LogicalChanges {
 #[derive(Default)]
 pub(super) struct LogicalTransitions {
     pub(super) bindings: super::binding_changes::BindingTransitions,
-    pub(super) certified_bindings: super::binding_changes::BindingChanges,
+    pub(super) certified_bindings: Option<super::binding_changes::BindingChanges>,
     directories: ChangedDirectories,
     full_windows: u64,
     partial: Window,
@@ -185,7 +185,7 @@ impl LogicalTransitions {
         before: Option<InodeValue>,
         after: Option<InodeValue>,
     ) -> ContentResult<()> {
-        self.bindings.prove(state, serial, after)?;
+        self.bindings.prove(state, serial, before, after)?;
         if before == after {
             return Ok(());
         }

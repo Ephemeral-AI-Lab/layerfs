@@ -40,7 +40,7 @@ pub use file::{
 pub use file::{
     EditRecordApply as ConstructionRecordApply, EditRecordChange as ConstructionRecordChange,
     EditRecordExpected as ConstructionRecordExpected, EditRecordKey as ConstructionRecordKey,
-    IndexedEditBacking as IndexedConstructionBacking,
+    IndexedEditBacking as IndexedConstructionBacking, IndexedRecordPage,
 };
 pub use filesystem::inode::InodeChange;
 pub use filesystem::{

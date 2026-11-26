@@ -42,6 +42,9 @@ pub enum EditRecordApply {
         actual: Option<Vec<u8>>,
     },
 }
+/// One bounded sequential page of indexed key/value rows and its end flag.
+pub type IndexedRecordPage = (Vec<([u8; 32], Vec<u8>)>, bool);
+
 /// A single caller-bound operation/file scope. Methods are short bounded jobs;
 /// the provider retains the first original refusal/completion and becomes
 /// terminal. Scope acquisition/release and actual consumer fences belong to the
@@ -57,6 +60,16 @@ pub trait IndexedEditBacking {
     /// first refusal is the first refused key's.
     fn get_many(&mut self, keys: &[EditRecordKey]) -> ContentResult<Vec<Option<Vec<u8>>>> {
         keys.iter().map(|key| self.get(*key)).collect()
+    }
+    /// A key/value page strictly after the given key. The eager copy holds
+    /// at most 64 records and 64 KiB of value bytes. None selects the
+    /// provider's ordinary point interface before any effects or refusal.
+    fn entries_after(
+        &mut self,
+        _kind: u32,
+        _after: Option<[u8; 32]>,
+    ) -> ContentResult<Option<IndexedRecordPage>> {
+        Ok(None)
     }
     /// One sorted unique guarded batch within a64KiB retained-capacity envelope.
     fn apply(&mut self, changes: Vec<EditRecordChange>) -> ContentResult<EditRecordApply>;

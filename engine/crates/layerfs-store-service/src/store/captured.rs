@@ -41,9 +41,18 @@ impl CapturedLogical {
         owner: &crate::OwnerClient,
         reader: &layerfs_storage::Reader<'_>,
         known: u64,
-    ) -> Result<(u64, ChangedDirectories, super::hints::CapturedBindings), CommitError> {
-        let bindings =
-            super::hints::CapturedBindings::new(self.changes.take_bindings(), self.scope);
+    ) -> Result<
+        (
+            u64,
+            ChangedDirectories,
+            Option<super::hints::CapturedBindings>,
+        ),
+        CommitError,
+    > {
+        let bindings = self
+            .changes
+            .take_bindings()
+            .map(|bindings| super::hints::CapturedBindings::new(bindings, self.scope));
         let mut records = IndexedEditRecords::new(owner, self.scope);
         let counted = super::commit::with_file_lengths(reader, |lengths| {
             self.changes.count(&mut records, known, lengths)

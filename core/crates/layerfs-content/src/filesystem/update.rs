@@ -516,11 +516,6 @@ fn run_body<'b>(
                             resources.scratch_bytes,
                             &mut observe,
                         )?;
-                        if let Some(logical) = logical.as_mut() {
-                            logical
-                                .bindings
-                                .parent(state, update.header.parent, root.0)?;
-                        }
                         counters.directories.pages_read = counters
                             .directories
                             .pages_read
@@ -548,6 +543,11 @@ fn run_body<'b>(
                         counters.directory_updates = counters.directory_updates.saturating_add(1);
                         root.0
                     };
+                    if let Some(logical) = logical.as_mut() {
+                        logical
+                            .bindings
+                            .parent(state, update.header.parent, content_root)?;
+                    }
                     contents.insert(update.header.parent, content_root)?;
                 }
                 if !parents.is_empty() {

@@ -379,7 +379,7 @@ impl BoundWorkspace {
                         }) {
                             let (logical, directories, bindings) =
                                 changes.count(&self.owner, &reader, known)?;
-                            return Ok::<_, CommitError>((logical, directories, Some(bindings)));
+                            return Ok::<_, CommitError>((logical, directories, bindings));
                         }
                         let mut directories = ChangedDirectories::default();
                         let logical = self.logical_after(

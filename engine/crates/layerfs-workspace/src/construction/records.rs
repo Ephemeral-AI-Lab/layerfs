@@ -184,6 +184,13 @@ impl<P: OverlayOperationRecords + ?Sized> IndexedEditBacking for IndexedEditReco
         let keys: Vec<_> = records.iter().map(|record| key(*record)).collect();
         self.observe(self.provider.operation_record_get_many(self.scope, &keys))
     }
+    fn entries_after(
+        &mut self,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> ContentResult<Option<layerfs_content::IndexedRecordPage>> {
+        IndexedEditRecords::entries_after(self, kind, after).map(Some)
+    }
     fn apply(&mut self, changes: Vec<EditRecordChange>) -> ContentResult<EditRecordApply> {
         self.ready()?;
         let input = retained(&changes);
