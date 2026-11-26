@@ -53,6 +53,11 @@
 //!   [0, 0, 0, 0] on both backends (its cold connect goes too). A cold
 //!   Commit on the separate path pays one more writer trip: its `head` read
 //!   is now the first use of the by-id snapshot statement (a prepare).
+//! - W3: the Store keeps the logical size of the node its Workspaces last
+//!   read or published, so every `.warm` case (bound to the Commit its
+//!   `.cold` call published on the same open) skips `logical.known`:
+//!   writer PostgreSQL -1 trip and statement, SQLite -3 statements and
+//!   -1 transaction; `.cold` unchanged (a new Store open).
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -72,7 +77,7 @@ const SQLITE: &[Pin] = &[
     ),
     pin(
         "write.new_file.warm",
-        [0, 0, 47, 8],
+        [0, 0, 44, 7],
         [0, 0, 0, 0],
         [0, 0, 14, 2],
     ),
@@ -85,7 +90,7 @@ const SQLITE: &[Pin] = &[
     ),
     pin(
         "write.overwrite.warm",
-        [0, 0, 40, 4],
+        [0, 0, 37, 3],
         [0, 0, 0, 0],
         [0, 0, 8, 2],
     ),
@@ -98,22 +103,22 @@ const SQLITE: &[Pin] = &[
     ),
     pin(
         "edit.2000_lines.warm",
-        [0, 0, 37, 4],
+        [0, 0, 34, 3],
         [0, 0, 0, 0],
         [0, 0, 9, 2],
     ),
     // probe mkdir: 69
     pin("mkdir.cold", [0, 0, 79, 11], [0, 0, 0, 0], [0, 0, 65, 4]),
-    pin("mkdir.warm", [0, 0, 51, 8], [0, 0, 0, 0], [0, 0, 17, 2]),
+    pin("mkdir.warm", [0, 0, 48, 7], [0, 0, 0, 0], [0, 0, 17, 2]),
     // probe cp.file: 64
     pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 0, 0], [0, 0, 86, 4]),
-    pin("cp.file.warm", [0, 0, 50, 8], [0, 0, 0, 0], [0, 0, 9, 2]),
+    pin("cp.file.warm", [0, 0, 47, 7], [0, 0, 0, 0], [0, 0, 9, 2]),
     // probe mv.file: 60
     pin("mv.file.cold", [0, 0, 79, 10], [0, 0, 0, 0], [0, 0, 81, 4]),
-    pin("mv.file.warm", [0, 0, 54, 8], [0, 0, 0, 0], [0, 0, 17, 2]),
+    pin("mv.file.warm", [0, 0, 51, 7], [0, 0, 0, 0], [0, 0, 17, 2]),
     // probe rm.file: 58
     pin("rm.file.cold", [0, 0, 85, 9], [0, 0, 0, 0], [0, 0, 87, 4]),
-    pin("rm.file.warm", [0, 0, 38, 7], [0, 0, 0, 0], [0, 0, 8, 2]),
+    pin("rm.file.warm", [0, 0, 35, 6], [0, 0, 0, 0], [0, 0, 8, 2]),
     // probe apply.10_writes: 74
     pin(
         "apply.10_writes.cold",
@@ -123,7 +128,7 @@ const SQLITE: &[Pin] = &[
     ),
     pin(
         "apply.10_writes.warm",
-        [0, 0, 61, 8],
+        [0, 0, 58, 7],
         [0, 0, 0, 0],
         [0, 0, 9, 2],
     ),
@@ -136,7 +141,7 @@ const SQLITE: &[Pin] = &[
     ),
     pin(
         "rm.dir_100_recursive.warm",
-        [0, 0, 47, 7],
+        [0, 0, 44, 6],
         [0, 0, 0, 0],
         [0, 0, 116, 2],
     ),
@@ -154,7 +159,7 @@ const POSTGRESQL: &[Pin] = &[
     ),
     pin(
         "write.new_file.warm",
-        [0, 29, 25, 4],
+        [0, 28, 24, 4],
         [0, 0, 0, 0],
         [0, 5, 5, 0],
     ),
@@ -167,7 +172,7 @@ const POSTGRESQL: &[Pin] = &[
     ),
     pin(
         "write.overwrite.warm",
-        [0, 10, 24, 2],
+        [0, 9, 23, 2],
         [0, 0, 0, 0],
         [0, 2, 2, 0],
     ),
@@ -180,22 +185,22 @@ const POSTGRESQL: &[Pin] = &[
     ),
     pin(
         "edit.2000_lines.warm",
-        [0, 12, 26, 2],
+        [0, 11, 25, 2],
         [0, 0, 0, 0],
         [0, 2, 2, 0],
     ),
     // probe mkdir: 45
     pin("mkdir.cold", [1, 78, 46, 8], [0, 0, 0, 0], [1, 19, 17, 1]),
-    pin("mkdir.warm", [0, 32, 28, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
+    pin("mkdir.warm", [0, 31, 27, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
     // probe cp.file: 44
     pin("cp.file.cold", [1, 75, 43, 8], [0, 0, 0, 0], [1, 29, 27, 1]),
-    pin("cp.file.warm", [0, 31, 27, 4], [0, 0, 0, 0], [0, 3, 3, 0]),
+    pin("cp.file.warm", [0, 30, 26, 4], [0, 0, 0, 0], [0, 3, 3, 0]),
     // probe mv.file: 40
     pin("mv.file.cold", [1, 69, 41, 7], [0, 0, 0, 0], [1, 20, 18, 1]),
-    pin("mv.file.warm", [0, 31, 27, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
+    pin("mv.file.warm", [0, 30, 26, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
     // probe rm.file: 37
     pin("rm.file.cold", [1, 66, 41, 6], [0, 0, 0, 0], [1, 20, 18, 1]),
-    pin("rm.file.warm", [0, 27, 25, 3], [0, 0, 0, 0], [0, 2, 2, 0]),
+    pin("rm.file.warm", [0, 26, 24, 3], [0, 0, 0, 0], [0, 2, 2, 0]),
     // probe apply.10_writes: 46
     pin(
         "apply.10_writes.cold",
@@ -205,7 +210,7 @@ const POSTGRESQL: &[Pin] = &[
     ),
     pin(
         "apply.10_writes.warm",
-        [0, 32, 28, 4],
+        [0, 31, 27, 4],
         [0, 0, 0, 0],
         [0, 2, 2, 0],
     ),
@@ -218,7 +223,7 @@ const POSTGRESQL: &[Pin] = &[
     ),
     pin(
         "rm.dir_100_recursive.warm",
-        [0, 29, 27, 3],
+        [0, 28, 26, 3],
         [0, 0, 0, 0],
         [0, 109, 109, 0],
     ),

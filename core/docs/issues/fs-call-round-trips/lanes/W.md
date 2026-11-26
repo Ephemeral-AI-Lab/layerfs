@@ -134,3 +134,42 @@ prepares the by-id snapshot statement the bind used to prepare).
 - Deleted tests: none.
 - Production LOC: 227,620 -> 227,712 (delta +92), engine
   layerfs-store-service +92.
+
+## W3 — the Store remembers the last logical size
+
+Prediction (before coding). A Store-level slot `(NodeId, u64)` (D7: no
+`BranchSnapshot` change) is set wherever a Workspace remembers a node's
+recorded logical size (the one it read, or the Commit it published), and
+`known_logical` checks it after the Workspace's own slot. A call whose bound
+head is the Commit the previous call on this Store open published skips the
+`logical.known` read. In the pins every `.warm` case is such a call (the
+`.cold` call before it published on the same open and Branch); `.cold` cases
+open a new Store, so they miss.
+
+| Case | PG writer | SQLite writer |
+|---|---|---|
+| every `.warm` | −1 trip, −1 statement (overwrite 12 → 11, new_file 34 → 33, rm.dir 138 → 137) | −3 statements, −1 transaction (W0: `logical.known` 3 statements in 1 transaction) |
+| every `.cold` | unchanged | unchanged |
+
+Memory: one `(NodeId, u64)` per Store (about 40 bytes).
+
+**Measured** (`receipts/W3/pins-measured.log`; `sdk_write_round_trips.log`
+green on the new pins). Exactly as predicted: every `.warm` writer −1 PG
+trip and statement, SQLite −3 statements and −1 transaction; `.cold`
+unchanged.
+
+| Case | PG trips W2 → predicted → measured | SQLite stmts W2 → measured |
+|---|---|---|
+| `write.overwrite.cold` / `.warm` | 58 / 12 → 58 / 11 → 58 / 11 | 134 / 48 → 134 / 45 |
+| `write.new_file.cold` / `.warm` | 96 / 34 → 96 / 33 → 96 / 33 | 138 / 61 → 138 / 58 |
+| `mkdir.cold` / `.warm` | 97 / 36 → 97 / 35 → 97 / 35 | 144 / 68 → 144 / 65 |
+| `rm.dir_100_recursive.cold` / `.warm` | 191 / 138 → 191 / 137 → 191 / 137 | 237 / 163 → 237 / 160 |
+
+Within 15%: yes (0% off). Decision D7: Store slot, no `BranchSnapshot`
+change; the slot is set in `remember_logical` (a read or a publication, both
+immutable facts of that node), so `store/commit.rs` does not grow.
+- Checks: equivalence driver, `method_refusal_order`, `mount_round_trips`
+  (its pins unchanged), `postgresql_phase_attribution`, `commit_random_model`,
+  `commit_batched_base_files`: green. No new message, no sweep. Deleted
+  tests: none.
+- Production LOC: 227,712 -> 227,717 (delta +5), engine layerfs-store-service +5.
