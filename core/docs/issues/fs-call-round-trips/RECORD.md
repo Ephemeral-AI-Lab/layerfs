@@ -337,3 +337,80 @@ for netem.
   0–3 warm; W7 ≤ 2 per call and needs a per-statement trace before building
   (W0 does not record statement order within a phase); recursive rm 100: 106
   Workspace-reader trips warm (W5's target).
+
+## M1 (merged at `cfc9586d05`)
+
+Merges: RH `1cb784d313` (R1–R3) → W `dd62841f38` (W1–W3, W5) → I `bfde99c690`
+(I1, I2a, I2b); no textual conflicts. Read and write pins pass on the merged tip
+(`receipts/M1/merge-pins-*.log`): W2 took write calls off the control reader, so
+R1's −4 control-reader trips do not move the write pins. Production LOC
+227,595 -> 228,392 (delta +503+152+142 = +797). Per-item detail: `lanes/RH.md`,
+`lanes/W.md`, `lanes/I.md`.
+
+| Item | Prediction | Measured (pins) | 15% | Notes |
+|---|---|---|---|---|
+| R1 | −4 trips every read | −4 every read; revision.h10 −6 (makes 3 of the replaced reads) | yes | 2 new statements, drop/kill swept |
+| R2 | −3 reads per read call, −2 blame/diff | exact; SQLite −9 stmts (3-stmt tx per read) | yes | D1 SQLite pins; **fault-path change:** a failed serial read now refuses instead of silently using serial 0 (base `read/snapshot.rs:94-97`); fail-closed per `visibility.rs`'s own rule; healthy answers equal |
+| R3 | SPEC −3 root, −7/component | exact to SPEC; cold stat d7 91 → 34 (−57 vs −56), grep1k 111 → 100 (−11 vs −10) | yes (vs SPEC, cold-delta rule) | walk kept even without markers to keep refusal order |
+| W1 | −6 warm / −10 cold | exact | yes | D16 kept; with kept markers present, the base-tree open happens only on the refusal path |
+| W2 | −4 warm / −7 cold | exact; control reader 0 on all write cases | yes | new named-bind flight, 26 messages drop+kill swept; cold separate-path Commit +1 writer trip |
+| W3 | −1 warm | exact | yes | D7 Store slot |
+| W5 | rm.dir ~88/~34 | 92/38 | yes (+4.5%/+11.8%) | `validate`'s 3 Workspace trips not in estimate |
+| I1 | 205 / 2,225 / 606 / 20,700 PG | 209 / 2,226 / 624 / 20,720 | yes | 10k pins now exact (variance came from the removed walk) |
+| I2a | flat 1k ~226, 10k flat ~706 | 228 / 726 | yes | D17 check adds 1 trip per unit; 84 messages drop+kill swept |
+| I2b | SQLite windows of 32 | flat 1k 360, flat 10k 2,502 stmts | yes | 3 SQLite SQL files (place_children, bind_host_files, placement_dependencies) |
+
+Pre-existing, not #818: `postgresql_round_trips` fails at `workspace_reader_open`
+(11 round trips < 12 statements) identically at the Phase 0 base `54778271cd`
+(`receipts/M1/postgresql_round_trips-base-54778271cd.log`) and the M1 tip.
+
+Findings outside the spec (recorded, not built): `check_aliases` runs one read unit
+per hard link (Init `wide_hardlinks` PG ≈1,200 trips, 339 transactions).
+
+Tests deleted in M1: none.
+
+### M1 independent review (fresh subagent, diff `54778271cd..cfc9586d05`)
+
+Healthy-path answers equal on reads, writes and Init; R1, R2, R3, W1, W3, W5, I1,
+I2a/I2b checked correct (I2 window cuts mirror `independent`; D17 covers every
+stored-row constraint). Findings:
+1. **W2 (bug, fault path):** `write/files.rs:273` maps a `BindError::Read` in
+   phase `Snapshot` to `published`, but reader acquisition (`store/bind.rs:129`,
+   `:148`) also runs in that phase before the lookup → a reader-open failure
+   answers `Unknown` (custody) where the parent answered `NoSuchProject` /
+   `Failed`. **Sent to lane W to fix with a test** (fix lands with M2).
+2. **R3 (nit):** `Cached::new` now precedes the hidden-path check, so a
+   decompression-workspace failure would precede `Removed`. **Sent to lane RH**
+   (fix lands with M2).
+3. **W1 (nit, recorded):** with kept markers, an `open_tree` failure surfaces
+   inside `removed()` as `Unknown`, as the parent's lazy `snapshot::entry` did.
+
+### M1 benchmark (`receipts/M1/REPORT.md`, one sample per case and arm)
+
+22 of 32 rows exactly at expectation; every outcome equals P0. Headline PG trips
+P0 → M1 (PG +10 ms ms): stat `/` 18 → 8 (256 → 107); stat d7 73 → 17 (1,029 →
+234); read small 38 → 10 (514 → 145); list100 33 → 12; grep1k 78 → 67 (1,120 →
+912); overwrite 24 → 13 (318 → 188); new file 66 → 56; rm dir 151 → 41 (2,142 →
+638); Init 10k nested 10,952 → 624 (+10 ms 14.2 s, was ≈141 s projected); Init
+10k flat 31,042 → 726 (15.2 s, was ≈386 s). All Init rows now run directly at
++10 ms.
+
+Beyond 15%, diagnosed once:
+- stat.depth3 28 vs 22 (+27%): first call of the group pays R1/R2's prepares on
+  a control reader the setup no longer warms (W2); within its cold target 31.
+  Recorded.
+- stat.depth7 17 vs ~34: better (R3's walk costs ~0 per cached component).
+
+Recorded, within 15% but noted:
+- blame.h100 probe 2,428 vs P0 2,325 (+4.4%): probe starts colder (setup writes
+  no longer read through the control reader); pins at the tip show the predicted
+  −6. Not a code regression.
+- **SQLite Init flat_10k 510 → 564 ms (+10.5%)** with statements −92%: against
+  the "no SQLite call slower" guardrail; sent to lane I to diagnose once with I3.
+- +10 ms latency band (≤1.10×) exceeded on mkdir 1.17, rm.dir 1.11, Init flat_1k
+  1.18, Init nested_10k 1.15 (+2 ms: blame 1.11–1.21). Client statements equal
+  server top-level calls in every flagged row, so no trip is uncounted; the
+  excess is time without statements (P0 spread reached 1.18 at +2 ms).
+  Needs a per-statement trace to attribute; recorded.
+- Peak memory 13.5–15.7 MiB per fs command, Init 12 MiB (1k) / 23–29 MiB (10k);
+  no P0 memory receipt existed to compare.

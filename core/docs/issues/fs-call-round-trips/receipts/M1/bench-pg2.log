@@ -1,0 +1,102 @@
+=== pg2 fs_calls history cases=blame.h10,blame.h100,blame.h20 2026-11-26T23:47:38Z load { 4.22 6.49 6.88 } bin target/debug/deps/fs_call_round_trips-9eab8e660a198019 sha256 37ffea395b869d2f src cfc9586d05
+
+running 1 test
+test fs_calls ... FS_RT {"arm":"pg2","case":"setup.init_nested_1k","method":"project.init","entries":1024,"ms":327.1,"client_storage":{"connects":0,"round_trips":266,"prepares":47,"statements":135,"transactions":43,"returned_rows":9281},"server":{"toplevel_calls":455,"nested_calls":3080,"evicted":false,"distinct":65,"top":[[43,"COMMIT"],[43,"SET LOCAL search_path TO lfs818_fs_65721"],[42,"SELECT $1"],[42,"SELECT catalog_incarnation::text FROM lfs818_fs_65721.history_meta WHERE id=$1"],[31,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[22,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]},"logical":28806,"walked":28806,"stored":24233,"canonical":155884,"load1":"4.22"}
+FS_RT {"arm":"pg2","case":"setup.history_100_writes_total","ms":1107.6,"client":{"connects":1,"round_trips":1032,"prepares":25,"statements":2414,"transactions":205,"returned_rows":3064}}
+FS_RT {"case":"calibration.select1","delay_ms":2,"min_us":2484,"median_us":3416,"p90_us":4177}
+FS_RT {"arm":"pg2","case":"blame.h10","method":"fs.blame","outcome":"ok","ms":1214.98,"client":{"connects":0,"round_trips":281,"prepares":10,"statements":271,"transactions":0,"returned_rows":801},"roles":{"writer":{"connects":0,"round_trips":20,"prepares":1,"statements":19,"transactions":0,"returned_rows":19},"control":{"connects":0,"round_trips":261,"prepares":9,"statements":252,"transactions":0,"returned_rows":782},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":{"toplevel_calls":271,"nested_calls":0,"evicted":false,"distinct":10,"top":[[132,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[44,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[27,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[26,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay"],[25,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id"],[10,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM lfs818_fs_65721.\"commit\" WHERE commit_id=$"]]},"load1":"4.68"}
+FS_RT {"arm":"pg2","case":"blame.h100","method":"fs.blame","outcome":"ok","ms":11008.41,"client":{"connects":0,"round_trips":2428,"prepares":1,"statements":2427,"transactions":0,"returned_rows":9205},"roles":{"writer":{"connects":0,"round_trips":199,"prepares":0,"statements":199,"transactions":0,"returned_rows":199},"control":{"connects":0,"round_trips":2229,"prepares":1,"statements":2228,"transactions":0,"returned_rows":9006},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":{"toplevel_calls":2427,"nested_calls":0,"evicted":false,"distinct":11,"top":[[1212,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[404,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[251,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay"],[250,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id"],[181,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[100,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM lfs818_fs_65721.\"commit\" WHERE commit_id=$"]]},"load1":"3.92"}
+FS_RT {"arm":"pg2","case":"blame.h20","method":"fs.blame","outcome":"ok","ms":2193.75,"client":{"connects":0,"round_trips":462,"prepares":0,"statements":462,"transactions":0,"returned_rows":1486},"roles":{"writer":{"connects":0,"round_trips":39,"prepares":0,"statements":39,"transactions":0,"returned_rows":39},"control":{"connects":0,"round_trips":423,"prepares":0,"statements":423,"transactions":0,"returned_rows":1447},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":{"toplevel_calls":462,"nested_calls":0,"evicted":false,"distinct":8,"top":[[252,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[84,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[51,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay"],[50,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id"],[20,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM lfs818_fs_65721.\"commit\" WHERE commit_id=$"],[3,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_layer_id, y.root_id, y."]]},"load1":"3.92"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":156,"median_us":267,"p90_us":677}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 21.76s
+
+       21.77 real         0.85 user         0.64 sys
+            31195136  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                7827  page reclaims
+                   7  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                5050  messages sent
+                9077  messages received
+                  45  signals received
+                  18  voluntary context switches
+               32105  involuntary context switches
+          7404769135  instructions retired
+          4186448990  cycles elapsed
+            15139248  peak memory footprint
+run_bounded: exit 0 after 21.8 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
+=== pg2 fs_calls history cases=revision.h100 2026-11-26T23:48:02Z load { 4.25 6.32 6.81 } bin target/debug/deps/fs_call_round_trips-9eab8e660a198019 sha256 37ffea395b869d2f src cfc9586d05
+
+running 1 test
+test fs_calls ... FS_RT {"arm":"pg2","case":"setup.init_nested_1k","method":"project.init","entries":1024,"ms":397.3,"client_storage":{"connects":0,"round_trips":266,"prepares":47,"statements":135,"transactions":43,"returned_rows":9281},"server":{"toplevel_calls":455,"nested_calls":3080,"evicted":false,"distinct":65,"top":[[43,"COMMIT"],[43,"SET LOCAL search_path TO lfs818_fs_66083"],[42,"SELECT $1"],[42,"SELECT catalog_incarnation::text FROM lfs818_fs_66083.history_meta WHERE id=$1"],[31,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[22,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]},"logical":28806,"walked":28806,"stored":24214,"canonical":155884,"load1":"4.25"}
+FS_RT {"arm":"pg2","case":"setup.history_100_writes_total","ms":1088.6,"client":{"connects":1,"round_trips":1032,"prepares":25,"statements":2414,"transactions":205,"returned_rows":3064}}
+FS_RT {"case":"calibration.select1","delay_ms":2,"min_us":2498,"median_us":3019,"p90_us":3766}
+FS_RT {"arm":"pg2","case":"revision.h100","method":"fs.revision","outcome":"ok","ms":14871.10,"client":{"connects":0,"round_trips":4113,"prepares":11,"statements":4102,"transactions":0,"returned_rows":15830},"roles":{"writer":{"connects":0,"round_trips":93,"prepares":1,"statements":92,"transactions":0,"returned_rows":92},"control":{"connects":0,"round_trips":4020,"prepares":10,"statements":4010,"transactions":0,"returned_rows":15738},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":{"toplevel_calls":4102,"nested_calls":0,"evicted":false,"distinct":11,"top":[[2127,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[740,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[508,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay"],[277,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id"],[192,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[185,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM lfs818_fs_66083.\"commit\" WHERE commit_id=$"]]},"load1":"5.14"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":168,"median_us":264,"p90_us":514}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 22.62s
+
+       22.63 real         0.74 user         0.53 sys
+            31490048  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                7537  page reclaims
+                  40  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                5968  messages sent
+               10358  messages received
+                  42  signals received
+                  27  voluntary context switches
+               35980  involuntary context switches
+          8044594464  instructions retired
+          4250853613  cycles elapsed
+            15729096  peak memory footprint
+run_bounded: exit 0 after 22.6 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
+=== pg2 fs_calls history cases=revision.h10,revision.h20 2026-11-26T23:48:27Z load { 5.45 6.41 6.83 } bin target/debug/deps/fs_call_round_trips-9eab8e660a198019 sha256 37ffea395b869d2f src cfc9586d05
+
+running 1 test
+test fs_calls ... FS_RT {"arm":"pg2","case":"setup.init_nested_1k","method":"project.init","entries":1024,"ms":335.8,"client_storage":{"connects":0,"round_trips":266,"prepares":47,"statements":135,"transactions":43,"returned_rows":9281},"server":{"toplevel_calls":455,"nested_calls":3080,"evicted":false,"distinct":65,"top":[[43,"COMMIT"],[43,"SET LOCAL search_path TO lfs818_fs_66302"],[42,"SELECT $1"],[42,"SELECT catalog_incarnation::text FROM lfs818_fs_66302.history_meta WHERE id=$1"],[31,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[22,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]},"logical":28806,"walked":28806,"stored":24230,"canonical":155884,"load1":"5.45"}
+FS_RT {"arm":"pg2","case":"setup.history_100_writes_total","ms":1068.5,"client":{"connects":1,"round_trips":1032,"prepares":25,"statements":2414,"transactions":205,"returned_rows":3064}}
+FS_RT {"case":"calibration.select1","delay_ms":2,"min_us":2444,"median_us":3042,"p90_us":4016}
+FS_RT {"arm":"pg2","case":"revision.h10","method":"fs.revision","outcome":"ok","ms":1815.41,"client":{"connects":0,"round_trips":502,"prepares":11,"statements":491,"transactions":0,"returned_rows":1488},"roles":{"writer":{"connects":0,"round_trips":11,"prepares":1,"statements":10,"transactions":0,"returned_rows":10},"control":{"connects":0,"round_trips":491,"prepares":10,"statements":481,"transactions":0,"returned_rows":1478},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":{"toplevel_calls":491,"nested_calls":0,"evicted":false,"distinct":11,"top":[[252,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[88,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[55,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay"],[29,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id"],[27,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[22,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM lfs818_fs_66302.\"commit\" WHERE commit_id=$"]]},"load1":"5.33"}
+FS_RT {"arm":"pg2","case":"revision.h20","method":"fs.revision","outcome":"ok","ms":3152.00,"client":{"connects":0,"round_trips":907,"prepares":0,"statements":907,"transactions":0,"returned_rows":3008},"roles":{"writer":{"connects":0,"round_trips":20,"prepares":0,"statements":20,"transactions":0,"returned_rows":20},"control":{"connects":0,"round_trips":887,"prepares":0,"statements":887,"transactions":0,"returned_rows":2988},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":{"toplevel_calls":907,"nested_calls":0,"evicted":false,"distinct":11,"top":[[482,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[168,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[110,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay"],[59,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id"],[42,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM lfs818_fs_66302.\"commit\" WHERE commit_id=$"],[23,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"]]},"load1":"5.23"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":190,"median_us":272,"p90_us":482}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 12.37s
+
+       12.37 real         0.45 user         0.38 sys
+            31260672  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                7641  page reclaims
+                  33  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                3275  messages sent
+                6469  messages received
+                  34  signals received
+                  18  voluntary context switches
+               21677  involuntary context switches
+          6137536800  instructions retired
+          2815050357  cycles elapsed
+            14975432  peak memory footprint
+run_bounded: exit 0 after 12.4 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 

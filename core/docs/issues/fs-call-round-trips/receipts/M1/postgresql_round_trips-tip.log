@@ -1,0 +1,59 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/postgresql_round_trips.rs (target/debug/deps/postgresql_round_trips-a96081c46e9d6b07)
+
+running 2 tests
+test postgresql_round_trip_counts ... FAILED
+test sqlite_statement_counts ... ok
+
+failures:
+
+---- postgresql_round_trip_counts stdout ----
+ROUND_TRIPS {"backend":"postgresql","scenario":"calibration.select1","samples":200,"min_us":188,"median_us":306,"p90_us":399,"server_version":"17.11 (Debian 17.11-1.pgdg13+2)","load1":null}
+ROUND_TRIPS {"backend":"postgresql","scenario":"session_open","total":{"connects":1,"round_trips":1,"prepares":0,"statements":1,"transactions":1,"write_transactions":0,"commits":1,"rollbacks":0,"read_snapshots":0,"returned_rows":240,"bound_bytes":0},"writer":{"connects":1,"round_trips":1,"prepares":0,"statements":1,"transactions":1,"write_transactions":0,"commits":1,"rollbacks":0,"read_snapshots":0,"returned_rows":240,"bound_bytes":0},"readers":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"write_transactions":0,"commits":0,"rollbacks":0,"read_snapshots":0,"returned_rows":0,"bound_bytes":0},"ms":0.0,"load1":null,"phases_us":{},"phase_sql":{},"server":{"calls":6,"distinct":6,"top":[[1,0,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"],[1,0,"COMMIT"],[1,1,"SELECT h.schema_source,h.schema_definition,encode(h.catalog_id,$1),h.catalog_incarnation,encode(h.binding_key,$2),h.iden"],[1,30,"SELECT table_name::text FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = $1 ORDER B"],[1,209,"SELECT table_name::text, column_name::text, data_type::text, is_nullable::text FROM information_schema.columns WHERE tab"],[1,0,"SET LOCAL search_path TO lfs62_rt_57110"]]}}
+ROUND_TRIPS {"backend":"postgresql","scenario":"store_open","total":{"connects":1,"round_trips":1,"prepares":0,"statements":1,"transactions":1,"write_transactions":0,"commits":1,"rollbacks":0,"read_snapshots":0,"returned_rows":240,"bound_bytes":0},"writer":{"connects":1,"round_trips":1,"prepares":0,"statements":1,"transactions":1,"write_transactions":0,"commits":1,"rollbacks":0,"read_snapshots":0,"returned_rows":240,"bound_bytes":0},"readers":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"write_transactions":0,"commits":0,"rollbacks":0,"read_snapshots":0,"returned_rows":0,"bound_bytes":0},"ms":10.0,"load1":null,"phases_us":{},"phase_sql":{},"server":{"calls":6,"distinct":6,"top":[[1,0,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"],[1,0,"COMMIT"],[1,1,"SELECT h.schema_source,h.schema_definition,encode(h.catalog_id,$1),h.catalog_incarnation,encode(h.binding_key,$2),h.iden"],[1,30,"SELECT table_name::text FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = $1 ORDER B"],[1,209,"SELECT table_name::text, column_name::text, data_type::text, is_nullable::text FROM information_schema.columns WHERE tab"],[1,0,"SET LOCAL search_path TO lfs62_rt_57110"]]}}
+ROUND_TRIPS {"backend":"postgresql","scenario":"workspace_reader_open","total":{"connects":1,"round_trips":11,"prepares":7,"statements":12,"transactions":3,"write_transactions":1,"commits":3,"rollbacks":0,"read_snapshots":1,"returned_rows":14,"bound_bytes":798},"writer":{"connects":0,"round_trips":4,"prepares":4,"statements":6,"transactions":2,"write_transactions":1,"commits":2,"rollbacks":0,"read_snapshots":0,"returned_rows":5,"bound_bytes":630},"readers":{"connects":1,"round_trips":7,"prepares":3,"statements":6,"transactions":1,"write_transactions":0,"commits":1,"rollbacks":0,"read_snapshots":1,"returned_rows":9,"bound_bytes":168},"ms":14.7,"load1":null,"phases_us":{},"phase_sql":{},"server":{"calls":22,"distinct":15,"top":[[3,0,"COMMIT"],[3,6,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_nu"],[3,0,"SET LOCAL search_path TO lfs62_rt_57110"],[2,0,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"],[1,1,"-- A mount's intent, inside its admission transaction after its keys (#768): -- inserted only when the attempt token $18"],[1,1,"-- A mount's session keys, all or none, inside its admission transaction -- (#768): $1 the keys, $2 whether each is take"],[1,0,"BEGIN ISOLATION LEVEL READ COMMITTED"],[1,1,"SELECT octet_length(h.schema_source),(to_regclass($1) IS NOT NULL)::int+(to_regclass($2) IS NOT NULL)::int+(to_regclass("],[1,1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id"],[1,1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN $4"],[1,1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT n.history_serial,m.path,m.frontier_serial,m.removed_ms FROM (SELECT hist"],[1,1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($"]]}}
+
+thread 'postgresql_round_trip_counts' panicked at engine/crates/layerfs-store-service/tests/postgresql_round_trips.rs:373:13:
+workspace_reader_open
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+PG_TOTALS {"logical":5,"canonical":421,"stored":323,"metadata":281}
+PG_SIZE {"table":"history_meta","total":81920,"heap":8192,"toast":57344}
+PG_SIZE {"table":"layer","total":81920,"heap":8192,"toast":8192}
+PG_SIZE {"table":"branch","total":57344,"heap":8192,"toast":0}
+PG_SIZE {"table":"gc_intent","total":49152,"heap":8192,"toast":8192}
+PG_SIZE {"table":"layer_stack","total":40960,"heap":8192,"toast":0}
+PG_SIZE {"table":"layer_lineage","total":40960,"heap":8192,"toast":0}
+PG_SIZE {"table":"project_epoch","total":32768,"heap":8192,"toast":8192}
+PG_SIZE {"table":"store_policy","total":32768,"heap":8192,"toast":8192}
+PG_SIZE {"table":"pack","total":32768,"heap":8192,"toast":8192}
+PG_SIZE {"table":"commit","total":32768,"heap":0,"toast":8192}
+PG_SIZE {"table":"store_lane","total":24576,"heap":8192,"toast":0}
+PG_SIZE {"table":"object_location","total":24576,"heap":8192,"toast":0}
+PG_SIZE {"table":"inode_value_block","total":24576,"heap":8192,"toast":0}
+PG_SIZE {"table":"store_totals","total":24576,"heap":8192,"toast":0}
+PG_SIZE {"table":"scope_allocator","total":24576,"heap":8192,"toast":0}
+PG_SIZE {"table":"binding_hint_block","total":24576,"heap":8192,"toast":0}
+PG_SIZE {"table":"commit_lineage","total":24576,"heap":0,"toast":0}
+PG_SIZE {"table":"reach","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"kept_node","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"init_entry","total":16384,"heap":0,"toast":0}
+PG_SIZE {"table":"init_host_file","total":16384,"heap":0,"toast":0}
+PG_SIZE {"table":"branch_retired","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"layer_stack_retired","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"path_removed","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"absorbed","total":16384,"heap":0,"toast":0}
+PG_SIZE {"table":"gc_op","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"gc_dead","total":16384,"heap":0,"toast":8192}
+PG_SIZE {"table":"file_digest","total":8192,"heap":0,"toast":0}
+PG_SIZE {"table":"content_signature","total":8192,"heap":0,"toast":0}
+PG_SIZE {"table":"init_operation","total":8192,"heap":0,"toast":0}
+PG_SIZE {"table":"*","total":843776}
+
+
+failures:
+    postgresql_round_trip_counts
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+
+error: test failed, to rerun pass `-p layerfs-store-service --test postgresql_round_trips`
+run_bounded: exit 101 after 2.7 s
