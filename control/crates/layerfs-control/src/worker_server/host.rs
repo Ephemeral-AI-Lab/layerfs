@@ -48,7 +48,8 @@ struct Queue {
 
 struct Activity {
     lanes: [Queue; 2],
-    last: Instant,
+    last_call: Instant,
+    admitted: usize,
     draining: bool,
     answered: u64,
 }
@@ -57,14 +58,15 @@ impl Activity {
     fn new() -> Self {
         Self {
             lanes: Default::default(),
-            last: Instant::now(),
+            last_call: Instant::now(),
+            admitted: 0,
             draining: false,
             answered: 0,
         }
     }
 
     fn idle(&self) -> bool {
-        self.lanes.iter().all(|queue| queue.outstanding == 0) && self.last.elapsed() >= IDLE
+        self.admitted == 0 && self.last_call.elapsed() >= IDLE
     }
 }
 
@@ -114,12 +116,14 @@ impl HostServer {
 
     fn work(&self, lane: Lane) {
         while let Some(connection) = self.pop(lane) {
+            let mut admitted = false;
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 super::connection::serve_host_connection(
                     self,
                     &connection.stream,
                     connection.accepted,
                     lane.index == CONTROL.index,
+                    &mut admitted,
                 )
             }));
             if result.is_err() {
@@ -129,10 +133,13 @@ impl HostServer {
             drop(connection);
             let mut activity = self.lock();
             activity.lanes[lane.index].outstanding -= 1;
+            if admitted {
+                activity.admitted -= 1;
+                activity.last_call = Instant::now();
+            }
             if matches!(result, Ok(true)) {
                 activity.answered += 1;
             }
-            activity.last = Instant::now();
             drop(activity);
             self.notify();
         }
@@ -229,15 +236,41 @@ impl HostServer {
         }
     }
 
-    pub(super) fn dispatch(&self, control: bool, op: &str, args: &SdkValue) -> Outcome {
+    pub(super) fn dispatch(
+        &self,
+        control: bool,
+        op: &str,
+        args: &SdkValue,
+        admitted: &mut bool,
+    ) -> Outcome {
         // Admission and drain share one lock. Store work later runs after
         // admission, outside this lock, on the ordinary pool.
         let mut activity = self.lock();
         if activity.draining {
             return Err(refused("Unavailable", "the host worker is draining"));
         }
-        match (control, op) {
-            (true, "ping") => {
+        enum Operation {
+            Ping,
+            Drain,
+            CloseStore,
+            StoreCall,
+        }
+        let operation = match (control, op) {
+            (true, "ping") => Operation::Ping,
+            (true, "drain") => Operation::Drain,
+            (true, "store.close") => Operation::CloseStore,
+            (false, "store.call") => Operation::StoreCall,
+            _ => {
+                return Err(refused(
+                    "Unsupported",
+                    "the operation is unavailable on this host worker endpoint",
+                ))
+            }
+        };
+        activity.admitted += 1;
+        *admitted = true;
+        match operation {
+            Operation::Ping => {
                 let identity = self.identity.iter().cloned();
                 let fields = [
                     ("state", SdkValue::text("ready")),
@@ -264,22 +297,16 @@ impl HostServer {
                         .collect(),
                 ))
             }
-            (true, "drain") => {
+            Operation::Drain => {
                 self.drain(&mut activity);
                 Ok(SdkValue::map([("state", SdkValue::text("draining"))]))
             }
-            (true, "store.close") => {
+            Operation::CloseStore => {
                 let store = args.get_text("store").unwrap_or_default();
                 layerfs_home::names::StoreName::parse(store)?;
                 Ok(SdkValue::map([("closed", SdkValue::Bool(false))]))
             }
-            (false, "store.call") => {
-                Err(refused("Unavailable", "the host Store route is disabled"))
-            }
-            _ => Err(refused(
-                "Unsupported",
-                "the operation is unavailable on this host worker endpoint",
-            )),
+            Operation::StoreCall => Err(refused("Unavailable", "the host Store route is disabled")),
         }
     }
 }

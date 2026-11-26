@@ -228,6 +228,7 @@ pub(super) fn serve_host_connection(
     socket: &std::os::unix::net::UnixStream,
     accepted: Instant,
     management: bool,
+    admitted: &mut bool,
 ) -> bool {
     use layerfs_home::trace;
     use layerfs_machine::worker::{
@@ -275,7 +276,9 @@ pub(super) fn serve_host_connection(
                 "the request names another host worker generation",
             ))
         }
-        (Some(op), Some(args @ SdkValue::Map(_))) => server.dispatch(management, op, args),
+        (Some(op), Some(args @ SdkValue::Map(_))) => {
+            server.dispatch(management, op, args, admitted)
+        }
         _ => Err(refused(
             "InvalidInput",
             "the host request needs op and args",

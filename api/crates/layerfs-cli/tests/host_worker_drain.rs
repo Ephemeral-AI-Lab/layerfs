@@ -38,12 +38,17 @@ fn management_drains_independently_of_full_ordinary_pool() {
 }
 
 #[test]
-fn idle_worker_releases_endpoints_and_the_lifetime_lock() {
+fn idle_worker_releases_endpoints_even_after_abandoned_hellos() {
     let home = Fixture::new();
     let mut worker = home.start();
     home.ping();
     let last_call = Instant::now();
-    assert!(worker.wait(Duration::from_secs(72)).success());
+    std::thread::sleep(Duration::from_secs(50));
+    // Both have consumed a hello, but neither sent a complete operation.
+    drop(home.dial(false));
+    let pending = home.dial(false);
+    assert!(worker.wait(Duration::from_secs(22)).success());
+    drop(pending);
     assert!(last_call.elapsed() >= Duration::from_secs(59));
     assert!(home.paths.try_hold().unwrap().is_some());
     assert!(!home.paths.socket.exists());

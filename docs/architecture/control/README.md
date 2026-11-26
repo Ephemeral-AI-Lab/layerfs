@@ -161,8 +161,9 @@ fixed queue and a capped frame with an absolute deadline. The management
 socket reports worker identity and can request a drain even when every
 ordinary thread is occupied. The drain fences new operations, closes both
 listeners, and joins admitted connections before releasing the lifetime lock.
-The idle drain starts after 60 seconds without accepted work, checked every
-five seconds.
+The idle drain starts after 60 seconds without an admitted call, checked every
+five seconds. Connections that never submit an authenticated operation leave
+the idle deadline unchanged.
 
 The native bootstrap phase exposes lifecycle operations. The host Store call
 and close handlers gain Store authority and maintenance coordination in the
