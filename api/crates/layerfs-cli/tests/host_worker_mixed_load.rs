@@ -98,15 +98,17 @@ fn worker_reads_share_a_store_with_direct_grep_and_a_streamed_large_write() {
             "--detail",
         ],
     );
-    // The large write streams through the worker (S2.2) and holds one
-    // pool thread while it waits for the Store; six reads hold six more.
-    let reads = proof::spawn_reads(&fixture, 6, false);
-    proof::pool(&fixture, 7, 7, 0);
+    // C4: seven small reads hold seven ordinary threads; the large write
+    // streams through the worker (S2.2) on a write thread of its own, so
+    // it is admitted beside them and takes no ordinary thread or slot.
+    let reads = proof::spawn_reads(&fixture, 7, false);
+    proof::pool(&fixture, 7, 8, 0);
     assert_eq!(Cli::spawn(home, &other).ok(), other_before);
     // The extra ordinary lane finished the unrelated Store before the
     // first Store was released. The final small read can now occupy it.
     let last_read = proof::spawn_reads(&fixture, 1, false);
-    let mixed = proof::pool(&fixture, 8, 8, 0);
+    let mixed = proof::pool(&fixture, 8, 9, 0);
+    assert_eq!(mixed.get_int("writes"), Some(1));
     assert_eq!(mixed.get_int("stores"), Some(2));
     drop(gate);
 

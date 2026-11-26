@@ -231,7 +231,8 @@ const EGRESS: Duration = Duration::from_secs(5);
 /// Serves one Unix connection on a reserved host worker thread: its hello
 /// and request, unless `read` holds a request an ordinary thread already
 /// read, then its operation and answer. A PostgreSQL read read here is
-/// returned for the PostgreSQL lane instead (#819 P-B).
+/// returned for the PostgreSQL lane instead (#819 P-B), and a file write
+/// for the write lane (S2.2).
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub(super) fn serve_host_connection(
     server: &super::host::HostServer,
@@ -252,7 +253,15 @@ pub(super) fn serve_host_connection(
             None => return Served::Answered(false),
         },
     };
-    let answered = answer_host_request(server, socket, management, &request, admitted, None);
+    let mut refusal = None;
+    if !management && request.get_text("op") == Some(layerfs_store::host_write::OP) {
+        match held_write(server, socket, &request) {
+            Some(Ok(held)) => return Served::Write(held),
+            Some(Err(error)) => refusal = Some(error),
+            None => {}
+        }
+    }
+    let answered = answer_host_request(server, socket, management, &request, admitted, refusal);
     // a PostgreSQL read's password goes with its answer (#819 P-B)
     if is_postgres_read(&request) {
         layerfs_store::host_postgresql::wipe_request(request);
@@ -325,7 +334,6 @@ fn answer_host_request(
     refusal: Option<SdkRefusal>,
 ) -> bool {
     use layerfs_home::trace;
-    use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
 
     let Some(request_id) = request
         .get_text("request_id")
@@ -337,7 +345,6 @@ fn answer_host_request(
     if traced {
         trace::steps_begin();
     }
-    let mut write = None;
     let outcome = match refusal {
         Some(refusal) => Err(refusal),
         None => match (request.get_text("op"), request.get("args")) {
@@ -346,12 +353,6 @@ fn answer_host_request(
                     "Unavailable",
                     "the request names another host worker generation",
                 ))
-            }
-            (Some(layerfs_store::host_write::OP), Some(args @ SdkValue::Map(_)))
-                if !management =>
-            {
-                write = Some(args);
-                server.dispatch_write(args, socket, request_id, admitted)
             }
             (Some(op), Some(args @ SdkValue::Map(_))) => {
                 server.dispatch(management, op, args, admitted)
@@ -362,7 +363,54 @@ fn answer_host_request(
             )),
         },
     };
-    let kept = write.map(|args| (args, outcome.clone()));
+    reply(socket, request_id, traced, outcome)
+}
+
+/// A `store.write` request with a valid id, this generation and a map of
+/// arguments, held with its connection for the write lane (§11). Anything
+/// else is answered as an ordinary request; a connection that cannot be
+/// held is refused, nothing run.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+fn held_write(
+    server: &super::host::HostServer,
+    socket: &std::os::unix::net::UnixStream,
+    request: &SdkValue,
+) -> Option<Result<super::host::Held, SdkRefusal>> {
+    let request_id = request
+        .get_text("request_id")
+        .filter(|id| !id.is_empty() && id.len() <= 128)?;
+    if request.get_text("generation") != Some(server.hello.generation.as_str()) {
+        return None;
+    }
+    let args @ SdkValue::Map(_) = request.get("args")? else {
+        return None;
+    };
+    Some(match socket.try_clone() {
+        Ok(stream) => Ok(super::host::Held {
+            stream,
+            args: args.clone(),
+            request_id: request_id.to_owned(),
+            traced: request.get_bool("trace_step"),
+        }),
+        Err(error) => Err(refused(
+            "Failed",
+            format!("cannot hold the write's connection: {error}; nothing was committed"),
+        )),
+    })
+}
+
+/// Writes one request's answer, with its trace steps when traced; whether
+/// it was delivered.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub(super) fn reply(
+    socket: &std::os::unix::net::UnixStream,
+    request_id: &str,
+    traced: bool,
+    outcome: layerfs_home::outcome::Outcome,
+) -> bool {
+    use layerfs_home::trace;
+    use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
+
     let answer = match outcome {
         Ok(value) => ("ok", value),
         Err(refusal) => (
@@ -382,15 +430,11 @@ fn answer_host_request(
         trace::step("host_dispatch");
         fields.push(("steps".to_owned(), trace::steps_value(trace::steps_take())));
     }
-    let delivered = write_host_frame(
+    write_host_frame(
         socket,
         &SdkValue::Map(fields),
         HOST_MAX_REPLY,
         Instant::now() + EGRESS,
     )
-    .is_ok();
-    if let (false, Some((args, outcome))) = (delivered, kept) {
-        server.undelivered(request_id, args, &outcome);
-    }
-    delivered
+    .is_ok()
 }

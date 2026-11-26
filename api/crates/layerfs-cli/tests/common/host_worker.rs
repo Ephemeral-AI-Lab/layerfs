@@ -22,11 +22,15 @@ pub struct Fixture {
 impl Fixture {
     pub fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let path = PathBuf::from(format!(
+        Self::at(PathBuf::from(format!(
             "/tmp/lh819-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        )))
+    }
+
+    /// A new home at `path` (a short path whose parent exists).
+    pub fn at(path: PathBuf) -> Self {
         std::fs::DirBuilder::new()
             .mode(0o700)
             .create(&path)

@@ -3,10 +3,13 @@
 //! them to the Store call one change and one piece at a time.
 //!
 //! Memory on each side is independent of the input's size: the CLI holds
-//! at most [`QUEUED`] read pieces plus the one it sends, the worker one
-//! frame. The exception is one `file apply` change, which the CLI parses
-//! whole (and the worker too, when it is too large for one frame); its
-//! write content still streams.
+//! at most [`QUEUED`] read items plus the one it sends, the worker one
+//! frame. The exception is one `file apply` change other than a write's
+//! content (an edit's text): the engine needs it whole on every route. The
+//! CLI's reader thread builds it from the input with no copy of its text,
+//! converts it, and the sender prints it once; the worker builds it from
+//! its frames the same way. Per connection that is the change's value and,
+//! on the CLI, its printed text: about twice the element's size at most.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::host_write::{header, InputKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -16,16 +19,22 @@ use layerfs_machine::worker::{
     StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE,
 };
 use layerfs_store_service::methods::Source;
-use std::io::{BufReader, Read};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::sync::mpsc::{sync_channel, RecvTimeoutError, SyncSender};
 
-/// Read pieces waiting for the sender, beside the one being sent.
+/// Read items waiting for the sender, beside the one being sent.
 const QUEUED: usize = 2;
 
-/// What the reader thread passes on: a piece of content or one change's
-/// text, the input's end, or why it stopped.
-type Item = Result<Option<Vec<u8>>, SdkRefusal>;
+/// What the reader thread passes on.
+enum Item {
+    /// A piece of content.
+    Piece(Vec<u8>),
+    /// One `file apply` change, in the Store's form.
+    Change(SdkValue),
+    /// The input's end.
+    End,
+}
 
 fn not_json(why: &str) -> SdkRefusal {
     refused("InvalidInput", format!("the input is not JSON: {why}"))
@@ -45,14 +54,21 @@ pub(crate) fn send(
     let source = source
         .take()
         .ok_or_else(|| refused("Failed", "the input was already read"))?;
-    let (items, received) = sync_channel::<Item>(QUEUED);
+    let (items, received) = sync_channel::<Result<Item, SdkRefusal>>(QUEUED);
     // The reader is detached: on an early stop it ends at its next send,
-    // or with this process, without the sender waiting for its input.
+    // or with this process, without the sender waiting for its input. It
+    // parses and converts changes too, so the sender's keepalive goes on
+    // while a large change is read.
     std::thread::Builder::new()
         .name("layerfs-input".to_owned())
-        .spawn(move || match kind {
-            InputKind::Content => pieces(source, &items),
-            InputKind::Changes => elements(source, &items),
+        .spawn(move || {
+            let outcome = match kind {
+                InputKind::Content => pieces(source, &items),
+                InputKind::Changes => elements(source, &items),
+            };
+            if let Err(refusal) = outcome {
+                let _ = items.send(Err(refusal));
+            }
         })
         .map_err(|error| refused("Failed", format!("cannot start the input reader: {error}")))?;
     loop {
@@ -67,20 +83,17 @@ pub(crate) fn send(
             }
         };
         match (kind, item) {
-            (InputKind::Content, Some(piece)) => sender.content(&piece)?,
-            (InputKind::Content, None) => return sender.end_content(),
-            (InputKind::Changes, Some(text)) => change(&text, sender)?,
-            (InputKind::Changes, None) => return Ok(()),
+            (_, Item::Piece(piece)) => sender.content(&piece)?,
+            (InputKind::Content, Item::End) => return sender.end_content(),
+            (_, Item::Change(change)) => send_change(change, sender)?,
+            (InputKind::Changes, Item::End) => return Ok(()),
         }
     }
 }
 
-/// One `file apply` element: checked and converted as the direct route
-/// does, then sent with any write content after it.
-fn change(text: &[u8], sender: &mut StreamSender<'_>) -> Result<(), SdkRefusal> {
-    let text = std::str::from_utf8(text).map_err(|_| not_json("it is not UTF-8"))?;
-    let element = json::parse(text).map_err(|error| not_json(&error.0))?;
-    let SdkValue::Map(mut fields) = crate::host_write::store_change(&element)? else {
+/// One converted change, with a write's content streamed after it.
+fn send_change(mut change: SdkValue, sender: &mut StreamSender<'_>) -> Result<(), SdkRefusal> {
+    let SdkValue::Map(fields) = &mut change else {
         return Err(refused("Failed", "a change was not converted to a record"));
     };
     let content = match fields
@@ -97,10 +110,10 @@ fn change(text: &[u8], sender: &mut StreamSender<'_>) -> Result<(), SdkRefusal> 
         _ => None,
     };
     let Some(content) = content else {
-        return sender.change(&SdkValue::Map(fields));
+        return sender.change(change);
     };
     fields.push(("streamed".to_owned(), SdkValue::Bool(true)));
-    sender.change(&SdkValue::Map(fields))?;
+    sender.change(change)?;
     match &content {
         SdkValue::Text(text) => sender.content(text.as_bytes())?,
         SdkValue::Bytes(bytes) => sender.content(bytes)?,
@@ -114,8 +127,11 @@ fn change(text: &[u8], sender: &mut StreamSender<'_>) -> Result<(), SdkRefusal> 
     sender.end_content()
 }
 
-/// Content in pieces of at most [`STREAM_PIECE`] bytes.
-fn pieces(mut source: Box<dyn Read + Send>, items: &SyncSender<Item>) {
+/// Content in pieces of [`STREAM_PIECE`] bytes, the last one shorter.
+fn pieces(
+    mut source: Box<dyn Read + Send>,
+    items: &SyncSender<Result<Item, SdkRefusal>>,
+) -> Result<(), SdkRefusal> {
     loop {
         let mut piece = vec![0; STREAM_PIECE];
         let mut filled = 0;
@@ -129,102 +145,149 @@ fn pieces(mut source: Box<dyn Read + Send>, items: &SyncSender<Item>) {
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(error) => {
-                    let _ = items.send(Err(unreadable(error)));
-                    return;
-                }
+                Err(error) => return Err(unreadable(error)),
             }
         };
         piece.truncate(filled);
-        if filled > 0 && items.send(Ok(Some(piece))).is_err() {
-            return;
+        if filled > 0 && items.send(Ok(Item::Piece(piece))).is_err() {
+            return Ok(());
         }
         if ended {
-            let _ = items.send(Ok(None));
-            return;
+            let _ = items.send(Ok(Item::End));
+            return Ok(());
         }
     }
 }
 
-/// The elements of a JSON list, each one element's text, by a scan that
-/// tracks only strings and nesting. Each element is parsed by itself.
-fn elements(source: Box<dyn Read + Send>, items: &SyncSender<Item>) {
-    let outcome = (|| {
-        let mut bytes = BufReader::with_capacity(64 << 10, source).bytes();
-        let mut next =
-            || -> Result<Option<u8>, SdkRefusal> { bytes.next().transpose().map_err(unreadable) };
-        let blank = |byte: u8| matches!(byte, b' ' | b'\t' | b'\n' | b'\r');
-        let first = loop {
-            match next()? {
-                Some(byte) if blank(byte) => {}
-                other => break other,
+/// The elements of a JSON list, each built from the input as it is read
+/// (no copy of its text) and converted to the Store's form.
+fn elements(
+    source: Box<dyn Read + Send>,
+    items: &SyncSender<Result<Item, SdkRefusal>>,
+) -> Result<(), SdkRefusal> {
+    let mut input = BufReader::with_capacity(64 << 10, source);
+    let next = |input: &mut BufReader<_>| -> Result<Option<u8>, SdkRefusal> {
+        loop {
+            let byte = input.fill_buf().map_err(unreadable)?.first().copied();
+            match byte {
+                Some(b' ' | b'\t' | b'\n' | b'\r') => input.consume(1),
+                other => return Ok(other),
+            }
+        }
+    };
+    if next(&mut input)? != Some(b'[') {
+        return Err(refused(
+            "InvalidInput",
+            "`changes` must be a list of changes",
+        ));
+    }
+    input.consume(1);
+    if next(&mut input)? == Some(b']') {
+        input.consume(1);
+    } else {
+        loop {
+            let element = json::read_value(&mut input).map_err(|error| not_json(&error.0))?;
+            let change = crate::host_write::store_change(&element)?;
+            drop(element);
+            if items.send(Ok(Item::Change(change))).is_err() {
+                return Ok(());
+            }
+            match next(&mut input)? {
+                Some(b',') => input.consume(1),
+                Some(b']') => {
+                    input.consume(1);
+                    break;
+                }
+                None => return Err(not_json("it ends inside the list")),
+                Some(_) => return Err(not_json("expected , or ] after an element")),
+            }
+        }
+    }
+    if next(&mut input)?.is_some() {
+        return Err(not_json("text after the list"));
+    }
+    let _ = items.send(Ok(Item::End));
+    Ok(())
+}
+
+/// One spilled change's data frames as a byte stream: the change is built
+/// from them as they arrive, holding one frame, never its whole text.
+struct Spilled<'r, 'a> {
+    reader: &'r mut StreamReader<'a>,
+    at: usize,
+    ended: bool,
+    /// Why the frames stopped, kept for the refusal.
+    failed: Option<SdkRefusal>,
+}
+
+impl<'r, 'a> Spilled<'r, 'a> {
+    fn read(reader: &'r mut StreamReader<'a>) -> Result<SdkValue, SdkRefusal> {
+        // the reader's buffer still holds an earlier frame: start past it
+        let at = reader.piece.len();
+        let mut input = Self {
+            reader,
+            at,
+            ended: false,
+            failed: None,
+        };
+        let change = json::read_value(&mut input);
+        // only blanks may follow the change, then its content's end
+        let rest = loop {
+            match input.fill_buf() {
+                Ok([]) => break Ok(()),
+                Ok(bytes) if bytes.iter().all(u8::is_ascii_whitespace) => {
+                    let blank = bytes.len();
+                    input.consume(blank);
+                }
+                Ok(_) => break Err(()),
+                Err(_) => break Err(()),
             }
         };
-        if first != Some(b'[') {
-            return Err(refused(
-                "InvalidInput",
-                "`changes` must be a list of changes",
-            ));
+        if let Some(refusal) = input.failed {
+            return Err(refusal);
         }
-        let (mut element, mut depth, mut quoted, mut escaped) = (Vec::new(), 0usize, false, false);
-        let mut count = 0usize;
-        loop {
-            let byte = next()?.ok_or_else(|| not_json("it ends inside the list"))?;
-            if quoted {
-                element.push(byte);
-                match (escaped, byte) {
-                    (true, _) => escaped = false,
-                    (false, b'\\') => escaped = true,
-                    (false, b'"') => quoted = false,
-                    _ => {}
+        match (change, rest) {
+            (Ok(change), Ok(())) => Ok(change),
+            _ => Err(out_of_order()),
+        }
+    }
+}
+
+impl Read for Spilled<'_, '_> {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        let available = self.fill_buf()?;
+        let n = available.len().min(out.len());
+        out[..n].copy_from_slice(&available[..n]);
+        self.consume(n);
+        Ok(n)
+    }
+}
+
+impl BufRead for Spilled<'_, '_> {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        while !self.ended && self.at == self.reader.piece.len() {
+            match self.reader.next_frame() {
+                Ok(StreamFrame::Piece) => self.at = 0,
+                Ok(StreamFrame::EndContent) => self.ended = true,
+                Ok(StreamFrame::Wait) => {}
+                Ok(_) => {
+                    self.failed = Some(out_of_order());
+                    return Err(std::io::ErrorKind::InvalidData.into());
                 }
-                continue;
-            }
-            let end = match byte {
-                b'"' => {
-                    quoted = true;
-                    false
+                Err(refusal) => {
+                    self.failed = Some(refusal);
+                    return Err(std::io::ErrorKind::UnexpectedEof.into());
                 }
-                b'[' | b'{' => {
-                    depth += 1;
-                    false
-                }
-                b']' | b'}' if depth > 0 => {
-                    depth -= 1;
-                    false
-                }
-                b',' | b']' if depth == 0 => true,
-                _ => false,
-            };
-            if !end {
-                element.push(byte);
-                continue;
-            }
-            let empty = element.iter().all(|&byte| blank(byte));
-            match (empty, byte) {
-                (true, b']') if count == 0 => break,
-                (true, _) => return Err(not_json("an empty list element")),
-                (false, _) => {
-                    count += 1;
-                    if items.send(Ok(Some(std::mem::take(&mut element)))).is_err() {
-                        return Ok(());
-                    }
-                }
-            }
-            if byte == b']' {
-                break;
             }
         }
-        while let Some(byte) = next()? {
-            if !blank(byte) {
-                return Err(not_json("text after the list"));
-            }
-        }
-        let _ = items.send(Ok(None));
-        Ok(())
-    })();
-    if let Err(refusal) = outcome {
-        let _ = items.send(Err(refusal));
+        Ok(match self.ended {
+            true => &[],
+            false => &self.reader.piece[self.at..],
+        })
+    }
+
+    fn consume(&mut self, n: usize) {
+        self.at += n;
     }
 }
 
@@ -271,16 +334,7 @@ impl Source for Body<'_, '_> {
         match self.frame()? {
             StreamFrame::Change(change) if self.changes => Ok(Some(self.opened(change))),
             StreamFrame::Spilled if self.changes => {
-                let mut text = Vec::new();
-                loop {
-                    match self.frame()? {
-                        StreamFrame::Piece => text.extend_from_slice(&self.reader.piece),
-                        StreamFrame::EndContent => break,
-                        _ => return Err(out_of_order()),
-                    }
-                }
-                let text = String::from_utf8(text).map_err(|_| out_of_order())?;
-                let change = json::parse(&text).map_err(|_| out_of_order())?;
+                let change = Spilled::read(self.reader)?;
                 Ok(Some(self.opened(change)))
             }
             StreamFrame::End { changes, bytes } if (changes, bytes) == self.counted => {

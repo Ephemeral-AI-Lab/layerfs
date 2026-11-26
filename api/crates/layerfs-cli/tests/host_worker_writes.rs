@@ -5,153 +5,15 @@
 
 #[path = "common/host_worker.rs"]
 mod fixture;
+#[path = "common/host_writes.rs"]
+mod writes;
 
 use fixture::Fixture;
 use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
 use std::io::Write;
-use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
-use std::time::{Duration, Instant};
-
-const CLI: &str = env!("CARGO_BIN_EXE_layerfs");
-const WAIT: Duration = Duration::from_secs(60);
-
-fn cli(home: &Path, words: &[&str]) -> Command {
-    let mut command = Command::new(CLI);
-    command
-        .args(words)
-        .args(["--json", "--detail"])
-        .env("LAYERFS_HOME", home)
-        .env("LAYERFS_TRACE", home.join("trace.jsonl"))
-        .env_remove("LAYERFS_TRACE_STEP")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    command
-}
-
-fn finish(mut child: Child) -> Output {
-    let end = Instant::now() + WAIT;
-    while child.try_wait().unwrap().is_none() {
-        if Instant::now() > end {
-            let _ = child.kill();
-            panic!("a CLI call did not finish");
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    child.wait_with_output().unwrap()
-}
-
-/// Runs one CLI call with `stdin` piped in; its JSON answer.
-fn run(home: &Path, words: &[&str], stdin: &[u8]) -> (bool, SdkValue) {
-    let mut child = cli(home, words).stdin(Stdio::piped()).spawn().unwrap();
-    let mut input = child.stdin.take().unwrap();
-    let bytes = stdin.to_vec();
-    let feeder = std::thread::spawn(move || {
-        let _ = input.write_all(&bytes);
-    });
-    let output = finish(child);
-    feeder.join().unwrap();
-    let text = if output.stdout.is_empty() {
-        &output.stderr
-    } else {
-        &output.stdout
-    };
-    let value = json::parse(String::from_utf8_lossy(text).trim())
-        .unwrap_or_else(|_| panic!("not JSON: {}", String::from_utf8_lossy(text)));
-    (output.status.success(), value)
-}
-
-fn ok(home: &Path, words: &[&str], stdin: &[u8]) -> SdkValue {
-    let (success, value) = run(home, words, stdin);
-    assert!(success, "{words:?}: {value:?}");
-    value
-}
-
-fn refused(home: &Path, words: &[&str], stdin: &[u8], code: &str) -> SdkValue {
-    let (success, value) = run(home, words, stdin);
-    assert!(!success, "{words:?} succeeded: {value:?}");
-    assert_eq!(value.get_text("error"), Some(code), "{value:?}");
-    value
-}
-
-fn prepare(branches: &[&str]) -> Fixture {
-    let home = Fixture::new();
-    let path = &home.paths.home;
-    let source = path.join("source");
-    std::fs::create_dir(&source).unwrap();
-    std::fs::write(source.join("hello"), "hello\n").unwrap();
-    ok(path, &["store", "create", "shop"], b"");
-    ok(
-        path,
-        &["project", "init", "shop/api", source.to_str().unwrap()],
-        b"",
-    );
-    for branch in branches {
-        ok(path, &["branch", "fork", "shop/api", branch], b"");
-    }
-    home
-}
-
-fn commits(home: &Path, project: &str, branch: &str) -> usize {
-    let listed = ok(
-        home,
-        &["commit", "list", project, branch, "--limit", "200"],
-        b"",
-    );
-    match listed.get("items") {
-        Some(SdkValue::List(items)) => items.len(),
-        _ => panic!("no Commit list: {listed:?}"),
-    }
-}
-
-/// The routed write exchanges the trace saw so far.
-fn routed(home: &Path) -> usize {
-    std::fs::read_to_string(home.join("trace.jsonl"))
-        .unwrap_or_default()
-        .lines()
-        .filter_map(|line| json::parse(line).ok())
-        .filter(|line| {
-            line.get_text("event") == Some("worker.connection")
-                && line.get_text("op") == Some("store.write")
-                && line.get_bool("sent")
-        })
-        .count()
-}
-
-fn read(home: &Path, branch: &str, path: &str) -> String {
-    let value = ok(home, &["file", "read", "shop/api", branch, path], b"");
-    value.get_text("text").unwrap_or_default().to_owned()
-}
-
-fn size(home: &Path, branch: &str, path: &str) -> i64 {
-    let value = ok(home, &["file", "stat", "shop/api", branch, path], b"");
-    value.get_int("size").unwrap()
-}
-
-fn patterned(len: usize) -> Vec<u8> {
-    let mut state = 0x9e37_79b9_u32;
-    (0..len)
-        .map(|_| {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            state as u8
-        })
-        .collect()
-}
-
-fn drain(home: &Fixture) {
-    if home.paths.control.exists() {
-        home.drain();
-    }
-    let end = Instant::now() + Duration::from_secs(10);
-    while home.paths.socket.exists() {
-        assert!(Instant::now() < end, "worker did not drain");
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
+use std::time::Duration;
+use writes::*;
 
 #[test]
 fn every_write_streams_through_the_worker_as_one_commit() {
@@ -330,104 +192,6 @@ fn stopped_or_refused_inputs_commit_nothing() {
     drain(&home);
 }
 
-fn retained(home: &Path) -> Vec<SdkValue> {
-    let dir = home.join("machine").join(host()).join("retained");
-    let mut records: Vec<_> = std::fs::read_dir(&dir)
-        .map(|entries| entries.filter_map(Result::ok).map(|e| e.path()).collect())
-        .unwrap_or_else(|_| Vec::<PathBuf>::new());
-    records.sort();
-    records
-        .iter()
-        .map(|file| json::parse(&std::fs::read_to_string(file).unwrap()).unwrap())
-        .collect()
-}
-
-fn host() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "macos-host"
-    } else {
-        "linux-host"
-    }
-}
-
-fn wait_for<T>(what: &str, mut ready: impl FnMut() -> Option<T>) -> T {
-    let end = Instant::now() + WAIT;
-    loop {
-        if let Some(value) = ready() {
-            return value;
-        }
-        assert!(Instant::now() < end, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(20));
-    }
-}
-
-fn retained_check(home: &Path) -> SdkValue {
-    retained_report(home).0
-}
-
-fn retained_report(home: &Path) -> (SdkValue, SdkValue) {
-    let report = ok(home, &["machine", "doctor", host()], b"");
-    let Some(SdkValue::List(checks)) = report.get("tree").and_then(|tree| tree.get("checks"))
-    else {
-        panic!("{report:?}");
-    };
-    let check = checks
-        .iter()
-        .find(|check| check.get_text("check") == Some("machine.worker.retained"))
-        .cloned()
-        .unwrap_or_else(|| panic!("no retained check: {report:?}"));
-    (check, report)
-}
-
-/// One raw streamed write on the worker's socket, its answer never read.
-fn unread_write(home: &Fixture, id: &str, content: &[u8]) {
-    let exchange = home.dial(false);
-    let socket: &UnixStream = exchange.socket();
-    let request = SdkValue::map([
-        ("op", SdkValue::text("store.write")),
-        (
-            "args",
-            SdkValue::map([
-                ("method", SdkValue::text("fs.write")),
-                ("store", SdkValue::text("shop")),
-                ("project", SdkValue::text("api")),
-                ("body", SdkValue::text("content")),
-                (
-                    "fields",
-                    SdkValue::map([
-                        ("branch", SdkValue::text("work")),
-                        ("path", SdkValue::text("/unread")),
-                        ("streamed", SdkValue::Bool(true)),
-                    ]),
-                ),
-            ]),
-        ),
-        (
-            "generation",
-            exchange.hello.get("generation").unwrap().clone(),
-        ),
-        ("request_id", SdkValue::text(id)),
-    ]);
-    let frame = |bytes: &[u8], attached: bool| {
-        let mut out = ((bytes.len() as u32) | if attached { 1 << 31 } else { 0 })
-            .to_be_bytes()
-            .to_vec();
-        out.extend_from_slice(bytes);
-        out
-    };
-    let mut stream = socket;
-    stream
-        .write_all(&frame(json::print(&request).as_bytes(), false))
-        .unwrap();
-    for piece in content.chunks(256 << 10) {
-        stream.write_all(&frame(piece, true)).unwrap();
-    }
-    stream.write_all(&frame(&[], true)).unwrap();
-    let end = format!(r#"{{"end":{{"changes":0,"bytes":{}}}}}"#, content.len());
-    stream.write_all(&frame(end.as_bytes(), false)).unwrap();
-    drop(exchange);
-}
-
 #[test]
 fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
     let home = prepare(&["work"]);
@@ -440,7 +204,8 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
         retained_check(path)
     );
 
-    // SIGKILL mid-stream: nothing commits, the worker keeps the outcome
+    // SIGKILL mid-stream: a definite refusal the caller never reads;
+    // nothing commits and nothing is kept (the refusal changed nothing)
     let mut child = cli(path, &["file", "write", "shop/api", "work", "/killed"])
         .stdin(Stdio::piped())
         .spawn()
@@ -454,18 +219,10 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
     child.kill().unwrap();
     child.wait().unwrap();
     drop(input);
-    let killed = wait_for("the killed stream's record", || {
-        let records = retained(path);
-        (!records.is_empty()).then_some(records)
+    wait_for("the killed stream to end", || {
+        (home.ping().get_int("admitted") == Some(1)).then_some(())
     });
-    assert_eq!(killed.len(), 1, "{killed:?}");
-    assert_eq!(killed[0].get_text("kind"), Some("undelivered"));
-    let outcome = killed[0].get("outcome").unwrap();
-    assert_eq!(outcome.get_text("code"), Some("Unavailable"), "{outcome:?}");
-    assert!(outcome
-        .get_text("message")
-        .unwrap()
-        .contains("nothing was committed"));
+    assert!(retained(path).is_empty(), "{:?}", retained(path));
     assert_eq!(commits(path, "shop/api", "work"), before);
 
     // a whole input whose answer is never read: committed, and kept
@@ -476,7 +233,7 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
     );
     let records = wait_for("the unread answer's record", || {
         let records = retained(path);
-        (records.len() == 2).then_some(records)
+        (records.len() == 1).then_some(records)
     });
     let unread = records
         .iter()
@@ -503,13 +260,31 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
         b"after\n",
     );
     assert_eq!(commits(path, "shop/api", "work"), before + 2);
-    assert_eq!(retained(path).len(), 2);
+    assert_eq!(retained(path).len(), 1);
     let (check, report) = retained_report(path);
     assert_eq!(check.get_text("outcome"), Some("notice"), "{check:?}");
     let report = json::print(&report);
     assert!(
         report.contains("c0ffee") && report.contains("undelivered"),
         "{report}"
+    );
+    // the finding's fix, an existing call, removes the checked records
+    assert!(
+        report.contains(&format!("layerfs machine prune {} --retained", host())),
+        "{report}"
+    );
+    let pruned = ok(path, &["machine", "prune", host(), "--retained"], b"");
+    assert_eq!(
+        json::print(pruned.get("removed").unwrap()),
+        r#"["00000000000000000000000000c0ffee"]"#
+    );
+    assert!(retained(path).is_empty());
+    assert_eq!(retained_check(path).get_text("outcome"), Some("pass"));
+    refused(
+        path,
+        &["machine", "prune", "docker", "--retained"],
+        b"",
+        "InvalidInput",
     );
     drain(&home);
 }

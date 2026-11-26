@@ -496,24 +496,78 @@ frame:
 A streamed write in an apply is its change with `streamed: true`, then its
 data frames. The worker reads a frame only when the Store call asks for its
 next change or piece, so a faster caller blocks in the kernel socket buffer.
-Each side holds one frame plus, on the caller, at most two read pieces
-queued by its input thread. Memory does not grow with the input's size. One
-apply change is parsed whole by the caller, and by the worker when spilled.
-The worker waits at most 30 seconds for each frame. A caller whose input
-produced nothing for 10 seconds sends `wait`. A caller write may go 60
-seconds without progress. The end frame's counts must match what was
-received. The worker commits only after reading it, so input that stops
-earlier commits nothing. A change refused mid-stream answers at once and
-closes; the caller, whose next send fails, reads that early refusal. The
-request's frame and the end frame bound the custody boundary. Before the end
-frame is completely written the caller reports a definite refusal; after
-it, a missing or invalid answer is `Unknown` with the request ID.
+Memory does not grow with a content's size: the caller holds one read piece
+of 256 KiB being sent plus at most two queued by its input thread, the
+worker one frame. A data frame is four engine records (4 × 65,519 bytes),
+so whole pieces are written as whole records. An apply change is the one
+exception. Its edit text is what the engine needs whole, so the caller's
+input thread builds each element straight from the input as it reads
+(no copy of the input's text), converts it to the Store's form, and the
+sender prints it once and drops the value before sending that text. The
+caller's worst case per call is one change value plus its printed text,
+the worker's one change value. A change larger than a 64 KiB frame is sent
+spilled; the worker builds the value as its data frames arrive, holding
+one frame of the text. The CLI keeps sending `wait` while it parses a
+large element, since parsing runs on its input thread.
 
-An engine `Unknown` is written to `machine/<host>/retained/<request id>.json`
-before its answer is sent. An answer the worker cannot write is kept there
-afterwards as `undelivered`. A record names the call, Store, project,
-Branch, path and outcome, never content. Drain, stop, crash and replacement
-leave the records; `machine.worker.retained` reports them.
+A write needs a Commit per call, not a held connection. The worker reads a
+`store.write` request on an ordinary thread and then hands it, with its
+connection, to a separate write lane: 4 write threads (`WRITE_THREADS`)
+and at most 16 held writes (`WRITES_HELD`), running or waiting, apart from
+the 16 ordinary slots. A write never runs on an ordinary thread, so however
+many writes stream, small reads keep all 8 ordinary threads. A write past
+16 held ones is refused `Unavailable` before any of its input is read. A
+held write waits for a write thread while its input fits the socket
+buffer; the caller's 60 s send bound ends a wait that never gets one.
+
+Minimum progress (§11): while the worker waits for a write's caller, the
+input must deliver 256 KiB (`STREAM_PROGRESS`, frame headers included)
+within 30 s of waiting (`STREAM_WAIT`), or end. Only time the worker spends
+blocked on the input counts, never its own Store work. A `wait` frame is
+not progress, so a caller that sends keepalives but no input, or input
+slower than 256 KiB per 30 s, is refused `Unavailable` ("delivered less
+than 256 KiB in 30 s of waiting; nothing was committed"). No write thread
+is held longer than that by a stalled caller. A caller whose input produced
+nothing for 10 seconds sends `wait`, which only shows the worker is still
+there. A caller write may go 60 seconds without progress. The end frame's
+counts must match what was received. The worker commits only after reading
+it, so input that stops earlier commits nothing. A change refused
+mid-stream answers at once and closes; the caller, whose next send fails,
+reads that early refusal. The request's frame and the end frame bound the
+custody boundary. Before the end frame is completely written the caller
+reports a definite refusal; after it, a missing or invalid answer is
+`Unknown` with the request ID.
+
+Drain (`machine stop`, idle exit) ends the input of every running write
+(`shutdown(Read)` on its connection) and refuses held writes not yet
+running. A write whose end frame was not read is refused with nothing
+committed; one already past its end finishes as admitted. A stuck caller
+therefore cannot hold a drain: the worker exits once its running Store
+calls finish, and the stuck caller learns the refusal at its next send (10 s
+at most).
+
+Custody (§8.5). Only an outcome the caller may not know is recorded: an
+engine `Unknown`, and a `Committed` answer the worker could not deliver.
+A definite refusal changed nothing and is never recorded. An engine
+`Unknown` is written to `machine/<host>/retained/<request id>.json` before
+its answer is sent, and its answer carries the request ID; the record's
+detail carries the engine's phase, whether it published, its attempt,
+expected head and candidate root. A record is written to a `.part` file and
+linked into place, so a reader never sees half a record and an existing
+record (an `uncertain` one) is never overwritten by a later `undelivered`.
+Records are not synced (the home's Normal profile; a power loss may lose
+one). If an uncertain outcome's record cannot be written, the worker logs
+the outcome without content, holds it in memory, and refuses a drain or a
+close of its Store, and does not exit idle, until a retry of that record
+write succeeds. A record names the call, Store, project, Branch, path and
+outcome, never content. Drain, stop, crash and replacement leave the
+records; `machine.worker.retained` reports them, with the fix
+`layerfs machine prune <host> --retained`, which removes them. At most 256
+records are kept; past that a new one is refused `Capacity`, and so the
+uncertain outcome stays held as above until they are pruned.
+
+A scoped apply (`file apply --scope`) runs in the caller's process, not
+through the worker: its Workspace route is not a host Store write.
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale

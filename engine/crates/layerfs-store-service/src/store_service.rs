@@ -284,23 +284,49 @@ impl StoreService {
     }
 
     /// Keeps a private Workspace whose Commit outcome is uncertain, with its
-    /// failure, and answers the call `Unknown`.
+    /// failure, and answers the call `Unknown`. The answer carries the
+    /// evidence that decides the outcome later, outside this process (§8.5):
+    /// the Commit's attempt, unique in the Store, with the head it expected
+    /// and the root it would publish, so a holder of the answer can keep it
+    /// beyond this Workspace.
     pub fn retain(
         &self,
         workspace: Arc<BoundWorkspace>,
         failure: Box<CommitFailure>,
     ) -> SdkRefusal {
+        use crate::history::lookup::hex;
+        let intent = failure.intent.as_ref();
         let refusal = SdkRefusal {
             code: "Unknown".to_owned(),
             message: failure.to_string(),
             detail: SdkValue::map([
                 (
                     "workspace",
-                    SdkValue::text(crate::history::lookup::hex(
-                        &workspace.identity().to_bytes(),
-                    )),
+                    SdkValue::text(hex(&workspace.identity().to_bytes())),
                 ),
                 ("namespace", SdkValue::Int(workspace.route().namespace())),
+                ("phase", SdkValue::text(format!("{:?}", failure.phase))),
+                ("published", SdkValue::Bool(failure.published.is_some())),
+                (
+                    "attempt",
+                    SdkValue::opt_text(
+                        intent
+                            .and_then(|intent| intent.meta.attempt)
+                            .map(|attempt| hex(attempt.as_slice())),
+                    ),
+                ),
+                (
+                    "expected_head",
+                    SdkValue::opt_text(
+                        intent
+                            .and_then(|intent| intent.expected_head)
+                            .map(|head| hex(&head.to_bytes())),
+                    ),
+                ),
+                (
+                    "candidate_root",
+                    SdkValue::opt_text(intent.map(|intent| hex(intent.candidate_root.as_bytes()))),
+                ),
             ]),
         };
         self.retained

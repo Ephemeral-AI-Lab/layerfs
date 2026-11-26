@@ -16,11 +16,10 @@
 //! of `end` leaves nothing committed; after that, a lost answer is `Unknown`.
 use super::super::frame::ATTACHED;
 use super::super::host_frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
-use super::super::host_hello::{build_identity, token, HostHello, CORRELATION_LEN};
-use super::{decode_answer, host_check_peer, request, unavailable, unknown, HostPaths, READY_WAIT};
+use super::{decode_answer, unavailable, unknown, HostPaths};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::{
-    home::{self, host_socket},
+    home::host_socket,
     json,
     outcome::{refused, Outcome},
     trace,
@@ -29,11 +28,20 @@ use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
 
-/// Largest data frame of streamed content.
-pub const STREAM_PIECE: usize = 256 << 10;
-/// The longest the worker waits for the next frame of a streamed input.
+/// Largest data frame of streamed content: four engine records
+/// (`MAX_PLAINTEXT_BYTES`), so full pieces are written as whole records.
+pub const STREAM_PIECE: usize = 4 * layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES;
+/// The worker's minimum-progress rule (§11, review M3): while it waits
+/// for its caller, a streamed input must deliver [`STREAM_PROGRESS`] bytes
+/// within this much waiting, or end. Only the time the worker spends
+/// blocked on the input counts, never its own Store work, and a `wait`
+/// frame is no progress, so neither a stalled nor a trickling input holds
+/// a write thread past it: it is refused, nothing committed.
 pub const STREAM_WAIT: Duration = Duration::from_secs(30);
-/// A caller whose input produced nothing for this long sends `wait`.
+/// Input bytes, frame headers included, that renew [`STREAM_WAIT`].
+pub const STREAM_PROGRESS: usize = STREAM_PIECE;
+/// A caller whose input produced nothing for this long sends `wait`, which
+/// only shows the caller the worker is still there.
 pub const STREAM_KEEPALIVE: Duration = Duration::from_secs(10);
 /// The longest one caller write may go without progress.
 const SEND_WAIT: Duration = Duration::from_secs(60);
@@ -66,9 +74,23 @@ pub struct StreamReader<'a> {
     stream: &'a UnixStream,
     /// The last data frame's bytes.
     pub piece: Vec<u8>,
+    /// Time blocked on the input since the last renewal.
+    waited: Duration,
+    /// Input bytes since the last renewal.
+    progressed: usize,
 }
 
 fn lost(error: io::Error) -> SdkRefusal {
+    if error.kind() == io::ErrorKind::TimedOut {
+        return refused(
+            "Unavailable",
+            format!(
+                "the streamed input delivered less than {} KiB in {} s of waiting; nothing was committed",
+                STREAM_PROGRESS >> 10,
+                STREAM_WAIT.as_secs()
+            ),
+        );
+    }
     refused(
         "Unavailable",
         format!("the streamed input stopped before its end: {error}; nothing was committed"),
@@ -81,6 +103,8 @@ impl<'a> StreamReader<'a> {
         Self {
             stream,
             piece: Vec::new(),
+            waited: Duration::ZERO,
+            progressed: 0,
         }
     }
 
@@ -97,10 +121,25 @@ impl<'a> StreamReader<'a> {
         Ok(())
     }
 
-    /// The next frame, within [`STREAM_WAIT`]. Sizes are checked from the
-    /// header before any body is read.
+    /// The next frame, under the minimum-progress rule of [`STREAM_WAIT`].
+    /// Sizes are checked from the header before any body is read.
     pub fn next_frame(&mut self) -> Result<StreamFrame, SdkRefusal> {
-        let end = Instant::now() + STREAM_WAIT;
+        let began = Instant::now();
+        let end = began + STREAM_WAIT.saturating_sub(self.waited);
+        let frame = self.frame(end);
+        self.waited += began.elapsed();
+        frame
+    }
+
+    fn counted(&mut self, bytes: usize) {
+        self.progressed += bytes;
+        if self.progressed >= STREAM_PROGRESS {
+            self.progressed = 0;
+            self.waited = Duration::ZERO;
+        }
+    }
+
+    fn frame(&mut self, end: Instant) -> Result<StreamFrame, SdkRefusal> {
         let mut header = [0u8; 4];
         self.fill(&mut header, end)?;
         let header = u32::from_be_bytes(header);
@@ -114,6 +153,7 @@ impl<'a> StreamReader<'a> {
             let filled = self.fill(&mut piece, end);
             self.piece = piece;
             filled?;
+            self.counted(4 + len);
             return Ok(match len {
                 0 => StreamFrame::EndContent,
                 _ => StreamFrame::Piece,
@@ -134,6 +174,10 @@ impl<'a> StreamReader<'a> {
         match frame {
             SdkValue::Map(ref fields) if fields.len() == 1 => {}
             _ => return Err(invalid("a JSON frame holds one field")),
+        }
+        // a `wait` frame renews nothing; every other frame is progress
+        if !frame.get_bool("wait") {
+            self.counted(4 + len);
         }
         Ok(if let Some(change) = frame.get("change") {
             StreamFrame::Change(change.clone())
@@ -220,16 +264,21 @@ impl<'a> StreamSender<'a> {
         self.raw(bytes)
     }
 
-    /// Sends one change in the Store's form. A change whose frame would
-    /// exceed the JSON ceiling is sent spilled, its text as content.
-    pub fn change(&mut self, change: &SdkValue) -> Result<(), SdkRefusal> {
+    /// Sends one change in the Store's form, printed once. A change whose
+    /// frame would exceed the JSON ceiling is sent spilled, its text as
+    /// content; the value is dropped before that text is sent.
+    pub fn change(&mut self, change: SdkValue) -> Result<(), SdkRefusal> {
+        const WRAP: &str = "{\"change\":";
         self.changes += 1;
-        let frame = SdkValue::map([("change", change.clone())]);
-        if json::print(&frame).len() <= HOST_MAX_REQUEST {
-            return self.json(&frame);
+        let text = json::print(&change);
+        drop(change);
+        if WRAP.len() + text.len() < HOST_MAX_REQUEST {
+            let frame = format!("{WRAP}{text}}}");
+            self.raw(&(frame.len() as u32).to_be_bytes())?;
+            return self.raw(frame.as_bytes());
         }
         self.json(&SdkValue::map([("spilled", SdkValue::Bool(true))]))?;
-        for piece in json::print(change).as_bytes().chunks(STREAM_PIECE) {
+        for piece in text.as_bytes().chunks(STREAM_PIECE) {
             self.data(piece)?;
         }
         self.data(&[])
@@ -286,37 +335,14 @@ impl HostPaths {
         body: &mut dyn FnMut(&mut StreamSender<'_>) -> Result<(), SdkRefusal>,
         valid: impl FnOnce(&SdkValue) -> bool,
     ) -> Outcome {
-        self.check_paths()?;
         let path = &self.socket;
-        let began = Instant::now();
-        let id = token()?;
-        let request = request(op, args, &id, &"0".repeat(CORRELATION_LEN));
-        host_frame::encode(&request, HOST_MAX_REQUEST)?;
-        let build = match &self.cli {
-            Some((_, build)) => build.clone(),
-            None => build_identity()?,
-        };
-        trace::step("route");
-        let end = began + READY_WAIT;
-        let Some((stream, startup)) = self.acquire(path, true, end)? else {
+        let Some(greeted) = self.greet(false, true, op, args, None)? else {
             return Err(unavailable("start", "no accepting host endpoint"));
         };
-        trace::step("connect");
-        let generation = (|| {
-            host_check_peer(&stream)?;
-            // as for an ordinary call: the hello waits for a pool thread
-            // however long earlier calls take (§16.1 C7)
-            let hello = Self::read_hello(&stream, None)?;
-            HostHello::generation_of(&hello, self, &build)
-        })();
-        if generation.is_err() {
-            trace::connection(&path.to_string_lossy(), op, false, began);
-        }
-        let generation = generation?;
-        drop(startup);
-        trace::step("ready");
-        let request = home::with_field(request, "generation", SdkValue::Text(generation));
-        let frame = host_frame::encode(&request, HOST_MAX_REQUEST)?;
+        let (stream, id, began) = (greeted.stream, greeted.id, greeted.began);
+        // a write carries no login; its request is dropped once encoded
+        let frame = host_frame::encode(greeted.request.get(), HOST_MAX_REQUEST)?;
+        drop(greeted.request);
         let mut sender = StreamSender::new(&stream);
         let sent = (sender.raw(&frame))
             .and_then(|()| body(&mut sender))

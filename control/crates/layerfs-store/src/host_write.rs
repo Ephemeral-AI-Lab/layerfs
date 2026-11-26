@@ -300,15 +300,23 @@ pub fn header(request: &SdkValue) -> Result<(&str, &str, &str, &str, &SdkValue),
 
 /// Where the host worker keeps write outcomes its caller may not know:
 /// `machine/<host>/retained/<request id>.json`, one file each, never
-/// removed by the worker's idle exit, stop, replacement or crash.
+/// removed by the worker's idle exit, stop, replacement or crash; only
+/// `layerfs machine prune <host> --retained` removes them.
 pub fn retained_dir(home: &Path) -> std::path::PathBuf {
     layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE).join("retained")
 }
 
+/// The most kept outcomes: past it a new one is not written (the worker
+/// then holds an uncertain one in memory and does not drain).
+pub const RETAINED_CAP: usize = 256;
+
 /// Keeps one write's outcome before its answer is sent (`uncertain`: the
-/// engine could not tell whether it committed), or after its answer could
-/// not be delivered (`undelivered`), keyed by the caller's request id.
-/// The record names the call, never its content.
+/// engine could not tell whether it committed, with the engine's evidence),
+/// or after the answer of a Commit could not be delivered (`undelivered`),
+/// keyed by the caller's request id. The record names the call, never its
+/// content. It is written whole under a temporary name and linked into
+/// place, so a reader never sees part of one and a record is never
+/// replaced; like every Normal-profile write it is not synced.
 pub fn keep(
     home: &Path,
     request_id: &str,
@@ -325,6 +333,18 @@ pub fn keep(
     }
     let dir = retained_dir(home);
     layerfs_home::home::private_dir(&dir)?;
+    let path = dir.join(format!("{request_id}.json"));
+    if path.exists() {
+        return Ok(());
+    }
+    if retained(home, 0)?.0 >= RETAINED_CAP {
+        return Err(refused(
+            "Capacity",
+            format!(
+                "{RETAINED_CAP} write outcomes are kept already; check them with `layerfs machine doctor`, then `layerfs machine prune <host> --retained`"
+            ),
+        ));
+    }
     let fields = request.get("fields");
     let field = |name: &str| SdkValue::opt_text(fields.and_then(|f| f.get_text(name)));
     let outcome = match outcome {
@@ -350,12 +370,17 @@ pub fn keep(
         ("path", field("path")),
         ("outcome", outcome),
     ]);
-    let path = dir.join(format!("{request_id}.json"));
-    let written =
-        layerfs_home::home::host_socket::private_file(&path, false).and_then(|mut file| {
+    let part = dir.join(format!(".{request_id}.part"));
+    let written = layerfs_home::home::host_socket::private_file(&part, false)
+        .and_then(|mut file| {
             file.set_len(0)?;
             file.write_all(layerfs_home::json::print(&record).as_bytes())
+        })
+        .and_then(|()| match std::fs::hard_link(&part, &path) {
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            linked => linked,
         });
+    let _ = std::fs::remove_file(&part);
     written.map_err(|error| {
         refused(
             "Failed",
@@ -364,20 +389,44 @@ pub fn keep(
     })
 }
 
-/// The kept write outcomes: how many, and the first `shown` by request id.
-pub fn retained(home: &Path, shown: usize) -> Result<(usize, Vec<SdkValue>), SdkRefusal> {
+/// Removes every kept write outcome (`machine prune <host> --retained`,
+/// after their Branches were checked); the removed request ids.
+pub fn prune_retained(home: &Path) -> Result<Vec<String>, SdkRefusal> {
     let dir = retained_dir(home);
-    let entries = match std::fs::read_dir(&dir) {
+    let mut removed = Vec::new();
+    for path in records(&dir)? {
+        std::fs::remove_file(&path)
+            .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))?;
+        if let Some(id) = path.file_stem().and_then(|stem| stem.to_str()) {
+            removed.push(id.to_owned());
+        }
+    }
+    Ok(removed)
+}
+
+fn records(dir: &Path) -> Result<Vec<std::path::PathBuf>, SdkRefusal> {
+    let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, Vec::new())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(refused("Failed", format!("{}: {error}", dir.display()))),
     };
     let mut names: Vec<_> = entries
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+        .filter(|path| {
+            path.extension().is_some_and(|ext| ext == "json")
+                && !path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+        })
         .collect();
     names.sort();
+    Ok(names)
+}
+
+/// The kept write outcomes: how many, and the first `shown` by request id.
+pub fn retained(home: &Path, shown: usize) -> Result<(usize, Vec<SdkValue>), SdkRefusal> {
+    let names = records(&retained_dir(home))?;
     let records = names
         .iter()
         .take(shown)

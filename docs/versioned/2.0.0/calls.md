@@ -632,7 +632,14 @@ The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
 with one Commit (or none when nothing changed). `file write`'s content and
 an unscoped `file apply`'s changes stream from stdin or `--from` in bounded
 frames, so neither the CLI nor the worker holds the whole input; there is
-no new size limit. One `file apply` change is still read whole by the CLI.
+no new size limit. One `file apply` change is still built whole, once,
+by the CLI and the worker (the engine needs its edit text whole); the
+input's text is not copied. A scoped `file apply --scope` runs in the
+caller. The worker runs writes on 4 write threads of their own, at most
+16 held at once (past that, `Unavailable` before any effect), so writes
+never take the threads of reads. Input that delivers less than 256 KiB in
+30 s of the worker waiting for it is refused `Unavailable`, nothing
+committed; the CLI's keepalives do not count as input.
 A call whose Store or socket path does not qualify reads its input whole
 and runs in the caller, as before; so does a single-change write whose
 arguments pass 64 KiB. Input that stops before its end (a killed CLI, a
@@ -643,7 +650,9 @@ check the Branch before writing again, since nothing is resent. The worker
 keeps the outcome of a call it could not answer, and an outcome its Store
 could not settle, in `machine/<host>/retained/<request id>.json`;
 `machine doctor` reports them as a `machine.worker.retained` notice until
-you remove the record. CLI PostgreSQL writes run in the caller.
+`layerfs machine prune <host> --retained` removes them (at most 256 are
+kept). A definite refusal is never recorded. CLI PostgreSQL writes run in
+the caller.
 
 The host worker's SQLite cache keeps up to 16 Stores open per home.
 It checks the Store's current record before serving a call, including a
@@ -1144,7 +1153,7 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 | `get` | `machine` | `--with live` | a machine's record and state |
 | `images` | `machine` | `--with docker` | the Sandbox images a machine holds |
 | `load_image` | `machine`, `image` | `on_progress` | copies an image from the host's Docker to a machine without creating a Sandbox |
-| `prune` | `machine`, `[image]` | `unused` | removes a Sandbox image from a machine, or every unused one |
+| `prune` | `machine`, `[image]` | `unused`, `retained` | removes a Sandbox image from a machine, or every unused one; `--retained` (host machine only, alone) removes the host worker's kept write outcomes and answers their `removed` request IDs |
 | `stats` | `machine` | `--with space` | a machine's processors, memory and data disk, its Stores' sizes and live Sandboxes |
 | `files` | `machine`, `[path]` | `depth` (1), `limit` (100), `cursor`, `byte_offset` (0), `byte_length` (262144) | a machine's LayerFS folders by role, or a folder or file of the machine |
 | `log` | `machine` | `limit` (200), `cursor` | a machine's worker log: its last lines, then the lines before a cursor |

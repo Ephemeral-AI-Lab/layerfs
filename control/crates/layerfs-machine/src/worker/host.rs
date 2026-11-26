@@ -21,7 +21,8 @@ use std::time::{Duration, Instant};
 
 mod stream;
 pub use stream::{
-    StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_WAIT,
+    StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS,
+    STREAM_WAIT,
 };
 
 const READY_WAIT: Duration = Duration::from_secs(10);
@@ -46,6 +47,20 @@ const INHERITED: [&str; 8] = [
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
 ];
+
+/// One connection past its authenticated hello, with its request ready
+/// to send under the worker's generation.
+pub(super) struct Greeted {
+    pub(super) stream: UnixStream,
+    pub(super) id: String,
+    /// The request with its generation, overwritten when dropped if it
+    /// carries a login.
+    pub(super) request: layerfs_home::wipe::Guard,
+    /// Whether the request carries a login: its encoded frame is
+    /// overwritten too.
+    pub(super) secret: bool,
+    pub(super) began: Instant,
+}
 
 /// Canonical home authority and its two endpoints.
 pub struct HostPaths {
@@ -352,7 +367,46 @@ impl HostPaths {
         expected_generation: Option<&str>,
         valid: impl FnOnce(&SdkValue) -> bool,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
-        // a request carrying a login (#819 P-B) is overwritten on every path
+        let Some(greeted) = self.greet(control, start, op, args, expected_generation)? else {
+            return Ok(None);
+        };
+        let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
+        let body = host_frame::encode(greeted.request.get(), max)?;
+        let path = self.endpoint(control);
+        let answer = send_request(
+            &greeted.stream,
+            path,
+            (op, &greeted.id),
+            &body,
+            greeted.began,
+            control,
+            None,
+        );
+        host_frame::release(body, greeted.secret);
+        drop(greeted.request);
+        let answer = answer?;
+        if !valid(&answer) {
+            return Err(unknown(op, &greeted.id, "invalid success payload"));
+        }
+        Ok(Some(answer))
+    }
+
+    /// Connects to `control`'s endpoint (starting a worker when `start`),
+    /// checks the peer and reads the hello under one rule for every call:
+    /// starting a worker and management wait [`READY_WAIT`]; an ordinary
+    /// call to a running worker waits [`CALL_HELLO_WAIT`] for a pool thread,
+    /// then is refused `Unavailable` before anything was sent. None when no
+    /// worker accepts and `start` is false. A request carrying a login
+    /// (#819 P-B) is overwritten on every path, the early returns included;
+    /// the caller's [`Greeted::request`] guard overwrites it after sending.
+    pub(super) fn greet(
+        &self,
+        control: bool,
+        start: bool,
+        op: &str,
+        args: SdkValue,
+        expected_generation: Option<&str>,
+    ) -> Result<Option<Greeted>, SdkRefusal> {
         let secret = args.get("password").is_some();
         let args = layerfs_home::wipe::Guard::new(args, secret);
         self.check_paths()?;
@@ -413,20 +467,16 @@ impl HostPaths {
         let generation = generation?;
         drop(startup);
         trace::step("ready");
-
         // Generation tokens are fixed-size hex, so exchanging the placeholder
         // leaves the already checked envelope size unchanged.
         let request = home::with_field(request.take(), "generation", SdkValue::Text(generation));
-        let request = layerfs_home::wipe::Guard::new(request, secret);
-        let body = host_frame::encode(request.get(), max)?;
-        let answer = send_request(&stream, path, (op, &id), &body, began, control, None);
-        host_frame::release(body, secret);
-        drop(request);
-        let answer = answer?;
-        if !valid(&answer) {
-            return Err(unknown(op, &id, "invalid success payload"));
-        }
-        Ok(Some(answer))
+        Ok(Some(Greeted {
+            stream,
+            id,
+            request: layerfs_home::wipe::Guard::new(request, secret),
+            secret,
+            began,
+        }))
     }
 
     pub(super) fn read_hello(stream: &UnixStream, end: Option<Instant>) -> Outcome {
@@ -684,7 +734,17 @@ fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {
         (Some((_, error)), None)
             if error.get_text("code").is_some() && error.get_text("message").is_some() =>
         {
-            Err(super::client::refusal_of(&error))
+            let mut refusal = super::client::refusal_of(&error);
+            // an engine-uncertain outcome is kept under this id (§8.5):
+            // the caller matches it to its record
+            if refusal.code == "Unknown" {
+                refusal.detail = home::with_field(
+                    std::mem::take(&mut refusal.detail),
+                    "request_id",
+                    SdkValue::text(id),
+                );
+            }
+            Err(refusal)
         }
         _ => Err(unknown(op, id, "malformed final answer")),
     }

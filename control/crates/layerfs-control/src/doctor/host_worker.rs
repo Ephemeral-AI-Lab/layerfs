@@ -173,8 +173,15 @@ pub(super) fn retained(home: &Path, checks: &mut Checks) {
             checks.notice(
                 RETAINED,
                 format!(
-                    "{count} write outcome(s) a caller may not know are kept in {}; check each Branch's head, then remove its record",
+                    "{count} write outcome(s) a caller may not know are kept in {}; check each record's Branch (`layerfs commit list`), then remove them",
                     dir.display()
+                ),
+            );
+            checks.fix(
+                RETAINED,
+                format!(
+                    "layerfs machine prune {} --retained",
+                    layerfs_home::names::HOST_MACHINE
                 ),
             );
             checks.evidence(

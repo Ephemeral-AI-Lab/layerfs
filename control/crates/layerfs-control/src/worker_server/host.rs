@@ -8,10 +8,11 @@ use std::io::{self, Read, Write};
 use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::{Condvar, Mutex};
+use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 mod write;
+pub(super) use write::Held;
 
 const IDLE: Duration = Duration::from_secs(60);
 const IDLE_CHECK: Duration = Duration::from_secs(5);
@@ -75,6 +76,9 @@ struct Activity {
     draining: bool,
     answered: u64,
     last_close: Option<SdkValue>,
+    writes: write::Writes,
+    /// Uncertain write outcomes whose record could not be written yet.
+    unkept: Vec<write::Unkept>,
 }
 
 impl Activity {
@@ -86,6 +90,8 @@ impl Activity {
             draining: false,
             answered: 0,
             last_close: None,
+            writes: write::Writes::default(),
+            unkept: Vec::new(),
         }
     }
 
@@ -93,7 +99,9 @@ impl Activity {
     /// and, as one of `lanes`, the PostgreSQL reads handed over and not yet
     /// answered: a queued or running read keeps the worker from idle exit.
     fn quiet(&self) -> bool {
-        self.admitted == 0 && self.lanes.iter().all(|lane| lane.outstanding == 0)
+        self.admitted == 0
+            && self.lanes.iter().all(|lane| lane.outstanding == 0)
+            && self.writes.held() == 0
     }
 }
 
@@ -104,11 +112,13 @@ pub(super) struct HostServer {
     identity: Vec<(&'static str, SdkValue)>,
     activity: Mutex<Activity>,
     queued: [Condvar; 3],
+    /// Wakes a write thread: a write is held, or the worker drains.
+    writable: Condvar,
     wake: UnixStream,
 }
 
 impl HostServer {
-    fn lock(&self) -> std::sync::MutexGuard<'_, Activity> {
+    fn lock(&self) -> MutexGuard<'_, Activity> {
         self.activity
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -121,9 +131,11 @@ impl HostServer {
 
     fn drain(&self, activity: &mut Activity) {
         activity.draining = true;
+        activity.writes.stop_inputs();
         for ready in &self.queued {
             ready.notify_all();
         }
+        self.writable.notify_all();
         self.notify();
     }
 
@@ -191,6 +203,15 @@ impl HostServer {
                     _ => Ok(Served::HandedOver),
                 };
             }
+            // a write is held before this slot is released, so the worker
+            // is never quiet in between
+            result = match result {
+                Ok(Served::Write(held)) => {
+                    self.hold_write(held);
+                    Ok(Served::HandedOver)
+                }
+                other => other,
+            };
             if result.is_err() {
                 let _ = layerfs_home::trace::steps_take();
                 log("a host connection panicked; its answer was lost");
@@ -386,6 +407,12 @@ impl HostServer {
                 match unpublished {
                     None if activity.last_call.elapsed() >= IDLE => {
                         drop(activity);
+                        // an uncertain outcome only this worker holds keeps
+                        // it up until its record is written (§8.5)
+                        if self.keep_unkept() > 0 {
+                            self.lock().last_call = Instant::now();
+                            continue;
+                        }
                         unpublish();
                         unpublished = Some(Instant::now());
                         continue;
@@ -451,6 +478,21 @@ impl HostServer {
         }
     }
 
+    /// The one admission step of every call and write: refused before any
+    /// effect while draining, otherwise counted as admitted under the
+    /// returned lock.
+    fn admit(&self, admitted: &mut bool) -> Result<MutexGuard<'_, Activity>, SdkRefusal> {
+        let mut activity = self.lock();
+        if activity.draining {
+            let mut error = refused("Unavailable", "the host worker is draining");
+            error.detail = SdkValue::map([("state", SdkValue::text("draining"))]);
+            return Err(error);
+        }
+        activity.admitted += 1;
+        *admitted = true;
+        Ok(activity)
+    }
+
     pub(super) fn dispatch(
         &self,
         control: bool,
@@ -462,12 +504,6 @@ impl HostServer {
         // admission, outside this lock, on the ordinary pool.
         let stores =
             (control && op == "ping").then(|| layerfs_store::open::host_store_count(&self.home));
-        let mut activity = self.lock();
-        if activity.draining {
-            let mut error = refused("Unavailable", "the host worker is draining");
-            error.detail = SdkValue::map([("state", SdkValue::text("draining"))]);
-            return Err(error);
-        }
         enum Operation {
             Ping,
             Drain,
@@ -490,8 +526,7 @@ impl HostServer {
                 ))
             }
         };
-        activity.admitted += 1;
-        *admitted = true;
+        let activity = self.admit(admitted)?;
         match operation {
             Operation::Ping => {
                 let identity = self.identity.iter().cloned();
@@ -509,6 +544,13 @@ impl HostServer {
                         SdkValue::Int(activity.lanes[CONTROL.index].outstanding as i64),
                     ),
                     ("admitted", SdkValue::Int(activity.admitted as i64)),
+                    ("writes", SdkValue::Int(activity.writes.counts().0 as i64)),
+                    (
+                        "writes_waiting",
+                        SdkValue::Int(activity.writes.counts().1 as i64),
+                    ),
+                    ("unkept", SdkValue::Int(activity.unkept.len() as i64)),
+                    ("faults", SdkValue::Bool(write::FAULTS)),
                     ("stores", SdkValue::Int(stores.unwrap_or_default() as i64)),
                     ("postgresql", postgresql(&activity)),
                     (
@@ -538,13 +580,24 @@ impl HostServer {
                 ))
             }
             Operation::Drain => {
+                drop(activity);
+                let unkept = self.keep_unkept();
+                if unkept > 0 {
+                    return Err(write::unkept_refusal(unkept));
+                }
+                let mut activity = self.lock();
                 self.drain(&mut activity);
                 drop(activity);
                 self.close_drained_stores();
                 Ok(SdkValue::map([("state", SdkValue::text("draining"))]))
             }
             Operation::CloseStore => {
+                let store = args.get_text("store").unwrap_or_default();
+                let held = activity.unkept.iter().any(|unkept| unkept.on(store));
                 drop(activity);
+                if held && self.keep_unkept() > 0 {
+                    return Err(write::unkept_refusal(self.lock().unkept.len()));
+                }
                 self.close_store(args)
             }
             Operation::StoreCall => {
@@ -707,8 +760,12 @@ pub(super) enum Served {
     Answered(bool),
     /// A PostgreSQL read whose request was read, for its own lane.
     Postgres(SdkValue),
-    /// Handed to the PostgreSQL lane, which answers and accounts it.
+    /// Handed to the PostgreSQL lane or the write lane, which answers and
+    /// accounts it.
     HandedOver,
+    /// A `store.write` whose request was read, held for a write thread with
+    /// its connection.
+    Write(Held),
 }
 
 /// The ping's `postgresql` field (§11): held read sessions idle and lent,
@@ -766,6 +823,7 @@ fn run(
         identity: layerfs_home::process::identity(),
         activity: Mutex::new(Activity::new()),
         queued: Default::default(),
+        writable: Condvar::new(),
         wake,
     };
     let served = std::thread::scope(|scope| {
@@ -780,6 +838,11 @@ fn run(
                             false => server.work(lane),
                         })?;
                 }
+            }
+            for _ in 0..write::WRITE_THREADS {
+                std::thread::Builder::new()
+                    .name("layerfs-host-write".to_owned())
+                    .spawn_scoped(scope, move || server.work_writes())?;
             }
             server.listen(&ordinary, &control, wake_read, unpublish)
         })();

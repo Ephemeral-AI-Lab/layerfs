@@ -1,4 +1,6 @@
-//! `machine.prune`: remove a Sandbox image from a machine, or every unused one.
+//! `machine.prune`: remove a Sandbox image from a machine, or every unused
+//! one; on the host machine, `--retained` removes the host worker's kept
+//! write outcomes once their Branches were checked.
 use crate::calls::table::Kind::{Bool, Image, Name};
 use crate::calls::table::{a, call, opt, Call};
 #[cfg(feature = "machine")]
@@ -39,7 +41,7 @@ pub(crate) const CALL: Call = call(
     "machine",
     "prune",
     &[a("machine", Name), opt("image", Image)],
-    &[opt("unused", Bool)],
+    &[opt("unused", Bool), opt("retained", Bool)],
     "remove a Sandbox image from a machine, or every unused one",
     run,
 )
@@ -52,6 +54,9 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let unused = args.get_bool("unused");
     let image = args.get_text("image");
+    if args.get_bool("retained") {
+        return retained(context, &machine, image.is_some() || unused);
+    }
     let pruned = layerfs_sandbox::images::prune(&context.home, &machine, image, unused)?;
     let removed = pruned.get("removed").cloned().unwrap_or_default();
     let skipped: Vec<SdkValue> = match pruned.get("skipped") {
@@ -79,6 +84,39 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ("removed", removed),
         ("removed_count", removed_count),
         ("skipped_count", skipped_count),
+    ]))
+}
+
+/// `--retained`: the host machine's kept write outcomes (§8.5), alone.
+#[cfg(feature = "machine")]
+fn retained(context: &mut Context<'_>, machine: &MachineName, images: bool) -> Outcome {
+    use layerfs_home::outcome::refused;
+    if machine.as_str() != layerfs_home::names::HOST_MACHINE {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "--retained names the host worker's kept write outcomes: only {} has them",
+                layerfs_home::names::HOST_MACHINE
+            ),
+        ));
+    }
+    if images {
+        return Err(refused(
+            "InvalidInput",
+            "--retained is given alone, without an image or --unused",
+        ));
+    }
+    let removed = layerfs_store::host_write::prune_retained(&context.home)?;
+    let removed = SdkValue::List(removed.into_iter().map(SdkValue::Text).collect());
+    let (removed, removed_count) = super::stats::cut(removed);
+    Ok(SdkValue::map([
+        ("freed_bytes", SdkValue::Int(0)),
+        ("skipped", SdkValue::List(Vec::new())),
+        ("outcome", SdkValue::text("pruned")),
+        ("machine", SdkValue::text(machine.as_str())),
+        ("removed", removed),
+        ("removed_count", removed_count),
+        ("skipped_count", SdkValue::Null),
     ]))
 }
 
