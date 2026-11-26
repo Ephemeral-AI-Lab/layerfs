@@ -28,7 +28,12 @@ fn identity(inode: u64) -> HostIdentity {
     }
 }
 
-fn entry(name: &str, kind: InodeKind, position: Option<u64>, host: Option<HostIdentity>) -> NewEntry {
+fn entry(
+    name: &str,
+    kind: InodeKind,
+    position: Option<u64>,
+    host: Option<HostIdentity>,
+) -> NewEntry {
     NewEntry {
         key: EntryKey {
             parent: (!name.is_empty()).then_some(0),
@@ -37,7 +42,11 @@ fn entry(name: &str, kind: InodeKind, position: Option<u64>, host: Option<HostId
         position,
         kind,
         metadata: layerfs_content::filesystem::attributes::PortableMetadata {
-            mode: if kind == InodeKind::Symlink { 0o777 } else { 0o644 },
+            mode: if kind == InodeKind::Symlink {
+                0o777
+            } else {
+                0o644
+            },
             mtime_seconds: 0,
             mtime_nanoseconds: 0,
         },
@@ -54,7 +63,12 @@ fn entry(name: &str, kind: InodeKind, position: Option<u64>, host: Option<HostId
 fn shape() -> (Vec<NewEntry>, Vec<Placed>) {
     let mut rows = vec![
         entry("", InodeKind::Directory, Some(0), None),
-        entry("stored", InodeKind::RegularFile, Some(30), Some(identity(900))),
+        entry(
+            "stored",
+            InodeKind::RegularFile,
+            Some(30),
+            Some(identity(900)),
+        ),
     ];
     let mut placed = Vec::new();
     let mut add = |name: &str, kind: InodeKind, inode: Option<u64>| {
@@ -106,7 +120,10 @@ fn wait_backend_gone(admin: &mut postgres::Client, pid: i32) {
         if gone {
             return;
         }
-        assert!(Instant::now() < deadline, "faulted backend {pid} still runs");
+        assert!(
+            Instant::now() < deadline,
+            "faulted backend {pid} still runs"
+        );
         std::thread::sleep(Duration::from_millis(5));
     }
 }
@@ -174,7 +191,10 @@ fn sample(
             }
             let pid = proxy.pids()[fired.connection].expect("the writer's backend pid");
             wait_backend_gone(&mut admin, pid);
-            eprintln!("placement_fault {fault:?} at {at} {} {answer:?}", fired.kind);
+            eprintln!(
+                "placement_fault {fault:?} at {at} {} {answer:?}",
+                fired.kind
+            );
         }
     }
     let after = state(&mut admin);
@@ -209,7 +229,13 @@ fn sweep(tag: &str, fault: Fault) {
     eprintln!("placement_clean_messages {}", clean.messages.seen);
     for at in 0..clean.messages.seen {
         schema.drop_schema();
-        sample(&schema, &proxy, &proxied_url, Some((at, fault)), Some(&clean));
+        sample(
+            &schema,
+            &proxy,
+            &proxied_url,
+            Some((at, fault)),
+            Some(&clean),
+        );
     }
 }
 

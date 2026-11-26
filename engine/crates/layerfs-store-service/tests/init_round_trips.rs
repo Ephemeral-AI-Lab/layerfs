@@ -49,7 +49,10 @@ use std::path::Path;
 /// (production source identical to 056e920166) in the comments; the pins
 /// are after #818 I1 (Init no longer walks the built root for its logical
 /// bytes: −20 statements at 1k, −12 at 600 entries, −1 on the hard-link
-/// directory).
+/// directory) and I2b (a wide directory places 32 children per window, one
+/// dependency check, one host upsert and one update each, instead of two
+/// statements per child: flat_1k 2,264 -> 360, dir_600 1,416 -> 273,
+/// wide_hardlinks 1,702 -> 1,403).
 const SQLITE: &[InitPin] = &[
     // probe init.nested_1k at baseline: 308 statements, 24 transactions
     pin(
@@ -62,7 +65,7 @@ const SQLITE: &[InitPin] = &[
     // probe init.flat_1k at baseline: 2,284 statements, 25 transactions
     pin(
         "flat_1k",
-        [0, 0, 2264, 25],
+        [0, 0, 360, 25],
         10890,
         137359,
         "8a79e63caabd7530",
@@ -78,13 +81,13 @@ const SQLITE: &[InitPin] = &[
     // added before I2 (at I1: [0, 0, 1,702, 24])
     pin(
         "wide_hardlinks",
-        [0, 0, 1702, 24],
+        [0, 0, 1403, 24],
         5180,
         43894,
         "e6cba9e302a3c58f",
     ),
     // baseline [0, 0, 1,428, 25]
-    pin("dir_600", [0, 0, 1416, 25], 6490, 82511, "f2238ebb0be91b92"),
+    pin("dir_600", [0, 0, 273, 25], 6490, 82511, "f2238ebb0be91b92"),
     // added at I1 (no baseline row)
     pin(
         "mixed",

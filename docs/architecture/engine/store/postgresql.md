@@ -1688,7 +1688,7 @@ same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 **Wide-directory placement (#818 I2a).** A `place_children` unit (one write
 window: at most 4,096 children or 1 MiB) binds and places its children in
 set windows instead of two statements per child. The window rule is shared
-with SQLite (`sqlite/acquisition/placement.rs`) and mirrors `put_entries`'
+with SQLite (`sqlite/acquisition/placement.rs`, I2b) and mirrors `put_entries`'
 `independent`: a window ends before a repeated name, position or
 (device, inode), and before a child a statement could refuse alone (a
 position that does not convert to signed, a host path out of bounds, a bound

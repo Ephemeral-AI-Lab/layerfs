@@ -132,7 +132,11 @@ impl Rig {
             for sql in [ENTRIES[1], HOSTS[1], HELD[1]] {
                 let found = admin.query(sql, &[]).unwrap();
                 // PostgreSQL's hex is lower case, SQLite's upper case.
-                rows.extend(found.iter().map(|row| row.get::<_, String>(0).to_uppercase()));
+                rows.extend(
+                    found
+                        .iter()
+                        .map(|row| row.get::<_, String>(0).to_uppercase()),
+                );
             }
         }
         rows
@@ -160,7 +164,12 @@ fn path(name: &str) -> Vec<u8> {
 }
 
 /// One child of the source root (position 0), unpositioned unless placed.
-fn entry(name: &str, kind: InodeKind, position: Option<u64>, host: Option<HostIdentity>) -> NewEntry {
+fn entry(
+    name: &str,
+    kind: InodeKind,
+    position: Option<u64>,
+    host: Option<HostIdentity>,
+) -> NewEntry {
     NewEntry {
         key: EntryKey {
             parent: Some(0),
@@ -168,7 +177,11 @@ fn entry(name: &str, kind: InodeKind, position: Option<u64>, host: Option<HostId
         },
         position,
         kind,
-        metadata: meta(if kind == InodeKind::Symlink { 0o777 } else { 0o644 }),
+        metadata: meta(if kind == InodeKind::Symlink {
+            0o777
+        } else {
+            0o644
+        }),
         target_root: (kind == InodeKind::Symlink).then(|| ObjectId::for_bytes(b"target")),
         host_path: (kind != InodeKind::Symlink).then(|| path(name)),
         host,
@@ -256,7 +269,10 @@ fn case(
         assert_eq!(after, reference.dump(), "{backend:?} {tag}: rows");
         assert_ne!(after, before, "{backend:?} {tag}: placed");
     } else {
-        assert_eq!(after, before, "{backend:?} {tag}: a refused unit rolls back");
+        assert_eq!(
+            after, before,
+            "{backend:?} {tag}: a refused unit rolls back"
+        );
     }
     Some(answer)
 }
@@ -276,7 +292,12 @@ fn shapes(backend: Backend) {
     // directory at position 20, both placed by the setup unit.
     let stored = || {
         vec![
-            entry("stored-file", InodeKind::RegularFile, Some(30), Some(identity(900, 7))),
+            entry(
+                "stored-file",
+                InodeKind::RegularFile,
+                Some(30),
+                Some(identity(900, 7)),
+            ),
             entry("stored-dir", InodeKind::Directory, Some(20), None),
         ]
     };
@@ -311,9 +332,17 @@ fn shapes(backend: Backend) {
 
     // Repeated position: two directories collide on the directory index;
     // two symlinks may share it; an earlier Changed wins.
-    let rows = with(stored(), &[file("m", 99), dir("d1"), dir("d2"), link("s1"), link("s2")]);
+    let rows = with(
+        stored(),
+        &[file("m", 99), dir("d1"), dir("d2"), link("s1"), link("s2")],
+    );
     assert_eq!(
-        case(backend, "position_dirs", &rows, &[at("d1", 6, None), at("d2", 6, None)]),
+        case(
+            backend,
+            "position_dirs",
+            &rows,
+            &[at("d1", 6, None), at("d2", 6, None)]
+        ),
         Some(constraint())
     );
     assert_eq!(
@@ -342,7 +371,11 @@ fn shapes(backend: Backend) {
             backend,
             "unsigned",
             &rows,
-            &[at("s1", 9, None), at("s2", 10, None), at("s3", u64::MAX, None)],
+            &[
+                at("s1", 9, None),
+                at("s2", 10, None),
+                at("s3", u64::MAX, None)
+            ],
         ),
         Some(Err(AcquisitionError::Bounds))
     );
@@ -359,9 +392,17 @@ fn shapes(backend: Backend) {
 
     // Dependencies on rows stored by an earlier unit: the stored directory's
     // position and the stored identity's canonical position.
-    let rows = with(stored(), &[file("m", 99), link("s"), dir("d"), file("f", 901)]);
+    let rows = with(
+        stored(),
+        &[file("m", 99), link("s"), dir("d"), file("f", 901)],
+    );
     assert_eq!(
-        case(backend, "stored_dir", &rows, &[at("s", 4, None), at("d", 20, None)]),
+        case(
+            backend,
+            "stored_dir",
+            &rows,
+            &[at("s", 4, None), at("d", 20, None)]
+        ),
         Some(constraint())
     );
     assert_eq!(
@@ -374,7 +415,12 @@ fn shapes(backend: Backend) {
         Some(changed(5))
     );
     assert_eq!(
-        case(backend, "stored_host", &rows, &[at("s", 4, None), file_at("f", 30, 901)]),
+        case(
+            backend,
+            "stored_host",
+            &rows,
+            &[at("s", 4, None), file_at("f", 30, 901)]
+        ),
         Some(constraint())
     );
     assert_eq!(
@@ -406,7 +452,11 @@ fn shapes(backend: Backend) {
             backend,
             "earlier_window",
             &rows,
-            &[file_at("a", 12, 1), file_at("b", 13, 1), file_at("c", 12, 2)],
+            &[
+                file_at("a", 12, 1),
+                file_at("b", 13, 1),
+                file_at("c", 12, 2)
+            ],
         ),
         Some(constraint())
     );
@@ -437,7 +487,12 @@ fn shapes(backend: Backend) {
         Some(changed(2))
     );
     assert_eq!(
-        case(backend, "kind_unbound", &rows, &[at("d", 1, None), at("f", 2, None)]),
+        case(
+            backend,
+            "kind_unbound",
+            &rows,
+            &[at("d", 1, None), at("f", 2, None)]
+        ),
         Some(changed(2))
     );
 

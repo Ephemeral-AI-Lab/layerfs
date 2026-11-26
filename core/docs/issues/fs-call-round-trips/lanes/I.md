@@ -186,3 +186,51 @@ the sweeps) and `receipts/I2a/check/`.
   they stay in the fast lane.
 - Deleted tests: none. Production LOC: 227,606 -> 227,827 (delta +221),
   engine layerfs-persistence +221.
+
+### I2b measured (SQLite; test profile, one sample)
+
+Receipts: `receipts/I2b/` (pins against the I2a pins, the equivalence
+test) and `receipts/I2b/check/`.
+
+| Shape | SQLite stmts after I1 → predicted → measured | Within 15% |
+|---|---|---|
+| `flat_1k` | 2,264 → ~360 → **360** | yes (exact) |
+| `dir_600` | 1,416 → ~273 → **273** | yes (exact) |
+| `flat_10k` | 21,560 → ~2,499 → **2,502** | yes (+3: 314 windows of up to 32, not 313; the units' 1 MiB byte bound, not the 4,096 rows, decides their size, so the last window of each unit rounds differently) |
+| `wide_hardlinks` | 1,702 → ~1,403 → **1,403** | yes (exact) |
+| `nested_1k`, `nested_10k`, `hardlink_window`, `mixed` | unchanged → 288, 1,837, 486, 175 | yes |
+
+- Transactions unchanged; roots, logical and canonical bytes identical.
+  PostgreSQL unchanged (its pins pass as at I2a).
+- init.md expectation (no D17 check): 1k flat ~330 → 360 (+9%), 10k flat
+  ~2,330 → 2,502 (+7%): the per-window dependency check adds one statement
+  per 32 children.
+- New SQL: `placement_dependencies.sql`, `bind_host_files.sql`,
+  `place_children.sql` (init.md named only `place_children.sql`; SQLite
+  cannot bind and place in one statement, so the upsert is its own text,
+  and the D17 check is the third). `bind_host_file.sql` and
+  `place_entry.sql` stay (per-row path, `entry_windows.rs`).
+- New file `backend/sqlite/acquisition/child_windows.rs` (SQLite's
+  statements over the shared `placement.rs`); `writes.rs` delegates.
+- Equivalence (`acquisition_placement.rs`) now runs SQLite's set windows
+  against its per-row path: pass (19 cases). No SQLite sweep: in-process
+  statements have no lost reply; a refused window rolls back with its unit
+  (checked by the equivalence cases).
+- Check set (once): init pins 1k/10k, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, persistence `acquisition_placement`,
+  `postgresql_placement_fault`, `postgresql_acquisition`,
+  `acquisition_batching`, `acquisition_reads`, `acquisition_disposal`,
+  `sqlite_reference_acquisition`, all `layerfs-project` tests: pass.
+- Milestone end: Clippy `-D warnings --all-targets` on layerfs-persistence,
+  layerfs-project, layerfs-store-service clean; rustfmt applied to the
+  files this lane touched (incl. the I2a tests). `cargo fmt --check` still
+  reports files no lane-I item touches (`history/admission.rs`,
+  `layerfs-project/src/store/init.rs`, `tests/init_postgresql.rs`,
+  store-service `refresh_lookups.rs`, `support/view.rs`, `verify768y_*`):
+  left alone.
+- `flat_10k` window count: a placed row is name + host path + 160 bytes
+  (`WRITE_ROW_BYTES`), about 270 bytes with the test's temporary path, so
+  `place_wide` fills a unit at 1 MiB (about 3,880 children), not 4,096:
+  three units of 122 + 122 + 70 SQLite windows = 314.
+- Deleted tests: none. Production LOC: 227,827 -> 228,098 (delta +271),
+  engine layerfs-persistence +271 (Rust and the three shipped SQL texts).

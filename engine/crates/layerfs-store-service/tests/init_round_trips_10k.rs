@@ -50,10 +50,12 @@ const SQLITE_NESTED: InitPin = pin(
     1379418,
     "a68d83d36cfcc6aa",
 );
-// probe init.flat_10k at 056e920166: 31,881 statements, 60 transactions
+// probe init.flat_10k at 056e920166: 31,881 statements, 60 transactions;
+// after I1 21,560; after I2b (314 placement windows of up to 32 children,
+// three statements each) 2,502
 const SQLITE_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 0, 21560, 60],
+    [0, 0, 2502, 60],
     118890,
     1380691,
     "a0b8d9600c933c0a",

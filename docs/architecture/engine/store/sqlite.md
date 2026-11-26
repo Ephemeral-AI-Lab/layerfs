@@ -604,6 +604,21 @@ operation is refused first. A Store created without the tables refuses every
 unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition)).
 The import algorithm is in [Project Init](../project-init/README.md).
 
+A wide directory's `place_children` unit runs the same set-window placement
+as PostgreSQL ([Acquisition](postgresql.md#acquisition), #818 I2b; the window
+rule and decoding are shared in
+[`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition/placement.rs)),
+over fixed 32-row inputs as entry and root windows use: per window one
+dependency check (`placement_dependencies.sql`), one multi-row upsert of the
+bound children (`bind_host_files.sql`) and one multi-row `UPDATE … FROM`
+(`place_children.sql`). `UPDATE … FROM` cannot return the input's columns,
+so a placed row is matched to its child by its new position and a binding by
+its identity. One-child windows and dependent children run the per-row
+`bind_host_file.sql` and `place_entry.sql`
+([`child_windows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition/child_windows.rs)).
+A flat directory of 10,000 files places in about 940 statements instead of
+20,000.
+
 The session's epoch (the identity of its first operation, which later
 operations reuse) is read without a lock, so a live owner's unit never waits
 on, or is refused by, a `begin` that waits for another process's lane. Only
