@@ -7,6 +7,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_control::inventory;
 use layerfs_home::home::{paths, write_record};
 use layerfs_home::json::parse;
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -229,7 +230,7 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
         inventory::can_change_machine(&home, layerfs_home::names::HOST_MACHINE).unwrap_err();
     assert_eq!(
         refusal.message,
-        "Sandbox b runs on machine native: remove it before changing it"
+        format!("Sandbox b runs on machine {HOST_MACHINE}: remove it before changing it")
     );
     let next = refusal.detail.get("next").unwrap();
     assert_eq!(next.get("sandboxes"), Some(&listed(&["b"])));
@@ -297,13 +298,15 @@ fn a_move_checks_the_stores_side() {
     let refusal = can_move(&home, &on_dev, "fc").unwrap_err();
     assert_eq!(refusal.code, "InvalidInput");
     assert!(
-        refusal.message.contains("`layerfs store move shop native`"),
+        refusal
+            .message
+            .contains(&format!("`layerfs store move shop {HOST_MACHINE}`")),
         "{}",
         refusal.message
     );
     assert_eq!(
         refusal.detail.get_text("fix"),
-        Some("layerfs store move shop native")
+        Some(format!("layerfs store move shop {HOST_MACHINE}").as_str())
     );
     assert_eq!(code(can_move(&home, &here, "nosuch")), "NotFound");
     assert_eq!(code(can_move(&home, &pg, "dev")), "InvalidInput");

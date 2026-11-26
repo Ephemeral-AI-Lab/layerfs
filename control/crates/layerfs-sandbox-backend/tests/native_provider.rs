@@ -29,7 +29,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     .unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
     let provider = native(&base);
-    assert_eq!(provider.capabilities().unwrap().name, "native-macos");
+    assert_eq!(provider.capabilities().unwrap().name, "process-macos");
     let request = |name: &str| LaunchRequest {
         name: name.into(),
         daemon_executable: binary.clone(),

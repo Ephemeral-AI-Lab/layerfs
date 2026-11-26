@@ -49,7 +49,7 @@ fn fixture() -> (PathBuf, PathBuf) {
 }
 
 fn started(root: &Path, daemon: &Path, name: &str) -> Sandbox {
-    Local::native(root)
+    Local::process(root)
         .unwrap()
         .naming(name)
         .unwrap()

@@ -138,7 +138,7 @@ fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
     .unwrap();
     std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
     let wait = Duration::from_secs(10);
-    let mut sandbox = Local::native(base.join("root"))
+    let mut sandbox = Local::process(base.join("root"))
         .unwrap()
         .naming("early")
         .unwrap()

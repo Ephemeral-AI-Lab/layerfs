@@ -404,6 +404,19 @@ def release(cli: Cli, home: Path) -> list[str]:
     return removed
 
 
+def capture_host_machine(cli: Cli) -> str:
+    rows = cli("machine", "list")["items"]
+    hosts = [
+        row["machine"]
+        for row in rows
+        if (row.get("platform"), row.get("machine"))
+        in {("native", "native"), ("host", "macos-host"), ("host", "linux-host")}
+    ]
+    if len(hosts) != 1:
+        raise SystemExit("the selected build must list exactly one local host machine for SQLite capture")
+    return hosts[0]
+
+
 def capture(args: argparse.Namespace) -> None:
     cli_path = Path(args.cli).expanduser().resolve()
     out = Path(args.out).resolve()
@@ -458,7 +471,7 @@ def capture(args: argparse.Namespace) -> None:
     out.mkdir(parents=True, exist_ok=True)
     manifest: dict = {"engine": args.engine}
     if args.engine == "sqlite":
-        cli("store", "move", store, "native")
+        cli("store", "move", store, capture_host_machine(cli))
         db = home / "store" / store / "store.sqlite"
         leftovers = [p.name for p in db.parent.iterdir() if p.name.startswith("store.sqlite-")]
         if leftovers:

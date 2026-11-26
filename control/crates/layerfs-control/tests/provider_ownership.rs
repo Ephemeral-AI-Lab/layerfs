@@ -63,7 +63,7 @@ use layerfs_bridge::{
 use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_sandbox::{ProviderCreate, SandboxApi, SandboxPhase};
 use layerfs_sandbox_backend::{
-    native::ProcessProvider, shared::LocalPaths, CommandIdentity, LaunchRequest,
+    process::ProcessProvider, shared::LocalPaths, CommandIdentity, LaunchRequest,
     ProviderLaunchOptions, Runtime,
 };
 use std::{

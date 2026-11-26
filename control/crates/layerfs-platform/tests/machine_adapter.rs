@@ -35,7 +35,7 @@ fn built_in_machines_are_never_created_or_removed() {
             "/x",
             &scratch.path("x")
         )),
-        "the native machine dev runs in-process; its files are the host's"
+        "the host machine dev runs in-process; its files are the host's"
     );
     assert!(scratch.log().is_empty());
 }

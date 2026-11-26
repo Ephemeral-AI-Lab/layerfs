@@ -323,7 +323,7 @@ fn native_backend_here() -> Option<Backend> {
     let rows = support_json::rows();
     let row = rows
         .iter()
-        .find(|r| r.host == host && r.platform == "process")
+        .find(|r| r.host == host && r.platform == "host")
         .expect("a native row for this host");
     row.backend
         .as_deref()

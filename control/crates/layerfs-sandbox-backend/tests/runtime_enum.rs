@@ -25,7 +25,7 @@ fn each_backend_fixes_its_capabilities() {
     assert_eq!(
         (host.name, host.isolation, host.mount_driver),
         (
-            "native-macos",
+            "process-macos",
             IsolationModel::HostProcess,
             MountDriver::LoopbackNfs
         )
