@@ -41,7 +41,7 @@ prepared one exists and records none
 | The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); else the automatic choice (`env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); no older record is given a fixed socket. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `docker_socket`, [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs) `Docker::of` |
 | Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `home.get --with platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 
-## native (`platforms/native/`)
+## native (`platforms/host/`)
 
 Sandboxes on the host's own OS, with no VM: one per home, never created or
 removed. `native` is a machine, not the host: this computer is the control
@@ -211,7 +211,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 | --- | --- | --- |
 | `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `native` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
 | `missing: host:macos-or-linux` | `native` on Windows or another host | same |
-| `Unsupported` from a `native` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`native/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
+| `Unsupported` from a `native` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`native/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/observe.rs) |
 | `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
 | docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/unix.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/unix.rs) `not_ours` |

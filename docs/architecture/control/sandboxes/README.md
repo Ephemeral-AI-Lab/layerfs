@@ -98,21 +98,21 @@ home's call log (`trace/calls.jsonl`).
 | Rule | Enforced by |
 | --- | --- |
 | The Sandbox runtime, not the daemon, launches commands and owns their streams, exit status and cancel. | `Sandbox::run_in` ([`runtime/dispatch.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs)); [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) sends nothing to the daemon |
-| One attempt per operation: no resend, rebind, re-attach, adoption or implicit cleanup. | `*_attempted` flags ([`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/sandbox.rs), [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs)); `Control::call` ([`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs)) |
+| One attempt per operation: no resend, rebind, re-attach, adoption or implicit cleanup. | `*_attempted` flags ([`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/sandbox.rs), [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs)); `Control::call` ([`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs)) |
 | A failed or fenced connection is never lent again. | `Lease::drop` ([`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs)) |
 | Commands run as a nonroot identity. | `CommandIdentity::check` refuses uid or gid 0 ([`runtime/types/execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/types/execution.rs)) |
 | A record is reopened only by the backend that wrote it. | `SandboxRecord` variants; each provider refuses another's record before any effect ([`runtime/types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/types/options.rs)) |
 | No namespaces command can create a user namespace. | Seccomp filter ([`namespaces/seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/seccomp.rs)); host check ([`namespaces/host_checks.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host_checks.rs)) |
 | Debug output never shows the daemon setup or command arguments. | `LaunchRequest` and `ExecRequest` `Debug` ([`runtime/types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/types/options.rs), [`runtime/types/request.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/types/request.rs)) |
-| Stored names do not follow Rust names: `Native` is `"native"`. | `NativeBackend::stored_name` ([`native/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/adapter.rs)) |
-| Deleting a Sandbox never touches the shared Store. | `delete` removes only the Sandbox's directory, cgroup and private root ([`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs), [`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/sandbox.rs)) |
+| Stored names do not follow Rust names: `Native` is `"native"`. | `NativeBackend::stored_name` ([`native/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs)) |
+| Deleting a Sandbox never touches the shared Store. | `delete` removes only the Sandbox's directory, cgroup and private root ([`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs), [`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/sandbox.rs)) |
 | A cancel that arrives before its command runs never answers `ended` for a command that then runs. | `Running::spawned` refuses as interrupted ([`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs)) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Backend per host | `Native` launches on macOS only, `Namespaces` on Linux only; Windows has no backend. | [`runtime/dispatch.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs), [`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/profile.rs) |
+| Backend per host | `Native` launches on macOS only, `Namespaces` on Linux only; Windows has no backend. | [`runtime/dispatch.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs), [`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/profile.rs) |
 | Daemon setup size | 1 to 8192 bytes, else `Protocol`. | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs) |
 | Startup wait | 30 s (`STARTUP`), then `TimedOut`; a daemon that exits first is `Protocol`. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`shared/listener.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/listener.rs) |
 | Binds | Only `Namespaces` binds; `Native` refuses a non-empty list `Unsupported`. | `launch_with_binds` ([`runtime/dispatch.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs)) |
@@ -122,7 +122,7 @@ home's call log (`trace/calls.jsonl`).
 | Lost daemon reply | `Unavailable` with `outcome: "unknown"`, `retryable: false`. | `refusal` ([`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs)) |
 | Exec id | 1 to 64 of `A-Za-z0-9._-`, not starting with `.` or `-`, else `InvalidInput`; a live duplicate is `Exists`. | [`exec/id.rs`](../../../../control/crates/layerfs-sandbox/src/exec/id.rs), [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs) |
 | Exec output | 1 MiB per stream inline, then spooled to a file; no total cap, nothing cut. | [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs) |
-| Exec duration | No timeout; a command runs until it ends or is cancelled. | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
+| Exec duration | No timeout; a command runs until it ends or is cancelled. | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
 | Stop and delete | A second `stop`, and `delete` before a known stop, are refused. | [Backends](backends.md#stop-and-delete) |
 | Unmount or remove with live commands | `Busy` (`detail.execs`); with `force` each is cancelled first; one not confirmed is `Unknown`. | `settle` ([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)) |
 

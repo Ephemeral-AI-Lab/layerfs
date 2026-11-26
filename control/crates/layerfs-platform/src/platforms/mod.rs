@@ -7,4 +7,5 @@
 pub(crate) mod apple_container;
 pub(crate) mod docker;
 pub(crate) mod lima;
+#[path = "host/mod.rs"]
 pub(crate) mod native;

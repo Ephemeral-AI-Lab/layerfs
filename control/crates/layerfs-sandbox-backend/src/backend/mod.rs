@@ -12,4 +12,5 @@ mod kind;
 pub(crate) use adapter::adapter;
 pub use kind::Backend;
 pub mod namespaces;
+#[path = "process/mod.rs"]
 pub mod native;

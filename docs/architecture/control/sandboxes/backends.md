@@ -16,14 +16,14 @@ The crate is grouped by owner:
 | --- | --- |
 | [`runtime/`](../../../../control/crates/layerfs-sandbox-backend/src/runtime) | The backend-neutral surface: `dispatch.rs` (`Runtime`, `Sandbox`, matched over the backends), `cancel.rs` (one command's stop handle), `trace.rs` (a traced command's step times) and `types/` (what the backends share). |
 | [`shared/`](../../../../control/crates/layerfs-sandbox-backend/src/shared) | The process lifecycle both backends use: the daemon start (`daemon.rs`), its listener, the search path, streams and confined reads. |
-| [`backend/native/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native) | Everything only `native` uses, its OS facts included: the provider and Sandbox, process groups (`groups.rs`) and `macos/` (the `mount` table, `umount -f`, confined reads). macOS runs only `native`. |
+| [`backend/process/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process) | Everything only `native` uses, its OS facts included: the provider and Sandbox, process groups (`groups.rs`) and `macos/` (the `mount` table, `umount -f`, confined reads). macOS runs only `native`. |
 | [`backend/namespaces/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces) | Everything only `namespaces` uses, its OS facts included: the provider and Sandbox, the cgroup, the helper spec (`spec.rs`), host checks (`host_checks.rs`), the command filter (`seccomp.rs`), the root (`rootfs/`), the Sandbox's network (`network/`) and `linux/` (`mountinfo`, confined reads). Linux runs only `namespaces`. |
 | [`support/`](../../../../control/crates/layerfs-sandbox-backend/src/support) | Small formats other crates read: `json/`, `postgres_url.rs`, `removed_platforms.rs`. |
 
 A machine's platform fixes its backend and callers never choose it: `native`
 on macOS runs `Native`; `native` on Linux and every `lima`,
 `apple-container` and `docker` machine run `Namespaces`; Windows has none
-([`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/profile.rs),
+([`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/profile.rs),
 `namespaces` in [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs);
 [Machines: platforms](../machines/platforms.md)).
 
@@ -61,7 +61,7 @@ different string and is not what records store.
 | Record | `SandboxRecord::Local` | `SandboxRecord::Namespaces` (local facts + image + network) |
 | Process boundary | named process groups | cgroup v2 directory |
 | Kernel requirements | none | cgroup v2 with `cgroup.kill` (Linux 5.14), and `clone3` with `CLONE_INTO_CGROUP` allowed (Linux 5.7; not answered `ENOSYS` or `EPERM` by a seccomp filter around the worker): every command is created inside its cgroup, with no fallback |
-| Source | [`native/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
+| Source | [`native/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
 
 ### Every `namespaces` Sandbox's own network
 
@@ -200,7 +200,7 @@ Capabilities "describe support, not qualification"
 The native backend is macOS only: Linux starts no native Sandbox
 (#533 O27), and a native record found there is refused with the
 records-only `sandbox remove` as its fix (RV3 FAIL 3,
-[`native/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/mod.rs)).
+[`native/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/mod.rs)).
 A reopened namespaces Sandbox runs the helper copy in its own `bin/`; one
 without it (an earlier build's) refuses a command with that fix
 (`namespaces::NO_HELPER_COPY`).
@@ -217,7 +217,7 @@ leaves unknown exit and storage facts `None`.
 | Second `stop` | refused | refused |
 | `delete` before a known stop | refused ("known stop required") | refused |
 | `delete` | kill groups if not yet, detach mounts, remove the directory | refuse while the cgroup holds a process; remove cgroup tree, directory and private root |
-| Source | [`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/sandbox.rs) | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
+| Source | [`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/sandbox.rs) | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
 
 Neither is retried. On `Drop` an owner only reaps a daemon or init it started
 that already exited; a running one is left for `stop`.
@@ -226,7 +226,7 @@ that already exited; a running one is left for `stop`.
 
 | Backend | `ExecExit.code` | `pid` | Source |
 | --- | --- | --- | --- |
-| Native | the exit code, or 128 + signal | the command's | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/exec.rs) |
+| Native | the exit code, or 128 + signal | the command's | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs) |
 | Namespaces | the helper's code, which is the command's or 128 + its signal; 125 is the helper's own failure; a helper ended by a signal (its setup failed, or the Sandbox ended) is a failure, never an exit code | the helper's | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper main.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/main.rs) |
 
 Both: stdout and stderr are copied to the sinks as they arrive in 8 KiB
@@ -270,7 +270,7 @@ not prove descendants ended.
 | Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; it lives in the bridge's `process` module. | [`process/identity.rs`](../../../../engine/crates/layerfs-bridge/src/process/identity.rs) |
 | `daemon.log` | Made new (`O_EXCL`) with the Sandbox's directory by each start, which refuses a directory that exists, and removed with it at close: a daemon never opens a log an earlier one wrote, so there is no `daemon.1.log`. Nothing rotates it while the daemon runs (a rename would not move the daemon's descriptor, and its launcher waits for the listener line from the file's start); it grows until the Sandbox closes. With tracing off the daemon writes one line for each control connection that ends without `EndSession` (a caller that closes it) and for each reclaimed slot or expired request, none for a mount, exec or Commit itself. Rotating it while the daemon runs is not built in 2.0 (layerfs-project#180, live writers). | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs), [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`shared/search_path.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/search_path.rs) |
-| OS facts | Each lives in the one backend that runs on its OS; `shared/` reaches it as `os`. `backend/namespaces/linux/`: `mountinfo`, lazy `MNT_DETACH`. `backend/native/macos/`: the `mount` table, `umount -f`. The seccomp filter is `backend/namespaces/seccomp.rs`, the crate's only `unsafe`. | [`shared/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/mod.rs), [`namespaces/linux/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux), [`native/macos/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/macos), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
+| OS facts | Each lives in the one backend that runs on its OS; `shared/` reaches it as `os`. `backend/namespaces/linux/`: `mountinfo`, lazy `MNT_DETACH`. `backend/process/macos/`: the `mount` table, `umount -f`. The seccomp filter is `backend/namespaces/seccomp.rs`, the crate's only `unsafe`. | [`shared/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/mod.rs), [`namespaces/linux/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux), [`native/macos/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/macos), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
 
 ### The run folder
 
@@ -293,7 +293,7 @@ the folder goes with it: `delete` removes it whole after a known stop, at
 | `workspaces/` | made by the daemon (`native`) or the launcher (`namespaces`); the daemon mounts each Workspace in it | commands, as the mounts allow | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs) `LocalPaths` |
 | `daemon.log` | the daemon's stdout and stderr, into the file the launcher made | the launcher (the listener line), `log_tail` and the inspect route; a macOS `native` command can read it too | same; [Inspection](inspect.md) |
 | `tmp/` | commands: it is their `HOME` and scratch directory | anyone who can reach it (1777) | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [`runtime/dispatch.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs) `scratch_directory` |
-| `groups/` | each `native` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`native/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/groups.rs) |
+| `groups/` | each `native` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`native/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs) |
 | `bin/`, `runtime/` | the launcher: copies of the daemon, the helper and the runtime layer | anyone may read and run them; only root may change them | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs) |
 | `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and the run root sweep, which removes a run folder only when its marker is older than a minute and names no live daemon ([`sweep.rs`](../../../../control/crates/layerfs-sandbox/src/sweep.rs) `owner`) | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
 | `<root>/<name>.root/` | the launcher makes it empty; the init stage mounts the Sandbox's root on it inside the Sandbox's own mount namespace, so from outside it stays empty | nothing outside the Sandbox | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs); `delete` removes it with `rmdir` |
@@ -307,13 +307,13 @@ reserves space for it (`supports_resource_limits` is false for both
 backends): what a command writes to its `HOME` takes space from the
 Stores' disk. A `namespaces` Sandbox's `/tmp` is a tmpfs, in memory.
 
-## `backend/native/`: native
+## `backend/process/`: native
 
 The machine is the boundary: daemon and commands share this kernel's
 processes, network, users and filesystem. `NativeProvider::launch`
 accepts only `Local` options whose identity is this process's own uid and gid
 and whose environment has no `PATH`
-([`native/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/provider.rs)).
+([`native/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/provider.rs)).
 
 This backend isolates nothing. A command is an ordinary process of the
 calling user: it starts in the Workspace's directory with `HOME` set to the
@@ -323,13 +323,13 @@ Sandbox's `daemon.setup`, and uses the host's network. It gets this
 process's search path and, when present, the user's `RUSTUP_HOME`,
 `CARGO_HOME` and `GIT_CONFIG_GLOBAL`, and nothing else of the caller's
 environment
-([`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/exec.rs),
+([`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs),
 [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `start_named`).
 
 | Rule | Source |
 | --- | --- |
-| Each command leads its own process group, named in `groups/<boot 32 hex>-<pid>-<start>` before anything waits on it; a group that cannot be named is killed at once. | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/exec.rs) |
-| A name is removed once its group has no member; a process that leaves its group (`setsid`) is followed only when named with `Sandbox::track(pid, start)`. | [`native/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/native/groups.rs) |
+| Each command leads its own process group, named in `groups/<boot 32 hex>-<pid>-<start>` before anything waits on it; a group that cannot be named is killed at once. | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs) |
+| A name is removed once its group has no member; a process that leaves its group (`setsid`) is followed only when named with `Sandbox::track(pid, start)`. | [`native/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs) |
 | Groups of another boot, or whose leader id now names another start time, are never signalled. | `end`, `members` in `native/groups.rs` |
 
 ## `backend/namespaces/`: Linux namespaces and the helper
