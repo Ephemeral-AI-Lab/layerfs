@@ -237,3 +237,12 @@ The per-child cost is gone: 106 → 7 in `files.change`. No fix needed.
   same demands), no sweep. Deleted tests: none.
 - Production LOC: 227,717 -> 227,748 (delta +31), engine
   layerfs-store-service −2, layerfs-workspace +33.
+
+## M1 close
+
+- Clippy `-D warnings` (`--all-targets`) on `layerfs-store-service` and
+  `layerfs-workspace`: one finding in W2 code (`map_err` returning its
+  argument in `StoreService::bound_or_released`), fixed with `inspect_err` in
+  its own commit; pins and `sdk_write_named_refusals` rerun green
+  (`receipts/M1-lint/`). rustfmt clean on every file lane W touched
+  (pre-existing `cargo fmt` diffs in other tests of the crate left alone).

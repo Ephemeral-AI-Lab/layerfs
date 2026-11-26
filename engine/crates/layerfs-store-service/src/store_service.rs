@@ -271,9 +271,8 @@ impl StoreService {
     ) -> Result<Arc<BoundWorkspace>, BindRefusal> {
         bound
             .map(|success| Arc::new(success.workspace))
-            .map_err(|refusal| {
+            .inspect_err(|_| {
                 self.bound.fetch_sub(1, Ordering::AcqRel);
-                refusal
             })
     }
 
