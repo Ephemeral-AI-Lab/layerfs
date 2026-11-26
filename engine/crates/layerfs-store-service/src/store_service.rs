@@ -101,6 +101,7 @@ pub struct StoreService {
 /// A service's overlay owner: not started yet (the template it starts
 /// over), or started, by the service (`owned`) or by its caller.
 enum Overlay {
+    ReadOnly,
     Later(PathBuf),
     Started {
         owned: Option<Owner>,
@@ -187,12 +188,26 @@ impl StoreService {
         Ok(Self::later(opened, template))
     }
 
+    /// Opens the CLI's one-shot PostgreSQL read path over one Full-checked
+    /// session. There is no writer or private Workspace.
+    pub fn open_postgres_read_only(
+        selection: &layerfs_persistence::PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<Self, OpenRefusal> {
+        let opened =
+            crate::bootstrap::open_postgres_read_only(selection, binding, cursor_key, CACHE_BYTES)
+                .map_err(open_refusal)?;
+        Ok(Self::serving(opened, Overlay::ReadOnly, 0))
+    }
+
     /// The overlay owner, started over the template by the first call that
     /// needs it. A start that fails fails that call alone; nothing is retried
     /// for it.
     fn owner(&self) -> Result<OwnerClient, String> {
         let mut overlay = self.overlay.lock().unwrap_or_else(|e| e.into_inner());
         let template = match &*overlay {
+            Overlay::ReadOnly => return Err("one-shot read has no overlay owner".to_owned()),
             Overlay::Started { client, .. } => return Ok(client.clone()),
             Overlay::Later(template) => template,
         };

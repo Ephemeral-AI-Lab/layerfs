@@ -85,16 +85,18 @@ pub fn open(
         identity.cursor_key,
         template,
     )
-    .map_err(|refusal| {
-        let reason = match refusal {
-            OpenRefusal::Outdated(status) => return refused(crate::state::OLD_STORE, status),
-            OpenRefusal::Unsupported(reason) => reason.0,
-            OpenRefusal::Missing(reason)
-            | OpenRefusal::Busy(reason)
-            | OpenRefusal::Failed(reason) => reason,
-        };
-        refused("Failed", reason)
-    })
+    .map_err(open_refusal)
+}
+
+fn open_refusal(refusal: OpenRefusal) -> SdkRefusal {
+    let reason = match refusal {
+        OpenRefusal::Outdated(status) => return refused(crate::state::OLD_STORE, status),
+        OpenRefusal::Unsupported(reason) => reason.0,
+        OpenRefusal::Missing(reason) | OpenRefusal::Busy(reason) | OpenRefusal::Failed(reason) => {
+            reason
+        }
+    };
+    refused("Failed", reason)
 }
 
 /// The binding key the schema of a call's `postgresql { url, schema,
@@ -249,6 +251,28 @@ pub fn open_postgres(
     identity: &Identity,
     template: &Path,
 ) -> Result<StoreService, SdkRefusal> {
+    let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
+    open(url, schema, sync, identity, template)
+}
+
+/// The fresh command's Store-call session, Full-checked once at open.
+pub(crate) fn open_read_only(
+    postgresql: Option<&PgSelection>,
+    identity: &Identity,
+) -> Result<StoreService, SdkRefusal> {
+    let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
+    StoreService::open_postgres_read_only(
+        &selection(url, schema, sync),
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .map_err(open_refusal)
+}
+
+fn resolve_postgres<'a>(
+    postgresql: Option<&'a PgSelection>,
+    identity: &'a Identity,
+) -> Result<(&'a str, &'a str, &'a str), SdkRefusal> {
     let Kind::Postgresql {
         schema,
         synchronous_commit,
@@ -264,5 +288,5 @@ pub fn open_postgres(
                 "a PostgreSQL Store call needs postgresql.url (passed per call, never stored)",
             )
         })?;
-    crate::postgresql::open::open(url, schema, synchronous_commit, identity, template)
+    Ok((url, schema, synchronous_commit))
 }

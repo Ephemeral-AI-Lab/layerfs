@@ -14,6 +14,7 @@ use std::{
 /// The Store's writer session on its engine (#506).
 #[derive(Clone)]
 enum Writer {
+    ReadOnly,
     Sqlite(Arc<StorageProvider>),
     DeferredSqlite {
         writer: Arc<DeferredSqliteWriter>,
@@ -24,6 +25,7 @@ enum Writer {
 impl Writer {
     fn diagnostics(&self) -> Result<Option<SqlWork>, PersistenceError> {
         match self {
+            Self::ReadOnly => Ok(None),
             Self::Sqlite(provider) => provider.diagnostics().map(Some),
             Self::DeferredSqlite { writer, .. } => writer
                 .get()
@@ -131,7 +133,7 @@ impl OpenedStore {
     /// SQLite.
     pub fn prepare_mounts(&self) -> StorageResult<()> {
         match &self.writer {
-            Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
+            Writer::ReadOnly | Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
             Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
         }
     }
@@ -148,7 +150,7 @@ impl OpenedStore {
                     .map_or(reader, |writer| &writer.storage)
                     .as_ref(),
             ),
-            Writer::Postgres(_) => None,
+            Writer::ReadOnly | Writer::Postgres(_) => None,
         }
     }
     /// Checkpoints an owned SQLite writer. Explicit maintenance can start
@@ -159,7 +161,7 @@ impl OpenedStore {
             Writer::Sqlite(provider) => Some(provider),
             Writer::DeferredSqlite { writer, .. } if explicit => Some(&writer.start()?.storage),
             Writer::DeferredSqlite { writer, .. } => writer.get().map(|writer| &writer.storage),
-            Writer::Postgres(_) => None,
+            Writer::ReadOnly | Writer::Postgres(_) => None,
         };
         provider.map(|provider| provider.checkpoint()).transpose()
     }
@@ -337,6 +339,42 @@ pub(crate) fn open_sqlite_for_calls(
         store,
         sqlite_version,
         writer: Writer::DeferredSqlite { writer, reader },
+        readers: observations,
+    })
+}
+
+/// A one-shot read over a single PostgreSQL session with Full validation.
+pub(crate) fn open_postgres_read_only(
+    selection: &layerfs_persistence::PostgresSelection,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    cache_bytes: usize,
+) -> StorageResult<OpenedStore> {
+    use layerfs_persistence::{PostgresCheck, PostgresHandles};
+    let selection = selection.clone().with_check(PostgresCheck::Full);
+    let opened = PostgresHandles::open_read_only(&selection, binding, cursor_key)?;
+    let version = format!("postgresql {}", opened.storage.server_version());
+    let observations = registry();
+    let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
+    let history = Arc::new(opened.history);
+    let control = StoreReader::new(Storage::new(opened.storage)?, history.clone());
+    let control = observe(&observations, 0, provider, control)?;
+    let store = Store::with_control_reader(
+        history,
+        control,
+        Arc::new(|_| {
+            Err(StorageError::Integrity(
+                "one-shot read has no Workspace reader",
+            ))
+        }),
+        cache_bytes,
+        ReservationBlocks::default(),
+        1,
+    )?;
+    Ok(OpenedStore {
+        store: Arc::new(store),
+        sqlite_version: version,
+        writer: Writer::ReadOnly,
         readers: observations,
     })
 }

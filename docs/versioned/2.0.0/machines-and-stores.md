@@ -445,6 +445,10 @@ $ layerfs store doctor shop-pg
 {"ok":true}
 ```
 
+The CLI opens one read-only PostgreSQL connection for each `file read`,
+`file stat`, or `file list`. It checks the schema and the Store binding on
+that connection before reading, using the TLS mode from the Store's URL.
+
 - **`store connect <store> <url> --user U --password-stdin`.** The user and
   password are required on a Store's first connect and are checked from
   this computer before anything is saved. The record keeps the URL, the

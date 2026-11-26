@@ -308,7 +308,9 @@ fn scoped(
     }
     layerfs_home::trace::step("dispatch");
     let mut context = Context::new(home, log.tag.clone(), asked.clone(), events);
-    let value = (spec.run)(&mut context, &args)?;
+    let value = layerfs_store::open::with_one_shot(log.client == Client::Cli, || {
+        (spec.run)(&mut context, &args)
+    })?;
     let value = match scope {
         Some(scope) => scope.answer(spec, value),
         None => value,

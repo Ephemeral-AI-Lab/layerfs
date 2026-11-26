@@ -18,6 +18,7 @@ use crate::open_args::OpenArgs;
 use crate::service as direct;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, Once};
@@ -42,11 +43,31 @@ static REAPER: Once = Once::new();
 /// Signalled when an idle checkpoint ends: `close` waits for it.
 static SETTLED: Condvar = Condvar::new();
 
+thread_local! {
+    static ONE_SHOT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Gives a single-call process's Store calls the one-shot route.
+pub fn with_one_shot<T>(enabled: bool, call: impl FnOnce() -> T) -> T {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            ONE_SHOT.set(self.0);
+        }
+    }
+    let _restore = Restore(ONE_SHOT.replace(enabled));
+    call()
+}
+
 /// Runs Store method `op` once, with the call's own arguments `args`, on
 /// the Store `open` names (`storePath`), opening it first if this process
 /// holds it not yet. `lease` is held for as long as the Store stays open.
 /// The Store stays open while it runs.
 pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> Outcome {
+    if ONE_SHOT.get() && open.postgresql.is_some() && direct::is_one_shot_read(op) {
+        let _lease = lease;
+        return direct::postgres_read(op, open, args);
+    }
     let running = Running(enter(open, lease, 1)?);
     layerfs_home::trace::step("store_open");
     // An admitting call reads the bounded places this home can speak for,

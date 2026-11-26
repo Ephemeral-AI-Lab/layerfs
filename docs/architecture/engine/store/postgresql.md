@@ -66,12 +66,20 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 | Call | What it answers | Source |
 | --- | --- | --- |
 | `create` | A new empty Store with Init's acquisition tables; projects reach it only by Init, nothing converts a SQLite Store | [`store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs) |
-| `Full` check (default) | Init, Store connect and the host's Store service; the only check that finds a column changed by hand | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| `Full` check (default) | Init, Store connect, the host's Store service and the CLI's one-shot file reads; the only check that finds a column changed by hand | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | `Light` check | A Sandbox daemon's writer, Workspace and control readers, and `attach_read_only`; a hand-changed column fails the statement that uses it instead | [`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs), [`owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
 | `binding(selection)` | The binding key a schema records, read in one read-only session, so a home that did not create it can open it | [`store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs) |
 | `attach_read_only(selection)` | One read-only session under the recorded binding, returned for the caller to compare with its own | same |
 | `postgresql_access(url, schema)` | Server version, one round trip's latency, `current_user`, whether the schema exists, and each privilege a Sandbox's reads and writes need that the role lacks: the schema's `USAGE` and `CREATE`, the database's `TEMP` (merges stage in temporary tables), each table's `SELECT`/`INSERT`/`UPDATE`/`DELETE` and each sequence's `USAGE`. What only a compaction needs (the database's `CREATE`, `pg_read_all_stats`) is not asked: `compaction_missing` checks it when a compaction starts | [`access.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/access.rs) |
 | `postgresql_status(url, schemas)` | Server version, one round trip's latency and each named schema's size | [`status.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/status.rs) |
+
+Each direct CLI `file read`, `file stat` and `file list` holds the Store's lease
+while one read-only PostgreSQL session checks the live schema and binding and
+serves the entire query. Each invocation performs the Full check with the
+configured TLS mode. It closes the session before releasing the lease.
+The in-process Store service still owns writable sessions and the Light
+checks for its control and pooled readers. The Sandbox reach and held-head
+paths keep their existing Light sessions.
 
 `access` and `status` open one connection for the call and close it, run
 read-only queries only and never retry. An authentication or unknown

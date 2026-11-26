@@ -60,14 +60,7 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
         }
     };
     // an older-format Store names the call that clears it (`state::outdated_fix`)
-    let opened = opened.map_err(|refusal| match (&args.store, refusal.code.as_str()) {
-        (Some(store), crate::state::OLD_STORE) => {
-            let postgresql = matches!(identity.kind, crate::identity::Kind::Postgresql { .. });
-            let fix = crate::state::outdated_fix(store, postgresql, &refusal.message);
-            with_fix(refusal, fix)
-        }
-        _ => refusal,
-    });
+    let opened = opened.map_err(|refusal| with_upgrade_fix(args, &identity, refusal));
     match opened {
         Ok(service) => Ok(Opened {
             service: Arc::new(service),
@@ -79,6 +72,39 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
             Err(refusal)
         }
     }
+}
+
+fn with_upgrade_fix(
+    args: &OpenArgs,
+    identity: &crate::identity::Identity,
+    refusal: SdkRefusal,
+) -> SdkRefusal {
+    match (&args.store, refusal.code.as_str()) {
+        (Some(store), crate::state::OLD_STORE) => {
+            let postgresql = matches!(identity.kind, crate::identity::Kind::Postgresql { .. });
+            let fix = crate::state::outdated_fix(store, postgresql, &refusal.message);
+            with_fix(refusal, fix)
+        }
+        _ => refusal,
+    }
+}
+
+/// Direct calls that use only published data, with no writer or Workspace.
+pub(crate) fn is_one_shot_read(method: &str) -> bool {
+    matches!(method, "fs.read" | "fs.stat" | "fs.list")
+}
+
+/// Checks the authoritative record's binding on the only session this read uses.
+pub(crate) fn postgres_read(method: &str, args: &OpenArgs, fields: SdkValue) -> Outcome {
+    let identity = crate::identity::identity(args)?;
+    let service = crate::postgresql::open::open_read_only(args.postgresql.as_ref(), &identity)
+        .map_err(|refusal| with_upgrade_fix(args, &identity, refusal))?;
+    layerfs_home::trace::step("store_open");
+    let outcome = dispatch(&service, method, fields);
+    layerfs_home::trace::step("call");
+    drop(service);
+    layerfs_home::trace::step("store_close");
+    outcome
 }
 
 /// One more client of the Store a call names, opening it first.
@@ -153,6 +179,10 @@ pub fn with_service<T>(
 /// the call's own arguments `args` (any routing key in them is dropped).
 pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
     let service = service(open)?;
+    dispatch(&service, method, args)
+}
+
+fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> Outcome {
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
@@ -166,7 +196,7 @@ pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
         method: method.to_owned(),
         args,
     };
-    layerfs_store_service::methods::call(&service, &call)
+    layerfs_store_service::methods::call(service, &call)
 }
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.
