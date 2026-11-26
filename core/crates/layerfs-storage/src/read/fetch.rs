@@ -128,6 +128,35 @@ pub(crate) struct Fetch {
     pub(super) trust_hints: Cell<bool>,
 }
 impl Fetch {
+    pub(crate) fn retain_inode_locators(&mut self) {
+        if self.metadata.batched_chain_reads() {
+            self.locators.get_mut().retain_inodes();
+        }
+    }
+
+    /// Gives non-lost FULL files just admitted to the similarity ring one
+    /// extra clock pass without retaining new entries or private locators.
+    pub(crate) fn keep_captured_ring_winners(
+        &self,
+        batch: &crate::port::Publication,
+        lost: &BTreeSet<ObjectId>,
+    ) {
+        let cache = self.locators.borrow();
+        if !cache.keeps_ring_winners() || batch.signatures.is_empty() {
+            return;
+        }
+        let indexed: BTreeSet<_> = batch.signatures.iter().map(|row| row.object_id).collect();
+        for row in &batch.objects {
+            if row.role == layerfs_content::ObjectRole::WholeFile
+                && row.base.is_none()
+                && indexed.contains(&row.object_id)
+                && !lost.contains(&row.object_id)
+            {
+                cache.keep_ring_winner(*row);
+            }
+        }
+    }
+
     pub(crate) fn new(metadata: Arc<dyn PackPersistence>) -> Self {
         Self {
             metadata,
