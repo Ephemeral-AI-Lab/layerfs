@@ -1174,8 +1174,12 @@ measured with `log_statement=all` on the private test server, and pinned):
   back, and the built bytes reach the shared cache only after publication.
 - (g) `logical.known`: the Workspace keeps one node's recorded logical size,
   the one it last read or published (`BoundWorkspace::known_logical`); a
-  Commit over its own last Commit reads nothing. The bind snapshot carries
-  no size, so the first Commit after a mount still reads it.
+  Commit over its own last Commit reads nothing. Its Store keeps one more,
+  the size any of its Workspaces last read or published
+  (`Store::last_logical`, #818 W3), so a Workspace bound to the Commit
+  another one just published (sequential SDK file calls on one Branch)
+  reads nothing either. The bind snapshot carries no size, so the first
+  Commit after a mount over any other node still reads it.
 - (h) The whiteout step reuses the bound node's serial and markers that the
   mount read (`KnownRemovals`), and a Commit this Workspace published hides
   nothing: its serial is above every marker's frontier, and while the mount

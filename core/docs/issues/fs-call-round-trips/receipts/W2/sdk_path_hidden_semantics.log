@@ -1,0 +1,9 @@
+
+running 3 tests
+test a_marker_under_a_replaced_ancestor_hides_nothing_and_pages_normally ... ok
+test glob_removed_count_counts_the_hidden_results_at_any_depth_on_every_page ... ok
+test hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+run_bounded: exit 0 after 1.0 s

@@ -51,6 +51,26 @@ impl Store {
         owner: OwnerClient,
         request: NamedBindRequest,
     ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_named_with(owner, request, false)
+    }
+    /// [`Self::bind_named`] for an SDK call's private Workspace, whose
+    /// reader comes from and returns to the Store's idle readers, as
+    /// [`Self::bind_private`] (#818 W2).
+    #[allow(clippy::result_large_err)]
+    pub fn bind_named_private(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: NamedBindRequest,
+    ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_named_with(owner, request, true)
+    }
+    #[allow(clippy::result_large_err)]
+    fn bind_named_with(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: NamedBindRequest,
+        pooled: bool,
+    ) -> Result<BindSuccess, BindRefusal> {
         if HistoryName::new(&request.project).is_err() {
             return Err(BindRefusal {
                 phase: BindPhase::Snapshot,
@@ -59,12 +79,8 @@ impl Store {
                 request: BindIntent::Named(request),
             });
         }
-        self.bind_with(
-            owner,
-            BindIntent::Named(request),
-            MountPlace::default(),
-            false,
-        )
+        let intent = BindIntent::Named(request);
+        self.bind_with(owner, intent, MountPlace::default(), pooled)
     }
     /// [`Self::bind_named`] of a mount whose caller knows the Sandbox and
     /// machine its daemon serves.

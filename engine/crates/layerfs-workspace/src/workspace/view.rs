@@ -37,15 +37,19 @@ impl ViewStat {
         }
     }
 }
+/// The content kind of an overlay inode.
+fn kind_of(kind: layerfs_overlay::InodeKind) -> InodeKind {
+    match kind {
+        layerfs_overlay::InodeKind::File => InodeKind::RegularFile,
+        layerfs_overlay::InodeKind::Directory => InodeKind::Directory,
+        layerfs_overlay::InodeKind::Symlink => InodeKind::Symlink,
+    }
+}
 impl From<Inode> for ViewStat {
     fn from(v: Inode) -> Self {
         Self {
             serial: v.serial,
-            kind: match v.kind {
-                layerfs_overlay::InodeKind::File => InodeKind::RegularFile,
-                layerfs_overlay::InodeKind::Directory => InodeKind::Directory,
-                layerfs_overlay::InodeKind::Symlink => InodeKind::Symlink,
-            },
+            kind: kind_of(v.kind),
             metadata: PortableMetadata {
                 mode: u32::from(v.mode),
                 mtime_seconds: v.mtime_seconds,
@@ -106,6 +110,37 @@ impl SourceView {
             return Ok(value.into());
         }
         inherited.ok_or(ContentError::PathNotFound.into())
+    }
+    /// The kinds [`Self::stat`] reports for `serials` (a listed page), with
+    /// no metadata, length or sub-directory read: the overlay's own inodes
+    /// first, then one [`BaseView::values`] for the rest, the overlay asked
+    /// again after it as `stat` does (#818 W5). A serial neither holds is
+    /// `PathNotFound`. Bounded by the page: one value per serial.
+    pub fn kinds(
+        &self,
+        overlay: &impl OverlayRead,
+        serials: &[u64],
+    ) -> WorkspaceResult<Vec<InodeKind>> {
+        let mut kinds = Vec::with_capacity(serials.len());
+        let mut inherited = Vec::new();
+        for (index, serial) in serials.iter().enumerate() {
+            let local = overlay.inode(self.source, *serial)?;
+            if local.is_none() {
+                inherited.push(index);
+            }
+            kinds.push(local.map(|row| kind_of(row.kind)));
+        }
+        let wanted: Vec<u64> = inherited.iter().map(|index| serials[*index]).collect();
+        for (index, value) in inherited.into_iter().zip(self.base.values(&wanted)?) {
+            kinds[index] = match overlay.inode(self.source, serials[index])? {
+                Some(row) => Some(kind_of(row.kind)),
+                None => value.map(|value| value.kind),
+            };
+        }
+        kinds
+            .into_iter()
+            .map(|kind| kind.ok_or(ContentError::PathNotFound.into()))
+            .collect()
     }
     /// Canonical root directory serial of the owned base; never rebound.
     pub fn root_serial(&self) -> u64 {

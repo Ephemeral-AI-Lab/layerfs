@@ -114,8 +114,12 @@ meets: `fs.list { path: "/absent", pageSize: 0 }` is `NoSuchPath`, not
 
 ```text
 files::commit(service, project, branch, changes, message)
-  resolve  branch "main" -> ReadOnly; unknown -> NoSuchBranch
-  bind     fresh WorkspaceId; private Workspace (never listed or mounted)
+  bind     fresh WorkspaceId; private Workspace (never listed or mounted),
+           found by project and Branch name with its snapshot in one read:
+           unknown project -> NoSuchProject; unknown -> NoSuchBranch
+  resolve  only when the bind cannot run by name or refused before reading:
+           project, branch argument, "main" -> ReadOnly, Branch by name
+  hidden   bound node's serial + markers kept by the bind; else read them
   change   Mutation per change, in order; first refusal stops, {index}
   commit   commit_captured_via(message, CommitVia::Files)
            head moved -> merged in the same Save; conflict -> Conflict
@@ -134,12 +138,41 @@ files::commit(service, project, branch, changes, message)
 A path is absolute, at most 4096 bytes, without NUL, trailing `/`, empty,
 `.` or `..` components; a mode is 0..=0o7777, and set-ID or sticky bits on a
 file are refused ([`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs)).
-Recursive walks hold one directory page per level, and the copy's hard-link
+Recursive walks hold one directory page per level and take the page's
+kinds in one demand (`SourceView::kinds`: the overlay's own inodes, then one
+`BaseView::values` inode lookup for the rest; no metadata or length, #818
+W5); the copy still stats each entry it copies. The copy's hard-link
 map lives in the private overlay's indexed operation records (kind
 `0x53444b43`), not in memory. Each change runs as short locked jobs on the
 private overlay; serials come from the Store's pooled reservation
 ([`store/ports.rs`](../../../../engine/crates/layerfs-store-service/src/store/ports.rs)).
 The Commit itself is the Workspace Commit; see [Commit](../commit/README.md).
+
+**Binding by name.** A call on a named Branch other than `main` without
+`expected` binds through `Store::bind_named_private`: on PostgreSQL the
+writer's one named snapshot statement and the admission message, on SQLite
+the Workspace reader's named snapshot, with no control-reader read (#818
+W2). The refusal order stays the lookups': a refused `branch` argument,
+`main` (`ReadOnly`) and an `expected` Commit (which needs the project
+record) take the lookups on the control reader first, as do a missing
+Workspace key and a Store that refuses the bind before reading (overlay
+maintenance stopped, call capacity full), so `NoSuchProject` and
+`NoSuchBranch` still come first. The bind's `NoSuchProject` /
+`NoSuchBranch` answer with the lookups' texts, and its snapshot read
+failure as a lookup read failure.
+
+**Hidden paths.** The private overlay already whiteouts a path a
+`project.remove_file` marker hides, so `edit` and a `cp` source that come
+back `NoSuchPath` ask the base tree whether the path exists there and is
+hidden (`Removed`, with its frontier) or never existed (`NoSuchPath`). The
+check uses the bound node's `history_serial` and markers that the bind kept
+under its mount admission (`BoundWorkspace::kept_markers`, the
+`KnownRemovals` of [PostgreSQL](../store/postgresql.md) (h), on both
+backends), with no read; the base tree is opened on the control reader only
+when such a refusal asks (#818 W1). When the bind kept none (no admission,
+or markers charging over `KEPT_REMOVAL_BYTES`), the call reads the markers
+and the node's serial and opens the tree first, as before, so a failed
+marker read still refuses every change (SPEC D16).
 
 ### Branch history
 

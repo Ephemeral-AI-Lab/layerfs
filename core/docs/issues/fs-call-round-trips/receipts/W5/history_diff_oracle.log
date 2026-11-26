@@ -1,0 +1,10 @@
+
+running 1 test
+test change_walk_equals_the_full_walk ... DIFF_ORACLE seed=352 diffs=120 entries=1539 named_alike=289 profile=Normal
+DIFF_ORACLE seed=7 diffs=120 entries=1353 named_alike=275 profile=Normal
+DIFF_ORACLE seed=2026 diffs=120 entries=1820 named_alike=318 profile=Normal
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.19s
+
+run_bounded: exit 0 after 5.0 s

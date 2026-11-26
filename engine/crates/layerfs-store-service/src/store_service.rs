@@ -9,7 +9,9 @@
 //! resent or discarded.
 use crate::bootstrap::{open_store_observed, OpenedStore};
 use crate::kernel_guard::{self, Unsupported};
-use crate::store::{BindRequest, BoundWorkspace, CommitFailure, Store};
+use crate::store::{
+    BindRefusal, BindRequest, BindSuccess, BoundWorkspace, CommitFailure, NamedBindRequest, Store,
+};
 use crate::{Owner, OwnerClient, OwnerConfig};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, WorkspaceId};
@@ -25,6 +27,17 @@ use std::sync::{Arc, Mutex};
 pub struct Retained {
     pub workspace: Arc<BoundWorkspace>,
     pub failure: Box<CommitFailure>,
+}
+
+/// Why [`StoreService::bind_named`] bound no Workspace.
+#[derive(Debug)]
+pub enum NamedBindFailure {
+    /// Refused before any read: the overlay owner's maintenance stopped or
+    /// the call capacity is full.
+    Admission(String),
+    /// The bind itself refused: no such project or Branch, a read or a
+    /// later bind step.
+    Bind(Box<BindRefusal>),
 }
 
 /// Private Workspaces one process's Store calls may hold at once: one per
@@ -198,6 +211,41 @@ impl StoreService {
         branch: BranchId,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, String> {
+        self.admit()?;
+        let bound = crate::telemetry::phase(timing, "store.bind", || {
+            self.store
+                .bind_private(self.owner.clone(), BindRequest { workspace, branch })
+        });
+        self.bound_or_released(bound)
+            .map_err(|refusal| refusal.to_string())
+    }
+
+    /// [`Self::bind`] of Branch `branch` of `project` by name: the bind
+    /// finds both with its snapshot in one read (#818 W2).
+    pub fn bind_named(
+        &self,
+        workspace: WorkspaceId,
+        project: &str,
+        branch: &str,
+        timing: &TimingScope<'_, Active>,
+    ) -> Result<Arc<BoundWorkspace>, NamedBindFailure> {
+        self.admit().map_err(NamedBindFailure::Admission)?;
+        let request = NamedBindRequest {
+            workspace,
+            project: project.to_owned(),
+            branch: branch.to_owned(),
+        };
+        let bound = crate::telemetry::phase(timing, "store.bind", || {
+            self.store.bind_named_private(self.owner.clone(), request)
+        });
+        self.bound_or_released(bound)
+            .map_err(|refusal| NamedBindFailure::Bind(Box::new(refusal)))
+    }
+
+    /// Admits one more private Workspace, before any read: refused while
+    /// the overlay owner's maintenance is stopped or the call capacity is
+    /// full.
+    fn admit(&self) -> Result<(), String> {
         if let Some(stopped) = self
             .owner
             .maintenance_failure()
@@ -213,17 +261,19 @@ impl StoreService {
         if admitted.is_err() {
             return Err("Capacity: Store call Workspace capacity".to_owned());
         }
-        let bound = crate::telemetry::phase(timing, "store.bind", || {
-            self.store
-                .bind_private(self.owner.clone(), BindRequest { workspace, branch })
-        });
-        match bound {
-            Ok(success) => Ok(Arc::new(success.workspace)),
-            Err(refusal) => {
+        Ok(())
+    }
+
+    /// The bound Workspace, or the refusal with its admission given back.
+    fn bound_or_released(
+        &self,
+        bound: Result<BindSuccess, BindRefusal>,
+    ) -> Result<Arc<BoundWorkspace>, BindRefusal> {
+        bound
+            .map(|success| Arc::new(success.workspace))
+            .inspect_err(|_| {
                 self.bound.fetch_sub(1, Ordering::AcqRel);
-                Err(refusal.to_string())
-            }
-        }
+            })
     }
 
     /// Closes a private Workspace and retires its overlay namespace.
