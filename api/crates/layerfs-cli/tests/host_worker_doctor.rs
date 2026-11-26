@@ -111,6 +111,31 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
         Some("stale"),
     );
     assert!(home.paths.control.exists(), "the probe changed the socket");
+
+    // A worker killed between bind and chmod leaves a socket without its
+    // private mode; the next start replaces it, so doctor reports it stale.
+    fs::set_permissions(&home.paths.control, fs::Permissions::from_mode(0o755)).unwrap();
+    let unready = machine(&home);
+    assert_eq!(
+        unready
+            .get("live")
+            .unwrap()
+            .get("worker")
+            .unwrap()
+            .get_text("health"),
+        Some("stale"),
+    );
+    let report = cli(
+        &home,
+        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+    );
+    let checks = list(report.get("tree").unwrap(), "checks");
+    let endpoint = checks
+        .iter()
+        .find(|row| row.get_text("check") == Some("machine.worker.endpoint"))
+        .unwrap();
+    assert_eq!(endpoint.get_text("outcome"), Some("notice"), "{endpoint:?}");
+    assert!(home.paths.control.exists(), "the probe changed the socket");
 }
 
 #[test]

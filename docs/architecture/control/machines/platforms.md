@@ -338,6 +338,10 @@ The client resolves aliases to the same home before
 checking the kernel pathname limit. A too-long path can be routed directly
 by the caller before a connection attempt. The separate management socket
 retains admission capacity for probes and close requests.
+Doctor and `machine get --with live` report a leftover socket (no listener,
+or not yet 0600 with its worker gone) as health `stale`, a notice on
+`machine.worker.endpoint`: the next start replaces it, and callers never
+dial a socket without mode 0600.
 
 Both ends verify the effective peer UID. The handshake identifies the
 installed executable using its package version and kernel file identity,

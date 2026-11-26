@@ -24,7 +24,9 @@ pub enum HostProbe {
 pub enum HostObservation {
     /// No control socket was present when observed.
     Absent,
-    /// A socket was present but the kernel found no listener.
+    /// A socket was present but the kernel found no listener, or it never
+    /// got its private mode (its worker died between bind and chmod). The
+    /// next start replaces it.
     Stale,
     /// The probe could not verify the endpoint or its answer.
     Unreachable(HostProbe, SdkRefusal),
@@ -58,12 +60,9 @@ impl HostPaths {
         for path in [&self.socket, &self.control] {
             match existing_socket(path) {
                 Ok(None) if path == &self.control => return Absent,
-                Ok(Some(metadata)) if metadata.mode() & 0o777 != 0o600 => {
-                    return Unreachable(
-                        HostProbe::Endpoint,
-                        refused("Denied", format!("{} must have mode 0600", path.display())),
-                    )
-                }
+                // Never dialled: a call treats it as absent once no worker
+                // holds the lifetime lock, and the next start replaces it.
+                Ok(Some(metadata)) if metadata.mode() & 0o777 != 0o600 => return Stale,
                 Ok(_) => {}
                 Err(error) => return Unreachable(HostProbe::Endpoint, error),
             }

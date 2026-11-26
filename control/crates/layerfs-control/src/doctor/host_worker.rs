@@ -106,7 +106,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
         Stale => {
             checks.notice(
                 ENDPOINT,
-                "a private worker socket has no accepting listener",
+                "a leftover worker socket has no listener or lacks its private mode; the next start replaces it",
             );
             checks.evidence(ENDPOINT, evidence());
         }
