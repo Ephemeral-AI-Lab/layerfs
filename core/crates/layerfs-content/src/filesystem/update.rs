@@ -317,9 +317,9 @@ fn run_body<'b>(
     let dropped = state.dropped_view(input);
     let mut validation = ValidationWork::default();
     let topology = phases.phase("validate", || {
-        validate::check_operation(objects.reader(), input, state, &mut validation)
+        validate::check_operation(objects.base_reader(), input, state, &mut validation)
     })?;
-    let reader = objects.reader();
+    let reader = objects.base_reader();
     let mut counters = FilesystemUpdateCounters {
         validation,
         ..FilesystemUpdateCounters::default()

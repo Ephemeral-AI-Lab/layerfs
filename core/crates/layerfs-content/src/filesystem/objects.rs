@@ -41,7 +41,7 @@ pub struct FilesystemObjects<'a> {
     accepted: Option<&'a dyn AuthenticatedObjects>,
     work: ObjectWork,
     inode_read_ahead: bool,
-    cached_base: Option<&'a dyn AuthenticatedObjects>,
+    base_reader: Option<&'a dyn AuthenticatedObjects>,
 }
 
 impl<'a> FilesystemObjects<'a> {
@@ -56,7 +56,7 @@ impl<'a> FilesystemObjects<'a> {
             accepted: None,
             work: ObjectWork::default(),
             inode_read_ahead: false,
-            cached_base: None,
+            base_reader: None,
         }
     }
 
@@ -75,7 +75,7 @@ impl<'a> FilesystemObjects<'a> {
             accepted: Some(accepted),
             work: ObjectWork::default(),
             inode_read_ahead: false,
-            cached_base: None,
+            base_reader: None,
         }
     }
 
@@ -85,11 +85,14 @@ impl<'a> FilesystemObjects<'a> {
         self
     }
 
-    /// Offers authenticated resident pages of the same immutable base. Only
-    /// reads whose IDs were resolved from that base may use this cache.
-    pub fn with_cached_base(mut self, cached: Option<&'a dyn AuthenticatedObjects>) -> Self {
-        self.cached_base = cached;
+    /// Supplies an authenticated read port for the exact immutable base.
+    pub fn with_base_reader(mut self, base: Option<&'a dyn AuthenticatedObjects>) -> Self {
+        self.base_reader = base;
         self
+    }
+
+    pub(crate) fn base_reader(&self) -> &'a dyn AuthenticatedObjects {
+        self.base_reader.unwrap_or(self.reader)
     }
 
     pub(crate) const fn inode_read_ahead(&self) -> bool {
@@ -131,13 +134,21 @@ impl<'a> FilesystemObjects<'a> {
     /// ceiling is the same figure, so a wave this boundary accepts is one the
     /// storage side accepts too.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        self.read_from(self.reader, ids)
+    }
+
+    fn read_from(
+        &mut self,
+        reader: &'a dyn AuthenticatedObjects,
+        ids: &[ObjectId],
+    ) -> ContentResult<Vec<Vec<u8>>> {
         if ids.len() > MAXIMUM_READ_DEMANDS {
             return Err(crate::error::ContentError::ObjectLimitExceeded {
                 limit: MAXIMUM_READ_DEMANDS,
                 actual: ids.len(),
             });
         }
-        let values = self.reader.read_canonical_batch(ids)?;
+        let values = reader.read_canonical_batch(ids)?;
         if values.len() != ids.len() {
             return Err(crate::error::ContentError::BatchCardinality {
                 requested: ids.len(),
@@ -151,42 +162,9 @@ impl<'a> FilesystemObjects<'a> {
         Ok(values)
     }
 
-    /// Reads a bounded cohort of known base pages. Reuses authorized
-    /// resident bytes before it sends the remaining IDs to the provider.
+    /// Reads a bounded cohort of known base pages.
     pub(crate) fn read_base_pages(&mut self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        let Some(cache) = self.cached_base else {
-            return self.read_batch(ids);
-        };
-        let bound = ids
-            .len()
-            .saturating_mul(crate::filesystem::limits::MAXIMUM_PAGE_BYTES);
-        let values = cache.cached_canonical_batch(ids, bound)?;
-        if values.len() != ids.len() {
-            return Err(crate::ContentError::BatchCardinality {
-                requested: ids.len(),
-                returned: values.len(),
-            });
-        }
-        let missing: Vec<_> = ids
-            .iter()
-            .zip(&values)
-            .filter_map(|(id, value)| value.is_none().then_some(*id))
-            .collect();
-        let mut fetched = if missing.is_empty() {
-            Vec::new()
-        } else {
-            self.read_batch(&missing)?
-        }
-        .into_iter();
-        let mut result = Vec::with_capacity(values.len());
-        for value in values {
-            result.push(
-                value
-                    .or_else(|| fetched.next())
-                    .ok_or(crate::ContentError::InvalidRecord("cached base page reply"))?,
-            );
-        }
-        Ok(result)
+        self.read_from(self.base_reader(), ids)
     }
 
     /// Moves one finalized object to the consumer and charges it.
@@ -203,6 +181,73 @@ impl<'a> FilesystemObjects<'a> {
         self.work.objects_read = self.work.objects_read.saturating_add(objects);
         self.work.bytes_read = self.work.bytes_read.saturating_add(bytes);
         self.work.read_waves = self.work.read_waves.saturating_add(1);
+    }
+}
+
+/// Reads namespace pages already authenticated and held for the exact base,
+/// then sends only misses to the ordinary provider. It does not admit
+/// canonical bytes into the resident cache. Accepted Save reads use a
+/// separate capability.
+pub struct BasePageReader<'a> {
+    cache: &'a dyn AuthenticatedObjects,
+    provider: &'a dyn AuthenticatedObjects,
+}
+
+impl<'a> BasePageReader<'a> {
+    /// Both ports are already authorized to read this immutable base.
+    pub fn new(
+        cache: &'a dyn AuthenticatedObjects,
+        provider: &'a dyn AuthenticatedObjects,
+    ) -> Self {
+        Self { cache, provider }
+    }
+}
+
+const BASE_RESIDENT_BYTES: usize = 2 * 1024 * 1024;
+
+impl AuthenticatedObjects for BasePageReader<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let bound = ids
+            .len()
+            .saturating_mul(crate::filesystem::limits::MAXIMUM_PAGE_BYTES)
+            .min(BASE_RESIDENT_BYTES);
+        let values = self.cache.cached_canonical_batch(ids, bound)?;
+        if values.len() != ids.len() {
+            return Err(crate::ContentError::BatchCardinality {
+                requested: ids.len(),
+                returned: values.len(),
+            });
+        }
+        let missing: Vec<_> = ids
+            .iter()
+            .zip(&values)
+            .filter_map(|(id, value)| value.is_none().then_some(*id))
+            .collect();
+        let mut fetched = if missing.is_empty() {
+            Vec::new()
+        } else {
+            self.provider.read_canonical_batch(&missing)?
+        }
+        .into_iter();
+        if fetched.len() != missing.len() {
+            return Err(crate::ContentError::BatchCardinality {
+                requested: missing.len(),
+                returned: fetched.len(),
+            });
+        }
+        let mut result = Vec::with_capacity(values.len());
+        for value in values {
+            result.push(
+                value
+                    .or_else(|| fetched.next())
+                    .ok_or(crate::ContentError::InvalidRecord("cached base page reply"))?,
+            );
+        }
+        Ok(result)
+    }
+
+    fn decoded_pages(&self) -> Option<&super::decoded::DecodedPages> {
+        self.cache.decoded_pages()
     }
 }
 

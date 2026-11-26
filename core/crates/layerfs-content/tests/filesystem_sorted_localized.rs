@@ -916,9 +916,10 @@ fn a_resident_base_leaf_is_removed_from_the_planned_provider_demand() {
         retained: children[40],
     };
     let mut emitted = TreeStore::new();
+    let base_reader = layerfs_content::filesystem::objects::BasePageReader::new(&cache, &reader);
     let mut objects = FilesystemObjects::new(&reader, &mut emitted)
         .with_inode_read_ahead(true)
-        .with_cached_base(Some(&cache));
+        .with_base_reader(Some(&base_reader));
     let (_, work) = Inodes::apply(
         &mut objects,
         Some(tree.root),

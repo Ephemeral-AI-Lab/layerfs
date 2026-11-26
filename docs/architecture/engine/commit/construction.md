@@ -112,9 +112,13 @@ the existing authenticated read port. Canonical pages, IDs, inline
 change records and one decode slot fit within 1 MiB. The pages also
 charge the existing sorted scratch budget. The merge consumes the
 pages in serial order and fetches newly required neighbours on demand.
-Both inode-leaf and directory-root cohorts consult the captured base's
-existing authenticated cache first. Only missing pages go through the
-Save read port. A failed group returns its original provider error.
+Once the sealed input exceeds one 64-row record job, validation, reference
+reduction, and the inode-leaf and directory-root cohorts consult the
+captured base's existing authenticated cache, reusing up to 2 MiB of
+resident canonical bytes per demand. Only missing pages go
+through the Save read port. Reads of newly accepted Save objects keep
+their separate capability. A failed group returns its original provider
+error.
 
 [Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
 
