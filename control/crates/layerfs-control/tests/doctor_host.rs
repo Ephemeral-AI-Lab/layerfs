@@ -389,7 +389,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
         check.get_text("message"),
         Some(
             format!(
-                "the native daemon at {shown} was built from 22222222, this build from 11111111; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`"
+                "the host machine's daemon at {shown} was built from 22222222, this build from 11111111; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`"
             )
             .as_str()
         )
@@ -424,7 +424,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
         check.get_text("message"),
         Some(
             format!(
-                "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update {HOST_MACHINE} --daemon <path>`"
+                "the host machine's daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update {HOST_MACHINE} --daemon <path>`"
             )
             .as_str()
         )

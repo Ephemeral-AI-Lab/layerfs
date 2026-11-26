@@ -209,7 +209,10 @@ fn artifact(checks: &mut Checks, machine: &str, path: &str, present: bool) {
 pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) {
     const ID: &str = "home.native_daemon";
     let Some(daemon) = NativeDaemon::of(home) else {
-        checks.unknown(ID, "the native daemon's location could not be resolved");
+        checks.unknown(
+            ID,
+            "the host machine's daemon location could not be resolved",
+        );
         return;
     };
     let shown = daemon.path.display().to_string();
@@ -227,7 +230,7 @@ pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) 
     ]);
     if daemon.present && !executable(&daemon.path) {
         let message = format!(
-            "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update {HOST_MACHINE} --daemon <path>`"
+            "the host machine's daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update {HOST_MACHINE} --daemon <path>`"
         );
         match daemon.source {
             "recorded" => checks.fail(ID, message),
@@ -251,11 +254,14 @@ pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) 
             checks.fix(ID, fix);
         }
     } else if matched == SdkValue::Bool(true) {
-        checks.pass(ID, format!("the native daemon at {shown} is this build's"));
+        checks.pass(
+            ID,
+            format!("the host machine's daemon at {shown} is this build's"),
+        );
     } else {
         checks.pass(
             ID,
-            format!("the native daemon at {shown} is executable; its build cannot be compared with this one (a commit unknown or a tree dirty)"),
+            format!("the host machine's daemon at {shown} is executable; its build cannot be compared with this one (a commit unknown or a tree dirty)"),
         );
     }
     checks.evidence(ID, evidence);

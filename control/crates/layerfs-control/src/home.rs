@@ -294,7 +294,7 @@ impl NativeDaemon {
     /// `DaemonMissing`'s message.
     pub fn missing(&self) -> String {
         format!(
-            "no native daemon at {}; the native machine needs this build's `layerfs-daemon`: `layerfs machine update {HOST_MACHINE} --daemon <path>`",
+            "no host machine daemon at {}; the host machine needs this build's `layerfs-daemon`: `layerfs machine update {HOST_MACHINE} --daemon <path>`",
             self.path.display()
         )
     }
@@ -305,7 +305,7 @@ impl NativeDaemon {
         let ours = build.commit?;
         (self.matches(build) == SdkValue::Bool(false)).then(|| {
             format!(
-                "the native daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`",
+                "the host machine's daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`",
                 self.path.display(),
                 short(theirs),
                 short(ours)

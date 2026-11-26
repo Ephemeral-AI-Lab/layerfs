@@ -254,7 +254,7 @@ worker's root:
 
 | Sandbox on | Its record | Daemon keys (`control.json`) | Workspace and command records | Run folder |
 | --- | --- | --- | --- | --- |
-| `native` | the home | the home | the home | the home's `machine/<host>/run/` |
+| the host machine (`macos-host` or `linux-host`) | the home | the home | the home | the home's `machine/<host>/run/` |
 | `lima`, daemon reached directly (its port forwarded to the host) | the home, and the machine | both | the home | the machine |
 | any other machine | the home (without `daemon`), and the machine | the machine | the machine | the machine |
 

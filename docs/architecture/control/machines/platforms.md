@@ -13,7 +13,7 @@ may run, and how to add one, within [Machines](README.md).
 
 | Platform | How | Tool | Hosts | Backend | Kernel | sqlite calls | Worker binds | Options |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `host` | built in | none | macOS, Linux, Windows | macOS `process` (`Process`); Linux `namespaces`; Windows none | macOS `nfs`; Linux `fuse` | in process; Windows `worker` | (no worker) | none |
+| `host` | built in | none | macOS, Linux (the profile also lists Windows, where no host machine is built) | macOS `process` (`Process`); Linux `namespaces` | macOS `nfs`; Linux `fuse` | in process; eligible CLI reads in the host worker | Unix sockets `worker.sock`, `worker.ctl` in the machine folder | none |
 | `docker` | built in | `docker` | macOS, Linux | `namespaces` in the worker container | `fuse` | worker | `0.0.0.0:7070` (macOS); host network on Linux | none |
 | `apple-container` | created | `container` | macOS | `namespaces` | `fuse` | worker | `0.0.0.0:7070` | `cpus`, `memory`, `disk`, `image`, `os_image` |
 | `lima` | created | `limactl` | macOS | `namespaces` | `fuse` | worker | `127.0.0.1:7070` | `cpus`, `memory`, `disk`, `image`, `os_image` |
@@ -48,8 +48,12 @@ removed. The host machine (`macos-host` or `linux-host`) is a machine, not the h
 process (the home, records, secrets and the near end of a transfer), and
 nothing about it is written as `macos-host` or `linux-host`. What is special about the host machine
 comes from its platform on the host, never from its name: its executor is
-`Local` on macOS and Linux (Store calls in the caller's process, no worker)
-and `Worker` on Windows; its loopback is shared (`Loopback::Shared`); no
+`Local` on macOS and Linux (Store calls in the caller's process; eligible CLI
+reads go to the demand-started host worker, see
+[Workers and reach](workers-and-reach.md#host-worker-exchange-20-implementation-plan)).
+The profile still names a `Worker` executor for Windows, but Windows builds
+no host machine (`BUILT_IN` in [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs)
+is `docker` alone there), so nothing uses it; its loopback is shared (`Loopback::Shared`); no
 provider holds it (`Platform::provided` is false: no tool, no `vm_name`,
 never stopped or missing, always `ready`). Behaviour asks those facts
 (`layerfs_machine::runs_here`, `in_process`, `provided`); the name maps to
@@ -62,7 +66,7 @@ other machine.
 | Call | Answer |
 | --- | --- |
 | `create`, `remove` | `InvalidInput`: "is built in and never created" / "… never removed" |
-| `start` | `None` on macOS and Linux; on Windows `Unsupported` (its Stores would run in a WSL2 worker, which is not designed) |
+| `start` | `None` on macOS and Linux (the host worker is started by the caller, not the platform adapter); no host machine exists on Windows |
 | `stop` | nothing to stop |
 | `status` | `running`; `Unsupported` with `missing` (`host:root`, `host:/dev/fuse`, `host:cgroup2`, `host:macos-or-linux`) when the host lacks what its Sandboxes need, as `provider_within` answers, so it never reads `ready` |
 | `guest`, `copy_in`, `copy_out` | `InvalidInput`: "runs in-process; its files are the host's" |
@@ -334,14 +338,14 @@ kind or kernel route is an engine change, not a platform.
 The host worker transport uses two owner-only Unix sockets under the host
 machine directory. Directories may permit traversal by Sandbox processes
 without granting them read or write access. Each socket remains mode 0600.
-The client resolves aliases to the same home before
-checking the kernel pathname limit. A too-long path can be routed directly
-by the caller before a connection attempt. The separate management socket
-retains admission capacity for probes and close requests.
 Doctor and `machine get --with live` report a leftover socket (no listener,
 or not yet 0600 with its worker gone) as health `stale`, a notice on
 `machine.worker.endpoint`: the next start replaces it, and callers never
 dial a socket without mode 0600.
+The client resolves aliases to the same home before
+checking the kernel pathname limit. A too-long path can be routed directly
+by the caller before a connection attempt. The separate management socket
+retains admission capacity for probes and close requests.
 
 Both ends verify the effective peer UID. The handshake identifies the
 installed executable using its package version and kernel file identity,

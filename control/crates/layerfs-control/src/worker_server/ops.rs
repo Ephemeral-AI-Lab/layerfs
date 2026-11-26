@@ -255,7 +255,7 @@ pub(super) fn run(
         // a Sandbox image copied to this machine (`sandbox.create --image`,
         // `machine.load_image`), one step at a time
         "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),
-        // a Sandbox or Workspace operation on this machine's own native;
+        // a Sandbox or Workspace operation on this machine's own kernel (its guest root, namespaces backend);
         // an event that cannot be written does not end it (#177)
         "sandbox.host" => layerfs_sandbox::route::in_worker(
             root,
