@@ -31,8 +31,10 @@ A native CLI worker on macOS or Linux can create `worker.sock` and
 `worker.ctl` in the private `machine/native/` directory. These sockets
 accept the UID that owns the home. The worker keeps `worker.lock` through
 shutdown, releases both sockets after draining its connections, and becomes
-eligible to exit after one minute with no admitted calls. The home itself keeps
-its permissions.
+eligible to exit after one minute with no calls and no waiting connections.
+Status checks (`machine doctor`, `machine get --with live`) do not keep it
+running. A call made while the worker is busy waits for it, however long the
+calls ahead of it take. The home itself keeps its permissions.
 The CLI checks the worker's build before it sends a request. If they differ,
 wait for the current worker's idle exit before making another call.
 If the connection ends after a request starts sending and before a complete

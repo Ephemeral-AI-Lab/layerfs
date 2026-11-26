@@ -36,7 +36,6 @@ struct Lane {
 
 struct Pending {
     stream: UnixStream,
-    accepted: Instant,
 }
 
 #[derive(Default)]
@@ -67,8 +66,12 @@ impl Activity {
         }
     }
 
+    /// §8.3: no ordinary call for 60 s and nothing in flight, counting
+    /// connections accepted but not yet admitted.
     fn idle(&self) -> bool {
-        self.admitted == 0 && self.last_call.elapsed() >= IDLE
+        self.admitted == 0
+            && self.lanes.iter().all(|lane| lane.outstanding == 0)
+            && self.last_call.elapsed() >= IDLE
     }
 }
 
@@ -124,7 +127,6 @@ impl HostServer {
                 super::connection::serve_host_connection(
                     self,
                     &connection.stream,
-                    connection.accepted,
                     lane.index == CONTROL.index,
                     &mut admitted,
                 )
@@ -138,7 +140,11 @@ impl HostServer {
             activity.lanes[lane.index].outstanding -= 1;
             if admitted {
                 activity.admitted -= 1;
-                activity.last_call = Instant::now();
+                // Only calls keep the worker warm (§8.3, §7.3). Management
+                // observes it: polling ping must not keep it alive (§12).
+                if lane.index == ORDINARY.index {
+                    activity.last_call = Instant::now();
+                }
             }
             if matches!(result, Ok(true)) {
                 activity.answered += 1;
@@ -163,10 +169,7 @@ impl HostServer {
             Ok((stream, _)) => {
                 stream.set_nonblocking(false)?;
                 queue.outstanding += 1;
-                queue.pending.push_back(Pending {
-                    stream,
-                    accepted: Instant::now(),
-                });
+                queue.pending.push_back(Pending { stream });
                 self.queued[lane.index].notify_one();
                 Ok(())
             }
@@ -190,7 +193,8 @@ impl HostServer {
             if activity.draining {
                 return Ok(());
             }
-            if activity.idle() {
+            // A caller still in the listen queue is accepted, not drained.
+            if activity.idle() && !queued(ordinary)? && !queued(control)? {
                 self.drain(&mut activity);
                 return Ok(());
             }
@@ -409,6 +413,18 @@ impl HostServer {
                 self.record_close(store, "drain", &report);
             }
         }
+    }
+}
+
+/// Whether a connection is waiting in the listener's kernel queue.
+fn queued(listener: &UnixListener) -> io::Result<bool> {
+    let mut ready = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
+    match poll(&mut ready, 0u16) {
+        Ok(_) => Ok(ready[0]
+            .revents()
+            .is_some_and(|events| events.contains(PollFlags::POLLIN))),
+        Err(nix::errno::Errno::EINTR) => Ok(true),
+        Err(error) => Err(error.into()),
     }
 }
 

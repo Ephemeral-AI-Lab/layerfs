@@ -226,7 +226,6 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
 pub(super) fn serve_host_connection(
     server: &super::host::HostServer,
     socket: &std::os::unix::net::UnixStream,
-    accepted: Instant,
     management: bool,
     admitted: &mut bool,
 ) -> bool {
@@ -245,7 +244,9 @@ pub(super) fn serve_host_connection(
             socket,
             &server.hello.to_frame(),
             MAX_HELLO,
-            accepted + layerfs_machine::worker::HELLO_WAIT,
+            // From this thread's turn, not the accept: a connection that
+            // waited in the queue behind long calls is still greeted (§16.1 C7).
+            Instant::now() + layerfs_machine::worker::HELLO_WAIT,
         )
         .is_err()
     {

@@ -88,7 +88,7 @@ impl HostPaths {
         if let Err(error) = host_check_peer(&stream) {
             return Unreachable(HostProbe::Peer, error);
         }
-        let hello = match Self::read_hello(&stream, end) {
+        let hello = match Self::read_hello(&stream, Some(end)) {
             Ok(hello) => hello,
             Err(error) => return Unreachable(HostProbe::Hello, error),
         };

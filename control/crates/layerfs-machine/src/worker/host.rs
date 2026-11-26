@@ -339,7 +339,11 @@ impl HostPaths {
         trace::step("connect");
         let generation = (|| {
             host_check_peer(&stream)?;
-            let hello = Self::read_hello(&stream, end)?;
+            // An ordinary caller connected to a live worker waits for a pool
+            // thread however long earlier calls take (§16.1 C7): the kernel
+            // queue and the worker's slots bound what waits, and a worker
+            // that exits closes the stream before anything was sent.
+            let hello = Self::read_hello(&stream, control.then_some(end))?;
             let generation = HostHello::generation_of(&hello, self, &build)?;
             if expected_generation.is_some_and(|expected| expected != generation) {
                 return Err(unavailable("hello", "worker generation changed"));
@@ -364,8 +368,8 @@ impl HostPaths {
         Ok(Some(answer))
     }
 
-    pub(super) fn read_hello(stream: &UnixStream, end: Instant) -> Outcome {
-        host_frame::read_host_frame(stream, MAX_HELLO, Some(end))?
+    pub(super) fn read_hello(stream: &UnixStream, end: Option<Instant>) -> Outcome {
+        host_frame::read_host_frame(stream, MAX_HELLO, end)?
             .ok_or_else(|| unavailable("hello", "endpoint closed before readiness"))
     }
 

@@ -58,3 +58,29 @@ fn ten_cli_reads_share_the_real_warm_store() {
 fn twenty_cli_reads_clear_the_backlog_and_leave_management_available() {
     check_readers(20, 16);
 }
+
+#[test]
+fn callers_queued_behind_slow_calls_wait_past_the_hello_deadline() {
+    // §16.1 C7: 8 calls hold every ordinary thread for longer than the
+    // 10 s hello deadline; 8 more wait accepted and 4 in the listen queue.
+    let home = proof::create();
+    let before = proof::commits(&home);
+    let mut worker = home.start();
+    proof::assert_reads(proof::spawn_reads(&home, 1, false));
+    let gate = proof::lock_store(&home);
+    let reads = proof::spawn_reads(&home, 20, false);
+    proof::pool(&home, 16, 8, 8);
+    std::thread::sleep(Duration::from_secs(12));
+    let held = proof::pool(&home, 16, 8, 8);
+    assert_eq!(held.get_text("state"), Some("ready"));
+    drop(gate);
+
+    proof::assert_reads(reads);
+    assert_eq!(
+        proof::pool(&home, 0, 0, 0).get_int("pid"),
+        Some(worker.pid())
+    );
+    assert_eq!(proof::commits(&home), before);
+    home.drain();
+    assert!(worker.wait(Duration::from_secs(5)).success());
+}

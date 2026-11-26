@@ -412,7 +412,29 @@ The v1 host request and answer bodies are plain JSON with byte ceilings of
 this read-only route. A deadline-bounded receive reads any reply bytes
 buffered before the peer closed. An ordinary call waits for the first reply
 byte for the duration of the Store operation and bounds the transfer from
-that byte onward. The guest exchange keeps its existing framing and hello.
+that byte onward. That wait has no deadline by design (spec §8.5, §11): a
+Store call has no time cap (a long `file.grep` is legitimate), the exchange
+has no cancel message, so a client deadline would turn a live call into
+`Unknown` without stopping or freeing it, and nothing may be resent. A worker
+that exits or crashes closes the stream, so the caller sees `Unknown` at once;
+only a live worker keeps it waiting, as an in-process SDK call would. The
+caller can still be interrupted by its own caller. The guest exchange keeps
+its existing framing and hello.
+
+Admission is bounded by slots, not by time. An ordinary caller that has
+connected waits for its hello as long as the worker keeps the connection:
+behind 8 busy pool threads, in the 16-slot queue or in the kernel's listen
+queue (§16.1 C7). The worker writes the hello within 10 s of a pool thread
+taking the connection, not of its accept. A worker that exits closes every
+waiting connection before anything was sent, which is a definite
+`Unavailable`. Connecting, starting a worker, and management hellos keep
+their 10 s deadline.
+
+The worker counts only ordinary calls toward its idle clock: a `ping` from
+doctor or `machine get --with live` observes it without keeping it alive
+(§8.3, §12). It becomes idle only when no connection is outstanding in
+either lane and none waits in a listen queue, so a caller accepted at the
+60 s mark is served instead of refused `draining`.
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale
