@@ -14,6 +14,7 @@ use layerfs_content::filesystem::{
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
 use layerfs_history::{BranchSnapshot, HistoryCatalog, HistoryName, MountMarkers, NamedSnapshot};
 use layerfs_workspace::{BaseView, CanonicalClient, Workspace};
+use std::cell::Cell;
 use std::sync::Arc;
 
 impl Store {
@@ -51,18 +52,21 @@ impl Store {
         owner: OwnerClient,
         request: NamedBindRequest,
     ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_named_with(owner, request, false)
+        self.bind_named_with(owner, request, false, &Cell::new(false))
     }
     /// [`Self::bind_named`] for an SDK call's private Workspace, whose
     /// reader comes from and returns to the Store's idle readers, as
-    /// [`Self::bind_private`] (#818 W2).
+    /// [`Self::bind_private`] (#818 W2). `looked_up` is set when the bind
+    /// read the project and Branch, so a refusal tells the lookup's own
+    /// answer from a failure before it (a reader that did not open).
     #[allow(clippy::result_large_err)]
     pub fn bind_named_private(
         self: &Arc<Self>,
         owner: OwnerClient,
         request: NamedBindRequest,
+        looked_up: &Cell<bool>,
     ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_named_with(owner, request, true)
+        self.bind_named_with(owner, request, true, looked_up)
     }
     #[allow(clippy::result_large_err)]
     fn bind_named_with(
@@ -70,8 +74,10 @@ impl Store {
         owner: OwnerClient,
         request: NamedBindRequest,
         pooled: bool,
+        looked_up: &Cell<bool>,
     ) -> Result<BindSuccess, BindRefusal> {
         if HistoryName::new(&request.project).is_err() {
+            looked_up.set(true);
             return Err(BindRefusal {
                 phase: BindPhase::Snapshot,
                 snapshot: None,
@@ -80,7 +86,7 @@ impl Store {
             });
         }
         let intent = BindIntent::Named(request);
-        self.bind_with(owner, intent, MountPlace::default(), pooled)
+        self.bind_looked(owner, intent, MountPlace::default(), pooled, looked_up)
     }
     /// [`Self::bind_named`] of a mount whose caller knows the Sandbox and
     /// machine its daemon serves.
@@ -111,8 +117,22 @@ impl Store {
         place: MountPlace,
         pooled: bool,
     ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_looked(owner, request, place, pooled, &Cell::new(false))
+    }
+    #[allow(clippy::result_large_err)]
+    fn bind_looked(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: BindIntent,
+        place: MountPlace,
+        pooled: bool,
+        looked_up: &Cell<bool>,
+    ) -> Result<BindSuccess, BindRefusal> {
         // One call: a quarantined PostgreSQL session reopens at most once.
-        layerfs_persistence::one_call(|| self.bind_once(owner, request, place, pooled))
+        layerfs_persistence::one_call(|| {
+            looked_up.set(false);
+            self.bind_once(owner, request, place, pooled, looked_up)
+        })
     }
     #[allow(clippy::result_large_err)]
     fn bind_once(
@@ -121,6 +141,7 @@ impl Store {
         request: BindIntent,
         place: MountPlace,
         pooled: bool,
+        looked_up: &Cell<bool>,
     ) -> Result<BindSuccess, BindRefusal> {
         let mut phase = BindPhase::Snapshot;
         let mut snapshot = None;
@@ -155,6 +176,7 @@ impl Store {
                         .map(|(snapshot, project)| (snapshot, project.as_str().to_owned()))
                         .ok_or(BindError::MissingBranch(request.branch)),
                     BindIntent::Named(named_request) => {
+                        looked_up.set(true);
                         named(&source, named_request).map(|s| (s, named_request.project.clone()))
                     }
                 }

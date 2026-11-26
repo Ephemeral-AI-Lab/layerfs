@@ -246,3 +246,43 @@ The per-child cost is gone: 106 → 7 in `files.change`. No fix needed.
   its own commit; pins and `sdk_write_named_refusals` rerun green
   (`receipts/M1-lint/`). rustfmt clean on every file lane W touched
   (pre-existing `cargo fmt` diffs in other tests of the crate left alone).
+
+## W2 fix — a bind that fails before its lookup (M1 review)
+
+Finding (independent M1 review, forwarded by the coordinator): `bind_named`
+mapped every `BindError::Read` in phase `Snapshot` to the lookup's read
+failure, but `Store::bind_once` is also in phase `Snapshot` when the
+Workspace reader opens (`readers.mount`, and `self.reader` on SQLite),
+before the named lookup. A reader that does not open (factory failure,
+reader set stopping or at capacity) answered `Unknown` (custody: the
+caller is told the write may have landed) for a misspelled project, where
+the parent answered `NoSuchProject` from the control-reader lookup, and an
+existing Branch answered `Unknown` where the parent answered `Failed`.
+Confirmed against source: the new test on the W2 source fails with
+`("Unknown", "Store port: ReadAdmission(Capacity)")` for a missing project
+(`receipts/W2-fix/before-fix.log`).
+
+Fix: the named private bind reports whether it read the project and
+Branch (`Store::bind_named_private` takes a `looked_up` flag the bind sets
+just before the named lookup, reset on the one reopen `one_call` allows;
+`NamedBindFailure::Bind { refusal, looked_up }`). Not looked up: the
+lookups run first on the control reader, as for an admission failure, then
+`Failed` with the bind's text. Looked up: `NoSuchProject`, `NoSuchBranch`
+and a `Snapshot`-phase read (after the lookup began, the only `Read` in that
+phase is the lookup's) keep the lookups' answers, also under a
+`BindError::Cleanup` from the reader's close that followed them (the parent
+never opened that reader). No new server message, no trip change.
+
+- Test: `sdk_write_named_refusals::sqlite_reader_refusal_keeps_the_lookups_first`
+  holds every Workspace reader (`mount_reader` × `CALLS`), then a missing
+  project answers `NoSuchProject`, a missing Branch `NoSuchBranch`, the
+  existing Branch `Failed` naming the reader capacity; after release the
+  write commits. SQLite only: holding every reader on PostgreSQL would hold
+  64 connections of the shared test server. The cleanup-failure case has no
+  reachable trigger in the test harness (a reader close does not fail on
+  demand); it is covered by the unwrapping in `lookup_answer`.
+- Checks (`receipts/W2-fix/`): `sdk_write_named_refusals` (3, both
+  backends), `sdk_bind_named_fault` (drop and kill sweeps, PG),
+  `sdk_write_round_trips` (pins unchanged), `method_refusal_order`: green.
+  Clippy `-D warnings` on `layerfs-store-service` clean; rustfmt clean on
+  the touched files. Deleted tests: none.

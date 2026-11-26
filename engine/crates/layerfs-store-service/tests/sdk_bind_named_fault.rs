@@ -51,7 +51,11 @@ fn bind_named(service: &Service, branch: &str) -> Result<BoundWorkspace, String>
         branch: branch.to_owned(),
     };
     (service.service.store)
-        .bind_named_private(service.owner.client(), request)
+        .bind_named_private(
+            service.owner.client(),
+            request,
+            &std::cell::Cell::new(false),
+        )
         .map(|bound| bound.workspace)
         .map_err(|error| format!("{error:?}"))
 }

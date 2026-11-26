@@ -1,0 +1,18 @@
+
+running 1 test
+
+thread 'sqlite_reader_refusal_keeps_the_lookups_first' panicked at engine/crates/layerfs-store-service/tests/sdk_write_named_refusals.rs:140:5:
+assertion `left == right` failed
+  left: ("Unknown", "Store port: ReadAdmission(Capacity)")
+ right: ("NoSuchProject", "project ghost does not exist")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test sqlite_reader_refusal_keeps_the_lookups_first ... FAILED
+
+failures:
+
+failures:
+    sqlite_reader_refusal_keeps_the_lookups_first
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.13s
+
+run_bounded: exit 101 after 1.2 s

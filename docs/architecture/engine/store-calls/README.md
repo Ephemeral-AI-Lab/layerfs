@@ -156,10 +156,13 @@ W2). The refusal order stays the lookups': a refused `branch` argument,
 `main` (`ReadOnly`) and an `expected` Commit (which needs the project
 record) take the lookups on the control reader first, as do a missing
 Workspace key and a Store that refuses the bind before reading (overlay
-maintenance stopped, call capacity full), so `NoSuchProject` and
-`NoSuchBranch` still come first. The bind's `NoSuchProject` /
+maintenance stopped, call capacity full, a Workspace reader that does not
+open), so `NoSuchProject` and `NoSuchBranch` still come first and such a
+refusal is `Failed` with the bind's text. The bind reports whether it read
+the project and Branch; only then do its `NoSuchProject` /
 `NoSuchBranch` answer with the lookups' texts, and its snapshot read
-failure as a lookup read failure.
+failure as a lookup read failure, also when the reader's close after it
+failed.
 
 **Hidden paths.** The private overlay already whiteouts a path a
 `project.remove_file` marker hides, so `edit` and a `cp` source that come
