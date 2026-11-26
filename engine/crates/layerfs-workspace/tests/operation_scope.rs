@@ -82,6 +82,25 @@ fn fresh_clients_share_one_allowance_and_return_independent_bytes() {
 }
 
 #[test]
+fn resident_lookup_skips_bytes_outside_its_allowance_without_provider_reads() {
+    let store = Store::default();
+    let large = file(&store, &[1; 1024]);
+    let small = file(&store, &[2; 32]);
+    let reader = client(&store, Arc::new(CanonicalCache::new(4096)));
+    let large_bytes = reader.read_canonical(large).unwrap();
+    let small_bytes = reader.read_canonical(small).unwrap();
+    let demand = store.demand.load(Ordering::Relaxed);
+    assert!(large_bytes.len() > small_bytes.len());
+    assert_eq!(
+        reader
+            .cached_canonical_batch(&[large, small, small], small_bytes.len())
+            .unwrap(),
+        [None, Some(small_bytes), None]
+    );
+    assert_eq!(store.demand.load(Ordering::Relaxed), demand);
+}
+
+#[test]
 fn failed_operation_provider_does_not_poison_shared_cache_or_fresh_provider() {
     let store = Store::default();
     let cached = file(&store, b"cached");

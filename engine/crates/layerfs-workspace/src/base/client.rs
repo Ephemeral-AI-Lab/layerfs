@@ -515,6 +515,10 @@ impl AuthenticatedObjects for CanonicalClient {
         let mut remaining = bytes;
         let mut values = Vec::with_capacity(ids.len());
         for id in ids {
+            if !state.cache.within(*id, remaining) {
+                values.push(None);
+                continue;
+            }
             let value = state.cache.get(*id, remaining)?;
             if let Some(value) = &value {
                 remaining -= value.len();

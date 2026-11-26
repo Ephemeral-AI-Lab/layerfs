@@ -955,6 +955,32 @@ impl AuthenticatedObjects for RefuseFirstBatch<'_> {
 }
 
 #[test]
+fn a_refused_change_window_stops_before_a_further_fetch_or_emission() {
+    let (tree, _, firsts) = page_of_eighty();
+    let reader = RefuseFirstBatch {
+        store: &tree.store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let mut emitted = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&reader, &mut emitted).with_inode_read_ahead(true);
+    let original = ContentError::InvalidRecord("operation rows refused");
+    let changes = [
+        Ok((Inodes::key(firsts[10]), Some(Inodes::value(7)))),
+        Ok((Inodes::key(firsts[40]), Some(Inodes::value(7)))),
+        Err(original.clone()),
+    ];
+    let result = apply_inode_values(
+        &mut objects,
+        Some(tree.root),
+        changes.into_iter(),
+        MAXIMUM_SCRATCH_BYTES,
+    );
+    assert_eq!(result.unwrap_err(), original);
+    assert_eq!(reader.demands.into_inner(), [vec![tree.root]]);
+    assert!(emitted.is_empty());
+}
+
+#[test]
 fn a_failed_planned_leaf_batch_keeps_its_error_without_a_second_attempt() {
     let (tree, children, firsts) = page_of_eighty();
     let reader = RefuseFirstBatch {

@@ -10,17 +10,19 @@
 //! or unsorted change fails the attempt instead of being normalized.
 
 use crate::error::{ContentError, ContentResult};
+use crate::filesystem::sorted::budget::{Budget, Lease};
 use crate::filesystem::sorted::format::Format;
 use crate::filesystem::sorted::page::{Engine, Entry, Node, Page, ReadPage};
 use crate::object::ObjectId;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 /// One strictly ordered final-state change stream.
 pub(crate) struct Changes<I, K, V> {
     source: I,
     pub(crate) next: Option<(K, Option<V>)>,
     ahead: VecDeque<(K, Option<V>)>,
-    end: Option<ContentResult<()>>,
+    ahead_lease: Option<Lease>,
+    end: bool,
 }
 
 impl<I, K, V> Changes<I, K, V>
@@ -35,7 +37,8 @@ where
             source,
             next,
             ahead: VecDeque::new(),
-            end: None,
+            ahead_lease: None,
+            end: false,
         })
     }
 
@@ -46,29 +49,36 @@ where
             .is_some_and(|next| bound.is_none_or(|bound| &next.0 <= bound))
     }
 
-    /// The next ordered change keys, including the current one. Errors in
-    /// future rows stay queued until the normal merge reaches them.
-    pub(crate) fn keys_ahead(&mut self, limit: usize) -> impl Iterator<Item = &K> {
-        while self.ahead.len() + 1 < limit && self.end.is_none() {
-            let following = match self.source.next().transpose() {
-                Ok(Some(row)) => row,
-                Ok(None) => {
-                    self.end = Some(Ok(()));
-                    break;
-                }
-                Err(original) => {
-                    self.end = Some(Err(original));
-                    break;
-                }
+    /// The next ordered keys, including the current one. A source refusal
+    /// ends the merge before it can issue a lookup or emit another object.
+    pub(crate) fn keys_ahead(
+        &mut self,
+        budget: &Rc<Budget>,
+        limit: usize,
+    ) -> ContentResult<Option<impl Iterator<Item = &K>>> {
+        if self.ahead_lease.is_none() && !self.end {
+            let rows = limit - 1;
+            let bytes = rows * std::mem::size_of::<(K, Option<V>)>();
+            let Ok(lease) = budget.reserve(bytes) else {
+                return Ok(None);
+            };
+            self.ahead = VecDeque::with_capacity(rows);
+            self.ahead_lease = Some(lease);
+        }
+        while self.ahead.len() + 1 < limit && !self.end {
+            let Some(following) = self.source.next().transpose()? else {
+                self.end = true;
+                break;
             };
             let previous = self.ahead.back().or(self.next.as_ref());
             if previous.is_some_and(|previous| previous.0 >= following.0) {
-                self.end = Some(Err(ContentError::NonCanonicalOrdering));
-                break;
+                return Err(ContentError::NonCanonicalOrdering);
             }
             self.ahead.push_back(following);
         }
-        self.next.iter().chain(&self.ahead).map(|(key, _)| key)
+        Ok(Some(
+            self.next.iter().chain(&self.ahead).map(|(key, _)| key),
+        ))
     }
 
     /// Takes the next change, rejecting a duplicate or descending key.
@@ -76,12 +86,15 @@ where
         let current = self.next.take().ok_or(ContentError::UnexpectedEof)?;
         self.next = if let Some(row) = self.ahead.pop_front() {
             Some(row)
-        } else if let Some(end) = self.end.take() {
-            end?;
+        } else if self.end {
             None
         } else {
             self.source.next().transpose()?
         };
+        if self.ahead.is_empty() && self.ahead_lease.is_some() {
+            self.ahead = VecDeque::new();
+            self.ahead_lease = None;
+        }
         if self.next.as_ref().is_some_and(|next| next.0 <= current.0) {
             return Err(ContentError::NonCanonicalOrdering);
         }

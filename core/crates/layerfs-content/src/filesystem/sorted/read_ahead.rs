@@ -35,8 +35,17 @@ impl Leaves {
         I: Iterator<Item = ContentResult<(F::Key, Option<F::Value>)>>,
     {
         if self.retained.1.is_empty() && former.len() > 1 {
-            let mut keys = changes.keys_ahead(CHANGES).peekable();
-            let mut ids = Vec::new();
+            let Ok(_ids_lease) = engine
+                .budget
+                .reserve(LEAVES * std::mem::size_of::<ObjectId>())
+            else {
+                return engine.read(id, false);
+            };
+            let Some(keys) = changes.keys_ahead(&engine.budget, CHANGES)? else {
+                return engine.read(id, false);
+            };
+            let mut keys = keys.peekable();
+            let mut ids = Vec::with_capacity(LEAVES);
             for (index, row) in former.iter().enumerate() {
                 let limit = if index + 1 == former.len() {
                     bound
