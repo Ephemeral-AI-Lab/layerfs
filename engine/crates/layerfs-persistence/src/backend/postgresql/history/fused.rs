@@ -66,7 +66,10 @@ use crate::blocks::hints::Block;
 use crate::history::Fused;
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{CommitOutcome, CommitRecord, CommitRequest};
-use layerfs_storage::{location::PackDomain, port::Publication};
+use layerfs_storage::{
+    location::PackDomain,
+    port::{Publication, PublishedPack},
+};
 use postgres::error::SqlState;
 use postgres::types::ToSql;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -340,6 +343,11 @@ fn boxed(param: crate::backend::records::Param) -> Value<'static> {
 
 /// The pack rows of `batch`, as `objects::publish::packs` writes them.
 pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value<'_>>, u64), Fused> {
+    pack_values_of(&batch.packs)
+}
+
+/// The pack insert's parameters for a contiguous run of a batch's packs.
+pub(crate) fn pack_values_of(packs: &[PublishedPack]) -> Result<(Vec<Value<'_>>, u64), Fused> {
     let mut columns = (
         Vec::new(),
         Vec::new(),
@@ -349,7 +357,7 @@ pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value<'_>>, u64), 
         Vec::new(),
     );
     let mut bound = 0;
-    for pack in &batch.packs {
+    for pack in packs {
         let info = pack.info();
         let body = pack.body();
         let header = layerfs_storage::pack::layout::parse_header(body)
