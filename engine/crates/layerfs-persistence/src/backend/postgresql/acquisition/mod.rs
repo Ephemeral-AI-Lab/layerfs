@@ -7,6 +7,7 @@
 //! as arrays, so a window costs a fixed number of round trips.
 mod cleanup;
 mod provider;
+mod placement;
 mod reads;
 mod writes;
 

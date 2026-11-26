@@ -9,6 +9,7 @@ mod metadata;
 pub(crate) mod reads;
 mod root_windows;
 pub(crate) mod statements;
+pub(crate) mod placement;
 pub(crate) mod writes;
 
 pub(crate) use metadata::{metadata_blob, metadata_parse};

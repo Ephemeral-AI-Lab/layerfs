@@ -5,7 +5,7 @@
 //! live owner is matched against its row first in the same transaction, so
 //! a released or foreign operation is `Stale` before any row is read or
 //! written. Nothing is created, and contention is the one-attempt refusal.
-use super::{cleanup, reads, writes};
+use super::{cleanup, placement, reads, writes};
 use crate::backend::{
     postgresql::session::{connection::Session, transaction::Transaction},
     sqlite::acquisition::statements::Failure,
@@ -133,7 +133,7 @@ impl Acquisition for PostgresAcquisition {
         });
         bounded(placed.len(), bytes.sum())?;
         self.unit(owner, true, |tx| {
-            writes::place_children(tx, owner, parent, placed)
+            placement::place_children(tx, owner, parent, placed)
         })
     }
 

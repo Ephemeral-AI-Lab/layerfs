@@ -1685,6 +1685,24 @@ unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend
 same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 `begin` waiting for the lane blocks no live owner's unit.
 
+**Wide-directory placement (#818 I2a).** A `place_children` unit (one write
+window: at most 4,096 children or 1 MiB) binds and places its children in
+set windows instead of two statements per child. The window rule is shared
+with SQLite (`sqlite/acquisition/placement.rs`) and mirrors `put_entries`'
+`independent`: a window ends before a repeated name, position or
+(device, inode), and before a child a statement could refuse alone (a
+position that does not convert to signed, a host path out of bounds, a bound
+child at position 0). A one-child window runs the per-row `BIND_HOST_FILE`
+and `PLACE_ENTRY`. A longer window first runs one indexed check for its first
+child a stored row could refuse (a stored identity at its canonical position,
+a stored directory at its position; D17), which then runs per row after the
+children before it; the rest go in one statement (`PLACE_CHILDREN`: the
+upsert and the update as data-modifying CTEs over `unnest` arrays, answering
+each slot's binding and kind). The first slot with no binding, no placed row
+or a kind that disagrees is the loop's `Changed`, and the unit rolls back as
+before. A flat directory of 10,000 files places in 3 units of 2 round trips
+instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/placement.rs)).
+
 ```text
  release of the last operation                    one Write transaction
    SELECT 1 FROM store_lane ... FOR UPDATE
@@ -1707,6 +1725,8 @@ reuses an operation id
 | --- | --- | --- |
 | [`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_open_check` | `Full` and `Light` refusals |
 | [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
+| [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
+| [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (84 + 84): the unit is atomic, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check
 nothing.

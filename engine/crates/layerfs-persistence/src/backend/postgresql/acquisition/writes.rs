@@ -1,5 +1,6 @@
-//! Bounded write units: begin, append, place, record roots and advance, with
-//! the owner check and exact charges every unit shares.
+//! Bounded write units: begin, append, record roots and advance, with the
+//! owner check and exact charges every unit shares (placement, which shares
+//! them too, is in `placement.rs`).
 //!
 //! A window of entries is appended in array statements once a check over
 //! the whole window shows its rows cannot conflict with each other or with
@@ -18,7 +19,7 @@ use crate::backend::{
 };
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{
-    AcquisitionWork, Begin, HostIdentity, NewEntry, Owner, Phase, Placed,
+    AcquisitionWork, Begin, HostIdentity, NewEntry, Owner, Phase,
 };
 use std::collections::BTreeSet;
 
@@ -34,7 +35,6 @@ const CLAIM_EPOCH: &str =
 const ADVANCE: &str = "UPDATE init_operation SET phase=$3::bigint WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING phase";
 const BIND_HOST_FILE: &str = "INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) VALUES($1::bigint,$2::bigint,$3::bytea,$4::bytea,$5::bytea,$6::bytea) ON CONFLICT(operation_id,device,inode) DO UPDATE SET aliases=init_host_file.aliases+1 WHERE init_host_file.evidence=excluded.evidence RETURNING canonical_position";
 const PUT_ENTRY: &str = "INSERT INTO init_entry(operation_id,parent_position,name,position,kind,canonical_position,metadata_root,content_root,host_path,host_identity) VALUES($1::bigint,$2::bigint,$3::bytea,$4::bigint,$5::bigint,$6::bigint,$7::bytea,$8::bytea,$9::bytea,$10::bytea)";
-const PLACE_ENTRY: &str = "UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=NULL WHERE operation_id=$1::bigint AND parent_position=$2::bigint AND name=$3::bytea AND position IS NULL RETURNING kind";
 /// The first slot of a window whose row a stored row could refuse or change.
 const DEPENDENCIES: &str = "SELECT min(s.slot) FROM unnest($2::bigint[],$3::bigint[],$4::bytea[],$5::bigint[],$6::bigint[],$7::bytea[],$8::bytea[]) AS s(slot,parent,name,position,kind,device,inode) \
  WHERE EXISTS(SELECT 1 FROM init_entry e WHERE e.operation_id=$1::bigint AND e.parent_position=s.parent AND e.name=s.name) \
@@ -148,7 +148,7 @@ pub(super) fn begin(tx: &Transaction<'_>, epoch: u64, facts: &Begin) -> Result<O
 
 /// Binds one positioned path to its host identity and returns the canonical
 /// position with whether this path created the identity's row.
-fn bind(
+pub(super) fn bind(
     tx: &Transaction<'_>,
     operation: i64,
     position: u64,
@@ -433,51 +433,6 @@ fn put_one(
     rows += 1;
     bytes += entry_bytes(entry);
     Ok((first.map(unsigned).transpose()?, rows, bytes))
-}
-
-/// Assigns positions to one window of unpositioned children of `parent`.
-pub(super) fn place_children(
-    tx: &Transaction<'_>,
-    owner: Owner,
-    parent: u64,
-    placed: &[Placed],
-) -> Result<Vec<u64>, Failure> {
-    let (operation, parent) = (signed(owner.operation)?, signed(parent)?);
-    let (mut rows, mut bytes) = (0_i64, 0_i64);
-    let mut canonical = Vec::new();
-    for child in placed {
-        let position = signed(child.position)?;
-        let mut first = None;
-        if let Some((host, path)) = &child.host {
-            let (bound, created) = bind(tx, operation, child.position, host, path)?;
-            first = Some(bound);
-            canonical.push(unsigned(bound)?);
-            if created {
-                rows += 1;
-                bytes += host_bytes(path);
-            }
-            bytes -= HOST_BYTES;
-        }
-        let updated = tx.typed(
-            PLACE_ENTRY,
-            &[
-                &operation,
-                &parent,
-                &child.name.as_slice(),
-                &position,
-                &first,
-            ],
-            32 + child.name.len() as u64,
-        )?;
-        // The child must exist unpositioned, and be regular exactly when bound.
-        let kind: i64 = get(updated.first().ok_or(Failure::Changed(child.position))?, 0)?;
-        let regular = kind == i64::from(InodeKind::RegularFile.code());
-        if regular != child.host.is_some() {
-            return Err(Failure::Changed(child.position));
-        }
-    }
-    charge(tx, owner, rows, bytes)?;
-    Ok(canonical)
 }
 
 /// Which roots a window records.

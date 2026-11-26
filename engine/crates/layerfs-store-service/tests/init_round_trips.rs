@@ -20,7 +20,11 @@
 //!   tiny, a whole-file (100,000 bytes) and a chunked file (300,000 bytes,
 //!   above the whole-file bound), symlinks (to a file, to a directory and
 //!   dangling), and empty directories. Its times, symlinks included, are
-//!   fixed without following links.
+//!   fixed without following links;
+//! - `wide_hardlinks` (added before #818 I2): one directory of 300 files and
+//!   300 hard links to them, interleaved, so the 600-entry wide placement
+//!   meets a repeated (device, inode) every other child (I2's windows cut
+//!   before each repeat).
 //!
 //! The 10k shapes are pinned in `init_round_trips_10k.rs` (kept apart so
 //! each binary stays well under the 120 s ceiling on PostgreSQL).
@@ -71,6 +75,14 @@ const SQLITE: &[InitPin] = &[
         7524,
         "d767c58fa69403d6",
     ),
+    // added before I2 (at I1: [0, 0, 1,702, 24])
+    pin(
+        "wide_hardlinks",
+        [0, 0, 1702, 24],
+        5180,
+        43894,
+        "e6cba9e302a3c58f",
+    ),
     // baseline [0, 0, 1,428, 25]
     pin("dir_600", [0, 0, 1416, 25], 6490, 82511, "f2238ebb0be91b92"),
     // added at I1 (no baseline row)
@@ -85,7 +97,10 @@ const SQLITE: &[InitPin] = &[
 
 /// PostgreSQL: session `[connects, round_trips, statements, transactions]`.
 /// Baseline 3a904ac225 in the comments; the pins are after #818 I1 (−20
-/// round trips at 1k, −12 at 600 entries, −1 on the hard-link directory).
+/// round trips at 1k, −12 at 600 entries, −1 on the hard-link directory)
+/// and I2a (one placement statement and one dependency check per wide
+/// window instead of two statements per child: flat_1k and dir_600
+/// 2,226 / 1,426 -> 228, wide_hardlinks 2,634 -> 2,038).
 const POSTGRESQL: &[InitPin] = &[
     // probe init.nested_1k at baseline: [0, 229, 118, 33]
     pin(
@@ -98,7 +113,7 @@ const POSTGRESQL: &[InitPin] = &[
     // probe init.flat_1k at baseline: [0, 2,246, 2,125, 37]
     pin(
         "flat_1k",
-        [0, 2226, 2105, 37],
+        [0, 228, 107, 37],
         10890,
         137359,
         "8a79e63caabd7530",
@@ -111,10 +126,18 @@ const POSTGRESQL: &[InitPin] = &[
         7524,
         "d767c58fa69403d6",
     ),
+    // added before I2 (at I1: [0, 2,634, 1,907, 339])
+    pin(
+        "wide_hardlinks",
+        [0, 2038, 1309, 339],
+        5180,
+        43894,
+        "e6cba9e302a3c58f",
+    ),
     // baseline [0, 1,438, 1,317, 37]
     pin(
         "dir_600",
-        [0, 1426, 1305, 37],
+        [0, 228, 107, 37],
         6490,
         82511,
         "f2238ebb0be91b92",
@@ -152,6 +175,7 @@ const SHAPES: &[Shape] = &[
     ("nested_1k", |source| rt::files(source, 10, 100)),
     ("flat_1k", |source| rt::files(source, 1, 1000)),
     ("hardlink_window", hardlinks),
+    ("wide_hardlinks", wide_hardlinks),
     ("dir_600", |source| rt::files(source, 1, 600)),
     ("mixed", mixed),
 ];
@@ -223,6 +247,18 @@ fn hardlinks(source: &Path) {
     let dir = source.join("h");
     std::fs::create_dir_all(&dir).unwrap();
     for n in 0..50 {
+        let file = dir.join(format!("f{n:03}a"));
+        std::fs::write(&file, format!("file {n}\n")).unwrap();
+        std::fs::hard_link(&file, dir.join(format!("f{n:03}b"))).unwrap();
+    }
+}
+
+/// 300 files and 300 hard links to them, interleaved by name in one wide
+/// directory.
+fn wide_hardlinks(source: &Path) {
+    let dir = source.join("w");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..300 {
         let file = dir.join(format!("f{n:03}a"));
         std::fs::write(&file, format!("file {n}\n")).unwrap();
         std::fs::hard_link(&file, dir.join(format!("f{n:03}b"))).unwrap();

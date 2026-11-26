@@ -68,10 +68,12 @@ const POSTGRESQL_NESTED: InitPin = pin(
     1379418,
     "a68d83d36cfcc6aa",
 );
-// probe init.flat_10k at 056e920166 (`pg.log`): [0, 31,039, 30,700, 144]
+// probe init.flat_10k at 056e920166 (`pg.log`): [0, 31,039, 30,700, 144];
+// after I1 [0, 20,720, 20,381, 144]; after I2a (three placement units, each
+// one dependency check and one placement statement) [0, 726, 387, 144]
 const POSTGRESQL_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 20720, 20381, 144],
+    [0, 726, 387, 144],
     118890,
     1380691,
     "a0b8d9600c933c0a",

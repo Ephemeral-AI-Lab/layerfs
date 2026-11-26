@@ -1,0 +1,12 @@
+# load 7.20 6.41 6.15
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/acquisition_reads.rs (target/debug/deps/acquisition_reads-33bcc37bbadbd716)
+
+running 3 tests
+test valid_empty_missing_released_and_foreign_owners_remain_distinct ... ok
+test typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds ... ok
+test a_live_owner_is_read_while_a_begin_waits_for_another_sessions_lane ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+
+run_bounded: exit 0 after 2.8 s
