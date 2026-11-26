@@ -200,9 +200,12 @@ fn a_definite_commit_failure_returns_the_kept_ordinals() {
 
 /// An unknown outcome on PostgreSQL: the first Workspace's handle keeps its
 /// ordinals; another Commit's reply is lost at its first server message (its
-/// new handle's reservation), so the writer session is quarantined. The orderly close still tries the
-/// release once; it is refused, the kept ordinals are lost, and a later
-/// service never reuses them: its values land past the old counter.
+/// new handle's reservation), so the writer session is quarantined, and the
+/// server is then unreachable, so it cannot reopen (`session/reopen.rs`; a
+/// reopened writer returns them by the conditional rewind). The orderly
+/// close still tries the release once; it is refused, the kept ordinals are
+/// lost, and a later service never reuses them: its values land past the
+/// old counter.
 #[test]
 fn an_unknown_outcome_loses_the_kept_ordinals_and_never_reuses_them() {
     adversary::tmp();
@@ -233,6 +236,7 @@ fn an_unknown_outcome_loses_the_kept_ordinals_and_never_reuses_them() {
             || matches!(&answer, Verdict::Refused(why) if why.contains("UnknownOutcome")),
         "{answer:?}"
     );
+    proxy.refuse(true);
     let _ = service.try_unmount(second);
     let _ = service.try_unmount(first);
     let _ = service.service.close();

@@ -47,6 +47,9 @@ impl BoundWorkspace {
     /// which a refused release has already marked uncertain), and nothing
     /// with an unknown outcome is sent again.
     pub fn close(&self) -> Result<(), super::CloseError> {
+        layerfs_persistence::one_call(|| self.close_once())
+    }
+    fn close_once(&self) -> Result<(), super::CloseError> {
         if let Err(error) = self.owner.close(self.route()) {
             // The Workspace stays bound; its idle producer handle stays too,
             // but returns its kept ordinals first, as it would at a close

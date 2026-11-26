@@ -16,7 +16,8 @@
 //!   per-cycle pack-id growth (pack ids are never returned, by design).
 //! * `a_close_after_the_writer_backend_died_rewinds_nothing` and
 //!   `a_close_on_a_stale_generation_rewinds_nothing` (PostgreSQL): a
-//!   service whose writer backend was terminated, or whose Store generation
+//!   service whose writer backend was terminated with the server then
+//!   unreachable (so the writer cannot reopen), or whose Store generation
 //!   moved, closes without failing and without moving the counter back; a
 //!   later service's values land past it.
 //!
@@ -216,8 +217,11 @@ fn cycles_of_open_commit_close_leak_no_ordinals() {
 
 /// Commits on a service reached through a pass-through proxy, unmounts (the
 /// handle keeps 128 ordinals in the Store's idle slot), then terminates
-/// every backend the proxy carried. The close finds a dead writer: it must
-/// answer without failing and must not move the counter back.
+/// every backend the proxy carried and refuses new connections, so the
+/// writer cannot reopen (`session/reopen.rs`; a reopened writer would
+/// return the kept ordinals by the conditional rewind). The close finds a
+/// dead writer: it must answer without failing and must not move the
+/// counter back.
 #[test]
 fn a_close_after_the_writer_backend_died_rewinds_nothing() {
     adversary::tmp();
@@ -241,6 +245,7 @@ fn a_close_after_the_writer_backend_died_rewinds_nothing() {
     );
     service.unmount(first);
     let mut admin = store.admin();
+    proxy.refuse(true);
     let pids: Vec<i32> = proxy.pids().into_iter().flatten().collect();
     assert!(!pids.is_empty(), "the service's backends");
     for pid in &pids {

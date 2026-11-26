@@ -39,21 +39,22 @@
 //! | 5 | a definite SQLSTATE | admitted, markers not read |
 //! | any | a SQLSTATE without a definite rule, `25P02` first, or no reply | unknown, the session quarantined |
 //!
-//! Known limit: a reply lost after the `COMMIT` went out, the markers'
-//! included, is an unknown outcome although the intent may have committed.
-//! The writer is quarantined and nothing is resent, so a committed live row
-//! stays until the daemon exits and its owner is settled, and meanwhile
-//! refuses `branch.remove` and compaction (`MountsActive`). Before step B a
-//! lost markers reply was the reader's and left the writer able to release
-//! the row. Reopening the writer after a quarantine would clear this and
-//! the existing writer-quarantine limit alike.
+//! A reply lost after the `COMMIT` went out, the markers' included, is an
+//! unknown outcome although the intent may have committed. The writer is
+//! quarantined and nothing is resent; the admission records the op as an
+//! orphan (`Session::note_orphan`) inside that turn, and the writer's reopen
+//! deletes a row left behind, with the owner release's generation-checked
+//! statement, once the old backend is proven gone (`session/reopen.rs`).
+//! Until then the row refuses `branch.remove` and compaction
+//! (`MountsActive`). Before step B a lost markers reply was the reader's and
+//! left the writer able to release the row.
 //!
 //! A refusal whose session lost a later reply (quarantined, its connection
 //! closed, so the server holds none of its keys) is a definite `Conflict`:
 //! the transaction aborted at the refusal, and the caller's separate path
 //! cannot run on that session. The outcome is decided, and an unknown one
 //! quarantines the session, while the session's lock is still held
-//! (`Session::pipeline_decided`).
+//! (`Session::decided_turn`).
 use super::{fused::nonce, statements};
 use crate::backend::postgresql::{
     metadata::{chains, reads},
@@ -109,7 +110,7 @@ fn qualified(key: &str, schema: &str) -> Result<String, BackendError> {
 /// markers; the statement-by-statement registration a refusal falls back to
 /// (the session keys taken and given back, the Branch probe, the conflict
 /// scan, the intent insert); and the release's `DELETE` and its unlock.
-fn writer_texts(schema: &str) -> Result<Vec<String>, BackendError> {
+pub(crate) fn writer_texts(schema: &str) -> Result<Vec<String>, BackendError> {
     let mut texts = Vec::new();
     for key in [
         "branch_snapshot",
@@ -153,7 +154,10 @@ fn reader_texts(schema: &str) -> Vec<String> {
 impl Session {
     /// Prepares the writer's mount and unmount statements in one flight.
     pub(crate) fn prepare_mount_writes(&self) -> Result<(), BackendError> {
-        self.prepare(&writer_texts(&self.settings.schema)?)
+        self.prepare(&writer_texts(&self.settings.schema)?)?;
+        // A reopened writer prepares them again (`Session::reopen`).
+        self.mount_writes.store(true, Ordering::SeqCst);
+        Ok(())
     }
 
     /// Prepares a Workspace reader's mount statements in one flight.
@@ -225,7 +229,8 @@ pub(crate) fn admit(
     keys: &[SessionKey],
     row: &IntentRow,
     markers: Option<(&[u8], &[u8])>,
-) -> Result<Admission, BackendError> {
+    settle: impl FnOnce(&Admission),
+) -> Result<(Admission, u64), BackendError> {
     let generation = session.incarnation.load(Ordering::SeqCst);
     if generation == 0 {
         return Err(BackendError::Integrity);
@@ -238,66 +243,73 @@ pub(crate) fn admit(
         session.settings.publish_begin()
     );
     let (ids, modes): (Vec<i64>, Vec<bool>) = keys.iter().copied().unzip();
-    let pid = session.backend_pid.load(Ordering::SeqCst);
     let insert = insert_sql()?;
     let markers_sql = qualified("paths_node_markers", schema)?;
     // The insert names its tables as the transaction's `search_path`
-    // resolves them: `pipeline_decided` prepares a statement not yet cached
-    // inside a read transaction with that `search_path`, in the flight's own
-    // turn (one round trip; none when all are cached).
-    let lock_params: [&(dyn ToSql + Sync); 4] = [&ids, &modes, &pid, &nonce];
-    let insert_params: [&(dyn ToSql + Sync); 18] = [
-        &row.project_id,
-        &row.branch_id,
-        &row.op_id,
-        &row.kind,
-        &row.scope_kind,
-        &row.workspace,
-        &row.sandbox,
-        &row.machine,
-        &row.project,
-        &row.branch,
-        &row.owner_runtime,
-        &row.owner_boot,
-        &row.state,
-        &row.uncertain,
-        &row.phase,
-        &row.evidence,
-        &row.updated_ms,
-        &nonce,
-    ];
-    let (node, stack) = markers.unwrap_or_default();
-    let markers_params: [&(dyn ToSql + Sync); 2] = [&node, &stack];
-    let mut steps = vec![Step::Begin, Step::Lock, Step::Insert, Step::Commit];
-    let mut requests = vec![
-        Request::Simple(&begin),
-        Request::Statement {
-            sql: LOCK,
-            params: &lock_params,
-            bytes: 9 * ids.len() as u64 + 8 + 32,
-        },
-        Request::Statement {
-            sql: &insert,
-            params: &insert_params,
-            bytes: 512,
-        },
-        Request::Simple("COMMIT"),
-    ];
-    if markers.is_some() {
-        steps.push(Step::Markers);
-        requests.push(Request::Statement {
-            sql: &markers_sql,
-            params: &markers_params,
-            bytes: 34,
-        });
-    }
-    let admission = session.pipeline_decided(&requests, |replies, trusted| {
-        let admission = decide(session, &steps, replies, trusted, generation);
-        let unknown = matches!(admission, Admission::Unknown);
-        (admission, unknown)
+    // resolves them: the flight prepares a statement not yet cached inside
+    // a read transaction with that `search_path`, in its own turn (one
+    // round trip; none when all are cached). The backend the keys must be
+    // on is read in that turn, after a quarantined writer reopened, and
+    // `settle` records what the session now holds before the turn ends.
+    let (admission, epoch) = session.decided_turn(|turn| {
+        turn.ready()?;
+        let pid = session.backend_pid.load(Ordering::SeqCst);
+        let lock_params: [&(dyn ToSql + Sync); 4] = [&ids, &modes, &pid, &nonce];
+        let insert_params: [&(dyn ToSql + Sync); 18] = [
+            &row.project_id,
+            &row.branch_id,
+            &row.op_id,
+            &row.kind,
+            &row.scope_kind,
+            &row.workspace,
+            &row.sandbox,
+            &row.machine,
+            &row.project,
+            &row.branch,
+            &row.owner_runtime,
+            &row.owner_boot,
+            &row.state,
+            &row.uncertain,
+            &row.phase,
+            &row.evidence,
+            &row.updated_ms,
+            &nonce,
+        ];
+        let (node, stack) = markers.unwrap_or_default();
+        let markers_params: [&(dyn ToSql + Sync); 2] = [&node, &stack];
+        let mut steps = vec![Step::Begin, Step::Lock, Step::Insert, Step::Commit];
+        let mut requests = vec![
+            Request::Simple(&begin),
+            Request::Statement {
+                sql: LOCK,
+                params: &lock_params,
+                bytes: 9 * ids.len() as u64 + 8 + 32,
+            },
+            Request::Statement {
+                sql: &insert,
+                params: &insert_params,
+                bytes: 512,
+            },
+            Request::Simple("COMMIT"),
+        ];
+        if markers.is_some() {
+            steps.push(Step::Markers);
+            requests.push(Request::Statement {
+                sql: &markers_sql,
+                params: &markers_params,
+                bytes: 34,
+            });
+        }
+        let admission = turn.send(&requests, |replies, trusted| {
+            let admission = decide(session, &steps, replies, trusted, generation);
+            let unknown = matches!(admission, Admission::Unknown);
+            (admission, unknown)
+        })?;
+        settle(&admission);
+        Ok((admission, turn.epoch()))
     })?;
     session.count_fused(matches!(admission, Admission::Admitted(_)));
-    Ok(admission)
+    Ok((admission, epoch))
 }
 
 /// The outcome of one message's replies: the first refusal decides (module

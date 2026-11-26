@@ -47,7 +47,15 @@ impl BoundWorkspace {
     ) -> Result<CommitSuccess, Box<CommitFailure>> {
         self.commit_captured_via(options, layerfs_history::CommitVia::Workspace)
     }
+    /// One call: a quarantined PostgreSQL session reopens at most once in it.
     pub fn commit_captured_via(
+        &self,
+        options: &CommitOptions,
+        via: layerfs_history::CommitVia,
+    ) -> Result<CommitSuccess, Box<CommitFailure>> {
+        layerfs_persistence::one_call(|| self.commit_captured_once(options, via))
+    }
+    fn commit_captured_once(
         &self,
         options: &CommitOptions,
         via: layerfs_history::CommitVia,

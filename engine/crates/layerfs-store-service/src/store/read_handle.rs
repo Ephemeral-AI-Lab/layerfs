@@ -16,6 +16,7 @@ pub struct StoreReader {
     pub(super) history: Arc<dyn HistoryCatalog>,
     closed: Option<Box<dyn FnOnce() + Send>>,
     usable: Option<Box<dyn Fn() -> bool + Send + Sync>>,
+    reopens: bool,
 }
 impl StoreReader {
     pub fn new(storage: Storage, history: Arc<dyn HistoryCatalog>) -> Self {
@@ -24,7 +25,15 @@ impl StoreReader {
             history,
             closed: None,
             usable: None,
+            reopens: false,
         }
+    }
+    /// Says that this reader's session reopens after a lost reply (a
+    /// PostgreSQL reader): an uncertain read then fails only that read,
+    /// and its session's next one runs on a new connection.
+    pub fn reopening(mut self) -> Self {
+        self.reopens = true;
+        self
     }
     /// Says whether an idle reader can still serve before a mount takes it:
     /// a PostgreSQL reader whose connection closed or was quarantined, or
@@ -108,9 +117,10 @@ impl ReadSession {
             .as_ref()
             .ok_or_else(|| Arc::new(PortError::ReadAdmission(ReadAdmissionError::Stopped)))?;
         self.requests.fetch_add(1, Ordering::Relaxed);
+        let reopens = reader.reopens;
         call(reader, cache, &self.counts).map_err(|error| {
             let error = Arc::new(error);
-            if uncertain(&error) {
+            if uncertain(&error) && !reopens {
                 self.failure.get_or_init(|| error).clone()
             } else {
                 error

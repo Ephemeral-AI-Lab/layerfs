@@ -13,11 +13,16 @@
 //!
 //! * an idle reader terminated between mounts: the local check sees it; the
 //!   mount opens a fresh reader and every read succeeds;
-//! * a mounted Workspace's reader terminated: its reads fail and its unmount
-//!   reports the reader's failure, but the writer still releases the mount
-//!   intent: no row and no key stay (#768 review fix);
-//! * an idle writer terminated: the next mounts are refused (unknown
-//!   outcome; the writer is quarantined, a known limit) and no key stays;
+//! * a mounted Workspace's reader terminated: its next read sees the closed
+//!   connection before it sends anything and reopens the reader once
+//!   (`session/reopen.rs`), so its reads and its unmount succeed and no row
+//!   and no key stay (before readers reopened, its reads failed and its
+//!   unmount reported the reader's failure, while the writer still released
+//!   the mount intent, #768 review fix);
+//! * an idle writer terminated: the next mount sees the closed connection
+//!   before it sends anything and reopens the writer once
+//!   (`session/reopen.rs`); both mounts and their reads work and no key
+//!   stays (before the reopen existed both were refused);
 //! * an idle reader aged past the threshold whose peer went silent: the
 //!   mount's check gives up after its 5 s cap and opens a fresh reader, so
 //!   the first read does not stall.
@@ -105,11 +110,15 @@ fn short<T, E: AsRef<str>>(answer: &Result<T, E>) -> String {
 
 /// Connects opened by every reader session so far (Workspace readers).
 fn reader_connects(service: &Service) -> u64 {
+    reader_work(service).connects
+}
+
+fn reader_work(service: &Service) -> SqlWork {
     let mut total = SqlWork::default();
     for reader in &service.service.opened.diagnostics().unwrap().readers {
         total.accumulate(reader);
     }
-    total.connects
+    total
 }
 
 struct Proxied {
@@ -249,8 +258,10 @@ fn a_mounted_workspace_reader_terminated() {
         assert!(terminate(&mut admin, *pid));
     }
     std::thread::sleep(Duration::from_millis(200));
+    let reopens = reader_work(&p.service).reopens;
     let first = read(&workspace, 1);
     let second = read(&workspace, 2);
+    let reopened = reader_work(&p.service).reopens - reopens;
     let connects = reader_connects(&p.service);
     let unmounted = p.service.try_unmount(workspace);
     let keys = mount_keys(&store, branch);
@@ -280,14 +291,17 @@ fn a_mounted_workspace_reader_terminated() {
     }
     p.service.abandon();
     fresh_mounts_and_reads(&store, branch, 4);
-    assert!(first.is_err(), "a read on the terminated reader fails");
-    let failure = unmounted.expect_err("the unmount reports the reader's failure");
-    assert!(failure.contains("Reader"), "{failure}");
-    // #768 review fix: the healthy writer still released the mount intent.
+    assert!(
+        first.is_ok() && second.is_ok(),
+        "the reads after the reader reopened: {first:?} {second:?}"
+    );
+    assert_eq!(reopened, 1, "the reader reopened once");
+    assert!(unmounted.is_ok(), "the unmount: {unmounted:?}");
+    // The writer released the mount intent.
     assert_eq!(
         (held_after_unmount, rows_after_unmount),
         (0, 0),
-        "no key and no live row after the failed unmount"
+        "no key and no live row after the unmount"
     );
     assert!(
         again_read.is_ok(),
@@ -334,10 +348,18 @@ fn an_idle_writer_terminated_between_mounts() {
         held.is_empty(),
         "no key held after the writer's backend ended: {held:?}"
     );
-    // The writer has no idle check: its first call meets the closed
-    // connection, an unknown outcome that quarantines it (a known limit:
-    // the writer is not reopened), so both mounts are refused.
-    assert!(first_text.starts_with("Err") && second_text.starts_with("Err"));
+    // The writer's next call finds the connection the server closed
+    // before it sends anything and reopens it once: both mounts work.
+    assert!(
+        first_text.starts_with("Ok") && second_text.starts_with("Ok"),
+        "both mounts after the reopen: {first_text}, {second_text}"
+    );
+    assert!(first_read.is_ok(), "the first mount reads: {first_read:?}");
+    let reopens = (p.service.service.opened.session_diagnostics(None))
+        .unwrap()
+        .unwrap()
+        .reopens;
+    assert_eq!(reopens, 1, "one reopen");
     assert_eq!(live_mounts(&mut admin, branch), 0, "no row");
     p.service.abandon();
     fresh_mounts_and_reads(&store, branch, 2);
