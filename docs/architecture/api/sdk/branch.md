@@ -7,7 +7,7 @@ The `branch` calls: list and read a project's Branches, fork one, merge one into
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/branch`](../../../../api/crates/layerfs-api/src/branch) (one file per call), [`layerfs-store/src/calls/branch.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs), [`layerfs-store/src/calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs), [`layerfs-store-service/src/methods/branch`](../../../../engine/crates/layerfs-store-service/src/methods/branch), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs) |
-| Runs by default | where the Store's calls run: the caller's process for a PostgreSQL Store and for a sqlite Store on a locally executing machine (`native`, except on Windows); else the Store machine's worker (`store.call`). No daemon serves a Store call |
+| Runs by default | where the Store's calls run: the caller's process for a PostgreSQL Store and for a sqlite Store on a locally executing machine (the host machine, except on Windows); else the Store machine's worker (`store.call`). No daemon serves a Store call |
 | Design | [Store calls](../../engine/store-calls/README.md), [History](../../core/history/README.md), [merge flow](../../flows/merge.md) |
 
 ## Calls
@@ -101,7 +101,7 @@ with other filters, or to another call, is refused `InvalidInput`. A scoped
 list reads the namespace's names only and answers them without the
 namespace.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs branch list shop/api
@@ -169,7 +169,7 @@ one short write through the Store's single writer and reads no tree.
 | `NotFound` | `from` names no Branch or Commit; `--at` is not in `from`'s history | |
 | `Unknown` | the reply was lost | `branch get <project> <name>` says whether it was made; a second fork is `Exists` |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs branch fork shop/api agent main
@@ -228,7 +228,7 @@ the final publish holds it.
 | `NotFound` | `branch` or `from` is missing | |
 | `Failed` | a Store without merge scratch, or another failure that ran once | |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs branch merge shop/api agent main --into merged
@@ -284,7 +284,7 @@ main` shows between the new head and `base`. `--expected C` refuses
 | `InvalidInput` | an ambiguous prefix (`matches`) | |
 | `Unknown` | the reply was lost | publish the same Commit again: it answers `unchanged` if it landed |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs branch publish shop/api agent
@@ -327,7 +327,7 @@ Commits and objects stay until a later
 | `Busy`, `Unresolved` | another operation holds the Branch, or a gone owner left one uncertain | |
 | `Unknown` | worker route: the answer was lost; it names the Branch | [`unknown.rs`](../../../../control/crates/layerfs-store/src/unknown.rs) |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs branch remove shop/api merged

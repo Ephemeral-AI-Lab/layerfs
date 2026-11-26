@@ -25,10 +25,10 @@ A PostgreSQL login and a bucket's secret key are not settings either: they
 are kept in the home's secret folder; see
 [machines, Stores and backups](machines-and-stores.md#secrets).
 
-### Native worker lifecycle
+### Host worker lifecycle
 
-A native CLI worker on macOS or Linux can create `worker.sock` and
-`worker.ctl` in the private `machine/native/` directory. These sockets
+A host worker on macOS or Linux can create `worker.sock` and
+`worker.ctl` in the private `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) directory. These sockets
 accept the UID that owns the home. The worker keeps `worker.lock` through
 shutdown, releases both sockets after draining its connections, and becomes
 eligible to exit after one minute with no calls and no waiting connections.
@@ -63,17 +63,17 @@ steps.
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
-    control.json               the Sandbox daemon's keys (0600; native, and machines reached directly)
+    control.json               the Sandbox daemon's keys (0600; the host machine, and machines reached directly)
     lock                       the Sandbox lock: its record and Workspace record changes
-    serve.lock                 held by the call that runs the Sandbox (native, and machines reached directly)
+    serve.lock                 held by the call that runs the Sandbox (the host machine, and machines reached directly)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, namespace, created
     workspace/<id>.unmount     who owns an unmount of it, with <id>.unmount-lock; kept until the Sandbox is removed
     workspace/<id>/exec/<x>.json  one per running command (exec id <x>): owner, route, stop handle
   store/<name>/
     record.json                kind, machine, profile, backup links
     lock                       the Store lock
-    store.sqlite               a sqlite Store's file while it is on native
-    store.sqlite.incoming      the partial copy of a store move to native, renamed to store.sqlite when verified
+    store.sqlite               a sqlite Store's file while it is on the host machine
+    store.sqlite.incoming      the partial copy of a store move to the host machine, renamed to store.sqlite when verified
     backup.lock                held by a backup create of this Store
     backup.staging             a backup create's snapshot fetched from a machine, removed when it ends
     store.sqlite.backup        a backup create's snapshot staged beside the file, removed when it ends
@@ -130,7 +130,7 @@ worker's root:
   nothing changes. A thread that already holds it takes it again at once.
   It is held only for checks and record writes, never across a machine
   start, a Store step, a download or a VM's deletion.
-- **`machine/native/` and `machine/docker/`** exist from the first call and
+- **`machine/macos-host/` (or `machine/linux-host/`) and `machine/docker/`** exist from the first call and
   are never removed.
 - **`store/<name>/open/<pid>`** is a lease. Every process that uses a sqlite
   Store holds one: the process that opens it, or, for a Store behind a
@@ -148,14 +148,14 @@ worker's root:
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
   Sandbox is one folder read. Its `record.json` holds facts: its name,
   project and machine and, once started, its id, `backend`, kernel `route`
-  (`fuse`, or `nfs` on a macOS native Sandbox) and `runtime_id`; and,
+  (`fuse`, or `nfs` on a macOS `process` Sandbox) and `runtime_id`; and,
   while a `sandbox.create` or `sandbox.remove` runs or after one lost its
   answer, one `op` intent (`{id, name, phase, args, owner: {pid,
   pid_start, pid_boot}, started, updated, uncertain}`, #536 §7.1). Its
   state is derived, never stored. Its `lock` is taken after the home lock
   for each change of the record and of its Workspace records, and never
-  held across a machine or daemon call; the call that runs a native
-  Sandbox takes turns on `serve.lock`, a different file. On `native` the side
+  held across a machine or daemon call; the call that runs a host-machine
+  Sandbox takes turns on `serve.lock`, a different file. On the host machine the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
   same file, and its daemon keys to `control.json`. A Sandbox on
   `lima` whose daemon the caller reaches directly (#535 G4)
@@ -185,7 +185,7 @@ worker's root:
   not check a machine's data disk.
 - **Command records** (`sandbox/<name>/workspace/<id>/exec/<x>.json`)
   are written new when a command starts and removed when it ends, on the
-  side that keeps the Workspace's record: here on `native` and for a
+  side that keeps the Workspace's record: here on the host machine and for a
   Sandbox reached directly; in the machine's worker otherwise. Each names
   its owning process, its route (`local` or `machine:<name>`), how it
   is stopped, the log tag of the call that started it and the program its
@@ -274,7 +274,7 @@ under `machine/linux-guest/run/`. The worker's own output is in
 
 - **Secrets in the home.** `machine/<name>/worker.json` holds a worker's
   secret and `sandbox/<name>/control.json` a Sandbox daemon's keys (both
-  0600). A started native Sandbox's run folder holds its daemon's setup
+  0600). A started host-machine Sandbox's run folder holds its daemon's setup
   (`config/daemon.setup`, 0600), with the daemon's private key and, for a
   PostgreSQL Store, the URL with its password. A PostgreSQL password or a
   bucket key is otherwise kept only in the secret folder, `secret/`
@@ -282,10 +282,10 @@ under `machine/linux-guest/run/`. The worker's own output is in
   integration keeps its own secrets under `secret/`. A copy of a home
   carries all of these.
 - **Moving.** No call moves a home, and nothing rewrites a path in a
-  record. A started native Sandbox's record names its run folder by
+  record. A started host-machine Sandbox's record names its run folder by
   absolute path, and the run folder names its record's folder: after a
   move every call on it is refused `InvalidInput`, and it is neither used
-  nor deleted. Close every native Sandbox first and move the home only
+  nor deleted. Close every host-machine Sandbox first and move the home only
   while nothing in it runs; then name the new path (`LAYERFS_HOME`).
   Machines, and the Stores and Sandboxes on them, are named by `vm_name`
   and a loopback address, not by a path in the home, and are unchanged.
@@ -307,7 +307,7 @@ The first call on an empty or missing folder creates it with
 ```console
 $ export LAYERFS_HOME=/tmp/lfs-new
 $ layerfs store create shop
-{"name":"shop","kind":"sqlite","machine":"native","profile":"normal",…}
+{"name":"shop","kind":"sqlite","machine":"macos-host","profile":"normal",…}
 $ cat /tmp/lfs-new/layerfs.json
 {"layout":3,"id":"2f51a567b6f153b6e914393cab0904b6"}
 ```

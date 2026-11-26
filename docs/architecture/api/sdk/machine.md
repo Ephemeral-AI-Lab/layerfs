@@ -17,7 +17,7 @@ The `machine` calls: list and read the machines that hold sqlite Stores and run 
                          (--with live probes; --with space walks; --with docker)
  Sandbox images:         load-image (copy from the host's Docker)   prune
 
- built in: native, docker ---------------------- update (image, docker,
+ built in: macos-host or linux-host, docker ---- update (image, docker,
                                                   wsl, daemon)
  create <name> <lima | apple-container> -----> ready
                                           |     |      ^
@@ -99,7 +99,7 @@ record is written only when the state word or reason changed (which moves
 the home's `generation`); `observed_at` is kept in `observed.json` beside
 the record, which does not.
 
-The long row: `backend` is the Sandbox backend on this host (`native`,
+The long row: `backend` is the Sandbox backend on this host (`process`,
 `namespaces`, also on `docker`, or `-` for a removed platform); `supports`
 is a list of words: `sqlite`, `postgresql_sandbox`, and `log` when the
 machine has a worker whose log can be read (clients read this and never test
@@ -114,11 +114,11 @@ built-in machine); `stores` and `sandboxes` list the first 20 names, each
 count only past those
 ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)).
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs machine list
-{"items":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native"}]}
+{"items":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"macos-host","platform":"host"}]}
 ```
 
 ### machine.get
@@ -156,8 +156,8 @@ reply of `machine start` or `stop`.
 ```console
 $ layerfs machine get docker
 {"platform":"docker","state":"stopped"}
-$ layerfs machine get native --with live
-{"platform":"native","state":"ready"}
+$ layerfs machine get macos-host --with live
+{"platform":"host","state":"ready"}
 ```
 
 ### machine.images
@@ -198,7 +198,7 @@ load-image <machine> sha256:<hex>`, which resumes or rebuilds it, and
 `size` null. `image` is the Docker image Id for an imported image and the
 config digest for an archive's; `sandboxes` names the Sandbox records on
 this machine using it; `last_used_at` is the last create's time; `default`
-marks the record's image, else the archive's only one. macOS `native`
+marks the record's image, else the archive's only one. `macos-host`
 answers `mode: "host"` with no items.
 
 `--with docker` reads the host's Docker (one `docker image ls`, one batched
@@ -213,7 +213,7 @@ cache's free bytes. A Docker that does not answer fills `reason` and
 ([`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs)).
 
 ```console
-$ layerfs machine images native
+$ layerfs machine images macos-host
 {"items":[]}
 ```
 
@@ -276,7 +276,7 @@ estimate, never below `done`, until the last `send` event, whose `done` and
 | Refusal | When | Next |
 | --- | --- | --- |
 | `Capacity` | the machine has no room for the image, checked before the first effect (`detail { needed_bytes, free_bytes, path }`) | `fix: layerfs machine prune <machine> --unused` |
-| `Unsupported` | the image is for another architecture or OS (`detail.architecture` or `os`); macOS `native` runs no image (`{reason: "host"}`) | |
+| `Unsupported` | the image is for another architecture or OS (`detail.architecture` or `os`); `macos-host` runs no image (`{reason: "host"}`) | |
 | `InvalidInput` | Docker has no such image, or a reference more than one held image claims (`detail.images`) | `machine prune` one of them |
 | `Unavailable` | Docker or the machine's worker cannot be reached (`detail.what`: `docker` or `machine`) | |
 | `InUse` | a stranded unpack of the image is in use | |
@@ -331,7 +331,7 @@ only past those).
 | `Failed` | the named image's copy lock cannot be checked |
 | `InvalidInput` | neither an image nor `--unused`, or not an image id |
 | `NotFound` | no such image on the machine |
-| `Unsupported` | macOS `native` (`{reason: "host"}`) |
+| `Unsupported` | `macos-host` (`{reason: "host"}`) |
 
 ### machine.stats
 
@@ -359,7 +359,7 @@ memory and data disk, each sqlite Store's size, and its Sandboxes' daemons
 and usage. It answers the present only: processor values are counters, and
 a client keeps its own history and turns two reads into a rate. It is one
 [inspection](../../control/sandboxes/inspect.md) request: in this process
-on `native`, else one request to the machine's worker. It takes no lock or
+on the host machine, else one request to the machine's worker. It takes no lock or
 lease, opens no Store, asks no daemon and no provider tool, starts nothing
 and writes nothing, the call log included
 ([`inspect/stats.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/stats.rs)).
@@ -370,10 +370,10 @@ and writes nothing, the call log included
 | `memory_total_bytes`, `memory_used_bytes` | Linux: `MemTotal` and `MemTotal - MemAvailable` of `/proc/meminfo`. macOS: `hw.memsize`, and that less the free, file-backed and purgeable pages | `host.rs` |
 | `disk_total_bytes`, `disk_used_bytes`, `disk_free_bytes` | one `statvfs` of the filesystem that holds the machine's data; `disk_free_bytes` is what the answering process may use, so used and free can sum to less than the total. On `lima` and `apple-container` that is the machine's own data volume | [`home/capacity.rs`](../../../../control/crates/layerfs-home/src/home/capacity.rs) |
 | `cpu_busy_ms`, `cpu_total_ms` | the machine's processor time since boot, from the first `cpu` line of `/proc/stat` (busy is user + nice + system + irq + softirq + steal; total adds idle and iowait). The share between two reads is Δbusy / Δtotal, of the kernel `scope` names. Null on macOS (`cpu_unsupported`) and when the read failed (`cpu_not_read`) | `host.rs`, [`inspect/process.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/process.rs) |
-| `scope` | whose processors and memory they are: `host` (`native`), `vm` (`lima`, `apple-container`), `engine_host` (`docker`: the kernel the Engine runs on) | `stats.rs` |
+| `scope` | whose processors and memory they are: `host` (`macos-host`, `linux-host`), `vm` (`lima`, `apple-container`), `engine_host` (`docker`: the kernel the Engine runs on) | `stats.rs` |
 | `reasons` | which values are null and why: `memory_not_read`, `disk_not_read`, `cpu_unsupported`, `cpu_not_read`, `deadline` | `stats.rs` |
 | `incomplete` | the request's soft budget (4 s) ended the Store or Sandbox part early; what was read is answered | `stats.rs` |
-| `worker` | the machine's worker process (`version`, `pid`, `started_at`, `protocol`, `bundle`); null on `native` | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
+| `worker` | the machine's worker process (`version`, `pid`, `started_at`, `protocol`, `bundle`); null on the host machine | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
 | `data_disk` | the folder measured, its filesystem type, its `scope` (`host_fs`, `vm_disk`, `volume`), the provider's `volume` name and `inodes_free` | `capacity.rs` |
 | `stores` | `[{store, size, allocated_bytes}]`: the sqlite Stores the home records on the machine, from one `lstat` of `store.sqlite` and its `-wal`; no Store file is opened | `stats.rs` |
 | `sandboxes` | `[{sandbox, live, live_reason, started_at, usage, usage_reason}]`: one row per recorded Sandbox, read by the side that runs it from its daemon record, `/proc` and its cgroup; `usage` as [`sandbox get --with stats`](sandbox.md#sandboxget) answers it | [`inspect/live.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/live.rs) |
@@ -385,7 +385,7 @@ and a file with several names counts once. `layerfs_bytes` is the sum of
 `parts` (`[{part, bytes}]`, the parts `stores`, `sandboxes`, `images`,
 `other_runs`, `logs`, `other`); `outside_bytes` is the disk's used bytes
 less that, never below 0 (on a Docker VM disk, Docker's images and other
-volumes; on `native` the rest of the host's disk), null unless the walk is
+volumes; on the host machine the rest of the host's disk), null unless the walk is
 complete. `stores` is `[{store, allocated_bytes}]`; `sandboxes` is
 `[{sandbox, allocated_bytes, overlays_bytes, writes_bytes, home_bytes,
 log_bytes, runtime_bytes, reason}]` from each run folder. `unreadable_count`
@@ -395,7 +395,7 @@ link, enters no other device and never enters a Workspace mount point, so a
 stopped daemon cannot hang it.
 
 ```console
-$ layerfs machine stats native
+$ layerfs machine stats macos-host
 {"cpus":14,"memory_used_bytes":25904775168,"memory_total_bytes":38654705664,"disk_free_bytes":129668911104,"disk_total_bytes":994662584320}
 ```
 
@@ -437,14 +437,14 @@ Reads what is on a machine: its LayerFS folders, one page of a folder or one
 byte window of a file. Its options, folder page and file window are those of
 [`sandbox files`](sandbox.md#sandboxfiles); what differs is where a path may
 lead ([`inspect/machine.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/machine.rs)).
-It is one inspection request: in this process on `native`, else one request
+It is one inspection request: in this process on the host machine, else one request
 to the machine's worker; no lock, no lease, no daemon call, nothing written.
 
 **The roots** (no `path`): a page that is never continued. Each entry is a
 folder with a `role`, in this order; a folder that is not there is left out.
 A client shows roles and never writes a path of its own.
 
-| `role` | Folder on docker, Lima and Apple Container | Folder on `native` |
+| `role` | Folder on docker, Lima and Apple Container | Folder on the host machine |
 | --- | --- | --- |
 | `data` | `/layerfs/data`, the worker's root, with `disk_free_bytes` | — |
 | `stores` | `/layerfs/data/store` | `<home>/store` |
@@ -458,7 +458,7 @@ A client shows roles and never writes a path of its own.
 | `image` | `/layerfs/image`: a custom Sandbox image copied in (never on docker) | — |
 | `machine` | `/`: the whole machine | — |
 
-`native` has no `machine` root: that machine is its owner's own computer,
+The host machine has no `machine` root: that machine is its owner's own computer,
 and a path outside its LayerFS folders is `InvalidInput`.
 
 | | In a LayerFS folder | Anywhere else, from `/` |
@@ -475,7 +475,7 @@ files with `role: "log"` and read with `machine log` and `sandbox log`.
 Refusals are `sandbox files`'s.
 
 ```console
-$ layerfs machine files native
+$ layerfs machine files macos-host
 {"items":[{"path":"/tmp/demo/home/store","type":"dir"},{"path":"/tmp/demo/home/sandbox","type":"dir"},{"path":"/tmp/demo/home/machine/macos-host/run","type":"dir"}]}
 ```
 
@@ -519,7 +519,7 @@ It takes no lock or lease, starts nothing and writes nothing.
 
 | Refusal | When |
 | --- | --- |
-| `Unsupported` | the machine's calls run in the caller's process (`native`), so it has no worker |
+| `Unsupported` | the machine's calls run in the caller's process (the host machine), so it has no worker |
 | `InvalidInput` | `limit` out of range; a cursor that is not one, or is stale (the log rotated) |
 | `NotFound` | no machine has this name |
 | `Unavailable` | the machine is stopped, its worker is not reached, or it does not answer in time |
@@ -528,8 +528,8 @@ It takes no lock or lease, starts nothing and writes nothing.
 It was `logs.machine`, removed with no alias (its `--before` is `--cursor`).
 
 ```console
-$ layerfs machine log native --limit 1
-{"error":"Unsupported","message":"machine native has no worker (its calls run in the caller's process), so it has no worker log"}
+$ layerfs machine log macos-host --limit 1
+{"error":"Unsupported","message":"machine macos-host has no worker (its calls run in the caller's process), so it has no worker log"}
 ```
 
 ### machine.start
@@ -586,7 +586,7 @@ the same value. A start that cannot confirm the old worker is refused
 | `Unknown` | a provider command timed out or its reply was lost: the machine is `broken` `unresolved` | `fix: layerfs machine get <machine> --with live`, which settles it by observing |
 
 ```console
-$ layerfs machine start native
+$ layerfs machine start macos-host
 {"unchanged":true}
 ```
 
@@ -613,7 +613,7 @@ Python  layerfs.machine.stop(machine, *, force=None, on_progress=None)
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Stops a machine's worker and, where it has one, its VM; disks and Stores
-stay. `native` stops nothing; `docker` ends its worker container only;
+stay. The host machine stops nothing; `docker` ends its worker container only;
 `lima` and `apple-container` end the worker and VM. It runs under
 `start.lock` and removes `worker.json`: a later call that needs the machine
 is `Unavailable` until `machine start`. A stopped machine answers
@@ -631,7 +631,7 @@ it goes straight to the provider, does not call the worker, commit or
 unmount Workspaces one by one, and deletes no record; it answers
 `stopped_sandboxes` and `unknown_workspaces` (Workspaces whose state could
 not be confirmed; these are not saved Commits), each the first 20 with its
-count past those. On `native` it ends only this home's recorded Sandbox
+count past those. On the host machine it ends only this home's recorded Sandbox
 runtimes and commands, without opening the Store or calling the daemon, and
 the machine stays `ready`. Stopped Sandboxes are recorded `broken`
 `missing`, or `unresolved` when the stop could not be confirmed. A provider
@@ -641,7 +641,7 @@ A lost reply leaves the machine `broken` `unresolved` with `fix: layerfs
 machine get <machine> --with live`.
 
 ```console
-$ layerfs machine stop native
+$ layerfs machine stop macos-host
 {"unchanged":true}
 ```
 
@@ -693,7 +693,7 @@ home lock; the boot runs under `start.lock` only. Progress phases:
 | failed after the VM existed | `broken` `failed`; the VM is kept for inspection |
 | `Unknown` | everything kept; `op` uncertain; logged to `log/uncertain.jsonl`; `machine remove` clears it |
 
-Refusals: `Exists`; `InvalidInput` (`native` or `docker` as the name, a
+Refusals: `Exists`; `InvalidInput` (the host machine's name or `docker` as the name, a
 name too long); `Unsupported` (a removed or unsupported platform, a missing
 tool in `detail.missing`, no sealed bundle).
 
@@ -780,7 +780,7 @@ resizing is not in 2.0.
 | `cpus`, `memory` | VM machines | `InvalidInput` on a built-in; on a VM `Unsupported` ("not built yet"), nothing changed |
 
 ```console
-$ layerfs machine update native --daemon /opt/layerfs/layerfs-daemon
+$ layerfs machine update macos-host --daemon /opt/layerfs/layerfs-daemon
 {"ok":true}
 ```
 
@@ -825,7 +825,7 @@ bytes. It changes nothing and exits 0 once its report is made. It replaces
 the shell's `layerfs doctor machine`, removed with no alias.
 
 ```console
-$ layerfs machine doctor native
+$ layerfs machine doctor macos-host
 {"ok":true}
 ```
 

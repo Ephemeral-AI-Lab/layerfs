@@ -20,10 +20,10 @@ The crate is grouped by owner:
 | [`backend/namespaces/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces) | Everything only `namespaces` uses, its OS facts included: the provider and Sandbox, the cgroup, the helper spec (`spec.rs`), host checks (`host_checks.rs`), the command filter (`seccomp.rs`), the root (`rootfs/`), the Sandbox's network (`network/`) and `linux/` (`mountinfo`, confined reads). Linux runs only `namespaces`. |
 | [`support/`](../../../../control/crates/layerfs-sandbox-backend/src/support) | Small formats other crates read: `json/`, `postgres_url.rs`, `removed_platforms.rs`. |
 
-A machine's platform fixes its backend and callers never choose it: `process`
-on macOS runs `Process`; `process` on Linux and every `lima`,
+A machine's platform fixes its backend and callers never choose it: `host`
+on macOS runs `Process`; `host` on Linux and every `lima`,
 `apple-container` and `docker` machine run `Namespaces`; Windows has none
-([`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/profile.rs),
+([`host/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/profile.rs),
 `namespaces` in [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs);
 [Machines: platforms](../machines/platforms.md)).
 
@@ -34,7 +34,7 @@ on macOS runs `Process`; `process` on Linux and every `lima`,
         |
         v
  adapter(backend) -> &'static dyn BackendAdapter    adapter.rs: one match
-        +-- Backend::Native      => &native::ADAPTER
+        +-- Backend::Process     => &process::ADAPTER
         +-- Backend::Namespaces  => &namespaces::ADAPTER
 
  trait BackendAdapter: Sync     pub(crate), no default methods, no registry
@@ -50,7 +50,7 @@ different string and is not what records store.
 | --- | --- | --- |
 | Stored name | `process` | `namespaces` |
 | Description | "Sandboxes run as this user's processes, served over loopback NFS" | "Sandboxes run in Linux namespaces and a cgroup" |
-| `capabilities.name` | `native-macos` | `namespaces-linux` |
+| `capabilities.name` | `process-macos` | `namespaces-linux` |
 | `isolation` | `HostProcess` | `Namespaces`: mount, PID and IPC namespaces, a cgroup and a network namespace for its commands on the kernel that runs it (a VM's, or the host's own on a Linux host); no VM of its own |
 | `mount_driver` | `LoopbackNfs` | `Fuse` |
 | `requires_image` | no | yes |
@@ -61,7 +61,7 @@ different string and is not what records store.
 | Record | `SandboxRecord::Local` | `SandboxRecord::Namespaces` (local facts + image + network) |
 | Process boundary | named process groups | cgroup v2 directory |
 | Kernel requirements | none | cgroup v2 with `cgroup.kill` (Linux 5.14), and `clone3` with `CLONE_INTO_CGROUP` allowed (Linux 5.7; not answered `ENOSYS` or `EPERM` by a seccomp filter around the worker): every command is created inside its cgroup, with no fallback |
-| Source | [`native/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
+| Source | [`process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
 
 ### Every `namespaces` Sandbox's own network
 
@@ -84,9 +84,9 @@ daemon's Store connection (the URL as configured) and its name resolution
 
 | Machine | Where the namespace, its host end and the table live | Commands reach |
 | --- | --- | --- |
-| `process` on macOS (`Process`) | none | this host's network, its `127.0.0.1` included |
-| `process` on a Linux host | this host's network namespace | out through this host (masqueraded); not this host's `127.0.0.1` |
-| `docker` on a Linux host | this host's network namespace (`--network host` worker) | as `process` on Linux |
+| `macos-host` (`Process`) | none | this host's network, its `127.0.0.1` included |
+| `linux-host` | this host's network namespace | out through this host (masqueraded); not this host's `127.0.0.1` |
+| `docker` on a Linux host | this host's network namespace (`--network host` worker) | as `linux-host` |
 | `docker` on macOS (Docker Desktop) | the worker container's namespace | out through the worker's bridge; not the worker's port 7070 on the container's addresses (its published port on this Mac stays reachable by `host.docker.internal`) |
 | `lima` | the VM's | out through the VM; not the VM's `127.0.0.1` (its worker, its daemons; their forwards on this Mac stay reachable by `host.lima.internal`) |
 | `apple-container` | the container's in its VM | out through the container; not the worker's port 7070 on the container's addresses |
@@ -112,13 +112,13 @@ daemon's Store connection (the URL as configured) and its name resolution
 | Record | `<sandbox>/network` (0644, `lfs<id12> <guest>/31`), read by the launcher after the listener (missing or empty fails the start in its listener phase) into the namespace record and the daemon record, and the home's Sandbox record (`network`), which [`sandbox.get`](../../api/sdk/sandbox.md#sandboxget)'s long form answers. State for reopen, doctor and tests; nothing allocates from it. | [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs), [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
 | Firewall (D6, D7, D8, D15, D20) | `table inet layerfs`, one nfnetlink transaction at every Sandbox create and every worker start (owner to confirm): `NEWTABLE` and three base chains (forward filter 0, input filter 0, postrouting nat 100, policy accept, no `EXCL`), a flush of the table's rules, then the rules: forward `iifname "lfs*" oifname "lfs*" drop`, `iifname "lfs*" accept`, `oifname "lfs*" ct state established,related accept`, `oifname "lfs*" drop`; input `iifname "lfs*" tcp dport <port> drop` per closed port (the chain is always there, empty with none); postrouting `ip saddr <pool> oifname != "lfs*" masquerade`. Idempotent, atomic, and self-healing after an `nft flush ruleset`. Only `meta`, `cmp`, `ct`, `bitwise`, `payload`, `immediate` and `masq`: no `fib` (Docker Desktop's kernel has none). No chain drops by policy, so Docker's and lima's tables keep working. | [`network/nftables.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/nftables.rs), [`network/netlink.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/netlink.rs) |
 | Closed ports (D7) | A command's loopback is its own, so every daemon (`127.0.0.1`, which the listener parse asserts) and every worker on loopback (lima, a Linux Engine) is out of reach at the machine's own addresses by construction. The input chain drops the launcher's own listening port when its address is not loopback: Docker Desktop's and apple-container's worker, `0.0.0.0:7070` (`launch::network::serving_on`, set by `layerfs worker` after it binds). On a Linux host no user port is closed; a host's `127.0.0.1` listener is not reachable at its other addresses. What this closes is the machine's own addresses only; see Host-side forwards. | [`layerfs-sandbox launch/network.rs`](../../../../control/crates/layerfs-sandbox/src/launch/network.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `prepare_network` |
-| Forwarding | LayerFS sets `net.ipv4.ip_forward=1` only where it owns the namespace: the lima and apple-container preparation (`PREPARE`, every start) and Docker Desktop's worker entry (not a Linux Engine's `--network host` worker). On a Linux host (`process`, Linux Engine `docker`) it never writes it, and a start reads it first: 0 is `Unavailable`, naming the setting (owner to confirm). | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs), `network/setup.rs` `forwarding` |
+| Forwarding | LayerFS sets `net.ipv4.ip_forward=1` only where it owns the namespace: the lima and apple-container preparation (`PREPARE`, every start) and Docker Desktop's worker entry (not a Linux Engine's `--network host` worker). On a Linux host (`linux-host`, Linux Engine `docker`) it never writes it, and a start reads it first: 0 is `Unavailable`, naming the setting (owner to confirm). | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs), `network/setup.rs` `forwarding` |
 | Dropping forward chains (D19) | In nftables an accept in one table does not override a drop in another at the same hook. A start refuses `Unavailable` when a forward-hook base chain of an `ip` or `inet` table has policy drop and its table has no rule accepting `iifname "lfs*"` and none accepting `oifname "lfs*"` (Docker's `filter FORWARD` once it enabled forwarding; ufw's default), naming the chain and the rules that admit the host ends (`iptables -I DOCKER-USER -i lfs+ -j ACCEPT` and the return rule; owner to confirm). A rule matching the `lfs` prefix, as iptables-nft writes `-i lfs+`, is recognised, so a host that added them is admitted. Legacy (x_tables) iptables is not visible over nfnetlink and is not checked. | `network/nftables.rs` `dropping_forward`, `network/setup.rs` `forward_policy` |
 | Resolver (D12, D13) | Decided by the launcher before any effect from its `/etc/resolv.conf`; a Sandbox has its own loopback and no IPv6. No loopback (or `0.0.0.0`) and no IPv6 `nameserver`: its file is bound as before (Docker Desktop `192.168.65.7`). A loopback one (systemd-resolved's `127.0.0.53`, a local dnsmasq) or an IPv6 one: `<sandbox>/resolv.conf` (0644) is written with its `search`, `domain` and `options` lines and only IPv4 nameservers that are not this host's own, its own and, for `127.0.0.53`, those of `/run/systemd/resolve/resolv.conf` (lima: `192.168.5.2`; a dual-stack upstream's IPv6 servers, which glibc would try first, are left out); no IPv4 server left, `Unavailable` naming `/etc/resolv.conf`, what it names and the fix: LayerFS runs no DNS forwarder (owner to confirm). The written file is the commands' alone (spec §3.1: the daemon's paths are unchanged): the daemon's view binds the launcher's file, and the outer init stage, which commands join, holds a mount namespace of its own made from the daemon's after the pivot (`mounts::commands_view`): the daemon's root is made shared (`MS_SHARED`) within the Sandbox's mount namespace, which stays private to the machine's, the commands' copy a slave (`MS_SLAVE`), so every mount and unmount the daemon makes later (a Workspace's) reaches commands and nothing commands' view mounts goes back, and the written file is bound read-only at `/etc/resolv.conf` there. Every command joins that view through `/proc/<init>/ns/mnt` as before (no per-command cost); it exists before the daemon starts, and a failure to make it ends the Sandbox, so no command runs without it (the gate is one byte each way on the inner stage's standard input: an end of file means the inner stage failed and its own error is logged; any other byte is logged as the outer stage's error). The file is a snapshot taken at create: a long-lived Sandbox on a roaming host keeps the upstream servers it started with. `/etc/hosts` is bound unchanged; its `localhost` now means the Sandbox. | [`network/resolver.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/resolver.rs), `namespaces/create.rs`, [`helper root.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/root.rs) |
 | Joining | Every command helper opens `/proc/<init>/ns/net` with the other handles and its own `/proc/self/ns/net`; equal `(st_dev, st_ino)` (a Sandbox started by an earlier build, or a reused pid) ends the stage by a signal before anything runs, so a command never runs on the machine's network. Then it enters the network namespace first, before the mount (`/proc/<init>/ns/mnt`: the commands' view where a resolver file was written, else the daemon's), pid and IPC ones, no-new-privs and the uid change: one open, two `fstat`, one `setns` per command. | [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
 | Reopen (D16) | Also requires that the recorded init holds a network namespace other than the launcher's (`network::private`): a Sandbox started before this change is not reopened and answers its broken state with the `sandbox remove` fix (no backward compatibility in 2.0). | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
-| Leftovers (D5) | A pair dies with its namespace, which dies with the Sandbox's cgroup; a host end outlives it only while something outside holds the namespace (a user's `nsenter`) or during the kernel's asynchronous teardown (under a second). Doctor reports and never removes (owner to confirm): `machine.network` lists `lfs*` links no Sandbox recorded in the home owns, on any machine (`process` and a Linux Engine `docker` share a Linux host's namespace, and a worker reads only its own machine's records, so the caller matches the links against all of the home's; when any of those records cannot be read it has no verdict and lists no link, since a delete fix could cut a live Sandbox's network), a missing table while Sandboxes are recorded and `ip_forward` 0, each with its fix; `sandbox.network` checks a running Sandbox's init namespace and host end. On a Linux host a link may be another home's, so nothing is swept, and doctor has no `--fix` action (spec §6 and §7.7 ask for one; owner to confirm). | [`doctor/network.rs`](../../../../control/crates/layerfs-control/src/doctor/network.rs) |
-| Removal | lima, apple-container and Docker Desktop lose the namespace, links and table with the VM or container. On a Linux host the `process` and `docker` machines are built in and never removed, so nothing removes this host's `table inet layerfs` (owner to confirm): with no `lfs*` link left it matches nothing, and `nft delete table inet layerfs` removes it. | — |
+| Leftovers (D5) | A pair dies with its namespace, which dies with the Sandbox's cgroup; a host end outlives it only while something outside holds the namespace (a user's `nsenter`) or during the kernel's asynchronous teardown (under a second). Doctor reports and never removes (owner to confirm): `machine.network` lists `lfs*` links no Sandbox recorded in the home owns, on any machine (`linux-host` and a Linux Engine `docker` share a Linux host's namespace, and a worker reads only its own machine's records, so the caller matches the links against all of the home's; when any of those records cannot be read it has no verdict and lists no link, since a delete fix could cut a live Sandbox's network), a missing table while Sandboxes are recorded and `ip_forward` 0, each with its fix; `sandbox.network` checks a running Sandbox's init namespace and host end. On a Linux host a link may be another home's, so nothing is swept, and doctor has no `--fix` action (spec §6 and §7.7 ask for one; owner to confirm). | [`doctor/network.rs`](../../../../control/crates/layerfs-control/src/doctor/network.rs) |
+| Removal | lima, apple-container and Docker Desktop lose the namespace, links and table with the VM or container. On a Linux host the `linux-host` and `docker` machines are built in and never removed, so nothing removes this host's `table inet layerfs` (owner to confirm): with no `lfs*` link left it matches nothing, and `nft delete table inet layerfs` removes it. | — |
 
 Breaking changes (2.0; no backward compatibility, owner 2026-11-19): a
 command that relied on reaching a service on its machine's `127.0.0.1`
@@ -179,7 +179,7 @@ files. What a PostgreSQL Store's URL may name on each machine is
 [Reach](../machines/workers-and-reach.md#reach-reachrs); the daemon dials
 it from the machine's network.
 
-On a Linux host, then, a `namespaces` Sandbox on `process` or `docker` shares
+On a Linux host, then, a `namespaces` Sandbox on `linux-host` or `docker` shares
 the host's kernel: its separation is its namespaces (its network among
 them), cgroup, seccomp filter and command identity (uid 501), not a VM. No
 call option, record or answer has an `isolation` or `scheduling` field;
@@ -194,13 +194,13 @@ Capabilities "describe support, not qualification"
 
 | Enum | Variants | Methods |
 | --- | --- | --- |
-| `Runtime`: one deployment's choice | `Native(NativeProvider)` (macOS), `Namespaces(NamespaceProvider)` (Linux) | `backend`, `capabilities`, `local_directory`, `native_paths`, `launch`, `launch_with_binds`, `reopen`, `reopen_stopped` |
+| `Runtime`: one deployment's choice | `Process(ProcessProvider)` (macOS), `Namespaces(NamespaceProvider)` (Linux) | `backend`, `capabilities`, `local_directory`, `native_paths`, `launch`, `launch_with_binds`, `reopen`, `reopen_stopped` |
 | `Sandbox`: the launched owner | `Process` (macOS), `Namespaces(Box<_>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `run_in`, `exec_stop`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
 
-The native backend is macOS only: Linux starts no native Sandbox
-(#533 O27), and a native record found there is refused with the
+The `process` backend is macOS only: Linux starts no `process` Sandbox
+(#533 O27), and a `process` record found there is refused with the
 records-only `sandbox remove` as its fix (RV3 FAIL 3,
-[`native/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/mod.rs)).
+[`process/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/mod.rs)).
 A reopened namespaces Sandbox runs the helper copy in its own `bin/`; one
 without it (an earlier build's) refuses a command with that fix
 (`namespaces::NO_HELPER_COPY`).
@@ -211,13 +211,13 @@ leaves unknown exit and storage facts `None`.
 
 ### Stop and delete
 
-| Step | Native | Namespaces |
+| Step | Process | Namespaces |
 | --- | --- | --- |
 | `stop(s)` | Detach mounts; SIGTERM, wait `s`; SIGKILL, wait 5 s; then SIGKILL every named process group and the daemon's, wait 5 s | One write to `cgroup.kill`; wait `max(s, 5 s)` for the init to be gone and `populated 0` |
 | Second `stop` | refused | refused |
 | `delete` before a known stop | refused ("known stop required") | refused |
 | `delete` | kill groups if not yet, detach mounts, remove the directory | refuse while the cgroup holds a process; remove cgroup tree, directory and private root |
-| Source | [`native/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/sandbox.rs) | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
+| Source | [`process/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/sandbox.rs) | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
 
 Neither is retried. On `Drop` an owner only reaps a daemon or init it started
 that already exited; a running one is left for `stop`.
@@ -226,7 +226,7 @@ that already exited; a running one is left for `stop`.
 
 | Backend | `ExecExit.code` | `pid` | Source |
 | --- | --- | --- | --- |
-| Native | the exit code, or 128 + signal | the command's | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs) |
+| Process | the exit code, or 128 + signal | the command's | [`process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs) |
 | Namespaces | the helper's code, which is the command's or 128 + its signal; 125 is the helper's own failure; a helper ended by a signal (its setup failed, or the Sandbox ended) is a failure, never an exit code | the helper's | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper main.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/main.rs) |
 
 Both: stdout and stderr are copied to the sinks as they arrive in 8 KiB
@@ -250,7 +250,7 @@ not prove descendants ended.
    daemon.log                  0600  daemon stdout + stderr; new with the
                                      directory, never rotated (below)
    tmp/                        1777  commands' scratch and HOME
-   groups/                     0700  native: one empty file per group
+   groups/                     0700  process: one empty file per group
    bin/layerfs-daemon, layerfs-sandbox-helper   namespaces only, 0755
    runtime/lib/  runtime/bin/  0755  namespaces only: the bundle's runtime layer
  <root>/<name>.root/           0755  namespaces only: private root (sibling)
@@ -266,11 +266,11 @@ not prove descendants ended.
 
 | Fact | Rule | Source |
 | --- | --- | --- |
-| Root | Absolute, this user's, not group or other writable, `o+x`. `Local::new` (namespaces) also needs every ancestor `o+x`, since commands run as another identity; `Local::native` does not (a macOS home is 0750). | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs) |
+| Root | Absolute, this user's, not group or other writable, `o+x`. `Local::new` (namespaces) also needs every ancestor `o+x`, since commands run as another identity; `Local::process` does not (a macOS home is 0750). | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs) |
 | Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; it lives in the bridge's `process` module. | [`process/identity.rs`](../../../../engine/crates/layerfs-bridge/src/process/identity.rs) |
 | `daemon.log` | Made new (`O_EXCL`) with the Sandbox's directory by each start, which refuses a directory that exists, and removed with it at close: a daemon never opens a log an earlier one wrote, so there is no `daemon.1.log`. Nothing rotates it while the daemon runs (a rename would not move the daemon's descriptor, and its launcher waits for the listener line from the file's start); it grows until the Sandbox closes. With tracing off the daemon writes one line for each control connection that ends without `EndSession` (a caller that closes it) and for each reclaimed slot or expired request, none for a mount, exec or Commit itself. Rotating it while the daemon runs is not built in 2.0 (layerfs-project#180, live writers). | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs), [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`shared/search_path.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/search_path.rs) |
-| OS facts | Each lives in the one backend that runs on its OS; `shared/` reaches it as `os`. `backend/namespaces/linux/`: `mountinfo`, lazy `MNT_DETACH`. `backend/process/macos/`: the `mount` table, `umount -f`. The seccomp filter is `backend/namespaces/seccomp.rs`, the crate's only `unsafe`. | [`shared/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/mod.rs), [`namespaces/linux/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux), [`native/macos/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/macos), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
+| OS facts | Each lives in the one backend that runs on its OS; `shared/` reaches it as `os`. `backend/namespaces/linux/`: `mountinfo`, lazy `MNT_DETACH`. `backend/process/macos/`: the `mount` table, `umount -f`. The seccomp filter is `backend/namespaces/seccomp.rs`, the crate's only `unsafe`. | [`shared/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/mod.rs), [`namespaces/linux/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux), [`process/macos/`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/macos), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
 
 ### The run folder
 
@@ -294,7 +294,7 @@ the folder goes with it: `delete` removes it whole after a known stop, at
 | `workspaces/` | made by the daemon (`process`) or the launcher (`namespaces`); the daemon mounts each Workspace in it | commands, as the mounts allow | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs) `LocalPaths` |
 | `daemon.log` | the daemon's stdout and stderr, into the file the launcher made | the launcher (the listener line), `log_tail` and the inspect route; a macOS `process` command can read it too | same; [Inspection](inspect.md) |
 | `tmp/` | commands: it is their `HOME` and scratch directory | anyone who can reach it (1777) | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [`runtime/dispatch.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs) `scratch_directory` |
-| `groups/` | each `process` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`native/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs) |
+| `groups/` | each `process` command's start: one empty file per process group, removed once the group has no member | the caller's side only | [`process/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs) |
 | `bin/`, `runtime/` | the launcher: copies of the daemon, the helper and the runtime layer | anyone may read and run them; only root may change them | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs) |
 | `owner` | the caller's side, once, after the daemon started | a reopen with no `deploy.localDir`, and the run root sweep, which removes a run folder only when its marker is older than a minute and names no live daemon ([`sweep.rs`](../../../../control/crates/layerfs-sandbox/src/sweep.rs) `owner`) | [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `mark_owner`, `owned` |
 | `<root>/<name>.root/` | the launcher makes it empty; the init stage mounts the Sandbox's root on it inside the Sandbox's own mount namespace, so from outside it stays empty | nothing outside the Sandbox | [`namespaces/paths.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs); `delete` removes it with `rmdir` |
@@ -308,13 +308,13 @@ reserves space for it (`supports_resource_limits` is false for both
 backends): what a command writes to its `HOME` takes space from the
 Stores' disk. A `namespaces` Sandbox's `/tmp` is a tmpfs, in memory.
 
-## `backend/process/`: native
+## `backend/process/`: macOS host processes
 
 The machine is the boundary: daemon and commands share this kernel's
-processes, network, users and filesystem. `NativeProvider::launch`
+processes, network, users and filesystem. `ProcessProvider::launch`
 accepts only `Local` options whose identity is this process's own uid and gid
 and whose environment has no `PATH`
-([`native/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/provider.rs)).
+([`process/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/provider.rs)).
 
 This backend isolates nothing. A command is an ordinary process of the
 calling user: it starts in the Workspace's directory with `HOME` set to the
@@ -324,14 +324,14 @@ Sandbox's `daemon.setup`, and uses the host's network. It gets this
 process's search path and, when present, the user's `RUSTUP_HOME`,
 `CARGO_HOME` and `GIT_CONFIG_GLOBAL`, and nothing else of the caller's
 environment
-([`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs),
+([`process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs),
 [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `start_named`).
 
 | Rule | Source |
 | --- | --- |
-| Each command leads its own process group, named in `groups/<boot 32 hex>-<pid>-<start>` before anything waits on it; a group that cannot be named is killed at once. | [`native/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs) |
-| A name is removed once its group has no member; a process that leaves its group (`setsid`) is followed only when named with `Sandbox::track(pid, start)`. | [`native/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs) |
-| Groups of another boot, or whose leader id now names another start time, are never signalled. | `end`, `members` in `native/groups.rs` |
+| Each command leads its own process group, named in `groups/<boot 32 hex>-<pid>-<start>` before anything waits on it; a group that cannot be named is killed at once. | [`process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs) |
+| A name is removed once its group has no member; a process that leaves its group (`setsid`) is followed only when named with `Sandbox::track(pid, start)`. | [`process/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs) |
+| Groups of another boot, or whose leader id now names another start time, are never signalled. | `end`, `members` in `process/groups.rs` |
 
 ## `backend/namespaces/`: Linux namespaces and the helper
 
@@ -435,7 +435,7 @@ the daemon record keeps the container's name (no older name is computed);
 | Handle | Backend | Cancel |
 | --- | --- | --- |
 | `Stop::Cgroup { path }` | namespaces: `<sandbox cgroup>/ws-<workspace>/exec-<exec>` | SIGTERM to each process in `cgroup.procs`, wait the grace, `cgroup.kill`, wait 5 s for it to be empty; once empty (or found empty), remove the group and its Workspace's when that is empty; a cancel told before the command started kills and removes it the same way |
-| `Stop::Group { pgid, leader }` | native: the command's process group, leader by pid, start and boot | SIGTERM to the group, wait the grace, SIGKILL, wait 5 s; a child that called `setsid` escapes it |
+| `Stop::Group { pgid, leader }` | process: the command's process group, leader by pid, start and boot | SIGTERM to the group, wait the grace, SIGKILL, wait 5 s; a child that called `setsid` escapes it |
 
 `cancel` answers `Ended` (nothing ran, not signalled) or `Signalled(SIGTERM
 | SIGKILL)`; a process left after SIGKILL is an error. One attempt; nothing

@@ -35,7 +35,7 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   starts enabled, the built-in `docker` `stopped` until `machine start
   docker`) and, in the long form, `supports` (`sqlite`, `postgresql_sandbox`,
   and `log` when the machine has a worker whose log can be read, never on
-  `native`), its sizes, image, Stores and Sandboxes. `--with live` probes the
+  the host machine), its sizes, image, Stores and Sandboxes. `--with live` probes the
   provider and says hello to the worker once (every machine at the same time
   for `list`), within 10 s, starting nothing; a probe that does not answer
   is `unknown` with `observed_at`. `layerfs home get --with platforms`
@@ -254,7 +254,7 @@ its owner exits. Direct PostgreSQL calls continue while the host is stopped.
 ### Routes
 
 - Calls on a sqlite Store on a machine whose calls run in the caller's
-  process (`macos-host` on macOS and `linux-host` on Linux; on Windows `native` has a worker),
+  process (`macos-host` on macOS and `linux-host` on Linux; Windows has no host machine),
   and calls on a PostgreSQL Store, run in the caller's process.
 - Calls on a sqlite Store on any other machine go to that machine's worker,
   behind a secret, over a forwarded loopback port. The caller sends the
@@ -339,7 +339,7 @@ profile label is `normal` (a record that says `disposable` reads as `normal`). A
 $ layerfs store create shop
 {"ok":true}
 $ layerfs store move shop macos-host
-{"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
+{"error":"InvalidInput","message":"store move, check: Store shop is already on macos-host"}
 ```
 
 (Run for this manual on macOS. `store move shop dev` to a VM and back was
@@ -358,7 +358,7 @@ the Store directory's writer lane before SQLite attaches to the WAL. A new
 connection may wait while a write or maintenance holds the lane. Reads on
 an open connection continue without that wait.
 
-For a local SQLite Store held open by a native CLI worker, move, remove,
+For a local SQLite Store held open by a host worker, move, remove,
 compact and upgrade record a `worker-close` phase and ask that worker to
 release its Store. The phase keeps new calls out until the caller verifies
 release. A held Store record lock yields `InUse` before the worker closes
@@ -373,9 +373,9 @@ records close and checkpoint outcomes in
 
 - `store move <store> <machine>` moves the file between the machine whose
   calls run in this process (`macos-host` on macOS and `linux-host` on Linux) and another
-  machine: from `native` to a machine, or from its machine back to `native`
+  machine: from the host machine to a machine, or from its machine back to the host machine
   (#536 H1). A Store on a machine moves to another machine by `store move
-  <store> native` first; asked directly it is `InvalidInput`, naming that
+  <store> macos-host` (or `linux-host`) first; asked directly it is `InvalidInput`, naming that
   call. On a host with no such machine every move is `Unsupported`. The phases are `check`, `snapshot`, `send`, `verify`, `install`,
   `record` and `retire`, once each. The bytes pass through the calling
   process in pieces. Retire deletes the source's copy: on the host machine (in this process) the file
@@ -544,7 +544,7 @@ that connection before reading, using the TLS mode from the Store's URL.
   records nothing (`outcome: "tested"`). A refused check names the
   `machine` and the connection `step` it stopped at (`configuration`,
   `transport`, `tls`, `authentication`, `database`, `schema`, `identity`,
-  the doctor's `store.connection.<step>`). Machine native is attached
+  the doctor's `store.connection.<step>`). The host machine is attached
   like any other (`store connect` attaches nothing); its platform decides
   whether a loopback URL is allowed, and its reach is its own, apart from
   this computer's. `store detach <store> --machine M` removes it,
@@ -571,7 +571,7 @@ that connection before reading, using the TLS mode from the Store's URL.
   is refused with `store attach` as its fix; several are listed and one
   must be named). The machine must be attached to the Store (refused
   `InvalidInput`, with `store attach` as its fix, otherwise) and its
-  platform must run PostgreSQL Sandboxes (`native` on
+  platform must run PostgreSQL Sandboxes (`host` on
   macOS and Linux, `docker`, `lima`, `apple-container`); `sandbox create`
   checks from the machine that the server answers and holds this Store.
   The URL is dialled exactly as configured, never rewritten. On a machine
@@ -582,7 +582,7 @@ that connection before reading, using the TLS mode from the Store's URL.
   (`host.docker.internal`; `host.lima.internal`; `apple-container`: its
   network's gateway, on which the server must listen) and advising to
   connect the Store again with an address the machine reaches (`layerfs
-  store connect <store> <url>`); `native` and `docker` on a Linux Engine
+  store connect <store> <url>`); the host machine and `docker` on a Linux Engine
   share the loopback and dial it as given. A Sandbox resolves names as its
   machine does. Only the calls that dial the URL (`sandbox create`,
   Commit, a Workspace status) are refused for it: a Sandbox whose URL its

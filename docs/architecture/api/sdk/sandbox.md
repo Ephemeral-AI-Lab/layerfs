@@ -85,7 +85,7 @@ Store's machine, or on the one machine attached to its PostgreSQL Store
 the call must name one); another machine than a sqlite Store's is
 `Unsupported`, and the support table must accept the platform and Store
 kind. A PostgreSQL Store's Sandbox runs only on a machine attached to it,
-machine native as much as any other: any other is refused `InvalidInput` with `layerfs store attach
+the host machine as much as any other: any other is refused `InvalidInput` with `layerfs store attach
 <store> --machine <machine>` as its fix. The caller puts the Store's user
 and saved password into the URL and sends
 the URL only in this request; the launching side checks that it reaches the
@@ -95,7 +95,7 @@ server and holds the project first. Nothing starts a stopped machine.
 one the machine holds (unpacked, or in its archive) starts at once; any other
 is copied from the host's Docker first, as
 [`machine load-image`](machine.md#machineload_image) does, with its
-refusals. macOS `native` runs no image (`Unsupported` `{reason: "host"}`).
+refusals. `macos-host` runs no image (`Unsupported` `{reason: "host"}`).
 Without it the root is the machine record's image (not on `docker`), else
 the sealed bundle's archive
 ([`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs),
@@ -130,10 +130,10 @@ Sandbox resolves names as its machine does. Its `detail` holds `daemon`
 `removed`
 ([`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon`).
 Its `fix` is `layerfs machine doctor <machine>` unless the refusal names a
-closer one. On `native`, when `detail.daemon` is the native machine's
+closer one. On the host machine, when `detail.daemon` is the host machine's
 daemon and it is of another build than this one (or names no build), the
 message says so and the `fix` is
-`layerfs machine update native --daemon <this build's daemon>` when one is
+`layerfs machine update macos-host --daemon <this build's daemon>` when one is
 found beside the program or the bundle, else `layerfs home doctor`
 ([`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) `native_start`;
 a refusal with no `detail.daemon` is not looked at). A start whose cleanup
@@ -142,23 +142,23 @@ failed is `Unknown` and says what is left.
 | Refusal | When |
 | --- | --- |
 | `Exists` | the name is taken in the home |
-| `InvalidInput` | `native` or `docker` as the name (they name the built-in machines), or a name ending in `.root` |
-| `Unsupported` | another machine than its sqlite Store's; an `--image` on macOS `native`; an image for another architecture or OS |
+| `InvalidInput` | the host machine's name or `docker` as the name (they name the built-in machines), or a name ending in `.root` |
+| `Unsupported` | another machine than its sqlite Store's; an `--image` on `macos-host`; an image for another architecture or OS |
 | `Capacity` | copying the image needs `2 × size × 1.05` bytes, less what a resumed copy staged, and the machine has fewer (`detail { needed_bytes, free_bytes, path }`, `fix: layerfs machine prune <machine> --unused`) |
 | `Unavailable` | the machine is stopped (`detail { what: "machine" }`) or Docker cannot be read (`detail { what: "docker" }`) |
 | `Failed` | the start failed: what stopped it in words, `detail.daemon` and `log`, `fix` as above |
 | the mount's code | `--mount` was refused; the Sandbox is kept (`sandbox`, `fix`: fork first only for a missing Branch) |
 | `Unknown` | the start's answer was lost; the record keeps the `op` |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs sandbox create shop/api tests --progress
 {"phase":"start","done":0,"total":1}
 {"phase":"start","done":1,"total":1}
 {"ok":true}
-$ layerfs sandbox create shop/api native
-{"error":"InvalidInput","message":"a Sandbox is not named native: that names a built-in machine (H §7.6)"}
+$ layerfs sandbox create shop/api macos-host
+{"error":"InvalidInput","message":"a Sandbox is not named macos-host: that names a built-in machine (H §7.6)"}
 ```
 
 ### sandbox.list
@@ -246,12 +246,12 @@ row adds `path`, `commit`, `base_layer`, `mounted_at`, `branch_moved`,
 argument or environment value is shown) and `id`. The Sandbox's long form
 adds `sandbox, project, machine, platform, image, backend, route,
 created_at`, `workspace_capacity` (16) and `network`. `platform` is `docker`, `mac` or
-`linux`; `backend` `native` (a macOS host process) or `namespaces`; `route`
+`linux`; `backend` `process` (a macOS host process) or `namespaces`; `route`
 `nfs` for a macOS host process, else `fuse`
 ([`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs)).
 `network` is a `namespaces` Sandbox's own network as its record keeps it
 from the create: its host end on the machine and its commands' address,
-`lfs<id12> <address>/31` (null for a native Sandbox;
+`lfs<id12> <address>/31` (null for a `process` Sandbox;
 [Backends: own network](../../control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 `--with stats` adds `stats`, null unless the Sandbox is ready: `daemon`
@@ -262,7 +262,7 @@ memory_file_bytes, pid_count, oom_kill_count}` of its cgroup, or null with
 control-capacity model, one more bounded call) and `workspaces`
 (`[{workspace, overlay_bytes, usage, usage_reason}]`).
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs sandbox get tests
@@ -298,13 +298,13 @@ record at the end; progress is its phases `cancel` (with `--force`, one per
 command this home records), `stop` and `delete`. With `--force`, each
 running command is cancelled first (SIGTERM, then SIGKILL after 5 s), then
 the Sandbox is stopped anyway: `unmounted` lists the Workspaces it ended,
-whose uncommitted changes end with it. On `native` a forced remove works
+whose uncommitted changes end with it. On the host machine a forced remove works
 from the Sandbox's own records: it calls no daemon, checks the runtime's
 identity and ends its mounts and processes
 ([`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs)).
 Once the runtime is confirmed stopped, either forced path ends the mount
 intent each of its Workspaces held in the Store, once each (by the Branch
-name and Workspace id their records keep on `native`; by the bound ids its
+name and Workspace id their records keep on the host machine; by the bound ids its
 worker holds on a machine, which hands them back to the caller to end with
 the Store's own URL when it could not dial a PostgreSQL Store's), and each one it could not end is a `left`
 sentence naming why and what ends it there
@@ -326,7 +326,7 @@ and a `kill` of the process only while the process its record identifies
 (RV3 FAIL 4). Two more cases go by their records alone, with no signal sent,
 and answer `already_gone` with `left`: a local record this build does not
 read (a field a 2.0 record always has missing or of another shape, or a
-native record on Linux; every other call refuses it with the fix
+`process` record on Linux; every other call refuses it with the fix
 `layerfs sandbox remove <sandbox>`; RV3 FAIL 2, 3), and a Sandbox on a
 machine whose record has no 2.0 name, whose worker is not asked either
 (RV3 FAIL 1). So does a Sandbox on a machine whose VM a live read found
@@ -345,7 +345,7 @@ It was `sandbox.close`, removed with no alias.
 | `Failed` | the stop or delete failed; a failed stop is not followed by a delete |
 | `Unknown` | the machine's answer was lost; or with `--force` a command's cancel was not confirmed (`running`) |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs sandbox remove tests
@@ -403,9 +403,9 @@ is checked for its range and not used. `depth` is 1 to 32; `byte_length` is
 | `workspace` | one per mounted Workspace: `type: "dir"`, `not_read: "mount"`, `path` its mount (`<run folder>/workspaces/<n>`), `workspace` its handle. Ordered by path, `2` before `10` | the Workspace records on the side that keeps them. The mount is never `stat`ed or opened: a stopped daemon cannot hang the answer |
 | `home` | `type: "dir"`, `path` `<run folder>/tmp`: `HOME` for the Sandbox's commands | the run folder |
 | `log` | `type: "file"`, `path` `<run folder>/daemon.log`, with its `size`. It is read with [`sandbox log`](#sandboxlog), not with this call | the run folder |
-| `root` | `type: "dir"`, `path` `/`: what the Sandbox's commands see as `/`. Only for a Sandbox with a root of its own (the `namespaces` backend: native Linux, docker, Lima, Apple Container) | the Sandbox's record: nothing of the root is opened for this answer, so a stopped Sandbox lists it too |
+| `root` | `type: "dir"`, `path` `/`: what the Sandbox's commands see as `/`. Only for a Sandbox with a root of its own (the `namespaces` backend: `linux-host`, docker, Lima, Apple Container) | the Sandbox's record: nothing of the root is opened for this answer, so a stopped Sandbox lists it too |
 
-A host-process Sandbox (native macOS) has no `root` entry: its commands see
+A host-process Sandbox (`macos-host`) has no `root` entry: its commands see
 the owner's computer, and a path outside its home is `InvalidInput`.
 
 **The root** (a path outside the home, when the roots offer `/`) is read
@@ -452,7 +452,7 @@ A Sandbox whose daemon has ended keeps its home readable while its run
 folder is there. Which reads open what is in
 [inspection](../../control/sandboxes/inspect.md#files).
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs sandbox files tests
@@ -494,7 +494,7 @@ pieces, each but the last with `continued: true`. Control characters in
 U+FFFD.
 
 The file is read where the run folder is: in the caller's process for a
-Sandbox on `native`, in the machine's worker for every other
+Sandbox on the host machine, in the machine's worker for every other
 ([`inspect/log.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/log.rs)).
 The daemon is not asked, so the log of a daemon that has ended stays
 readable while its run folder is there. It takes no lock or lease and writes

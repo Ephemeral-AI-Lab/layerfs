@@ -64,7 +64,7 @@ against the built table.
 | [`backup`](backup.md) (6) | [`connect`](backup.md#backupconnect), [`disconnect`](backup.md#backupdisconnect), [`list`](backup.md#backuplist), [`create`](backup.md#backupcreate), [`restore`](backup.md#backuprestore), [`doctor`](backup.md#backupdoctor) | the caller's process; `create` stages on the Store's machine | [`backup/`](../../../../api/crates/layerfs-api/src/backup) |
 
 "Where the Store's calls run" is the caller's process for a PostgreSQL Store
-and for a sqlite Store on a locally executing machine (`native`, except on
+and for a sqlite Store on a locally executing machine (the host machine, except on
 Windows), else the Store machine's worker; no daemon serves a Store call. The
 full per-call routing is the single table in [Control](../../control/README.md).
 Calling conventions (names, options, the short and long form, `--with`,
@@ -81,8 +81,8 @@ progress, the refusals the call names with their `fix`, and its MCP profile
 
 | To get | You first need | Made by |
 | --- | --- | --- |
-| a sqlite Store | nothing (`native` is built in) | [`store.create`](store.md#storecreate) |
-| a PostgreSQL Store | a database and its login | [`store.connect`](store.md#storeconnect); [`store.attach`](store.md#storeattach) for each machine that runs its Sandboxes, machine native too |
+| a sqlite Store | nothing (the host machine is built in) | [`store.create`](store.md#storecreate) |
+| a PostgreSQL Store | a database and its login | [`store.connect`](store.md#storeconnect); [`store.attach`](store.md#storeattach) for each machine that runs its Sandboxes, the host machine too |
 | a project | a Store | [`project.init`](project.md#projectinit) |
 | a Branch to work on | a project (`main` is its published line) | [`branch.fork`](branch.md#branchfork) |
 | a Sandbox | a project and a machine | [`sandbox.create`](sandbox.md#sandboxcreate) |

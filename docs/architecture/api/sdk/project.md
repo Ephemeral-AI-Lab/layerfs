@@ -95,8 +95,8 @@ known (a lost reply) keeps it `broken` `unresolved`
 | Store | Runs in |
 | --- | --- |
 | PostgreSQL | the caller's process |
-| sqlite on a locally executing machine (`native` on Linux or macOS) | the caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
-| sqlite on any other machine (which must be running), and `native` on Windows | that machine's worker, on a staged copy of the folder sent from the caller, deleted when its Init ends ([`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs)) |
+| sqlite on a locally executing machine (the host machine, `linux-host` or `macos-host`) | the caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
+| sqlite on any other machine (which must be running), and the `host` platform on Windows | that machine's worker, on a staged copy of the folder sent from the caller, deleted when its Init ends ([`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs)) |
 
 | Refusal | When | Source |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ known (a lost reply) keeps it `broken` `unresolved`
 | `Failed` | the deadline passed, a read error, or another engine failure | [`project/add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs) |
 | `Unknown` | worker route: a stage or the answer was lost; the entry stays `broken` `unresolved` until `project delete` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs project init shop/api /tmp/demo/src --progress
@@ -159,7 +159,7 @@ no tree walk; it is left out for a blocked project
 $ layerfs project list
 {"items":[{"project":"shop/api"}]}
 $ layerfs project list --with stats --detail
-{"items":[{"project":"shop/api","state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"store":"shop","engine":"sqlite","machine":"native","commit":"32919f5590656a0ee8daeae5a82fe8a3ecd320349b661147c5bc3b7f912997ae6c","created_at":"2026-11-18T22:04:02Z","size":19}],"next_cursor":null}
+{"items":[{"project":"shop/api","state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"store":"shop","engine":"sqlite","machine":"macos-host","commit":"32919f5590656a0ee8daeae5a82fe8a3ecd320349b661147c5bc3b7f912997ae6c","created_at":"2026-11-18T22:04:02Z","size":19}],"next_cursor":null}
 ```
 
 ### project.get
@@ -417,7 +417,7 @@ grow with the project. While it reads it sends `{phase: "data", done,
 total}` events counting trees, then the `self` event with the project's
 node.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs project doctor shop/api

@@ -126,7 +126,7 @@ output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
 | `apple-container` | `0.0.0.0:7070` | `--publish 127.0.0.1:<port>:7070` at create |
 | `docker` (macOS) | `0.0.0.0:7070` | `-p 127.0.0.1::7070`, read back with `docker port` |
 | `docker` (Linux) | `127.0.0.1:<free port>` | nothing: host network |
-| `native` (macOS, Linux) | no worker | calls run in the caller's process |
+| `host` (macOS, Linux) | no worker | calls run in the caller's process |
 
 Every host-side address is loopback; the secret guards the worker on every
 bind address. `layerfs worker` reads its two settings, makes its root
@@ -206,7 +206,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.reach` | the check of this machine's connection to a PostgreSQL Store with the address and login the host saved (or a new one `store.connect` checks before saving it), for `store.attach`, `store.connect` and `store.doctor`; a refusal names its connection `step` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
 | `network.inspect` | doctor's read-only observation of the machine's Sandbox network for `machine.network`: `{ table, forwarding, links: [{ link, addresses, sandbox }] }`, `sandbox` the recorded Sandbox the link is named for, or null |
-| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |
+| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `linux-host`, decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |
 | `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.delete`, `project.delete.admit`, `project.delete.entry`, `project.delete.release` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; admit, mark, remove the entry of and release a project's deletion |
 | anything else | `InvalidInput`, "the worker has no operation …" |
@@ -329,7 +329,7 @@ part of the URL but a loopback host. Each adapter declares its `Loopback`.
 
 | Platform | `Loopback` | The refusal names |
 | --- | --- | --- |
-| `native` | `Shared` | — |
+| `host` | `Shared` | — |
 | `docker` | `Shared` on a Linux host (`--network host`); `Apart` on Docker Desktop | `host.docker.internal` |
 | `lima` | `Apart` | `host.lima.internal` (192.168.5.2) |
 | `apple-container` | `Apart` | the gateway the last start recorded, else `192.168.64.1`; the server must listen on it, not on 127.0.0.1 alone |
@@ -365,7 +365,7 @@ process reaches it, so Workspace calls skip the worker
 
 | Platform | Answer |
 | --- | --- |
-| `native` | `127.0.0.1:<guest_port>`, no pid |
+| `host` | `127.0.0.1:<guest_port>`, no pid |
 | `lima` | a free host port through Lima's `ssh.config` with `ControlMaster=no`; the `ssh` pid |
 | `docker`, `apple-container` | `Unsupported`: "the <platform> machine <name> forwards no Sandbox daemon port: …"; Workspace calls stay on the worker |
 

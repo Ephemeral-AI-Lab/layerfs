@@ -21,7 +21,7 @@ The `store` calls: list and read Stores, create a sqlite Store, connect a Postgr
         |                |                 connect <store> <url> (change address, login, setting)
         v                |                 attach <store> --machine M (checked from M)
      move <store> <machine>                detach <store> --machine M
-     move <store> native (back)            disconnect (login and attachments go; data stays)
+     move <store> macos-host (back)        disconnect (login and attachments go; data stays)
         |                |
         v
      remove (file + projects)
@@ -111,7 +111,7 @@ not answer. It changes nothing and is not paged
 
 ```console
 $ layerfs store list
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","projects":["api"]}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"macos-host","projects":["api"]}]}
 ```
 
 ### store.get
@@ -177,7 +177,7 @@ move.
 **`--with live`** ([`live.rs`](../../../../control/crates/layerfs-store/src/live.rs))
 reads the Store where it lives, starting nothing: a sqlite Store's file,
 compaction record and heads through its machine (in this process on
-`native`, else its recorded worker), a PostgreSQL Store's server from this
+the host machine, else its recorded worker), a PostgreSQL Store's server from this
 computer. `blocked` comes first, with nothing asked, while a sqlite Store's
 machine is not ready; then `broken` `missing` (no file where the record
 says), `broken` `unreachable` (the server does not answer), `busy` or
@@ -218,13 +218,13 @@ outdated, `layerfs store remove <store>` or `layerfs store disconnect
 <store>` when unsupported, else null). `store list --with format` adds each
 item's `format`.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs store get shop
-{"engine":"sqlite","state":"ready","machine":"native","projects":["api"]}
+{"engine":"sqlite","state":"ready","machine":"macos-host","projects":["api"]}
 $ layerfs store get shop --with live,stats
-{"engine":"sqlite","state":"ready","machine":"native","projects":["api"],"observed_at":"2026-11-18T22:05:32Z","stats":{"size":307200,"logical_bytes":199,"canonical_bytes":6815,"stored_bytes":3354,"metadata_bytes":278242,"file_bytes":307200,"reusable_bytes":28672,"dedupe":"0.029200","compression":"2.031902"}}
+{"engine":"sqlite","state":"ready","machine":"macos-host","projects":["api"],"observed_at":"2026-11-18T22:05:32Z","stats":{"size":307200,"logical_bytes":199,"canonical_bytes":6815,"stored_bytes":3354,"metadata_bytes":278242,"file_bytes":307200,"reusable_bytes":28672,"dedupe":"0.029200","compression":"2.031902"}}
 ```
 
 `store.status` and `store.stats` were merged into this call, with no alias.
@@ -242,7 +242,7 @@ Python  layerfs.store.create(name, *, machine=None)
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `name` | name | the new Store's name |
-| `machine` option | name | make it on this machine; this computer (native) when left out |
+| `machine` option | name | make it on this machine; this computer (the host machine) when left out |
 
 | Answer | Keys |
 | --- | --- |
@@ -250,9 +250,9 @@ Python  layerfs.store.create(name, *, machine=None)
 | long | `ok, outcome, store, engine, machine, profile, sqlite_version, created_at` |
 | call | writes one call-log line; MCP `admin` |
 
-A new empty sqlite Store, ready for `project init`: on `native`, or with
+A new empty sqlite Store, ready for `project init`: on the host machine, or with
 `--machine M` made on that machine directly through its worker (a running
-machine), recording a `create` operation while it runs. On `native`, under
+machine), recording a `create` operation while it runs. On the host machine, under
 the home lock, the call makes `store/` and `store/<name>/` (`0700`), checks
 the folder with the kernel guard, builds the empty file as
 `store.sqlite.creating` (`0600`) and renames it to `store.sqlite`. A failure
@@ -388,7 +388,7 @@ Store's saved one is used when none is given. Input refusals (`InvalidInput`,
 | `Unavailable` | no server answered, the server refused the login or the database, or the address holds another Store; `step` says which |
 | `Conflict` | an attached machine does not reach a new address or login (`machines`); the Store was disconnected or connected to another database meanwhile |
 
-Run on macOS native against a local `postgres:17`, with a debug build:
+Run on macOS (`macos-host`) against a local `postgres:17`, with a debug build:
 
 ```console
 $ layerfs store connect shop-pg 'postgresql://postgres:pw@127.0.0.1:55231/shop'
@@ -463,7 +463,7 @@ Only after the check succeeds is the machine added to the record's
 outcome is `checked` instead of `attached`, and a failed check is recorded
 as its reach while the attachment stays. A machine that reaches the server
 only through this computer's loopback is refused with advice to connect the
-Store again with an address the machine reaches. Machine native is attached,
+Store again with an address the machine reaches. The host machine is attached,
 checked and detached like any other machine, its platform deciding whether
 a loopback URL is allowed (it shares this computer's loopback on macOS and
 Linux); its reach is its own, apart from this computer's. `store connect`
@@ -531,7 +531,7 @@ Python  layerfs.store.move(store, machine, *, on_progress=None)
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `store` | name | a Store name |
-| `machine` | name | the machine it moves to; `native` moves it to this computer |
+| `machine` | name | the machine it moves to; the host machine (`macos-host` or `linux-host`) moves it to this computer |
 | `on_progress` option | function |  |
 
 | Answer | Keys |
@@ -541,8 +541,8 @@ Python  layerfs.store.move(store, machine, *, on_progress=None)
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Moves a sqlite Store's file between this computer and a machine, checked
-byte for byte. One side is always `native`: a Store on a machine moves to
-another by `store move <store> native` first (refused `InvalidInput` naming
+byte for byte. One side is always the host machine: a Store on a machine moves to
+another by `store move <store> macos-host` (or `linux-host`) first (refused `InvalidInput` naming
 that call; [`sqlite/transfer/resolve.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs)).
 `moved_bytes` is the bytes moved; the long form adds `outcome` (`moved`),
 `store`, `from`, `to` and `heads_sha256`, the digest of the Store's history
@@ -557,7 +557,7 @@ remove`. It replaces `store.push` and `store.pull`, removed with no alias.
 
 | Refusal | When |
 | --- | --- |
-| `InvalidInput` | a PostgreSQL Store; the Store is already on `machine`; neither side is `native` |
+| `InvalidInput` | a PostgreSQL Store; the Store is already on `machine`; neither side is the host machine |
 | `NotFound` | no such Store or machine; no Store file at snapshot |
 | `InUse` | a live process holds the Store, or a Sandbox of one of its projects is recorded (`detail.related`); the next field `sandboxes` names them, and when no process holds it the `fix` removes them (`layerfs sandbox remove a && layerfs sandbox remove b`; [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`) |
 | `Exists` | the target already holds a Store file of that name |
@@ -734,7 +734,7 @@ Progress phases, sent as each starts with null counts: `mark`, `build`,
 | `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | |
 | `Conflict` | the sealed state changed at install | |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs store compact shop --progress
@@ -770,7 +770,7 @@ call of [`layerfs-control/src/store.rs`](../../../../control/crates/layerfs-cont
 `upgrade`). Nothing else converts a Store: open refuses an older one
 (`OldStore`, whose `fix` names this call when a step exists). The steps
 today: SQLite 2 → 3 and PostgreSQL 3 → 4. It runs where the Store's record
-says: a sqlite Store on `native` in this process, on another machine in that
+says: a sqlite Store on the host machine in this process, on another machine in that
 machine's worker, a PostgreSQL Store from this process. `outcome` is
 `upgraded`, or `current` for a Store already at the latest format, which is
 not changed; `steps` lists the steps applied (`["2->3"]`, `[]` when

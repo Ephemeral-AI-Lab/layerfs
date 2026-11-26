@@ -84,7 +84,7 @@ the process releases its readers before closing its writer if one started.
 Machine, Store, bucket, project and Sandbox names are 1 to 63 lowercase
 letters, digits, `_`, `.` and `-`, starting and ending with a letter or
 digit. Windows device names (`con`, `nul`, `aux`, `prn`, `com1`–`com9`,
-`lpt1`–`lpt9`) are refused. `native` and `docker` name the built-in
+`lpt1`–`lpt9`) are refused. The host machine (`macos-host` on macOS, `linux-host` on Linux) and `docker` name the built-in
 machines and are refused (`InvalidInput`) as new machine names and as
 Sandbox names (H §7.6).
 
@@ -212,12 +212,12 @@ $ echo $?
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are
   `{ path, source, present, commit, dirty, matches }` for the Linux bundle
-  and the native daemon this build would use (`matches` is null when either
+  and the host machine's daemon this build would use (`matches` is null when either
   side cannot tell); the bundle's `source` is `env:LAYERFS_BUNDLE`,
   `runtime` (an installed runtime's own, `<runtime>/bundle/linux-<arch>/`
   beside `<runtime>/bin/layerfs`, chosen after `LAYERFS_BUNDLE` and before
   the cache) or `cache`; `cache` is `{ path }`. It reads `layerfs.json`, the
-  folder's mode, `bundle.json`, the native daemon's record and the daemon
+  folder's mode, `bundle.json`, the host machine's record and the daemon
   file, and changes nothing. The answer has no `warnings` list any more:
   what is wrong with a bundle, a daemon or the folder's mode is the home
   doctor's to say.
@@ -253,7 +253,7 @@ $ echo $?
   Sandbox answers `workspaces` null and `workspaces_not_listed: true`. A Store or Sandbox whose machine is stopped, busy or
   broken is `blocked`, and `blocked_by` names that machine. A machine that
   only a Store or Sandbox names, with no record of its own, is listed too
-  (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
+  (`broken`, `missing`, unless it is the host machine or `docker`), so nothing in the
   home is left out. A record that cannot be read does not fail the tree:
   an unreadable machine record is a `broken` `failed` machine, a Store
   record whose machine is not known (unreadable, or of a kind this build
@@ -283,7 +283,7 @@ $ echo $?
   folder copy on a machine) LayerFS removes itself, at fixed points in
   later calls and only where it can prove nothing owns it: a machine's
   worker sweeps its run root when it starts and before each `sandbox
-  create`, and `native` before each `sandbox create`; the next image copy
+  create`, and the host machine before each `sandbox create`; the next image copy
   to a machine sweeps the temporaries and export containers of every image
   no copy holds; the next `backup create` of a Store, or a `backup restore`
   that replaces it, removes its staged snapshots; and the call that settles
@@ -613,7 +613,7 @@ $ layerfs commit diff shop/api agent --with patch --path /docs/a.txt
 ### `file` (14)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
-On macOS and Linux, the CLI uses the native worker for `file read`,
+On macOS and Linux, the CLI uses the host worker for `file read`,
 `file stat`, and one bounded `file list` page on local SQLite when the
 socket path and request fit. It selects the direct route before dialing
 when they do not fit. An error identifying the worker's home refuses the
@@ -624,7 +624,7 @@ known successful call on stderr and exits 125. SDK local calls, CLI PostgreSQL a
 caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).
 
-The native host worker's SQLite cache keeps up to 16 Stores open per home.
+The host worker's SQLite cache keeps up to 16 Stores open per home.
 It checks the Store's current record before serving a call, including a
 call on a warm Store. A maintenance operation can ask the worker to close
 an idle Store and release its lease. The worker acknowledges the close
@@ -809,7 +809,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   form adds `sandbox, project, machine, platform, image, backend, route,
   created_at`, `workspace_capacity` (16, whatever its state) and `network`
   (a namespaces Sandbox's host end and its commands' address,
-  `lfs<id12> <address>/31`; null for a native one).
+  `lfs<id12> <address>/31`; null for a `process` one).
   ```text
   $ layerfs sandbox get s1
   {"workspaces":[{"workspace":"s1:w","branch":"dev","running":["exec-9c0f6f0d2a1b4e77"]}]}
@@ -922,7 +922,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   `role` (long form): one `workspace` per mounted Workspace (`not_read:
   mount`, its handle in `workspace`), `home` (the folder that is `HOME`
   for its commands), `log` (its daemon's log, read with `sandbox log`)
-  and, for a Sandbox with a root of its own (every one but a native macOS
+  and, for a Sandbox with a root of its own (every one but a `process` macOS
   Sandbox), `/` with role `root`. With the path of a folder it answers
   `items` (`path`, `type` `file`, `dir`, `symlink` or `other`, `size` and,
   for an entry listed and not read, `not_read`: `system`, `mount`,
@@ -983,7 +983,7 @@ $ layerfs sandbox remove tests --progress
 {"ok":true}
 ```
 
-The native daemon was this build's (`layerfs machine update macos-host --daemon
+The host machine's daemon was this build's (`layerfs machine update macos-host --daemon
 target/debug/layerfs-daemon` on the scratch home).
 
 ### `workspace` (7)
@@ -1284,11 +1284,11 @@ $ layerfs machine get docker --with live
 {"platform":"docker","state":"stopped","observed_at":"2026-11-18T15:34:11Z","live":{"tool_version":"29.5.2"}}
 $ layerfs machine get macos-host --detail --with live
 {"platform":"host","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"macos-host","backend":"process","supports":["sqlite","postgresql_sandbox"],"loopback":"shared","cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
-$ layerfs machine start native
+$ layerfs machine start macos-host
 {"unchanged":true}
-$ layerfs machine stats native
+$ layerfs machine stats macos-host
 {"cpus":14,"memory_used_bytes":25457885184,"memory_total_bytes":38654705664,"disk_free_bytes":213131337728,"disk_total_bytes":994662584320}
-$ layerfs machine files native /tmp/home1/store/shop --depth 1
+$ layerfs machine files macos-host /tmp/home1/store/shop --depth 1
 {"items":[{"path":"/tmp/home1/store/shop/lock","type":"file","size":0,"not_read":"restricted"},{"path":"/tmp/home1/store/shop/record.json","type":"file","size":291},{"path":"/tmp/home1/store/shop/store.sqlite","type":"file","size":270336,"not_read":"restricted"}]}
 $ layerfs machine get old
 {"platform":"ssh","state":"broken","reason":"unsupported","fix":"layerfs machine remove old"}
@@ -1392,7 +1392,7 @@ attached to the Store and dial with both.
   and its reach. Short `{ ok, outcome }` with `latency_ms`; long `ok,
   outcome (attached, or checked for an attached machine checked again),
   store, machine, latency_ms, server_version`. A sqlite Store is refused
-  `InvalidInput` naming `store move`. Machine native is attached like any
+  `InvalidInput` naming `store move`. The host machine is attached like any
   other, its platform deciding whether a loopback URL is allowed, and its
   reach is its own, apart from this computer's; `connect` attaches
   nothing. A machine that reaches the server only
@@ -1567,7 +1567,7 @@ attached to the Store and dial with both.
   process) does not say whether the Store changed; its fix `layerfs store
   upgrade <store>` then answers `current` or does the work.
 
-Run (macOS, native; rerun at `61960e3f5f` on a fresh scratch home, all but
+Run (macOS, `macos-host`; rerun at `61960e3f5f` on a fresh scratch home, all but
 the `--detail` line, which is from an earlier run of the same calls):
 
 ```console
@@ -1584,10 +1584,10 @@ $ layerfs store list --with stats
 $ layerfs store compact shop
 {"freed_bytes":0}
 $ layerfs store move shop macos-host
-{"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
+{"error":"InvalidInput","message":"store move, check: Store shop is already on macos-host"}
 ```
 
-PostgreSQL, against a local `postgres:17` (macOS, native; this build's
+PostgreSQL, against a local `postgres:17` (macOS, `macos-host`; this build's
 outputs, run 2026-11-24 on a scratch home after the machine native correction):
 
 ```console
@@ -1602,7 +1602,7 @@ $ layerfs store get shop-pg
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --synchronous-commit off --detail
 {"ok":true,"projects":null,"projects_count":null,"outcome":"updated","store":"shop-pg","engine":"postgresql","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres","synchronous_commit":"off","machines":[]}
 $ layerfs store doctor shop-pg --machine macos-host
-{"error":"InvalidInput","message":"machine native is not attached to PostgreSQL Store shop-pg","fix":"layerfs store attach shop-pg --machine macos-host"}
+{"error":"InvalidInput","message":"machine macos-host is not attached to PostgreSQL Store shop-pg","fix":"layerfs store attach shop-pg --machine macos-host"}
 $ layerfs store attach shop-pg --machine macos-host
 {"outcome":"attached","latency_ms":1}
 $ layerfs store attach shop-pg --machine macos-host --detail
@@ -1618,7 +1618,7 @@ $ layerfs store disconnect shop-pg --detail
 ```
 
 The URL above names `127.0.0.1`, which works only where the Sandbox's
-machine shares this computer's loopback: machine native on macOS and Linux
+machine shares this computer's loopback: the host machine on macOS and Linux
 and `docker` on a Linux Engine. On `docker` with Docker Desktop, `lima` or `apple-container`,
 `store attach --machine` refuses it, naming what that machine calls this
 computer: connect the Store again with a host every attached machine

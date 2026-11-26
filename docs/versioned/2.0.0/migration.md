@@ -473,7 +473,7 @@ A doctor **exits 0 once its report is made**, whatever it found; the short
 form is `{"ok": true}` alone when nothing was found and every check was
 made. It is 125 when the thing is not in the home (`NotFound`), and 2 for a
 wrong command line. Run for this page: `layerfs home doctor`, `machine
-doctor native`, `store doctor shop` and `project doctor shop/api --full` on a
+doctor macos-host`, `store doctor shop` and `project doctor shop/api --full` on a
 scratch home ([the calls](calls.md#project-8)).
 
 ## 9. The Workspace flow

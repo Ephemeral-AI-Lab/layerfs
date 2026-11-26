@@ -27,13 +27,13 @@ writes no record.
   -------------             v              -------
               +----> layerfs-sandbox ----> layerfs-sandbox-backend
               |             |               (how a Sandbox runs:
-              |             v                native, namespaces)
+              |             v                process, namespaces)
               |      layerfs-store ------> layerfs-bucket
               |             |               (how a Store is backed up:
               |             v                local_folder, minio, r2)
               +----> layerfs-machine ----> layerfs-platform
                             |   (feature    (where Sandboxes run:
-                            v    machine)    native, docker,
+                            v    machine)    host, docker,
                       layerfs-home           apple_container, lima)
                  (home, records, locks,
                   op, names, secrets, logs)
@@ -78,7 +78,7 @@ machine's worker, or in a Sandbox's daemon.
 | `store.attach` | records; the Store's address and login are dialled here for a locally executing machine | `store.reach`: the machine's check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
 | `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `store.detach`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
-| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
+| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its own `linux-host`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
 | `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | the same, not forwarded | — (local machine: dials the daemon) | `sandbox.host`; the worker dials the daemon | serves it | `route.rs` |
 | `workspace.exec` | checks the directory; keeps the command's record when forwarded (route `machine:<name>`) | runs `bash -c` through the Sandbox runtime (always the machine) | — | [`workspace/exec.rs`](../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
@@ -86,24 +86,24 @@ machine's worker, or in a Sandbox's daemon.
 
 | Platform | sqlite Store calls on macOS / Linux / Windows | Workspace calls skip the worker? | Source |
 | --- | --- | --- | --- |
-| `native` | caller / caller / worker | yes (the daemon is on this host) | [`native/profile.rs`](../../../control/crates/layerfs-platform/src/platforms/host/profile.rs) |
+| `host` | caller / caller / worker | yes (the daemon is on this host) | [`host/profile.rs`](../../../control/crates/layerfs-platform/src/platforms/host/profile.rs) |
 | `docker` | worker / worker / — | no: ports publish only at container start | [`docker/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `apple-container` | worker / — / — | no: ports publish only at create | [`apple_container/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | `lima` | worker / — / — | yes: an `ssh -L` forward | [`lima/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/lima/adapter.rs) |
 
 The machine whose calls run in this process
 ([`layerfs_machine::in_process`](../../../control/crates/layerfs-machine/src/local.rs):
-the built-in machine whose platform's executor is `Local` here, `native` on
+the built-in machine whose platform's executor is `Local` here, the host machine (`macos-host` or `linux-host`) on
 macOS and Linux, none on Windows) is where a sqlite Store goes when
 `store create` names no machine, one end of every `store move`, and the
 machine a `backup restore` installs on; on a host with none those refuse
 `Unsupported`. This computer is never a machine: see
-[Platforms](machines/platforms.md#native-platformsnative).
+[Platforms](machines/platforms.md#host-platformshost).
 
 `plan` reads no worker record and dials nothing; the first worker call
 dials `machine/<m>/worker.json` and a worker not recorded or not answering
 is `Unavailable`, naming `layerfs machine start`. A build without the
-`machine` feature (the guest worker's) has no adapters: there `native` is
+`machine` feature (the guest worker's) has no adapters: there the guest's own `linux-host` is
 local and every other machine a worker. The daemon serves no Store calls:
 a mount's caller reads no Store (the daemon finds the Branch by name), and
 a status's head read takes the Store's own route
@@ -135,20 +135,20 @@ kind or kernel route is an engine change.
 
 | Rule | Enforced by |
 | --- | --- |
-| sqlite Store calls run in a process on the Store's kernel (the caller on a local `native`, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process; a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
+| sqlite Store calls run in a process on the Store's kernel (the caller on the local host machine, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process; a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
 | Workers listen on loopback behind a secret; one attempt per call, no retry, no replay; an uncertain outcome is reported, never resent | [`worker/client.rs`](../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
 | Drivers know nothing of the home and write no records | [`layerfs-platform/src/lib.rs`](../../../control/crates/layerfs-platform/src/lib.rs) |
-| Stored and displayed values do not follow internal renames: the `Native` backend is stored and shown as `"native"` | [`native/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) |
+| Stored and displayed values do not follow internal renames: the `NativeBackend` adapter is stored and shown as `"process"` | [`process/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) |
 | sqlite Stores open with the Normal profile (WAL, synchronous=NORMAL), the only SQLite profile; their records carry the label `normal`; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../control/crates/layerfs-store/src/record.rs) |
 
 The binding code rules for this layer are in the
 [control guide](../../../control/AGENTS.md).
 
-## Native host worker bootstrap
+## Host worker bootstrap
 
-A machine-enabled CLI on macOS or Linux can start the native process through its
-internal `worker --host` entry. The native endpoint uses the real home's ID
+A machine-enabled CLI on macOS or Linux can start the host worker process through its
+internal `worker --host` entry. The host worker endpoint uses the real home's ID
 and preserves its directory permissions. The process holds its lifetime lock
 from endpoint setup through socket removal. It accepts ordinary and management
 connections on separate Unix sockets, and checks the peer UID before exchanging
@@ -166,7 +166,7 @@ five seconds. Connections that never submit an authenticated operation leave
 the idle deadline unchanged.
 
 The CLI can route bounded local SQLite `file.read`, `file.stat`, and
-`file.list` calls to the native worker after argument and scope checks.
+`file.list` calls to the host worker after argument and scope checks.
 The envelope contains the Store and project names and the allowlisted
 read arguments. The worker resolves the binding and checks the current
 Store record under its admission lock. An endpoint path or request that

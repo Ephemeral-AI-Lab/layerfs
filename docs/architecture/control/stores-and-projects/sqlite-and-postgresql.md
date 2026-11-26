@@ -26,7 +26,7 @@ chooses by `StoreKind`. Every sqlite Store opens with the Normal profile
 
 `store.move <s> <machine>` moves a sqlite Store's file from the machine
 whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux) to a
-machine's worker; `store.move <s> native` brings it back. One side is
+machine's worker; `store.move <s> macos-host` (or `linux-host`) brings it back. One side is
 always that machine, since the bytes pass through this process: between
 two other machines the caller moves the Store to it, then on; each half is
 its own operation; on a host with no such machine every move is
@@ -61,7 +61,7 @@ its own operation; on a host with no such machine every move is
 | `Retire` | delete a copy the record does not name | same |
 | `Remove` | delete the Store's whole directory on the machine | same |
 
-Steps run in the caller's process for `native` and in the machine's worker
+Steps run in the caller's process for the host machine and in the machine's worker
 (`store.file`, decoded once into `StepFrame`) for every other machine.
 Paths come from the root and the Store's name only. A step that reads,
 replaces or deletes the file first closes this process's open copy; a call
@@ -123,7 +123,7 @@ both; no machine has an address or a login of its own.
 A PostgreSQL Store is on no machine. Its Sandboxes run on every attached
 machine whose platform runs PostgreSQL Sandboxes (#536 C4). This computer
 is the control process (home, records, secrets, the saved connection); it
-is never a machine. Machine native is the built-in machine whose platform
+is never a machine. The host machine (`macos-host` or `linux-host`) is the built-in machine whose platform
 runs Sandboxes directly on the host OS; what it allows (a shared loopback,
 a local executor) comes from its platform, not its name, and it runs a
 Store's Sandboxes only once attached. `store connect` attaches nothing.
@@ -186,7 +186,7 @@ with the same check, then every attached machine, or `--machine` alone) and
 a Sandbox create on a machine (`{ at, ok: true }`, on the host after the
 reply, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)
 `reach`). `here` is this computer, the process that holds the connection;
-machine native's reach is `reach.native`, like any machine's, and neither
+the host machine's reach is `reach.macos-host` or `reach.linux-host`, like any machine's, and neither
 is read as the other. A
 writer runs after its Store I/O, under the Store's lock, and writes nothing
 once the record is gone; a write never fails its call and moves no
@@ -222,7 +222,7 @@ is refused `InvalidInput` with `layerfs store connect <store> <url>
                          read back by the client before it is dialled)
       v
  machine reach(spec, url) -> postgresql field of ONE request
-      |  native: same process; else worker sandbox.host, whose decode
+      |  host machine: same process; else worker sandbox.host, whose decode
       |  drops url and password from the Store record it keeps
       v
  DaemonStore::Postgres in the daemon setup -> <sandbox>/config/daemon.setup

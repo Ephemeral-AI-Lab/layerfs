@@ -84,7 +84,7 @@ root
 
 `project.export(project, destination, {branch})` writes a project's
 committed Branch snapshot (default `main`) to a local folder on the
-caller's host, on all three routes: `native` SQLite and PostgreSQL in this
+caller's host, on all three routes: host-machine SQLite and PostgreSQL in this
 process, SQLite behind a worker
 ([`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs)).
 

@@ -58,7 +58,7 @@ for this manual.
 | Creating a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
 | A machine kind whose tool is missing | `detail.missing`, such as `tool:limactl` |
 | `machine` calls in a build without the `machine` feature (the guest worker's build) | names the #533 step |
-| A `native` Sandbox on Linux started by a non-root user | namespaces need root for FUSE |
+| A `linux-host` Sandbox started by a non-root user | namespaces need root for FUSE |
 | A Store made without the acquisition tables projects are added through | LayerFS adds no tables to an existing Store |
 | A folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or files and no `layerfs.json`) | not converted or written (owner, 2026-11-19); fix `mv <home> <home>.old && layerfs home init` |
 
@@ -91,9 +91,9 @@ Also not built:
   own cgroup and nothing it starts escapes.
 - **`workspace cancel` on a Linux Docker Engine** was not run for this
   manual (no such host; layerfs-project#114). The docker machine on Docker
-  Desktop (macOS) and `native` were.
+  Desktop (macOS) and `macos-host` were.
 - **`backup list` of a Store not on the host machine.** Its heads are read on
-  `native` only, so its state is `unknown` with a `reason`; reading heads
+  the host machine only, so its state is `unknown` with a `reason`; reading heads
   through the machine's worker is not built.
 - **Background processes, operator and diagnostic calls, and the trace
   subscription** of 1.1.0's `@layerfs/backend` (O25, O26). Trace files
@@ -152,7 +152,7 @@ step commits.
   Linux x64 wheel, addon and command were built and installed outside the
   checkout (sqlite Stores; PostgreSQL Stores only in the opt-in feature build), in
   [artifact-qualification-2.0.0.md](../../general/artifact-qualification-2.0.0.md).
-- **Windows** (O5). `native` on Windows holds only records; its sqlite
+- **Windows** (O5). Windows has no host machine; its sqlite
   Stores and Init are meant to live in a WSL worker. Not run. The library
   does not build for Windows yet: `home/`, `store/`, `worker/`, `start.rs`
   and the Sandbox family use `std::os::unix` without a cfg gate (review

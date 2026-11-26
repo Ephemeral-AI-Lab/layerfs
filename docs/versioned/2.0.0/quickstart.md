@@ -139,9 +139,9 @@ the Workspace lists it as removed; see
 - A Sandbox runs on the machine that holds its sqlite Store, or with
   `--machine M` on another machine for a PostgreSQL Store. A Store made by
   `store create` is on the host machine, so its Sandboxes run on the host machine.
-- On macOS, `native` runs the daemon as a host process with a loopback NFS
-  mount. On Linux it uses namespaces and needs root.
-- The `native` daemon is the host machine record's `daemon` (set by
+- On macOS, `macos-host` runs the daemon as a host process with a loopback NFS
+  mount. On Linux, `linux-host` uses namespaces and needs root.
+- The host machine's daemon is its record's `daemon` (set by
   `layerfs machine update macos-host --daemon <path>`, as on the scratch home
   here), else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon`.
   `layerfs home get --detail` shows which one this build would use.

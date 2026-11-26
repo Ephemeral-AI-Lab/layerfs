@@ -65,7 +65,7 @@ there at the second read. It dials no worker or daemon.
 | command record | `warning` when its owner process is gone; fix `layerfs workspace cancel <sandbox>:<workspace> --exec <id>` (the message adds that the Workspace's unmount or the Sandbox's removal also ends it); `error` when a file under `exec/` does not read as one (no fix: repair or remove it by hand) | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `execs` |
 
 Hidden (dot) entries are skipped. The scan ends no command and removes no
-record. Built-in `native` and `docker` count as present without a record.
+record. The built-in host machine and `docker` count as present without a record.
 
 ## Record checks
 
@@ -103,7 +103,7 @@ copy the move did not retire. Source:
 The records check runs these through `check_local`, which skips the remote
 `stat`: a move target's `store.sqlite.incoming` on another machine (read by
 the worker's `stat`, fix `layerfs store move <s> <machine>` or `layerfs store
-move <s> native`) is in `check_scope`'s remote branch, which no doctor calls
+move <s> macos-host`) is in `check_scope`'s remote branch, which no doctor calls
 today.
 
 ## Foreign homes
@@ -135,7 +135,7 @@ with no alias. `machine stats --with space` still counts run folders as
 ```text
  machine start (worker serve)  ----------> run root sweep (worker root)
  sandbox create on a machine (worker) ---> run root sweep (worker root)
- sandbox create on native (this process) -> run root sweep (the home)
+ sandbox create on host machine (this process) -> run root sweep (the home)
  machine load-image, sandbox create --image, when it copies an image:
    PruneGate, own ImageLock -> export containers of free images (Docker)
                             -> image.artifact step "sweep": .tmp-* of free images

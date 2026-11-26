@@ -21,7 +21,7 @@ call to list or remove it. `home.doctor` is one of
 
 ```text
  home.get        reads layerfs.json, the folder's mode, the generation file,
-                 bundle.json, native's record and the daemon file -> changes nothing
+                 bundle.json, the host machine's record and the daemon file -> changes nothing
    --with platforms   the platforms this computer supports
    --with tree        the home's records: machines > Stores, Sandboxes; buckets
  home.init       home::open (create an empty home; an older one refused)
@@ -62,7 +62,7 @@ Python  layerfs.home.init()
 | call | writes one call-log line; MCP `admin` |
 
 Makes the home ready for calls, as the first call of any other kind does: an
-empty or missing folder is created (0700, `layerfs.json`, `machine/native/`
+empty or missing folder is created (0700, `layerfs.json`, `machine/macos-host/` or `machine/linux-host/`
 and `machine/docker/` with the `machine` feature). A current home is left
 as it is. `outcome` is `created` or `unchanged`; `version` is this build's
 version and `layout` the home's layout. It writes one call-log line, and the
@@ -113,7 +113,7 @@ and it answers for a home that does not exist yet, creating nothing.
 | `message` | a sentence saying what is wrong, null when ready |
 | `layout`, `mode` | the layout `layerfs.json` records, and the folder's permission bits as text (`"0700"`); `layout` is null for a missing or foreign home, `mode` when there is no folder. Whether the mode is owner-only is the doctor's finding, not this call's |
 | `bundle` | The Linux bundle this build would deploy: `{ path, source, present, commit, dirty, matches }`; `source` is `env:LAYERFS_BUNDLE`, `runtime` (an installed runtime's own, `<runtime>/bundle/linux-<arch>` beside `<runtime>/bin/layerfs`) or `cache` (`<cache>/layerfs/bundle/<version>/linux-<arch>`, shared by every build of the version); `commit` and `dirty` from `bundle.json` `source` |
-| `daemon` | macOS: native's daemon, `{ path, source, present, commit, dirty, matches }`, `source` `recorded` (native's record) or `default` (beside the macOS bundle). Null elsewhere |
+| `daemon` | macOS: `macos-host`'s daemon, `{ path, source, present, commit, dirty, matches }`, `source` `recorded` (`macos-host`'s record) or `default` (beside the macOS bundle). Null elsewhere |
 | `cache` | `{ path }`: `XDG_CACHE_HOME`, else `~/.cache` |
 
 What is wrong with a bundle, a daemon or the folder's mode is the home
@@ -151,29 +151,29 @@ it dials nothing, and is null unless the home is ready.
 A sqlite Store is under its machine; a PostgreSQL Store lives on no machine
 and is in the top-level `stores`, with `machines` naming the machines
 attached to it (`store attach`); `store get` answers each one's reach. A Sandbox's `workspaces` are listed
-only where the home keeps their records (on `native`, or a Sandbox reached
+only where the home keeps their records (on the host machine, or a Sandbox reached
 directly); otherwise `workspaces_not_listed` is true, and for a blocked
 Sandbox `workspaces` is null. States come from the records: a recorded
 operation whose process lives is `busy` with `op { name, phase, started_at }`,
 one whose process is gone with its outcome unknown is `broken` `unresolved`;
 a machine of a removed platform is `broken` `unsupported`; a machine recorded
 stopped is `stopped`; a machine that only a Store or Sandbox names is listed
-too (`native` ready and `docker` stopped, which exist with or without a
+too (the host machine ready and `docker` stopped, which exist with or without a
 record; any other `broken` `missing`), so nothing is left out of the tree; a
 Sandbox recorded gone is `broken` `missing`. A Store or Sandbox on a machine
 that is not ready is `blocked`, `blocked_by { machine, reason }` naming it. A
 live probe is `machine get --with live`'s and `store get --with live`'s, not
 this call's.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs home get
 {"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":2}
 $ layerfs home get --with tree
-{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite","projects":["api"]}]}],"stores":[],"buckets":[]}}
+{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"macos-host","platform":"host","stores":[{"store":"shop","engine":"sqlite","projects":["api"]}]}],"stores":[],"buckets":[]}}
 $ layerfs home get --with platforms
-{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"platforms":{"host":"macos","items":[{"platform":"native","ready":true},{"platform":"docker","ready":true},{"platform":"apple-container","ready":true},{"platform":"lima","ready":true}]}}
+{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"platforms":{"host":"macos","items":[{"platform":"host","ready":true},{"platform":"docker","ready":true},{"platform":"apple-container","ready":true},{"platform":"lima","ready":true}]}}
 $ layerfs home get --with live
 layerfs: home.get: --with names `live`; this call takes platforms, tree
 ```
@@ -321,7 +321,7 @@ lease removed, no machine started) and exits 0 once its report is made. The
 report shape is in [the doctors](../../control/doctor/README.md). There is
 no `layerfs doctor` command: it was removed with no alias.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs home doctor

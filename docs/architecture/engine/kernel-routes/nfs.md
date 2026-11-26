@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The loopback NFSv3 route of [Kernel routes](README.md), used by the macOS native platform.
+The loopback NFSv3 route of [Kernel routes](README.md), used by the macOS `host` platform.
 
 | | |
 | --- | --- |
@@ -341,10 +341,10 @@ companion goes with it. It is off unless
 the variable is exactly `1`, is read once per process, and changes no state;
 the lines are written under the lock the request already holds.
 
-On the `native` route the daemon is started with `env_clear` and an empty
+On the `macos-host` route the daemon is started with `env_clear` and an empty
 environment (`control/crates/layerfs-sandbox-backend/src/shared/daemon.rs`), so
 it does not inherit `LAYERFS_NFS_TRACE=1` from the shell that created the
-Sandbox: a trace run there needs `machine update native --daemon` pointed at a
+Sandbox: a trace run there needs `machine update macos-host --daemon` pointed at a
 wrapper that exports the variable and `exec`s the real daemon (measured on
 macOS 27.2 for #636, where the plain variable gave 0 trace lines and the wrapper
 55 and 77 on the two matrices). Other routes start the daemon through a worker
