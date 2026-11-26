@@ -1,7 +1,7 @@
 //! The bounded plain JSON frames of the host-worker read exchange.
 use super::frame::ATTACHED;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::{json, outcome::refused};
+use layerfs_home::{home::host_socket, json, outcome::refused};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
@@ -83,9 +83,7 @@ fn remaining(end: Instant) -> io::Result<std::time::Duration> {
 
 impl Read for Until<'_> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        self.stream
-            .set_read_timeout(self.end.map(remaining).transpose()?)?;
-        self.stream.read(buffer)
+        host_socket::read_before(self.stream, buffer, self.end)
     }
 }
 

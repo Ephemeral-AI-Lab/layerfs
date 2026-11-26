@@ -407,9 +407,12 @@ echoes the request ID and has exactly one of `ok` and `error`.
 from its own home records.
 
 The v1 host request and answer bodies are plain JSON with byte ceilings of
-64 KiB and 1 MiB respectively. The hello ceiling is 4 KiB. Check ceilings
-before reading a frame body and reject attachments on this read-only route.
-The guest exchange continues using its existing framing and hello.
+64 KiB and 1 MiB respectively. Hello and management requests are limited to
+4 KiB. Check ceilings before reading a frame body and reject attachments on
+this read-only route. A deadline-bounded receive reads any reply bytes
+buffered before the peer closed. An ordinary call waits for the first reply
+byte for the duration of the Store operation and bounds the transfer from
+that byte onward. The guest exchange keeps its existing framing and hello.
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale

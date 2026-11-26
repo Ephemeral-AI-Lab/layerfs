@@ -2,14 +2,14 @@
 use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
-use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, UnixAddr};
+use nix::sys::socket::{self, AddressFamily, MsgFlags, SockFlag, SockType, UnixAddr};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// The credential reported by the kernel for the other end of this socket.
 pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
@@ -61,6 +61,43 @@ pub fn connect(path: &Path, deadline: Instant) -> io::Result<UnixStream> {
     let stream = UnixStream::from(fd);
     stream.set_nonblocking(false)?;
     Ok(stream)
+}
+
+/// Reads buffered bytes or waits for data or EOF. A finite deadline is
+/// absolute. This also reads data queued before the peer closed, when the
+/// system may already refuse to change the socket's receive timeout.
+pub fn read_before(
+    stream: &UnixStream,
+    output: &mut [u8],
+    deadline: Option<Instant>,
+) -> io::Result<usize> {
+    if output.is_empty() {
+        return Ok(0);
+    }
+    loop {
+        let timeout = match deadline {
+            Some(end) => {
+                let left = end.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    return Err(io::ErrorKind::TimedOut.into());
+                }
+                PollTimeout::try_from(left.max(Duration::from_millis(1)))
+                    .unwrap_or(PollTimeout::MAX)
+            }
+            None => PollTimeout::NONE,
+        };
+        match socket::recv(stream.as_raw_fd(), output, MsgFlags::MSG_DONTWAIT) {
+            Ok(size) => return Ok(size),
+            Err(Errno::EINTR) => continue,
+            Err(Errno::EWOULDBLOCK) => {}
+            Err(error) => return Err(error.into()),
+        }
+        let mut descriptors = [PollFd::new(stream.as_fd(), PollFlags::POLLIN)];
+        match poll(&mut descriptors, timeout) {
+            Ok(_) | Err(Errno::EINTR) => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
 }
 
 /// Opens an owner-only regular file, without following a symlink or

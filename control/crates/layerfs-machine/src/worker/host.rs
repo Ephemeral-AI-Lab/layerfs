@@ -289,7 +289,8 @@ impl HostPaths {
         let end = began + READY_WAIT;
         let id = token()?;
         let request = request(op, args, &id, &"0".repeat(CORRELATION_LEN));
-        host_frame::encode(&request, HOST_MAX_REQUEST)?;
+        let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
+        host_frame::encode(&request, max)?;
         let build = build_identity()?;
         trace::step("route");
         let Some((stream, startup)) = self.acquire(path, start, end)? else {
@@ -317,7 +318,7 @@ impl HostPaths {
         // Generation tokens are fixed-size hex, so exchanging the placeholder
         // leaves the already checked envelope size unchanged.
         let request = home::with_field(request, "generation", SdkValue::Text(generation));
-        let request = host_frame::encode(&request, HOST_MAX_REQUEST)?;
+        let request = host_frame::encode(&request, max)?;
         let send = host_frame::send(&stream, &request, Instant::now() + TRANSFER_WAIT);
         match send {
             Err((started, refusal)) => {

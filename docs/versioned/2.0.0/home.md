@@ -35,6 +35,8 @@ eligible to exit after one minute with no admitted calls. The home itself keeps
 its permissions.
 The CLI checks the worker's build before it sends a request. If they differ,
 wait for the current worker's idle exit before making another call.
+If the connection ends after a request starts sending and before a complete
+answer arrives, the CLI reports `Unknown` with the request ID.
 The internal `worker --host` entry serves that home when a launcher starts it.
 Host Store routing and maintenance coordination are separate implementation
 steps.

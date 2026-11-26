@@ -174,3 +174,36 @@ fn cleanup_refuses_a_replaced_native_machine_directory() {
     drop(new_socket);
     paths.remove_endpoints(&replacement).unwrap();
 }
+
+#[test]
+fn buffered_frame_survives_peer_close() {
+    let reply = SdkValue::map([("ok", SdkValue::text("completed"))]);
+    for end in [Some(Instant::now() + DEADLINE), None] {
+        let (sender, receiver) = UnixStream::pair().unwrap();
+        write_host_frame(&sender, &reply, MAX_HELLO, Instant::now() + DEADLINE).unwrap();
+        drop(sender);
+        let received = read_host_frame(&receiver, MAX_HELLO, end).unwrap();
+        assert_eq!(received, Some(reply.clone()));
+    }
+}
+
+#[test]
+fn management_rejects_oversize_before_dialing() {
+    let fixture = Fixture::new();
+    let paths = fixture.paths();
+    let refusal = paths
+        .call_existing(true, "store.close", SdkValue::text("x".repeat(MAX_HELLO)))
+        .unwrap_err();
+    assert_eq!(refusal.code, "TooLarge");
+    assert!(!paths.control.exists());
+}
+
+#[test]
+fn incomplete_header_obeys_the_transfer_deadline() {
+    let (mut sender, receiver) = UnixStream::pair().unwrap();
+    sender.write_all(&[0]).unwrap();
+    let end = Instant::now() + Duration::from_millis(30);
+    let refusal = read_host_frame(&receiver, MAX_HELLO, Some(end)).unwrap_err();
+    assert_eq!(refusal.code, "Unavailable");
+    assert!(Instant::now() >= end);
+}
