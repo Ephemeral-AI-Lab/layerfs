@@ -345,7 +345,7 @@ impl HostPaths {
         let id = token()?;
         let request = request(op, args, &id, &"0".repeat(CORRELATION_LEN));
         let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
-        host_frame::encode(&request, max)?;
+        host_frame::wipe(host_frame::encode(&request, max)?);
         let build = match &self.cli {
             Some((_, build)) => build.clone(),
             None => build_identity()?,
@@ -396,7 +396,9 @@ impl HostPaths {
         // leaves the already checked envelope size unchanged.
         let request = home::with_field(request, "generation", SdkValue::Text(generation));
         let body = host_frame::encode(&request, max)?;
-        let answer = send_request(&stream, path, (op, &id), &body, began, control, None)?;
+        let answer = send_request(&stream, path, (op, &id), &body, began, control, None);
+        host_frame::wipe(body);
+        let answer = answer?;
         if !valid(&answer) {
             return Err(unknown(op, &id, "invalid success payload"));
         }

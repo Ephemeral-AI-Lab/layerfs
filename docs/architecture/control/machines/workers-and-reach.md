@@ -411,11 +411,16 @@ records.
 `project`, `fields`, `login_revision` and `password`, and serves only its own
 three read methods (`fs.read`, `fs.stat`, `fs.list`). An ordinary thread
 reads it and hands it to the worker's PostgreSQL lane (8 threads, at most
-64 handed over and unanswered), so a PostgreSQL read waiting for a session
-or the server holds no ordinary thread or slot. The worker reads no secret
-from its environment or the home: it puts the sent password into the
-record's own address for the sessions of that Store and drops the address
-when the Store's last session closes. It sets `RLIMIT_CORE` to 0 before it
+64 handed over and unanswered), so a PostgreSQL read holds no ordinary
+thread or slot. A lane thread starts the oldest queued read whose Store has
+a free session slot, so a read of a busy Store waits in the queue on no
+thread and never holds a thread another Store could use. Queued reads whose
+caller closed its socket are dropped unrun. At 64 the ordinary thread waits
+at most 5 s for room, then answers `Unavailable` (`postgresql-reads-full`),
+unrun. The worker reads no secret from its environment or the home: it puts
+the sent password into the record's own address for the sessions of that
+Store and overwrites the copies it owns once they are no longer needed
+([password lifetime](../stores-and-projects/sqlite-and-postgresql.md#held-sessions-in-the-host-worker-819-p-b)). It sets `RLIMIT_CORE` to 0 before it
 reads its first request, and on Linux clears `PR_SET_DUMPABLE` as soon as
 it decodes its first PostgreSQL request, before any session holds the
 password (a worker that served none stays readable by its user, which
@@ -423,7 +428,7 @@ proves its cleared environment); macOS has no such flag. `store.postgresql_retir
 `{ closed }`) retires that login revision's held sessions unless it is the
 record's current one; `store connect` and `store disconnect` send it, past
 their locks, to a running worker only, never starting one. The ping
-answers `postgresql { stores, idle, lent, waiting, reads }`.
+answers `postgresql { stores, idle, lent, reads, queued }`.
 
 The v1 host request and answer bodies are plain JSON with byte ceilings of
 64 KiB and 1 MiB respectively. Hello and management requests are limited to

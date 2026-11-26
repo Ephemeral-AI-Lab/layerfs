@@ -19,13 +19,21 @@ use layerfs_store::project::family::{init, ProjectInit};
 use layerfs_store::record::StoreRecord;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 const BINDING: &[u8] = b"held-sessions";
 const INCARNATION: u64 = 7;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
+
+/// The held sessions are process-wide: one test at a time uses them, so
+/// the file is safe under a plain `cargo test`.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial() -> MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|error| error.into_inner())
+}
 
 fn url() -> Option<String> {
     let url = std::env::var("LAYERFS_TEST_POSTGRES_URL").ok();
@@ -202,6 +210,7 @@ fn ok(_: &layerfs_store_service::StoreService) -> layerfs_home::outcome::Outcome
 #[test]
 fn a_late_call_at_an_old_revision_leaves_the_current_sessions() {
     let Some(source) = url() else { return };
+    let _serial = serial();
     // the sessions are process-wide: none of another test's are left
     pool::close_idle(Duration::ZERO);
     let (database, home, open) = connected(&source);
@@ -239,6 +248,7 @@ fn a_late_call_at_an_old_revision_leaves_the_current_sessions() {
 #[test]
 fn a_panicking_call_gives_its_session_slot_back() {
     let Some(source) = url() else { return };
+    let _serial = serial();
     // the sessions are process-wide: none of another test's are left
     pool::close_idle(Duration::ZERO);
     let (_database, home, open) = connected(&source);
@@ -261,6 +271,7 @@ fn a_panicking_call_gives_its_session_slot_back() {
 #[test]
 fn a_reinitialized_schema_fails_the_held_session_check() {
     let Some(source) = url() else { return };
+    let _serial = serial();
     // the sessions are process-wide: none of another test's are left
     pool::close_idle(Duration::ZERO);
     let (database, home, open) = connected(&source);
@@ -283,6 +294,7 @@ fn a_reinitialized_schema_fails_the_held_session_check() {
 #[test]
 fn a_store_with_no_session_forgets_its_login() {
     let Some(source) = url() else { return };
+    let _serial = serial();
     // the sessions are process-wide: none of another test's are left
     pool::close_idle(Duration::ZERO);
     let (_database, home, open) = connected(&source);
@@ -290,4 +302,32 @@ fn a_store_with_no_session_forgets_its_login() {
     assert_eq!(pool::counts().stores, 1);
     assert_eq!(pool::close_idle(Duration::ZERO), 1);
     assert_eq!(pool::counts(), pool::Counts::default());
+}
+
+#[test]
+fn reservations_keep_both_bounds_and_never_wait() {
+    let Some(source) = url() else { return };
+    let _serial = serial();
+    // the sessions are process-wide: none of another test's are left
+    pool::close_idle(Duration::ZERO);
+    let (_database, home, open) = connected(&source);
+    pool::run(&home, "pgs", "r1", &open, ok).unwrap();
+    assert_eq!(pool::counts().idle, 1);
+    // the first slot takes the idle session; three more are room
+    let slots: Vec<_> = (0..pool::PER_STORE)
+        .map(|_| pool::reserve(&home, "pgs").expect("a free slot"))
+        .collect();
+    assert_eq!(pool::counts().lent, pool::PER_STORE);
+    assert_eq!(pool::counts().idle, 0);
+    // a full Store answers at once, with no slot
+    let began = std::time::Instant::now();
+    assert!(pool::reserve(&home, "pgs").is_none());
+    assert!(began.elapsed() < Duration::from_secs(1));
+    let refused = pool::run(&home, "pgs", "r1", &open, ok).unwrap_err();
+    assert_eq!(refused.code, "Unavailable");
+    // unused slots go back, and the session one took is kept
+    drop(slots);
+    assert_eq!(pool::counts().lent, 0);
+    assert_eq!(pool::counts().idle, 1);
+    pool::close_idle(Duration::ZERO);
 }

@@ -244,10 +244,13 @@ write and never reused. The CLI's `file.read`, `file.stat` and `file.list`
 send the saved password with that revision to the host worker
 (`store.postgresql_read`). Under the Store's lock the worker re-reads the
 record and refuses `Conflict` unless the revision matches, the record is
-unblocked and the host is admitted; it takes the call's lease there and
-drops it when the call ends, so no lease stands between calls. It then runs
-the call once on a held read-only session
-([`postgresql/pool.rs`](../../../../control/crates/layerfs-store/src/postgresql/pool.rs)).
+unblocked and the host is admitted. It then takes a held read-only session
+([`postgresql/pool.rs`](../../../../control/crates/layerfs-store/src/postgresql/pool.rs)),
+probing it if it was idle, and only with the session in hand takes the
+call's lease, under the Store's lock with the record checked again; it runs
+the call once and drops the lease when the call ends. A read waiting for a
+session, or for its probe, holds no lease, so `store disconnect` and
+`store upgrade` are never held off by a read that has not started.
 
 | Rule | Value |
 | --- | --- |
@@ -255,12 +258,14 @@ the call once on a held read-only session
 | Retire | `store connect` (update) and `store disconnect` send `store.postgresql_retire { store, revision }` naming the revision they replaced or removed, past their own locks, to a running worker only. The worker never retires the record's current revision; a lost retire changes nothing, since the record comparison refuses the old revision anyway |
 | Before reuse | one Light check within 5 s on one held session ([engine](../../engine/store/postgresql.md)). If it fails, every idle session of the Store closes and the call opens exactly one new session. This is a route decision taken before any byte of the call's operation is sent, as a mount reader's `usable()` is: nothing is retried |
 | After the call | `Unknown` or `StaleStore` drops the session; any other outcome keeps it. A guard gives the session's slot back on every path, a panic included |
-| Bounds | 4 sessions per Store and 8 per worker process, idle and lent (owner, 2026-11-27); a call with no free session waits, never `Busy`; an idle session of another Store closes to make room; idle ones close after the open-Store reaper's idle time, and on drain |
-| Threads | an ordinary thread reads the request and hands a PostgreSQL read to the worker's own PostgreSQL lane (8 threads, up to 64 reads handed over and unanswered), so PostgreSQL reads waiting for a session or the server never hold an ordinary thread or slot and calls on other Stores keep progressing. Past 64 such reads, the ordinary thread holding the next one waits for room |
-| Password lifetime | the worker reads no secret from its environment or the home and writes none. It holds a sent password in the request it decodes, in the dialled address of a Store that has a session, and in that session's connection settings. When a Store's last session closes (reaper, retire, a failed check, drain), its identity and address are dropped; memory is freed, not overwritten. The next call brings the login again |
+| Bounds | 4 sessions per Store and 8 per worker process, idle, lent and reserved (owner, 2026-11-27); an idle session of another Store closes to make room; idle ones close after the open-Store reaper's idle time, and on drain. A read starts only once it holds one of its Store's slots (a reservation, taken without waiting); nothing waits inside the pool |
+| Threads | an ordinary thread reads the request and hands a PostgreSQL read to the worker's own PostgreSQL lane (8 threads, up to 64 reads handed over and unanswered), so PostgreSQL reads never hold an ordinary thread or slot. A lane thread starts the oldest queued read whose Store has a free slot: a read of a busy Store waits in the queue, on no thread, and a Store whose sessions are stuck never holds the threads another Store's reads need. Queued reads whose caller has closed its socket are dropped unrun before any queued read starts and whenever a read is handed over |
+| Full lane | at 64 unanswered reads an ordinary thread waits at most 5 s for room, then answers the read `Unavailable` (`detail { state: postgresql-reads-full, reads: 64 }`), naming the load; the read was not run. Ordinary threads never wait longer than that on PostgreSQL |
+| Password lifetime | the worker reads no secret from its environment or the home and writes none. These copies of a sent password are overwritten with zeros before they are freed: the request frame's bytes once decoded; the decoded request once answered, refused or dropped unrun; the address dialled with it once the call ends; the percent-encoded password used to build that address; the pool's copy of a Store's address when its identity is replaced or its last session closes (reaper, retire, a failed check, drain); and the URL handed to a session's open, once it is open. The CLI also overwrites the frames it encodes. What remains, not overwritten: each open session's parsed connection settings (kept while the session lives, as reconnects within it need them), the copies the engine's open, the PostgreSQL client and its authentication exchange make, the JSON parser's own intermediate text, and freed allocator memory of those. A core dump cannot hold any of them (below) |
 | Core dumps | the host worker sets `RLIMIT_CORE` to 0 before it reads its first request; on Linux it also clears `PR_SET_DUMPABLE` as soon as it decodes its first PostgreSQL request, before any session holds the password, so another process of the user cannot read or trace it from then on. The request frame holding that first password is decoded just before; setting the flag at start would hide every worker's environment from the check that proves it cleared. macOS has no non-dumpable flag: there only the core file limit is set, and a debugger of the same user can still attach |
-| Upgrade | `store upgrade` keeps the revision. While its `op` stands the worker admits no PostgreSQL read; afterwards a held session fails its Light check (another schema version or generation) and is replaced |
-| Ping | the worker's ping and `machine doctor`'s ping evidence report `postgresql { stores, idle, lent, waiting, reads }` |
+| Upgrade | `store upgrade` keeps the revision (spec §8.7 bumps it; this is the documented departure). While its `op` stands the worker admits no PostgreSQL read; afterwards a held session fails its Light check (another schema version or generation) and is closed. The Full check every new session passes refuses a schema version the worker's build does not read, so a session held across the upgrade cannot serve it |
+| Ping | the worker's ping and `machine doctor`'s ping evidence report `postgresql { stores, idle, lent, reads, queued }`: `lent` counts slots reserved or lent, `reads` the reads handed over and unanswered, `queued` those not yet started |
+| Login order | `store connect` saves a new password before it writes the record with the new revision, so a revision is never visible without its password |
 | Records without a revision | 2.0 keeps no compatibility path for them: such a record stays on the direct route (P-A) until `store connect` is run again |
 
 The URL is never rewritten for a machine; which URLs a machine refuses is

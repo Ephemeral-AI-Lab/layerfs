@@ -252,9 +252,26 @@ pub(super) fn serve_host_connection(
             None => return Served::Answered(false),
         },
     };
-    Served::Answered(answer_host_request(
-        server, socket, management, &request, admitted,
-    ))
+    let answered = answer_host_request(server, socket, management, &request, admitted, None);
+    // a PostgreSQL read's password goes with its answer (#819 P-B)
+    if is_postgres_read(&request) {
+        layerfs_store::host_postgresql::wipe_request(request);
+    }
+    Served::Answered(answered)
+}
+
+/// Answers PostgreSQL read `request`, read by an ordinary thread and never
+/// run, with `refusal`: whether the answer was written.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub(super) fn refuse_host_request(
+    server: &super::host::HostServer,
+    socket: &std::os::unix::net::UnixStream,
+    request: SdkValue,
+    refusal: SdkRefusal,
+) -> bool {
+    let answered = answer_host_request(server, socket, false, &request, &mut false, Some(refusal));
+    layerfs_store::host_postgresql::wipe_request(request);
+    answered
 }
 
 /// Whether `request` is a PostgreSQL read for the host worker's own lane.
@@ -305,6 +322,7 @@ fn answer_host_request(
     management: bool,
     request: &SdkValue,
     admitted: &mut bool,
+    refusal: Option<SdkRefusal>,
 ) -> bool {
     use layerfs_home::trace;
     use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
@@ -319,20 +337,23 @@ fn answer_host_request(
     if traced {
         trace::steps_begin();
     }
-    let outcome = match (request.get_text("op"), request.get("args")) {
-        _ if request.get_text("generation") != Some(server.hello.generation.as_str()) => {
-            Err(refused(
-                "Unavailable",
-                "the request names another host worker generation",
-            ))
-        }
-        (Some(op), Some(args @ SdkValue::Map(_))) => {
-            server.dispatch(management, op, args, admitted)
-        }
-        _ => Err(refused(
-            "InvalidInput",
-            "the host request needs op and args",
-        )),
+    let outcome = match refusal {
+        Some(refusal) => Err(refusal),
+        None => match (request.get_text("op"), request.get("args")) {
+            _ if request.get_text("generation") != Some(server.hello.generation.as_str()) => {
+                Err(refused(
+                    "Unavailable",
+                    "the request names another host worker generation",
+                ))
+            }
+            (Some(op), Some(args @ SdkValue::Map(_))) => {
+                server.dispatch(management, op, args, admitted)
+            }
+            _ => Err(refused(
+                "InvalidInput",
+                "the host request needs op and args",
+            )),
+        },
     };
     let answer = match outcome {
         Ok(value) => ("ok", value),

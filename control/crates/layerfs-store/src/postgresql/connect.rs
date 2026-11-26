@@ -293,8 +293,12 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     }
     unclaimed_by_others(home_dir, name, &binding)?;
     home::private_dir(&directory)?;
-    record.write(home_dir)?;
+    // the password first: a login revision is never visible without it
     login::save(home_dir, name, password)?;
+    if let Err(refusal) = record.write(home_dir) {
+        let _ = login::forget(home_dir, name);
+        return Err(refusal);
+    }
     let mut projects = Vec::new();
     for project in listed {
         let stack = SdkValue::text(hex(&project.stack.to_bytes()));
@@ -457,10 +461,11 @@ impl Update {
         // every saved change is a new login for the host worker (#819 P-B)
         let replaced = current.login_revision().map(str::to_owned);
         let current = current.with_new_login_revision()?;
-        current.write(home_dir)?;
+        // the password first: a login revision is never visible without it
         if let Some(password) = &self.new_password {
             login::save(home_dir, name, password)?;
         }
+        current.write(home_dir)?;
         drop((store_lock, home_lock));
         crate::host_postgresql::retire(home_dir, name, replaced.as_deref());
         crate::observed::record(home_dir, name, None, &reach);
@@ -496,7 +501,8 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
     login::forget(home_dir, name)?;
     layerfs_home::home::generation::moved(home_dir);
-    // the worker's retire takes the Store's lock: past this call's locks
+    // the worker's retire reads the record without a lock; it is sent once
+    // this call's locks are released, so no call waits on them meanwhile
     drop((store, lock));
     crate::host_postgresql::retire(home_dir, name, record.login_revision());
     Ok(disconnected(name))

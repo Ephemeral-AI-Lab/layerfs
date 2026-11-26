@@ -4,9 +4,8 @@
 //!
 //! Each session is a read service over one Full-checked connection
 //! ([`crate::service::open_postgres_read`]), lent to one call at a time.
-//! Sessions are kept per Store key (the record's binding,
-//! [`crate::record::StoreRecord::postgresql_key`]) under one identity: the
-//! record's non-secret login revision and the address dialled with the
+//! Sessions are kept per Store (its folder in the home) under one identity:
+//! the record's non-secret login revision and the address dialled with the
 //! login the call sent. Revisions have no order of their own; the Store's
 //! record does. A call naming another revision than the sessions' is
 //! compared, under the Store's lock, with the record's current revision:
@@ -15,6 +14,13 @@
 //! `Conflict` with nothing run and the sessions untouched. [`retire`] (a
 //! `store connect` or `disconnect`) names the revision it retires and never
 //! retires the record's current one.
+//!
+//! A call first holds a [`Reservation`]: one of its Store's session slots,
+//! taken without waiting ([`reserve`]). The host worker's PostgreSQL lane
+//! starts a queued read only once its Store has a slot, so a read whose
+//! Store is busy waits in the queue, on no thread, and a busy Store never
+//! holds the threads another Store could use (§11). Nothing here waits for a
+//! slot.
 //!
 //! Before a held session serves a call it answers one readiness round trip
 //! (`read_session_current`, a Light check). A call probes at most one held
@@ -25,35 +31,41 @@
 //! `Unknown` or `StaleStore` drops the session it used.
 //!
 //! Bounds: [`PER_STORE`] sessions per Store and [`PER_PROCESS`] in all,
-//! idle and lent. A call that finds no session free waits for one; it is
-//! never refused `Busy`. Every lent session is given back by a guard, a
-//! panicking call included, so a wait always progresses. An idle session of
-//! another Store is closed to make room. The open-Store reaper closes
-//! sessions unused for [`crate::open::IDLE`]; a drain closes them. A Store
-//! with no session left forgets its identity and the dialled address, so
-//! the password lives on only inside open sessions; the next call brings
-//! the login again.
+//! idle, lent and reserved. An idle session of another Store is closed to
+//! make room. Every slot is given back by a guard, a panicking call
+//! included. The open-Store reaper closes sessions unused for
+//! [`crate::open::IDLE`]; a drain closes them. A Store with no session left
+//! forgets its identity, and the dialled address, which holds the password,
+//! is overwritten before it is freed ([`wipe`]). While a Store has sessions
+//! the address stays here, and each open session keeps the login in its
+//! connection settings.
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::StoreService;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-/// Sessions one Store keeps, idle and lent (owner, 2026-11-27).
+/// Sessions one Store keeps, idle, lent and reserved (owner, 2026-11-27).
 pub const PER_STORE: usize = 4;
 /// Sessions one process keeps across its Stores (owner, 2026-11-27).
 pub const PER_PROCESS: usize = 8;
-/// How long a waiting call sleeps before it looks again; a given-back
-/// session wakes it sooner.
-const RECHECK: Duration = Duration::from_secs(1);
 
 type Idle = Vec<(StoreService, Instant)>;
 
-/// One Store key's sessions and identity. No `Debug`: `dial` holds the
+/// Overwrites `text` before it is freed: a password, or an address that
+/// holds one.
+pub fn wipe(text: String) {
+    let mut bytes = text.into_bytes();
+    bytes.fill(0);
+    std::hint::black_box(&bytes);
+}
+
+/// One Store's sessions and identity. No `Debug`: `dial` holds the
 /// password.
 #[derive(Default)]
 struct Pool {
@@ -64,6 +76,7 @@ struct Pool {
     /// epoch is dropped when it comes back.
     epoch: u64,
     idle: Idle,
+    /// Slots reserved or lent.
     lent: usize,
 }
 
@@ -71,7 +84,8 @@ impl Pool {
     /// Replaces the identity: the idle sessions, to be dropped past the lock.
     fn replace(&mut self, epoch: u64, identity: Option<(&str, &str)>) -> Idle {
         self.revision = identity.map(|(revision, _)| revision.to_owned());
-        self.dial = identity.map_or_else(String::new, |(_, dial)| dial.to_owned());
+        let dial = identity.map_or_else(String::new, |(_, dial)| dial.to_owned());
+        wipe(std::mem::replace(&mut self.dial, dial));
         self.epoch = epoch;
         std::mem::take(&mut self.idle)
     }
@@ -81,7 +95,6 @@ impl Pool {
 struct Pools {
     stores: BTreeMap<PathBuf, Pool>,
     epochs: u64,
-    waiting: usize,
 }
 
 impl Pools {
@@ -95,16 +108,18 @@ impl Pools {
         self.epochs
     }
 
-    /// Forgets Store `key` once it holds no session: its identity and the
-    /// password-bearing address go with it.
+    /// Forgets Store `key` once it holds no session: its identity goes and
+    /// its password-bearing address is overwritten.
     fn tidy(&mut self, key: &Path) {
         if (self.stores.get(key)).is_some_and(|pool| pool.lent == 0 && pool.idle.is_empty()) {
-            self.stores.remove(key);
+            if let Some(pool) = self.stores.remove(key) {
+                wipe(pool.dial);
+            }
         }
     }
 
     /// The least recently used idle session of a Store other than `key`.
-    fn evict(&mut self, key: &Path) -> Option<(StoreService, Instant)> {
+    fn evict(&mut self, key: &Path) -> Option<StoreService> {
         let (other, at) = (self.stores.iter())
             .filter(|(other, _)| other.as_path() != key)
             .filter_map(|(other, pool)| {
@@ -113,7 +128,7 @@ impl Pools {
             })
             .min_by_key(|(_, _, last)| *last)
             .map(|(other, at, _)| (other.clone(), at))?;
-        let evicted = self.stores.get_mut(&other)?.idle.swap_remove(at);
+        let (evicted, _) = self.stores.get_mut(&other)?.idle.swap_remove(at);
         self.tidy(&other);
         Some(evicted)
     }
@@ -122,20 +137,116 @@ impl Pools {
 static POOLS: Mutex<Pools> = Mutex::new(Pools {
     stores: BTreeMap::new(),
     epochs: 0,
-    waiting: 0,
 });
-/// Signalled whenever a lent session comes back or a slot frees.
-static FREED: Condvar = Condvar::new();
 
 fn pools() -> MutexGuard<'static, Pools> {
     POOLS.lock().unwrap_or_else(|error| error.into_inner())
+}
+
+/// One of a Store's session slots, held before a call starts. Dropped
+/// unused, it gives the slot back, and the idle session it took to the
+/// Store's idle ones while their identity stands.
+pub struct Reservation {
+    key: PathBuf,
+    /// The idle session this slot took, with the epoch it was kept in.
+    session: Option<(StoreService, u64)>,
+    /// An idle session of another Store, closed to make room, past the
+    /// locks.
+    evicted: Option<StoreService>,
+    armed: bool,
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        drop(self.evicted.take());
+        let mut unused = self.session.take();
+        if self.armed {
+            let mut all = pools();
+            if let Some(pool) = all.stores.get_mut(&self.key) {
+                pool.lent -= 1;
+                if let Some((service, epoch)) = unused.take() {
+                    match epoch == pool.epoch {
+                        true => pool.idle.push((service, Instant::now())),
+                        false => unused = Some((service, epoch)),
+                    }
+                }
+            }
+            all.tidy(&self.key);
+        }
+        drop(unused);
+    }
+}
+
+/// A session slot of Store `store` of `home`, if one is free now: an idle
+/// session, taken now, room under both bounds, or room made by closing
+/// another Store's least recently used idle session. Never waits.
+pub fn reserve(home: &Path, store: &str) -> Option<Reservation> {
+    let key = layerfs_home::home::paths::store_dir(home, store);
+    let mut all = pools();
+    let held = all.held();
+    let pool = all.stores.entry(key.clone()).or_default();
+    if let Some((service, _)) = pool.idle.pop() {
+        pool.lent += 1;
+        return Some(Reservation {
+            key,
+            session: Some((service, pool.epoch)),
+            evicted: None,
+            armed: true,
+        });
+    }
+    let room = pool.lent < PER_STORE;
+    if room && held < PER_PROCESS {
+        pool.lent += 1;
+        return Some(Reservation {
+            key,
+            session: None,
+            evicted: None,
+            armed: true,
+        });
+    }
+    let evicted = room.then(|| all.evict(&key)).flatten();
+    match (evicted, all.stores.get_mut(&key)) {
+        (Some(evicted), Some(pool)) => {
+            pool.lent += 1;
+            Some(Reservation {
+                key,
+                session: None,
+                evicted: Some(evicted),
+                armed: true,
+            })
+        }
+        (evicted, _) => {
+            all.tidy(&key);
+            drop(all);
+            drop(evicted);
+            None
+        }
+    }
+}
+
+thread_local! {
+    /// The reservation the host worker's PostgreSQL lane took for the read
+    /// this thread runs now.
+    static HELD: RefCell<Option<Reservation>> = const { RefCell::new(None) };
+}
+
+/// Hands `reservation` to the read this thread runs next.
+pub fn hold(reservation: Reservation) {
+    let replaced = HELD.with(|held| held.borrow_mut().replace(reservation));
+    drop(replaced);
+}
+
+/// Gives back a reservation this thread's read did not use.
+pub fn release_held() {
+    let held = HELD.with(|held| held.borrow_mut().take());
+    drop(held);
 }
 
 /// One lent session's slot. Dropping it gives the slot back on every path,
 /// a panic included; the session is kept for later calls only when `keep`
 /// was set and its identity still stands.
 struct Lent {
-    key: PathBuf,
+    reservation: Reservation,
     epoch: u64,
     service: Option<StoreService>,
     keep: bool,
@@ -143,9 +254,11 @@ struct Lent {
 
 impl Drop for Lent {
     fn drop(&mut self) {
+        let key = self.reservation.key.clone();
+        self.reservation.armed = false;
         let mut all = pools();
         let mut dropped = self.service.take();
-        if let Some(pool) = all.stores.get_mut(&self.key) {
+        if let Some(pool) = all.stores.get_mut(&key) {
             pool.lent -= 1;
             if self.keep && pool.epoch == self.epoch {
                 if let Some(service) = dropped.take() {
@@ -153,15 +266,16 @@ impl Drop for Lent {
                 }
             }
         }
-        all.tidy(&self.key);
+        all.tidy(&key);
         drop(all);
         drop(dropped);
-        FREED.notify_all();
     }
 }
 
-/// Runs `call` once on a session of Store `store` of `home` (the key and
-/// dialled address `open` names), admitted at login revision `revision`.
+/// Runs `call` once on a session of Store `store` of `home` (the address
+/// `open` names), admitted at login revision `revision`, in the slot this
+/// thread holds ([`hold`]) or one free now; with none, the call is refused
+/// `Unavailable` with nothing run.
 pub fn run(
     home: &Path,
     store: &str,
@@ -169,11 +283,22 @@ pub fn run(
     open: &OpenArgs,
     call: impl FnOnce(&StoreService) -> Outcome,
 ) -> Outcome {
-    let key = open.store_path()?;
+    let key = layerfs_home::home::paths::store_dir(home, store);
     let dial = (open.postgresql.as_ref())
         .and_then(|postgresql| postgresql.url.as_deref())
         .ok_or_else(|| refused("InvalidInput", "a held read session needs its address"))?;
-    let mut lent = checkout(home, store, &key, revision, dial, open)?;
+    let held = HELD.with(|held| held.borrow_mut().take());
+    let reservation = match held {
+        Some(reservation) if reservation.key == key => Some(reservation),
+        _ => reserve(home, store),
+    }
+    .ok_or_else(|| {
+        refused(
+            "Unavailable",
+            format!("every PostgreSQL session of Store {store} is in use; nothing was run"),
+        )
+    })?;
+    let mut lent = checkout(home, store, reservation, revision, dial, open)?;
     crate::open::reaper();
     layerfs_home::trace::step("store_open");
     let outcome = match &lent.service {
@@ -190,20 +315,26 @@ pub fn run(
 fn checkout(
     home: &Path,
     store: &str,
-    key: &Path,
+    mut reservation: Reservation,
     revision: &str,
     dial: &str,
     open: &OpenArgs,
 ) -> Result<Lent, SdkRefusal> {
-    loop {
+    drop(reservation.evicted.take());
+    let key = reservation.key.clone();
+    let mut taken = reservation.session.take();
+    let (epoch, idle) = loop {
         let mut all = pools();
-        let held = all.held();
         let next = all.next_epoch();
-        let pool = all.stores.entry(key.to_path_buf()).or_default();
+        let Some(pool) = all.stores.get_mut(&key) else {
+            return Err(refused("Failed", "a reserved session slot was lost"));
+        };
         if pool.revision.as_deref() != Some(revision) {
-            all.tidy(key);
             drop(all);
-            adopt(home, store, key, revision, dial)?;
+            if let Err(refusal) = adopt(home, store, &key, revision, dial) {
+                reservation.session = taken;
+                return Err(refusal);
+            }
             continue;
         }
         if pool.dial != dial {
@@ -211,57 +342,40 @@ fn checkout(
             let dropped = pool.replace(next, Some((revision, dial)));
             drop(all);
             drop(dropped);
-            FREED.notify_all();
             continue;
         }
+        // the session the slot took, unless its identity was replaced since
+        // (then closed past the lock)
+        let stale = taken.take_if(|(_, epoch)| *epoch != pool.epoch);
+        let idle = match taken.take() {
+            Some(kept) => Some(kept),
+            None => pool.idle.pop().map(|(service, _)| (service, pool.epoch)),
+        };
         let epoch = pool.epoch;
-        if let Some((service, _)) = pool.idle.pop() {
-            pool.lent += 1;
-            drop(all);
-            let mut lent = Lent {
-                key: key.to_path_buf(),
-                epoch,
-                service: Some(service),
-                keep: false,
-            };
-            let probed = (lent.service.as_ref()).and_then(|s| s.opened.read_session_current());
-            if probed == Some(true) {
-                return Ok(lent);
-            }
+        drop(all);
+        drop(stale);
+        break (epoch, idle);
+    };
+    let mut lent = Lent {
+        reservation,
+        epoch,
+        service: idle.map(|(service, _)| service),
+        keep: false,
+    };
+    let probed = (lent.service.as_ref()).map(|service| service.opened.read_session_current());
+    match probed {
+        Some(Some(true)) => return Ok(lent),
+        Some(_) => {
             // one probe per call: its Store's idle sessions go, and this
             // call opens one session in the slot it holds
             drop(lent.service.take());
-            let stale = (pools().stores.get_mut(key)).map(|pool| std::mem::take(&mut pool.idle));
+            let stale = (pools().stores.get_mut(&key)).map(|pool| std::mem::take(&mut pool.idle));
             drop(stale);
-            lent.service = Some(crate::service::open_postgres_read(open)?);
-            return Ok(lent);
         }
-        if pool.lent < PER_STORE && held < PER_PROCESS {
-            pool.lent += 1;
-            drop(all);
-            let mut lent = Lent {
-                key: key.to_path_buf(),
-                epoch,
-                service: None,
-                keep: false,
-            };
-            lent.service = Some(crate::service::open_postgres_read(open)?);
-            return Ok(lent);
-        }
-        if held >= PER_PROCESS {
-            if let Some(evicted) = all.evict(key) {
-                drop(all);
-                drop(evicted);
-                continue;
-            }
-        }
-        // every session this call may take is lent: wait for one, never Busy
-        all.waiting += 1;
-        let (mut all, _) = FREED
-            .wait_timeout(all, RECHECK)
-            .unwrap_or_else(|error| error.into_inner());
-        all.waiting -= 1;
+        None => {}
     }
+    lent.service = Some(crate::service::open_postgres_read(open)?);
+    Ok(lent)
 }
 
 /// Makes `revision` the identity of Store `key` if it is the record's
@@ -291,7 +405,6 @@ fn adopt(
     };
     drop(all);
     drop(dropped);
-    FREED.notify_all();
     Ok(())
 }
 
@@ -313,7 +426,6 @@ pub fn close_idle(idle: Duration) -> usize {
     drop(all);
     let count = closed.len();
     drop(closed);
-    FREED.notify_all();
     count
 }
 
@@ -328,38 +440,28 @@ pub fn retire(home: &Path, store: &str, revision: &str) -> Result<usize, SdkRefu
     if current.as_ref().and_then(StoreRecord::login_revision) == Some(revision) {
         return Ok(0);
     }
-    let folder = layerfs_home::home::paths::store_dir(home, store);
+    let key = layerfs_home::home::paths::store_dir(home, store);
     let mut all = pools();
     let epoch = all.next_epoch();
-    let keys: Vec<PathBuf> = (all.stores.iter())
-        .filter(|(key, pool)| {
-            key.parent() == Some(folder.as_path()) && pool.revision.as_deref() == Some(revision)
-        })
-        .map(|(key, _)| key.clone())
-        .collect();
-    let mut closed = Idle::new();
-    for key in keys {
-        if let Some(pool) = all.stores.get_mut(&key) {
-            closed.extend(pool.replace(epoch, None));
-        }
-        all.tidy(&key);
-    }
+    let closed = match all.stores.get_mut(&key) {
+        Some(pool) if pool.revision.as_deref() == Some(revision) => pool.replace(epoch, None),
+        _ => Idle::new(),
+    };
+    all.tidy(&key);
     drop(all);
     let count = closed.len();
     drop(closed);
-    FREED.notify_all();
     Ok(count)
 }
 
 /// What the held sessions are now (§11, a host worker's ping).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
-    /// Stores with a login and a session.
+    /// Stores with a session or a slot taken.
     pub stores: usize,
     pub idle: usize,
+    /// Slots reserved or lent.
     pub lent: usize,
-    /// Calls waiting for a session.
-    pub waiting: usize,
 }
 
 /// The held sessions now.
@@ -369,6 +471,5 @@ pub fn counts() -> Counts {
         stores: all.stores.len(),
         idle: all.stores.values().map(|pool| pool.idle.len()).sum(),
         lent: all.stores.values().map(|pool| pool.lent).sum(),
-        waiting: all.waiting,
     }
 }

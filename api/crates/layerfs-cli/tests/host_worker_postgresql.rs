@@ -245,8 +245,12 @@ fn connected(db: &Db, at: (&str, u16)) -> Fixture {
 }
 
 fn connect(home: &Path, db: &Db, at: (&str, u16)) {
+    connect_as(home, "pg", db, at);
+}
+
+fn connect_as(home: &Path, name: &str, db: &Db, at: (&str, u16)) {
     let url = db.url(at);
-    let words = ["store", "connect", "pg", &url, "--user", &db.name];
+    let words = ["store", "connect", name, &url, "--user", &db.name];
     let words = [&words[..], &["--password-stdin"]].concat();
     call(home, &words, Some(&db.password)).unwrap();
 }
@@ -259,6 +263,15 @@ fn revision(home: &Path) -> String {
 
 /// One raw host request, as a caller that read the record earlier sends it.
 fn raw(home: &Fixture, revision: &str, password: &str) -> SdkValue {
+    let socket = sent(home, revision, password, "pb-raw-1");
+    let end = Instant::now() + Duration::from_secs(10);
+    read_host_frame(&socket, HOST_MAX_REPLY, Some(end))
+        .unwrap()
+        .unwrap()
+}
+
+/// The socket of one raw `fs.stat` request `id`, sent and not yet answered.
+fn sent(home: &Fixture, revision: &str, password: &str, id: &str) -> UnixStream {
     let socket = UnixStream::connect(&home.paths.socket).unwrap();
     let end = Instant::now() + Duration::from_secs(10);
     let hello = read_host_frame(&socket, MAX_HELLO, Some(end))
@@ -282,12 +295,10 @@ fn raw(home: &Fixture, revision: &str, password: &str) -> SdkValue {
         ("op", SdkValue::text("store.postgresql_read")),
         ("args", args),
         ("generation", hello.get("generation").unwrap().clone()),
-        ("request_id", SdkValue::text("pb-raw-1")),
+        ("request_id", SdkValue::text(id)),
     ]);
     write_host_frame(&socket, &request, HOST_MAX_REPLY, end).unwrap();
-    read_host_frame(&socket, HOST_MAX_REPLY, Some(end))
-        .unwrap()
-        .unwrap()
+    socket
 }
 
 fn error_code(answer: &SdkValue) -> Option<&str> {
@@ -416,6 +427,9 @@ fn rotation_retires_old_sessions_and_refuses_the_old_revision() {
     // session: it dials its own login, which the server refuses.
     let wrong = raw(&home, &new_revision, "not-the-password");
     assert!(wrong.get("error").is_some(), "{wrong:?}");
+    // a refused login never names the password it sent
+    let said = layerfs_api::json::print(&wrong);
+    assert!(!said.contains("not-the-password"), "{said}");
     assert_eq!(db.settle(0).len(), 0, "the held session was retired");
     ok(path, READ);
     assert_eq!(db.settle(1).len(), 1);
@@ -525,6 +539,8 @@ struct Relay {
     port: u16,
     cut: Arc<AtomicUsize>,
     stop: Arc<AtomicBool>,
+    /// Cut connections on which the client sent more than a Terminate.
+    probed: Arc<AtomicUsize>,
 }
 
 impl Relay {
@@ -534,7 +550,8 @@ impl Relay {
         let cut = Arc::new(AtomicUsize::new(0));
         let stop = Arc::new(AtomicBool::new(false));
         let upstream = format!("{host}:{port}");
-        let (cuts, stops) = (cut.clone(), stop.clone());
+        let probed = Arc::new(AtomicUsize::new(0));
+        let (cuts, stops, probes) = (cut.clone(), stop.clone(), probed.clone());
         std::thread::spawn(move || {
             for client in listener.incoming() {
                 if stops.load(Ordering::SeqCst) {
@@ -545,21 +562,33 @@ impl Relay {
                     continue;
                 };
                 let era = cuts.load(Ordering::SeqCst);
-                for (mut from, mut to) in [
-                    (client.try_clone().unwrap(), server.try_clone().unwrap()),
-                    (server, client),
+                for (outbound, mut from, mut to) in [
+                    (
+                        true,
+                        client.try_clone().unwrap(),
+                        server.try_clone().unwrap(),
+                    ),
+                    (false, server, client),
                 ] {
-                    let cuts = cuts.clone();
+                    let (cuts, probes) = (cuts.clone(), probes.clone());
                     std::thread::spawn(move || {
                         let mut buffer = [0u8; 16384];
+                        let mut counted = false;
                         while let Ok(read) = from.read(&mut buffer) {
                             if read == 0 {
                                 let _ = to.shutdown(std::net::Shutdown::Write);
                                 return;
                             }
-                            if cuts.load(Ordering::SeqCst) == era
-                                && to.write_all(&buffer[..read]).is_err()
-                            {
+                            if cuts.load(Ordering::SeqCst) != era {
+                                // a plaintext Terminate is `X` and length 4
+                                let terminate = buffer[..read] == [b'X', 0, 0, 0, 4];
+                                if outbound && !terminate && !counted {
+                                    counted = true;
+                                    probes.fetch_add(1, Ordering::SeqCst);
+                                }
+                                continue;
+                            }
+                            if to.write_all(&buffer[..read]).is_err() {
                                 return;
                             }
                         }
@@ -571,11 +600,16 @@ impl Relay {
             port: local,
             cut,
             stop,
+            probed,
         }
     }
 
     fn cut(&self) {
         self.cut.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn probed(&self) -> usize {
+        self.probed.load(Ordering::SeqCst)
     }
 }
 
@@ -992,10 +1026,9 @@ fn a_failed_probe_closes_the_idle_sessions_and_opens_one() {
     assert_eq!(ok(&path, STAT).get_text("type"), Some("file"));
     let took = began.elapsed();
     assert!(took >= Duration::from_secs(5), "{took:?}");
-    assert!(
-        took < Duration::from_secs(10),
-        "one probe, not four: {took:?}"
-    );
+    // one probe, not four: counted on the wire, the time a loose bound
+    assert_eq!(relay.probed(), 1, "probes sent on cut connections");
+    assert!(took < Duration::from_secs(17), "{took:?}");
     let after = db.backends();
     assert_eq!(after.difference(&held).count(), 1, "exactly one new login");
     assert_eq!(
@@ -1004,5 +1037,195 @@ fn a_failed_probe_closes_the_idle_sessions_and_opens_one() {
             .and_then(|p| p.get_int("idle")),
         Some(1)
     );
+    drain(&home);
+}
+
+/// A home with Stores `pg` (project `p`, on `db`) and `pg2` (project `q`,
+/// on `other`).
+fn two_stores(db: &Db, other: &Db) -> Fixture {
+    let home = connected(db, db.at());
+    let path = &home.paths.home;
+    connect_as(path, "pg2", other, other.at());
+    let source = path.join("source2");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("c.txt"), "other\n").unwrap();
+    ok(
+        path,
+        &["project", "init", "pg2/q", source.to_str().unwrap()],
+    );
+    home
+}
+
+/// `child`'s answer if it ends within `limit`; killed otherwise.
+fn within(mut child: std::process::Child, limit: Duration) -> Option<Output> {
+    let end = Instant::now() + limit;
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() > end {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    Some(child.wait_with_output().unwrap())
+}
+
+#[test]
+fn a_blocked_store_leaves_the_postgresql_threads_to_another() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "hol");
+    let other = Db::new(&server, "hol2");
+    let home = two_stores(&db, &other);
+    let path = home.paths.home.clone();
+    ok(&path, READ);
+    db.settle(1);
+
+    // Store pg's four sessions wait on a lock, and eight more of its reads
+    // queue for them: more than the PostgreSQL lane has threads
+    let lock = Locked::new(&db, "layer");
+    let callers: Vec<_> = (0..12).map(|_| spawn(&path, STAT, None)).collect();
+    assert_eq!(waiting_on_lock(&db, 4), 4, "four sessions in flight");
+    std::thread::sleep(Duration::from_millis(300));
+    let other_read = ["file", "read", "pg2/q", "main", "/c.txt"];
+    for _ in 0..3 {
+        let began = Instant::now();
+        let output = within(spawn(&path, &other_read, None), Duration::from_secs(10));
+        let took = began.elapsed();
+        let Some(output) = output else {
+            drop(lock);
+            panic!("a read of Store pg2 waited {took:?} behind Store pg's reads");
+        };
+        assert!(output.status.success(), "{:?}", decode(&output));
+        assert_eq!(decode(&output).get_text("text"), Some("other\n"));
+    }
+    drop(lock);
+    for child in callers {
+        let output = finish(child);
+        assert!(output.status.success(), "{:?}", decode(&output));
+    }
+    drain(&home);
+}
+
+/// The ping's `postgresql` field once `ready` holds, within 5 s.
+fn postgresql_when(home: &Fixture, ready: impl Fn(&SdkValue) -> bool) -> SdkValue {
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        let ping = home.ping();
+        let postgresql = ping.get("postgresql").cloned().expect("postgresql");
+        if ready(&postgresql) || Instant::now() > end {
+            return postgresql;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn a_full_postgresql_lane_refuses_within_its_bound_and_drops_gone_callers() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "cap");
+    let home = connected(&db, db.at());
+    let path = home.paths.home.clone();
+    let source = path.join("sqlite-source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("s.txt"), "sqlite\n").unwrap();
+    ok(&path, &["store", "create", "sq"]);
+    ok(
+        &path,
+        &["project", "init", "sq/q", source.to_str().unwrap()],
+    );
+    ok(&path, READ);
+    db.settle(1);
+    let current = revision(&path);
+
+    // a hung server: 4 reads in flight, 60 queued, the lane's 64
+    let lock = Locked::new(&db, "layer");
+    let mut open: Vec<Option<UnixStream>> = (0..64)
+        .map(|at| Some(sent(&home, &current, &db.password, &format!("pb-cap-{at}"))))
+        .collect();
+    assert_eq!(waiting_on_lock(&db, 4), 4);
+    let full = postgresql_when(&home, |p| p.get_int("reads") == Some(64));
+    assert_eq!(full.get_int("reads"), Some(64), "{full:?}");
+    assert_eq!(full.get_int("queued"), Some(60), "{full:?}");
+
+    // the next read is refused unrun within the bound, naming the load,
+    // and a SQLite read meanwhile completes
+    let began = Instant::now();
+    let extra = sent(&home, &current, &db.password, "pb-cap-extra");
+    let sqlite = spawn(&path, &["file", "read", "sq/q", "main", "/s.txt"], None);
+    let output = within(sqlite, Duration::from_secs(10)).expect("the SQLite read");
+    assert_eq!(decode(&output).get_text("text"), Some("sqlite\n"));
+    let end = Instant::now() + Duration::from_secs(15);
+    let refused = read_host_frame(&extra, HOST_MAX_REPLY, Some(end))
+        .unwrap()
+        .unwrap();
+    let took = began.elapsed();
+    assert_eq!(error_code(&refused), Some("Unavailable"), "{refused:?}");
+    let detail = refused.get("error").and_then(|e| e.get("detail")).unwrap();
+    assert_eq!(detail.get_text("state"), Some("postgresql-reads-full"));
+    assert_eq!(detail.get_int("reads"), Some(64));
+    assert!(took >= Duration::from_secs(4), "{took:?}");
+    assert!(took < Duration::from_secs(10), "{took:?}");
+
+    // twenty queued callers go away: their reads are dropped unrun, and
+    // the room is the next read's
+    for slot in &mut open[40..60] {
+        drop(slot.take());
+    }
+    let late = sent(&home, &current, &db.password, "pb-cap-late");
+    let after = postgresql_when(&home, |p| p.get_int("reads") == Some(45));
+    assert_eq!(after.get_int("reads"), Some(45), "{after:?}");
+    assert_eq!(after.get_int("queued"), Some(41), "{after:?}");
+
+    drop(lock);
+    let end = Instant::now() + Duration::from_secs(30);
+    for socket in open.iter().flatten().chain([&late]) {
+        let answer = read_host_frame(socket, HOST_MAX_REPLY, Some(end))
+            .unwrap()
+            .unwrap();
+        assert!(answer.get("ok").is_some(), "{answer:?}");
+    }
+    let idle = postgresql_when(&home, |p| p.get_int("reads") == Some(0));
+    assert_eq!(idle.get_int("queued"), Some(0), "{idle:?}");
+    drain(&home);
+}
+
+#[test]
+fn a_read_still_probing_holds_no_lease() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "lease");
+    let relay = Relay::new(&server.host, server.port);
+    // the relay listens in this process, beside the CLI and its worker
+    let home = connected(&db, ("127.0.0.1", relay.port));
+    let path = home.paths.home.clone();
+    ok(&path, READ);
+    db.settle(1);
+
+    // the held session goes silent: the next read waits out its probe
+    // with no lease, so a disconnect meanwhile is not refused InUse
+    relay.cut();
+    let probing = spawn(&path, STAT, None);
+    let end = Instant::now() + Duration::from_secs(4);
+    while relay.probed() == 0 && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(relay.probed(), 1, "the read is probing");
+    let began = Instant::now();
+    ok(&path, &["store", "disconnect", "pg"]);
+    assert!(
+        began.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        began.elapsed()
+    );
+    let output = finish(probing);
+    assert!(!output.status.success(), "{:?}", decode(&output));
+    let code = decode(&output).get_text("error").unwrap_or("?").to_owned();
+    assert!(
+        matches!(code.as_str(), "NotFound" | "NoSuchStore"),
+        "{code}"
+    );
+    // the cut connection's backend stays until the relay goes; the worker
+    // keeps no session of the Store
+    let held = postgresql_when(&home, |p| p.get_int("stores") == Some(0));
+    assert_eq!(held.get_int("stores"), Some(0), "{held:?}");
     drain(&home);
 }

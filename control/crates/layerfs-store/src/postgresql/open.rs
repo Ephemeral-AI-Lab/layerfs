@@ -261,12 +261,12 @@ pub(crate) fn open_read_only(
     identity: &Identity,
 ) -> Result<StoreService, SdkRefusal> {
     let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
-    StoreService::open_postgres_read_only(
-        &selection(url, schema, sync),
-        &identity.binding,
-        identity.cursor_key,
-    )
-    .map_err(open_refusal)
+    let mut chosen = selection(url, schema, sync);
+    let opened =
+        StoreService::open_postgres_read_only(&chosen, &identity.binding, identity.cursor_key);
+    // this copy of the URL may hold the login (#819 P-B)
+    super::pool::wipe(std::mem::take(&mut chosen.url));
+    opened.map_err(open_refusal)
 }
 
 fn resolve_postgres<'a>(

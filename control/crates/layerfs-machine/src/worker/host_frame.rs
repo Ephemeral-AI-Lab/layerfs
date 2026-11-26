@@ -119,26 +119,42 @@ pub fn read_host_frame(
         ));
     }
     let mut body = vec![0; len];
-    input.read_exact(&mut body).map_err(lost)?;
-    budget(&body)?;
-    let text = std::str::from_utf8(&body).map_err(|_| invalid("JSON must be UTF-8"))?;
-    json::parse(text)
-        .map(Some)
-        .map_err(|error| invalid(&error.0))
+    let read = input.read_exact(&mut body).map_err(lost);
+    let parsed = read.and_then(|()| {
+        budget(&body)?;
+        let text = std::str::from_utf8(&body).map_err(|_| invalid("JSON must be UTF-8"))?;
+        json::parse(text)
+            .map(Some)
+            .map_err(|error| invalid(&error.0))
+    });
+    // a request may carry a login (#819 P-B): its bytes go once decoded
+    wipe(body);
+    parsed
+}
+
+/// Overwrites `bytes`, which may hold a login, before freeing them.
+pub fn wipe(mut bytes: Vec<u8>) {
+    bytes.fill(0);
+    std::hint::black_box(&bytes);
 }
 
 pub(super) fn encode(value: &SdkValue, max: usize) -> Result<Vec<u8>, SdkRefusal> {
     let body = json::print(value);
     if body.len() > max.min(HOST_MAX_REPLY) {
+        wipe(body.into_bytes());
         return Err(refused(
             "TooLarge",
             "host worker frame exceeds its byte ceiling",
         ));
     }
-    budget(body.as_bytes())?;
+    if let Err(refusal) = budget(body.as_bytes()) {
+        wipe(body.into_bytes());
+        return Err(refusal);
+    }
     let mut frame = Vec::with_capacity(4 + body.len());
     frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
     frame.extend_from_slice(body.as_bytes());
+    wipe(body.into_bytes());
     Ok(frame)
 }
 

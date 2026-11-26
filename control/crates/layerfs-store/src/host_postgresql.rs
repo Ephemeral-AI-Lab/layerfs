@@ -142,28 +142,47 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
         ));
     };
     resolve::target(home, &format!("{store}/{project}"))?;
-    let (lease, record) = admit(home, &store, revision)?;
+    let record = admitted(home, &store, revision)?;
     let dial = crate::postgresql::login::dial_sent(&record, password)?;
     let selection = crate::postgresql::connect::selection_at(&record, dial);
-    let open = OpenArgs::dialled(home, &store, &record, selection).with_project(&project);
+    let mut open = OpenArgs::dialled(home, &store, &record, selection).with_project(&project);
     let mut fields = fields.clone();
     fields.retain(|(name, _)| name != "project");
     fields.push(("project".to_owned(), SdkValue::text(project.as_str())));
     let outcome = crate::postgresql::pool::run(home, &store, revision, &open, |service| {
-        crate::service::dispatch(service, method, SdkValue::Map(fields))
+        // the lease only once a session is in hand, the record checked again
+        let lease = admit(home, &store, revision)?;
+        let outcome = crate::service::dispatch(service, method, SdkValue::Map(fields));
+        drop(lease);
+        outcome
     });
-    drop(lease);
+    if let Some(url) = open
+        .postgresql
+        .as_mut()
+        .and_then(|selection| selection.url.take())
+    {
+        crate::postgresql::pool::wipe(url);
+    }
     outcome
 }
 
-/// This call's lease, taken under the Store's lock with the record read
-/// there at login revision `revision`.
-fn admit(
+/// The record of Store `store`, read under the Store's lock, when it admits
+/// a read at login revision `revision`: present, unblocked, PostgreSQL, at
+/// that revision, and the host machine admitted.
+fn admitted(
     home: &Path,
     store: &str,
     revision: &str,
-) -> Result<(lease::Lease, StoreRecord), layerfs_bridge::control::SdkRefusal> {
+) -> Result<StoreRecord, layerfs_bridge::control::SdkRefusal> {
     let _lock = record::lock(home, store)?;
+    checked(home, store, revision)
+}
+
+fn checked(
+    home: &Path,
+    store: &str,
+    revision: &str,
+) -> Result<StoreRecord, layerfs_bridge::control::SdkRefusal> {
     let record = StoreRecord::of(home, store)?;
     record.unblocked()?;
     let StoreRef::Postgres { .. } = record.store_ref()? else {
@@ -179,7 +198,38 @@ fn admit(
         ));
     }
     layerfs_machine::record::MachineRecord::admit_host(home, layerfs_home::names::HOST_MACHINE)?;
-    Ok((lease::claim_unblocked_locked(home, store)?, record))
+    Ok(record)
+}
+
+/// This call's lease, taken under the Store's lock with the record checked
+/// there again, once its session is in hand: a read waiting for a session
+/// or for the server's login holds none, so maintenance is not blocked by
+/// it.
+fn admit(
+    home: &Path,
+    store: &str,
+    revision: &str,
+) -> Result<lease::Lease, layerfs_bridge::control::SdkRefusal> {
+    let _lock = record::lock(home, store)?;
+    checked(home, store, revision)?;
+    lease::claim_unblocked_locked(home, store)
+}
+
+/// Overwrites the password a PostgreSQL read `request` carried, once its
+/// answer is written or it is dropped unrun.
+pub fn wipe_request(request: SdkValue) {
+    let SdkValue::Map(fields) = request else {
+        return;
+    };
+    for (name, value) in fields {
+        if let ("args", SdkValue::Map(args)) = (name.as_str(), value) {
+            for (name, value) in args {
+                if let ("password", SdkValue::Text(password)) = (name.as_str(), value) {
+                    crate::postgresql::pool::wipe(password);
+                }
+            }
+        }
+    }
 }
 
 /// Answers the management request that retires login revision `revision`

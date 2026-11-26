@@ -371,7 +371,9 @@ fn percent(text: &str) -> String {
 pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
     refuse_login(url)?;
     let (scheme, after) = scheme(url)?;
-    let dialled = format!("{scheme}://{}:{}@{after}", percent(user), percent(password));
+    let encoded = percent(password);
+    let dialled = format!("{scheme}://{}:{encoded}@{after}", percent(user));
+    super::pool::wipe(encoded);
     match (reading(url), reading(&dialled)) {
         (Some(given), Some(read))
             if read.get_user() == Some(user)
@@ -380,9 +382,12 @@ pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
         {
             Ok(dialled)
         }
-        _ => Err(refused(
+        _ => Err({
+            super::pool::wipe(dialled);
+            refused(
             "InvalidInput",
             "the saved login cannot be put into the URL so that its client reads it and the address as given; nothing was dialled",
-        )),
+            )
+        }),
     }
 }
