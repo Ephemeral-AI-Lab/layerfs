@@ -34,15 +34,24 @@ pub struct Visibility {
 }
 
 impl Visibility {
-    /// Loads the snapshot's serial and its project's markers. A provider that
-    /// does not implement the marker reads (a test double) sees none; any
-    /// other failure refuses rather than returning the removed bytes.
+    /// The snapshot's serial and its project's markers, from the one read
+    /// [`snapshot::resolve_saved`] made of both (#818 R2). A failure of that
+    /// read refuses here, where the marker read refused before, rather than
+    /// returning the removed bytes. A node with no row, or a provider without
+    /// the combined read (a test double), reads the markers alone, as before:
+    /// one that does not implement them either sees none.
     pub fn load(
         store: &Arc<Store>,
         stack: &LayerStackRecord,
         snap: &snapshot::Snap,
+        removals: snapshot::Removals,
     ) -> Result<Self, SdkRefusal> {
-        Self::for_stack(store, stack.id, snap.serial)
+        match removals {
+            Ok(Some((serial, markers))) => Ok(Self { serial, markers }),
+            Ok(None) => Self::for_stack(store, stack.id, snap.serial),
+            Err(error) if unsupported(&error) => Self::for_stack(store, stack.id, snap.serial),
+            Err(error) => Err(lookup::published(error)),
+        }
     }
 
     /// `load` when only the resolved snapshot is at hand.

@@ -5,7 +5,7 @@
 //! was. An argument the engine uses only after a lookup travels as an
 //! [`Arg`], read but not yet refused.
 use crate::read::compare::{Request, Selector};
-use crate::read::snapshot::Snap;
+use crate::read::snapshot::{Saved, Snap};
 use crate::store::StorePorts;
 use crate::write::files::{self, Change};
 use crate::StoreService;
@@ -26,17 +26,20 @@ pub fn project(service: &StoreService, args: &SdkValue) -> Result<LayerStackReco
 /// id prefix (8 to 65 hex characters) is resolved to its Commit first, a
 /// prefix more than one Commit starts with refused `InvalidInput` with
 /// `matches`.
+///
+/// With them comes what the resolve read on the way ([`Saved`]): the node's
+/// record for the answer's `at`, and its markers for the visibility step.
 pub fn snapshot_full(
     service: &StoreService,
     args: &SdkValue,
-) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap), SdkRefusal> {
+) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap, Saved), SdkRefusal> {
     let stack = project(service, args)?;
     let name = match pinned(service, &stack, args)? {
         Some(full) => full,
         None => crate::operator::args::snapshot_name(args)?.to_owned(),
     };
-    let (reader, snap) = crate::read::snapshot::open(&service.store, &stack, &name)?;
-    Ok((stack, reader, snap))
+    let (reader, snap, saved) = crate::read::snapshot::open_saved(&service.store, &stack, &name)?;
+    Ok((stack, reader, snap, saved))
 }
 
 /// The full identity of the read's `commit` when it is an id prefix. A

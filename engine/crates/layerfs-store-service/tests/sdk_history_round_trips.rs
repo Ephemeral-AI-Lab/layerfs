@@ -42,14 +42,19 @@ use rt::{branch_arg as branch, path_arg as path, t, Backend, Counts, Measured, P
 const NONE: Counts = [0, 0, 0, 0];
 
 /// SQLite: `[0, 0, statements, transactions]` per role. Baseline,
-/// 3a904ac225 (production source identical to 056e920166).
+/// 3a904ac225 (production source identical to 056e920166); the `probe`
+/// comments keep the baseline row.
+///
+/// - #818 R2 (dedupe): `blame` reads its Commit row once and the serial
+///   with the markers; each `diff_files` side reads its Commit row once:
+///   2 reads fewer (−6 statements, −2 transactions); `revision` unchanged.
 const SQLITE: &[Pin] = &[
     // probe blame.h10: 714 statements
-    pin("blame.h10.cold", [0, 0, 57, 19], [0, 0, 668, 49], NONE),
-    pin("blame.h10.warm", [0, 0, 57, 19], [0, 0, 627, 49], NONE),
+    pin("blame.h10.cold", [0, 0, 57, 19], [0, 0, 662, 47], NONE),
+    pin("blame.h10.warm", [0, 0, 57, 19], [0, 0, 621, 47], NONE),
     // probe blame.h100: 7,575
-    pin("blame.h100.cold", [0, 0, 597, 199], [0, 0, 7108, 410], NONE),
-    pin("blame.h100.warm", [0, 0, 597, 199], [0, 0, 6752, 410], NONE),
+    pin("blame.h100.cold", [0, 0, 597, 199], [0, 0, 7102, 408], NONE),
+    pin("blame.h100.warm", [0, 0, 597, 199], [0, 0, 6746, 408], NONE),
     // probe revision.h10 (appended at P0): 1,314
     pin("revision.h10.cold", [0, 0, 30, 10], [0, 0, 1325, 112], NONE),
     // probe revision.h100: 12,658
@@ -66,8 +71,8 @@ const SQLITE: &[Pin] = &[
         NONE,
     ),
     // probe diff_files.h10_vs_h99: 198
-    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 224, 17], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 193, 17], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 218, 15], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 187, 15], NONE),
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
@@ -78,21 +83,23 @@ const SQLITE: &[Pin] = &[
 ///   marker read), `blame.h100` and `revision.h100` −4 (Branch and markers),
 ///   `revision.h10` −6 (its Branch, its markers and one more Branch lookup),
 ///   `diff_files` −4 (one marker read per side); statements unchanged.
+/// - #818 R2: `blame` and `diff_files` −2 round trips and −2 statements
+///   (see SQLITE), cold and warm; `revision` unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", [0, 20, 19, 0], [1, 265, 255, 0], NONE),
-    pin("blame.h10.warm", [0, 19, 19, 0], [0, 225, 225, 0], NONE),
+    pin("blame.h10.cold", [0, 20, 19, 0], [1, 263, 253, 0], NONE),
+    pin("blame.h10.warm", [0, 19, 19, 0], [0, 223, 223, 0], NONE),
     // probe blame.h100: 2,325
     pin(
         "blame.h100.cold",
         [0, 200, 199, 0],
-        [1, 2266, 2255, 0],
+        [1, 2264, 2253, 0],
         NONE,
     ),
     pin(
         "blame.h100.warm",
         [0, 199, 199, 0],
-        [0, 2026, 2026, 0],
+        [0, 2024, 2024, 0],
         NONE,
     ),
     // probe revision.h10 (appended at P0)
@@ -111,8 +118,8 @@ const POSTGRESQL: &[Pin] = &[
         NONE,
     ),
     // probe diff_files.h10_vs_h99: 88
-    pin("diff_files.h10_vs_h99.cold", NONE, [1, 105, 96, 0], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 79, 79, 0], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [1, 103, 94, 0], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 77, 77, 0], NONE),
 ];
 
 /// `(method, F, W, K)`: cold PostgreSQL round trips at V versions are at

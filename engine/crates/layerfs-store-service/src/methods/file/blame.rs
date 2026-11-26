@@ -8,9 +8,9 @@ use layerfs_bridge::control::SdkValue;
 
 /// `blame(path, { branch, commit?, fromLine? })`: each line with the Commit that last changed it.
 pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap) = snapshot_full(service, args)?;
+    let (stack, reader, snap, saved) = snapshot_full(service, args)?;
     let path = path(args, "path")?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     blame::blame(
         &service.store,
         &reader,

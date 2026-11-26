@@ -21,8 +21,18 @@ name: "main" | Branch name | 66-hex Commit or Layer id
   +-- 66 hex      -> Commit | Layer                   Kind::Commit/Layer
   +-- Branch name -> head Commit, else base Layer     Kind::Branch
   v
-Snap { kind, label, node, root, tree }  --> every later step reads by root
+Snap { kind, label, node, root, tree, serial }  --> every later step reads by root
 ```
+
+The resolve reads the node's Commit or Layer row once: the ownership check
+and the root come from the same record. A read call (`stat`, `read`, `list`,
+`glob`, `grep`, `blame`, through `snapshot_full`) also keeps that record and
+reads the node's `history_serial` together with the project's
+`project.remove_file` markers in one statement (`node_path_removals`) where
+the serial alone was read (#818 R2). The record builds the answer's `at`
+without a second read; the markers reach the visibility filter at the place
+the marker read used to be, so its failure still refuses there. A node with
+no row, or a provider without the combined read, reads the markers alone.
 
 | Rule | Detail | Source |
 | --- | --- | --- |

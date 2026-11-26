@@ -6,14 +6,14 @@
 //! reads a live Workspace.
 use crate::history::lookup::{self as args, branch_node, invalid, refuse, short, Answer};
 use crate::history::MAIN;
-use crate::store::{Store, StorePorts};
+use crate::store::{PortError, Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{as_text, EntryFacts, TreeTable, MAXIMUM_TEXT_BYTES};
 use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::{FilesystemRootId, SymlinkTarget};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
-use layerfs_history::{LayerStackRecord, NodeId};
+use layerfs_history::{LayerStackRecord, NodeId, PathRemovalRecord};
 use std::sync::Arc;
 
 /// Width of one identity's hex text.
@@ -39,6 +39,21 @@ pub struct Snap {
     pub serial: u64,
 }
 
+/// A node's serial with its project's `project.remove_file` markers, read
+/// together; `None` when the node has no row.
+pub type Removals = Result<Option<(u64, Vec<PathRemovalRecord>)>, Arc<PortError>>;
+
+/// What [`resolve_saved`] read on the way, for the call's later steps
+/// (#818 R2): the node's record, from which `at` is built without reading
+/// it again, and its serial with the markers, which the call's
+/// [`Visibility`](super::visibility::Visibility) takes at the place it read
+/// them before, so a failed read still refuses there. `Snap` keeps its
+/// fields: the daemon builds one of its own.
+pub struct Saved {
+    pub record: args::NodeRecord,
+    pub removals: Removals,
+}
+
 /// The stack's object reader.
 pub fn reader(store: &Arc<Store>, stack: &LayerStackRecord) -> Arc<StorePorts> {
     store.ports(stack.scope)
@@ -51,6 +66,48 @@ pub fn resolve(
     reader: &StorePorts,
     name: &str,
 ) -> Result<Snap, SdkRefusal> {
+    let (snap, _, ()) = resolve_with(store, stack, reader, name, |node| {
+        let serial = match store.published(|history| history.node_history_serial(node)) {
+            Ok(Some(serial)) => serial,
+            _ => 0,
+        };
+        (serial, ())
+    })?;
+    Ok(snap)
+}
+
+/// [`resolve`] for a read call, which keeps what it read: the node's
+/// record, and its serial read with the project's markers in one statement
+/// where the serial alone was read (#818 R2). A failed or missing read
+/// gives serial 0 here, as [`resolve`] does; [`Saved::removals`] keeps the
+/// outcome for the marker step.
+pub fn resolve_saved(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    reader: &StorePorts,
+    name: &str,
+) -> Result<(Snap, Saved), SdkRefusal> {
+    let (snap, record, removals) = resolve_with(store, stack, reader, name, |node| {
+        let removals = store.published(|history| history.node_path_removals(stack.id, node));
+        let serial = match &removals {
+            Ok(Some((serial, _))) => *serial,
+            _ => 0,
+        };
+        (serial, removals)
+    })?;
+    Ok((snap, Saved { record, removals }))
+}
+
+/// The shared resolve: the name, the node's record (its ownership check
+/// and its root, one read), the root's tree, then `position`, the node's
+/// serial with whatever the caller reads beside it.
+fn resolve_with<T>(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    reader: &StorePorts,
+    name: &str,
+    position: impl FnOnce(NodeId) -> (u64, T),
+) -> Result<(Snap, args::NodeRecord, T), SdkRefusal> {
     let (kind, label, node) = if name == MAIN {
         let node = NodeId::Layer(stack.head_layer);
         (Kind::Main, format!("main@{}", short(node)), node)
@@ -82,27 +139,22 @@ pub fn resolve(
         let node = branch_node(&branch);
         (Kind::Branch, format!("{name}@{}", short(node)), node)
     };
-    let belongs = match node {
-        NodeId::Commit(id) => args::commit(store, id)?.stack == stack.id,
-        NodeId::Layer(id) => args::layer(store, id)?.stack == stack.id,
-    };
-    if !belongs {
+    let record = args::node_record(store, node)?;
+    if record.stack() != stack.id {
         return Err(invalid("saved version belongs to another project"));
     }
-    let root = args::root(store, node)?;
+    let root = record.root();
     let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
-    let serial = match store.published(|history| history.node_history_serial(node)) {
-        Ok(Some(serial)) => serial,
-        _ => 0,
-    };
-    Ok(Snap {
+    let (serial, beside) = position(node);
+    let snap = Snap {
         kind,
         label,
         node,
         root,
         tree,
         serial,
-    })
+    };
+    Ok((snap, record, beside))
 }
 
 /// The entry at a checked absolute path, if any.
@@ -249,6 +301,17 @@ pub fn open(
     let reader = reader(store, stack);
     let snap = resolve(store, stack, &reader, name)?;
     Ok((reader, snap))
+}
+
+/// [`open`] for a read call, with what [`resolve_saved`] kept.
+pub fn open_saved(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    name: &str,
+) -> Result<(Arc<StorePorts>, Snap, Saved), SdkRefusal> {
+    let reader = reader(store, stack);
+    let (snap, saved) = resolve_saved(store, stack, &reader, name)?;
+    Ok((reader, snap, saved))
 }
 
 /// The result shape every read shares.

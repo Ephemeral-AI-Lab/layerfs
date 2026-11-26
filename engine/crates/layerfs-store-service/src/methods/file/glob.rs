@@ -8,10 +8,10 @@ use layerfs_bridge::control::SdkValue;
 
 /// `glob(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: paths matching a `/.lww`-syntax pattern.
 pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap) = snapshot_full(service, args)?;
+    let (stack, reader, snap, saved) = snapshot_full(service, args)?;
     let pattern = text(args, "pattern")?;
     let path = optional_path(args)?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     if snapshot::entry(&reader, &snap.tree, &path)?.is_some() {
         if let Some(refusal) = visibility::refuse(&path, &seen) {
             return Err(refusal);
@@ -30,6 +30,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
         return paged_reads::pin(
             &service.store,
             &snap,
+            &saved.record,
             paged_reads::glob(
                 &service.store,
                 &reader,
@@ -46,6 +47,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
     paged_reads::pin(
         &service.store,
         &snap,
+        &saved.record,
         reads::glob(&reader, &snap, pattern, &path, &seen, &filters, limit, pos)
             .map(|value| visibility::settle(value, &seen, removed)),
     )
