@@ -118,7 +118,9 @@ captured base's existing authenticated cache, reusing up to 2 MiB of
 resident canonical bytes per demand. Only missing pages go
 through the Save read port. Reads of newly accepted Save objects keep
 their separate capability. A failed group returns its original provider
-error.
+error. A failed captured PostgreSQL construction drops its unsent
+producer batch. Earlier acknowledged Save batches remain registered
+under the normal Save custody rules.
 
 [Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
 

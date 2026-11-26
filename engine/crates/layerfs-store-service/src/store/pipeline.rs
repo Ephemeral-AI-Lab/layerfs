@@ -140,10 +140,12 @@ fn next<T>(receiver: &mpsc::Receiver<T>) -> Option<T> {
 /// that feed `save` and `consumer` on this thread. Returns once the producer
 /// has ended; its panic resumes here. A thread that cannot be started is the
 /// spawn's error, before any construction.
+/// `handoff` decides whether the producer's unsent final batch can go to Save.
 pub(super) fn construct<T: Send>(
     save: &Save<'_>,
     consumer: &mut dyn FinalizedConsumer,
     produce: impl FnOnce(&dyn AuthenticatedObjects, &mut dyn FinalizedConsumer) -> T + Send,
+    handoff: impl FnOnce(&T) -> bool + Send,
 ) -> std::io::Result<Piped<T>> {
     std::thread::scope(|scope| {
         let (sender, receiver) = mpsc::sync_channel::<Message>(QUEUE_SLOTS);
@@ -155,9 +157,10 @@ pub(super) fn construct<T: Send>(
                     pending: RefCell::new((Vec::new(), 0)),
                 };
                 let produced = produce(&pipe, &mut PipeSink(&pipe));
-                // A refused hand-over means the Save side already stopped,
-                // and it reports that itself.
-                let _ = pipe.flush();
+                if handoff(&produced) {
+                    // The Save side reports a refusal to take the batch.
+                    let _ = pipe.flush();
+                }
                 produced
             })?;
         let mut rejected = false;

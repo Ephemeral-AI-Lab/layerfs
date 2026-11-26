@@ -160,14 +160,16 @@ impl BoundWorkspace {
         };
         let digests = super::digests::StoreDigests(&*self.store.history);
         let (workspace, overlay) = (operation.workspace(), operation.overlay());
+        let planned_reads = self.store.writer.batched_chain_reads();
         // The one producer runs on its own thread; this thread keeps the
         // Save and accepts what it builds (`pipeline`).
         let piped = crate::telemetry::timed("captured.namespace", |scope| {
             let recording = scope.is_recording();
-            let piped = super::pipeline::construct(save, &mut sink, |objects, consumer| {
+            let produce = |objects: &dyn AuthenticatedObjects,
+                           consumer: &mut dyn FinalizedConsumer| {
                 let namespace = CapturedNamespace::new(workspace, overlay, reader, owner)
                     .with_digests(&digests)
-                    .with_inode_read_ahead(self.store.writer.batched_chain_reads());
+                    .with_inode_read_ahead(planned_reads);
                 if !recording {
                     let attempt =
                         namespace.construct_untimed(policy, &capacities, objects, consumer);
@@ -184,6 +186,12 @@ impl BoundWorkspace {
                 });
                 let attempt = attempt.unwrap_or_else(|never| match never {});
                 (attempt, Some(report))
+            };
+            // A refused PostgreSQL demand or input window can leave objects
+            // in the producer's private batch. Keep any acknowledged batches
+            // in Save custody and drop that unsent batch.
+            let piped = super::pipeline::construct(save, &mut sink, produce, |(attempt, _)| {
+                !planned_reads || attempt.result.is_ok()
             });
             if let Ok(Piped {
                 produced: (_, Some(report)),
