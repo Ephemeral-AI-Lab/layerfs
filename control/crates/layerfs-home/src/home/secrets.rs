@@ -4,7 +4,7 @@
 //! PostgreSQL login is kind `auth`; a bucket's key is kind `bucket`. Saving
 //! again under a name replaces the secret whole, by one rename. Nothing
 //! here logs or shows a value; a secret's value has no `Debug`.
-use crate::home::{generation, read_record, write_record};
+use crate::home::generation;
 use crate::names::name;
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -29,13 +29,21 @@ fn file(home: &Path, kind: &str, secret: &str) -> Result<PathBuf> {
 /// Secret `name` of kind `kind`, as it was saved, or `None` when there is
 /// none.
 pub fn read_secret(home: &Path, kind: &str, secret: &str) -> Result<Option<SdkValue>> {
-    read_record(&file(home, kind, secret)?)
+    let path = file(home, kind, secret)?;
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(super::records::unreadable(&path, &error)),
+    };
+    let read = super::records::record_of(&path, &text);
+    crate::wipe::text(text);
+    read.map(Some)
 }
 
 /// Saves `value` as secret `name` of kind `kind`, replacing the one there
 /// whole (0600, in 0700 folders), and moves the home's `generation`.
 pub fn save_secret(home: &Path, kind: &str, secret: &str, value: &SdkValue) -> Result<()> {
-    write_record(&file(home, kind, secret)?, value)?;
+    super::records::write_record_as(&file(home, kind, secret)?, value, true)?;
     generation::moved(home);
     Ok(())
 }

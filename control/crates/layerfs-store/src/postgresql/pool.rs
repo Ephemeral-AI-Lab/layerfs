@@ -12,8 +12,8 @@
 //! the current one replaces the old identity (its idle sessions close at
 //! once, its lent ones when they come back), and any other is refused
 //! `Conflict` with nothing run and the sessions untouched. [`retire`] (a
-//! `store connect` or `disconnect`) names the revision it retires and never
-//! retires the record's current one.
+//! `store connect`, `store upgrade` or `disconnect`) names the revision it
+//! retires and never retires the record's current one.
 //!
 //! A call first holds a [`Reservation`]: one of its Store's session slots,
 //! taken without waiting ([`reserve`]). The host worker's PostgreSQL lane
@@ -43,7 +43,7 @@ use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::wipe::text as wipe;
+use layerfs_home::wipe::text as wipe;
 use layerfs_store_service::StoreService;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -173,6 +173,11 @@ impl Drop for Reservation {
 /// A session slot of Store `store` of `home`, if one is free now: an idle
 /// session, taken now, room under both bounds, or room made by closing
 /// another Store's least recently used idle session. Never waits.
+///
+/// The slot is taken before the read's record is checked (a file read
+/// under the Store's lock, not done while the worker's queue is locked): a
+/// read then refused there may have closed another Store's idle session,
+/// which that Store's next read replaces with one login.
 pub fn reserve(home: &Path, store: &str) -> Option<Reservation> {
     let key = layerfs_home::home::paths::store_dir(home, store);
     let mut all = pools();
@@ -423,7 +428,7 @@ pub fn close_idle(idle: Duration) -> usize {
 }
 
 /// Retires login revision `revision` of Store `store` of `home` (after a
-/// `store connect` or `disconnect`), unless it is the record's current
+/// `store connect`, `store upgrade` or `disconnect`), unless it is the record's current
 /// revision: idle sessions serving it close now, lent ones when they come
 /// back; how many closed now.
 pub fn retire(home: &Path, store: &str, revision: &str) -> Result<usize, SdkRefusal> {

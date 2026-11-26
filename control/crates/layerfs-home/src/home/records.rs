@@ -67,6 +67,16 @@ pub fn unreadable(path: &Path, error: &std::io::Error) -> SdkRefusal {
 /// Writes `value` as the record at `path`: a private temporary file in the
 /// same folder, then one rename.
 pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
+    write_record_as(path, value, false)
+}
+
+/// [`write_record`]; when `secret`, the copy and the text it makes of
+/// `value` are overwritten before they are freed ([`crate::wipe`]).
+pub(crate) fn write_record_as(
+    path: &Path,
+    value: &SdkValue,
+    secret: bool,
+) -> Result<(), SdkRefusal> {
     let parent = path
         .parent()
         .ok_or_else(|| refused("Failed", "a record needs a folder"))?;
@@ -85,10 +95,17 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
         .mode(0o600)
         .open(&temporary)
         .map_err(failed)?;
-    let mut text = json::print(&to_hex(value.clone()));
-    text.push('\n');
-    let written = file.write_all(text.as_bytes()).map_err(failed);
+    let copy = to_hex(value.clone());
+    let text = json::print(&copy);
+    // the line's end is written apart: `text` never grows into a new buffer
+    let written = (file.write_all(text.as_bytes()))
+        .and_then(|()| file.write_all(b"\n"))
+        .map_err(failed);
     drop(file);
+    if secret {
+        crate::wipe::value(copy);
+        crate::wipe::text(text);
+    }
     match written.and_then(|()| fs::rename(&temporary, path).map_err(failed)) {
         Ok(()) => Ok(()),
         Err(refusal) => {

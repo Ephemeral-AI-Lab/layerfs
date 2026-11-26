@@ -1336,6 +1336,7 @@ fn a_record_that_cannot_be_written_puts_the_old_password_back() {
         std::fs::read(&secret).unwrap(),
         std::fs::read(&record).unwrap(),
     );
+    let old_password = db.password.clone();
     db.rotate();
     // the record's folder takes no new file: its write fails after the
     // new password was saved
@@ -1358,5 +1359,9 @@ fn a_record_that_cannot_be_written_puts_the_old_password_back() {
     assert!(record_kept, "the record is as it was");
     let secret_back = std::fs::read(&secret).unwrap() == secret_before;
     assert!(secret_back, "the old password is back");
+    let saved = std::fs::read_to_string(&secret).unwrap();
+    let saved = layerfs_api::json::parse(&saved).unwrap();
+    let kept = saved.get_text("password") == Some(old_password.as_str());
+    assert!(kept, "the saved login is the old password");
     drain(&home);
 }

@@ -265,7 +265,7 @@ pub(crate) fn open_read_only(
     let opened =
         StoreService::open_postgres_read_only(&chosen, &identity.binding, identity.cursor_key);
     // this copy of the URL may hold the login (#819 P-B)
-    layerfs_machine::wipe::text(std::mem::take(&mut chosen.url));
+    layerfs_home::wipe::text(std::mem::take(&mut chosen.url));
     opened.map_err(open_refusal)
 }
 

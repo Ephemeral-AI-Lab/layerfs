@@ -399,7 +399,7 @@ pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
             Ok(dialled)
         }
         _ => Err({
-            layerfs_machine::wipe::text(dialled);
+            layerfs_home::wipe::text(dialled);
             refused(
             "InvalidInput",
             "the saved login cannot be put into the URL so that its client reads it and the address as given; nothing was dialled",

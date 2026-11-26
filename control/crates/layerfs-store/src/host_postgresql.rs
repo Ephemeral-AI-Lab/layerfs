@@ -97,11 +97,17 @@ pub(crate) fn routed(
     ]);
     let paths = match HostPaths::new(home) {
         Ok(paths) => paths,
-        Err(error) => return Some(Err(error)),
+        Err(error) => {
+            layerfs_home::wipe::value(args);
+            return Some(Err(error));
+        }
     };
-    paths
-        .request_fits(OP, &args)
-        .then(|| paths.call_validated(OP, args, |value| checked.valid_answer(value)))
+    if !paths.request_fits(OP, &args) {
+        // it goes direct: the copy of the password it carries goes now
+        layerfs_home::wipe::value(args);
+        return None;
+    }
+    Some(paths.call_validated(OP, args, |value| checked.valid_answer(value)))
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -166,7 +172,7 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
         .as_mut()
         .and_then(|selection| selection.url.take())
     {
-        layerfs_machine::wipe::text(url);
+        layerfs_home::wipe::text(url);
     }
     outcome
 }
@@ -223,7 +229,7 @@ fn admit(
 /// Overwrites a PostgreSQL read `request`, which carries a password, once
 /// its answer is written or it is dropped unrun.
 pub fn wipe_request(request: SdkValue) {
-    layerfs_machine::wipe::value(request);
+    layerfs_home::wipe::value(request);
 }
 
 /// Answers the management request that retires login revision `revision`
@@ -242,7 +248,7 @@ pub fn retire_request(home: &Path, request: &SdkValue) -> Outcome {
     Ok(SdkValue::map([("closed", SdkValue::Int(closed as i64))]))
 }
 
-/// After a `store connect` or `disconnect` replaced or removed login
+/// After a `store connect`, `store upgrade` or `disconnect` replaced or removed login
 /// revision `revision` of Store `store`, and with the Store's locks
 /// dropped: asks a running host worker of `home` to retire it. It never
 /// starts a worker, and its failure changes nothing: a call at the old

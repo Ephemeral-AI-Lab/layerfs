@@ -262,14 +262,23 @@ impl HostPaths {
     }
 
     /// Whether an intended request fits before selecting the host route.
+    /// A trial frame that carries a login, and its copy of `args`, are
+    /// overwritten before they are freed (#819 P-B).
     pub fn request_fits(&self, op: &str, args: &SdkValue) -> bool {
+        if !self.fits() {
+            return false;
+        }
         let placeholder = "0".repeat(CORRELATION_LEN);
-        self.fits()
-            && host_frame::encode(
-                &request(op, args.clone(), &placeholder, &placeholder),
-                HOST_MAX_REQUEST,
-            )
-            .is_ok()
+        let trial = request(op, args.clone(), &placeholder, &placeholder);
+        let secret = host_frame::carries_login(&trial);
+        let trial = layerfs_home::wipe::Guard::new(trial, secret);
+        match host_frame::encode(trial.get(), HOST_MAX_REQUEST) {
+            Ok(frame) => {
+                host_frame::release(frame, secret);
+                true
+            }
+            Err(_) => false,
+        }
     }
 
     /// Selects the matching CLI for a lifecycle operation issued by an SDK.
@@ -338,15 +347,16 @@ impl HostPaths {
         expected_generation: Option<&str>,
         valid: impl FnOnce(&SdkValue) -> bool,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
+        // a request carrying a login (#819 P-B) is overwritten on every path
+        let secret = args.get("password").is_some();
+        let args = layerfs_home::wipe::Guard::new(args, secret);
         self.check_paths()?;
         let path = self.endpoint(control);
         let began = Instant::now();
         let end = began + READY_WAIT;
         let id = token()?;
-        // a request carrying a login (#819 P-B) is overwritten on every path
-        let request = request(op, args, &id, &"0".repeat(CORRELATION_LEN));
-        let secret = host_frame::carries_login(&request);
-        let request = crate::wipe::Guard::new(request, secret);
+        let request = request(op, args.take(), &id, &"0".repeat(CORRELATION_LEN));
+        let request = layerfs_home::wipe::Guard::new(request, secret);
         let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
         host_frame::release(host_frame::encode(request.get(), max)?, secret);
         let build = match &self.cli {
@@ -398,7 +408,7 @@ impl HostPaths {
         // Generation tokens are fixed-size hex, so exchanging the placeholder
         // leaves the already checked envelope size unchanged.
         let request = home::with_field(request.take(), "generation", SdkValue::Text(generation));
-        let request = crate::wipe::Guard::new(request, secret);
+        let request = layerfs_home::wipe::Guard::new(request, secret);
         let body = host_frame::encode(request.get(), max)?;
         let answer = send_request(&stream, path, (op, &id), &body, began, control, None);
         host_frame::release(body, secret);

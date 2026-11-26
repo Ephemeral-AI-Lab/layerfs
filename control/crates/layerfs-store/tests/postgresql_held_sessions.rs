@@ -43,7 +43,24 @@ fn url() -> Option<String> {
     url
 }
 
-fn tempdir(tag: &str) -> PathBuf {
+/// A private test folder, removed when dropped, a panic included: a home
+/// holds a saved login.
+struct Temp(PathBuf);
+
+impl std::ops::Deref for Temp {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for Temp {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn tempdir(tag: &str) -> Temp {
     let dir = std::env::temp_dir().join(format!(
         "layerfs-held-{tag}-{}-{}",
         std::process::id(),
@@ -56,7 +73,7 @@ fn tempdir(tag: &str) -> PathBuf {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
-    dir
+    Temp(dir)
 }
 
 /// The URL of `database` on the server of `source` (a URL).
@@ -128,6 +145,20 @@ impl Database {
         self.schema(binding);
     }
 
+    /// The process ids of the backends other than this test's admin
+    /// connections.
+    fn pids(&self) -> std::collections::BTreeSet<i32> {
+        let mut admin = postgres::Client::connect(&self.source, postgres::NoTls).unwrap();
+        let rows = admin
+            .query(
+                "SELECT pid FROM pg_stat_activity WHERE datname = $1 \
+                 AND pid <> pg_backend_pid()",
+                &[&self.name],
+            )
+            .unwrap();
+        rows.iter().map(|row| row.get(0)).collect()
+    }
+
     /// Backends other than this test's admin connections.
     fn backends(&self) -> i64 {
         let mut admin = postgres::Client::connect(&self.source, postgres::NoTls).unwrap();
@@ -155,7 +186,7 @@ impl Drop for Database {
 
 /// Store `pgs` with project `app` on a fresh database, its record at login
 /// revision `r1`, and the arguments a host worker opens it with.
-fn connected(source: &str) -> (Database, PathBuf, OpenArgs) {
+fn connected(source: &str) -> (Database, Temp, OpenArgs) {
     let database = Database::create(source);
     let url = database.url();
     let home = tempdir("home");
@@ -401,37 +432,74 @@ fn three_stores_meet_the_process_bound_and_evict_idle_sessions() {
     pool::close_idle(Duration::ZERO);
 }
 
+/// A worker's `store.postgresql_read` of `/a.txt` in project `app`, as the
+/// CLI sends it, at login revision `revision`.
+fn read_at(home: &std::path::Path, revision: &str) -> layerfs_home::outcome::Outcome {
+    let saved = layerfs_store::postgresql::login::read(home, "pgs")
+        .unwrap()
+        .expect("a saved login");
+    let request = SdkValue::map([
+        ("method", SdkValue::text("fs.stat")),
+        ("store", SdkValue::text("pgs")),
+        ("project", SdkValue::text("app")),
+        (
+            "fields",
+            SdkValue::map([
+                ("branch", SdkValue::text("main")),
+                ("path", SdkValue::text("/a.txt")),
+            ]),
+        ),
+        ("login_revision", SdkValue::text(revision)),
+        ("password", SdkValue::text(saved.password())),
+    ]);
+    layerfs_store::host_postgresql::serve(home, &request)
+}
+
 #[test]
 fn an_upgrade_renews_the_login_revision() {
     let Some(source) = url() else { return };
     let _serial = serial();
     // the sessions are process-wide: none of another test's are left
     pool::close_idle(Duration::ZERO);
-    let (_database, home, open) = connected(&source);
-    pool::run(&home, "pgs", "r1", &open, ok).unwrap();
-    assert_eq!(pool::counts().idle, 1);
-    assert_eq!(
-        pool::retire(&home, "pgs", "r1").unwrap(),
-        0,
-        "r1 is current"
-    );
+    let (database, home, _open) = connected(&source);
+    read_at(&home, "r1").expect("a read at r1");
+    let held = database.pids();
+    assert_eq!(held.len(), 1, "one held session");
     let op = layerfs_home::op::Op::begin("upgrade", "check", SdkValue::Null).unwrap();
     let related = layerfs_store::Related {
         store_idle: idle,
         store_idle_except: None,
         can_remove_project: idle,
     };
+    // the real upgrade's first step: `op` written, the revision renewed
     layerfs_store::postgresql::family::begin(&home, "pgs", &op, related, |_| Ok(())).unwrap();
     let record = StoreRecord::read(&home, "pgs").unwrap().unwrap();
     let renewed = record.login_revision().expect("a revision").to_owned();
     assert_ne!(renewed, "r1", "the upgrade renewed the login revision");
-    // the retire the upgrade sends a worker now closes the session held at
-    // r1, which is no longer the record's revision
-    assert_eq!(pool::retire(&home, "pgs", "r1").unwrap(), 1);
-    assert_eq!(pool::counts(), pool::Counts::default());
-    // and a call at the renewed revision logs in again
-    pool::run(&home, "pgs", &renewed, &open, ok).unwrap();
-    assert_eq!(pool::counts().idle, 1);
+    // while `op` stands no read is admitted
+    assert!(
+        read_at(&home, &renewed).is_err(),
+        "admitted during the upgrade"
+    );
+    // the upgrade ends (its `op` goes): a call admitted at the old revision
+    // is refused `Conflict`, and the session held before it serves nothing
+    record
+        .without(layerfs_home::op::FIELD)
+        .write(&home)
+        .unwrap();
+    let late = read_at(&home, "r1").unwrap_err();
+    assert_eq!(late.code, "Conflict", "{late:?}");
+    read_at(&home, &renewed).expect("a read at the renewed revision");
+    let end = std::time::Instant::now() + Duration::from_secs(10);
+    while database.pids().intersection(&held).count() > 0 && std::time::Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let after = database.pids();
+    assert!(
+        after.is_disjoint(&held),
+        "a session held before the upgrade served"
+    );
+    assert_eq!(after.len(), 1, "one new session");
     pool::close_idle(Duration::ZERO);
 }
 

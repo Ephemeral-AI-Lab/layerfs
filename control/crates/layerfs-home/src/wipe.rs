@@ -1,13 +1,13 @@
 //! Overwriting a secret before its memory is freed (#819 P-B): a password,
-//! an address that holds one, a frame or request that carries one.
+//! an address that holds one, a frame, request or record that carries one.
 //!
 //! Every byte of the buffer's allocation, its spare capacity included, is
-//! set to zero and then handed to [`std::hint::black_box`] behind a
-//! [`compiler_fence`], so the compiler must treat the zeros as read and
-//! keeps the writes. This crate forbids `unsafe` code, so the writes are
-//! ordinary ones rather than `std::ptr::write_volatile`; no dependency is
-//! added for it. Copies a buffer left behind when it grew, and copies made
-//! by code that is not LayerFS's, are not reached.
+//! set to zero and then handed to [`std::hint::black_box`] between
+//! [`compiler_fence`]s. Control forbids `unsafe` code, so these are
+//! ordinary writes, not `std::ptr::write_volatile`: `black_box` makes it
+//! likely that the compiler keeps them, but Rust does not guarantee it. No
+//! dependency is added for it. Copies a buffer left behind when it grew,
+//! and copies made by code that is not LayerFS's, are not reached.
 use layerfs_bridge::control::SdkValue;
 use std::sync::atomic::{compiler_fence, Ordering};
 

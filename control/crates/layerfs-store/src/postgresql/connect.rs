@@ -394,12 +394,17 @@ fn update(home_dir: &Path, request: &StoreConnect) -> Result<Update> {
         || record.text("user") != Some(user.as_str())
         || saved.as_ref().map(login::Saved::password) != Some(password.as_str());
     let trial = changed(record.clone(), request, &user);
-    let dial = with_login(&request.url, &user, &password)?;
-    let probe = selection_at(&trial, dial.clone());
+    let dial = with_login(&request.url, &user, &password);
+    layerfs_home::wipe::text(password);
+    let dial = dial?;
+    let mut probe = selection_at(&trial, dial.clone());
     let here = super::check::same_store(&trial, &probe).map_err(|refusal| SdkRefusal {
         message: format!("PostgreSQL Store {name}: {}", refusal.message),
         ..refusal
     });
+    if let Some(url) = probe.url.take() {
+        layerfs_home::wipe::text(url);
+    }
     Ok(Update {
         record,
         trial,
@@ -418,6 +423,15 @@ fn changed(record: StoreRecord, request: &StoreConnect, user: &str) -> StoreReco
     match &request.synchronous_commit {
         Some(sync) => record.with("synchronous_commit", SdkValue::text(sync)),
         None => record,
+    }
+}
+
+impl Drop for Update {
+    fn drop(&mut self) {
+        layerfs_home::wipe::text(std::mem::take(&mut self.dial));
+        if let Some(password) = self.new_password.take() {
+            layerfs_home::wipe::text(password);
+        }
     }
 }
 
@@ -445,9 +459,10 @@ impl Update {
     /// sessions on it are closed. A running Sandbox keeps the connection
     /// it started with. Once saved, the check's reach is this computer's
     /// (`here`).
-    pub fn save(self, home_dir: &Path, request: &StoreConnect) -> Outcome {
+    pub fn save(mut self, home_dir: &Path, request: &StoreConnect) -> Outcome {
         let name = request.store.as_str();
-        let reach = crate::observed::Reach::of(&Ok(self.here?));
+        let here = std::mem::replace(&mut self.here, Ok(SdkValue::Null));
+        let reach = crate::observed::Reach::of(&Ok(here?));
         let home_lock = home::lock::take(home_dir)?;
         let store_lock = crate::record::lock(home_dir, name)?;
         let binding = self.record.binding();
@@ -475,7 +490,7 @@ impl Update {
             let kept = login::kept(home_dir, name)?;
             if let Err(refusal) = login::save(home_dir, name, password) {
                 if let Some(kept) = kept {
-                    layerfs_machine::wipe::value(kept);
+                    layerfs_home::wipe::value(kept);
                 }
                 return Err(refusal);
             }
@@ -487,7 +502,7 @@ impl Update {
             _ => Ok(()),
         };
         if let Some(Some(kept)) = before {
-            layerfs_machine::wipe::value(kept);
+            layerfs_home::wipe::value(kept);
         }
         if let Err(mut refusal) = written {
             if let Err(back) = put {

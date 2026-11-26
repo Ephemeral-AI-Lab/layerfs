@@ -24,6 +24,12 @@ pub struct Saved {
     pub changed_ms: Option<i64>,
 }
 
+impl Drop for Saved {
+    fn drop(&mut self) {
+        layerfs_home::wipe::text(std::mem::take(&mut self.password));
+    }
+}
+
 impl Saved {
     /// The password, for the URL a call dials and nothing else.
     pub fn password(&self) -> &str {
@@ -52,7 +58,7 @@ pub fn save(home: &Path, store: &str, password: &str) -> Result<()> {
         ("changed", SdkValue::Int(layerfs_home::home::now_ms())),
     ]);
     let saved = save_secret(home, KIND, store, &value);
-    layerfs_machine::wipe::value(value);
+    layerfs_home::wipe::value(value);
     saved
 }
 

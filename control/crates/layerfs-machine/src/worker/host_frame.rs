@@ -130,7 +130,7 @@ pub fn read_host_frame(
     // a request that carries a login (#819 P-B) has its bytes overwritten
     // once decoded; so has a frame that did not decode, unread
     if !matches!(&parsed, Ok(Some(value)) if !carries_login(value)) {
-        crate::wipe::bytes(body);
+        layerfs_home::wipe::bytes(body);
     }
     parsed
 }
@@ -145,7 +145,7 @@ pub fn carries_login(value: &SdkValue) -> bool {
 /// (`secret`, [`carries_login`]).
 pub(super) fn release(frame: Vec<u8>, secret: bool) {
     if secret {
-        crate::wipe::bytes(frame);
+        layerfs_home::wipe::bytes(frame);
     }
 }
 
@@ -154,7 +154,7 @@ pub(super) fn encode(value: &SdkValue, max: usize) -> Result<Vec<u8>, SdkRefusal
     let secret = carries_login(value);
     let fail = |body: String, refusal: SdkRefusal| {
         if secret {
-            crate::wipe::text(body);
+            layerfs_home::wipe::text(body);
         }
         Err(refusal)
     };
@@ -169,7 +169,7 @@ pub(super) fn encode(value: &SdkValue, max: usize) -> Result<Vec<u8>, SdkRefusal
     frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
     frame.extend_from_slice(body.as_bytes());
     if secret {
-        crate::wipe::text(body);
+        layerfs_home::wipe::text(body);
     }
     Ok(frame)
 }

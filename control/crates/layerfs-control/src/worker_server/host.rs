@@ -667,7 +667,9 @@ fn purge_gone(activity: &mut Activity) {
 /// Whether the caller of `stream` has closed or reset its end: a hang-up,
 /// an error, or end of file seen by a peek that consumes nothing. Bytes the
 /// caller sends are not a close: a streamed P-B write (#819, Step 7) may
-/// send more after its request, and stays queued.
+/// send more after its request, and stays queued. That step must also
+/// handle macOS, where `poll` may report `POLLHUP` once the caller shuts
+/// down only its write side, which is not a close of the read side.
 fn peer_gone(stream: &UnixStream) -> bool {
     use nix::sys::socket::{recv, MsgFlags};
     let mut ready = [PollFd::new(stream.as_fd(), PollFlags::POLLIN)];

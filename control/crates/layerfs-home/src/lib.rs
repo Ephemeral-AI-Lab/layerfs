@@ -24,3 +24,4 @@ pub mod tail;
 pub mod time;
 #[doc(hidden)]
 pub mod trace;
+pub mod wipe;
