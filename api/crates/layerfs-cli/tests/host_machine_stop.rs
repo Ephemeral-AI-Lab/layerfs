@@ -38,6 +38,13 @@ fn state(home: &Fixture, machine: &str, worker: &str) {
 
 #[test]
 fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
+    // SDK power management discovers its matching installation through PATH.
+    let bin = std::path::Path::new(env!("CARGO_BIN_EXE_layerfs"))
+        .parent()
+        .unwrap();
+    let previous = std::env::var_os("PATH").unwrap_or_default();
+    let search = std::iter::once(bin.to_owned()).chain(std::env::split_paths(&previous));
+    std::env::set_var("PATH", std::env::join_paths(search).unwrap());
     let home = proof::create();
     let start = ["machine", "start", HOST_MACHINE];
     let stop = ["machine", "stop", HOST_MACHINE];
@@ -66,6 +73,18 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
     let pid = std::process::id();
     assert!(proof::lease_file(&home, i64::from(pid)).exists());
 
+    let self_stop = layerfs_api::call(
+        Some(&home.paths.home),
+        "machine.stop",
+        SdkValue::map([("machine", SdkValue::text(HOST_MACHINE))]),
+        &mut |_| {},
+    )
+    .expect_err("an SDK process retains its own Store lease during stop");
+    assert_eq!(self_stop.code, "InUse", "{self_stop:?}");
+    assert!(
+        self_stop.message.contains(&pid.to_string()),
+        "{self_stop:?}"
+    );
     let refused = cli(&home, &stop).refused("InUse");
     let msg = refused.get_text("message").unwrap();
     assert!(
@@ -88,6 +107,21 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
 
     layerfs_api::close_idle(Duration::ZERO);
     cli(&home, &stop).ok();
+    let record = layerfs_api::home::paths::store_record(&home.paths.home, "shop");
+    let before_compact = std::fs::read(&record).unwrap();
+    cli(&home, &["store", "compact", "shop"]).refused("Unavailable");
+    assert_eq!(
+        std::fs::read(&record).unwrap(),
+        before_compact,
+        "refused compact changed the Store record"
+    );
+    assert!(std::fs::read_dir(layerfs_api::home::paths::lease_dir(
+        &home.paths.home,
+        "shop"
+    ))
+    .unwrap()
+    .next()
+    .is_none());
     assert!(cli(&home, &stop).ok().get_bool("unchanged"));
     state(&home, "stopped", "absent");
     cli(&home, &start).ok();
