@@ -1,6 +1,6 @@
 //! One fenced PostgreSQL flight for an eligible captured Save registration.
 use super::super::{
-    history::fused::{nonce, pack_values_of, row_values, PACK, ROWS},
+    history::fused::{nonce, pack_statements, row_values, PACK, ROWS},
     session::{
         connection::Session,
         pipeline::{Refusal, Reply, Request},
@@ -9,39 +9,13 @@ use super::super::{
 };
 use crate::backend::records::BackendError;
 use layerfs_content::ObjectId;
-use layerfs_storage::port::{Publication, Published, PublishedPack};
+use layerfs_storage::port::{Publication, Published};
 use postgres::{error::SqlState, types::ToSql};
 use std::{collections::BTreeSet, sync::atomic::Ordering};
 
 /// The pack bytes that may be copied into one typed request. Catalog arrays
 /// are independently bounded by the existing publication row limit.
 const PACK_BYTES: usize = 4 * 1024 * 1024;
-/// Pack bytes bound by one insert statement inside the flight. The driver
-/// encodes each statement into a buffer and copies it into the connection's
-/// write buffer, and both keep their grown capacity for the connection's
-/// life. Statements of at most one ordinary pack keep that retained capacity
-/// near one pack, however large the batch; they share the flight's single
-/// round trip and transaction. A larger singleton pack is sent alone.
-const STATEMENT_PACK_BYTES: usize = layerfs_storage::policy::PACK_LIMIT;
-
-/// Splits a batch's packs into contiguous runs of at most
-/// `STATEMENT_PACK_BYTES` body bytes, each holding at least one pack.
-fn statement_runs(packs: &[PublishedPack]) -> Vec<&[PublishedPack]> {
-    let mut runs = Vec::new();
-    let (mut start, mut bytes) = (0, 0);
-    for (index, pack) in packs.iter().enumerate() {
-        let length = pack.body().len();
-        if index > start && bytes + length > STATEMENT_PACK_BYTES {
-            runs.push(&packs[start..index]);
-            (start, bytes) = (index, 0);
-        }
-        bytes += length;
-    }
-    if start < packs.len() {
-        runs.push(&packs[start..]);
-    }
-    runs
-}
 
 pub(crate) fn eligible(session: &Session, batch: &Publication) -> Result<bool, BackendError> {
     Ok(batch
@@ -87,11 +61,9 @@ fn send(
     let lane = format!("{check}; {}", Settings::lane_row(schema));
     let pack_sql = PACK.replace("{s}", schema);
     let row_sql = ROWS.replace("{s}", schema);
-    let built = statement_runs(&batch.packs)
-        .into_iter()
-        .map(pack_values_of)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| BackendError::Integrity)?;
+    // One pack statement per run of at most one ordinary pack's bytes, all
+    // in this flight's round trip and transaction (`pack_statements`).
+    let built = pack_statements(&batch.packs).map_err(|_| BackendError::Integrity)?;
     let pack_params: Vec<Vec<&(dyn ToSql + Sync)>> = built
         .iter()
         .map(|(values, _)| {
