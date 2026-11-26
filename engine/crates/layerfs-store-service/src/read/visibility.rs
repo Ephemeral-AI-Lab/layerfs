@@ -92,6 +92,14 @@ impl Visibility {
         Ok(Self { serial, markers })
     }
 
+    /// The filter over markers and a node position the caller already holds,
+    /// with no read: a bound Workspace's kept markers (#818 W1). `serial` is
+    /// the node's `history_serial`; a node without one, or a provider that
+    /// keeps no markers, passes 0 and none, as [`Self::for_node`] reads them.
+    pub fn from_markers(serial: u64, markers: Vec<PathRemovalRecord>) -> Self {
+        Self { serial, markers }
+    }
+
     /// The node's `history_serial`, or 0 for a provider that keeps none. A
     /// read failure refuses instead of silently treating the node as serial 0.
     pub fn node_serial(store: &Arc<Store>, node: NodeId) -> Result<u64, SdkRefusal> {
