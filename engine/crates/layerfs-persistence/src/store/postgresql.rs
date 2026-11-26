@@ -203,7 +203,11 @@ impl PostgresHandles {
         let trace_salt = checked.trace_salt;
         let _ = session.policy.set(checked.policy);
         let _ = session.server_version.set(checked.server_version);
-        let _ = session.opened_backend.set(checked.backend);
+        session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .backend = Some(checked.backend);
         let (incarnation, tables) = (checked.incarnation, checked.acquisition);
         // Spec §5.2/§10: every write transaction this session runs compares
         // `history_meta.catalog_incarnation` with the generation the open read.

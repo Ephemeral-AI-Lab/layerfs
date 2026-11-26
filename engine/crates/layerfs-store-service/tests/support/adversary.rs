@@ -393,11 +393,16 @@ impl TestStore {
     /// The Store's own audit (`diagnose`, full) on a fresh session: every
     /// `Fail` observation, as text. Bounded by its deadline.
     pub fn integrity_failures(&self) -> Vec<String> {
+        self.integrity_failures_within(Duration::from_secs(30))
+    }
+
+    /// [`Self::integrity_failures`] with a deadline of `limit`.
+    pub fn integrity_failures_within(&self, limit: Duration) -> Vec<String> {
         let handles = Handles::open_read_only(&self.selection, &self.binding, CURSOR).unwrap();
         let mut failures = Vec::new();
         let options = Options {
             quick: false,
-            deadline: Some(Instant::now() + Duration::from_secs(30)),
+            deadline: Some(Instant::now() + limit),
             ..Options::default()
         };
         let mut observe = |o: layerfs_persistence::diagnostic::Observation| {

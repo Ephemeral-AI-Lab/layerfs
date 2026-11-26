@@ -22,9 +22,10 @@
 //! | a definite SQLSTATE | no row | that refusal | kept with the op |
 //! | answered | refused, or a reply lost | the delete's answer | unknown: the session is quarantined, its connection closes with every key |
 //! | no reply, or a SQLSTATE without a definite rule | — | `UnknownOutcome` | unknown: quarantined |
+//! | not sent: the turn found the writer quarantined, or a prepare in the flight lost its reply | — | that refusal | gone with the connection; the row is an orphan for the next reopen |
 //!
 //! Nothing is resent: an unknown outcome quarantines the session while its
-//! lock is still held (`Session::pipeline_decided`).
+//! lock is still held (`Session::decided_turn`).
 use super::{fused::nonce, statements};
 use crate::backend::postgresql::session::{
     connection::{Session, SessionKey},
@@ -59,13 +60,16 @@ pub(crate) struct Released {
 }
 
 /// Sends one owner release of `op_id` (see the module documentation), with
-/// the unlock of `keys` when there are any. `Err` only when nothing was
-/// sent: the caller keeps the keys with the op.
-pub(crate) fn release(
-    session: &Session,
-    op_id: &[u8; 16],
-    keys: &[SessionKey],
-) -> Result<Released, BackendError> {
+/// the unlock of the keys this session holds for it. The op is taken from
+/// `held_ops` inside the release's own writer turn, after the session is
+/// ready (a reopen there took its keys again), and put back there when the
+/// unlock gave nothing back, before the turn ends: no reopen sees the op
+/// half released. A turn refused on a quarantined writer sends nothing; the
+/// closed connection gave the op's keys back, so the op leaves `held_ops`
+/// (no reopen takes them again) and its row, which its owner has given up,
+/// is an orphan the next reopen deletes (`session/reopen.rs`). `Err` only
+/// when nothing was sent.
+pub(crate) fn release(session: &Session, op_id: &[u8; 16]) -> Result<Released, BackendError> {
     let expected = i64::try_from(session.incarnation.load(Ordering::SeqCst))
         .map_err(|_| BackendError::Integrity)?;
     let schema = session.settings.schema.as_str();
@@ -73,24 +77,54 @@ pub(crate) fn release(
     let unlock = unlock_sql(schema);
     let op = op_id.as_slice();
     let token = nonce();
-    let (ids, modes): (Vec<i64>, Vec<bool>) = keys.iter().copied().unzip();
-    let delete_params: [&(dyn ToSql + Sync); 3] = [&op, &expected, &token];
-    let unlock_params: [&(dyn ToSql + Sync); 3] = [&ids, &modes, &token];
-    let mut requests = vec![Request::Statement {
-        sql: &delete,
-        params: &delete_params,
-        bytes: 24 + token.len() as u64,
-    }];
-    if !keys.is_empty() {
-        requests.push(Request::Statement {
-            sql: &unlock,
-            params: &unlock_params,
-            bytes: 9 * ids.len() as u64 + token.len() as u64,
+    session.decided_turn(|turn| {
+        if let Err(error) = turn.ready() {
+            orphaned(session, op_id);
+            return Err(error);
+        }
+        let keys: Vec<SessionKey> = session.take_op(op_id).unwrap_or_default();
+        let (ids, modes): (Vec<i64>, Vec<bool>) = keys.iter().copied().unzip();
+        let delete_params: [&(dyn ToSql + Sync); 3] = [&op, &expected, &token];
+        let unlock_params: [&(dyn ToSql + Sync); 3] = [&ids, &modes, &token];
+        let mut requests = vec![Request::Statement {
+            sql: &delete,
+            params: &delete_params,
+            bytes: 24 + token.len() as u64,
+        }];
+        if !keys.is_empty() {
+            requests.push(Request::Statement {
+                sql: &unlock,
+                params: &unlock_params,
+                bytes: 9 * ids.len() as u64 + token.len() as u64,
+            });
+        }
+        let released = turn.send(&requests, |replies, trusted| {
+            decide(session, keys.len(), expected, replies, trusted)
         });
-    }
-    session.pipeline_decided(&requests, |replies, trusted| {
-        decide(session, keys.len(), expected, replies, trusted)
+        let kept = match &released {
+            Ok(released) => released.kept,
+            // Nothing was sent: the keys stay held unless the connection
+            // closed (a lost prepare reply), which gave them back; the op
+            // was taken above, so its row is recorded here directly.
+            Err(_) if turn.quarantined() => {
+                session.note_orphan(*op_id);
+                false
+            }
+            Err(_) => true,
+        };
+        if kept && !keys.is_empty() {
+            session.hold_op(*op_id, keys);
+        }
+        released
     })
+}
+
+/// An op whose release could not be sent on a quarantined writer: its keys
+/// went with the connection, and its row is left for the next reopen.
+fn orphaned(session: &Session, op_id: &[u8; 16]) {
+    if session.take_op(op_id).is_some() {
+        session.note_orphan(*op_id);
+    }
 }
 
 /// A refusal that is definite: a SQLSTATE with a definite rule, or a

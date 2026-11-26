@@ -5,8 +5,13 @@ use crate::methods::{branch, file as fs, project, store};
 use crate::StoreService;
 use layerfs_bridge::control::{SdkCall, SdkValue};
 
-/// Runs one public Store method once, in this process, on `service`.
+/// Runs one public Store method once, in this process, on `service`: one
+/// call, so a quarantined PostgreSQL session reopens at most once in it.
 pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
+    layerfs_persistence::one_call(|| call_once(service, call))
+}
+
+fn call_once(service: &StoreService, call: &SdkCall) -> Answer {
     let args = &call.args;
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {

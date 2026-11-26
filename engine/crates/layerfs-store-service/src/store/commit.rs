@@ -100,6 +100,16 @@ impl BoundWorkspace {
             &BranchSnapshot,
         ) -> Result<FilesystemRootId, CommitError>,
     ) -> Result<CommitSuccess, Box<CommitFailure>> {
+        layerfs_persistence::one_call(|| self.commit_once(construct))
+    }
+    fn commit_once(
+        &self,
+        construct: impl FnOnce(
+            &Save<'_>,
+            Capture,
+            &BranchSnapshot,
+        ) -> Result<FilesystemRootId, CommitError>,
+    ) -> Result<CommitSuccess, Box<CommitFailure>> {
         let mut admission = self.admit_commit()?;
         let result = crate::telemetry::timed("commit", |timing| {
             self.commit_admitted(

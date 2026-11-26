@@ -283,6 +283,10 @@ fn open_postgres(
 ) -> StorageResult<OpenedStore> {
     use layerfs_persistence::PostgresHandles;
     let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
+    // A lost reply quarantines the writer; its next call reopens it once,
+    // settling what the closed connection left, instead of refusing every
+    // later Commit, mount and release until the service closes.
+    writer.storage.enable_reopen();
     let version = format!("postgresql {}", writer.storage.server_version());
     let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
     let binding = binding.to_vec();
@@ -290,6 +294,11 @@ fn open_postgres(
     let registry = observations.clone();
     let factory: crate::store::ReaderFactory = Arc::new(move |index| {
         let opened = PostgresHandles::open_read_only(&selection, &binding, cursor_key)?;
+        // A reader reopens too: a read changes nothing on the server, so a
+        // lost reply leaves no custody, and a reader whose connection
+        // closed (a lost reply, a restart) serves its next call on a new
+        // one instead of failing every later read of its Workspace.
+        opened.storage.enable_reopen();
         // #768: a Workspace reader (the control reader is index 0) prepares
         // its mount statements in one flight when it opens: at the mount
         // that opens it, or after readiness for the idle reader.
@@ -299,7 +308,8 @@ fn open_postgres(
         let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
         let session = opened.storage.clone();
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
-            .with_usable(move || session.usable());
+            .with_usable(move || session.usable())
+            .reopening();
         observe(&registry, index, provider, reader)
     });
     let committer = writer.history.committer();

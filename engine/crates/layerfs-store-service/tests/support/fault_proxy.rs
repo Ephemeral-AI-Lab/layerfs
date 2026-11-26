@@ -20,7 +20,8 @@
 //!   test acts on the server from elsewhere.
 //!
 //! [`FaultProxy::cut`] ends one connection's client side on demand, while
-//! its backend is still working on what it was sent.
+//! its backend is still working on what it was sent, and
+//! [`FaultProxy::refuse`] closes new connections as a stopped server would.
 //!
 //! Messages are the protocol's own (type byte and length); the startup of
 //! a connection opened while armed counts too. The backend's pid comes from
@@ -62,6 +63,9 @@ pub struct Window {
     pub seen: u64,
     /// Per counted message: its connection and type byte.
     pub log: Vec<(usize, char)>,
+    /// Per counted `ErrorResponse`: its position in `log`, its connection
+    /// and `E` with its SQLSTATE (`E22012`).
+    pub errors: Vec<(u64, usize, String)>,
     pub fired: Option<Fired>,
 }
 
@@ -76,6 +80,8 @@ struct State {
     clients: Vec<Option<TcpStream>>,
     cut: Vec<bool>,
     released: bool,
+    /// While set, every new connection is closed at once ([`FaultProxy::refuse`]).
+    refusing: bool,
 }
 
 pub struct FaultProxy {
@@ -125,6 +131,11 @@ impl FaultProxy {
         std::thread::spawn(move || {
             for client in listener.incoming() {
                 let Ok(client) = client else { return };
+                if state.lock().unwrap().refusing {
+                    // A server that is down: the dial reaches no server.
+                    let _ = client.shutdown(Shutdown::Both);
+                    continue;
+                }
                 let Ok(server) = TcpStream::connect(upstream) else {
                     return;
                 };
@@ -200,6 +211,13 @@ impl FaultProxy {
         }
     }
 
+    /// While `down`, every new connection is closed as soon as it is
+    /// accepted, as a stopped server's would be refused; connections
+    /// already made are untouched.
+    pub fn refuse(&self, down: bool) {
+        self.shared.lock().unwrap().refusing = down;
+    }
+
     /// Backend pids of the proxied connections, in connect order.
     pub fn pids(&self) -> Vec<Option<i32>> {
         self.shared.lock().unwrap().pids.clone()
@@ -268,6 +286,10 @@ fn back(
                 let at = state.window.seen;
                 state.window.seen += 1;
                 state.window.log.push((connection, kind as char));
+                if kind == b'E' {
+                    let code = error_kind(&pending[offset + 5..offset + 1 + length]);
+                    state.window.errors.push((at, connection, code));
+                }
                 if let Some((target, chosen)) = state.target {
                     if target == at && state.window.fired.is_none() {
                         state.window.fired = Some(Fired {
@@ -370,6 +392,24 @@ fn back(
     let _ = client.shutdown(Shutdown::Write);
 }
 
+/// `E` and the SQLSTATE of an `ErrorResponse` body (`E22012`).
+fn error_kind(body: &[u8]) -> String {
+    let mut kind = "E".to_owned();
+    // Fields: a code byte and a C string each, then a zero byte.
+    let mut field = 0;
+    while field < body.len() && body[field] != 0 {
+        let end = body[field + 1..]
+            .iter()
+            .position(|b| *b == 0)
+            .map_or(body.len(), |n| field + 1 + n);
+        if body[field] == b'C' {
+            kind.push_str(&String::from_utf8_lossy(&body[field + 1..end]));
+        }
+        field = end + 1;
+    }
+    kind
+}
+
 /// Records the whole messages of `bytes` (after what `tail` kept of the
 /// last read) in the fired fault's `delivered`.
 fn delivered(shared: &Mutex<State>, tail: &mut Vec<u8>, bytes: &[u8]) {
@@ -382,22 +422,10 @@ fn delivered(shared: &Mutex<State>, tail: &mut Vec<u8>, bytes: &[u8]) {
             break;
         }
         let body = &tail[offset + 5..offset + 1 + length];
-        let mut kind = (tail[offset] as char).to_string();
-        if tail[offset] == b'E' {
-            // Fields: a code byte and a C string each, then a zero byte.
-            let mut field = 0;
-            while field < body.len() && body[field] != 0 {
-                let end = body[field + 1..]
-                    .iter()
-                    .position(|b| *b == 0)
-                    .map_or(body.len(), |n| field + 1 + n);
-                if body[field] == b'C' {
-                    kind.push_str(&String::from_utf8_lossy(&body[field + 1..end]));
-                }
-                field = end + 1;
-            }
-        }
-        kinds.push(kind);
+        kinds.push(match tail[offset] {
+            b'E' => error_kind(body),
+            kind => (kind as char).to_string(),
+        });
         offset += 1 + length;
     }
     tail.drain(..offset);

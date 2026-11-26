@@ -95,6 +95,17 @@ impl Store {
         place: MountPlace,
         pooled: bool,
     ) -> Result<BindSuccess, BindRefusal> {
+        // One call: a quarantined PostgreSQL session reopens at most once.
+        layerfs_persistence::one_call(|| self.bind_once(owner, request, place, pooled))
+    }
+    #[allow(clippy::result_large_err)]
+    fn bind_once(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: BindIntent,
+        place: MountPlace,
+        pooled: bool,
+    ) -> Result<BindSuccess, BindRefusal> {
         let mut phase = BindPhase::Snapshot;
         let mut snapshot = None;
         let mut gc_op: Option<[u8; 16]> = None;

@@ -212,19 +212,34 @@ impl Session {
         self.pipeline_turn(requests, false, false, Some(release), judge)
     }
 
-    /// [`Self::pipeline_judged`] that may also run inside this thread's
-    /// held lane: for a flight that never takes the lane row (a mount's
-    /// admission, an owner's release). Statements not yet prepared on the
-    /// connection are prepared inside a read transaction whose `SET LOCAL
-    /// search_path` resolves their unqualified names (one round trip and one
-    /// read transaction, counted), in the same turn as the flight, so no
-    /// other caller can evict them from the cache in between.
-    pub(crate) fn pipeline_decided<T>(
+    /// [`Self::pipeline_judged`] that may also run inside this thread's held
+    /// lane, for a flight that never takes the lane row (a mount's
+    /// admission, an owner's release), and whose requests are built inside
+    /// the turn. Statements not yet prepared on the connection are prepared
+    /// inside a read transaction whose `SET LOCAL search_path` resolves their
+    /// unqualified names (one round trip and one read transaction, counted),
+    /// in the same turn as the flight, so no other caller can evict them
+    /// from the cache in between. `run` makes the session ready ([`DecidedTurn::ready`]: a quarantined
+    /// writer reopens, `Session::ready`), and may act on a refusal there
+    /// before the turn ends; it reads what the connection decides, such as
+    /// the backend its session keys are on, sends the flight with
+    /// [`DecidedTurn::send`], and records what the session now holds while
+    /// the turn is still held, so no reopen can come in between.
+    pub(crate) fn decided_turn<T>(
         &self,
-        requests: &[Request<'_>],
-        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+        run: impl FnOnce(&mut DecidedTurn<'_>) -> Result<T, BackendError>,
     ) -> Result<T, BackendError> {
-        self.pipeline_turn(requests, true, true, None, judge)
+        if !self.writable {
+            return Err(BackendError::ReadOnly);
+        }
+        let turn = self.admission.enter(Wait::Writer)?;
+        let mut guard = self.state.lock().map_err(|_| BackendError::Unknown)?;
+        run(&mut DecidedTurn {
+            session: self,
+            state: &mut guard,
+            nested: turn.nested,
+            ready: false,
+        })
     }
 
     fn pipeline_turn<T>(
@@ -244,9 +259,19 @@ impl Session {
         }
         let mut guard = self.state.lock().map_err(|_| BackendError::Unknown)?;
         let state: &mut State = &mut guard;
-        if state.quarantined {
-            return Err(BackendError::Unknown);
-        }
+        self.ready(state, turn.nested)?;
+        self.flight(state, requests, scoped, release, judge)
+    }
+
+    /// One flight on `state`, whose turn and lock the caller holds.
+    fn flight<T>(
+        &self,
+        state: &mut State,
+        requests: &[Request<'_>],
+        scoped: bool,
+        release: Option<&str>,
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
         let start = Instant::now();
         let texts: Vec<&str> = requests
             .iter()
@@ -346,6 +371,47 @@ impl Session {
             state.quarantine();
         }
         Ok(answer)
+    }
+}
+
+/// A writer turn [`Session::decided_turn`] holds.
+pub(crate) struct DecidedTurn<'s> {
+    session: &'s Session,
+    state: &'s mut State,
+    nested: bool,
+    ready: bool,
+}
+
+impl DecidedTurn<'_> {
+    /// Makes the session ready for this turn (`Session::ready`), once.
+    pub(crate) fn ready(&mut self) -> Result<(), BackendError> {
+        if !self.ready {
+            self.session.ready(self.state, self.nested)?;
+            self.ready = true;
+        }
+        Ok(())
+    }
+
+    /// The epoch of the connection this turn runs on, for a later turn
+    /// pinned to it (`Session::ready_pinned`).
+    pub(crate) fn epoch(&self) -> u64 {
+        self.state.closed
+    }
+
+    /// Whether the session is quarantined: its connection closed.
+    pub(crate) fn quarantined(&self) -> bool {
+        self.state.quarantined
+    }
+
+    /// Sends one flight in this turn (see [`Session::decided_turn`]), once
+    /// [`Self::ready`] succeeded.
+    pub(crate) fn send<T>(
+        &mut self,
+        requests: &[Request<'_>],
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        self.ready()?;
+        self.session.flight(self.state, requests, true, None, judge)
     }
 }
 

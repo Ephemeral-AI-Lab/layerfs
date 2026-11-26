@@ -177,10 +177,15 @@ The Workspace's next Commit request runs `BoundWorkspace::resolve_retained`
 once, before its own admission (daemon
 [`resolve.rs`](../../../../engine/crates/layerfs-daemon/src/control/resolve.rs),
 activity `Committing`, phase `resolve`). It is not a retry: nothing is
-resent. An attempt that determines the publication's outcome uses the record
-whatever its local step finds; one that cannot determine it puts the record
+resent. One that cannot determine the publication's outcome puts the record
 back, so the next request reads again instead of the Workspace refusing every
-Commit with nothing left to resolve.
+Commit with nothing left to resolve. So does one that knew the publication
+but whose local install failed definitely (nothing installed: a failed read
+of the candidate's objects after a server restart, a refused live check, an
+install job that failed with no uncertain effect): the record goes back with
+the publication known, and the next request installs it without reading the
+history. An attempt whose install has an uncertain local effect, one that
+installed, and a fold-back use the record whatever follows.
 
 Before history is read the attempt passes the Store's publication lane
 (`HistoryCatalog::pass_publication_lane`). On PostgreSQL a COMMIT whose reply
@@ -191,8 +196,10 @@ both under `lock_timeout`, and rolls back, proves the original has ended. A
 wait that reaches the timeout is `Busy`, an undetermined attempt. The lane
 alone does not cover a fused Commit, whose message sends its packs before it
 takes the lane row: a backend still inserting them when the reply was lost
-would take the lane and commit after the pass. So on a quarantined writer
-session the pass first ends that session's backend (`pg_terminate_backend`
+would take the lane and commit after the pass. So the pass first ends the
+backend of each closed writer connection still recorded as lost (the
+session quarantined, or [reopened](../store/postgresql.md#writer-reopen)
+while that backend was not yet proven gone; `pg_terminate_backend`
 with a wait, bounded by `lock_timeout`; the backend is named by the pid and
 start the open's check read; with no start read it is never terminated): a
 `COMMIT` it already made is then found by the attempt, and one it had not

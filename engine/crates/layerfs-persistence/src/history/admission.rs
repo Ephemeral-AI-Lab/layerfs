@@ -64,7 +64,8 @@ pub(crate) use mount::{one_message, register_mount, separately_refuses};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
-use session::{session_lock, session_unlock};
+use crate::backend::postgresql::session::transaction::Mode;
+use session::{session_lock, session_unlock, session_unlock_op};
 
 const INSERT: &str = "gc_intent_insert";
 const RELEASE: &str = "gc_intent_release";
@@ -782,23 +783,26 @@ pub(crate) fn mark_uncertain(provider: &HistoryProvider, op_id: &[u8; 16]) -> Hi
 /// and the single write transaction are the exclusion.
 pub(crate) struct StoreClaim<'a> {
     provider: &'a HistoryProvider,
-    /// The key level the claim holds, until it is unlocked.
+    /// The key level the claim holds, until it is unlocked, and the epoch
+    /// of the connection holding it.
     held: Vec<crate::backend::postgresql::session::connection::SessionKey>,
+    epoch: u64,
 }
 impl HistoryProvider {
     /// Takes this Store's exclusive advisory key without registering an intent
     /// row, so a compaction can settle a leftover op under the key.
     pub(crate) fn claim_store_exclusive(&self) -> HistoryResult<StoreClaim<'_>> {
-        let held = match &self.engine {
+        let (held, epoch) = match &self.engine {
             Engine::Postgres(session) => {
                 let keys = [(1u8, self.catalog_id.as_slice().to_vec(), false)];
                 session_lock(session, self.catalog_id, &keys)?
             }
-            Engine::Sqlite(_) => Vec::new(),
+            Engine::Sqlite(_) => (Vec::new(), 0),
         };
         Ok(StoreClaim {
             provider: self,
             held,
+            epoch,
         })
     }
 }
@@ -808,7 +812,7 @@ impl StoreClaim<'_> {
     fn unlock(&mut self) {
         let held = std::mem::take(&mut self.held);
         if let Engine::Postgres(session) = &self.provider.engine {
-            let _ = session_unlock(session, &held);
+            let _ = session_unlock(session, &held, Some(self.epoch));
         }
     }
 }
@@ -941,29 +945,41 @@ pub(crate) fn register_separately(
     match &provider.engine {
         Engine::Sqlite(_) => provider.write(|tx| register_in(tx, intent, false)),
         Engine::Postgres(session) => {
-            let keys = session_lock(
+            let (keys, epoch) = session_lock(
                 session,
                 provider.catalog_id,
                 &advisory_keys(provider.catalog_id, intent),
             )?;
-            let result = if intent.kind == GcIntentKind::Mount {
-                session.run_admit(|statements| {
-                    register_in(&Transaction::new(statements), intent, true)
-                })
-            } else {
-                session.run(true, |statements| {
-                    register_in(&Transaction::new(statements), intent, true)
-                })
+            let mode = match intent.kind {
+                GcIntentKind::Mount => Mode::Admit,
+                _ => Mode::Write,
             };
+            // Pinned to the connection that holds the keys: after a reopen
+            // they are gone, and the row is not written keyless. The op is
+            // held, or a mount whose outcome is unknown recorded as an
+            // orphan, before the turn ends, so no reopen comes in between.
+            let mut earlier = None;
+            let result = session.run_turn(
+                mode,
+                Some(epoch),
+                |statements| register_in(&Transaction::new(statements), intent, true),
+                |state, result| match result {
+                    Ok(()) => earlier = session.hold_op(intent.op_id, keys.clone()),
+                    Err(_) if state.quarantined && intent.kind == GcIntentKind::Mount => {
+                        session.note_orphan(intent.op_id)
+                    }
+                    Err(_) => {}
+                },
+            );
             match &result {
                 // A second registration of a held op keeps one level per key.
                 Ok(()) => {
-                    if let Some(earlier) = session.hold_op(intent.op_id, keys) {
-                        let _ = session_unlock(session, &earlier);
+                    if let Some(earlier) = earlier {
+                        let _ = session_unlock(session, &earlier, Some(epoch));
                     }
                 }
                 Err(_) => {
-                    let _ = session_unlock(session, &keys);
+                    let _ = session_unlock(session, &keys, Some(epoch));
                 }
             }
             result

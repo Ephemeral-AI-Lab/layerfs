@@ -61,16 +61,22 @@ impl Service {
         ) -> Result<FilesystemRootId, CommitError>,
     ) -> Result<Success, Failure> {
         match request {
-            Request::Commit(control) => {
+            Request::Commit(control) => layerfs_persistence::one_call(|| {
                 self.commit(control.token, |workspace| workspace.commit(construct))
-            }
+            }),
             other => self.execute_control(other),
         }
     }
     /// Runs one control operation. Commit captures the shared published
     /// frontier and constructs it with the captured namespace producer on
     /// this caller's thread; retained original custody refuses it first.
+    /// One request is one public call: its Store sessions reopen at most once
+    /// in it, across a Commit's custody resolution and its own Commit
+    /// (`layerfs_persistence::one_call`).
     pub fn execute_control(&self, request: &Request) -> Result<Success, Failure> {
+        layerfs_persistence::one_call(|| self.control(request))
+    }
+    fn control(&self, request: &Request) -> Result<Success, Failure> {
         match request {
             Request::Observed { .. } => Err(Failure::Rejected(
                 ControlCode::Invalid,

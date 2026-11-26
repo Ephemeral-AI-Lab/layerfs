@@ -153,6 +153,12 @@ pub struct SqlWork {
     /// PostgreSQL only: new server connections opened by the session,
     /// including its publication-lane connection.
     pub connects: u64,
+    /// PostgreSQL only: times a quarantined writer session opened a new
+    /// connection and settled what the closed one left (`session/reopen.rs`).
+    pub reopens: u64,
+    /// PostgreSQL only: when the last of those reopens finished, in
+    /// milliseconds since the Unix epoch; 0 before any.
+    pub last_reopen_ms: u64,
 }
 pub(crate) struct State {
     pub(crate) connection: super::lifecycle::ConnectionSlot,

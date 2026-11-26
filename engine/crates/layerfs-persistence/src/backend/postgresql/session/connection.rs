@@ -11,7 +11,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str::FromStr,
     sync::{
-        atomic::{AtomicI64, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
         Mutex, OnceLock,
     },
     time::{Duration, Instant},
@@ -29,6 +29,30 @@ pub(crate) struct State {
     statements: HashMap<String, Statement>,
     pub(crate) quarantined: bool,
     pub(crate) work: SqlWork,
+    /// The backend of the current connection as the open's check (or a
+    /// reopen's) read it: its pid and, when the role may see it, its start
+    /// (microseconds since the epoch), which together name it even if the
+    /// pid is reused. `None` until a check read it.
+    pub(crate) backend: Option<(i64, Option<i64>)>,
+    /// The backends of connections a quarantine closed and nobody has yet
+    /// seen gone: a lost reply's resolution ends each before the lane pass
+    /// (`Session::pass_lane`), and a reopen first (`Session::reopen`).
+    pub(crate) lost: Vec<LostBackend>,
+    /// Ordinary connections closed so far: the epoch of the current one. A
+    /// turn pinned to an epoch (`Session::ready_pinned`) runs only on the
+    /// connection that epoch names, so keys taken there are still held.
+    pub(crate) closed: u64,
+}
+
+/// The backend of a connection a quarantine closed, until it is seen gone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LostBackend {
+    /// Its pid and start as [`State::backend`] held them.
+    pub(crate) backend: (i64, Option<i64>),
+    /// The backend this session's session locks named while that connection
+    /// served (`Session::backend_pid`), stamped when a reopen resets it;
+    /// `None` while it is still the session's own.
+    pub(crate) noted: Option<i64>,
 }
 
 impl State {
@@ -41,8 +65,11 @@ impl State {
     /// body error classed uncertain) kept every row lock, a write's
     /// `store_lane` row included, so every other writer met `Busy` after its
     /// lock wait. Closing ends all of it. Nothing is replayed and the outcome
-    /// stays unknown; every later call is refused before it reaches a
-    /// connection, and the caller opens a new session. GC intent rows are not
+    /// stays unknown. The closed backend is recorded in [`State::lost`] until
+    /// it is proven gone. A session that does not reopen refuses every later
+    /// call before it reaches a connection, and the caller opens a new
+    /// session; one that does (the Store service's writer and readers) opens
+    /// one new connection at its next call (`session/reopen.rs`). GC intent rows are not
     /// touched: an intent's owner stays live by its recorded process, not by
     /// this connection. A diagnostic driver keeps its connection: it is
     /// read-only, holds no lane, and its deadline and cancellation outcome
@@ -50,6 +77,15 @@ impl State {
     pub(crate) fn quarantine(&mut self) {
         self.quarantined = true;
         if matches!(self.client, super::driver::Driver::Ordinary(_)) {
+            // Its backend may still be finishing what it was sent. One no
+            // check read (an open's own check failing) serves nothing more.
+            self.closed += 1;
+            if let Some(backend) = self.backend.take() {
+                self.lost.push(LostBackend {
+                    backend,
+                    noted: None,
+                });
+            }
             // Close first: a cached statement holds only a weak reference to
             // the client, so once it is closed dropping the cache queues no
             // `Close` for a silent server to leave unanswered.
@@ -346,12 +382,6 @@ pub(crate) struct Session {
     /// proxy changes it between transactions, which is `Unsupported` for
     /// mounts and compaction.
     pub(crate) backend_pid: AtomicI64,
-    /// The backend of this session's connection as the open's check read
-    /// it: its pid and, when the role may see it, its start (microseconds
-    /// since the epoch), which together name it even if the pid is reused.
-    /// A lost reply's resolution ends it before the lane pass
-    /// (`Session::pass_lane`), and only when the start is known.
-    pub(crate) opened_backend: OnceLock<(i64, Option<i64>)>,
     /// The `catalog_incarnation` this session opened at (spec §5.2, §10); the
     /// generation fence in [`super::transaction::Session::run_as`] compares
     /// every write transaction against it. `0` until an open's check set it,
@@ -366,7 +396,22 @@ pub(crate) struct Session {
     /// never drops a key level a live mount of this session holds
     /// (PostgreSQL counts advisory locks per session), and a release whose
     /// row is already gone still unlocks them.
+    /// Every change to it happens inside a writer turn, as does a reopen's
+    /// read of it, so the two never interleave (`session/reopen.rs`).
     pub(crate) held_ops: Mutex<HashMap<[u8; 16], Vec<SessionKey>>>,
+    /// Whether a quarantined session opens a new connection at its next
+    /// top-level call (`Session::reopen`); the Store service enables it on
+    /// its writer and readers.
+    pub(crate) reopens: AtomicBool,
+    /// Whether the writer's mount statements were prepared
+    /// (`prepare_mount_writes`), so a reopen prepares them again.
+    pub(crate) mount_writes: AtomicBool,
+    /// Mount intents whose admission ended with an unknown outcome: the
+    /// next reopen deletes each one's row once, by its op id.
+    pub(crate) orphans: Mutex<Vec<[u8; 16]>>,
+    /// This session's identity in a call's reopen budget (`reopen::one_call`):
+    /// unique in the process, never reused, unlike its address.
+    pub(crate) identity: u64,
 }
 
 /// One session advisory key a registered intent holds: the key, and whether
@@ -411,6 +456,9 @@ impl Session {
                     connects: 1,
                     ..SqlWork::default()
                 },
+                backend: None,
+                lost: Vec::new(),
+                closed: 0,
             }),
             lane: Mutex::new(None),
             writable: false,
@@ -420,10 +468,13 @@ impl Session {
             connector,
             lane_work: LaneWork::default(),
             backend_pid: AtomicI64::new(0),
-            opened_backend: OnceLock::new(),
             incarnation: AtomicU64::new(0),
             chain_packs: Mutex::default(),
             held_ops: Mutex::default(),
+            reopens: AtomicBool::new(false),
+            mount_writes: AtomicBool::new(false),
+            orphans: Mutex::default(),
+            identity: super::reopen::identity(),
         })
     }
     pub(crate) fn connect(
@@ -444,6 +495,9 @@ impl Session {
                     connects: 1,
                     ..SqlWork::default()
                 },
+                backend: None,
+                lost: Vec::new(),
+                closed: 0,
             }),
             lane: Mutex::new(None),
             writable,
@@ -453,10 +507,13 @@ impl Session {
             connector,
             lane_work: LaneWork::default(),
             backend_pid: AtomicI64::new(0),
-            opened_backend: OnceLock::new(),
             incarnation: AtomicU64::new(0),
             chain_packs: Mutex::default(),
             held_ops: Mutex::default(),
+            reopens: AtomicBool::new(false),
+            mount_writes: AtomicBool::new(false),
+            orphans: Mutex::default(),
+            identity: super::reopen::identity(),
         })
     }
 
@@ -503,21 +560,20 @@ impl Session {
 
     /// Notes that this session holds `keys` for registered op `op`. Returns
     /// the keys an earlier registration of the same op still held, which the
-    /// caller unlocks so the op keeps one level of each key.
+    /// caller unlocks so the op keeps one level of each key. Called inside
+    /// the writer turn whose connection holds `keys`.
     pub(crate) fn hold_op(&self, op: [u8; 16], keys: Vec<SessionKey>) -> Option<Vec<SessionKey>> {
         self.held_ops
             .lock()
             .ok()
-            .and_then(|mut held| held.insert(op, keys))
+            .and_then(|mut ops| ops.insert(op, keys))
     }
 
     /// Takes `op` from the ops this session holds keys for, with its keys:
     /// `Some` only the first time, and only when this session registered it.
+    /// Called inside a writer turn.
     pub(crate) fn take_op(&self, op: &[u8; 16]) -> Option<Vec<SessionKey>> {
-        self.held_ops
-            .lock()
-            .ok()
-            .and_then(|mut held| held.remove(op))
+        self.held_ops.lock().ok().and_then(|mut ops| ops.remove(op))
     }
 
     /// Records the backend that took a session advisory lock. The first lock

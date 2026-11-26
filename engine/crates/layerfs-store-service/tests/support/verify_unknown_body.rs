@@ -96,6 +96,19 @@ fn run(
     (window.seen, format!("{class}/{state}"))
 }
 
+/// The final audit's deadline, proportional to the work it is given: it
+/// reads every located object, and a writer that reopens lets the sweep's
+/// follow-up Commits land, so a warm half locates about 2.8x the objects it
+/// did before reopen (8,412 against 3,052; its audit took 15.6 s against
+/// 6.8 s at host load 7-10). Measured per located object at load 4-6: warm
+/// 1.9 ms (8,412 in 15.6 s), raced 2.9 ms (4,886 in 14.1 s, more Commits per
+/// object). 9 ms per object leaves about 3x the dearer rate for a host
+/// loaded past its cores; never under the former 30 s.
+fn audit_limit(located: i64) -> std::time::Duration {
+    let scaled = std::time::Duration::from_millis(9 * located.max(0) as u64);
+    scaled.max(std::time::Duration::from_secs(30))
+}
+
 fn sweep(tag: &str, flight: Flight, fault: Fault, part: u64, parts: u64) {
     let _slot = verify768::sweep_slot();
     let Some(store) = TestStore::postgres(tag, SEED) else {
@@ -107,7 +120,10 @@ fn sweep(tag: &str, flight: Flight, fault: Fault, part: u64, parts: u64) {
     let (k, _) = run(&store, &proxy, &proxied, "clean", flight, None);
     let mut states = std::collections::BTreeMap::<String, u64>::new();
     let mut direct = 0;
-    for n in (0..k).filter(|n| n % parts == part) {
+    // A direct Commit after every fifth run of this part: one per five
+    // runs of the flight whatever the split (the whole flight before any
+    // split had one per ten warm runs and one per five cold or raced runs).
+    for (index, n) in (0..k).filter(|n| n % parts == part).enumerate() {
         let (_, state) = run(
             &store,
             &proxy,
@@ -117,7 +133,7 @@ fn sweep(tag: &str, flight: Flight, fault: Fault, part: u64, parts: u64) {
             Some((n, fault)),
         );
         *states.entry(state).or_default() += 1;
-        if n % 10 == part {
+        if index % 5 == 0 {
             direct += 1;
             let service = store.open();
             let branch = store.fork(&format!("direct{direct}"));
@@ -136,10 +152,19 @@ fn sweep(tag: &str, flight: Flight, fault: Fault, part: u64, parts: u64) {
             assert!(failures.is_empty(), "direct after n{n}: {failures:#?}");
         }
     }
+    let located: i64 = store
+        .admin()
+        .query_one("SELECT count(*) FROM object_location", &[])
+        .unwrap()
+        .get(0);
+    let limit = audit_limit(located);
+    let audit = std::time::Instant::now();
+    let failures = store.integrity_failures_within(limit);
     println!(
-        "VERIFY_UNKNOWN {{\"tag\":\"{tag}\",\"flight\":\"{flight:?}\",\"fault\":\"{fault:?}\",\"K\":{k},\"states\":{states:?}}}"
+        "VERIFY_UNKNOWN {{\"tag\":\"{tag}\",\"flight\":\"{flight:?}\",\"fault\":\"{fault:?}\",\"K\":{k},\"states\":{states:?},\"direct\":{direct},\"located\":{located},\"audit_limit_ms\":{},\"audit_ms\":{}}}",
+        limit.as_millis(),
+        audit.elapsed().as_millis()
     );
-    let failures = store.integrity_failures();
     assert!(failures.is_empty(), "audit: {failures:#?}");
     let failures = verify768::amcheck(&store);
     assert!(failures.is_empty(), "amcheck: {failures:#?}");

@@ -20,12 +20,11 @@
 //! * at the end: the Store audit, amcheck, no duplicated allocation, and no
 //!   backend left in a transaction.
 //!
-//! `the_same_service_refuses_after_a_lost_fallback_reply` pins the documented
-//! behaviour after a lost reply: the faulted service's writer session stays
-//! quarantined for the service's life (postgresql.md, "Fused Commit"), so
-//! the same Workspace's follow-up is refused definitely (never `InFlight`,
-//! nothing published), and a fresh service lands the change. Reopening the
-//! writer is not part of #768.
+//! `the_same_service_reopens_after_a_lost_fallback_reply` pins the
+//! behaviour after a lost reply: the faulted service's writer session is
+//! quarantined, and the same Workspace's follow-up reopens it once
+//! (postgresql.md, "Writer reopen") and lands the change exactly once
+//! (never `InFlight`, nothing published twice); nothing is resent.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #[path = "support/adversary.rs"]
@@ -81,6 +80,8 @@ struct Run {
     follow_in_flight: bool,
     retained_after_follow: bool,
     answered: Vec<CommitId>,
+    /// The faulted service writer's reopens by the end of the run.
+    reopens: u64,
 }
 
 fn content(name: &str) -> Vec<u8> {
@@ -138,6 +139,10 @@ fn run(rig: &Rig, name: &str, target: Option<(u64, Fault)>) -> Run {
         answered.push(*id);
     }
     let retained_after_follow = workspace.has_retained();
+    let reopens = (service.service.opened.session_diagnostics(None))
+        .unwrap()
+        .unwrap()
+        .reopens;
     let _ = service.try_unmount(workspace);
     service.abandon();
     Run {
@@ -148,6 +153,7 @@ fn run(rig: &Rig, name: &str, target: Option<(u64, Fault)>) -> Run {
         follow_in_flight,
         retained_after_follow,
         answered,
+        reopens,
     }
 }
 
@@ -368,13 +374,13 @@ fn hint_rows_backend_killed_keeps_history_exact() {
 }
 
 /// After a lost reply in the fallback's tail publication (its first message)
-/// and in its hint write (its first message): the same service refuses the
-/// same Workspace's next Commit definitely, its writer being quarantined
-/// for the service's life; nothing extra is published (`check`: the chain
-/// is exactly the answered Commits, no Commit retained, never `InFlight`);
-/// and a fresh service lands the change (`check`).
+/// and in its hint write (its first message): the same Workspace's next
+/// Commit reopens the quarantined writer once and lands the change, exactly
+/// once (`check`: the chain is exactly the answered Commits, no Commit
+/// retained, never `InFlight`). Before the reopen existed it was refused
+/// for the service's life.
 #[test]
-fn the_same_service_refuses_after_a_lost_fallback_reply() {
+fn the_same_service_reopens_after_a_lost_fallback_reply() {
     adversary::tmp();
     let Some(rig) = rig("v768x_same_ws") else {
         return;
@@ -385,16 +391,23 @@ fn the_same_service_refuses_after_a_lost_fallback_reply() {
         let name = format!("same_{what}");
         let outcome = run(&rig, &name, Some((n, Fault::Drop)));
         check(&rig, &name, &outcome);
-        outcomes.push((what, n, outcome.first.clone(), outcome.follow.clone()));
+        outcomes.push((
+            what,
+            n,
+            outcome.first.clone(),
+            outcome.follow.clone(),
+            outcome.reopens,
+        ));
     }
-    for (what, n, first, follow) in &outcomes {
+    for (what, n, first, follow, reopens) in &outcomes {
         assert!(
             matches!(first, Verdict::Unknown(_) | Verdict::Refused(_)),
             "{what} (message {n}): a lost fallback reply does not answer Committed: {first:?}"
         );
         assert!(
-            matches!(follow, Verdict::Refused(_)),
-            "{what} (message {n}): first {first:?}, the same service's next Commit is refused definitely: {follow:?}"
+            matches!(follow, Verdict::Committed(_)),
+            "{what} (message {n}): first {first:?}, the same service's next Commit lands the change: {follow:?}"
         );
+        assert_eq!(*reopens, 1, "{what} (message {n}): one reopen");
     }
 }
