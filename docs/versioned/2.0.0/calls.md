@@ -616,7 +616,8 @@ $ layerfs commit diff shop/api agent --with patch --path /docs/a.txt
 On macOS and Linux, the CLI uses the native worker for `file read`,
 `file stat`, and one bounded `file list` page on local SQLite when the
 socket path and request fit. It selects the direct route before dialing
-when they do not fit. The CLI reports an uncertain exchange as `Unknown`
+when they do not fit. An error identifying the worker's home refuses the
+call before any send. The CLI reports an uncertain exchange as `Unknown`
 with a request ID. SDK local calls, CLI PostgreSQL and writes run in the
 caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).

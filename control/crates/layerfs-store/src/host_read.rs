@@ -119,7 +119,10 @@ pub(crate) fn routed(
         ("project", SdkValue::text(&target.project)),
         ("fields", fields),
     ]);
-    let paths = HostPaths::new(home).ok()?;
+    let paths = match HostPaths::new(home) {
+        Ok(paths) => paths,
+        Err(error) => return Some(Err(error)),
+    };
     paths.request_fits(OP, &args).then(|| paths.call(OP, args))
 }
 

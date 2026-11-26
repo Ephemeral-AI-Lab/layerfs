@@ -170,7 +170,8 @@ The CLI can route bounded local SQLite `file.read`, `file.stat`, and
 The envelope contains the Store and project names and the allowlisted
 read arguments. The worker resolves the binding and checks the current
 Store record under its admission lock. An endpoint path or request that
-does not fit uses the direct route, chosen before dialing. If operation
+does not fit uses the direct route, chosen before dialing. An error reading
+the worker's home identity is a definite refusal before any send. If operation
 bytes may have been sent and no valid reply arrives, the caller reports
 `Unknown` with a request ID. The caller owns the single public audit line.
 SDK calls, PostgreSQL, writes, and guest Stores use their existing routes.
