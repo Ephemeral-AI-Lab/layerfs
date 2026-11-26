@@ -78,11 +78,12 @@ only the opened handles differ ([`store/init.rs`](../../../../engine/crates/laye
  init_observed                                     InitStep
    check_root, outside_source, acquisition.begin   Scan
    Save #1: scan rows + symlink targets; finish
-   Save #2: files (4 workers -> 1 owner); finish   Files
+   Save #2: files (4 workers -> 1 owner),         Files
+            logical bytes summed; finish
    reserve_inodes(scope, entries)                  Tree
    Save #3: directories, inode table, root
    discard working rows                            Publish
-   Save #3 finish; logical size; record_new_bindings
+   Save #3 finish; record_new_bindings
    initialize_layerstack(genesis_root)
  caller: fork first Branch; seal or close          Seal
 ```
@@ -92,6 +93,7 @@ only the opened handles differ ([`store/init.rs`](../../../../engine/crates/laye
 | Files | Content `construct_stream`, one job per host identity | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
 | Serials | `reserve_inodes`: one contiguous range, serial = start + position; scope from `scope_for_seed` | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs) |
 | Directories, table, root | Content `build_directory`, `empty_directory` (once), `build_table`, `FilesystemRoot::new` | [`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs) |
+| Logical bytes | Each constructor sums its files' scanned lengths (`stamp.len`, which construction checked equal to the built length); `check_aliases` adds the identity's length for every later path. That is `logical_size` of the built root (length × namespace references, regular files only), with no read of the roots (#818 I1); tests keep `logical_size` as the oracle | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
 | Binding hints | Every binding of the new root, 4096 rows per write | [`import/hints.rs`](../../../../engine/crates/layerfs-project/src/import/hints.rs) |
 | Genesis and Branch | `initialize_layerstack`, then `fork` from the head Layer | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
 

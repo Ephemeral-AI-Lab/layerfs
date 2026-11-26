@@ -22,34 +22,38 @@
 //! 31,881 / 31,883 / 31,885 / 31,883 / 31,879. The pins (the 056e920166
 //! probe rows) allow `SLACK` on round trips and statements; connects and
 //! transactions are exact, and the logical bytes, canonical bytes and root
-//! (fixed source times) repeat exactly on both backends. Lane I's I1
-//! removes that walk; the slack should then go to 0.
+//! (fixed source times) repeat exactly on both backends.
 //!
-//! Each PostgreSQL case takes 9–17 s in the test profile; the two run one
-//! after the other under the binary's PostgreSQL turn.
+//! #818 I1 removed that walk (Init sums its logical bytes from the scan),
+//! and with it the per-file locates: the pins are now exact (`SLACK` = 0).
+//!
+//! Each PostgreSQL case took 9–17 s in the test profile at baseline (6–13 s
+//! after I1); the two run one after the other under the binary's PostgreSQL
+//! turn.
 #[path = "support/round_trips.rs"]
 mod rt;
 
 use rt::{Backend, InitPin, Store};
 
 /// Allowed difference on round trips and statements (see the module doc).
-const SLACK: u64 = 32;
+const SLACK: u64 = 0;
 
-// The pins are the 056e920166 probe rows (`receipts/056e920166/*.log`).
+// The baseline rows in the comments are the 056e920166 probe rows
+// (`receipts/056e920166/*.log`); the pins are after #818 I1.
 
 // SQLite: session `[0, 0, statements, transactions]`.
 // probe init.nested_10k at 056e920166: 12,164 statements, 57 transactions
 const SQLITE_NESTED: InitPin = pin(
     "nested_10k",
-    [0, 0, 12164, 57],
+    [0, 0, 1837, 57],
     108000,
     1379418,
     "a68d83d36cfcc6aa",
 );
-// probe init.flat_10k: 31,881 statements, 60 transactions
+// probe init.flat_10k at 056e920166: 31,881 statements, 60 transactions
 const SQLITE_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 0, 31881, 60],
+    [0, 0, 21560, 60],
     118890,
     1380691,
     "a0b8d9600c933c0a",
@@ -59,15 +63,15 @@ const SQLITE_FLAT: InitPin = pin(
 // probe init.nested_10k at 056e920166 (`pg.log`): [0, 10,955, 10,666, 120]
 const POSTGRESQL_NESTED: InitPin = pin(
     "nested_10k",
-    [0, 10955, 10666, 120],
+    [0, 624, 335, 120],
     108000,
     1379418,
     "a68d83d36cfcc6aa",
 );
-// probe init.flat_10k (`pg.log`): [0, 31,039, 30,700, 144]
+// probe init.flat_10k at 056e920166 (`pg.log`): [0, 31,039, 30,700, 144]
 const POSTGRESQL_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 31039, 30700, 144],
+    [0, 20720, 20381, 144],
     118890,
     1380691,
     "a0b8d9600c933c0a",

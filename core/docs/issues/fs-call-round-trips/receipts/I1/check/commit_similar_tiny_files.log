@@ -1,0 +1,17 @@
+# load 6.67 6.41 6.30
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/commit_similar_tiny_files.rs (target/debug/deps/commit_similar_tiny_files-9d55744eff81e4a9)
+
+running 2 tests
+SIMILAR_COUNTS {"backend":"sqlite","scenario":"commit.overwrite","writer":[0, 0, 28, 2],"control":[0, 0, 0, 0],"workspace":[0, 0, 1, 0],"publications":1,"storage":[155, 153, 2, 2, 10232],"depths":[150, 0, 0],"metadata_bytes":994}
+SIMILAR_COUNTS {"backend":"sqlite","scenario":"commit.add","writer":[0, 0, 27, 2],"control":[0, 0, 0, 0],"workspace":[0, 0, 0, 0],"publications":1,"storage":[164, 161, 3, 2, 7872],"depths":[150, 0, 0],"metadata_bytes":2180}
+SIMILAR_COUNTS {"backend":"sqlite","scenario":"commit.families","writer":[0, 0, 35, 3],"control":[0, 0, 0, 0],"workspace":[0, 0, 0, 0],"publications":2,"storage":[159, 35, 124, 3, 16327],"depths":[30, 120, 0],"metadata_bytes":1984}
+test sqlite_similar_tiny_file_commits ... ok
+SIMILAR_COUNTS {"backend":"postgresql","scenario":"commit.overwrite","writer":[0, 10, 15, 2],"control":[0, 0, 0, 0],"workspace":[0, 1, 1, 0],"publications":1,"storage":[155, 153, 2, 2, 10232],"depths":[150, 0, 0],"metadata_bytes":994}
+SIMILAR_COUNTS {"backend":"postgresql","scenario":"commit.add","writer":[0, 6, 14, 2],"control":[0, 0, 0, 0],"workspace":[0, 0, 0, 0],"publications":1,"storage":[164, 161, 3, 2, 7872],"depths":[150, 0, 0],"metadata_bytes":2176}
+SIMILAR_COUNTS {"backend":"postgresql","scenario":"commit.families","writer":[0, 15, 18, 3],"control":[0, 0, 0, 0],"workspace":[0, 0, 0, 0],"publications":2,"storage":[159, 35, 124, 3, 16327],"depths":[30, 120, 0],"metadata_bytes":1993}
+test postgresql_similar_tiny_file_commits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+run_bounded: exit 0 after 1.3 s
