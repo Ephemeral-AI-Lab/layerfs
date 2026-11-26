@@ -51,7 +51,7 @@ UPDATE and DELETE on `pack` and `pack_unit`. Open checks `application_id`,
 
 | Step in `Session::connect` | Detail | Source |
 | --- | --- | --- |
-| Writer lock | When `writable`, or read-only with no `-shm` beside the Store, takes `Writer::acquire(path)` across connect and releases it after the last step that can fail (see Last close) | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| Writer lock | Ordinary connections take `Writer::acquire(path)` across setup and file identity verification. Diagnostic connections take it if no `-shm` exists (see Last close) | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Open | `READ_WRITE` or `READ_ONLY`, `NO_MUTEX`; statement cache 64 | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back into `ConnectionProfile`; a mismatch is `Integrity`; an existing Store not in `wal` mode is refused | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |

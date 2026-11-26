@@ -217,11 +217,11 @@ fn admit_open(
 /// compaction's leftover-work check, a snapshot's source. The lane (taken
 /// only when the Store has no `-shm`) is held through the connection's first
 /// read, which creates the sidecars, and is returned for the caller to
-/// release; an error exit closes the connection under it. A `-shm` that
-/// appears or goes between the check and that read is benign: the identity
-/// check here and a compaction's re-check before its rename catch a replaced
-/// file or a sidecar left beside one. `error` maps SQLite's errors, so a
-/// caller can classify the first read's. Returns the file it opened.
+/// release; an error exit closes the connection under it. A reader that
+/// sees an existing `-shm` can meet SQLite's Busy if recovery is still active.
+/// The identity check here and a compaction's re-check before its rename
+/// catch a replaced file or a sidecar left beside one. The caller supplies
+/// `error` to classify the first read's SQLite errors. Returns the file opened.
 pub(crate) fn open_admitted_read_only(
     path: &Path,
     error: &mut dyn FnMut(rusqlite::Error) -> BackendError,

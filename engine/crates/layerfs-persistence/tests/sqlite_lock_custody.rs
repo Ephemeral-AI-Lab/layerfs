@@ -216,7 +216,7 @@ fn fresh_read_open_waits_for_partial_wal_index_recovery() {
     let recovery = RawLockHolder::hold_wal_recovery(&path);
     let (starting, started) = mpsc::channel();
     let (done, finished) = mpsc::channel();
-    std::thread::spawn(move || {
+    let opener = std::thread::spawn(move || {
         starting.send(()).unwrap();
         let opened = SqliteHandles::open_read_only(
             config(&path),
@@ -237,4 +237,5 @@ fn fresh_read_open_waits_for_partial_wal_index_recovery() {
         .recv_timeout(Duration::from_secs(3))
         .expect("fresh reader completes after recovery")
         .expect("fresh reader attaches with one attempt");
+    opener.join().expect("fresh reader exits");
 }
