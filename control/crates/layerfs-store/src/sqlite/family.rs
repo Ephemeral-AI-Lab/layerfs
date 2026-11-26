@@ -118,6 +118,7 @@ pub(crate) fn begin_maintenance<T>(
     {
         record.unheld()?;
     }
+    record.admit_machine(home)?;
     let answer = check(&record)?;
     let holder = Worker::holder(worker.as_ref(), home, name, &record)?;
     related.check_idle(home, name, holder)?;

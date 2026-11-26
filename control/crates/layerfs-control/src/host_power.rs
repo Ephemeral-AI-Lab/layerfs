@@ -28,8 +28,22 @@ fn set(home: &Path, name: &MachineName, stopped: bool) -> Result<bool, SdkRefusa
 pub(crate) fn start(home: &Path, name: &MachineName) -> Outcome {
     layerfs_machine::machine_of(home, name.as_str())?;
     let _operation = layerfs_machine::force_stop_lock(home, name.as_str())?;
-    let enabled = set(home, name, false)?;
     let paths = HostPaths::new(home)?;
+    if MachineRecord::of(home, name.as_str())?.recorded_state() == Some("stopped") && paths.fits() {
+        // A stop that reported holders may still have a draining worker.
+        // Wait for its lifetime lock before the new start sends anything.
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while paths.try_hold()?.is_none() {
+            if std::time::Instant::now() >= until {
+                return Err(refused(
+                    "Unavailable",
+                    "the previous host worker is still draining",
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    let enabled = set(home, name, false)?;
     let was_ready = paths.control.exists();
     paths.for_management()?.start()?;
     Ok(layerfs_machine::done(
@@ -54,10 +68,19 @@ pub(crate) fn stop(
             .try_exists()
             .map_err(layerfs_home::outcome::failed)?
     {
-        paths
+        match paths
             .for_management()?
-            .call_existing(true, "drain", SdkValue::map([]))?
-            .is_some()
+            .call_existing(true, "drain", SdkValue::map([]))
+        {
+            Ok(reply) => reply.is_some(),
+            Err(error)
+                if error.code == "Unavailable"
+                    && error.detail.get_text("state") == Some("draining") =>
+            {
+                true
+            }
+            Err(error) => return Err(error),
+        }
     } else {
         false
     };
@@ -78,6 +101,9 @@ pub(crate) fn stop(
         if !matches!(record.store_ref()?,layerfs_store::record::StoreRef::Sqlite{machine,..} if machine==name.as_str())
         {
             continue;
+        }
+        if layerfs_store::lease::held_here(home, &store) {
+            blocking.push(format!("Store {store} (pid {})", std::process::id()));
         }
         for pid in layerfs_store::lease::holders(home, &store)? {
             blocking.push(format!("Store {store} (pid {pid})"));

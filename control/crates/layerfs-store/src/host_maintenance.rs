@@ -105,11 +105,13 @@ impl Worker {
 /// Store, even if the process has no accepting endpoint.
 pub(crate) fn recover(home: &Path, name: &str, call: &str, to: Option<&str>) -> Result<()> {
     let initial = StoreRecord::of(home, name)?;
+    initial.admit_machine(home)?;
     if initial.op().is_none_or(|op| op.phase() != WORKER_CLOSE) {
         return Ok(());
     }
     let _store = record::lock(home, name)?;
     let record = StoreRecord::of(home, name)?;
+    record.admit_machine(home)?;
     let Some(held) = record.op().filter(|op| op.phase() == WORKER_CLOSE) else {
         return Ok(());
     };

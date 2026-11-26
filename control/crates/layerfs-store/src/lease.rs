@@ -78,9 +78,7 @@ pub fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusa
     let _store = crate::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?.ok_or_else(none)?;
     record.unblocked()?;
-    if let crate::record::StoreRef::Sqlite { machine, .. } = record.store_ref()? {
-        layerfs_machine::record::MachineRecord::admit_host(home, machine)?;
-    }
+    record.admit_machine(home)?;
     Ok((claim_unblocked_locked(home, store)?, record))
 }
 

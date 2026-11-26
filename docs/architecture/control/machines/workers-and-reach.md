@@ -428,7 +428,8 @@ Host start and stop serialize on the machine lifecycle lock. The built-in
 host's record defaults to enabled. Stop atomically records stopped under
 the home lock used by Sandbox creation and worker socket publication.
 Each SQLite lease claim and reused worker Store checks the machine record
-under its Store lock. After fencing admission, stop drains the worker and
+under its Store lock. Maintenance operations check the same fence before
+recovering an old intent or recording their new one. After fencing admission, stop drains the worker and
 inspects holders under each Store lock. This ordering lets earlier leases
 finish and exposes the process identities still holding the Store.
 Force uses the existing per-Sandbox stop with its recorded runtime identity.

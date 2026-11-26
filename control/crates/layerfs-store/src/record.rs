@@ -226,6 +226,14 @@ impl StoreRecord {
         self.parsed.as_ref().map_err(Clone::clone)
     }
 
+    /// Checks the admission fence of this Store's local host, when it has one.
+    pub(crate) fn admit_machine(&self, home: &Path) -> Result<()> {
+        if let StoreRef::Sqlite { machine, .. } = self.store_ref()? {
+            layerfs_machine::record::MachineRecord::admit_host(home, machine)?;
+        }
+        Ok(())
+    }
+
     /// The Store's kind.
     pub fn kind(&self) -> Result<StoreKind> {
         Ok(self.store_ref()?.kind())

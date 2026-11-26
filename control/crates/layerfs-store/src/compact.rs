@@ -222,6 +222,7 @@ fn prepare_compaction(
     let (lease, record, op, previous, close_worker) = {
         let _store = record::lock(home, name)?;
         let record = StoreRecord::of(home, name)?;
+        record.admit_machine(home)?;
         record.unblocked()?;
         if !host_maintenance::local(home, &record)? {
             return Ok((lease::claim_unblocked_locked(home, name)?, record, None));

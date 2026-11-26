@@ -243,7 +243,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 
 The OS host is enabled on a new home. Starting it explicitly enables it and verifies
 the host worker. Idle worker exit leaves the host enabled. Stopping records
-`stopped` before the worker drains. New local SQLite Store calls and new Sandboxes
+`stopped` before the worker drains. New local SQLite Store calls, maintenance operations, and new Sandboxes
 on this host then receive `Unavailable` with a start command. A previously admitted
 call finishes. If holders remain, stop reports `InUse` with the Sandbox names
 and Store process IDs, and the host stays stopped. A later stop checks again.
