@@ -3,12 +3,11 @@
 use super::{
     cached::{self, Cached},
     search,
-    snapshot::{answer, found, header, kind_name, size, Snap},
+    snapshot::{answer, found, header, kind_name, size_in, Snap},
     visibility::Visibility,
     walk, window,
 };
 use crate::history::lookup::{self as args, invalid, Answer, Arg};
-use crate::store::StorePorts;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
@@ -31,7 +30,6 @@ pub const REPLY_BUDGET: usize = window::BYTES;
 /// over `cached`; the file's own objects are read through the caches only.
 #[allow(clippy::too_many_arguments)]
 pub fn read(
-    reader: &StorePorts,
     cached: &Cached,
     snap: &Snap,
     path: &str,
@@ -69,7 +67,7 @@ pub fn read(
             let mut fields = header(snap, path);
             fields.extend([
                 ("binary", SdkValue::Bool(true)),
-                ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+                ("size", SdkValue::Int(size_in(cached, &entry)? as i64)),
             ]);
             return answer(fields);
         }
@@ -93,7 +91,7 @@ pub fn read(
             "nextLine",
             next.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
         ),
-        ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+        ("size", SdkValue::Int(size_in(cached, &entry)? as i64)),
     ]);
     answer(fields)
 }
@@ -101,13 +99,7 @@ pub fn read(
 /// The type, inode, size, permission mode and modification time of the
 /// entry at `path`, the call's one lookup (#818 R3). An inline mode costs
 /// no object read.
-pub fn stat(
-    reader: &StorePorts,
-    cached: &Cached,
-    snap: &Snap,
-    path: &str,
-    entry: Option<EntryFacts>,
-) -> Answer {
+pub fn stat(cached: &Cached, snap: &Snap, path: &str, entry: Option<EntryFacts>) -> Answer {
     let entry = found(snap, path, entry)?;
     let metadata = read_portable(
         cached,
@@ -120,7 +112,7 @@ pub fn stat(
     fields.extend([
         ("type", SdkValue::text(kind_name(entry.value.kind))),
         ("inode", SdkValue::Int(entry.serial as i64)),
-        ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+        ("size", SdkValue::Int(size_in(cached, &entry)? as i64)),
         ("mode", SdkValue::Int(i64::from(metadata.mode))),
         (
             "modifiedMs",

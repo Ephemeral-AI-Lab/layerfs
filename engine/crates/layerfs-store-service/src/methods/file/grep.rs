@@ -1,5 +1,7 @@
 //! `fs.grep`.
-use crate::methods::args::{invalid, optional_path, paging, snapshot_full, text, Answer};
+use crate::methods::args::{
+    invalid, optional_path, paging, snapshot_in, snapshot_target, text, Answer,
+};
 use crate::read::cached::Cached;
 use crate::{
     read::{paged_reads, query, reads, search, visibility},
@@ -10,7 +12,10 @@ use layerfs_content::compare::memo::Memo;
 
 /// `grep(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: literal matches per line in text files.
 pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap, saved) = snapshot_full(service, args)?;
+    let (stack, reader, name) = snapshot_target(service, args)?;
+    // The call's caches, from the root's open on (#818 R4).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, &name)?;
     let pattern = text(args, "pattern")?;
     if pattern.is_empty() {
         return Err(invalid("pattern is empty"));
@@ -18,7 +23,6 @@ pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {
     let path = optional_path(args)?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     // One path walk for the call (#818 R3), through its caches and memo.
-    let cached = Cached::new(&reader)?;
     let memo = Memo::new(&cached);
     let entry = visibility::checked(&memo, &snap, &path, &seen)?;
     let filters = search::Filters::of(args)?;

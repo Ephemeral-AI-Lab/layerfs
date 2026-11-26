@@ -36,7 +36,7 @@ impl<'a> Cached<'a> {
         if ids.is_empty() {
             return Ok(HashMap::new());
         }
-        let lengths = self.ports.file_lengths(ids).map_err(args::failed)?;
+        let lengths = self.lengths(ids)?;
         if lengths.len() != ids.len() {
             return Err(args::failed("file length cardinality"));
         }
@@ -45,6 +45,13 @@ impl<'a> Cached<'a> {
             self.open(&ids[batch], &mut views)?;
         }
         Ok(views)
+    }
+
+    /// Regular files' lengths through the call's caches (#818 R4).
+    pub fn lengths(&self, ids: &[ObjectId]) -> Result<Vec<u64>, SdkRefusal> {
+        self.ports
+            .lengths_with(&mut self.cache.borrow_mut(), ids)
+            .map_err(args::failed)
     }
 
     fn open(

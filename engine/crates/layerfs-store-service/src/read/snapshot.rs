@@ -6,6 +6,7 @@
 //! reads a live Workspace.
 use crate::history::lookup::{self as args, branch_node, invalid, refuse, short, Answer};
 use crate::history::MAIN;
+use crate::read::cached::Cached;
 use crate::store::{PortError, Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{as_text, EntryFacts, TreeTable, MAXIMUM_TEXT_BYTES};
@@ -81,13 +82,16 @@ pub fn resolve(
 /// where the serial alone was read (#818 R2). A failed or missing read
 /// gives serial 0 here, as [`resolve`] does; [`Saved::removals`] keeps the
 /// outcome for the marker step.
+///
+/// `pages` opens the root's tree: the call's caches, so the call's later
+/// demands find what the open read (#818 R4).
 pub fn resolve_saved(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
-    reader: &StorePorts,
+    pages: &dyn AuthenticatedObjects,
     name: &str,
 ) -> Result<(Snap, Saved), SdkRefusal> {
-    let (snap, record, removals) = resolve_with(store, stack, reader, name, |node| {
+    let (snap, record, removals) = resolve_with(store, stack, pages, name, |node| {
         let removals = store.published(|history| history.node_path_removals(stack.id, node));
         let serial = match &removals {
             Ok(Some((serial, _))) => *serial,
@@ -104,7 +108,7 @@ pub fn resolve_saved(
 fn resolve_with<T>(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
-    reader: &StorePorts,
+    pages: &dyn AuthenticatedObjects,
     name: &str,
     position: impl FnOnce(NodeId) -> (u64, T),
 ) -> Result<(Snap, args::NodeRecord, T), SdkRefusal> {
@@ -144,7 +148,7 @@ fn resolve_with<T>(
         return Err(invalid("saved version belongs to another project"));
     }
     let root = record.root();
-    let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
+    let tree = TreeTable::open(pages, FilesystemRootId(root)).map_err(args::content)?;
     let (serial, beside) = position(node);
     let snap = Snap {
         kind,
@@ -284,6 +288,23 @@ pub fn size(reader: &StorePorts, entry: &EntryFacts) -> Result<u64, SdkRefusal> 
     }
 }
 
+/// [`size`] through the call's caches (#818 R4): a file's length state and
+/// a symlink's target can come from a pack the call already holds.
+pub fn size_in(cached: &Cached, entry: &EntryFacts) -> Result<u64, SdkRefusal> {
+    match entry.value.kind {
+        InodeKind::Directory => Ok(0),
+        InodeKind::RegularFile => cached
+            .lengths(&[entry.value.content_root])?
+            .pop()
+            .ok_or_else(|| args::failed("missing file length")),
+        InodeKind::Symlink => cached
+            .read_canonical(entry.value.content_root)
+            .and_then(|canonical| SymlinkTarget::decode(&canonical))
+            .map(|target| target.as_bytes().len() as u64)
+            .map_err(args::content),
+    }
+}
+
 /// A regular file's text within the text bound; `None` for anything else, a
 /// binary file or a larger one.
 pub fn text(reader: &StorePorts, entry: Option<EntryFacts>) -> Result<Option<String>, SdkRefusal> {
@@ -316,17 +337,6 @@ pub fn open(
     let reader = reader(store, stack);
     let snap = resolve(store, stack, &reader, name)?;
     Ok((reader, snap))
-}
-
-/// [`open`] for a read call, with what [`resolve_saved`] kept.
-pub fn open_saved(
-    store: &Arc<Store>,
-    stack: &LayerStackRecord,
-    name: &str,
-) -> Result<(Arc<StorePorts>, Snap, Saved), SdkRefusal> {
-    let reader = reader(store, stack);
-    let (snap, saved) = resolve_saved(store, stack, &reader, name)?;
-    Ok((reader, snap, saved))
 }
 
 /// The result shape every read shares.

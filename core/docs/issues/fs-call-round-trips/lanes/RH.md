@@ -286,3 +286,34 @@ open per case, `.warm` the repeat on that open (pins' own definitions).
   (`persistence/src/history/admission.rs`, store-service
   `tests/refresh_lookups.rs`, `tests/support/view.rs`, `tests/verify768y_*`),
   left as they are.
+
+## M2 (base: merged M1 tip `cfc9586d05`; read and write pins green there)
+
+Targets (RECORD rule): warm = SPEC target; cold = SPEC target + (cold − probe)
+from the Phase 0 table.
+
+### R4 — one `Cached` for the whole call (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: the five reads (and `blame`) build the call's `Cached` before
+  the snapshot resolves and open the root's `TreeTable` through it; `size()`
+  of a file in `stat`/`read` and `Cached::roots`' lengths (grep) read through
+  the same cache (`Storage::lengths_with` beside `read_with`,
+  `ReadSession::lengths_with`, `StorePorts::lengths_with`).
+- Saves a demand only where the root object, the file's state object or the
+  lengths' objects share a pack the call already holds. Predicted per case:
+  0 to −2 PG trips (TreeTable::open's pack is the one the walk's first page
+  sits in on this small tree: −1 likely everywhere; a file's length −0/−1
+  on `stat`/`read` files); SQLite: the same reads' statements. No case may
+  rise. SPEC counts R4 as 0.
+- Memory: the existing per-call `Cached` (3 MiB bound) only.
+
+**Measured (receipts `receipts/R4/`).** PG: every read case unchanged (0,
+within the predicted 0..−2). SQLite: −1 statement on every read case, cold
+and warm (`stat.root` 22 → 21 warm; new pins, D1). History pins unchanged
+(`blame` opens its root through a cache of its own until H3). No new
+message: no sweep. `method_refusal_order`, `sdk_round_trip_equivalence_seeded`,
+`sdk_text_scan`, `sdk_path_reads`, `stat_symlink`, `sdk_grep_reads`,
+`sdk_large_file_budget` green. `sdk_text_scan.rs` follows `reads::read`'s
+signature (no reader argument). Deleted tests: none.

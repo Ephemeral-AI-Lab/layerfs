@@ -10,6 +10,7 @@ use crate::store::StorePorts;
 use crate::write::files::{self, Change};
 use crate::StoreService;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::AuthenticatedObjects;
 use layerfs_history::LayerStackRecord;
 use std::sync::Arc;
 
@@ -27,19 +28,32 @@ pub fn project(service: &StoreService, args: &SdkValue) -> Result<LayerStackReco
 /// prefix more than one Commit starts with refused `InvalidInput` with
 /// `matches`.
 ///
-/// With them comes what the resolve read on the way ([`Saved`]): the node's
-/// record for the answer's `at`, and its markers for the visibility step.
-pub fn snapshot_full(
+/// The snapshot itself resolves in [`snapshot_in`], once the call has built
+/// its caches over the reader (#818 R4).
+pub fn snapshot_target(
     service: &StoreService,
     args: &SdkValue,
-) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap, Saved), SdkRefusal> {
+) -> Result<(LayerStackRecord, Arc<StorePorts>, String), SdkRefusal> {
     let stack = project(service, args)?;
     let name = match pinned(service, &stack, args)? {
         Some(full) => full,
         None => crate::operator::args::snapshot_name(args)?.to_owned(),
     };
-    let (reader, snap, saved) = crate::read::snapshot::open_saved(&service.store, &stack, &name)?;
-    Ok((stack, reader, snap, saved))
+    let reader = crate::read::snapshot::reader(&service.store, &stack);
+    Ok((stack, reader, name))
+}
+
+/// The snapshot `name` resolves to, its root opened through `pages` (the
+/// call's caches), with what the resolve read on the way ([`Saved`]): the
+/// node's record for the answer's `at`, and its markers for the visibility
+/// step.
+pub fn snapshot_in(
+    service: &StoreService,
+    stack: &LayerStackRecord,
+    pages: &dyn AuthenticatedObjects,
+    name: &str,
+) -> Result<(Snap, Saved), SdkRefusal> {
+    crate::read::snapshot::resolve_saved(&service.store, stack, pages, name)
 }
 
 /// The full identity of the read's `commit` when it is an id prefix. A

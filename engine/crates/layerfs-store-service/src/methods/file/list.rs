@@ -1,5 +1,5 @@
 //! `fs.list`.
-use crate::methods::args::{optional_path, paging, snapshot_full, Answer};
+use crate::methods::args::{optional_path, paging, snapshot_in, snapshot_target, Answer};
 use crate::read::cached::Cached;
 use crate::{
     read::{paged_reads, query, reads, visibility},
@@ -10,11 +10,13 @@ use layerfs_content::compare::memo::Memo;
 
 /// `list(path?, { branch, commit?, pageSize?, pagePos? })`: one window of a directory.
 pub fn list(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap, saved) = snapshot_full(service, args)?;
+    let (stack, reader, name) = snapshot_target(service, args)?;
+    // The call's caches, from the root's open on (#818 R4).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, &name)?;
     let path = optional_path(args)?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     // One path walk for the call (#818 R3), through its caches and memo.
-    let cached = Cached::new(&reader)?;
     let memo = Memo::new(&cached);
     let entry = visibility::checked(&memo, &snap, &path, &seen)?;
     let removed = seen.hidden_children(&memo, &snap, &path)?;
