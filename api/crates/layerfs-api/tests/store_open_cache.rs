@@ -211,3 +211,43 @@ fn a_running_call_keeps_its_store_open_against_a_move_or_remove() {
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);
 }
+
+/// The host's `machine.stop` closes this process's own idle copy itself
+/// (#819): only other processes and a call running here hold it. A write
+/// waiting for the writer lock is such a call, and holds the stop.
+#[cfg(all(feature = "machine", any(target_os = "linux", target_os = "macos")))]
+#[test]
+fn a_running_call_holds_the_host_stop_and_an_idle_copy_does_not() {
+    use nix::fcntl::{Flock, FlockArg};
+    use std::time::Duration;
+    let (home, root, folder) = home_with_project();
+    assert_eq!(read(&home), "zero\n");
+    let lease = paths::lease_dir(&home, "shop").join(std::process::id().to_string());
+    let directory = std::fs::File::open(paths::store_dir(&home, "shop")).unwrap();
+    let writer = Flock::lock(directory, FlockArg::LockExclusive).unwrap();
+    let running = {
+        let home = home.clone();
+        std::thread::spawn(move || write(&home, "slow\n"))
+    };
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(
+        !running.is_finished(),
+        "the write waits for the writer lock"
+    );
+    let stop = [("machine", t(layerfs_home::names::HOST_MACHINE))];
+    let (code, message) = call(&home, "machine.stop", &stop).unwrap_err();
+    assert_eq!(code, "InUse", "{message}");
+    let holder = format!("Store shop (pid {})", std::process::id());
+    assert!(message.contains(&holder), "{message}");
+    assert!(lease.is_file(), "the running call keeps its lease");
+    drop(writer.unlock().unwrap());
+    // a call admitted before the stop finishes
+    let written = running.join().unwrap().unwrap();
+    assert!(written.get_text("commit").is_some(), "{written:?}");
+    // the call has ended: its copy is idle, and the stop closes it
+    ok(&home, "machine.stop", &stop);
+    assert!(!lease.exists(), "the stop closed this process's idle copy");
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(folder);
+}

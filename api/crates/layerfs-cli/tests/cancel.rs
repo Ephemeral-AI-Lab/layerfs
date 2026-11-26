@@ -607,8 +607,6 @@ fn forced_native_machine_stop_cancels_running_commands() {
         ("machine", t(layerfs_api::names::HOST_MACHINE)),
         ("force", SdkValue::Bool(true)),
     ];
-    // this process's own warm Store lease is a holder a stop names: close it
-    layerfs_api::close_idle(Duration::ZERO);
     let stopped = ok(&home, "machine.stop", &force);
     assert_eq!(
         stopped.get("stopped_sandboxes"),

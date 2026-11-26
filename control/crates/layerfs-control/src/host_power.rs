@@ -99,7 +99,18 @@ pub(crate) fn stop(
             blocking.push(format!("Sandbox {}", sandbox.name()));
         }
     }
-    for store in crate::inventory::stores_on(home, name.as_str())? {
+    let stores = crate::inventory::stores_on(home, name.as_str())?;
+    // this process's own idle copies close first, as a move's settle does
+    // (Store I/O, so before any record lock): only other processes and a
+    // call running here hold the machine; a copy in use stays a holder
+    for store in &stores {
+        let file = layerfs_home::home::paths::store_file(home, store);
+        match layerfs_store::open::close(&file) {
+            Err(error) if error.code != "InUse" => return Err(error),
+            _ => {}
+        }
+    }
+    for store in stores {
         let _guard = layerfs_store::record::lock(home, &store)?;
         let record = layerfs_store::record::StoreRecord::of(home, &store)?;
         if !matches!(record.store_ref()?,layerfs_store::record::StoreRef::Sqlite{machine,..} if machine==name.as_str())

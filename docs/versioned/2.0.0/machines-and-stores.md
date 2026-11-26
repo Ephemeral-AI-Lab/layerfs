@@ -245,8 +245,10 @@ The OS host is enabled on a new home. Starting it explicitly enables it and veri
 the host worker. Idle worker exit leaves the host enabled. Stopping records
 `stopped` before the worker drains. New local SQLite Store calls, maintenance operations, and new Sandboxes
 on this host then receive `Unavailable` with a start command. A previously admitted
-call finishes. If holders remain, stop reports `InUse` with the Sandbox names
-and Store process IDs, and the host stays stopped. A later stop checks again.
+call finishes. The stopping process's own idle Store copies close first; an
+SDK app's call still running holds the host. If holders remain, stop reports
+`InUse` with the Sandbox names and Store process IDs, and the host stays
+stopped. A later stop checks again.
 A forced stop performs the host Sandbox teardown and records its outcomes.
 A later explicit forced stop can reconcile an uncertain previous stop after
 its owner exits. Direct PostgreSQL calls continue while the host is stopped.

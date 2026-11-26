@@ -1,8 +1,12 @@
 //! The six doctors (call surface 2.0): `home`, `machine`, `store`,
 //! `project`, `sandbox` and `backup doctor` answer one report ([`report`])
 //! made by one runner ([`frame`]) over each kind's checks ([`kinds`]). A
-//! doctor changes nothing and starts no machine; it takes no lock, so a
-//! home that changes meanwhile may be reported as it was part way.
+//! doctor changes nothing and starts no machine. It waits for no lock: the
+//! one lock it takes is the host worker probe's single non-blocking try of
+//! the startup lock and `worker.lock`, released at once and only for a
+//! socket that has no listener or lacks its private mode (`machine get
+//! --with live` shares that probe). A home that changes meanwhile may be
+//! reported as it was part way.
 //!
 //! No doctor's report holds what interrupted operations left: LayerFS
 //! removes it itself where nothing can own it (spec v20,

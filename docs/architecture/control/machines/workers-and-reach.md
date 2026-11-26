@@ -503,8 +503,11 @@ host's record defaults to enabled. Stop atomically records stopped under
 the home lock used by Sandbox creation and worker socket publication.
 Each SQLite lease claim and reused worker Store checks the machine record
 under its Store lock. Maintenance operations check the same fence before
-recovering an old intent or recording their new one. After fencing admission, stop drains the worker and
-inspects holders under each Store lock. This ordering lets earlier leases
+recovering an old intent or recording their new one. After fencing admission, stop drains the worker,
+closes the calling process's own idle copies of the machine's Stores (as a
+move's settle does, before any record lock) and inspects holders under each
+Store lock: other processes' leases and a copy a call in the calling
+process is using still block it. This ordering lets earlier leases
 finish and exposes the process identities still holding the Store.
 Force uses the existing per-Sandbox stop with its recorded runtime identity.
 The machine remains stopped when a holder or teardown refusal is reported.

@@ -9,7 +9,6 @@ use fixture::Fixture;
 use layerfs_api::names::HOST_MACHINE;
 use layerfs_bridge::control::SdkValue;
 use proof::Cli;
-use std::time::Duration;
 
 fn cli(home: &Fixture, args: &[&str]) -> Cli {
     Cli::spawn(&home.paths.home, args)
@@ -73,18 +72,7 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
     let pid = std::process::id();
     assert!(proof::lease_file(&home, i64::from(pid)).exists());
 
-    let self_stop = layerfs_api::call(
-        Some(&home.paths.home),
-        "machine.stop",
-        SdkValue::map([("machine", SdkValue::text(HOST_MACHINE))]),
-        &mut |_| {},
-    )
-    .expect_err("an SDK process retains its own Store lease during stop");
-    assert_eq!(self_stop.code, "InUse", "{self_stop:?}");
-    assert!(
-        self_stop.message.contains(&pid.to_string()),
-        "{self_stop:?}"
-    );
+    // another process's warm lease (this SDK's) holds the stopped host
     let refused = cli(&home, &stop).refused("InUse");
     let msg = refused.get_text("message").unwrap();
     assert!(
@@ -105,8 +93,16 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
     proof::assert_reads(proof::spawn_reads(&other, 1, false));
     other.drain();
 
-    layerfs_api::close_idle(Duration::ZERO);
-    cli(&home, &stop).ok();
+    // the SDK's own stop closes its own idle copy first: only other
+    // processes and a call running here hold the host
+    layerfs_api::call(
+        Some(&home.paths.home),
+        "machine.stop",
+        SdkValue::map([("machine", SdkValue::text(HOST_MACHINE))]),
+        &mut |_| {},
+    )
+    .expect("an SDK process's own idle Store lease does not hold its stop");
+    assert!(!proof::lease_file(&home, i64::from(pid)).exists());
     let record = layerfs_api::home::paths::store_record(&home.paths.home, "shop");
     let before_compact = std::fs::read(&record).unwrap();
     cli(&home, &["store", "compact", "shop"]).refused("Unavailable");

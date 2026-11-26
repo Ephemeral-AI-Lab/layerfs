@@ -157,9 +157,20 @@ impl HostPaths {
     }
 }
 
+/// A lock [`free_lock`] took, released explicitly when dropped: a child
+/// forked meanwhile shares the open file description until its exec, so
+/// closing the descriptor alone would leave it held (F-053).
+struct Taken(File);
+
+impl Drop for Taken {
+    fn drop(&mut self) {
+        flock::unlock(&self.0);
+    }
+}
+
 /// The lock at `path` taken without waiting (`None` when another holds it),
 /// or no file when there is none.
-fn free_lock(path: &Path) -> Result<Option<Option<File>>, SdkRefusal> {
+fn free_lock(path: &Path) -> Result<Option<Option<Taken>>, SdkRefusal> {
     let unavailable = |error: io::Error| {
         refused(
             "Unavailable",
@@ -176,7 +187,7 @@ fn free_lock(path: &Path) -> Result<Option<Option<File>>, SdkRefusal> {
     }
     let file = File::open(path).map_err(unavailable)?;
     match flock::try_lock(&file, true).map_err(unavailable)? {
-        true => Ok(Some(Some(file))),
+        true => Ok(Some(Some(Taken(file)))),
         false => Ok(None),
     }
 }

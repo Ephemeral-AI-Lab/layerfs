@@ -59,8 +59,6 @@ fn exec_helper() {
 /// `machine.stop native --force`, its long answer: a forced stop, and
 /// `native` stays `ready` (the host itself never stops).
 fn forced_stop(home: &Path) -> SdkValue {
-    // this process's own warm Store lease is a holder a stop names: close it
-    layerfs_api::close_idle(Duration::ZERO);
     let stopped = call(
         home,
         "machine.stop",
@@ -314,8 +312,6 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
     live_case(&home, "live", true);
     live_case(&home, "close", false);
     identity_case(&home);
-    // the worker `machine start` began drains before its home goes
-    layerfs_api::close_idle(Duration::ZERO);
     call(
         &home,
         "machine.stop",
