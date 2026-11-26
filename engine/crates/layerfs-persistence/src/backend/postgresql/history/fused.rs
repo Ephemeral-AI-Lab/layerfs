@@ -7,7 +7,9 @@
 //! 1. `BEGIN READ COMMITTED`; `SET LOCAL` search_path, synchronous_commit and
 //!    lock_timeout; `set_config('layerfs.attempt', nonce, true)` and the
 //!    generation fence `1/(catalog_incarnation = G)` (simple text).
-//! 2. The pack bodies: `INSERT ... FROM unnest`, binary (only with packs).
+//! 2. The pack bodies: `INSERT ... FROM unnest`, binary (only with packs),
+//!    one statement per run of at most one ordinary pack's bytes
+//!    ([`pack_statements`]).
 //! 3. The attempt check; `store_lane FOR UPDATE`; the barrier lock and
 //!    unlock (simple text).
 //! 4. The Branch at the expected head and base (the `branch_snapshot`
@@ -66,7 +68,10 @@ use crate::blocks::hints::Block;
 use crate::history::Fused;
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{CommitOutcome, CommitRecord, CommitRequest};
-use layerfs_storage::{location::PackDomain, port::Publication};
+use layerfs_storage::{
+    location::PackDomain,
+    port::{Publication, PublishedPack},
+};
 use postgres::error::SqlState;
 use postgres::types::ToSql;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -181,8 +186,9 @@ pub(crate) fn commit(
             && batch.release_ordinals.is_none())
     });
     if let Some(batch) = tail.filter(|batch| !batch.packs.is_empty()) {
-        let (values, bound) = pack_values(batch)?;
-        message.statement(Step::Packs, qualified(PACK), with(values, &nonce), bound);
+        for (values, bound) in pack_statements(&batch.packs)? {
+            message.statement(Step::Packs, qualified(PACK), with(values, &nonce), bound);
+        }
     }
     message.simple(Step::Lane);
     let (branch, stack, base) = (
@@ -338,8 +344,42 @@ fn boxed(param: crate::backend::records::Param) -> Value<'static> {
     }
 }
 
-/// The pack rows of `batch`, as `objects::publish::packs` writes them.
-pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value<'_>>, u64), Fused> {
+/// Pack bytes bound by one pack insert statement. The driver encodes each
+/// statement into a buffer and copies it into the connection's write
+/// buffer, and both keep their grown capacity for the connection's life.
+/// Splitting keeps the pack statements' share of that capacity near one
+/// ordinary pack, however many packs the batch holds; they stay in the same
+/// message and transaction. A singleton pack, up to `SINGLETON_PACK_LIMIT`,
+/// cannot be split and is sent alone. The retained capacity is therefore
+/// the largest single statement: a singleton pack, or the rows or hint
+/// statement at their limits (`TRANSACTION_ROW_LIMIT` rows, `ARRAY_ROWS`
+/// hint blocks).
+const STATEMENT_PACK_BYTES: usize = layerfs_storage::policy::PACK_LIMIT;
+
+/// The pack insert parameters of `packs`, one entry per statement: the
+/// contiguous runs of at most [`STATEMENT_PACK_BYTES`] body bytes, each
+/// holding at least one pack, in order. None for no packs.
+pub(crate) fn pack_statements(
+    packs: &[PublishedPack],
+) -> Result<Vec<(Vec<Value<'_>>, u64)>, Fused> {
+    let mut statements = Vec::new();
+    let (mut start, mut bytes) = (0, 0);
+    for (index, pack) in packs.iter().enumerate() {
+        let length = pack.body().len();
+        if index > start && bytes + length > STATEMENT_PACK_BYTES {
+            statements.push(pack_values(&packs[start..index])?);
+            (start, bytes) = (index, 0);
+        }
+        bytes += length;
+    }
+    if start < packs.len() {
+        statements.push(pack_values(&packs[start..])?);
+    }
+    Ok(statements)
+}
+
+/// The pack rows of `packs`, as `objects::publish::packs` writes them.
+fn pack_values(packs: &[PublishedPack]) -> Result<(Vec<Value<'_>>, u64), Fused> {
     let mut columns = (
         Vec::new(),
         Vec::new(),
@@ -349,7 +389,7 @@ pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value<'_>>, u64), 
         Vec::new(),
     );
     let mut bound = 0;
-    for pack in &batch.packs {
+    for pack in packs {
         let info = pack.info();
         let body = pack.body();
         let header = layerfs_storage::pack::layout::parse_header(body)

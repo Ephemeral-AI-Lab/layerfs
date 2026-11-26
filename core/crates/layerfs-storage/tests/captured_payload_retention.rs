@@ -8,7 +8,8 @@ mod support;
 
 use chains::ChainProvider;
 use layerfs_content::{
-    object::codec::encode_bytes_object, FinalizedConsumer, FinalizedObject, ObjectRole,
+    object::codec::encode_bytes_object, AdvisoryPredecessors, FinalizedConsumer, FinalizedObject,
+    ObjectRole,
 };
 use layerfs_storage::{
     location::PackDomain,
@@ -196,4 +197,75 @@ fn captured_save_uses_the_first_winner_and_releases_the_losing_pack() {
     pack_requests(&provider);
     assert_read(&storage, &raced);
     assert_eq!(pack_requests(&provider), [winner]);
+}
+
+/// Small whole files that share one six-group pack, then a captured Save of
+/// an edited version of each, declaring the old one as its base. The Save
+/// reads each base as one group of the shared pack. Once the groups it keeps
+/// cover half the pack, the next read keeps the whole pack, which serves the
+/// rest: five reads of the pack, not one per group.
+#[test]
+fn captured_base_reads_keep_a_dense_shared_pack_whole() {
+    const FILES: usize = 12;
+    const BYTES: usize = 20_000;
+    let memory = Arc::new(MemoryMetadata::default());
+    // Whole small packs answer group reads, as PostgreSQL's do.
+    let mut port = ChainProvider::new(memory.clone());
+    (port.batched, port.ranged) = (true, false);
+    let provider = Arc::new(port);
+    let raw: Vec<Vec<u8>> = support::noise(FILES * BYTES)
+        .chunks_exact(BYTES)
+        .map(<[u8]>::to_vec)
+        .collect();
+    let bases: Vec<_> = raw
+        .iter()
+        .map(|bytes| {
+            FinalizedObject::new(
+                ObjectRole::WholeFile,
+                support::assembled_small_object(bytes),
+            )
+            .unwrap()
+        })
+        .collect();
+    save(&Storage::new(provider.clone()).unwrap(), &bases, false);
+    let state = memory.state.lock().unwrap();
+    let shared = state.objects[&bases[0].id()].pack_id;
+    assert!(bases
+        .iter()
+        .all(|base| state.objects[&base.id()].pack_id == shared));
+    let header = layerfs_storage::pack::layout::parse_header(&state.packs[&shared].body).unwrap();
+    assert_eq!(header.group_count, 6);
+    drop(state);
+
+    let edited: Vec<_> = raw
+        .iter()
+        .zip(&bases)
+        .map(|(bytes, base)| {
+            let mut bytes = bytes.clone();
+            bytes[7] ^= 0x5a;
+            FinalizedObject::new(
+                ObjectRole::WholeFile,
+                support::assembled_small_object(&bytes),
+            )
+            .unwrap()
+            .with_predecessors(AdvisoryPredecessors::explicit(base.id()).unwrap())
+        })
+        .collect();
+    // A wave's worth of unrelated files after each edited one puts every
+    // base read in its own wave: one group of the shared pack at a time.
+    let fillers = payloads(FILES * (WAVE_CANONICAL_BYTES_LIMIT as usize / FILE_BYTES + 1));
+    let objects: Vec<_> = edited
+        .iter()
+        .zip(fillers.chunks(fillers.len() / FILES))
+        .flat_map(|(object, filler)| std::iter::once(object).chain(filler))
+        .cloned()
+        .collect();
+    let storage = Storage::new(provider.clone()).unwrap();
+    pack_requests(&provider);
+    save(&storage, &objects, true);
+    let requests = pack_requests(&provider);
+    assert_eq!(requests.iter().filter(|id| **id == shared).count(), 5);
+    for object in &edited {
+        assert_read(&storage, object);
+    }
 }

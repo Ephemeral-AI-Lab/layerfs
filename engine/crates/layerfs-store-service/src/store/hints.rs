@@ -14,7 +14,7 @@ use layerfs_workspace::IndexedEditRecords;
 use std::cell::RefCell;
 
 /// Rows one hint write transaction carries.
-const BATCH: usize = 4096;
+const BATCH: usize = layerfs_persistence::HINT_BATCH_ROWS;
 
 /// Records every name binding `right` holds that `left` does not, in bounded
 /// write transactions, and returns how many rows it recorded. `left` is a

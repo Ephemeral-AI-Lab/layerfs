@@ -24,6 +24,7 @@ mod removal;
 mod rows;
 mod transaction;
 pub use fused::{Committer, Fused, FIXED_ROWS};
+pub use hints::HINT_BATCH_ROWS;
 pub use kept::{KeptHistory, KeptNode, KeptNodeId};
 pub(crate) use lineage_backfill::backfill_lineage;
 pub(crate) use objects::spill;

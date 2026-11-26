@@ -10,8 +10,8 @@ use crate::{
     IndexedRecordPage, ObjectId,
 };
 
-const PROVISIONAL: u32 = 0x4653_0031;
-const CERTIFIED: u32 = 0x4653_0032;
+const PROVISIONAL: u32 = state::BINDING_PROVISIONAL;
+const CERTIFIED: u32 = state::BINDING_CERTIFIED;
 const BLOCK_ROWS: usize = 64;
 const HINT_HEADER: usize = 17;
 const MARKER_BYTES: usize = 41;

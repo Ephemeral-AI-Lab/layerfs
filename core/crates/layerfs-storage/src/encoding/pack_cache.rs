@@ -355,9 +355,19 @@ impl PackCache {
                 }
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
                 let bytes = body.len();
+                // Retained units of this pack covering half its bytes make
+                // it dense: the whole body is kept (the rule `acquire_groups`
+                // applies when it asks for one) and serves its other groups.
+                let dense = self
+                    .entries
+                    .range((id, Some(0))..=(id, Some(usize::MAX)))
+                    .map(|(_, entry)| entry.body.len())
+                    .sum::<usize>()
+                    >= bytes.div_ceil(2);
                 let sparse = match (info, wanted.first()) {
                     (Some(info), Some(&number))
                         if self.sparse_whole_files
+                            && !dense
                             && header.lane == crate::pack::layout::PackLane::WholeFile
                             && header.group_count > 1
                             && wanted.len() == 1 =>

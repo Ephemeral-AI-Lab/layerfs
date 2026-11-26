@@ -15,10 +15,14 @@ pub(crate) const ARRAY_ROWS: usize = 1024;
 
 const BLOCKS_OF: &str = "hint_blocks_of";
 
+/// Binding hint rows one write transaction carries: the batch callers
+/// record at a time, and the most one overflow flight takes.
+pub const HINT_BATCH_ROWS: usize = 4096;
+
 /// Only one existing array statement fits the overflow flight. Invalid rows
 /// follow the ordinary transaction so its fence and encoding error order hold.
 pub(crate) fn overflow_blocks(rows: &[BindingHint]) -> Option<Vec<Block>> {
-    if rows.is_empty() || rows.len() > 4096 {
+    if rows.is_empty() || rows.len() > HINT_BATCH_ROWS {
         return None;
     }
     encode(rows)

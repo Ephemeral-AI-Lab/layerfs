@@ -1,6 +1,6 @@
 //! One fenced PostgreSQL flight for an eligible captured Save registration.
 use super::super::{
-    history::fused::{nonce, pack_values, row_values, PACK, ROWS},
+    history::fused::{nonce, pack_statements, row_values, PACK, ROWS},
     session::{
         connection::Session,
         pipeline::{Refusal, Reply, Request},
@@ -61,15 +61,23 @@ fn send(
     let lane = format!("{check}; {}", Settings::lane_row(schema));
     let pack_sql = PACK.replace("{s}", schema);
     let row_sql = ROWS.replace("{s}", schema);
+    // One pack statement per run of at most one ordinary pack's bytes, all
+    // in this flight's round trip and transaction (`pack_statements`).
+    let built = pack_statements(&batch.packs).map_err(|_| BackendError::Integrity)?;
+    let pack_params: Vec<Vec<&(dyn ToSql + Sync)>> = built
+        .iter()
+        .map(|(values, _)| {
+            let mut params: Vec<&(dyn ToSql + Sync)> =
+                values.iter().map(|value| &**value).collect();
+            params.push(&nonce);
+            params
+        })
+        .collect();
     let mut requests = vec![Request::Simple(&begin)];
-
-    let (pack_values, pack_bytes) = pack_values(batch).map_err(|_| BackendError::Integrity)?;
-    let mut packs: Vec<&(dyn ToSql + Sync)> = pack_values.iter().map(|value| &**value).collect();
-    if !batch.packs.is_empty() {
-        packs.push(&nonce);
+    for ((_, pack_bytes), params) in built.iter().zip(&pack_params) {
         requests.push(Request::Statement {
             sql: &pack_sql,
-            params: &packs,
+            params,
             bytes: pack_bytes + nonce.len() as u64,
         });
     }

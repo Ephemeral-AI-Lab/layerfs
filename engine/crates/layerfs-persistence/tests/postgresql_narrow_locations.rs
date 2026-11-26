@@ -371,6 +371,108 @@ fn captured_publication_keeps_the_winner_and_rolls_back_invalid_rows() {
     assert_eq!(exercise("held_tail", false, true), ordinary);
 }
 
+/// Incompressible bytes, so a pack's body is as large as its records.
+fn noise(seed: u64, length: usize) -> Vec<u8> {
+    let mut state = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    (0..length)
+        .map(|_| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (state >> 56) as u8
+        })
+        .collect()
+}
+
+/// One payload pack of about 180 KiB per object, so no two packs fit in one
+/// captured pack statement.
+fn wide(handles: &PostgresHandles, objects: &[ObjectId], seed: u64) -> Publication {
+    let first = handles
+        .storage
+        .reserve(Reserve {
+            packs: objects.len(),
+            ordinals: 0,
+        })
+        .unwrap()
+        .first_pack_id;
+    let mut batch = Publication::default();
+    for (index, object) in objects.iter().enumerate() {
+        let pack_id = first + index as i64;
+        let groups: Vec<_> = (0..3)
+            .map(|group| {
+                let bytes = noise(seed * 1_000 + index as u64 * 10 + group, 60_000);
+                build_group(PackLane::WholeFile, &[bytes], None).unwrap()
+            })
+            .collect();
+        let body = assemble(PackLane::WholeFile, &groups).unwrap();
+        assert!(body.len() > 128 * 1024 && body.len() <= 256 * 1024);
+        batch.packs.push(PublishedPack::seal(
+            pack_id,
+            PackDomain::Payload,
+            Arc::new(body),
+        ));
+        batch.objects.push(location(*object, pack_id, 0));
+    }
+    batch
+}
+
+#[test]
+fn captured_publication_splits_wide_packs_inside_one_flight() {
+    let Some(url) = url() else { return };
+    let exercise = |tag, captured, held_tail| {
+        let (schema, _) = Schema::new(url.clone(), tag);
+        let writer = PostgresHandles::open_writable(&schema.selection, BINDING, CURSOR).unwrap();
+        let publish = |batch: &Publication| {
+            if held_tail {
+                writer.storage.publish_captured_tail(batch)
+            } else if captured {
+                writer.storage.publish_captured(batch)
+            } else {
+                writer.storage.publish(batch)
+            }
+        };
+        assert!(publish(&wide(&writer, &[id(7, 1)], 1))
+            .unwrap()
+            .lost
+            .is_empty());
+
+        let objects = [id(7, 2), id(7, 3), id(7, 4)];
+        let batch = wide(&writer, &objects, 2);
+        let start = writer.diagnostics().unwrap();
+        assert!(publish(&batch).unwrap().lost.is_empty());
+        let work = writer.diagnostics().unwrap().since(&start);
+        if captured || held_tail {
+            assert_eq!(work.round_trips, 1, "{work:?}");
+            assert_eq!(work.write_commits, 1, "{work:?}");
+        }
+        let expected: Vec<_> = batch
+            .packs
+            .iter()
+            .zip(objects)
+            .map(|(pack, object)| (object, pack.info().pack_id, 0))
+            .collect();
+        assert_eq!(located(&writer, &objects), expected);
+
+        // Every split pack statement belongs to the one transaction: a row
+        // the server refuses after them leaves none of the packs behind.
+        let mut refused = wide(&writer, &[id(7, 5), id(7, 6)], 3);
+        refused.signatures.push(SignatureRow {
+            slot: 9,
+            stamp: 10,
+            object_id: id(7, 9),
+            signature: [9; 32],
+        });
+        let before = publication_state(&schema);
+        let failure = publish(&refused).unwrap_err();
+        assert_eq!(publication_state(&schema), before);
+        assert!(located(&writer, &[id(7, 5), id(7, 6)]).is_empty());
+        (publication_state(&schema), failure)
+    };
+    let ordinary = exercise("wide_ordinary", false, false);
+    assert_eq!(exercise("wide_capture", true, false), ordinary);
+    assert_eq!(exercise("wide_held_tail", false, true), ordinary);
+}
+
 #[test]
 fn captured_publication_preserves_generation_refusals() {
     let Some(url) = url() else { return };
