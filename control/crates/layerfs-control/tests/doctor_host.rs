@@ -286,7 +286,7 @@ fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
     )
     .write(&home)
     .unwrap();
-    let runtime = paths::machine_dir(&home, "native").join("run");
+    let runtime = paths::run_root(&home);
     private_dir(&runtime).unwrap();
     let trap = runtime.join("unreadable-runtime-tree");
     private_dir(&trap).unwrap();
