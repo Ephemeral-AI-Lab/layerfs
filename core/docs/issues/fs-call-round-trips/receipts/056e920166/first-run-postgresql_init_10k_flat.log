@@ -1,0 +1,7 @@
+
+running 1 test
+test postgresql_init_10k_flat ... FS_RT {"case":"init.flat_10k","method":"project.init","entries":10002,"ms":26841.4,"client_storage":{"connects":0,"round_trips":31041,"prepares":49,"statements":30702,"transactions":144,"returned_rows":141254},"server":{"calls":61922,"toplevel_calls":31658,"distinct":72,"top":[[20004,"SELECT $2 FROM ONLY \"lfs818_init_95696\".\"init_operation\" x WHERE \"operation_id\" OPERATOR(p"],[10256,"SELECT $2 FROM ONLY \"lfs818_init_95696\".\"pack\" x WHERE \"pack_id\" OPERATOR(pg_catalog.=) $1"],[10135,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role"],[10000,"INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path"],[10000,"UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=$6 W"],[203,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o"]]}}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 29.00s
+

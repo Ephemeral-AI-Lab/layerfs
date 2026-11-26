@@ -1,0 +1,7 @@
+
+running 1 test
+test postgresql_init_10k_nested ... FS_RT {"case":"init.nested_10k","method":"project.init","entries":10101,"ms":12366.6,"client_storage":{"connects":0,"round_trips":10953,"prepares":47,"statements":10664,"transactions":120,"returned_rows":111941},"server":{"calls":41882,"toplevel_calls":11467,"distinct":70,"top":[[20103,"SELECT $2 FROM ONLY \"lfs818_init_95423\".\"init_operation\" x WHERE \"operation_id\" OPERATOR(p"],[10308,"SELECT $2 FROM ONLY \"lfs818_init_95423\".\"pack\" x WHERE \"pack_id\" OPERATOR(pg_catalog.=) $1"],[10142,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role"],[205,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o"],[120,"COMMIT"],[120,"SET LOCAL search_path TO lfs818_init_95423"]]}}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 13.99s
+
