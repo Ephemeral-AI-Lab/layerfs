@@ -23,6 +23,12 @@ pub fn main(words: Vec<String>) -> ExitCode {
             [flag] if flag == "--json" => crate::capabilities::version(),
             _ => wrong("use layerfs --version [--json]".to_owned()),
         },
+        #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+        Some("worker")
+            if words.get(1).map(String::as_str) == Some("--host") && words.len() == 2 =>
+        {
+            worker::host_main()
+        }
         Some("worker") if words.len() == 1 => worker::main(),
         Some(family) => {
             let Some(name) = words.get(1) else {

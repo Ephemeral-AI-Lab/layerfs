@@ -144,3 +144,26 @@ kind or kernel route is an engine change.
 
 The binding code rules for this layer are in the
 [control guide](../../../control/AGENTS.md).
+
+## Native host worker bootstrap
+
+A machine-enabled CLI on macOS or Linux can start the native process through its
+internal `worker --host` entry. The native endpoint uses the real home's ID
+and preserves its directory permissions. The process holds its lifetime lock
+from endpoint setup through socket removal. It accepts ordinary and management
+connections on separate Unix sockets, and checks the peer UID before exchanging
+frames. Its bootstrap stays independent of guest root setup.
+
+The accept loop lets the kernel hold ordinary connections once all 16
+ordinary slots are occupied. Eight ordinary threads and two independently
+reserved management threads serve the admitted connections. Admission uses a
+fixed queue and a capped frame with an absolute deadline. The management
+socket reports worker identity and can request a drain even when every
+ordinary thread is occupied. The drain fences new operations, closes both
+listeners, and joins admitted connections before releasing the lifetime lock.
+The idle drain starts after 60 seconds without accepted work, checked every
+five seconds.
+
+The native bootstrap phase exposes lifecycle operations. The host Store call
+and close handlers gain Store authority and maintenance coordination in the
+routing phase. See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).

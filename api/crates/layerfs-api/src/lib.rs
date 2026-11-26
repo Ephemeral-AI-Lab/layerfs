@@ -56,6 +56,8 @@ pub use layerfs_control::machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
 /// for the front ends and their tests.
 pub mod worker {
+    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+    pub use layerfs_control::worker_server::serve_host;
     pub use layerfs_control::worker_server::{prepare_network, serve, serve_with_incarnation};
     pub use layerfs_machine::worker::*;
 }

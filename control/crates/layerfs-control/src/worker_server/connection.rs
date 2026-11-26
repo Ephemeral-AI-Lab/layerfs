@@ -220,3 +220,91 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
         ]),
     )])
 }
+
+/// Serves one Unix connection on a reserved host worker thread.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub(super) fn serve_host_connection(
+    server: &super::host::HostServer,
+    socket: &std::os::unix::net::UnixStream,
+    accepted: Instant,
+    management: bool,
+) -> bool {
+    use layerfs_home::trace;
+    use layerfs_machine::worker::{
+        host_check_peer, read_host_frame, write_host_frame, HOST_MAX_REPLY, HOST_MAX_REQUEST,
+    };
+
+    // Absolute deadlines apply to protocol I/O. A Store producer is never
+    // cancelled merely because the peer stops reading.
+    const INGRESS: Duration = Duration::from_secs(5);
+    const EGRESS: Duration = Duration::from_secs(5);
+
+    if host_check_peer(socket).is_err()
+        || write_host_frame(
+            socket,
+            &server.hello.to_frame(),
+            MAX_HELLO,
+            accepted + layerfs_machine::worker::HELLO_WAIT,
+        )
+        .is_err()
+    {
+        return false;
+    }
+    let max = if management {
+        MAX_HELLO
+    } else {
+        HOST_MAX_REQUEST
+    };
+    let Ok(Some(request)) = read_host_frame(socket, max, Some(Instant::now() + INGRESS)) else {
+        return false;
+    };
+    let Some(request_id) = request
+        .get_text("request_id")
+        .filter(|id| !id.is_empty() && id.len() <= 128)
+    else {
+        return false;
+    };
+    let traced = request.get_bool("trace_step");
+    if traced {
+        trace::steps_begin();
+    }
+    let outcome = match (request.get_text("op"), request.get("args")) {
+        _ if request.get_text("generation") != Some(server.hello.generation.as_str()) => {
+            Err(refused(
+                "Unavailable",
+                "the request names another host worker generation",
+            ))
+        }
+        (Some(op), Some(args @ SdkValue::Map(_))) => server.dispatch(management, op, args),
+        _ => Err(refused(
+            "InvalidInput",
+            "the host request needs op and args",
+        )),
+    };
+    let answer = match outcome {
+        Ok(value) => ("ok", value),
+        Err(refusal) => (
+            "error",
+            SdkValue::map([
+                ("code", SdkValue::text(refusal.code)),
+                ("message", SdkValue::text(refusal.message)),
+                ("detail", refusal.detail),
+            ]),
+        ),
+    };
+    let mut fields = vec![
+        ("request_id".to_owned(), SdkValue::text(request_id)),
+        (answer.0.to_owned(), answer.1),
+    ];
+    if traced {
+        trace::step("host_dispatch");
+        fields.push(("steps".to_owned(), trace::steps_value(trace::steps_take())));
+    }
+    write_host_frame(
+        socket,
+        &SdkValue::Map(fields),
+        HOST_MAX_REPLY,
+        Instant::now() + EGRESS,
+    )
+    .is_ok()
+}

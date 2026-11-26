@@ -25,6 +25,17 @@ A PostgreSQL login and a bucket's secret key are not settings either: they
 are kept in the home's secret folder; see
 [machines, Stores and backups](machines-and-stores.md#secrets).
 
+### Native worker lifecycle
+
+A native CLI worker on macOS or Linux can create `worker.sock` and
+`worker.ctl` in the private `machine/native/` directory. These sockets
+accept the UID that owns the home. The worker keeps `worker.lock` through
+shutdown, releases both sockets after draining its connections, and becomes
+eligible to exit after one idle minute. The home itself keeps its permissions.
+The internal `worker --host` entry serves that home when a launcher starts it.
+Host Store routing and maintenance coordination are separate implementation
+steps.
+
 ## Layout
 
 ```
