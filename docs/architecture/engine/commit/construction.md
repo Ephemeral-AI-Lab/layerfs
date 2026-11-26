@@ -99,7 +99,10 @@ reads authenticate a retained body through the same complete-pack checks as
 a fetched body. A missing or evicted body is fetched by its winning locator. For
 single-group reads of a multi-group whole-file pack, the Save retains the
 authenticated requested group in its existing dependency pack allowance.
-Other pack formats and multi-group demands keep their ordinary admission.
+Once the retained groups of a pack cover half its bytes, the next read keeps
+the whole authenticated pack instead, so its remaining groups are served from
+the cache. Other pack formats and multi-group demands keep their ordinary
+admission.
 
 [Published body admission and eviction](../../../../core/crates/layerfs-storage/src/read/fetch.rs)
 
