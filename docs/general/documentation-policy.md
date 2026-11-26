@@ -25,7 +25,8 @@
   page in the same commit.
 - `docs/general/` contains maintained project practices and concepts.
 - `docs/lesson/<category>/` contains lessons: one short rule per file, learned
-  in merged or closed work and indexed by category in
+  in merged work or a measured finding (open ones marked open) and indexed by
+  category and symptom in
   [the lesson index](../lesson/README.md). Lessons are informative, never
   override AGENTS.md or a policy, and are not product contracts.
 - `docs/plugins/` contains the plugin listing guide, its template and checker;
