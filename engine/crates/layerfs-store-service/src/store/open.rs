@@ -73,7 +73,6 @@ pub struct MergeCounters {
 /// composition owns that selection; this adapter knows only the public ports.
 pub struct Store {
     writer: Option<Arc<dyn PackPersistence>>,
-    sqlite_writer: Option<Arc<layerfs_persistence::DeferredSqliteWriter>>,
     pub(super) history: Arc<dyn HistoryCatalog>,
     pub(super) readers: Arc<ReadSet>,
     policy: StoragePolicy,
@@ -106,6 +105,9 @@ pub struct Store {
     /// (#768 step B, PostgreSQL): with its admission and markers it is then
     /// two writer messages and no reader round trip.
     pub(super) mount_on_writer: bool,
+    /// Dropped after the readers so SQLite can clean up WAL and SHM on its
+    /// last writable close.
+    sqlite_writer: Option<Arc<layerfs_persistence::DeferredSqliteWriter>>,
 }
 impl Store {
     /// Takes the control reader and a mount-time factory under explicit capacity.
@@ -206,7 +208,6 @@ impl Store {
         let cache = Arc::new(CanonicalCache::new(cache_bytes));
         Ok(Self {
             writer,
-            sqlite_writer: None,
             history,
             readers,
             policy,
@@ -224,6 +225,7 @@ impl Store {
             committer: None,
             fused: Default::default(),
             mount_on_writer: false,
+            sqlite_writer: None,
         })
     }
     pub(crate) fn with_deferred_sqlite_writer(

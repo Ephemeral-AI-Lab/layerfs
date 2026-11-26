@@ -84,7 +84,9 @@ initialization fails, the call receives that failure and the next mutation
 can make its own attempt. The directory lane coordinates writable opens. A
 raw SQLite writer can still cause a definite pre-effect `Busy`. Ordinary
 close and idle checkpoints use the writer only if it started. An explicit
-Sandbox release can start it for its checkpoint.
+Sandbox release can start it for its checkpoint. At service close the local
+readers drop before the writer so the last writable handle can finish SQLite
+WAL and SHM cleanup.
 See [SQLite open](../store/sqlite.md) and
 [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs).
 
