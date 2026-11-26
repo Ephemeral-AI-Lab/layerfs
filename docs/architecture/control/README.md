@@ -165,6 +165,13 @@ The idle drain starts after 60 seconds without an admitted call, checked every
 five seconds. Connections that never submit an authenticated operation leave
 the idle deadline unchanged.
 
-The native bootstrap phase exposes lifecycle operations. The host Store call
-and close handlers gain Store authority and maintenance coordination in the
-routing phase. See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).
+The CLI can route bounded local SQLite `file.read`, `file.stat`, and
+`file.list` calls to the native worker after argument and scope checks.
+The envelope contains the Store and project names and the allowlisted
+read arguments. The worker resolves the binding and checks the current
+Store record under its admission lock. An endpoint path or request that
+does not fit uses the direct route, chosen before dialing. If operation
+bytes may have been sent and no valid reply arrives, the caller reports
+`Unknown` with a request ID. The caller owns the single public audit line.
+SDK calls, PostgreSQL, writes, and guest Stores use their existing routes.
+See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).

@@ -105,11 +105,57 @@ pub fn call_scoped(
     home_path: Option<&Path>,
     scope: Option<&super::Scope>,
     name: &str,
-    mut args: SdkValue,
+    args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
     client: Client,
 ) -> Outcome {
+    call_from(
+        families,
+        home_path,
+        scope,
+        name,
+        args,
+        events,
+        FrontEnd::Library(client),
+    )
+}
+
+/// The CLI executable's checked call, eligible for the native read route.
+pub fn call_cli(
+    families: &'static [Family],
+    scope: Option<&super::Scope>,
+    name: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    call_from(families, None, scope, name, args, events, FrontEnd::Cli)
+}
+
+enum FrontEnd {
+    Cli,
+    Library(Client),
+}
+
+fn call_from(
+    families: &'static [Family],
+    home_path: Option<&Path>,
+    scope: Option<&super::Scope>,
+    name: &str,
+    mut args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+    origin: FrontEnd,
+) -> Outcome {
+    let client = match origin {
+        FrontEnd::Cli => Client::Cli,
+        FrontEnd::Library(client) => client,
+    };
     let mut log = Log::start(families, name, client, take_tag(&mut args));
+    log.host_reads = matches!(origin, FrontEnd::Cli)
+        && cfg!(all(
+            feature = "machine",
+            any(target_os = "macos", target_os = "linux")
+        ))
+        && matches!(name, "file.read" | "file.stat" | "file.list");
     let outcome = layerfs_home::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });
@@ -219,6 +265,7 @@ struct Log<'n> {
     at: i64,
     started: Instant,
     on: bool,
+    host_reads: bool,
 }
 
 impl<'n> Log<'n> {
@@ -246,6 +293,7 @@ impl<'n> Log<'n> {
             at: layerfs_home::home::now_ms(),
             started: Instant::now(),
             on,
+            host_reads: false,
         }
     }
 
@@ -309,7 +357,7 @@ fn scoped(
     layerfs_home::trace::step("dispatch");
     let mut context = Context::new(home, log.tag.clone(), asked.clone(), events);
     let value = layerfs_store::open::with_one_shot(log.client == Client::Cli, || {
-        (spec.run)(&mut context, &args)
+        layerfs_store::host_read::with_cli(log.host_reads, || (spec.run)(&mut context, &args))
     })?;
     let value = match scope {
         Some(scope) => scope.answer(spec, value),

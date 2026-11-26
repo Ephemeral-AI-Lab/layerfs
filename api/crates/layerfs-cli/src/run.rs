@@ -189,14 +189,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
             };
         }
     };
-    let outcome = layerfs_api::call_scoped(
-        None,
-        scope.as_ref(),
-        &call.name(),
-        parsed.args,
-        &mut send,
-        layerfs_api::Client::Cli,
-    );
+    let outcome = layerfs_api::call_cli(scope.as_ref(), &call.name(), parsed.args, &mut send);
     // first thing after the call: a signal from now on changes nothing
     // (signals.rs names the residual window)
     crate::signals::answered();

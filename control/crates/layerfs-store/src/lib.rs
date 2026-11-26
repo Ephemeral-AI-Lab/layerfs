@@ -19,6 +19,7 @@ pub mod diagnostic;
 pub mod formats;
 pub mod get;
 pub mod host_maintenance;
+pub mod host_read;
 #[doc(hidden)]
 pub mod identity;
 pub mod intent;

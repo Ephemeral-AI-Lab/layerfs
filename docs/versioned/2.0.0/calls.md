@@ -613,10 +613,13 @@ $ layerfs commit diff shop/api agent --with patch --path /docs/a.txt
 ### `file` (14)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
-A sqlite Store on `native` and a PostgreSQL Store are read and written in
-the caller's process (the runs on this page were on macOS); a sqlite Store
-on another machine through that machine's worker (see
-[routes](machines-and-stores.md#routes)).
+On macOS and Linux, the CLI uses the native worker for `file read`,
+`file stat`, and one bounded `file list` page on local SQLite when the
+socket path and request fit. It selects the direct route before dialing
+when they do not fit. The CLI reports an uncertain exchange as `Unknown`
+with a request ID. SDK local calls, CLI PostgreSQL and writes run in the
+caller, and a SQLite Store on another machine runs through that machine's
+worker. See [routes](machines-and-stores.md#routes).
 
 The native host worker's SQLite cache keeps up to 16 Stores open per home.
 It checks the Store's current record before serving a call, including a

@@ -154,6 +154,17 @@ pub fn call_scoped(
     machinery::call_scoped(families(), home, scope, name, args, events, client)
 }
 
+/// Runs the CLI executable's checked call on its selected Store route.
+#[doc(hidden)]
+pub fn call_cli(
+    scope: Option<&Scope>,
+    name: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    machinery::call_cli(families(), scope, name, args, events)
+}
+
 /// [`call`] with JSON text on both sides, for the Node and Python bindings.
 pub fn call_json(
     home: Option<&Path>,

@@ -266,7 +266,7 @@ impl HostServer {
             (true, "ping") => Operation::Ping,
             (true, "drain") => Operation::Drain,
             (true, layerfs_store::host_maintenance::CLOSE) => Operation::CloseStore,
-            (false, "store.call") => Operation::StoreCall,
+            (false, layerfs_store::host_read::OP) => Operation::StoreCall,
             _ => {
                 return Err(refused(
                     "Unsupported",
@@ -328,7 +328,10 @@ impl HostServer {
                 drop(activity);
                 self.close_store(args)
             }
-            Operation::StoreCall => Err(refused("Unavailable", "the host Store route is disabled")),
+            Operation::StoreCall => {
+                drop(activity);
+                layerfs_store::host_read::serve(&self.home, args)
+            }
         }
     }
 
