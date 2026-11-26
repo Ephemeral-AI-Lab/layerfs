@@ -281,9 +281,14 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
             rows: &rows,
         };
         let mut timed = Timed { consumer, ns: 0 };
+        let base_cache = base.client();
+        let cached = self
+            .inode_read_ahead
+            .then_some(base_cache.as_ref() as &dyn AuthenticatedObjects);
         let mut output =
             FilesystemObjects::new_with_accepted(self.objects, &mut timed, self.objects)
-                .with_inode_read_ahead(self.inode_read_ahead);
+                .with_inode_read_ahead(self.inode_read_ahead)
+                .with_cached_base(cached);
         let recorded = shared.borrow().record_ns;
         let started = Instant::now();
         let result = timing.child("update").run(|_| {

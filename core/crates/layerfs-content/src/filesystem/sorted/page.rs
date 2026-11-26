@@ -302,6 +302,24 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         width: usize,
         child: &mut dyn FnMut(usize) -> ContentResult<ObjectId>,
     ) -> ContentResult<BatchChildren> {
+        self.batch_page_children(width, child, false)
+    }
+
+    /// Read-ahead children are checked IDs from the immutable base.
+    pub(crate) fn batch_base_children(
+        &mut self,
+        width: usize,
+        child: &mut dyn FnMut(usize) -> ContentResult<ObjectId>,
+    ) -> ContentResult<BatchChildren> {
+        self.batch_page_children(width, child, true)
+    }
+
+    fn batch_page_children(
+        &mut self,
+        width: usize,
+        child: &mut dyn FnMut(usize) -> ContentResult<ObjectId>,
+        immutable_base: bool,
+    ) -> ContentResult<BatchChildren> {
         let associations =
             std::mem::size_of::<ObjectId>() + std::mem::size_of::<(ObjectId, Vec<u8>)>();
         let decode =
@@ -317,7 +335,11 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             let ids = (0..chunk)
                 .map(&mut *child)
                 .collect::<ContentResult<Vec<_>>>()?;
-            let fetched = self.objects.read_batch(&ids)?;
+            let fetched = if immutable_base {
+                self.objects.read_base_pages(&ids)?
+            } else {
+                self.objects.read_batch(&ids)?
+            };
             let mut values = Vec::with_capacity(fetched.len());
             for (id, canonical) in ids.iter().zip(fetched) {
                 values.push((*id, canonical));

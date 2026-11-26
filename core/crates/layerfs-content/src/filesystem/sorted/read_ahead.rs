@@ -57,7 +57,7 @@ impl Leaves {
                 }
             }
             if ids.len() > 1 {
-                self.retained = engine.batch_children(ids.len(), &mut |at| Ok(ids[at]))?;
+                self.retained = engine.batch_base_children(ids.len(), &mut |at| Ok(ids[at]))?;
                 if !self.retained.1.is_empty() {
                     engine.work.prefetched_waves += 1;
                     engine.work.prefetched_bytes += self

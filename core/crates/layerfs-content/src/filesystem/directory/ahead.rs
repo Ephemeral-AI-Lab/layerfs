@@ -85,7 +85,7 @@ impl RootsAhead {
             }
             end += 1;
         }
-        let pages = objects.read_batch(&ids)?;
+        let pages = objects.read_base_pages(&ids)?;
         self.pages = rows.into_iter().zip(pages).collect();
         self.covered = end;
         Ok(())

@@ -506,6 +506,25 @@ impl CanonicalClient {
     }
 }
 impl AuthenticatedObjects for CanonicalClient {
+    fn cached_canonical_batch(
+        &self,
+        ids: &[ObjectId],
+        bytes: usize,
+    ) -> ContentResult<Vec<Option<Vec<u8>>>> {
+        let mut state = self.state()?;
+        let mut remaining = bytes;
+        let mut values = Vec::with_capacity(ids.len());
+        for id in ids {
+            let value = state.cache.get(*id, remaining)?;
+            if let Some(value) = &value {
+                remaining -= value.len();
+                state.work.cache_hits = state.work.cache_hits.saturating_add(1);
+            }
+            values.push(value);
+        }
+        Ok(values)
+    }
+
     fn decoded_pages(&self) -> Option<&layerfs_content::filesystem::decoded::DecodedPages> {
         Some(&self.cache.decoded)
     }

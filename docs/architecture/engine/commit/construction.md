@@ -96,10 +96,7 @@ While a PostgreSQL captured Commit accepts output, payload packs with
 acknowledged winning locators may occupy the unused portion of the existing
 2 MiB published-body cache. Metadata keeps its existing priority. Save
 reads authenticate a retained body through the same complete-pack checks as
-a fetched body. A missing or evicted body is fetched by its winning locator. An
-acknowledged FULL whole-file winner with a ring signature can seed the
-existing depth memo from its exact stored record width. Selection still
-authenticates any base bytes it needs through the ordinary read path.
+a fetched body. A missing or evicted body is fetched by its winning locator.
 
 [Published body admission and eviction](../../../../core/crates/layerfs-storage/src/read/fetch.rs)
 
@@ -112,7 +109,9 @@ the existing authenticated read port. Canonical pages, IDs, inline
 change records and one decode slot fit within 1 MiB. The pages also
 charge the existing sorted scratch budget. The merge consumes the
 pages in serial order and fetches newly required neighbours on demand.
-A failed group returns its original provider error.
+Both inode-leaf and directory-root cohorts consult the captured base's
+existing authenticated cache first. Only missing pages go through the
+Save read port. A failed group returns its original provider error.
 
 [Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
 

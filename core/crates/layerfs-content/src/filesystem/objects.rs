@@ -41,6 +41,7 @@ pub struct FilesystemObjects<'a> {
     accepted: Option<&'a dyn AuthenticatedObjects>,
     work: ObjectWork,
     inode_read_ahead: bool,
+    cached_base: Option<&'a dyn AuthenticatedObjects>,
 }
 
 impl<'a> FilesystemObjects<'a> {
@@ -55,6 +56,7 @@ impl<'a> FilesystemObjects<'a> {
             accepted: None,
             work: ObjectWork::default(),
             inode_read_ahead: false,
+            cached_base: None,
         }
     }
 
@@ -73,12 +75,20 @@ impl<'a> FilesystemObjects<'a> {
             accepted: Some(accepted),
             work: ObjectWork::default(),
             inode_read_ahead: false,
+            cached_base: None,
         }
     }
 
     /// Allows the inode merge to batch reads of touched stored leaf pages.
     pub fn with_inode_read_ahead(mut self, enabled: bool) -> Self {
         self.inode_read_ahead = enabled;
+        self
+    }
+
+    /// Offers authenticated resident pages of the same immutable base. Only
+    /// reads whose IDs were resolved from that base may use this cache.
+    pub fn with_cached_base(mut self, cached: Option<&'a dyn AuthenticatedObjects>) -> Self {
+        self.cached_base = cached;
         self
     }
 
@@ -139,6 +149,44 @@ impl<'a> FilesystemObjects<'a> {
             values.iter().map(|value| value.len() as u64).sum(),
         );
         Ok(values)
+    }
+
+    /// Reads a bounded cohort of known base pages. Reuses authorized
+    /// resident bytes before it sends the remaining IDs to the provider.
+    pub(crate) fn read_base_pages(&mut self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let Some(cache) = self.cached_base else {
+            return self.read_batch(ids);
+        };
+        let bound = ids
+            .len()
+            .saturating_mul(crate::filesystem::limits::MAXIMUM_PAGE_BYTES);
+        let values = cache.cached_canonical_batch(ids, bound)?;
+        if values.len() != ids.len() {
+            return Err(crate::ContentError::BatchCardinality {
+                requested: ids.len(),
+                returned: values.len(),
+            });
+        }
+        let missing: Vec<_> = ids
+            .iter()
+            .zip(&values)
+            .filter_map(|(id, value)| value.is_none().then_some(*id))
+            .collect();
+        let mut fetched = if missing.is_empty() {
+            Vec::new()
+        } else {
+            self.read_batch(&missing)?
+        }
+        .into_iter();
+        let mut result = Vec::with_capacity(values.len());
+        for value in values {
+            result.push(
+                value
+                    .or_else(|| fetched.next())
+                    .ok_or(crate::ContentError::InvalidRecord("cached base page reply"))?,
+            );
+        }
+        Ok(result)
     }
 
     /// Moves one finalized object to the consumer and charges it.

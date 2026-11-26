@@ -50,6 +50,17 @@ pub trait AuthenticatedObjects {
         self.read_canonical_batch(ids)
     }
 
+    /// Already authenticated bytes this owner retains, in request order.
+    /// An absent entry is an ordinary cache miss. The answer performs no
+    /// provider operation and charges no more than `bytes` canonical bytes.
+    fn cached_canonical_batch(
+        &self,
+        ids: &[ObjectId],
+        _bytes: usize,
+    ) -> ContentResult<Vec<Option<Vec<u8>>>> {
+        Ok(ids.iter().map(|_| None).collect())
+    }
+
     /// Reads one object; a point read is a one-ID batch.
     fn read_canonical(&self, id: ObjectId) -> ContentResult<Vec<u8>> {
         let mut values = self.read_canonical_batch(std::slice::from_ref(&id))?;

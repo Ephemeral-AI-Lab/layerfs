@@ -881,6 +881,61 @@ fn planned_inode_leaf_reads_preserve_emission_and_batch_only_touched_leaves() {
     );
 }
 
+struct ResidentLeaf<'a> {
+    store: &'a TreeStore,
+    retained: ObjectId,
+}
+impl AuthenticatedObjects for ResidentLeaf<'_> {
+    fn read_canonical_batch(&self, _: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        panic!("the resident cache performs no provider read");
+    }
+
+    fn cached_canonical_batch(
+        &self,
+        ids: &[ObjectId],
+        bytes: usize,
+    ) -> ContentResult<Vec<Option<Vec<u8>>>> {
+        let value = self.store.canonical(self.retained).unwrap();
+        assert!(value.len() <= bytes);
+        Ok(ids
+            .iter()
+            .map(|id| (*id == self.retained).then(|| value.to_vec()))
+            .collect())
+    }
+}
+
+#[test]
+fn a_resident_base_leaf_is_removed_from_the_planned_provider_demand() {
+    let (tree, children, firsts) = page_of_eighty();
+    let reader = Counted {
+        store: &tree.store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let cache = ResidentLeaf {
+        store: &tree.store,
+        retained: children[40],
+    };
+    let mut emitted = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&reader, &mut emitted)
+        .with_inode_read_ahead(true)
+        .with_cached_base(Some(&cache));
+    let (_, work) = Inodes::apply(
+        &mut objects,
+        Some(tree.root),
+        [10, 40, 70]
+            .into_iter()
+            .map(|child| (firsts[child], Some(7)))
+            .collect(),
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(work.prefetched_bytes, work.prefetched_consumed);
+    assert_eq!(
+        reader.demands.into_inner(),
+        [vec![tree.root], vec![children[10], children[70]]]
+    );
+}
+
 #[test]
 fn a_leaf_that_underflows_demands_one_neighbour_and_no_other() {
     // Every leaf of the built page holds the minimum, so one removal underflows.
