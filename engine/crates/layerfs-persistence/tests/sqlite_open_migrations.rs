@@ -76,7 +76,7 @@ fn a_store_left_before_the_next_serial_column_still_gains_it() {
 fn remove_next_serial(path: &std::path::Path) {
     // What an open interrupted between `add_gc` and `add_position_state`
     // leaves: the current source recorded, the column not yet appended.
-    let sql = rusqlite::Connection::open(&path).unwrap();
+    let sql = rusqlite::Connection::open(path).unwrap();
     sql.execute_batch("ALTER TABLE history_meta DROP COLUMN next_history_serial")
         .unwrap();
     let definition: String = sql
