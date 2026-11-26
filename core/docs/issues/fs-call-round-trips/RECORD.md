@@ -13,6 +13,17 @@
 - Target seeded by APFS clone from the idle baseline worktree
   `layerfs-818-rt` (`056e920166`, same `Cargo.lock`).
 
+## Benchmark identity
+
+- Lane and Phase 0 tests: container `lfs818-rt-pg` (postgres:17 17.11), one
+  database per lane (`rt818_p0a`, `rt818_p0b`, `rt818_rh`, `rt818_c`,
+  `rt818_w`, `rt818_i`).
+- Milestone benchmarks: a separate container `lfs818-bench-pg` (postgres:17,
+  17.11, same flags as the baseline container: `shared_preload_libraries=
+  pg_stat_statements`, `track=all`, `synchronous_commit=off`, trust auth),
+  database `rt818_bench`, so its netem windows never slow the lanes' tests.
+  Server counts are filtered to `toplevel` and the current database.
+
 ## Rules taken for this run (from the session that started it)
 
 - Implement first, verify once. Per item: prediction first, `--no-run` build,
@@ -260,3 +271,63 @@ for netem.
   a later `pg2` run verified it. Removal was checked after every arm.
 - Ruff is not installed on this host, so the `tools/ci_tests.py` change was
   not Ruff-checked. Its unit tests pass.
+
+### Lane C — H5 core (branch `rt818-lane-c`, `7647c0479f`, parent `3a904ac225`; merges at M2)
+
+- New `layerfs-content` `compare/across.rs` (`PathAcross`, `DirectoryMemo`,
+  `AcrossWork`, `VersionPath`/`PathAnswer`) and `filesystem::inode::read::lookup_tables`
+  beside an unchanged `lookup_many`; `TreeTable::from_root`. Batched path only when
+  the caller passes `batched = true`; `batched = false` with `DirectoryMemo::new(0)`
+  reads exactly what today's per-version walk reads (SQLite unchanged).
+- Demands per window (content reader, windows 16/32/64/128), predicted → measured:
+  depth-12 28, 2 → 28, 2, 2, 2; 10k-entry dir changed every version 10, 5 → 13, 6
+  (**+30%/+20% — diagnosed once:** inode height is 3, not 2; counts fit
+  1 + h + Σ(h + dir height) cold, then 1 + h + m; recorded, no change);
+  intermediate symlink 6, 2 → 6, 2; path created in a window later 3 → 6, 3
+  (cold first window as formula); hardlinks later 2 → 2; kind change later 4 → 4.
+- Tests: `core/crates/layerfs-content/tests/compare_across.rs` (9 tests, seeded
+  random histories batched/fallback = per-version walk; exact per-window counts;
+  `lookup_tables` = `lookup_many`), 0.9 s. Clippy clean.
+- Docs: `docs/architecture/core/compare-and-merge/README.md` "One path across versions".
+- Production LOC: 227,592 -> 228,159 (delta +567); core +567 (layerfs-content).
+- **Open for H5 wiring (RH):** an integrity/demand failure in any version of a
+  batched window fails the whole window, including versions past the point where
+  blame would stop today. On a healthy Store answers are equal; on a damaged
+  Store this could surface an integrity refusal today's walk never reaches. RH's
+  wiring must keep today's refusal (e.g. on a window failure, decide whether the
+  failing version is past the stop point) or this is raised as an order change.
+- Pre-existing `cargo fmt` diff in `filesystem/state/mod.rs` left alone (not lane C's).
+- Notes: shared notes folder `lane-c-notes.md`.
+
+### Phase 0b — seam and equivalence driver (branch `rt818-p0b-equivalence`: `dd37798d55`, `d3428bd7b6`)
+
+- `Visibility::from_markers(serial: u64, markers: Vec<PathRemovalRecord>) -> Visibility`
+  in `read/visibility.rs`; no caller; unit test `tests/visibility_units.rs`.
+  Production LOC: 227,592 -> 227,595 (delta +3), engine layerfs-store-service +3.
+- `tests/sdk_round_trip_equivalence_seeded.rs` (test only, delta 0): all 15 `fs.*`
+  methods + `project.remove_file`, `branch.fork`, `project.stats`,
+  `branch.list_commits`; 186 steps / 44 Commits plus a 17-step 4,200-entry Init
+  window test; refusals incl. the W1 Removed/NoSuchPath paths; markers, symlinks,
+  repeated-inode and all-hardlink directories, 600-entry dir, depth 8/10.
+  PG (`rt818_p0b`) 2 passed 11.0 s; SQLite-only 1.5 s; `method_refusal_order` green.
+- Not compared (by design, varies run to run on one backend too): Commit ids/roots
+  of SDK writes (wall-clock stamps; compared by position), `newStored`/`newMetadata`
+  (compression of timestamped metadata); Init roots and facts compared raw.
+
+### Phase 0 — orchestrator notes
+
+- Phase 0a (`8a8fcea616`) + 0b merged; lanes fork from the merge.
+- **Init 10k pin slack 32** (round trips and statements only): Init 10k varies
+  ±8 run to run at the base, likely the locator-cache order in Init's
+  `logical_size` walk, which I1 removes. Lane I must make the 10k pins exact
+  after I1 (or diagnose the remaining variance); slack stays only if a
+  diagnosed nondeterministic source remains.
+- **Open owner item from W0 (not in the W plan, not done):** create, mkdir, cp,
+  mv, rm and apply never take the fused one-message Commit (39–46 trips warm vs
+  22 for an overwrite) — inferred cause: SDK staging limit 64 KiB / 8 = 8 KiB, so
+  `covers()` is false after a directory rewrite. Raising that limit trades RAM
+  and is an owner decision; recorded, not acted on.
+- W0 re-estimates: W4 ≈ 17 trips on the first create per Store open only; W6 ≈
+  0–3 warm; W7 ≤ 2 per call and needs a per-statement trace before building
+  (W0 does not record statement order within a phase); recursive rm 100: 106
+  Workspace-reader trips warm (W5's target).
