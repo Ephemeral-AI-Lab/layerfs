@@ -26,7 +26,9 @@ fn development_home_reports_each_record_in_one_read_only_finding() {
             ("id", SdkValue::text("0123456789abcdef0123456789abcdef")),
         ]),
     );
-    assert_eq!(home::open(&root).unwrap().layout, 3);
+    assert!(
+        matches!(home::detect(&root).unwrap(), home::Layout::Current(file) if file.layout == 3)
+    );
     let original = std::fs::read(&file).unwrap();
     let samples = [
         (
@@ -97,5 +99,35 @@ fn development_home_reports_each_record_in_one_read_only_finding() {
     assert_eq!(std::fs::read(file).unwrap(), original);
     assert!(!root.join("layerfs.lock").exists());
     assert!(!root.join("trace").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn compatible_development_home_can_reopen_and_retire_a_local_run() {
+    let root = std::env::temp_dir().join(format!("legacy-home-local-run-{}", std::process::id()));
+    let id = "0123456789abcdef0123456789abcdef";
+    record(
+        &root,
+        "layerfs.json",
+        SdkValue::map([("layout", SdkValue::Int(3)), ("id", SdkValue::text(id))]),
+    );
+    let file = root.join("layerfs.json");
+    let before = std::fs::read(&file).unwrap();
+    doctor_own::own(
+        &root,
+        Kind::Home,
+        &root.display().to_string(),
+        &Options::default(),
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+    assert!(!root.join("layerfs.lock").exists());
+
+    let opened = home::open(&root).unwrap();
+    assert_eq!(opened.id, id);
+    let sandbox = home::paths::run_root(&root).join("test-sandbox");
+    private_dir(&sandbox).unwrap();
+    assert_eq!(home::open(&root).unwrap().id, id);
+    std::fs::remove_dir(&sandbox).unwrap();
+    assert_eq!(home::open(&root).unwrap().id, id);
     std::fs::remove_dir_all(root).unwrap();
 }

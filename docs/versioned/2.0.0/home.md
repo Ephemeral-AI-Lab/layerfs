@@ -329,4 +329,4 @@ $ mv <home> <home>.old && layerfs home init
 which keeps the old folder and makes a new, empty home. Nothing in the old
 folder is carried over.
 
-A layout 3 development home with old host names or a custom machine named `macos-host` or `linux-host` is refused before the first record write. Run `layerfs home doctor` to see the affected paths together. Use the old build to stop its workers and Sandboxes and export the data you need, then park the home and initialize a new one. A compatible layout 3 home keeps its original metadata.
+A layout 3 development home with old host names or a custom machine named `macos-host` or `linux-host` is refused before the first record write. Run `layerfs home doctor` to see the affected paths together. Use the old build to stop its workers and Sandboxes and export the data you need, then park the home and initialize a new one. The first ordinary open of a compatible layout 3 home records layout 4 and keeps its original home id. Doctor leaves the layout untouched.

@@ -136,10 +136,28 @@ fn parse(value: &SdkValue, layout: i64) -> Option<HomeFile> {
 /// The home's `layerfs.json`, written for an empty home; any other folder
 /// is refused ([`foreign`]).
 pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
+    let initial = detect(home)?;
+    let expected = match initial {
+        Layout::Current(file) if file.layout == LAYOUT_VERSION => return Ok(file),
+        Layout::Current(file) => Some(file.id),
+        Layout::Foreign => return Err(foreign(home)),
+        Layout::Empty => None,
+    };
+    let _lock = crate::home::lock::take(home)?;
     match detect(home)? {
-        Layout::Current(file) => Ok(file),
+        Layout::Current(mut file) if expected.as_ref().is_none_or(|id| id == &file.id) => {
+            if file.layout != LAYOUT_VERSION {
+                file.layout = LAYOUT_VERSION;
+                write(home, &file)?;
+            }
+            Ok(file)
+        }
+        Layout::Empty if expected.is_none() => create(home),
         Layout::Foreign => Err(foreign(home)),
-        Layout::Empty => create(home),
+        _ => Err(refused(
+            "Unavailable",
+            "home identity changed while opening it",
+        )),
     }
 }
 
@@ -151,14 +169,7 @@ pub fn open(home: &Path) -> Result<HomeFile, SdkRefusal> {
     if crate::home::guest::is_root(home) {
         return crate::home::guest::file(home);
     }
-    let file = match detect(home)? {
-        Layout::Current(file) => file,
-        Layout::Foreign => return Err(foreign(home)),
-        Layout::Empty => {
-            let _lock = crate::home::lock::take(home)?;
-            ensure(home)?
-        }
-    };
+    let file = ensure(home)?;
     crate::home::guest::opened(&file.id);
     Ok(file)
 }
