@@ -56,6 +56,26 @@ pub fn worker_record(home: &Path, machine: &str) -> PathBuf {
     machine_dir(home, machine).join("worker.json")
 }
 
+/// The native worker's ordinary endpoint.
+pub fn host_worker_socket(home: &Path) -> PathBuf {
+    machine_dir(home, "native").join("worker.sock")
+}
+
+/// The native worker's management endpoint, with independent admission.
+pub fn host_worker_control(home: &Path) -> PathBuf {
+    machine_dir(home, "native").join("worker.ctl")
+}
+
+/// Stable lock held by the worker until both endpoints have been removed.
+pub fn host_worker_lock(home: &Path) -> PathBuf {
+    machine_dir(home, "native").join("worker.lock")
+}
+
+/// Serializes launch attempts without relinquishing the worker's lifetime lock.
+pub fn host_worker_startup_lock(home: &Path) -> PathBuf {
+    machine_dir(home, "native").join("worker-start.lock")
+}
+
 /// `machine/<machine>/sandbox-retired/`: one tombstone per closed Sandbox,
 /// outside `sandbox/` so a Sandbox listing never mistakes it for one.
 pub fn sandbox_retired_dir(home: &Path, machine: &str) -> PathBuf {

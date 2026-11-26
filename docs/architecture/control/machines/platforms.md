@@ -328,3 +328,23 @@ kind or kernel route is an engine change, not a platform.
 - [Sandboxes: backends](../sandboxes/backends.md): `native` and `namespaces`.
 - [Kernel routes](../../engine/kernel-routes/README.md): `fuse` and `nfs`.
 - User guide: [machines and Stores](../../../versioned/2.0.0/machines-and-stores.md).
+
+### Host worker socket transport
+
+The native CLI transport uses two owner-only Unix sockets under the native
+machine directory. Directories may permit traversal by Sandbox processes
+without granting them read or write access. Each socket remains mode 0600.
+The client resolves aliases to the same home before
+checking the kernel pathname limit. A too-long path can be routed directly
+by the caller before a connection attempt. The separate management socket
+retains admission capacity for probes and close requests.
+
+Both ends verify the effective peer UID. The handshake identifies the
+installed executable using its package version and kernel file identity,
+including device, inode, size, and change timestamps. This keeps the
+warm-call check independent of executable size. Separate installed copies
+may require waiting for the old worker to drain, even when their bytes match.
+The startup lock serializes launchers. The worker holds its lifetime lock
+from stale-socket recovery through socket removal. See the
+[host worker exchange](workers-and-reach.md#host-worker-exchange-20-implementation-plan)
+for wire limits and result custody.

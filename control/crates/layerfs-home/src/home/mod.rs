@@ -8,6 +8,8 @@ pub mod fields;
 pub mod flock;
 pub mod generation;
 pub mod guest;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub mod host_socket;
 pub mod layout;
 pub mod lock;
 pub mod observed;

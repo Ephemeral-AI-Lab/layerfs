@@ -11,4 +11,4 @@ license.workspace = true
 # `layerfs_bridge::process`, below the drivers (layerfs-project#112).
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "socket", "poll"] }

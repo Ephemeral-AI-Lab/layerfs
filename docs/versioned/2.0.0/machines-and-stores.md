@@ -670,3 +670,12 @@ password this home does not hold is refused when it is dialled, with the
 fix `layerfs store connect <store> <url> --password-stdin`, and a bucket
 record with no key id is refused with the fix that connects it again
 (`layerfs backup connect <name> <url> --access-key <key> --key-stdin`).
+
+### Host worker transport
+
+The host-worker transport uses private Unix sockets and checks the user of
+the other process before exchanging any operation bytes. A CLI call chooses
+its route before sending. A lost answer after an operation send starts is
+reported as `Unknown` with a request ID. The CLI makes one attempt.
+Two installations sharing a home may need to wait for an existing worker's
+idle exit before the other installation can use that home worker.
