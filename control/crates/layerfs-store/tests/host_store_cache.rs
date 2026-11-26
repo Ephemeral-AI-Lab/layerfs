@@ -67,6 +67,9 @@ fn a_warm_hit_checks_the_current_fence_and_binding() {
     home.create("shop");
     stats(&home.0, "shop").unwrap();
     assert!(layerfs_store::lease::held_here(&home.0, "shop"));
+    let lease_path = paths::lease_dir(&home.0, "shop").join(std::process::id().to_string());
+    let lease = std::fs::read_to_string(lease_path).unwrap();
+    assert_eq!(lease.split_ascii_whitespace().last(), Some("host-worker"));
 
     let original = StoreRecord::of(&home.0, "shop").unwrap();
     let binding = original.field("binding").unwrap().clone();
@@ -107,6 +110,36 @@ fn a_warm_hit_checks_the_current_fence_and_binding() {
     stats(&home.0, "shop").unwrap();
     assert!(open::close(&home.entry("shop")).unwrap());
     assert!(!open::close(&home.entry("shop")).unwrap());
+}
+
+#[test]
+fn management_close_refuses_a_contended_record_lock_before_closing() {
+    let home = Home::new("contended-close");
+    home.create("shop");
+    stats(&home.0, "shop").unwrap();
+
+    let (acquired, wait_for_lock) = mpsc::channel();
+    let (release, wait_for_release) = mpsc::channel();
+    let root = home.0.clone();
+    let holder = thread::spawn(move || {
+        let _guard = record::lock(&root, "shop").unwrap();
+        acquired.send(()).unwrap();
+        let _ = wait_for_release.recv_timeout(WAIT);
+    });
+    wait_for_lock.recv_timeout(WAIT).unwrap();
+    let outcome = open::close_host(&home.0, "shop", |_| Ok(()));
+    let _ = release.send(());
+    holder.join().unwrap();
+
+    let Err(refusal) = outcome else {
+        panic!("the close waited for the Store lock and then closed the cache");
+    };
+    assert_eq!(refusal.code, "InUse");
+    let next = refusal.detail.get("next").unwrap();
+    assert_eq!(next.get_text("store"), Some("shop"));
+    assert_eq!(next.get_text("state"), Some("record-locked"));
+    assert_eq!(open::host_store_count(&home.0), 1);
+    assert!(layerfs_store::lease::held_here(&home.0, "shop"));
 }
 
 #[test]

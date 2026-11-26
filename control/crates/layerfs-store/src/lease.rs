@@ -24,6 +24,7 @@ use std::sync::Mutex;
 
 /// This process's leases and how many holders use each.
 static HELD: Mutex<BTreeMap<PathBuf, usize>> = Mutex::new(BTreeMap::new());
+const HOST_WORKER: &str = "host-worker";
 
 /// One use of a Store's lease; the last drop in this process removes it.
 pub struct Lease {
@@ -77,14 +78,28 @@ pub fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusa
     let _store = crate::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?.ok_or_else(none)?;
     record.unblocked()?;
+    Ok((claim_unblocked_locked(home, store)?, record))
+}
+
+/// Claims a lease after the caller checked the record under the Store lock.
+pub(crate) fn claim_unblocked_locked(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     // the leases of processes that ended go now; the live holders' stay
     holders(home, store)?;
-    Ok((hold_locked(home, store)?, record))
+    hold_locked(home, store)
 }
 
 /// Holds Store `store`'s lease under `root` with no record check: the
 /// caller holds the Store's lock, or is a worker under its own root.
 pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
+    hold_role_locked(root, store, None)
+}
+
+/// Acquires a native worker cache lease while holding the Store record lock.
+pub(crate) fn hold_host_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
+    hold_role_locked(root, store, Some(HOST_WORKER))
+}
+
+fn hold_role_locked(root: &Path, store: &str, role: Option<&str>) -> Result<Lease, SdkRefusal> {
     let dir = paths::lease_dir(root, store);
     let path = dir.join(std::process::id().to_string());
     let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
@@ -94,6 +109,10 @@ pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
         let mut text = home::now_ms().to_string();
         if let Some((start, boot)) = me() {
             text.push_str(&format!(" {start} {boot:032x}"));
+        }
+        if let Some(role) = role {
+            text.push(' ');
+            text.push_str(role);
         }
         text.push('\n');
         if let Err(error) = std::fs::write(&path, text) {
@@ -174,6 +193,7 @@ struct LeaseFile {
     path: PathBuf,
     alive: bool,
     owner: Option<Owner>,
+    host_worker: bool,
 }
 
 /// Store `store`'s leases other than this process's. Read only.
@@ -215,10 +235,29 @@ fn leases(home: &Path, store: &str) -> Result<Vec<LeaseFile>, SdkRefusal> {
             path,
             alive: alive_as(pid, start, boot),
             owner,
+            host_worker: text.split_ascii_whitespace().next_back() == Some(HOST_WORKER),
         });
     }
     found.sort_unstable_by_key(|lease| lease.pid);
     Ok(found)
+}
+
+/// Live host worker leases whose exact owner was not authenticated. Caller
+/// holds the Store lock, so a freshly acquired host lease is visible here.
+pub(crate) fn unmatched_host_workers(
+    home: &Path,
+    store: &str,
+    verified: Option<&Owner>,
+) -> Result<Vec<u32>, SdkRefusal> {
+    Ok(leases(home, store)?
+        .into_iter()
+        .filter(|lease| {
+            lease.alive
+                && lease.host_worker
+                && !verified.is_some_and(|owner| lease.owner.as_ref() == Some(owner))
+        })
+        .map(|lease| lease.pid)
+        .collect())
 }
 
 /// Removes the lease file at `path`: `false` when it is gone already. A

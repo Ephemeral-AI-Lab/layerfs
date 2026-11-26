@@ -441,7 +441,7 @@ fn enter_host(home: &Path, store: &str, project: &str) -> Result<(OpenArgs, Runn
                 .with_project(project);
             opened(&path, &args, 1, Owner::Host, pending, || {
                 lease::holders(home, store)?;
-                let lease = lease::hold_locked(home, store)?;
+                let lease = lease::hold_host_locked(home, store)?;
                 drop(record_lock);
                 Ok(Some(lease))
             })?;
@@ -728,7 +728,7 @@ pub fn close_host(
 ) -> Result<CloseReport, SdkRefusal> {
     crate::identity::store_dir(home, store)?;
     let path = paths::store_file(home, store);
-    let guard = record::lock(home, store)?;
+    let guard = record::lock_for_host_close(home, store)?;
     check(&StoreRecord::of(home, store)?)?;
     let mut open = cache();
     let Some(cached) = open.get(&path) else {

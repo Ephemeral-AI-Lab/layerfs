@@ -92,7 +92,12 @@ fn peer_fixture() {
     let mut lease = Some(lease::hold(&home, STORE).unwrap());
     let ready = home.join(format!("ready-{role}"));
     let end = Instant::now() + Duration::from_secs(20);
-    if role == "foreign" {
+    if role == "offline" {
+        let path = paths::lease_dir(&home, STORE).join(std::process::id().to_string());
+        let existing = fs::read_to_string(&path).unwrap();
+        fs::write(&path, format!("{} host-worker\n", existing.trim_end())).unwrap();
+    }
+    if matches!(role.as_str(), "foreign" | "offline") {
         fs::write(ready, b"").unwrap();
         while Instant::now() < end {
             std::thread::sleep(Duration::from_millis(20));
@@ -175,8 +180,17 @@ fn peer_fixture() {
                 if role == "lost" {
                     continue;
                 }
-                drop(lease.take());
-                SdkValue::map([("closed", SdkValue::Bool(true))])
+                if role == "malformed" {
+                    fs::write(
+                        home.join("wire-request-id"),
+                        request.get_text("request_id").unwrap(),
+                    )
+                    .unwrap();
+                    SdkValue::map([])
+                } else {
+                    drop(lease.take());
+                    SdkValue::map([("closed", SdkValue::Bool(true))])
+                }
             }
             other => panic!("unexpected operation {other:?}"),
         };
@@ -186,6 +200,49 @@ fn peer_fixture() {
         ]);
         worker::write_host_frame(&stream, &reply, HOST_MAX_REPLY, deadline).unwrap();
     }
+}
+
+#[test]
+fn an_unreachable_worker_lease_refuses_local_compaction_before_work() {
+    let home = new_home();
+    let home = &home.paths.home;
+    let worker = ProofChild::start(home, "offline");
+    let file = paths::store_file(home, STORE);
+    let before = fs::read(&file).unwrap();
+    let refused = call(home, "store.compact", &[("store", STORE)]).unwrap_err();
+    assert_eq!(refused.code, "InUse");
+    let pid = i64::from(worker.0.id());
+    assert!(refused.message.contains(&pid.to_string()));
+    assert_eq!(
+        refused
+            .detail
+            .get("next")
+            .and_then(|next| next.get("worker_pids")),
+        Some(&SdkValue::List(vec![SdkValue::Int(pid)]))
+    );
+    assert_eq!(active_intent(home), SdkValue::Null);
+    assert_eq!(fs::read(file).unwrap(), before);
+    assert!(!home.join("one-close").exists());
+}
+
+#[test]
+fn a_malformed_close_ack_leaves_a_correlated_unknown_and_is_never_replayed() {
+    let home = new_home();
+    let home = &home.paths.home;
+    let _worker = ProofChild::start(home, "malformed");
+    let refusal = call(home, "store.remove", &[("store", STORE)]).unwrap_err();
+    assert_eq!(refusal.code, "Unknown");
+    let wire_id = fs::read_to_string(home.join("wire-request-id")).unwrap();
+    assert_eq!(
+        refusal.detail.get_text("request_id"),
+        Some(wire_id.as_str())
+    );
+    let pending = active_intent(home);
+    assert_eq!(pending.get_text("phase"), Some("worker-close"));
+    assert!(pending.get_bool("uncertain"));
+    let refusal = call(home, "store.remove", &[("store", STORE)]).unwrap_err();
+    assert_eq!(refusal.code, "Unresolved");
+    assert_eq!(active_intent(home), pending);
 }
 
 #[test]

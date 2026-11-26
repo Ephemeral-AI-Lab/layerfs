@@ -522,7 +522,16 @@ fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {
         .drain(..)
         .filter(|(key, _)| matches!(key.as_str(), "ok" | "error"));
     match (outcome.next(), outcome.next()) {
-        (Some((key, value)), None) if key == "ok" => Ok(value),
+        (Some((key, value)), None) if key == "ok" => {
+            if op == "store.close" && !matches!(value.get("closed"), Some(SdkValue::Bool(_))) {
+                return Err(unknown(
+                    op,
+                    id,
+                    "answer did not report a Store close outcome",
+                ));
+            }
+            Ok(value)
+        }
         (Some((_, error)), None)
             if error.get_text("code").is_some() && error.get_text("message").is_some() =>
         {

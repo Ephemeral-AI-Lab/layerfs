@@ -103,19 +103,28 @@ existing worker through its authenticated management socket. Under the Store
 record lock they match its PID, start time and boot ID to one live lease.
 The caller writes the exclusive `worker-close` phase with the original
 operation ID and pinned worker generation before asking that worker to close.
-The worker checks the record under the same admission lock, then closes its
-cache entry outside the lock. The caller verifies lease release before
-continuing. Explicit lease release reports a failed unlink to the cache close.
-Independent SDK leases and Sandbox records retain their existing
-admission rules. A compaction resumes its usual admission after this phase.
+The worker takes the same record lock without waiting. Contention yields
+`InUse` before the cache entry changes and frees the management slot. A
+close that proceeds closes its cache entry outside the lock. The caller
+verifies lease release before continuing. Explicit lease release reports a
+failed unlink to the cache close.
+
+Host cache leases append a `host-worker` role after their process identity.
+Compaction refuses an unmatched live host-worker lease and names its process.
+Local compaction pins the Store lease and records its intent under the
+same lock as host cache admission, including when there is no worker lease.
+A live competing Store operation keeps its intent and the new compaction
+returns `Busy`. The Store's ordinary admission continues to govern
+independent SDK and Sandbox holders.
 
 The worker records maintenance and drain close outcomes in
 `log/worker-close.jsonl`, including the checkpoint result and observed WAL
 presence. Valid WAL may remain while another process holds the Store.
 
-A lost close answer leaves the phase unresolved. A later explicit invocation
-of the same maintenance operation can settle it after observing release or
-proved death of the recorded worker. It never sends the previous close again.
+A lost or malformed close answer reports `Unknown` with its request ID and
+leaves the phase unresolved. A later explicit invocation of the same
+maintenance operation can settle it after observing release or proved death
+of the recorded worker. It never sends the previous close again.
 
 ## Invariants
 

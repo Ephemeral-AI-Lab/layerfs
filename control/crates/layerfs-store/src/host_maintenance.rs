@@ -90,12 +90,8 @@ impl Worker {
             ("store", SdkValue::text(name)),
             ("op", SdkValue::text(op.id())),
         ]);
-        match paths.call_existing_generation(CLOSE, args, &self.generation)? {
-            Some(answer) if !matches!(answer.get("closed"), Some(SdkValue::Bool(_))) => Err(
-                refused("Unknown", "the host worker returned no Store close outcome"),
-            ),
-            _ => Ok(()),
-        }
+        paths.call_existing_generation(CLOSE, args, &self.generation)?;
+        Ok(())
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]

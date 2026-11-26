@@ -138,12 +138,28 @@ pub struct StoreRecord {
 /// never before it, and never held across a worker call or a byte
 /// transfer. A Store with no folder is `NotFound`.
 pub fn lock(home: &Path, name: &str) -> Result<EntityLock> {
+    take_lock(home, name, entity_lock::WAIT)
+}
+
+/// A management slot must be available for other work while a record is held.
+pub(crate) fn lock_for_host_close(home: &Path, name: &str) -> Result<EntityLock> {
+    take_lock(home, name, std::time::Duration::ZERO).map_err(|error| {
+        if error.code != "Unavailable" {
+            return error;
+        }
+        let error = refused("InUse", format!("Store {name}'s record lock is held"));
+        let error = with_next(error, "store", SdkValue::text(name));
+        with_next(error, "state", SdkValue::text("record-locked"))
+    })
+}
+
+fn take_lock(home: &Path, name: &str, wait: std::time::Duration) -> Result<EntityLock> {
     let dir = paths::store_dir(home, name);
     if !dir.is_dir() {
         return Err(refused("NotFound", format!("no Store named {name}")));
     }
     let held = format!("Store {name}'s lock was held");
-    entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
+    entity_lock::take(&dir.join("lock"), wait, &held)
 }
 
 /// The record field listing the machines attached to a PostgreSQL Store.
