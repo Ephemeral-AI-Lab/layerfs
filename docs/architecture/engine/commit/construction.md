@@ -102,12 +102,16 @@ one page at a time:
 | Chains of a grouped demand's stored objects | The Save's read (`Save::read_objects`) locates the chains of the stored objects of a demand of more than one a level at a time, one locate per level for all of them (`read::prefetch::chains`, as the Store's own reads do), before rebuilding each object | The Save's pack cache | [`save/provider.rs`](../../../../core/crates/layerfs-storage/src/save/provider.rs) |
 | Remembered directories' new root pages (step 7) | One grouped demand (`directory::root_shapes`) | `REMEMBERED_DIRECTORIES` = 256 pages | [`base/links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
 
-One grouped demand is one attempt. Its failure is the provider's original
-error and ends the operation at the group's first row. Save reads begin
-with locator hint binding disabled. The pooled leaf preparation reuses the
-grouped chain walk for the same demand and prepares another window when
-it reaches the first unresolved leaf outside the current one. The retained
-value budget stays 512 KiB. Wave selection walks the chains of
+A grouped demand runs once. On failure it returns the provider's original
+error at the group's first row and ends construction before history
+publication. Earlier acknowledged Save batches remain in the Store. Each
+batch uses a transaction separate from history publication. See
+[Save wave registration](../../../../core/crates/layerfs-storage/src/save/wave.rs)
+and the [Commit driver](../../../../engine/crates/layerfs-store-service/src/store/commit.rs).
+Save reads begin with locator hint binding disabled. The pooled leaf
+preparation reuses the grouped chain walk for the same demand and prepares
+another window at the first unresolved leaf outside the current one. The
+retained value budget stays 512 KiB. Wave selection walks the chains of
 its own stored leaf bases after the guarded base verification has ended.
 The reads preserve the resulting roots and stored objects. `commit_batched_directories.rs` pins the counts and
 `commit_fault_directories.rs` faults every message of a grouped read

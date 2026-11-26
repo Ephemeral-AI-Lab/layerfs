@@ -1330,9 +1330,13 @@ a warm Commit whose Save holds similar files for that publication.
 
 A wide change used to pay one round trip per changed directory, file or
 inode page it read before the lane. The reads are now collected first and
-sent a window at a time (campaign #810; Lane A fixes). A failed window read
-fails the Commit with the provider's own error before the lane; nothing is
-retried. The drop and kill sweeps of a wide Commit
+sent a window at a time (campaign #810; Lane A fixes). Each demand runs once.
+A failed construction window read ends the Commit before history publication
+and returns the provider's original error. Rows from earlier acknowledged Save batches
+remain in the Store. Each batch takes the lane in its own transaction
+before history publication. See
+[construction read failures](../commit/construction.md#base-directory-reads-810-f3).
+The drop and kill sweeps of a wide Commit
 (`commit_fault_wide_{drop,kill}_{0..3}.rs`, `Flight::Wide`) fault every
 server message of its flight:
 
