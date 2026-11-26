@@ -13,19 +13,24 @@
 //! a `store get --with live` right after sees the truncated log. A checkpoint that
 //! cannot complete now (another process writing, a reader still in the log)
 //! is left for the idle close and never retried.
-use crate::lease::Lease;
+use crate::lease::{self, Lease};
 use crate::open_args::OpenArgs;
-use crate::service as direct;
+use crate::record::{self, StoreRecord, StoreRef};
+use crate::service::{self as direct, Completion, Slot};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Condvar, Mutex, Once};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, Once};
 use std::time::{Duration, Instant};
 
 /// How long an unused Store stays open.
 pub const IDLE: Duration = Duration::from_secs(60);
+
+const HOST_STORES: usize = 16;
 
 struct Entry {
     /// What it was opened with: what `direct::release` needs.
@@ -35,13 +40,44 @@ struct Entry {
     calls: usize,
     /// Idle checkpoints running on it now (#86); it stays open meanwhile.
     settling: usize,
-    _lease: Option<Lease>,
+    checkpoint: Result<Option<bool>, SdkRefusal>,
+    lease: Option<Lease>,
 }
 
-static OPEN: Mutex<BTreeMap<PathBuf, Entry>> = Mutex::new(BTreeMap::new());
+struct Cached {
+    host: Option<PathBuf>,
+    state: Slot<Entry, CloseReport>,
+}
+
+type Cache = BTreeMap<PathBuf, Cached>;
+static OPEN: Mutex<Cache> = Mutex::new(BTreeMap::new());
 static REAPER: Once = Once::new();
-/// Signalled when an idle checkpoint ends: `close` waits for it.
-static SETTLED: Condvar = Condvar::new();
+/// Idle checkpoints and capacity waiters share these state notifications.
+static CHANGED: Condvar = Condvar::new();
+
+fn cache() -> MutexGuard<'static, Cache> {
+    OPEN.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn wait_changed(open: MutexGuard<'static, Cache>) {
+    drop(CHANGED.wait(open).unwrap_or_else(|e| e.into_inner()));
+}
+
+impl Cached {
+    fn ready(&mut self) -> Option<&mut Entry> {
+        match &mut self.state {
+            Slot::Ready(entry) => Some(entry),
+            _ => None,
+        }
+    }
+}
+
+impl Entry {
+    fn admit(&mut self, calls: usize) {
+        self.last = Instant::now();
+        self.calls += calls;
+    }
+}
 
 thread_local! {
     static ONE_SHOT: Cell<bool> = const { Cell::new(false) };
@@ -69,6 +105,33 @@ pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> O
         return direct::postgres_read(op, open, args);
     }
     let running = Running(enter(open, lease, 1)?);
+    call(op, open, args, running)
+}
+
+/// Runs one host worker method from the real home. The worker takes its own
+/// lease and validates the Store under the same lock as maintenance on
+/// every admission, including a hit. Routing and the method allowlist are
+/// checked by the caller before it invokes this.
+pub fn run_host(
+    home: &Path,
+    store: &str,
+    project: &str,
+    method: &str,
+    fields: SdkValue,
+) -> Outcome {
+    let SdkValue::Map(mut fields) = fields else {
+        return Err(refused(
+            "InvalidInput",
+            "a Store call needs an argument map",
+        ));
+    };
+    let (open, running) = enter_host(home, store, project)?;
+    fields.retain(|(name, _)| name != "project");
+    fields.push(("project".to_owned(), SdkValue::text(project)));
+    call(method, &open, SdkValue::Map(fields), running)
+}
+
+fn call(op: &str, open: &OpenArgs, args: SdkValue, running: Running) -> Outcome {
     layerfs_home::trace::step("store_open");
     // An admitting call reads the bounded places this home can speak for,
     // once; no other call reads the home (`place_view::admits`). The engine
@@ -90,11 +153,12 @@ impl Drop for Running {
     fn drop(&mut self) {
         let logged = has_log(&self.0);
         let args = {
-            let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-            let Some(entry) = open.get_mut(&self.0) else {
+            let mut open = cache();
+            let Some(entry) = open.get_mut(&self.0).and_then(Cached::ready) else {
                 return;
             };
-            entry.calls = entry.calls.saturating_sub(1);
+            entry.calls -= 1;
+            CHANGED.notify_all();
             entry.last = Instant::now();
             match logged {
                 true => settle(entry),
@@ -109,18 +173,17 @@ impl Drop for Running {
         let spawned = std::thread::Builder::new()
             .name("layerfs-store-checkpoint".to_owned())
             .spawn(move || {
-                let _ = checkpoint(&args, false);
-                settled(&path);
+                direct::transition(|| checkpoint(&args, false), |result| settled(&path, result));
             });
-        if spawned.is_err() {
-            settled(&self.0);
+        if let Err(error) = spawned {
+            settled(&self.0, Err(failed(error)));
         }
     }
 }
 
 /// Whether this process holds the Store at `path` open now.
 pub(crate) fn holds(path: &Path) -> bool {
-    (OPEN.lock().unwrap_or_else(|e| e.into_inner())).contains_key(path)
+    cache().contains_key(path)
 }
 
 /// Starts an idle checkpoint on `entry` when it is the last user here: no
@@ -134,31 +197,39 @@ fn settle(entry: &mut Entry) -> Option<OpenArgs> {
 }
 
 /// Ends an idle checkpoint started by [`settle`] on the Store at `path`.
-fn settled(path: &Path) {
-    let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(entry) = open.get_mut(path) {
-        entry.settling = entry.settling.saturating_sub(1);
+fn settled(path: &Path, result: Result<Option<bool>, SdkRefusal>) {
+    let mut open = cache();
+    if let Some(entry) = open.get_mut(path).and_then(Cached::ready) {
+        entry.settling -= 1;
+        entry.checkpoint = result;
     }
-    SETTLED.notify_all();
+    CHANGED.notify_all();
 }
 
 /// Whether the Store file at `path` has a non-empty write-ahead log. A
 /// PostgreSQL Store's key names no file: never.
 fn has_log(path: &Path) -> bool {
+    wal_remaining(path) == Some(true)
+}
+
+fn wal_remaining(path: &Path) -> Option<bool> {
     let mut log = path.as_os_str().to_os_string();
     log.push("-wal");
-    std::fs::symlink_metadata(log).is_ok_and(|metadata| metadata.len() > 0)
+    match std::fs::symlink_metadata(log) {
+        Ok(metadata) => Some(metadata.len() > 0),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(false),
+        Err(_) => None,
+    }
 }
 
 /// One `wal_checkpoint(TRUNCATE)` on the open Store `args` name, through
 /// its open service. `Some(true)`: its log is empty; `Some(false)`: left for
 /// the idle close; `None`: no writer available or the checkpoint failed.
 /// An explicit Sandbox release can start a writer to complete its checkpoint.
-fn checkpoint(args: &OpenArgs, explicit: bool) -> Option<bool> {
-    direct::with_service(args, |service| Ok(service.opened.checkpoint(explicit)))
-        .ok()
-        .and_then(Result::ok)
-        .flatten()
+fn checkpoint(args: &OpenArgs, explicit: bool) -> Result<Option<bool>, SdkRefusal> {
+    direct::with_service(args, |service| {
+        service.opened.checkpoint(explicit).map_err(failed)
+    })
 }
 
 /// A Sandbox on the Store at `path` has closed: with no call running on it
@@ -170,12 +241,17 @@ pub fn released(path: &Path) -> Option<bool> {
         return None;
     }
     let args = {
-        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-        settle(open.get_mut(path)?)?
+        let mut open = cache();
+        settle(open.get_mut(path)?.ready()?)?
     };
-    let done = checkpoint(&args, true);
-    settled(path);
-    done
+    direct::transition(
+        || checkpoint(&args, true),
+        |result| {
+            let done = result.as_ref().ok().copied().flatten();
+            settled(path, result);
+            done
+        },
+    )
 }
 
 /// Opens the Store `args` name (`storePath`) in this process if it is not
@@ -188,28 +264,200 @@ pub fn hold(args: &OpenArgs, lease: Option<Lease>) -> Result<PathBuf, SdkRefusal
 /// [`hold`], counting `calls` more calls running on it.
 fn enter(args: &OpenArgs, lease: Option<Lease>, calls: usize) -> Result<PathBuf, SdkRefusal> {
     let path = args.store_path()?;
-    let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-    match open.get_mut(&path) {
-        Some(entry) => {
-            entry.last = Instant::now();
-            entry.calls += calls;
+    let pending = loop {
+        let mut open = cache();
+        match open.get_mut(&path).map(|cached| &mut cached.state) {
+            Some(Slot::Ready(entry)) => {
+                entry.admit(calls);
+                return Ok(path);
+            }
+            Some(Slot::Opening(pending)) => {
+                let pending = pending.clone();
+                drop(open);
+                pending.wait()?;
+            }
+            Some(Slot::Closing(pending)) => {
+                let pending = pending.clone();
+                drop(open);
+                pending.wait()?;
+            }
+            None => break reserve(&mut open, path.clone(), None),
         }
-        None => {
+    };
+    opened(&path, args, calls, pending, || Ok(lease))?;
+    Ok(path)
+}
+
+fn reserve(open: &mut Cache, path: PathBuf, host: Option<PathBuf>) -> Arc<Completion<()>> {
+    let pending = Arc::new(Completion::new());
+    open.insert(
+        path,
+        Cached {
+            host,
+            state: Slot::Opening(pending.clone()),
+        },
+    );
+    pending
+}
+
+fn opened(
+    path: &Path,
+    args: &OpenArgs,
+    calls: usize,
+    pending: Arc<Completion<()>>,
+    claim: impl FnOnce() -> Result<Option<Lease>, SdkRefusal>,
+) -> Result<(), SdkRefusal> {
+    direct::transition(
+        || {
+            let lease = claim()?;
             direct::acquire(args)?;
-            open.insert(
-                path.clone(),
-                Entry {
-                    args: args.clone(),
-                    last: Instant::now(),
-                    calls,
-                    settling: 0,
-                    _lease: lease,
-                },
-            );
-            reaper();
+            Ok(Entry {
+                args: args.clone(),
+                last: Instant::now(),
+                calls,
+                settling: 0,
+                checkpoint: Ok(None),
+                lease,
+            })
+        },
+        |result| {
+            let mut open = cache();
+            let result = match result {
+                Ok(entry) => {
+                    open.get_mut(path).expect("open reserved").state = Slot::Ready(entry);
+                    Ok(())
+                }
+                Err(refusal) => {
+                    open.remove(path);
+                    Err(refusal)
+                }
+            };
+            CHANGED.notify_all();
+            pending.finish(result)
+        },
+    )?;
+    reaper();
+    Ok(())
+}
+
+/// Number of host cache slots in use, including opens and closes in progress.
+pub fn host_store_count(home: &Path) -> usize {
+    count_host(&cache(), home)
+}
+
+fn count_host(open: &Cache, home: &Path) -> usize {
+    open.values()
+        .filter(|slot| slot.host.as_deref() == Some(home))
+        .count()
+}
+
+fn enter_host(home: &Path, store: &str, project: &str) -> Result<(OpenArgs, Running), SdkRefusal> {
+    let path = paths::store_file(home, store);
+    crate::identity::store_dir(home, store)?;
+    loop {
+        let record_lock = record::lock(home, store)?;
+        let record = StoreRecord::of(home, store)?;
+        record.unblocked()?;
+        if record.op().is_some_and(|op| op.name() == "store.compact") {
+            record.unheld()?;
+        }
+        let StoreRef::Sqlite { machine, .. } = record.store_ref()? else {
+            return Err(refused(
+                "Unsupported",
+                "host worker Store calls require local SQLite",
+            ));
+        };
+        if layerfs_machine::in_process() != Some(machine) {
+            return Err(refused(
+                "Unavailable",
+                format!("Store {store} is placed on {machine}"),
+            ));
+        }
+        let mut open = cache();
+        if let Some(cached) = open.get_mut(&path) {
+            match &mut cached.state {
+                Slot::Ready(entry) => {
+                    check_identity(&entry.args, &record)?;
+                    if cached.host.is_some() {
+                        entry.admit(1);
+                        let args = OpenArgs::in_root(home, store, None).with_project(project);
+                        return Ok((args, Running(path)));
+                    }
+                    // A direct owner cannot be displaced while it holds this
+                    // path. A dedicated host worker acquires its own lease.
+                    return Err(refused(
+                        "Unavailable",
+                        format!("Store {store} is already open on the direct route"),
+                    ));
+                }
+                Slot::Opening(pending) => {
+                    let pending = pending.clone();
+                    drop(open);
+                    drop(record_lock);
+                    pending.wait()?;
+                }
+                Slot::Closing(pending) => {
+                    let pending = pending.clone();
+                    drop(open);
+                    drop(record_lock);
+                    pending.wait()?;
+                }
+            }
+        } else if count_host(&open, home) < HOST_STORES {
+            let pending = reserve(&mut open, path.clone(), Some(home.to_path_buf()));
+            drop(open);
+            let args = OpenArgs::in_root(home, store, Some(record.to_record().clone()))
+                .with_project(project);
+            opened(&path, &args, 1, pending, || {
+                lease::holders(home, store)?;
+                let lease = lease::hold_locked(home, store)?;
+                drop(record_lock);
+                Ok(Some(lease))
+            })?;
+            return Ok((args, Running(path)));
+        } else {
+            let victim = open
+                .iter()
+                .filter_map(|(path, slot)| match &slot.state {
+                    Slot::Ready(entry)
+                        if slot.host.as_deref() == Some(home)
+                            && entry.calls == 0
+                            && entry.settling == 0 =>
+                    {
+                        Some((path, entry.last))
+                    }
+                    _ => None,
+                })
+                .min_by_key(|&(_, last)| last)
+                .map(|(path, _)| path.clone());
+            drop(record_lock);
+            if let Some(victim) = victim {
+                let closing = start_close(&mut open, &victim);
+                drop(open);
+                let _ = finish_idle(&victim, closing);
+            } else {
+                wait_changed(open);
+            }
         }
     }
-    Ok(path)
+}
+
+fn check_identity(args: &OpenArgs, record: &StoreRecord) -> Result<(), SdkRefusal> {
+    let opened = args
+        .store_record
+        .as_ref()
+        .expect("host admission supplied a record");
+    let same = ["binding", "cursor"]
+        .into_iter()
+        .all(|key| opened.get(key) == record.field(key));
+    if same {
+        Ok(())
+    } else {
+        Err(refused(
+            "Unavailable",
+            format!("Store {} changed identity while open", record.name()),
+        ))
+    }
 }
 
 /// Starts the reaper thread once per process: every 5 s it closes the open
@@ -225,61 +473,218 @@ pub fn reaper() {
     });
 }
 
-/// Closes every Store unused for at least `idle` with no call running;
-/// returns how many. An idle checkpoint running on one ends first.
-pub fn close_idle(idle: Duration) -> usize {
-    let unused = |entry: &Entry| entry.calls == 0 && entry.last.elapsed() >= idle;
-    let stale: Vec<Entry> = {
-        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-        // An idle checkpoint on a Store to close (one statement, started
-        // when its last call returned) ends first, never skipping the
-        // Store: a process that closes its Stores before it exits (the CLI,
-        // `close_idle(ZERO)`) must still close each one, so SQLite folds the
-        // write-ahead log in at that close, as before #86.
-        while open
-            .values()
-            .any(|entry| unused(entry) && entry.settling > 0)
-        {
-            open = SETTLED.wait(open).unwrap_or_else(|e| e.into_inner());
-        }
-        let names: Vec<PathBuf> = open
-            .iter()
-            .filter(|(_, entry)| unused(entry))
-            .map(|(path, _)| path.clone())
-            .collect();
-        names.iter().filter_map(|path| open.remove(path)).collect()
-    };
-    let count = stale.len();
-    for entry in stale {
-        // the Store closes when its last call returns; the lease drops after
-        let _ = direct::release(&entry.args);
-    }
-    count
+/// The close acknowledgment and its last idle-checkpoint result. WAL
+/// presence is an observation after release: another opener can keep it.
+#[derive(Clone)]
+pub struct CloseReport {
+    pub closed: bool,
+    pub checkpoint: Result<Option<bool>, SdkRefusal>,
+    pub wal_remaining: Option<bool>,
 }
 
-/// Closes the Store at `path` now, if this process holds it open: `store
-/// move` and `store remove` need its file closed. A call running on it is
-/// `InUse`, and the Store stays open. An idle checkpoint running on it
-/// (one statement) ends first.
-pub fn close(path: &std::path::Path) -> Result<bool, SdkRefusal> {
-    crate::postgresql::reader::forget(path);
-    let entry = {
-        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-        while open.get(path).is_some_and(|entry| entry.settling > 0) {
-            open = SETTLED.wait(open).unwrap_or_else(|e| e.into_inner());
+impl CloseReport {
+    fn absent() -> Self {
+        Self {
+            closed: false,
+            checkpoint: Ok(None),
+            wal_remaining: None,
         }
-        match open.get(path) {
-            Some(entry) if entry.calls > 0 => {
-                return Err(refused(
-                    "InUse",
-                    format!("a call is running on {} in this process", path.display()),
-                ))
-            }
-            _ => open.remove(path),
-        }
-    };
-    match entry {
-        Some(entry) => direct::release(&entry.args).map(|_| true),
-        None => Ok(false),
     }
+}
+
+struct Closing {
+    entry: Entry,
+    host: bool,
+    pending: Arc<Completion<CloseReport>>,
+}
+
+fn start_close(open: &mut Cache, path: &Path) -> Closing {
+    let cached = open.get_mut(path).expect("ready while locked");
+    let pending = Arc::new(Completion::new());
+    let Slot::Ready(entry) = std::mem::replace(&mut cached.state, Slot::Closing(pending.clone()))
+    else {
+        unreachable!("ready while locked");
+    };
+    Closing {
+        entry,
+        host: cached.host.is_some(),
+        pending,
+    }
+}
+
+fn finish_close(
+    path: &Path,
+    Closing { entry, pending, .. }: Closing,
+) -> Result<CloseReport, SdkRefusal> {
+    direct::transition(
+        || {
+            let closed = direct::release(&entry.args);
+            drop(entry.lease);
+            closed?;
+            Ok(CloseReport {
+                closed: true,
+                checkpoint: entry.checkpoint,
+                wal_remaining: if entry.args.postgresql.is_none() {
+                    wal_remaining(path)
+                } else {
+                    None
+                },
+            })
+        },
+        |result| {
+            cache().remove(path);
+            CHANGED.notify_all();
+            pending.finish(result)
+        },
+    )
+}
+
+fn finish_idle(path: &Path, closing: Closing) -> Result<CloseReport, SdkRefusal> {
+    let host = closing.host;
+    let outcome = finish_close(path, closing);
+    if host {
+        let mut log = io::stderr().lock();
+        let _ = match &outcome {
+            Ok(report) => writeln!(
+                log,
+                "layerfs host worker: Store {} closed: checkpoint={:?}, wal_remaining={:?}",
+                path.display(),
+                report.checkpoint,
+                report.wal_remaining
+            ),
+            Err(refusal) => writeln!(
+                log,
+                "layerfs host worker: Store {} close failed: {}: {}",
+                path.display(),
+                refusal.code,
+                refusal.message
+            ),
+        };
+    }
+    outcome
+}
+
+/// Closes every Store unused for at least `idle` with no call running.
+/// An idle checkpoint running on one ends first.
+pub fn close_idle(idle: Duration) -> usize {
+    close_idle_report(idle).len()
+}
+
+/// As in [`close_idle`], with one outcome per settled Store. A final drain
+/// also awaits entries whose physical close is already underway.
+pub fn close_idle_report(idle: Duration) -> Vec<(PathBuf, Result<CloseReport, SdkRefusal>)> {
+    let names: Vec<_> = cache()
+        .iter()
+        .filter_map(|(path, cached)| match &cached.state {
+            Slot::Ready(entry) if is_idle(entry, idle) => Some(path.clone()),
+            Slot::Opening(_) | Slot::Closing(_) if idle.is_zero() => Some(path.clone()),
+            _ => None,
+        })
+        .collect();
+    names
+        .into_iter()
+        .filter_map(|path| {
+            let result = close_if_idle(&path, idle)?;
+            Some((path, result))
+        })
+        .collect()
+}
+
+fn is_idle(entry: &Entry, idle: Duration) -> bool {
+    entry.calls == 0 && entry.last.elapsed() >= idle
+}
+
+fn close_if_idle(path: &Path, idle: Duration) -> Option<Result<CloseReport, SdkRefusal>> {
+    loop {
+        let mut open = cache();
+        match &open.get(path)?.state {
+            Slot::Ready(entry) if is_idle(entry, idle) => {
+                if entry.settling > 0 {
+                    wait_changed(open);
+                } else {
+                    let closing = start_close(&mut open, path);
+                    drop(open);
+                    return Some(finish_idle(path, closing));
+                }
+            }
+            Slot::Opening(pending) if idle.is_zero() => {
+                let pending = pending.clone();
+                drop(open);
+                if pending.wait().is_err() {
+                    return None;
+                }
+            }
+            Slot::Closing(pending) if idle.is_zero() => {
+                let pending = pending.clone();
+                drop(open);
+                return Some(pending.wait());
+            }
+            _ => return None,
+        }
+    }
+}
+
+/// Releases the cached Store at `path`, if present, and reports whether an
+/// entry closed. Move and remove need its file closed.
+pub fn close(path: &Path) -> Result<bool, SdkRefusal> {
+    close_report(path).map(|report| report.closed)
+}
+
+/// Releases the cached Store at `path` and reports its checkpoint and close.
+pub fn close_report(path: &Path) -> Result<CloseReport, SdkRefusal> {
+    crate::postgresql::reader::forget(path);
+    close_checked(path, || Ok(()))
+}
+
+/// Validates a host close against the authoritative record under the same
+/// lock as admission, then fences this cache entry before unlocking.
+pub fn close_host(
+    home: &Path,
+    store: &str,
+    check: impl Fn(&StoreRecord) -> Result<(), SdkRefusal>,
+) -> Result<CloseReport, SdkRefusal> {
+    crate::identity::store_dir(home, store)?;
+    close_checked(&paths::store_file(home, store), || {
+        let guard = record::lock(home, store)?;
+        check(&StoreRecord::of(home, store)?)?;
+        Ok(guard)
+    })
+}
+
+fn close_checked<G>(
+    path: &Path,
+    check: impl Fn() -> Result<G, SdkRefusal>,
+) -> Result<CloseReport, SdkRefusal> {
+    loop {
+        let guard = check()?;
+        let mut open = cache();
+        match open.get(path).map(|cached| &cached.state) {
+            None => return Ok(CloseReport::absent()),
+            Some(Slot::Opening(_)) => return Err(in_use(path)),
+            Some(Slot::Ready(entry)) if entry.calls > 0 => return Err(in_use(path)),
+            Some(Slot::Ready(entry)) if entry.settling > 0 => {
+                drop(guard);
+                wait_changed(open);
+            }
+            Some(Slot::Closing(pending)) => {
+                let pending = pending.clone();
+                drop(open);
+                drop(guard);
+                return pending.wait();
+            }
+            Some(Slot::Ready(_)) => {
+                let closing = start_close(&mut open, path);
+                drop(open);
+                drop(guard);
+                return finish_close(path, closing);
+            }
+        }
+    }
+}
+
+fn in_use(path: &Path) -> SdkRefusal {
+    refused(
+        "InUse",
+        format!("a call is running on {} in this process", path.display()),
+    )
 }

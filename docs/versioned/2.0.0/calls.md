@@ -618,6 +618,12 @@ the caller's process (the runs on this page were on macOS); a sqlite Store
 on another machine through that machine's worker (see
 [routes](machines-and-stores.md#routes)).
 
+The native host worker's SQLite cache keeps up to 16 Stores open per home.
+It checks the Store's current record before serving a call, including a
+call on a warm Store. A maintenance operation can ask the worker to close
+an idle Store and release its lease. If a call or open is in progress, the
+worker reports `InUse`.
+
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `read` | `project`, `branch`, `path` | `at`, `line` (1), `limit` (2000) | read a text file, or a window of its lines |

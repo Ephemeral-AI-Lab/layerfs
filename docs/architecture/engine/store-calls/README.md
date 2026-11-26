@@ -56,6 +56,21 @@ Commits use; those are described under [Commit](../commit/README.md) and
 
 ### Opening the service
 
+Each process has one open owner per Store path. The owner reserves a cache
+entry, releases the shared cache locks, then opens the provider. Calls on
+other Stores can progress during that open or close. Same-Store callers
+waiting on an open receive its outcome.
+
+The host worker keeps at most 16 SQLite Store entries per home, including
+entries still opening or closing. At capacity it closes the least recently
+used idle Store or waits for a slot. Each admission checks the authoritative
+Store operation and identity under the Store record lock, even when it
+reuses an open entry. The worker holds its own real-home lease until physical
+release. A fenced close can release an idle entry once its checkpoint
+settles. An active call or opening Store answers `InUse`. Close reports
+record the checkpoint outcome and whether WAL content was observed after
+release, since another opener can retain WAL frames.
+
 ```text
 StoreService::open_direct(store, binding, cursor_key, template)
   1 kernel_guard::check(store)              -> Unsupported (nothing opened)

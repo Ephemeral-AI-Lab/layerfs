@@ -22,7 +22,7 @@ use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 /// One opened Store and the clients that hold it.
 struct Opened {
@@ -32,7 +32,66 @@ struct Opened {
     directory: PathBuf,
 }
 
-static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
+/// A Store occupies its slot from reservation through physical release.
+pub(crate) enum Slot<T, C> {
+    Opening(Arc<Completion<()>>),
+    Ready(T),
+    Closing(Arc<Completion<C>>),
+}
+
+type ServiceSlot = Slot<Opened, ()>;
+static STORES: Mutex<BTreeMap<PathBuf, ServiceSlot>> = Mutex::new(BTreeMap::new());
+
+/// Shares the result of one transition with callers already waiting for it.
+pub(crate) struct Completion<T> {
+    result: Mutex<Option<Result<T, SdkRefusal>>>,
+    done: Condvar,
+}
+
+impl<T: Clone> Completion<T> {
+    pub(crate) fn new() -> Self {
+        Self {
+            result: Mutex::new(None),
+            done: Condvar::new(),
+        }
+    }
+
+    pub(crate) fn finish(&self, result: Result<T, SdkRefusal>) -> Result<T, SdkRefusal> {
+        *self
+            .result
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(result.clone());
+        self.done.notify_all();
+        result
+    }
+
+    pub(crate) fn wait(&self) -> Result<T, SdkRefusal> {
+        let result = self
+            .result
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let result = self
+            .done
+            .wait_while(result, |result| result.is_none())
+            .unwrap_or_else(|error| error.into_inner());
+        result.as_ref().expect("transition finished").clone()
+    }
+}
+
+/// Lets the owner repair its cache slot and wake waiters even when open or
+/// close unwinds. The initiating caller still observes its original panic.
+pub(crate) fn transition<T, R>(
+    work: impl FnOnce() -> Result<T, SdkRefusal>,
+    publish: impl FnOnce(Result<T, SdkRefusal>) -> R,
+) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)) {
+        Ok(result) => publish(result),
+        Err(panic) => {
+            publish(Err(refused("Failed", "Store cache transition panicked")));
+            std::panic::resume_unwind(panic)
+        }
+    }
+}
 
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
@@ -110,14 +169,42 @@ pub(crate) fn postgres_read(method: &str, args: &OpenArgs, fields: SdkValue) -> 
 /// One more client of the Store a call names, opening it first.
 pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
-    let mut stores = lock(&STORES)?;
-    if !stores.contains_key(&store) {
-        let opened = open(&store, args)?;
-        stores.insert(store.clone(), opened);
-    }
-    let opened = stores.get_mut(&store).expect("opened above");
-    opened.clients += 1;
-    Ok(())
+    let pending = loop {
+        let mut stores = lock(&STORES)?;
+        match stores.get_mut(&store) {
+            Some(Slot::Ready(opened)) => {
+                opened.clients += 1;
+                return Ok(());
+            }
+            Some(Slot::Opening(pending) | Slot::Closing(pending)) => {
+                let pending = pending.clone();
+                drop(stores);
+                pending.wait()?;
+            }
+            None => {
+                let pending = Arc::new(Completion::new());
+                stores.insert(store.clone(), Slot::Opening(pending.clone()));
+                break pending;
+            }
+        }
+    };
+    transition(
+        || open(&store, args),
+        |result| {
+            let mut stores = lock(&STORES)?;
+            pending.finish(match result {
+                Ok(mut opened) => {
+                    opened.clients = 1;
+                    *stores.get_mut(&store).expect("open reserved") = Slot::Ready(opened);
+                    Ok(())
+                }
+                Err(refusal) => {
+                    stores.remove(&store);
+                    Err(refusal)
+                }
+            })
+        },
+    )
 }
 
 /// One client less; the last one closes the Store and removes its overlay
@@ -127,16 +214,33 @@ pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
 /// that running call gives back later is dropped without that release.
 pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
-    let mut stores = lock(&STORES)?;
-    let Some(opened) = stores.get_mut(&store) else {
-        return Err(refused("InvalidInput", "this process holds no such Store"));
+    let pending = Arc::new(Completion::new());
+    let opened = {
+        let mut stores = lock(&STORES)?;
+        let Some(Slot::Ready(opened)) = stores.get_mut(&store) else {
+            return Err(refused("InvalidInput", "this process holds no such Store"));
+        };
+        opened.clients -= 1;
+        if opened.clients > 0 {
+            return Ok(());
+        }
+        let Some(Slot::Ready(opened)) =
+            stores.insert(store.clone(), Slot::Closing(pending.clone()))
+        else {
+            unreachable!("ready while locked");
+        };
+        opened
     };
-    opened.clients = opened.clients.saturating_sub(1);
-    if opened.clients > 0 {
-        return Ok(());
-    }
-    let opened = stores.remove(&store).expect("present above");
-    drop(stores);
+    transition(
+        || close_service(opened),
+        |result| {
+            lock(&STORES)?.remove(&store);
+            pending.finish(result)
+        },
+    )
+}
+
+fn close_service(opened: Opened) -> Result<(), SdkRefusal> {
     let closed = match Arc::try_unwrap(opened.service) {
         Ok(service) => service.close().map_err(failed),
         // A call still running holds the service; its idle producer handle
@@ -156,7 +260,10 @@ fn service(args: &OpenArgs) -> Result<Arc<StoreService>, SdkRefusal> {
     let store = args.store_path()?;
     lock(&STORES)?
         .get(&store)
-        .map(|opened| opened.service.clone())
+        .and_then(|slot| match slot {
+            Slot::Ready(opened) => Some(opened.service.clone()),
+            _ => None,
+        })
         .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
 }
 
@@ -168,11 +275,15 @@ pub fn with_service<T>(
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
     acquire(args)?;
-    let result = service(args).and_then(|service| work(&service));
-    let released = release(args);
-    let value = result?;
-    released?;
-    Ok(value)
+    transition(
+        || service(args).and_then(|service| work(&service)),
+        |result| {
+            let released = release(args);
+            let value = result?;
+            released?;
+            Ok(value)
+        },
+    )
 }
 
 /// Runs one Store call in this process on the Store `open` names, with
