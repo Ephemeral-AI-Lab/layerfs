@@ -937,9 +937,9 @@ fn a_retained_authoritative_group_keeps_authority_for_a_later_whole_read() {
     let saved = Storage::new(memory.clone()).unwrap();
     let save = saved.begin_save().unwrap();
     let mut ids = Vec::new();
-    for seed in 1..=3 {
+    for seed in 1..=24 {
         let mut state = seed as u32;
-        let bytes: Vec<_> = (0..32_000)
+        let bytes: Vec<_> = (0..4_000)
             .map(|_| {
                 state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
                 (state >> 24) as u8
@@ -951,20 +951,32 @@ fn a_retained_authoritative_group_keeps_authority_for_a_later_whole_read() {
         save.accept(object).unwrap();
     }
     save.finish().unwrap();
-    let (held, guessed_group, info) = {
+    let (prime, held, guessed_group, info) = {
         let state = memory.state.lock().unwrap();
         let rows: Vec<_> = ids.iter().map(|id| state.objects[id]).collect();
         let pair = rows.iter().find_map(|row| {
             let pack = &state.packs[&row.pack_id];
             let header = layout::parse_header(&pack.body).unwrap();
             let view = layout::group_view(&pack.body, header, row.group_number).unwrap();
+            let prime = rows.iter().find(|other| {
+                other.object_id != row.object_id
+                    && other.pack_id == row.pack_id
+                    && other.group_number == row.group_number
+            })?;
             rows.iter()
                 .find(|other| {
                     row.pack_id == other.pack_id
                         && row.group_number != other.group_number
                         && 2 * (view.end - view.start) < pack.info.length
                 })
-                .map(|other| (row.object_id, other.group_number, pack.info))
+                .map(|other| {
+                    (
+                        prime.object_id,
+                        row.object_id,
+                        other.group_number,
+                        pack.info,
+                    )
+                })
         });
         pair.expect("one compact pack with distinct sparse groups")
     };
@@ -980,7 +992,7 @@ fn a_retained_authoritative_group_keeps_authority_for_a_later_whole_read() {
     let reader = Storage::new(provider.clone()).unwrap();
     let save = reader.begin_save().unwrap().joining_metadata_reads();
     let _captured = save.captured_sink();
-    save.read_objects(&[held]).unwrap();
+    save.read_objects(&[prime]).unwrap();
     assert_eq!(reader.diagnostics().range_selected, 1);
     *provider.classified_fault.lock().unwrap() =
         Some(Ok(vec![(info.pack_id, PersistenceError::Missing)]));
