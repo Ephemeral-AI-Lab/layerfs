@@ -519,7 +519,7 @@ It takes no lock or lease, starts nothing and writes nothing.
 
 | Refusal | When |
 | --- | --- |
-| `Unsupported` | the machine's calls run in the caller's process (the host machine), so it has no worker |
+| `Unsupported` | the machine's calls run in the caller's process (the host machine), so no machine worker keeps a log; its host worker, which serves the CLI's Store calls, writes the home's `log/worker.log`, which this call does not read |
 | `InvalidInput` | `limit` out of range; a cursor that is not one, or is stale (the log rotated) |
 | `NotFound` | no machine has this name |
 | `Unavailable` | the machine is stopped, its worker is not reached, or it does not answer in time |
@@ -529,7 +529,7 @@ It was `logs.machine`, removed with no alias (its `--before` is `--cursor`).
 
 ```console
 $ layerfs machine log macos-host --limit 1
-{"error":"Unsupported","message":"machine macos-host has no worker (its calls run in the caller's process), so it has no worker log"}
+{"error":"Unsupported","message":"machine macos-host runs its calls in the caller's process, so it has no machine worker log; its host worker's log is the home's log/worker.log"}
 ```
 
 ### machine.start

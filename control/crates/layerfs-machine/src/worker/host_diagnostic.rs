@@ -2,8 +2,11 @@
 use super::host::{existing_socket, host_check_peer, HostPaths};
 use super::host_hello::{build_identity, HostHello};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::{home::host_socket, outcome::refused};
-use std::{io, os::unix::fs::MetadataExt, time::Instant};
+use layerfs_home::{
+    home::{flock, host_socket, paths},
+    outcome::refused,
+};
+use std::{fs::File, io, os::unix::fs::MetadataExt, path::Path, time::Instant};
 
 /// The observed step at which a host worker could not be reached.
 #[derive(Clone, Copy)]
@@ -20,14 +23,20 @@ pub enum HostProbe {
     Ping,
 }
 
-/// Evidence from a probe that never starts a worker or takes a lock.
+/// Evidence from a probe that never starts a worker or waits for a lock.
 pub enum HostObservation {
     /// No control socket was present when observed.
     Absent,
     /// A socket was present but the kernel found no listener, or it never
-    /// got its private mode (its worker died between bind and chmod). The
-    /// next start replaces it.
+    /// got its private mode (its worker died between bind and chmod), and
+    /// no worker or start holds the endpoint's locks. The next start
+    /// replaces it.
     Stale,
+    /// The same socket while a worker holds the lifetime lock (it is
+    /// between bind and its private mode, wedged there, or closing) or a
+    /// caller holds the startup lock: nothing replaces it until they are
+    /// released.
+    Owned,
     /// The probe could not verify the endpoint or its answer.
     Unreachable(HostProbe, SdkRefusal),
     /// This home's worker identified a different build or protocol.
@@ -62,7 +71,9 @@ impl HostPaths {
                 Ok(None) if path == &self.control => return Absent,
                 // Never dialled: a call treats it as absent once no worker
                 // holds the lifetime lock, and the next start replaces it.
-                Ok(Some(metadata)) if metadata.mode() & 0o777 != 0o600 => return Stale,
+                Ok(Some(metadata)) if metadata.mode() & 0o777 != 0o600 => {
+                    return self.unowned();
+                }
                 Ok(_) => {}
                 Err(error) => return Unreachable(HostProbe::Endpoint, error),
             }
@@ -73,7 +84,9 @@ impl HostPaths {
         let stream = match host_socket::connect(&self.control, end) {
             Ok(stream) => stream,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Absent,
-            Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => return Stale,
+            Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
+                return self.unowned()
+            }
             Err(error) => {
                 return Unreachable(
                     HostProbe::Connect,
@@ -120,6 +133,51 @@ impl HostPaths {
             }
             Err(error) => Unreachable(HostProbe::Ping, error),
         }
+    }
+}
+
+impl HostPaths {
+    /// [`HostObservation::Stale`] only when nothing owns the endpoint: the
+    /// startup lock, then the lifetime lock, each tried once without waiting
+    /// and released at once. The startup lock comes first, so this check
+    /// never takes the lifetime lock from a starting worker its caller has
+    /// just spawned. A lock file that is not there is free and is not made.
+    fn unowned(&self) -> HostObservation {
+        let free = (|| {
+            let Some(_startup) = free_lock(&paths::host_worker_startup_lock(&self.home))? else {
+                return Ok(false);
+            };
+            Ok(free_lock(&paths::host_worker_lock(&self.home))?.is_some())
+        })();
+        match free {
+            Ok(true) => HostObservation::Stale,
+            Ok(false) => HostObservation::Owned,
+            Err(error) => HostObservation::Unreachable(HostProbe::Endpoint, error),
+        }
+    }
+}
+
+/// The lock at `path` taken without waiting (`None` when another holds it),
+/// or no file when there is none.
+fn free_lock(path: &Path) -> Result<Option<Option<File>>, SdkRefusal> {
+    let unavailable = |error: io::Error| {
+        refused(
+            "Unavailable",
+            format!("host worker lock {}: {error}", path.display()),
+        )
+    };
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Some(None)),
+        Err(error) => return Err(unavailable(error)),
+        Ok(metadata) if !metadata.is_file() => {
+            return Err(unavailable(io::Error::other("not a regular file")))
+        }
+        Ok(_) => {}
+    }
+    let file = File::open(path).map_err(unavailable)?;
+    match flock::try_lock(&file, true).map_err(unavailable)? {
+        true => Ok(Some(Some(file))),
+        false => Ok(None),
     }
 }
 

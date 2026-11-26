@@ -192,7 +192,7 @@ fn home_and_machine_doctors_answer_from_their_frozen_checks() {
         "home.layout",
         "home.records",
         "home.bundle",
-        "home.native_daemon",
+        "home.host_daemon",
         "home.artifacts",
         "home.capacity",
     ];

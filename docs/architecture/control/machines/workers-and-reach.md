@@ -454,9 +454,13 @@ listen queue. 30 s is three times the start deadline; it lets the §16.1 C7
 load (20 callers, small calls) and a queue behind calls of ordinary length
 complete. A caller still waiting at 30 s (all 8 threads held by long calls,
 or a stopped or wedged worker) gets a pre-send `Unavailable` naming the load
-("no call thread was free within 30 s"), so nothing is half sent. A caller
-that holds the startup lock (it started, or is starting, the worker),
-management calls and connecting keep the 10 s deadline. A worker that exits
+("no call thread was free within 30 s"), so nothing is half sent. Only a
+caller that spawned the worker it reached keeps the startup lock to its
+hello and the 10 s deadline, as do management calls and connecting. A
+caller that took the startup lock while the listen queue was full, or while
+another worker's socket was not yet private, and started nothing releases it
+once connected and waits as any queued caller does: 30 s from its connect,
+refused naming the load. A worker that exits
 closes every waiting connection, also before anything was sent.
 
 The worker counts only ordinary calls toward its idle clock: a `ping` from
@@ -467,9 +471,13 @@ both socket names under its lifetime lock, so no new caller can join a listen
 queue, keeps serving anything already queued (a `connect` that resolved the
 name just before is in the queue within microseconds; the worker keeps reading
 for 1 s, `UNPUBLISHED`), and drains only when it is quiet with both queues
-empty. A caller after the removal finds no endpoint and, once this worker
-releases `worker.lock`, starts the next one within its 10 s start deadline;
-no caller is reset mid-queue by an idle exit.
+empty. A caller after the removal finds no endpoint and can start the next
+worker only once this worker releases `worker.lock`. The old worker keeps
+that lock while it serves a call accepted in its last 1 s window and while it
+closes and checkpoints its Stores, so the next start is not guaranteed within
+the new caller's 10 s start deadline: that caller can get `Unavailable` with
+nothing sent, and maintenance meanwhile gets `InUse` naming the old worker's
+pid. No caller is reset mid-queue by an idle exit.
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale

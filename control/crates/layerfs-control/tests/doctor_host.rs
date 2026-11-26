@@ -68,7 +68,7 @@ const ORDER: [&str; 8] = [
     "home.layout",
     "home.records",
     "home.bundle",
-    "home.native_daemon",
+    "home.host_daemon",
     "home.artifacts",
     "home.capacity",
 ];
@@ -97,7 +97,7 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     // a home not made yet has no layout or records to check
     assert_eq!(outcome(&report, "home.layout"), None, "{report:?}");
     assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
-    assert!(outcome(&report, "home.native_daemon").is_some());
+    assert!(outcome(&report, "home.host_daemon").is_some());
     assert!(outcome(&report, "home.capacity").is_some());
     in_order(&report);
 }
@@ -348,7 +348,7 @@ fn row(report: &SdkValue, id: &str) -> SdkValue {
 }
 
 #[test]
-fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
+fn the_host_daemon_check_reads_the_recorded_daemon_and_its_build() {
     use layerfs_control::home::Build;
     use std::os::unix::fs::PermissionsExt;
     let home = home(layerfs_home::home::LAYOUT_VERSION);
@@ -383,7 +383,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     };
     // another commit: home.get's DaemonMismatch words, as a warning
     let other = with(ours);
-    let check = row(&other, "home.native_daemon");
+    let check = row(&other, "home.host_daemon");
     assert_eq!(check.get_text("severity"), Some("warning"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
@@ -400,11 +400,11 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     assert_eq!(evidence.get("matches"), Some(&SdkValue::Bool(false)));
     // the same commit, both clean
     let same = with(theirs);
-    let check = row(&same, "home.native_daemon");
+    let check = row(&same, "home.host_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
     // a build that names no commit cannot compare: it passes
     let unknown = run(&home);
-    let check = row(&unknown, "home.native_daemon");
+    let check = row(&unknown, "home.host_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
     // the native machine's daemon is reported here alone, not by home.artifacts
     assert!(
@@ -418,7 +418,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     // a recorded daemon that is there and not executable says so
     std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o644)).unwrap();
     let plain = run(&home);
-    let check = row(&plain, "home.native_daemon");
+    let check = row(&plain, "home.host_daemon");
     assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
@@ -432,7 +432,7 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     // a recorded daemon that is not there is an error, in the Sandbox's words
     std::fs::remove_file(&daemon).unwrap();
     let gone = run(&home);
-    let check = row(&gone, "home.native_daemon");
+    let check = row(&gone, "home.host_daemon");
     assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
     assert_eq!(
         check.get_text("message"),

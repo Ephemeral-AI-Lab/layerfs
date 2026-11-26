@@ -28,7 +28,7 @@ const HOME: &[CheckId] = &[
     CheckId::own("home.layout"),
     CheckId::own("home.records"),
     CheckId::own("home.bundle"),
-    CheckId::own("home.native_daemon"),
+    CheckId::own("home.host_daemon"),
     CheckId::own("home.artifacts"),
     CheckId::own("home.capacity"),
 ];

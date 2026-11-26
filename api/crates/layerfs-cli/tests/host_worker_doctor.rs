@@ -136,6 +136,34 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
         .unwrap();
     assert_eq!(endpoint.get_text("outcome"), Some("notice"), "{endpoint:?}");
     assert!(home.paths.control.exists(), "the probe changed the socket");
+
+    // The same socket while a worker holds the lifetime lock (here this
+    // test, as a worker between bind and chmod would): nothing replaces it,
+    // so it is `owned`, not `stale`, and doctor names the lock holder.
+    let guard = home.paths.try_hold().unwrap().unwrap();
+    let owned = machine(&home);
+    assert_eq!(
+        owned
+            .get("live")
+            .unwrap()
+            .get("worker")
+            .unwrap()
+            .get_text("health"),
+        Some("owned"),
+    );
+    let report = cli(
+        &home,
+        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+    );
+    let notice = list(&report, "findings")
+        .iter()
+        .find(|finding| finding.get_text("check") == Some("machine.worker.endpoint"))
+        .unwrap();
+    let message = notice.get_text("message").unwrap();
+    assert!(message.contains("holds its lifetime lock"), "{message}");
+    assert!(!message.contains("the next start replaces it"), "{message}");
+    drop(guard);
+    assert!(home.paths.control.exists(), "the probe changed the socket");
 }
 
 #[test]

@@ -111,7 +111,7 @@ fn record_start(home: &Path, machine: &MachineName) -> Result<Option<String>, Sd
 }
 
 /// The incarnation the machine's running worker reports, or `None` when its
-/// calls run in this process (a `native` machine has no worker). Reads the
+/// calls run in this process (the host machine has no machine worker). Reads the
 /// endpoint the start recorded and asks it once; it never starts a machine, so
 /// a failed read cannot restart one.
 fn worker_incarnation(home: &Path, machine: &str) -> Result<Option<String>, SdkRefusal> {

@@ -373,7 +373,7 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     .unwrap();
     assert_eq!(texts(&next), names(300, 303));
 
-    // refusals: a native machine has no worker log; unknown names
+    // refusals: the host machine has no machine worker log; unknown names
     let (code, message) = call(
         &home,
         "machine.log",

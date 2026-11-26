@@ -1274,7 +1274,8 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   `next_cursor` for the lines before it (left out at the start of the log).
   A cursor from before the worker's log rotated is stale (`InvalidInput`).
   A machine whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux)
-  has no worker: `Unsupported`.
+  keeps no machine worker log: `Unsupported`. Its host worker, which serves
+  the CLI's Store calls, writes the home's `log/worker.log`.
 - `stats`, `files` and `log` write no call-log line (`quiet`); like every
   `machine` call they are `full` profile calls, in the MCP `admin` profile.
   None of the reads starts a machine.

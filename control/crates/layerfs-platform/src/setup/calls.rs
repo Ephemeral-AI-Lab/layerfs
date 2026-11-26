@@ -51,7 +51,7 @@ pub struct Status {
     /// Whether the worker at the spec's endpoint answered its hello, asked
     /// only when the kernel runs: `Some(false)` when no endpoint was given.
     /// `None` when not asked, and on a machine whose calls run in the
-    /// caller's process (it has no worker).
+    /// caller's process (it has no machine worker).
     pub worker: Option<bool>,
     /// Free bytes of the data disk at `/layerfs/data`, as the guest sees them.
     pub free_disk: Option<u64>,

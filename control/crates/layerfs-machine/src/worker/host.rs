@@ -364,14 +364,18 @@ impl HostPaths {
             None => build_identity()?,
         };
         trace::step("route");
-        let Some((stream, startup)) = self.acquire(path, start, end)? else {
+        let Some((stream, startup, started)) = self.acquire(path, start, end)? else {
             trace::connection(&path.to_string_lossy(), op, false, began);
             return Ok(None);
         };
         trace::step("connect");
-        // Starting a worker and management keep the 10 s deadline; an
-        // ordinary call to a running worker may wait in its queue longer.
-        let queued = !control && startup.is_none();
+        // Only the caller that started the worker keeps the startup lock to
+        // its hello. Starting a worker and management keep the 10 s
+        // deadline; any other ordinary call reached a running worker and may
+        // wait in its queue longer, even one that took the startup lock
+        // while the listen queue was full.
+        let startup = startup.filter(|_| started);
+        let queued = !control && !started;
         let hello_by = if queued {
             Instant::now() + CALL_HELLO_WAIT
         } else {
@@ -446,12 +450,14 @@ impl HostPaths {
         )
     }
 
+    /// The connected stream, the startup lock if this caller took it, and
+    /// whether this caller spawned the worker it reached.
     fn acquire(
         &self,
         path: &Path,
         start: bool,
         end: Instant,
-    ) -> Result<Option<(UnixStream, Option<File>)>, SdkRefusal> {
+    ) -> Result<Option<(UnixStream, Option<File>, bool)>, SdkRefusal> {
         if start {
             crate::record::MachineRecord::admit_host(
                 &self.home,
@@ -464,7 +470,9 @@ impl HostPaths {
         let mut child: Option<Child> = None;
         loop {
             match observed {
-                Probe::Connected(stream) => return Ok(Some((stream, startup))),
+                Probe::Connected(stream) => {
+                    return Ok(Some((stream, startup, child.is_some())));
+                }
                 Probe::Absent if !start => return Ok(None),
                 _ => {}
             }
@@ -481,7 +489,7 @@ impl HostPaths {
                     // caller waited for the lock.
                     observed = probe(path, end)?;
                     if let Probe::Connected(stream) = observed {
-                        return Ok(Some((stream, startup)));
+                        return Ok(Some((stream, startup, false)));
                     }
                 }
             }

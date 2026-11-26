@@ -1,12 +1,12 @@
 //! The install's own checks, without deployment: this program
 //! (`home.build`), what a Sandbox on this computer needs
 //! (`home.prerequisites`), the Linux bundle where a recorded machine needs
-//! it (`home.bundle`), the native daemon (`home.native_daemon`) and each
+//! it (`home.bundle`), the host machine's daemon (`home.host_daemon`) and each
 //! machine's configured daemon file (`home.artifacts`).
 use super::super::checks::daemon_fix;
 use super::super::scan::{shell, Scanned};
 use super::{executable, Checks};
-use crate::home::{Build, NativeDaemon};
+use crate::home::{Build, HostDaemon};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::read_record;
 use layerfs_home::names::HOST_MACHINE;
@@ -146,7 +146,7 @@ pub(super) fn bundle(home: &Path, records: &Scanned, checks: &mut Checks) {
 }
 
 /// `home.artifacts`: each machine's configured daemon file (other than
-/// `native`'s, which is `home.native_daemon`'s) is present and can run. A
+/// the host machine's, which is `home.host_daemon`'s) is present and can run. A
 /// home whose machines configure none has nothing to check.
 pub(super) fn artifacts(records: &Scanned, budget: &super::Budget, checks: &mut Checks) {
     const ID: &str = "home.artifacts";
@@ -178,7 +178,7 @@ pub(super) fn artifacts(records: &Scanned, budget: &super::Budget, checks: &mut 
                 ID,
                 format!("machine {name}'s daemon {path} is not there; record another with `layerfs machine update {name} --daemon <path>`"),
             );
-            // no fix: the daemon of a machine that is not `native` is the
+            // no fix: the daemon of a machine that is not the host is the
             // one the user keeps for it; no file of this build is known
             artifact(checks, name, path, false);
         }
@@ -200,15 +200,15 @@ fn artifact(checks: &mut Checks, machine: &str, path: &str, present: bool) {
     checks.evidence("home.artifacts", SdkValue::Map(fields));
 }
 
-/// `home.native_daemon`: the daemon the native machine runs (its recorded
+/// `home.host_daemon`: the daemon the host machine runs (its recorded
 /// one, else the default beside this host's bundle) is present and this
 /// build's, in `home.get`'s words: missing is an error when recorded and a
 /// warning for the default (remote machines may still be usable); another
 /// commit is a warning (`DaemonMismatch`); a commit it cannot compare
 /// passes, saying so.
-pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) {
-    const ID: &str = "home.native_daemon";
-    let Some(daemon) = NativeDaemon::of(home) else {
+pub(super) fn host_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) {
+    const ID: &str = "home.host_daemon";
+    let Some(daemon) = HostDaemon::of(home) else {
         checks.unknown(
             ID,
             "the host machine's daemon location could not be resolved",

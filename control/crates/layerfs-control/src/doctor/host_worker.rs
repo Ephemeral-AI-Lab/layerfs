@@ -34,6 +34,7 @@ fn evidence(observation: &HostObservation) -> SdkValue {
     let (health, reply) = match observation {
         Absent => ("absent", None),
         Stale => ("stale", None),
+        Owned => ("owned", None),
         Ready(reply) => ("ready", Some(reply)),
         Draining(hello) => ("draining", Some(hello)),
         Incompatible(error) => ("unreachable", error.detail.get("worker")),
@@ -107,7 +108,14 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
         Stale => {
             checks.notice(
                 ENDPOINT,
-                "a leftover worker socket has no listener or lacks its private mode; the next start replaces it",
+                "a leftover worker socket has no listener or lacks its private mode, and no worker or start holds its locks; the next start replaces it",
+            );
+            checks.evidence(ENDPOINT, evidence());
+        }
+        Owned => {
+            checks.notice(
+                ENDPOINT,
+                "the worker socket has no listener or lacks its private mode while a host worker holds its lifetime lock (starting, closing or wedged) or a start holds the startup lock; nothing replaces it until they are released",
             );
             checks.evidence(ENDPOINT, evidence());
         }

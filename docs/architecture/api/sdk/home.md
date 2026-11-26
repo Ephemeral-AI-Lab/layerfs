@@ -309,7 +309,7 @@ its own shallow check; a Store on a machine and a Sandbox are
 `home.prerequisites`, `home.layout`, `home.records` (every record in the
 home: references between records, file modes, leases and half-finished
 operations; a finding names the thing it is about, at any depth),
-`home.bundle`, `home.native_daemon`, `home.artifacts`, `home.capacity`; a
+`home.bundle`, `home.host_daemon`, `home.artifacts`, `home.capacity`; a
 check that does not apply is left out. A stopped machine is not a problem:
 its record and state are checked, and the checks that need it running do not
 apply. No option changes what it checks and there is no timeout option: each

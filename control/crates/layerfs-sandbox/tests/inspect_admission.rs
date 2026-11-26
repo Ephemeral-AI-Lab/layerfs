@@ -281,7 +281,7 @@ fn the_local_route_reads_a_native_sandbox_s_log_from_its_recorded_run_folder() {
         .message
         .starts_with("sandbox.log: the cursor is stale"));
 
-    // a native machine has no worker, so no worker log
+    // the host machine has no machine worker, so no machine worker log
     let native = MachineName::parse(layerfs_home::names::HOST_MACHINE).unwrap();
     let none = inspect::machine_log(&home, &native, &Window::default()).unwrap_err();
     assert_eq!(none.code, "Unsupported", "{none:?}");

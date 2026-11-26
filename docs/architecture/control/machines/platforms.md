@@ -339,9 +339,13 @@ The host worker transport uses two owner-only Unix sockets under the host
 machine directory. Directories may permit traversal by Sandbox processes
 without granting them read or write access. Each socket remains mode 0600.
 Doctor and `machine get --with live` report a leftover socket (no listener,
-or not yet 0600 with its worker gone) as health `stale`, a notice on
-`machine.worker.endpoint`: the next start replaces it, and callers never
-dial a socket without mode 0600.
+or not yet 0600) as health `stale`, a notice on `machine.worker.endpoint`,
+only when its locks are free (the startup lock, then `worker.lock`, each
+tried once without waiting, never created): the next start replaces it.
+While a worker holds `worker.lock` (between bind and its private mode,
+closing, or wedged) or a start holds the startup lock, the same socket is
+health `owned`, a notice saying nothing replaces it until they are released.
+Callers never dial a socket without mode 0600.
 The client resolves aliases to the same home before
 checking the kernel pathname limit. A too-long path can be routed directly
 by the caller before a connection attempt. The separate management socket

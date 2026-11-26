@@ -167,7 +167,7 @@ impl Drop for Env {
     }
 }
 
-// ---- home.layout, home.records, home.artifacts, home.native_daemon, home.bundle
+// ---- home.layout, home.records, home.artifacts, home.host_daemon, home.bundle
 
 #[test]
 fn home_layout_findings_carry_evidence_and_the_move_fix() {
@@ -375,19 +375,19 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     let vm = found(&report, "home.artifacts", "vm1's daemon");
     assert_eq!(fix(&vm), "", "not a built-in machine");
 
-    let native = found(&report, "home.native_daemon", "not executable");
+    let native = found(&report, "home.host_daemon", "not executable");
     assert_eq!(fix(&native), format!("chmod +x {}", plain.display()));
     apply(&fix(&native));
     let after = host(&home, Some(OURS));
     assert!(
-        gone(&after, "home.native_daemon", "not executable"),
+        gone(&after, "home.host_daemon", "not executable"),
         "{after:?}"
     );
 
     // a daemon of another commit is recorded over by this build's
     daemon_file(&plain, "2222222222222222222222222222222222222222", 0o755);
     let report = host(&home, Some(OURS));
-    let other = found(&report, "home.native_daemon", "was built from");
+    let other = found(&report, "home.host_daemon", "was built from");
     assert_eq!(
         fix(&other),
         format!(
@@ -399,7 +399,7 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     std::fs::remove_file(&ours).unwrap();
     let report = host(&home, Some(OURS));
     assert_eq!(
-        fix(&found(&report, "home.native_daemon", "was built from")),
+        fix(&found(&report, "home.host_daemon", "was built from")),
         ""
     );
     // a recorded daemon that is gone: this build's is recorded over it
@@ -407,7 +407,7 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     std::fs::remove_file(&plain).unwrap();
     let report = host(&home, Some(OURS));
     assert_eq!(
-        fix(&found(&report, "home.native_daemon", "not there")),
+        fix(&found(&report, "home.host_daemon", "not there")),
         update
     );
     let recorded = format!("machine {HOST_MACHINE}'s recorded daemon");

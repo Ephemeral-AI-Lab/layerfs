@@ -183,7 +183,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 - A recorded daemon that is not there (its build moved or was removed)
   refuses a Sandbox on that machine `Unavailable` before any launch,
   naming `machine update <name> --daemon <path>`; `layerfs home doctor`
-  (check `home.native_daemon`) reports it as an error.
+  (check `home.host_daemon`) reports it as an error.
 - Resizing a VM with `machine update` is `Unsupported` ("not built yet");
   nothing is changed.
 
@@ -736,8 +736,10 @@ idle exit before the other installation can use that home worker.
 
 `layerfs machine get macos-host --with live` reports `live.machine_state`
 and `live.worker.health` separately. The host machine is enabled at this
-stage. The probe reports an absent, stale, unreachable, ready or draining
-endpoint, with worker identity and activity when available. Before a
+stage. The probe reports an absent, stale, owned, unreachable, ready or
+draining endpoint, with worker identity and activity when available. A
+leftover socket is `stale` (the next start replaces it) only when no worker
+or start holds its locks, and `owned` while one does. Before a
 worker publishes its socket, the probe can observe only an absent endpoint.
 
 `layerfs machine doctor macos-host --detail` uses one authenticated probe and

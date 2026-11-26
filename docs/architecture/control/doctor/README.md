@@ -84,7 +84,7 @@ read. A check that does not apply is left out.
 | `home.layout` | pass for a current layout; fail for a folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout or one that cannot be parsed, or anything but `layerfs.lock`, the integration folders and `.DS_Store` with no `layerfs.json`), "this build writes nothing in it", `fix: mv <home> <home>.old && layerfs home init`; fail with the OS error and no fix when the system refuses to read `layerfs.json` or the folder; left out for a home not made yet | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
 | `home.records` | The records scan and record checks (`checks::check_local`, on a current-layout home only), each finding as an error or warning on the thing it is about, with its fix; no verdict when the record inventory changed or could not be read; see [Checks](checks.md) | [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs), [`host_inventory.rs`](../../../../control/crates/layerfs-control/src/doctor/host_inventory.rs) |
 | `home.bundle` | When a record names a machine whose calls run in its worker (its platform's executor on this host), or one whose record cannot say: the Linux bundle manifest (this version, `linux-<arch>`) and its files present | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
-| `home.native_daemon` | The daemon the host machine runs, as its Sandbox launch chooses it (`NativeDaemon`, shared with `home.get`): its record's `daemon`, else the one beside this host's bundle; read from files. Missing or not executable: an error for a recorded one, a warning for the default (`fix: chmod +x <path>` where only the mode is wrong); its stamped commit (`layerfs-build-identity:`) against the calling build's (`Options.build`): another commit is a warning in `DaemonMismatch`'s words; unknown or dirty passes, saying it cannot compare | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs), [`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) |
+| `home.host_daemon` | The daemon the host machine runs, as its Sandbox launch chooses it (`HostDaemon`, shared with `home.get`): its record's `daemon`, else the one beside this host's bundle; read from files. Missing or not executable: an error for a recorded one, a warning for the default (`fix: chmod +x <path>` where only the mode is wrong); its stamped commit (`layerfs-build-identity:`) against the calling build's (`Options.build`): another commit is a warning in `DaemonMismatch`'s words; unknown or dirty passes, saying it cannot compare | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs), [`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) |
 | `home.artifacts` | Each non-host machine's recorded `daemon` executable | [`host_install.rs`](../../../../control/crates/layerfs-control/src/doctor/host_install.rs) |
 | `home.capacity` | `/bin/df -Pk` on the home or its nearest existing ancestor, capped at 5 s, killed and reaped when late; under 2 GiB free is a warning (`capacity::room`), evidence `disk_free_bytes` | [`host_capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/host_capacity.rs), [`capacity.rs`](../../../../control/crates/layerfs-control/src/doctor/capacity.rs) |
 
@@ -119,12 +119,15 @@ it with the reason found.
 On macOS and Linux, `machine doctor macos-host` uses the same host-worker probe
 as `machine get macos-host --with live`. One two-second budget covers the
 management socket, peer UID, hello and one read-only ping. An absent socket
-passes the endpoint check. A private socket with no listener is stale. A
+passes the endpoint check. A socket with no listener, or without its
+private mode, is stale only while its locks are free; while a worker holds
+`worker.lock` or a start holds the startup lock it is `owned`. A
 greeting for the same home from another build or protocol produces a
 compatibility notice before the ping. Ready and draining observations carry
 evidence on `machine.worker.ping`. Before a starting worker publishes its
-socket, the probe can observe only an absent endpoint. The probe takes no
-locks and never launches or replaces a worker.
+socket, the probe can observe only an absent endpoint. The probe waits for
+no lock: it tries the two locks once, only for such a socket, never creates
+their files, and never launches or replaces a worker.
 
 `home doctor` verifies the existing host-worker directory's ownership and
 privacy under `home.records`. `store doctor` reports live lease holders and
