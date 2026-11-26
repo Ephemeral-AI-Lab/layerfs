@@ -352,7 +352,8 @@ fn boxed(param: crate::backend::records::Param) -> Value<'static> {
 /// message and transaction. A singleton pack, up to `SINGLETON_PACK_LIMIT`,
 /// cannot be split and is sent alone. The retained capacity is therefore
 /// the largest single statement: a singleton pack, or the rows or hint
-/// statement at their row limits (each about 1 MiB).
+/// statement at their limits (`TRANSACTION_ROW_LIMIT` rows, `ARRAY_ROWS`
+/// hint blocks).
 const STATEMENT_PACK_BYTES: usize = layerfs_storage::policy::PACK_LIMIT;
 
 /// The pack insert parameters of `packs`, one entry per statement: the

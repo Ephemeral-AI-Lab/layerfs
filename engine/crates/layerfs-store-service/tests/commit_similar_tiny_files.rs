@@ -119,24 +119,26 @@ const SQLITE: &[Pin] = &[
     },
 ];
 
+// #816 Stage 2 (db54e9d75f) takes one writer statement from each shape and
+// one round trip from add and families; stored objects are unchanged.
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "commit.overwrite",
-        counts: [[0, 10, 16, 2], [0, 0, 0, 0], [0, 1, 1, 0]],
+        counts: [[0, 10, 15, 2], [0, 0, 0, 0], [0, 1, 1, 0]],
         publications: 1,
         storage: [155, 153, 2, 2, 10_232],
         depths: [150, 0, 0],
     },
     Pin {
         scenario: "commit.add",
-        counts: [[0, 7, 15, 2], [0, 0, 0, 0], [0, 0, 0, 0]],
+        counts: [[0, 6, 14, 2], [0, 0, 0, 0], [0, 0, 0, 0]],
         publications: 1,
         storage: [164, 161, 3, 2, 7_872],
         depths: [150, 0, 0],
     },
     Pin {
         scenario: "commit.families",
-        counts: [[0, 16, 19, 3], [0, 0, 0, 0], [0, 0, 0, 0]],
+        counts: [[0, 15, 18, 3], [0, 0, 0, 0], [0, 0, 0, 0]],
         publications: 2,
         storage: [159, 35, 124, 3, 16_327],
         depths: [30, 120, 0],

@@ -356,8 +356,8 @@ impl PackCache {
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
                 let bytes = body.len();
                 // Retained units of this pack covering half its bytes make
-                // it dense: the whole body is kept, as `acquire_groups`
-                // asked, and serves the rest of its groups.
+                // it dense: the whole body is kept (the rule `acquire_groups`
+                // applies when it asks for one) and serves its other groups.
                 let dense = self
                     .entries
                     .range((id, Some(0))..=(id, Some(usize::MAX)))
