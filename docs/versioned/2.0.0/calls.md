@@ -618,7 +618,9 @@ On macOS and Linux, the CLI uses the native worker for `file read`,
 socket path and request fit. It selects the direct route before dialing
 when they do not fit. An error identifying the worker's home refuses the
 call before any send. The CLI reports an uncertain exchange as `Unknown`
-with a request ID. SDK local calls, CLI PostgreSQL and writes run in the
+with a request ID, including when the success payload has an invalid
+shape. If writing stdout fails after a valid result, the CLI reports the
+known successful call on stderr and exits 125. SDK local calls, CLI PostgreSQL and writes run in the
 caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).
 

@@ -245,12 +245,24 @@ impl HostPaths {
     /// Makes one ordinary call, launching a worker only if the home has
     /// no live owner. Callers choose this route before invoking it.
     pub fn call(&self, op: &str, args: SdkValue) -> Outcome {
-        self.exchange(false, true, op, args, None)?.ok_or_else(|| {
-            refused(
-                "Unavailable",
-                "host worker did not become ready; wait for it and try a new call",
-            )
-        })
+        self.call_validated(op, args, |_| true)
+    }
+
+    /// Makes one ordinary call whose success payload must satisfy `valid`.
+    /// An invalid payload after the send is correlated to the original request.
+    pub fn call_validated(
+        &self,
+        op: &str,
+        args: SdkValue,
+        valid: impl FnOnce(&SdkValue) -> bool,
+    ) -> Outcome {
+        self.exchange(false, true, op, args, None, valid)?
+            .ok_or_else(|| {
+                refused(
+                    "Unavailable",
+                    "host worker did not become ready; wait for it and try a new call",
+                )
+            })
     }
 
     /// Calls an existing endpoint without starting a worker. None means
@@ -261,7 +273,7 @@ impl HostPaths {
         op: &str,
         args: SdkValue,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
-        self.exchange(control, false, op, args, None)
+        self.exchange(control, false, op, args, None, |_| true)
     }
 
     /// Calls a management endpoint only if it still has the generation
@@ -272,7 +284,7 @@ impl HostPaths {
         args: SdkValue,
         generation: &str,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
-        self.exchange(true, false, op, args, Some(generation))
+        self.exchange(true, false, op, args, Some(generation), |_| true)
     }
 
     fn exchange(
@@ -282,6 +294,7 @@ impl HostPaths {
         op: &str,
         args: SdkValue,
         expected_generation: Option<&str>,
+        valid: impl FnOnce(&SdkValue) -> bool,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
         self.check_paths()?;
         let path = self.endpoint(control);
@@ -318,7 +331,11 @@ impl HostPaths {
         // leaves the already checked envelope size unchanged.
         let request = home::with_field(request, "generation", SdkValue::Text(generation));
         let body = host_frame::encode(&request, max)?;
-        send_request(&stream, path, (op, &id), &body, began, control, None).map(Some)
+        let answer = send_request(&stream, path, (op, &id), &body, began, control, None)?;
+        if !valid(&answer) {
+            return Err(unknown(op, &id, "invalid success payload"));
+        }
+        Ok(Some(answer))
     }
 
     pub(super) fn read_hello(stream: &UnixStream, end: Instant) -> Outcome {

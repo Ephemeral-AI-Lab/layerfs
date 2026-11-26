@@ -82,6 +82,58 @@ impl Method {
             }
         }
     }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    fn valid_answer(self, value: &SdkValue) -> bool {
+        let Some(at) = value.get("at") else {
+            return false;
+        };
+        let snapshot = value.get_text("kind") == Some("ok")
+            && value.get_text("snapshot").is_some()
+            && value.get_text("root").is_some()
+            && value.get_text("path").is_some()
+            && at.get_text("id").is_some()
+            && matches!(at.get_text("kind"), Some("Commit" | "Layer"))
+            && matches!(at.get("branch"), Some(SdkValue::Null | SdkValue::Text(_)))
+            && at.get_text("root").is_some();
+        snapshot
+            && match self {
+                Self::Read if value.get_bool("binary") => value.get_int("size").is_some(),
+                Self::Read => {
+                    matches!(value.get("binary"), None | Some(SdkValue::Bool(false)))
+                        && value.get_text("text").is_some()
+                        && value.get_int("size").is_some()
+                        && value.get_int("startLine").is_some()
+                        && nullable_int(value, "endLine")
+                        && nullable_int(value, "nextLine")
+                        && matches!(value.get("lineTruncated"), Some(SdkValue::Bool(_)))
+                }
+                Self::Stat => {
+                    inode(value)
+                        && value.get_int("size").is_some()
+                        && value.get_int("mode").is_some()
+                        && value.get_int("modifiedMs").is_some()
+                }
+                Self::List => {
+                    nullable_int(value, "nextPagePos")
+                        && value.get_int("removed_count").is_some()
+                        && matches!(value.get("items"), Some(SdkValue::List(items)) if items.iter().all(|row| {
+                            row.get_text("name").is_some() && row.get_text("path").is_some() && inode(row)
+                        }))
+                }
+            }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn nullable_int(value: &SdkValue, field: &str) -> bool {
+    matches!(value.get(field), Some(SdkValue::Null | SdkValue::Int(_)))
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn inode(value: &SdkValue) -> bool {
+    matches!(value.get_text("type"), Some("file" | "dir" | "symlink"))
+        && value.get_int("inode").is_some()
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -123,7 +175,9 @@ pub(crate) fn routed(
         Ok(paths) => paths,
         Err(error) => return Some(Err(error)),
     };
-    paths.request_fits(OP, &args).then(|| paths.call(OP, args))
+    paths
+        .request_fits(OP, &args)
+        .then(|| paths.call_validated(OP, args, |value| checked.valid_answer(value)))
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]

@@ -4,13 +4,14 @@ mod common;
 #[path = "common/host_worker.rs"]
 mod fixture;
 
-use common::{layerfs, run, text};
+use common::{broken_pipe, failing_sinks, finish, layerfs, run, text};
 use fixture::Fixture;
 use layerfs_api::{home::paths, json, worker};
 use layerfs_bridge::control::SdkValue;
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 fn t(value: &str) -> SdkValue {
@@ -23,6 +24,8 @@ fn prepare(home: &Path) {
     std::fs::create_dir_all(source.join("docs")).unwrap();
     std::fs::write(source.join("docs/a.txt"), "one\ntwo\n").unwrap();
     std::fs::write(source.join("docs/b.txt"), "three\n").unwrap();
+    std::fs::write(source.join("docs/raw"), b"x\0x").unwrap();
+    std::fs::create_dir(source.join("docs/empty")).unwrap();
     layerfs_api::call(
         Some(home),
         "store.create",
@@ -237,6 +240,11 @@ fn ordinary_endpoint_refuses_methods_and_arguments_outside_the_allowlist() {
 
 #[test]
 fn malformed_reply_after_the_request_is_unknown_without_a_direct_attempt() {
+    assert_malformed_reply(false);
+    assert_malformed_reply(true);
+}
+
+fn assert_malformed_reply(valid_envelope: bool) {
     let home = Fixture::new();
     prepare(&home.paths.home);
     let mut reference = home.start();
@@ -272,8 +280,17 @@ fn malformed_reply_after_the_request_is_unknown_without_a_direct_attempt() {
         assert_eq!(args.get_text("project"), Some("api"));
         assert!(args.get("store_record").is_none());
         assert!(args.get("storePath").is_none());
-        stream.write_all(&[0, 0, 0, 9, b'{']).unwrap();
-        request.get_text("request_id").unwrap().to_owned()
+        let id = request.get_text("request_id").unwrap();
+        if valid_envelope {
+            let answer = SdkValue::map([
+                ("request_id", t(id)),
+                ("ok", SdkValue::map([("text", t("wrong method shape"))])),
+            ]);
+            worker::write_host_frame(&stream, &answer, worker::HOST_MAX_REPLY, end).unwrap();
+        } else {
+            stream.write_all(&[0, 0, 0, 9, b'{']).unwrap();
+        }
+        id.to_owned()
     });
 
     let out = run(layerfs(
@@ -296,6 +313,9 @@ fn malformed_reply_after_the_request_is_unknown_without_a_direct_attempt() {
         error.contains("\"Unknown\"") && error.contains(&id),
         "{error}"
     );
+    if valid_envelope {
+        assert!(error.contains("invalid success payload"), "{error}");
+    }
     let trace = lines(&home.paths.home.join("route.jsonl"));
     assert_eq!(trace.len(), 1, "{trace:?}");
     assert_eq!(trace[0].get_text("event"), Some("worker.connection"));
@@ -320,5 +340,109 @@ fn real_warm_worker_releases_its_lease_before_store_remove() {
     let close = after.get("last_close").unwrap();
     assert_eq!(close.get_text("store"), Some("shop"));
     assert!(close.get_bool("closed"));
+    cleanup(&home);
+}
+
+#[test]
+fn valid_binary_empty_and_pinned_answers_keep_their_public_shapes() {
+    let home = Fixture::new();
+    let path = &home.paths.home;
+    prepare(path);
+    let binary = read_cli(
+        path,
+        &["file", "read", "shop/api", "main", "/docs/raw", "--detail"],
+    );
+    assert!(binary.get_bool("binary"));
+    assert_eq!(binary.get_int("size"), Some(3));
+    let pinned = binary.get_text("commit").unwrap();
+    let empty = read_cli(
+        path,
+        &[
+            "file",
+            "list",
+            "shop/api",
+            "main",
+            "/docs/empty",
+            "--at",
+            pinned,
+            "--detail",
+        ],
+    );
+    assert_eq!(empty.get("items"), Some(&SdkValue::List(Vec::new())));
+    assert_eq!(empty.get_text("commit"), Some(pinned));
+    let end = read_cli(
+        path,
+        &[
+            "file",
+            "read",
+            "shop/api",
+            "main",
+            "/docs/b.txt",
+            "--line",
+            "500",
+            "--detail",
+        ],
+    );
+    assert_eq!(end.get_text("text"), Some(""));
+    let page = read_cli(
+        path,
+        &[
+            "file", "list", "shop/api", "main", "/docs", "--limit", "1", "--detail",
+        ],
+    );
+    assert!(page.get_text("next_cursor").is_some());
+    cleanup(&home);
+}
+
+#[test]
+fn a_failed_stdout_reports_the_known_result_and_one_audit() {
+    let home = Fixture::new();
+    let path = &home.paths.home;
+    prepare(path);
+    let mut sinks = failing_sinks("native-result");
+    sinks.push(("text pipe", broken_pipe("native-text-result")));
+    let attempts = sinks.len();
+    for (name, sink) in sinks {
+        let format = if name == "text pipe" {
+            "--text"
+        } else {
+            "--json"
+        };
+        let child = layerfs(
+            path,
+            &["file", "read", "shop/api", "main", "/docs/a.txt", format],
+        )
+        .env("LAYERFS_LOGS", "1")
+        .env("LAYERFS_LOGS_TAG", "output-failed")
+        .env("LAYERFS_TRACE", path.join("output.jsonl"))
+        .stdout(sink)
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+        let out = finish(child);
+        assert_eq!(out.status.code(), Some(125), "{name}");
+        let error = text(&out.stderr);
+        assert!(
+            error.contains("call succeeded") && error.contains("writing stdout failed"),
+            "{error}"
+        );
+        if format == "--json" {
+            let diagnostic = json::parse(error.trim()).unwrap();
+            assert_eq!(diagnostic.get_text("outcome"), Some("ok"));
+            assert_eq!(diagnostic.get_text("error"), Some("Failed"));
+        }
+    }
+    let audits = lines(&path.join("trace/calls.jsonl"));
+    let known: Vec<_> = audits
+        .iter()
+        .filter(|line| line.get_text("tag") == Some("output-failed"))
+        .collect();
+    assert_eq!(known.len(), attempts);
+    assert!(known
+        .iter()
+        .all(|line| line.get_text("outcome") == Some("ok")));
+    let trace = lines(&path.join("output.jsonl"));
+    assert_eq!(trace.len(), attempts);
+    assert!(trace.iter().all(|line| line.get_bool("sent")));
     cleanup(&home);
 }

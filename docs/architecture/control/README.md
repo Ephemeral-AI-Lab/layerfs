@@ -173,6 +173,8 @@ Store record under its admission lock. An endpoint path or request that
 does not fit uses the direct route, chosen before dialing. An error reading
 the worker's home identity is a definite refusal before any send. If operation
 bytes may have been sent and no valid reply arrives, the caller reports
-`Unknown` with a request ID. The caller owns the single public audit line.
+`Unknown` with a request ID, including when a success payload fails the
+requested method’s schema. The caller owns the single public audit line.
+A stdout failure after a complete result reports the known call outcome.
 SDK calls, PostgreSQL, writes, and guest Stores use their existing routes.
 See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).
