@@ -99,7 +99,8 @@ impl HistoryCatalog for HistoryProvider {
         stack: LayerStackId,
         name: &HistoryName,
     ) -> HistoryResult<Option<BranchRecord>> {
-        self.read(|tx| branch::branch_named(tx, stack, name))
+        // One statement (#818 R1): one fenced autocommit read on PostgreSQL.
+        self.read_statement(|tx| branch::branch_named(tx, stack, name))
     }
 
     fn branch_snapshot(&self, id: BranchId) -> HistoryResult<Option<BranchSnapshot>> {
@@ -342,7 +343,8 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn path_removals(&self, stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
-        self.read(|tx| super::paths::markers(tx, stack))
+        // One statement (#818 R1), as `node_path_removals` below.
+        self.read_statement(|tx| super::paths::markers(tx, stack))
     }
 
     fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {

@@ -339,7 +339,7 @@ role that can read its own backends' starts (the default) never meets it.
 | `Publish` | as `Write` | `FOR UPDATE` and the lane barrier after the pack bodies; nested: as a nested `Write` | one Save publication, up to 16 MiB − 1 |
 | `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values |
-| `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
+| `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Branch by name, a Commit or Layer by id, a LayerStack by name, a project's `project.remove_file` markers (alone or with a node's serial), `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
 | `Admit` | as `Publish`: `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | never | a mount's GC registration ([GC admission](#gc-admission)) |
 | `Bare` | none; exactly one autocommit statement that may write, sent as written | no | the GC session keys and the owner's release; each carries its own generation check ([GC admission](#gc-admission)) |
 | Fused | as `Write`, sent in one pipelined message with the generation fence and a per-attempt token | `FOR UPDATE` and the lane barrier in the transaction itself, never nested in a held lane | a Workspace Commit over its bound head ([Fused Commit](#fused-commit)) |
@@ -347,7 +347,12 @@ role that can read its own backends' starts (the default) never meets it.
 Source: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs),
 [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs).
 A single statement sees one snapshot, so `Statement` reads a Branch and the
-rows it resolves to coherently. Statements outside a transaction name the
+rows it resolves to coherently. A read call's Branch-by-name and marker reads
+are each one such statement (#818 R1): one round trip, where a `Read`
+transaction costs three (its `BEGIN` and fence, the statement, `COMMIT`).
+Each still sees a snapshot of its own, as the separate transactions did, and
+the markers are still read after the head resolves, so a later read can only
+hide more. Statements outside a transaction name the
 schema (`{s}` in [`queries/history`](../../../../engine/crates/layerfs-persistence/sql/postgresql/queries/history)).
 Writes are never `SERIALIZABLE` and never retried.
 

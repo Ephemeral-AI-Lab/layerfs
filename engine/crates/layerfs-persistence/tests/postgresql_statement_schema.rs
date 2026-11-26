@@ -12,7 +12,8 @@
 //!
 //! The PostgreSQL test below proves the pinned keys answer: it creates a
 //! Store, commits and publishes, then reads it back through every
-//! one-statement catalog read: `branch_any`, `published_layer`,
+//! one-statement catalog read: `branch_any`, `branch_named`, `path_removals`,
+//! `published_layer`,
 //! `node_history_serial`, `layer` (layer.get), `layer_history` (layer.list),
 //! `branch_snapshot`/`branch_snapshot_named` (the saved heads),
 //! `commit_history` (a historical read), the project lookup and `statistics`.
@@ -59,6 +60,11 @@ const READS: &[Read] = &[
         pg_only: false,
     },
     Read {
+        called: "branch_named",
+        keys: &["branch_branch_by_name"],
+        pg_only: false,
+    },
+    Read {
         called: "branch_snapshot",
         keys: &["branch_snapshot"],
         pg_only: false,
@@ -91,6 +97,11 @@ const READS: &[Read] = &[
     Read {
         called: "node_serial",
         keys: &["position_node_serial"],
+        pg_only: false,
+    },
+    Read {
+        called: "markers",
+        keys: &["paths_markers"],
         pg_only: false,
     },
     Read {
@@ -497,6 +508,24 @@ fn postgresql_one_statement_reads_answer() {
         history
             .node_path_removals(stack, NodeId::Commit(absent_commit()))
             .expect("a missing node"),
+        None
+    );
+
+    // path_removals: the stack's markers alone, one statement (#818 R1).
+    let alone = history.path_removals(stack).expect("the markers alone");
+    assert_eq!(alone, markers);
+
+    // branch_named: the by-name read with the visibility filter (#818 R1); a
+    // name the stack does not hold is none.
+    let named = history
+        .branch_named(stack, &support::name("work"))
+        .expect("branch_named")
+        .expect("the Branch row");
+    assert_eq!((named.id, named.head_commit), (branch, Some(record.id)));
+    assert_eq!(
+        history
+            .branch_named(stack, &support::name("absent"))
+            .expect("a missing name"),
         None
     );
 

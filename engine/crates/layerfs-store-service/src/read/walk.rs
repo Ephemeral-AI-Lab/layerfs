@@ -144,6 +144,19 @@ impl<'a> Walker<'a> {
     ) -> Result<Self, SdkRefusal> {
         let memo = Memo::new(pages);
         let entry = snapshot::existing(&memo, snap, path)?;
+        Ok(Self::from_entry(memo, snap, path, entry, within))
+    }
+
+    /// [`Self::within`] from `path`'s entry, already looked up through
+    /// `memo` (#818 R3): the call's one path walk is not repeated, and the
+    /// walk reads its pages through the same memo.
+    pub fn from_entry(
+        memo: Memo<'a>,
+        snap: &'a snapshot::Snap,
+        path: &str,
+        entry: EntryFacts,
+        within: Option<String>,
+    ) -> Self {
         let (mut stack, mut top) = (Vec::new(), None);
         if entry.value.kind != InodeKind::Directory {
             top = Some((path.to_owned(), entry));
@@ -167,13 +180,13 @@ impl<'a> Walker<'a> {
                 }
             }
         }
-        Ok(Self {
+        Self {
             memo,
             snap,
             stack,
             top,
             within,
-        })
+        }
     }
 
     /// Does not descend into the folder `path`, the entry [`Self::next`]
@@ -247,17 +260,19 @@ pub fn walk(
     walk_within(reader, snap, path, None, visit)
 }
 
-/// [`walk_within`], leaving out every path `excluded` says, and not
-/// descending into an excluded folder.
-pub fn walk_excluding(
-    pages: &dyn AuthenticatedObjects,
-    snap: &snapshot::Snap,
+/// [`walk_within`] from `path`'s entry, looked up through `memo`
+/// ([`Walker::from_entry`]), leaving out every path `excluded` says, and
+/// not descending into an excluded folder.
+pub fn walk_excluding<'a>(
+    memo: Memo<'a>,
+    snap: &'a snapshot::Snap,
     path: &str,
+    entry: EntryFacts,
     within: Option<String>,
     excluded: impl Fn(&str) -> bool,
     mut visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    let mut walker = Walker::within(pages, snap, path, within)?;
+    let mut walker = Walker::from_entry(memo, snap, path, entry, within);
     while let Some((path, entry)) = walker.next()? {
         if excluded(&path) {
             walker.skip(&path);

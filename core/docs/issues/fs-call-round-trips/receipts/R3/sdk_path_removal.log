@@ -1,0 +1,13 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_path_removal.rs (target/debug/deps/sdk_path_removal-276b3c1019eb49dd)
+
+running 5 tests
+test the_remove_file_path_grammar_is_refused ... ok
+test a_file_ancestor_is_absent_before_and_after_remove_file ... ok
+test a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden ... ok
+test a_removed_path_is_hidden_in_reads_stat_list_and_glob_until_recreated ... ok
+test remove_file_accepts_a_path_that_exists_only_on_a_branch ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+run_bounded: exit 0 after 1.2 s
