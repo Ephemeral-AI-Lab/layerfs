@@ -63,3 +63,74 @@ trips (locate + span), as W0 attributed.
 - No new or changed server message: no sweep. Deleted tests: none.
 - Production LOC: 227,595 -> 227,620 (delta +25), engine
   layerfs-store-service +25.
+
+## W2 — bind by name
+
+Prediction (before coding). The project lookup (1 statement) and
+`branch_named` (a 3-trip read transaction) on the control reader go: the
+private bind reads project, Branch and snapshot in one named statement
+(`branch_snapshot_named`) where it read the snapshot by id (writer on
+PostgreSQL, Workspace reader on SQLite). After W1 they were the control
+reader's only work on a write call, so the control reader is idle.
+
+| Case | PG control | PG writer | PG total | SQLite |
+|---|---|---|---|---|
+| every `.warm` | [0,4,2,1] → [0,0,0,0] | unchanged | −4 (overwrite 16 → 12) | control 6 → 0 (tx 2 → 0); Workspace reader unchanged |
+| fused `.cold` (overwrite, edit) | [1,7,3,1] → [0,0,0,0] | unchanged | −7 (overwrite 65 → 58) | control 6 → 0 |
+| non-fused `.cold` (new_file, mkdir, cp, mv, rm, apply, rm.dir) | [1,7,3,1] → [0,0,0,0] | +1 trip | −6 (new_file 102 → 96) | control 6 → 0 |
+
+The +1 cold writer trip: the bind's by-id snapshot statement, which the
+separate Commit path's `head` phase reuses, is then first prepared in `head`
+while the bind prepares the named one. Hand-off expectation: W2 saves 4
+before R1 (warm).
+
+Refusal order kept: the project lookup still runs first (then today's
+refusal) whenever the `branch` argument is an error, the Branch is `main`,
+`expected` is given (today's path, it needs the stack record), the Workspace
+key cannot be made, or the Store refuses the bind before reading (overlay
+maintenance stopped, call capacity full). `BindError::NoSuchProject` /
+`NoSuchBranch` map to today's `NoSuchProject` / `NoSuchBranch` texts, a
+snapshot read failure to today's lookup-failure refusal.
+
+**Measured** (`receipts/W2/pins-measured.log`; `sdk_write_round_trips.log`
+green on the new pins). As predicted on every case and role, both backends,
+after one fix during the item: the first measurement still showed a cold
+control reader `[1, 1, 1, 0]` (its connect and schema check), opened by the
+W1 code's eager `Store::ports` for the base tree; the reader is now made with
+the tree, lazily. Control is `[0, 0, 0, 0]` on every case.
+
+| Case | PG trips W1 → predicted → measured | SQLite stmts W1 → measured |
+|---|---|---|
+| `write.overwrite.cold` / `.warm` | 65 / 16 → 58 / 12 → 58 / 12 | 140 / 54 → 134 / 48 |
+| `edit.2000_lines.cold` / `.warm` | 57 / 18 → 50 / 14 → 50 / 14 | 143 / 52 → 137 / 46 |
+| `write.new_file.cold` / `.warm` | 102 / 38 → 96 / 34 → 96 / 34 | 144 / 67 → 138 / 61 |
+| `mkdir.cold` / `.warm` | 103 / 40 → 97 / 36 → 97 / 36 | 150 / 74 → 144 / 68 |
+| `rm.dir_100_recursive.cold` / `.warm` | 197 / 142 → 191 / 138 → 191 / 138 | 243 / 169 → 237 / 163 |
+
+Within 15%: yes (0% off). Hand-off expectation "W2 saves 4 before R1": 4
+warm. Cold separate-path Commits pay +1 writer trip (the `head` phase now
+prepares the by-id snapshot statement the bind used to prepare).
+
+- Refusal order: `tests/sdk_write_named_refusals.rs` (both backends)
+  checks `NoSuchProject` before every other fault (missing/`main`/unknown/
+  invalid Branch, bad content), then the missing `branch` argument, `ReadOnly`,
+  `NoSuchBranch` for unknown and invalid names, then the change's refusal;
+  it passes on W2 and, run once against the W1 source, on the order before W2
+  (`scratchpad`, not kept). `method_refusal_order`, `commit_expected`
+  (`expected` takes today's path), equivalence driver: green.
+- Not testable cheaply and kept by construction: a refusal before the bind
+  reads (Workspace key, overlay maintenance stopped, capacity full) runs the
+  lookups first and returns their refusal if any. A transient failure of the
+  named snapshot read answers as a lookup read failure (`published`);
+  `BindError::Cleanup` / reader-mount failures answer `Failed` with the bind's
+  text, as a bind failure did before.
+- Sweeps (new flight: the private named bind, writer named snapshot +
+  admission message): `tests/sdk_bind_named_fault.rs`, drop and kill at all
+  26 messages, mount-sweep invariants (rows, session keys, reopen, rebind,
+  fresh bind, no open transaction): drop 22 "unknown, row released at
+  reopen" + 4 "unknown, no row"; kill 26 "bound, then killed". 6.4 s.
+- `W1_KEPT` now shows the kept regime's write with 0 control statements
+  (PG kept [11, 0] vs fallback [13, 4]; SQLite [11, 0] vs [17, 10]).
+- Deleted tests: none.
+- Production LOC: 227,620 -> 227,712 (delta +92), engine
+  layerfs-store-service +92.

@@ -48,6 +48,11 @@
 //!   control reader's marker, serial and base-tree reads go: control
 //!   PostgreSQL [1, 17, 7, 2] -> [1, 7, 3, 1] cold, [0, 10, 6, 2] ->
 //!   [0, 4, 2, 1] warm; SQLite [0, 0, 14, 4] -> [0, 0, 6, 2].
+//! - W2: the private bind finds project and Branch by name with its
+//!   snapshot, so the control reader serves no write call: control
+//!   [0, 0, 0, 0] on both backends (its cold connect goes too). A cold
+//!   Commit on the separate path pays one more writer trip: its `head` read
+//!   is now the first use of the by-id snapshot statement (a prepare).
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -62,77 +67,77 @@ const SQLITE: &[Pin] = &[
     pin(
         "write.new_file.cold",
         [0, 0, 74, 12],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 64, 4],
     ),
     pin(
         "write.new_file.warm",
         [0, 0, 47, 8],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 14, 2],
     ),
     // probe write.overwrite: 54
     pin(
         "write.overwrite.cold",
         [0, 0, 61, 7],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 73, 4],
     ),
     pin(
         "write.overwrite.warm",
         [0, 0, 40, 4],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 8, 2],
     ),
     // probe edit.2000_lines: 52
     pin(
         "edit.2000_lines.cold",
         [0, 0, 67, 6],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 70, 4],
     ),
     pin(
         "edit.2000_lines.warm",
         [0, 0, 37, 4],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 9, 2],
     ),
     // probe mkdir: 69
-    pin("mkdir.cold", [0, 0, 79, 11], [0, 0, 6, 2], [0, 0, 65, 4]),
-    pin("mkdir.warm", [0, 0, 51, 8], [0, 0, 6, 2], [0, 0, 17, 2]),
+    pin("mkdir.cold", [0, 0, 79, 11], [0, 0, 0, 0], [0, 0, 65, 4]),
+    pin("mkdir.warm", [0, 0, 51, 8], [0, 0, 0, 0], [0, 0, 17, 2]),
     // probe cp.file: 64
-    pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 6, 2], [0, 0, 86, 4]),
-    pin("cp.file.warm", [0, 0, 50, 8], [0, 0, 6, 2], [0, 0, 9, 2]),
+    pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 0, 0], [0, 0, 86, 4]),
+    pin("cp.file.warm", [0, 0, 50, 8], [0, 0, 0, 0], [0, 0, 9, 2]),
     // probe mv.file: 60
-    pin("mv.file.cold", [0, 0, 79, 10], [0, 0, 6, 2], [0, 0, 81, 4]),
-    pin("mv.file.warm", [0, 0, 54, 8], [0, 0, 6, 2], [0, 0, 17, 2]),
+    pin("mv.file.cold", [0, 0, 79, 10], [0, 0, 0, 0], [0, 0, 81, 4]),
+    pin("mv.file.warm", [0, 0, 54, 8], [0, 0, 0, 0], [0, 0, 17, 2]),
     // probe rm.file: 58
-    pin("rm.file.cold", [0, 0, 85, 9], [0, 0, 6, 2], [0, 0, 87, 4]),
-    pin("rm.file.warm", [0, 0, 38, 7], [0, 0, 6, 2], [0, 0, 8, 2]),
+    pin("rm.file.cold", [0, 0, 85, 9], [0, 0, 0, 0], [0, 0, 87, 4]),
+    pin("rm.file.warm", [0, 0, 38, 7], [0, 0, 0, 0], [0, 0, 8, 2]),
     // probe apply.10_writes: 74
     pin(
         "apply.10_writes.cold",
         [0, 0, 93, 12],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 77, 4],
     ),
     pin(
         "apply.10_writes.warm",
         [0, 0, 61, 8],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 9, 2],
     ),
     // probe rm.dir_100_recursive: 179
     pin(
         "rm.dir_100_recursive.cold",
         [0, 0, 68, 9],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 169, 4],
     ),
     pin(
         "rm.dir_100_recursive.warm",
         [0, 0, 47, 7],
-        [0, 0, 6, 2],
+        [0, 0, 0, 0],
         [0, 0, 116, 2],
     ),
 ];
@@ -143,78 +148,78 @@ const POSTGRESQL: &[Pin] = &[
     // probe write.new_file: 66 trips (its process's first create)
     pin(
         "write.new_file.cold",
-        [1, 75, 41, 9],
-        [1, 7, 3, 1],
+        [1, 76, 41, 9],
+        [0, 0, 0, 0],
         [1, 20, 18, 1],
     ),
     pin(
         "write.new_file.warm",
         [0, 29, 25, 4],
-        [0, 4, 2, 1],
+        [0, 0, 0, 0],
         [0, 5, 5, 0],
     ),
     // probe write.overwrite: 24
     pin(
         "write.overwrite.cold",
         [0, 37, 34, 6],
-        [1, 7, 3, 1],
+        [0, 0, 0, 0],
         [1, 21, 19, 1],
     ),
     pin(
         "write.overwrite.warm",
         [0, 10, 24, 2],
-        [0, 4, 2, 1],
+        [0, 0, 0, 0],
         [0, 2, 2, 0],
     ),
     // probe edit.2000_lines: 23
     pin(
         "edit.2000_lines.cold",
         [0, 34, 34, 5],
-        [1, 7, 3, 1],
+        [0, 0, 0, 0],
         [1, 16, 14, 1],
     ),
     pin(
         "edit.2000_lines.warm",
         [0, 12, 26, 2],
-        [0, 4, 2, 1],
+        [0, 0, 0, 0],
         [0, 2, 2, 0],
     ),
     // probe mkdir: 45
-    pin("mkdir.cold", [1, 77, 46, 8], [1, 7, 3, 1], [1, 19, 17, 1]),
-    pin("mkdir.warm", [0, 32, 28, 4], [0, 4, 2, 1], [0, 4, 4, 0]),
+    pin("mkdir.cold", [1, 78, 46, 8], [0, 0, 0, 0], [1, 19, 17, 1]),
+    pin("mkdir.warm", [0, 32, 28, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
     // probe cp.file: 44
-    pin("cp.file.cold", [1, 74, 43, 8], [1, 7, 3, 1], [1, 29, 27, 1]),
-    pin("cp.file.warm", [0, 31, 27, 4], [0, 4, 2, 1], [0, 3, 3, 0]),
+    pin("cp.file.cold", [1, 75, 43, 8], [0, 0, 0, 0], [1, 29, 27, 1]),
+    pin("cp.file.warm", [0, 31, 27, 4], [0, 0, 0, 0], [0, 3, 3, 0]),
     // probe mv.file: 40
-    pin("mv.file.cold", [1, 68, 41, 7], [1, 7, 3, 1], [1, 20, 18, 1]),
-    pin("mv.file.warm", [0, 31, 27, 4], [0, 4, 2, 1], [0, 4, 4, 0]),
+    pin("mv.file.cold", [1, 69, 41, 7], [0, 0, 0, 0], [1, 20, 18, 1]),
+    pin("mv.file.warm", [0, 31, 27, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
     // probe rm.file: 37
-    pin("rm.file.cold", [1, 65, 41, 6], [1, 7, 3, 1], [1, 20, 18, 1]),
-    pin("rm.file.warm", [0, 27, 25, 3], [0, 4, 2, 1], [0, 2, 2, 0]),
+    pin("rm.file.cold", [1, 66, 41, 6], [0, 0, 0, 0], [1, 20, 18, 1]),
+    pin("rm.file.warm", [0, 27, 25, 3], [0, 0, 0, 0], [0, 2, 2, 0]),
     // probe apply.10_writes: 46
     pin(
         "apply.10_writes.cold",
-        [1, 80, 46, 9],
-        [1, 7, 3, 1],
+        [1, 81, 46, 9],
+        [0, 0, 0, 0],
         [1, 25, 23, 1],
     ),
     pin(
         "apply.10_writes.warm",
         [0, 32, 28, 4],
-        [0, 4, 2, 1],
+        [0, 0, 0, 0],
         [0, 2, 2, 0],
     ),
     // probe rm.dir_100_recursive: 151
     pin(
         "rm.dir_100_recursive.cold",
-        [1, 67, 42, 6],
-        [1, 7, 3, 1],
+        [1, 68, 42, 6],
+        [0, 0, 0, 0],
         [1, 123, 121, 1],
     ),
     pin(
         "rm.dir_100_recursive.warm",
         [0, 29, 27, 3],
-        [0, 4, 2, 1],
+        [0, 0, 0, 0],
         [0, 109, 109, 0],
     ),
 ];

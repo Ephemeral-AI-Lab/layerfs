@@ -114,8 +114,11 @@ meets: `fs.list { path: "/absent", pageSize: 0 }` is `NoSuchPath`, not
 
 ```text
 files::commit(service, project, branch, changes, message)
-  resolve  branch "main" -> ReadOnly; unknown -> NoSuchBranch
-  bind     fresh WorkspaceId; private Workspace (never listed or mounted)
+  bind     fresh WorkspaceId; private Workspace (never listed or mounted),
+           found by project and Branch name with its snapshot in one read:
+           unknown project -> NoSuchProject; unknown -> NoSuchBranch
+  resolve  only when the bind cannot run by name or refused before reading:
+           project, branch argument, "main" -> ReadOnly, Branch by name
   hidden   bound node's serial + markers kept by the bind; else read them
   change   Mutation per change, in order; first refusal stops, {index}
   commit   commit_captured_via(message, CommitVia::Files)
@@ -141,6 +144,19 @@ map lives in the private overlay's indexed operation records (kind
 private overlay; serials come from the Store's pooled reservation
 ([`store/ports.rs`](../../../../engine/crates/layerfs-store-service/src/store/ports.rs)).
 The Commit itself is the Workspace Commit; see [Commit](../commit/README.md).
+
+**Binding by name.** A call on a named Branch other than `main` without
+`expected` binds through `Store::bind_named_private`: on PostgreSQL the
+writer's one named snapshot statement and the admission message, on SQLite
+the Workspace reader's named snapshot, with no control-reader read (#818
+W2). The refusal order stays the lookups': a refused `branch` argument,
+`main` (`ReadOnly`) and an `expected` Commit (which needs the project
+record) take the lookups on the control reader first, as do a missing
+Workspace key and a Store that refuses the bind before reading (overlay
+maintenance stopped, call capacity full), so `NoSuchProject` and
+`NoSuchBranch` still come first. The bind's `NoSuchProject` /
+`NoSuchBranch` answer with the lookups' texts, and its snapshot read
+failure as a lookup read failure.
 
 **Hidden paths.** The private overlay already whiteouts a path a
 `project.remove_file` marker hides, so `edit` and a `cp` source that come

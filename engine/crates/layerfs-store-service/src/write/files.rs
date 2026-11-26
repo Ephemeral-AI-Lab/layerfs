@@ -5,11 +5,13 @@
 use super::mutation::Mutation;
 use crate::history::lookup::{self as args, Answer, Arg};
 use crate::read::{snapshot, visibility::Visibility};
+use crate::store::{BindError, BindPhase};
+use crate::store_service::NamedBindFailure;
 use crate::StoreService;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::TreeTable;
 use layerfs_content::filesystem::FilesystemRootId;
-use layerfs_history::{CommitOutcome, CommitVia, WorkspaceId};
+use layerfs_history::{BranchRecord, CommitOutcome, CommitVia, LayerStackRecord, WorkspaceId};
 use std::sync::Arc;
 
 pub fn path(value: &str) -> Result<String, SdkRefusal> {
@@ -76,42 +78,36 @@ pub fn commit(
     expected: Option<&str>,
 ) -> Answer {
     let store = &service.store;
-    let (branch_name, branch, stack) = crate::telemetry::timed("files.resolve", |_| {
-        let stack = args::project(store, project)?;
-        let branch_name = branch?;
-        if branch_name == "main" {
-            return Err(args::refuse(
-                "ReadOnly",
-                "main changes only through publish",
-                SdkValue::Null,
-            ));
+    let (branch_name, workspace) = match (branch, expected) {
+        // #818 W2: the bind finds the project and Branch by name with its
+        // snapshot, in one read.
+        (Ok(name), None) if name != crate::history::MAIN => {
+            (name, bind_named(service, project, name)?)
         }
-        let branch = args::branch(store, &stack, branch_name)?;
-        Ok((branch_name, branch, stack))
-    })?;
-    let id = WorkspaceId::from_authority(
-        layerfs_bridge::duplex::generate_keypair()
-            .map_err(args::failed)?
-            .public,
-    )
-    .map_err(args::history)?;
-    let workspace =
-        crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
-            .map_err(args::failed)?;
-    if let Some(expected) = expected {
-        let bound = workspace
-            .snapshot()
-            .map_err(crate::write::mutation::failure);
-        let guard = bound.and_then(|base| {
-            let head = crate::removal::node_of(&base);
-            let what = format!("Branch {branch_name}");
-            crate::history::resolve::expect(store, &stack, Some(expected), &what, head)
-        });
-        if let Err(refusal) = guard {
-            close(service, &workspace)?;
-            return Err(refusal);
+        (branch, expected) => {
+            let (branch_name, branch, stack) =
+                crate::telemetry::timed("files.resolve", |_| resolve(store, project, branch))?;
+            let id = workspace_id()?;
+            let workspace =
+                crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
+                    .map_err(args::failed)?;
+            if let Some(expected) = expected {
+                let bound = workspace
+                    .snapshot()
+                    .map_err(crate::write::mutation::failure);
+                let guard = bound.and_then(|base| {
+                    let head = crate::removal::node_of(&base);
+                    let what = format!("Branch {branch_name}");
+                    crate::history::resolve::expect(store, &stack, Some(expected), &what, head)
+                });
+                if let Err(refusal) = guard {
+                    close(service, &workspace)?;
+                    return Err(refusal);
+                }
+            }
+            (branch_name, workspace)
         }
-    }
+    };
     let result = crate::telemetry::timed("files.change", |_| change(&workspace, changes))?;
     if result.as_ref().is_err_and(|e| e.code == "Unknown") {
         return result.map(|_| SdkValue::Null);
@@ -222,6 +218,66 @@ pub fn commit(
     })
 }
 
+/// The project and Branch by name on the control reader, with the call's
+/// refusals in their order: `NoSuchProject`, a refused `branch` argument,
+/// `ReadOnly` for `main`, `NoSuchBranch`.
+fn resolve<'a>(
+    store: &Arc<crate::store::Store>,
+    project: &str,
+    branch: Arg<&'a str>,
+) -> Result<(&'a str, BranchRecord, LayerStackRecord), SdkRefusal> {
+    let stack = args::project(store, project)?;
+    let branch_name = branch?;
+    if branch_name == crate::history::MAIN {
+        return Err(args::refuse(
+            "ReadOnly",
+            "main changes only through publish",
+            SdkValue::Null,
+        ));
+    }
+    let branch = args::branch(store, &stack, branch_name)?;
+    Ok((branch_name, branch, stack))
+}
+
+/// A fresh identity for the call's private Workspace.
+fn workspace_id() -> Result<WorkspaceId, SdkRefusal> {
+    let key = layerfs_bridge::duplex::generate_keypair().map_err(args::failed)?;
+    WorkspaceId::from_authority(key.public).map_err(args::history)
+}
+
+/// The private Workspace on Branch `branch` of `project`, bound by name
+/// (#818 W2) with the refusals [`resolve`] gives, in its order: a refusal
+/// the call meets before the bind reads (no Workspace key, overlay
+/// maintenance stopped, call capacity full) comes after the lookups, as
+/// before.
+fn bind_named(
+    service: &StoreService,
+    project: &str,
+    branch: &str,
+) -> Result<Arc<crate::store::BoundWorkspace>, SdkRefusal> {
+    let looked_up = |refusal: SdkRefusal| {
+        let resolved = crate::telemetry::timed("files.resolve", |_| {
+            resolve(&service.store, project, Ok(branch))
+        });
+        resolved.err().unwrap_or(refusal)
+    };
+    let id = workspace_id().map_err(looked_up)?;
+    let bound = crate::telemetry::timed("files.bind", |timing| {
+        service.bind_named(id, project, branch, timing)
+    });
+    bound.map_err(|failure| match failure {
+        NamedBindFailure::Admission(message) => looked_up(args::failed(message)),
+        NamedBindFailure::Bind(refusal) => match &refusal.error {
+            BindError::NoSuchProject(_) => args::no_project(project),
+            BindError::NoSuchBranch(_) => args::no_branch(branch),
+            BindError::Read(error) if matches!(refusal.phase, BindPhase::Snapshot) => {
+                args::published(error.clone())
+            }
+            _ => args::failed(refusal),
+        },
+    })
+}
+
 /// Applies `changes` to the private Workspace: how many texts its edits
 /// replaced, or the first refused change's refusal, after the changes
 /// before it are finished in the overlay.
@@ -243,8 +299,7 @@ fn change(
     // #818 W1: the bound node's markers the bind kept answer without a read,
     // and the base tree opens only when a refusal asks. Without kept markers
     // the call reads both first, as before, so a failed read still refuses
-    // every change (SPEC D16).
-    let reader: Arc<crate::store::StorePorts> = workspace.store.ports(base.scope);
+    // every change (SPEC D16). The control reader opens with the tree.
     let tree = std::cell::OnceCell::new();
     let visibility = match workspace.kept_markers(node) {
         Some((serial, markers)) => Visibility::from_markers(serial, markers),
@@ -254,19 +309,19 @@ fn change(
                 base.branch.stack,
                 Visibility::node_serial(&workspace.store, node)?,
             )?;
-            let _ = tree.set(open_tree(&reader, &base)?);
+            let _ = tree.set(open_tree(workspace, &base)?);
             visibility
         }
     };
     let removed = |path: &str| -> Result<Option<SdkRefusal>, SdkRefusal> {
-        let tree = match tree.get() {
-            Some(tree) => tree,
+        let (reader, tree) = match tree.get() {
+            Some(opened) => opened,
             None => {
-                let opened = open_tree(&reader, &base)?;
+                let opened = open_tree(workspace, &base)?;
                 tree.get_or_init(|| opened)
             }
         };
-        let exists = snapshot::entry(&reader, tree, path)?.is_some();
+        let exists = snapshot::entry(reader, tree, path)?.is_some();
         Ok(exists
             .then(|| visibility.hidden(path))
             .flatten()
@@ -330,10 +385,12 @@ fn change(
 
 /// The bound node's raw tree on the control reader, for the hidden-path check.
 fn open_tree(
-    reader: &crate::store::StorePorts,
+    workspace: &crate::store::BoundWorkspace,
     base: &layerfs_history::BranchSnapshot,
-) -> Result<TreeTable, SdkRefusal> {
-    TreeTable::open(reader, FilesystemRootId(base.effective_root)).map_err(args::content)
+) -> Result<(Arc<crate::store::StorePorts>, TreeTable), SdkRefusal> {
+    let reader = workspace.store.ports(base.scope);
+    let tree = TreeTable::open(&*reader, FilesystemRootId(base.effective_root));
+    Ok((reader, tree.map_err(args::content)?))
 }
 
 /// Closes the call's private Workspace and discards its overlay.

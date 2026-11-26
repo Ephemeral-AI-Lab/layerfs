@@ -1,0 +1,14 @@
+
+running 2 tests
+test fs_calls_answer_alike_on_both_backends ... EQUIV sqlite: init 76 ms, 186 steps (44 Commits) 859 ms
+EQUIV postgresql: init 873 ms, 186 steps (44 Commits) 7217 ms
+EQUIV fs: 186 steps equal on sqlite and postgresql
+ok
+test init_past_the_write_window_answers_alike_on_both_backends ... EQUIV sqlite: init 215 ms, 17 steps (1 Commits) 67 ms
+EQUIV postgresql: init 4322 ms, 17 steps (1 Commits) 586 ms
+EQUIV window: 17 steps equal on sqlite and postgresql
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.95s
+
+run_bounded: exit 0 after 15.8 s
