@@ -82,7 +82,10 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     );
     assert_eq!(first.get_text("outcome"), Some("created"));
     assert_eq!(first.get("unchanged"), Some(&SdkValue::Bool(false)));
-    assert_eq!(first.get("layout"), Some(&SdkValue::Int(3)));
+    assert_eq!(
+        first.get("layout"),
+        Some(&SdkValue::Int(layerfs_home::home::LAYOUT_VERSION))
+    );
     assert_eq!(first.get_text("version"), Some(env!("CARGO_PKG_VERSION")));
     assert!(home.join("layerfs.json").is_file());
     let mode = std::fs::metadata(&home).unwrap().permissions().mode() & 0o777;
@@ -102,7 +105,10 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     assert_eq!(got.get("reason"), Some(&SdkValue::Null));
     assert_eq!(got.get("fix"), Some(&SdkValue::Null));
     assert_eq!(got.get("message"), Some(&SdkValue::Null));
-    assert_eq!(got.get("layout"), Some(&SdkValue::Int(3)));
+    assert_eq!(
+        got.get("layout"),
+        Some(&SdkValue::Int(layerfs_home::home::LAYOUT_VERSION))
+    );
     assert_eq!(got.get_text("mode"), Some("0700"));
     let _ = std::fs::remove_dir_all(&home);
 }

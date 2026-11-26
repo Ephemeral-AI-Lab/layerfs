@@ -102,9 +102,14 @@ impl Worker {
 
 /// A new explicit invocation can settle its earlier close without sending
 /// anything. Keep the recorded fence while that identity still holds the
-/// Store, even if the process has no accepting endpoint.
+/// Store, even if the process has no accepting endpoint. A record this
+/// build does not read names no machine a worker could hold: the call
+/// itself refuses it, or `store remove` forgets it by its records.
 pub(crate) fn recover(home: &Path, name: &str, call: &str, to: Option<&str>) -> Result<()> {
     let initial = StoreRecord::of(home, name)?;
+    if initial.store_ref().is_err() {
+        return Ok(());
+    }
     initial.admit_machine(home)?;
     if initial.op().is_none_or(|op| op.phase() != WORKER_CLOSE) {
         return Ok(());

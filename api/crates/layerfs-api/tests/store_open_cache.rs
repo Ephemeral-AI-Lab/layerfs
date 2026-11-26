@@ -195,7 +195,10 @@ fn a_running_call_keeps_its_store_open_against_a_move_or_remove() {
     ] {
         let (code, message) = call(&home, name, &args).unwrap_err();
         assert_eq!(code, "InUse", "{name}: {message}");
-        assert!(message.contains("a call is running"), "{name}: {message}");
+        assert!(
+            message.contains("is active in this process"),
+            "{name}: {message}"
+        );
     }
     let lease = paths::lease_dir(&home, "shop").join(std::process::id().to_string());
     assert!(lease.is_file(), "the running call keeps its lease");

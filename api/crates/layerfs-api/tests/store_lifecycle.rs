@@ -421,7 +421,10 @@ fn a_move_refuses_the_wrong_side_and_a_stopped_machine_naming_machine_start() {
     ];
     let (code, message) = call(&home, "store.move", &here).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
-    assert!(message.contains("already on native"), "{message}");
+    assert!(
+        message.contains(&format!("already on {}", layerfs_home::names::HOST_MACHINE)),
+        "{message}"
+    );
     let args = [("store", t("shop")), ("machine", t("nosuch"))];
     assert_eq!(call(&home, "store.move", &args).unwrap_err().0, "NotFound");
     let args = [("store", t("shop")), ("machine", t("vm"))];

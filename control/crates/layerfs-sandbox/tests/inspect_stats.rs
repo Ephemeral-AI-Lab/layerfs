@@ -185,7 +185,7 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
 
     // a process that ended, and its id under another start time
     let gone = ended();
-    let record = daemon(gone, layerfs_home::names::HOST_MACHINE, run);
+    let record = daemon(gone, "process", run);
     assert_eq!(process::live(&record), Ok(false));
     let shown = process::shown(&record, boot());
     assert_eq!(shown.get_int("pid"), Some(i64::from(gone.pid)));

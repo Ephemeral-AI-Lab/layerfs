@@ -239,7 +239,10 @@ fn a_move_here_stopped_between_install_and_record_is_cleared_by_a_new_move_here(
     let (code, message) = read(&home).unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");
     assert!(
-        message.contains("`layerfs store move shop native`"),
+        message.contains(&format!(
+            "`layerfs store move shop {}`",
+            layerfs_home::names::HOST_MACHINE
+        )),
         "{message}"
     );
 
@@ -297,7 +300,10 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
         found
             .iter()
             .any(|(severity, message, fix)| severity == "warning"
-                && message.contains("did not retire the copy on native")
+                && message.contains(&format!(
+                    "did not retire the copy on {}",
+                    layerfs_home::names::HOST_MACHINE
+                ))
                 && message.contains("the next `layerfs store move shop` deletes it first")
                 && fix.is_empty()),
         "{found:?}"
@@ -605,7 +611,10 @@ fn retire_failure_reports_authority_switched_to_target_and_source_unretired() {
     assert_eq!(refusal.detail.get_text("source"), Some("box"));
     assert_eq!(refusal.detail.get("retired"), Some(&SdkValue::Bool(false)));
     assert!(
-        refusal.message.contains("authority switched to native"),
+        refusal.message.contains(&format!(
+            "authority switched to {}",
+            layerfs_home::names::HOST_MACHINE
+        )),
         "{}",
         refusal.message
     );
