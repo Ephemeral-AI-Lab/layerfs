@@ -109,6 +109,10 @@ pub(crate) struct Fetch {
     pub(super) held: RefCell<Option<super::held::Held>>,
     /// Set while a Save, or a reader that continues one, reads.
     pub(super) serve_published: Cell<bool>,
+    /// Set only during a remote Save's canonical reads.
+    pub(super) compact_inode_packs: Cell<bool>,
+    /// Remote value requests may share a flight while a captured Save runs.
+    paired_inode_values: Cell<bool>,
     counters: Cell<Diagnostics>,
     /// Chain hints from chain locates (#758).
     pub(super) hints: RefCell<super::hints::Hints>,
@@ -167,6 +171,8 @@ impl Fetch {
             published: RefCell::new(Published::default()),
             held: RefCell::new(None),
             serve_published: Cell::new(false),
+            compact_inode_packs: Cell::new(false),
+            paired_inode_values: Cell::new(false),
             counters: Cell::new(Diagnostics::default()),
             hints: RefCell::default(),
             capacities: Cell::new(None),
@@ -251,6 +257,19 @@ impl Fetch {
     /// Serves the published bodies and values until the guard drops.
     pub(crate) fn serving_published(&self) -> Restore<'_> {
         Restore(&self.serve_published, self.serve_published.replace(true))
+    }
+    /// Keeps nearby inode groups together for a remote Save's canonical read.
+    pub(crate) fn compact_inode_packs(&self, enabled: bool) -> Restore<'_> {
+        Restore(
+            &self.compact_inode_packs,
+            self.compact_inode_packs.replace(enabled),
+        )
+    }
+    pub(crate) fn pairing_inode_values(&self, enabled: bool) -> Restore<'_> {
+        Restore(
+            &self.paired_inode_values,
+            self.paired_inode_values.replace(enabled),
+        )
     }
     /// Holds every demand to a Save's rule (no binding) until the guard drops.
     pub(crate) fn save_reads(&self) -> Restore<'_> {
@@ -819,13 +838,29 @@ impl Source for Fetch {
         } else {
             wanted
         };
-        let mut rows = Vec::new();
-        for page in wanted.chunks(READ_OBJECT_LIMIT) {
+        let mut batches = [Vec::new(), Vec::new()];
+        let paired = if self.paired_inode_values.get()
+            && wanted.len() > READ_OBJECT_LIMIT
+            && wanted.len() <= crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES
+        {
+            let (first, last) = wanted.split_at(READ_OBJECT_LIMIT);
+            self.metadata
+                .inode_values_pair([first, last], &mut batches)?
+        } else {
+            false
+        };
+        let mut ordinary = Vec::new();
+        for (index, page) in wanted.chunks(READ_OBJECT_LIMIT).enumerate() {
             self.note(|c| c.value_groups += 1);
-            self.metadata.inode_values(page, &mut rows)?;
+            let rows = if paired {
+                &batches[index]
+            } else {
+                self.metadata.inode_values(page, &mut ordinary)?;
+                &ordinary
+            };
             // The reply may omit an ordinal but never add, repeat or reorder one.
             let mut asked = page.iter();
-            for row in &rows {
+            for row in rows {
                 if !asked.any(|ordinal| *ordinal == row.ordinal) {
                     return Err(StorageError::Integrity("unrequested inode value"));
                 }
@@ -838,7 +873,7 @@ impl Source for Fetch {
             // values once (#768 stage 2).
             if self.serve_published.get() {
                 let mut published = self.published.borrow_mut();
-                for row in &rows {
+                for row in rows {
                     published.value(row.ordinal, row.value);
                 }
             }

@@ -21,7 +21,7 @@ use layerfs_storage::{
     location::{ChainMember, LocatedChains},
     pack::layout,
     policy::{CANONICAL_LIMIT, GROUP_COUNT_LIMIT, RECORD_COUNT_LIMIT},
-    port::ObjectKey,
+    port::{ObjectKey, PersistenceError},
     Storage, StorageCapacities, StorageError, StoragePolicy,
 };
 use std::sync::{Arc, Mutex};
@@ -870,6 +870,132 @@ fn noise_history(role: ObjectRole) -> (Arc<metadata::MemoryMetadata>, ObjectId) 
     let base = base.unwrap();
     assert_eq!(depth(&memory, base), 1, "the second page is a program");
     (memory, base)
+}
+
+#[test]
+fn captured_inode_reads_keep_authoritative_failures_in_a_mixed_group() {
+    let (memory, base) = noise_history(ObjectRole::InodeBranch);
+    let tail = noise_page(ObjectRole::InodeBranch, 3, None);
+    let tail_id = tail.id();
+    let saved = Storage::new(memory.clone()).unwrap();
+    let save = saved.begin_save().unwrap();
+    save.accept(tail).unwrap();
+    save.finish().unwrap();
+    let state = memory.state.lock().unwrap();
+    let member = state.objects[&state.objects[&base].base.unwrap()].pack_id;
+    let head = state.objects[&base].pack_id;
+    let other = state.objects[&tail_id].pack_id;
+    drop(state);
+    assert_ne!(member, head);
+    assert_ne!(member, other);
+    // The chain belongs to `base`. With both roots in one demand the
+    // first pack is authoritative, then its ancestor, then `tail_id`.
+    for fault in [
+        Ok(vec![
+            (member, PersistenceError::Missing),
+            (other, PersistenceError::Malformed),
+        ]),
+        Err(PersistenceError::Malformed),
+        Err(PersistenceError::Uncertain),
+    ] {
+        let expected = fault.clone().err().unwrap_or(PersistenceError::Malformed);
+        let mut provider = chain_port(&memory);
+        provider.batched = true;
+        *provider.classified_fault.lock().unwrap() = Some(fault);
+        let provider = Arc::new(provider);
+        let reader = Storage::new(provider.clone()).unwrap();
+        let save = reader.begin_save().unwrap().joining_metadata_reads();
+        let _captured = save.captured_sink();
+        let error = save.read_objects(&[base, tail_id]).unwrap_err();
+        let cause = match &error {
+            StorageError::UnknownOutcome { original } => original.as_ref(),
+            other => other,
+        };
+        let StorageError::Io(cause) = cause else {
+            panic!("{error:?}");
+        };
+        assert_eq!(
+            cause.get_ref().unwrap().downcast_ref::<PersistenceError>(),
+            Some(&expected)
+        );
+        assert_eq!(
+            error.is_unknown_outcome(),
+            expected == PersistenceError::Uncertain
+        );
+        assert!(matches!(
+            save.read_objects(&[base, tail_id]),
+            Err(StorageError::Aborted)
+        ));
+        assert_eq!(provider.requests.lock().unwrap().len(), 1);
+        assert_eq!(reader.diagnostics().chain_hint_stale, 0);
+    }
+}
+
+#[test]
+fn a_retained_authoritative_group_keeps_authority_for_a_later_whole_read() {
+    let (memory, base) = noise_history(ObjectRole::InodeBranch);
+    let saved = Storage::new(memory.clone()).unwrap();
+    let save = saved.begin_save().unwrap();
+    let mut ids = Vec::new();
+    for seed in 1..=3 {
+        let mut state = seed as u32;
+        let bytes: Vec<_> = (0..32_000)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 24) as u8
+            })
+            .collect();
+        let canonical = layerfs_content::object::encode_bytes_object(&bytes).unwrap();
+        let object = FinalizedObject::new(ObjectRole::InodeBranch, canonical).unwrap();
+        ids.push(object.id());
+        save.accept(object).unwrap();
+    }
+    save.finish().unwrap();
+    let (held, guessed_group, info) = {
+        let state = memory.state.lock().unwrap();
+        let rows: Vec<_> = ids.iter().map(|id| state.objects[id]).collect();
+        let pair = rows.iter().find_map(|row| {
+            let pack = &state.packs[&row.pack_id];
+            let header = layout::parse_header(&pack.body).unwrap();
+            let view = layout::group_view(&pack.body, header, row.group_number).unwrap();
+            rows.iter()
+                .find(|other| {
+                    row.pack_id == other.pack_id
+                        && row.group_number != other.group_number
+                        && 2 * (view.end - view.start) < pack.info.length
+                })
+                .map(|other| (row.object_id, other.group_number, pack.info))
+        });
+        pair.expect("one compact pack with distinct sparse groups")
+    };
+    assert!(info.length <= layerfs_storage::policy::PACK_LIMIT / 2);
+    let mut port = chain_port(&memory);
+    port.batched = true;
+    let provider = editing(port, move |chains| {
+        if let Some(hinted) = chains.chains.iter_mut().find(|c| c.root == base) {
+            hinted.members[0].pack = info;
+            hinted.members[0].group_number = guessed_group;
+        }
+    });
+    let reader = Storage::new(provider.clone()).unwrap();
+    let save = reader.begin_save().unwrap().joining_metadata_reads();
+    let _captured = save.captured_sink();
+    save.read_objects(&[held]).unwrap();
+    assert_eq!(reader.diagnostics().range_selected, 1);
+    *provider.classified_fault.lock().unwrap() =
+        Some(Ok(vec![(info.pack_id, PersistenceError::Missing)]));
+
+    let error = save.read_objects(&[held, base]).unwrap_err();
+    let StorageError::Io(cause) = error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(
+        cause.get_ref().unwrap().downcast_ref::<PersistenceError>(),
+        Some(&PersistenceError::Missing)
+    );
+    assert_eq!(reader.diagnostics().chain_hint_stale, 0);
+    assert_eq!(provider.requests.lock().unwrap().len(), 1);
+    assert_eq!(provider.calls("read_scoped_pack"), 1, "no replay");
 }
 
 #[test]

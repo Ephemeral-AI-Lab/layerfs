@@ -6,13 +6,23 @@ pub(crate) fn read<T: Mechanics + ?Sized>(
     ordinals: &[u32],
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
+    check_request(ordinals)?;
+    tx.inode_values(ordinals, out)?;
+    check_answer(ordinals, out)
+}
+pub(crate) fn check_request(ordinals: &[u32]) -> Result<(), PersistenceError> {
     if ordinals.len() > policy::READ_OBJECT_LIMIT
         || ordinals.first() == Some(&0)
         || ordinals.windows(2).any(|pair| pair[0] >= pair[1])
     {
         return Err(PersistenceError::Malformed);
     }
-    tx.inode_values(ordinals, out)?;
+    Ok(())
+}
+pub(crate) fn check_answer(
+    ordinals: &[u32],
+    out: &[InodeValueRow],
+) -> Result<(), PersistenceError> {
     // The reply names only asked ordinals, each once, ascending.
     let mut asked = ordinals.iter();
     for row in out.iter() {

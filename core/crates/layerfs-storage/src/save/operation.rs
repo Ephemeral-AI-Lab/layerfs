@@ -13,6 +13,7 @@ pub struct Save<'a> {
     pub(super) state: RefCell<State<'a>>,
     pub(super) terminal: Cell<bool>,
     pub(super) join_metadata_reads: bool,
+    pub(super) captured: Cell<bool>,
     failure: RefCell<Option<StorageError>>,
     finished: Cell<bool>,
     work_start: super::SaveWork,
@@ -28,6 +29,7 @@ impl<'a> Save<'a> {
             state: RefCell::new(State::new(storage)?),
             terminal: Cell::new(false),
             join_metadata_reads: false,
+            captured: Cell::new(false),
             failure: RefCell::new(None),
             finished: Cell::new(false),
         })
@@ -50,6 +52,11 @@ impl<'a> Save<'a> {
             let mut state = self.state.borrow_mut();
             let storage = state.storage;
             let _published = storage.source.serving_published();
+            let _paired = storage.source.pairing_inode_values(
+                captured
+                    && self.join_metadata_reads
+                    && storage.source.metadata.batched_chain_reads(),
+            );
             if let Some(objects) = state.pending.push(object)? {
                 state.captured_output = captured;
                 if captured && storage.source.metadata.batched_chain_reads() {
@@ -75,6 +82,7 @@ impl<'a> Save<'a> {
     }
     /// Accepts output from the captured Commit producer before history work.
     pub fn captured_sink(&self) -> SaveSink<'_, 'a> {
+        self.captured.set(true);
         SaveSink {
             save: self,
             captured: true,
@@ -117,6 +125,11 @@ impl<'a> Save<'a> {
         let mut state = self.state.borrow_mut();
         let storage = state.storage;
         let _published = storage.source.serving_published();
+        let _paired = storage.source.pairing_inode_values(
+            self.captured.get()
+                && self.join_metadata_reads
+                && storage.source.metadata.batched_chain_reads(),
+        );
         let objects = state.pending.drain();
         // The last wave is published below, with the sealed tail. Objects
         // held for a base of this Save (#810) are selected before it, after

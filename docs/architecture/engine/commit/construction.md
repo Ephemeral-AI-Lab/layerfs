@@ -124,6 +124,23 @@ under the normal Save custody rules.
 
 [Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
 
+### Pooled values on the PostgreSQL writer
+
+When a captured Save needs more than 4,096 stored ordinals for one existing
+512 KiB pooled-value window, the writer sends the first 4,096 and the
+remainder as two ordinary immutable statements in one flight. The
+published, held, and Save-private values stay on their existing paths.
+Each statement checks the Store generation. Replies are decoded in order
+through the existing checked packed-block reader.
+
+The flight asks for at most 7,182 values, or 524,286 bytes of decoded
+payload. Each requested ordinal can select at most one packed-block row,
+counting the predecessor at the start of each run. The existing 4,000-byte
+body cap and wire framing bound both replies below 32 MiB even for sparse
+requests or malformed block contents. Retained caches and publication
+are unchanged. SQLite, Init, and a demand of at most 4,096 ordinals
+keep one ordinary statement per slice.
+
 ### Logical accounting after construction
 
 For a captured PostgreSQL Commit whose sealed headers and values exceed
@@ -192,6 +209,14 @@ preparation reuses the grouped chain walk for the same demand and prepares
 another window at the first unresolved leaf outside the current one. The
 retained value budget stays 512 KiB. Wave selection walks the chains of
 its own stored leaf bases after the guarded base verification has ended.
+The captured PostgreSQL Save's canonical inode chain reads may keep complete
+metadata packs up to 128 KiB each. The same 2 MiB dependency cache pays for
+their full encoded length and holds nearby groups for subsequent chain steps.
+Promotion checks the range plan's directory first, and complete bodies use
+the existing pack authentication. The grouped PostgreSQL reply identifies
+each pack's result. A missing or malformed pack named only by a chain hint
+can invalidate that hint. The same failure on a pack named by an
+authoritative locator, or an error of the whole query, ends the read.
 The reads preserve the resulting roots and stored objects. `commit_batched_directories.rs` pins the counts and
 `commit_fault_directories.rs` faults every message of a grouped read
 ([Demonstration](README.md#demonstration)).

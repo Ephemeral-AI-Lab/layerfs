@@ -21,6 +21,11 @@ impl Save<'_> {
         let mut state = self.state.borrow_mut();
         let storage = state.storage;
         let _published = storage.source.serving_published();
+        let remote_capture = self.captured.get()
+            && self.join_metadata_reads
+            && storage.source.metadata.batched_chain_reads();
+        let _compact_inodes = storage.source.compact_inode_packs(remote_capture);
+        let _paired = storage.source.pairing_inode_values(remote_capture);
         let capacities = state.storage.capacities();
         if ids.len() > capacities.read_objects {
             return Err(StorageError::CapacityExceeded {
