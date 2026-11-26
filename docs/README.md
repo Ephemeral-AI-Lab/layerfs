@@ -8,6 +8,7 @@
 - [The `layerfs` package](../api/README.md) for Node and [Python](../api/python/README.md)
 - [Architecture](architecture/README.md): how 2.0 is built, one page per
   component in core, engine, connect and api, plus flows across them
+- [Lessons](lesson/README.md): short rules learned in merged work, by category
 - [Work order](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md) and [decisions](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md)
 
 ## LayerFS 1.1.0 (release candidate)
