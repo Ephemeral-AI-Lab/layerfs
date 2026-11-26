@@ -31,7 +31,16 @@ fn cli(home: &Fixture, words: &[&str]) -> SdkValue {
 }
 
 fn machine(home: &Fixture) -> SdkValue {
-    cli(home, &["machine", "get", "native", "--with", "live"])
+    cli(
+        home,
+        &[
+            "machine",
+            "get",
+            layerfs_api::names::HOST_MACHINE,
+            "--with",
+            "live",
+        ],
+    )
 }
 
 fn list<'a>(value: &'a SdkValue, key: &str) -> &'a [SdkValue] {
@@ -51,7 +60,10 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
         live.get("worker").unwrap().get_text("health"),
         Some("absent")
     );
-    cli(&home, &["machine", "doctor", "native"]);
+    cli(
+        &home,
+        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+    );
     assert!(!home.paths.control.exists());
     assert!(!paths::host_worker_lock(&home.paths.home).exists());
 
@@ -68,7 +80,10 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
     assert_eq!(fact.get_int("queued"), Some(0));
     assert_eq!(fact.get_int("stores"), Some(0));
     assert_eq!(fact.get("last_close"), Some(&SdkValue::Null));
-    let report = cli(&home, &["machine", "doctor", "native"]);
+    let report = cli(
+        &home,
+        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+    );
     let checks = list(report.get("tree").unwrap(), "checks");
     let checked = checks
         .iter()
@@ -135,7 +150,10 @@ fn incompatible_hello_is_a_notice_and_receives_no_ping() {
             "diagnostic sent a request"
         );
     });
-    let report = cli(&home, &["machine", "doctor", "native"]);
+    let report = cli(
+        &home,
+        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+    );
     server.join().unwrap();
     let notice = list(&report, "findings")
         .iter()

@@ -114,7 +114,7 @@ pub fn create_on(
     let name = request.name.as_str();
     let named = request.machine.as_deref().filter(|m| !m.is_empty());
     layerfs_home::names::SandboxName::parse(name)?;
-    if matches!(name, "native" | "docker") {
+    if layerfs_home::names::BUILT_IN.contains(&name) {
         return Err(refused(
             "InvalidInput",
             format!("a Sandbox is not named {name}: that names a built-in machine"),

@@ -9,13 +9,13 @@ fn record(label: Option<&str>) -> StoreRecord {
         Some(label) => SdkValue::map([
             ("name", SdkValue::text("shop")),
             ("kind", SdkValue::text("sqlite")),
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("profile", SdkValue::text(label)),
         ]),
         None => SdkValue::map([
             ("name", SdkValue::text("shop")),
             ("kind", SdkValue::text("sqlite")),
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ]),
     };
     StoreRecord::from_record("shop", fields)
@@ -24,7 +24,12 @@ fn record(label: Option<&str>) -> StoreRecord {
 #[test]
 fn new_records_are_written_normal() {
     assert_eq!(PROFILE, "normal");
-    let restored = StoreRecord::restored("shop", "native", &[7; 16], &[9; 32]);
+    let restored = StoreRecord::restored(
+        "shop",
+        layerfs_home::names::HOST_MACHINE,
+        &[7; 16],
+        &[9; 32],
+    );
     assert_eq!(restored.text("profile"), Some("normal"));
     assert_eq!(profile(&restored), Some("normal"));
 }

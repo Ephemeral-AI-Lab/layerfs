@@ -386,7 +386,10 @@ fn the_doctor_checks_attached_machines_only_after_this_computer() {
     );
     assert_eq!(froms(&report), ["lab"], "{report:?}");
     // `native` is an ordinary machine: not attached, it is refused
-    let on_native = [("store", t("pg")), ("machine", t("native"))];
+    let on_native = [
+        ("store", t("pg")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+    ];
     let (code, message) = call(&home, "store.doctor", &on_native).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
     assert!(message.contains("not attached"), "{message}");
@@ -423,16 +426,24 @@ fn the_doctor_checks_attached_machines_only_after_this_computer() {
     let again = long(&home, "store.attach", &on_native);
     assert_eq!(again.get_text("outcome"), Some("checked"), "{again:?}");
     let report = long(&home, "store.doctor", &on_native);
-    assert_eq!(froms(&report), ["native"], "{report:?}");
+    assert_eq!(
+        froms(&report),
+        [layerfs_home::names::HOST_MACHINE],
+        "{report:?}"
+    );
     let report = long(&home, "store.doctor", &[("store", t("pg"))]);
-    assert_eq!(froms(&report), ["dev", "lab", "native"], "{report:?}");
+    assert_eq!(
+        froms(&report),
+        ["dev", "lab", layerfs_home::names::HOST_MACHINE],
+        "{report:?}"
+    );
     let got = long(&home, "store.get", &[("store", t("pg"))]);
     let Some(SdkValue::List(rows)) = got.get("machines") else {
         panic!("{got:?}");
     };
     let native = rows
         .iter()
-        .find(|row| row.get_text("machine") == Some("native"));
+        .find(|row| row.get_text("machine") == Some(layerfs_home::names::HOST_MACHINE));
     assert_eq!(
         native.and_then(|row| row.get_text("reached")),
         Some("ok"),
@@ -595,12 +606,16 @@ fn dry_runs_record_nothing_and_an_address_change_checks_attached_machines() {
     let (record_before, seen_before) = (record(), seen());
     let on_native = [
         ("store", t("pg")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ("dry_run", SdkValue::Bool(true)),
     ];
     let tested = long(&home, "store.attach", &on_native);
     assert_eq!(tested.get_text("outcome"), Some("tested"), "{tested:?}");
-    assert_eq!(tested.get_text("machine"), Some("native"), "{tested:?}");
+    assert_eq!(
+        tested.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE),
+        "{tested:?}"
+    );
     assert!(tested.get_int("latency_ms").is_some(), "{tested:?}");
     assert_eq!(record(), record_before, "a dry run attached");
     assert_eq!(seen(), seen_before, "a dry run recorded a reach");
@@ -617,7 +632,7 @@ fn dry_runs_record_nothing_and_an_address_change_checks_attached_machines() {
     .unwrap();
     let path = paths::store_record(&home, "pg");
     let held = home::read_record(&path).unwrap().unwrap();
-    let attached = SdkValue::List(vec![t("native"), t("dev")]);
+    let attached = SdkValue::List(vec![t(layerfs_home::names::HOST_MACHINE), t("dev")]);
     home::write_record(&path, &home::with_field(held, "attached", attached)).unwrap();
     // its dry run is refused as its attach would be, naming the machine
     let on_dev = [
@@ -635,7 +650,11 @@ fn dry_runs_record_nothing_and_an_address_change_checks_attached_machines() {
     let refused = refusal(&home, "store.connect", &change);
     assert_eq!(refused.code, "Conflict", "{}", refused.message);
     assert!(refused.message.contains("dev"), "{}", refused.message);
-    assert!(!refused.message.contains("native"), "{}", refused.message);
+    assert!(
+        !refused.message.contains(layerfs_home::names::HOST_MACHINE),
+        "{}",
+        refused.message
+    );
     let machines = flat(&refused, "machines");
     let SdkValue::List(rows) = &machines else {
         panic!("{refused:?}");
@@ -665,8 +684,16 @@ fn dry_runs_record_nothing_and_an_address_change_checks_attached_machines() {
             .find(|row| row.get_text("machine") == Some(name));
         found.unwrap_or_else(|| panic!("{name}: {rows:?}")).clone()
     };
-    assert_eq!(row("native").get("ok"), Some(&SdkValue::Bool(true)));
-    assert!(row("native").get_int("latency_ms").is_some(), "{rows:?}");
+    assert_eq!(
+        row(layerfs_home::names::HOST_MACHINE).get("ok"),
+        Some(&SdkValue::Bool(true))
+    );
+    assert!(
+        row(layerfs_home::names::HOST_MACHINE)
+            .get_int("latency_ms")
+            .is_some(),
+        "{rows:?}"
+    );
     assert_eq!(row("dev").get("ok"), Some(&SdkValue::Bool(false)));
     assert!(row("dev").get_text("message").is_some(), "{rows:?}");
     assert_eq!(record(), record_before, "a dry run saved");

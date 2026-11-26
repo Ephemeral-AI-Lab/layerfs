@@ -48,8 +48,11 @@ fn home_with_project() -> (PathBuf, PathBuf, PathBuf) {
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     home::open(&home).unwrap();
     write_record(
-        &paths::machine_record(&home, "native"),
-        &SdkValue::map([("name", t("native")), ("platform", t("native"))]),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &SdkValue::map([
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ]),
     )
     .unwrap();
     // a 2.0 record names its VM (one without is an earlier build's)
@@ -144,7 +147,7 @@ fn a_worker_closes_its_open_copy_so_a_store_moves_here_at_once_and_returns_fresh
     let worker_lease = paths::lease_dir(&root, "shop").join(std::process::id().to_string());
     assert!(worker_lease.is_file(), "the worker holds its open copy");
     // within the worker's idle minute: the snapshot closes that copy first
-    to(&home, "native").unwrap();
+    to(&home, layerfs_home::names::HOST_MACHINE).unwrap();
     assert!(!worker_lease.exists());
     assert!(!paths::store_file(&root, "shop").exists());
     assert_eq!(read(&home), "one\n");

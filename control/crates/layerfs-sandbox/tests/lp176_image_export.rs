@@ -451,7 +451,7 @@ fn real_docker_two_exports_over_2s_apart_match_sha_and_resume() {
     std::thread::sleep(Duration::from_millis(2200));
 
     let docker = real_docker();
-    let (loaded, phases) = run_load(&docker, &home, "native", &img.tag);
+    let (loaded, phases) = run_load(&docker, &home, layerfs_home::names::HOST_MACHINE, &img.tag);
     let loaded = loaded.unwrap();
     assert!(!loaded.reused);
     assert_eq!(loaded.size, Some(bytes1.len() as u64));
@@ -482,7 +482,7 @@ fn real_docker_volume_image_leaves_no_anonymous_volumes() {
     let child = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home)
-        .env("LP176_PAUSE_MACHINE", "native")
+        .env("LP176_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
         .env("LP176_PAUSE_IMAGE", &img.tag)
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -851,7 +851,12 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
     let left_tmp = cache::cache(&home).join(format!(".tmp-{}.2-zz1", "cd".repeat(32)));
     fs::create_dir_all(left_tmp.join("usr")).unwrap();
     fs::write(left_tmp.join("usr/tool"), b"x").unwrap();
-    let (loaded, _) = run_load(&docker, &home, "native", &img_next.tag);
+    let (loaded, _) = run_load(
+        &docker,
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        &img_next.tag,
+    );
     assert!(!loaded.unwrap().reused);
     assert!(!left_tmp.exists(), "the copy sweeps a free image's unpack");
     assert!(

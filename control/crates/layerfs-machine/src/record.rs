@@ -122,15 +122,16 @@ impl MachineRecord {
     /// name (`vm_name`), recorded like every created machine's
     /// (layerfs-project#180). `native`'s platform has no provider.
     pub fn built_in(name: &str, home_id: &str) -> Self {
+        let platform = layerfs_home::names::built_in_platform(name).unwrap_or(name);
         let record = Self::from_record(
             name,
             SdkValue::map([
                 ("name", SdkValue::text(name)),
-                ("platform", SdkValue::text(name)),
+                ("platform", SdkValue::text(platform)),
                 ("created", SdkValue::Int(home::now_ms())),
             ]),
         );
-        match crate::local::provided(name) {
+        match crate::local::provided(platform) {
             false => record,
             true => record.with("vm_name", SdkValue::text(vm_name(home_id, name))),
         }

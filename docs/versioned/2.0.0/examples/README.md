@@ -168,7 +168,7 @@ $ layerfs store list --scope /docs --scope-project shop/site --scope-branch ns
 Exit 0:
 
 ```console
-store.get                   {"engine":"sqlite","state":"ready","machine":"native"}
+store.get                   {"engine":"sqlite","state":"ready","machine":"macos-host"}
 project.init phases         check install record
 file.read                   "# notes\n"
 file.list /                 /README.md(file) /docs(dir) /notes.md(file)
@@ -193,7 +193,7 @@ as Node, with Python's JSON spacing, and exited 0. The first and the
 refusal lines:
 
 ```console
-store.get                   {"engine": "sqlite", "state": "ready", "machine": "native"}
+store.get                   {"engine": "sqlite", "state": "ready", "machine": "macos-host"}
 project.init phases         check install record
 missing Branch              {"error": "NotFound", "message": "Branch nope does not exist", "fix": null}
 write to main               {"error": "InvalidInput", "message": "main changes only through publish", "fix": "layerfs branch fork shop/site work"}
@@ -208,10 +208,10 @@ a refusal (`InvalidInput`), not exit 2.
 
 ## The Workspace route
 
-A Workspace needs a Sandbox, and a Sandbox on `native` needs a daemon of
+A Workspace needs a Sandbox, and a Sandbox on the host machine needs a daemon of
 this build. On the scratch homes it was `target/debug/layerfs-daemon`, set
-with `layerfs machine update native --daemon <path>` (Node:
-`machine.update("native", { daemon })`); an installed bundle puts it where
+with `layerfs machine update macos-host --daemon <path>` (Node:
+`machine.update("macos-host", { daemon })`); an installed bundle puts it where
 `layerfs home get --detail` shows `daemon.path`. Node, run (paths and ids
 shortened):
 

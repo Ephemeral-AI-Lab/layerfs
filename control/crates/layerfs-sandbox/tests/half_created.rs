@@ -174,7 +174,7 @@ fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
         platform: "mac".to_owned(),
         name: given,
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -193,9 +193,9 @@ fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
         &SdkValue::map([
             ("name", t(name)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("op", ended_create("start")),
-            ("backend", t("native")),
+            ("backend", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -219,7 +219,7 @@ fn stand_in() -> std::process::Child {
 #[test]
 fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     use layerfs_bridge::process::LocalProcess;
-    let home = new_home("native");
+    let home = new_home(layerfs_home::names::HOST_MACHINE);
 
     // no Store to open: the ordinary close cannot run, so the remove is
     // refused and nothing is dropped
@@ -259,9 +259,13 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     assert!(!daemon.alive(), "its daemon still runs");
     assert!(!folder.exists(), "its run folder stays");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
-    let tombstone = read_record(&paths::sandbox_tombstone(&home, "native", "s1"))
-        .unwrap()
-        .expect("the confirmed stop's tombstone");
+    let tombstone = read_record(&paths::sandbox_tombstone(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "s1",
+    ))
+    .unwrap()
+    .expect("the confirmed stop's tombstone");
     assert_eq!(tombstone.get_text("generation"), Some(generation));
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -283,7 +287,7 @@ fn a_forced_remove_goes_on_when_its_tombstone_cannot_be_written() {
         .unwrap();
     let record = home::with_field(record, "generation", t("p1:sandbox:0000000000000001:00"));
     write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
-    let retired = paths::sandbox_retired_dir(&home, "native");
+    let retired = paths::sandbox_retired_dir(&home, layerfs_home::names::HOST_MACHINE);
     std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
     std::fs::write(&retired, b"not a folder").unwrap();
     let daemon = LocalProcess::observe(kept.id()).unwrap();
@@ -353,14 +357,18 @@ fn a_reclaimed_sandbox_is_tombstoned_or_says_why_not() {
     assert_eq!(refusal.code, "NoSuchSandbox", "{refusal:?}");
     assert!(refusal.detail.get("left").is_none(), "{refusal:?}");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
-    let tombstone = read_record(&paths::sandbox_tombstone(&home, "native", "s1"))
-        .unwrap()
-        .expect("the reclaim's tombstone");
+    let tombstone = read_record(&paths::sandbox_tombstone(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "s1",
+    ))
+    .unwrap()
+    .expect("the reclaim's tombstone");
     assert_eq!(tombstone.get_text("generation"), Some(generation));
 
     // its tombstone cannot be written: the reclaim goes on and says so
     ended(&home, "s2", generation);
-    let retired = paths::sandbox_retired_dir(&home, "native");
+    let retired = paths::sandbox_retired_dir(&home, layerfs_home::names::HOST_MACHINE);
     std::fs::remove_dir_all(&retired).unwrap();
     std::fs::write(&retired, b"not a folder").unwrap();
     let host = layerfs_sandbox::force::local_host(&home, "s2").unwrap();

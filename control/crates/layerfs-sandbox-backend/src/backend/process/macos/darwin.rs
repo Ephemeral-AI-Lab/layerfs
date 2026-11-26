@@ -1,4 +1,4 @@
-//! macOS mount facts the native runtime reads from `mountinfo` on Linux: the
+//! macOS mount facts the process runtime reads from `mountinfo` on Linux: the
 //! mount table (`mount`) and a forced unmount (`umount -f`). Each tool is one
 //! run with a fixed path and the C locale, read once; nothing is retried.
 //! An inspection read's table ([`mount_table`]) is the same tool under a

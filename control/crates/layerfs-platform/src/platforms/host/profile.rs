@@ -1,4 +1,4 @@
-//! `native`'s profile: Sandboxes on the host's own OS, with no VM. The
+//! `host`'s profile: Sandboxes on the host's own OS, with no VM. The
 //! machine is not the host: its executor, loopback and backend are what
 //! make it special, and they differ by host (Windows has no backend).
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Profile, ANY_HOST};
@@ -6,7 +6,7 @@ use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
 
 pub(crate) const PROFILE: Profile = Profile {
-    name: "native",
+    name: "host",
     tool: None,
     how: How::BuiltIn,
     hosts: ANY_HOST,
@@ -22,7 +22,7 @@ pub(crate) const PROFILE: Profile = Profile {
 /// records (§13 O5).
 fn backend(host: HostOs) -> Option<Backend> {
     match host {
-        HostOs::Macos => Some(Backend::Native),
+        HostOs::Macos => Some(Backend::Process),
         HostOs::Linux => Some(Backend::Namespaces),
         HostOs::Windows | HostOs::Other => None,
     }

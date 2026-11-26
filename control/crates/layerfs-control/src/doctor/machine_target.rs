@@ -88,7 +88,7 @@ pub(super) fn diagnose(
             "it runs whenever this computer does, as its record says",
         );
         #[cfg(any(target_os = "macos", target_os = "linux"))]
-        if name == "native" {
+        if name == layerfs_home::names::HOST_MACHINE {
             super::host_worker::diagnose(home, budget, checks);
         }
         // `native` on Linux runs namespaces Sandboxes on this host's

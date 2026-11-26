@@ -1,4 +1,4 @@
-//! macOS platform facts for the native runtime: the daemon serves loopback
+//! macOS platform facts for the process runtime: the daemon serves loopback
 //! NFS as this user, so its mounts come from `mount`/`umount -f` (its
 //! process facts, `proc_pidinfo`/`sysctl`, are `layerfs_bridge::process`).
 //! Only facts live here; the daemon lifecycle both backends use is

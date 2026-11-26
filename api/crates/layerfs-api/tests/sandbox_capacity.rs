@@ -172,15 +172,18 @@ fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
 /// record only while it runs (its absence is a stopped machine, #535 D11).
 fn home_records(home: &Path, worker: bool) {
     write_record(
-        &paths::machine_record(home, "native"),
-        &map(&[("name", t("native")), ("platform", t("native"))]),
+        &paths::machine_record(home, layerfs_home::names::HOST_MACHINE),
+        &map(&[
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ]),
     )
     .unwrap();
     if worker {
         // the forward's machine answers: a forward with no recorded process is
         // not checked against one
         write_record(
-            &paths::worker_record(home, "native"),
+            &paths::worker_record(home, layerfs_home::names::HOST_MACHINE),
             &map(&[("address", t("127.0.0.1:1")), ("secret", t("5e"))]),
         )
         .unwrap();
@@ -193,7 +196,7 @@ fn home_records(home: &Path, worker: bool) {
             ("binding", SdkValue::Bytes(vec![7; 16])),
             ("cursor", SdkValue::Bytes(vec![8; 32])),
             ("profile", t("normal")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ]),
     )
     .unwrap();
@@ -211,7 +214,7 @@ fn home_records(home: &Path, worker: bool) {
 fn sandbox_record(home: &Path, endpoint: SocketAddr, id: Option<&str>, pid: Option<i64>) {
     let mut forward = vec![
         ("address", t(&endpoint.to_string())),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ];
     if let Some(pid) = pid {
         forward.push(("pid", SdkValue::Int(pid)));
@@ -219,7 +222,7 @@ fn sandbox_record(home: &Path, endpoint: SocketAddr, id: Option<&str>, pid: Opti
     let mut fields = vec![
         ("name", t("s1")),
         ("project", t("shop/api")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ];
     if let Some(id) = id {
         fields.push(("id", t(id)));

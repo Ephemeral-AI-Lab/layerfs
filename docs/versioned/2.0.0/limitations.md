@@ -26,7 +26,7 @@ for this manual.
 - 2.0.0 is not tagged or released. No package is published to npm, PyPI or
   crates.io.
 - The terminal pass of the work order (step 19) ran on one Mac only: the
-  twelve cells passed on `native` and (at `a487409fe5`) on the macOS
+  twelve cells passed on the host machine and (at `a487409fe5`) on the macOS
   `docker` machine, as did MinIO backups, PostgreSQL Init and Sandboxes,
   and the three front ends compared; every VM kind, ssh, R2, Linux and
   Windows were `NOT_RUN`. Step 19 passes only when the twelve cells pass on
@@ -52,7 +52,7 @@ for this manual.
 | A machine, Sandbox or Store call on a removed platform's record (`firecracker`, `ssh`, `microsandbox`) | ``platform `<name>` was removed in LayerFS 2.0``; only `machine list`, `machine get` and `machine remove` (forgets the record) answer |
 | A Sandbox on a platform and Store kind the support table refuses (`layerfs home get --with platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
-| `backup restore` over a Store that is not on the machine whose calls run in this process (`native` on macOS and Linux) | `store move <store> native` first |
+| `backup restore` over a Store that is not on the machine whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux) | `store move <store> macos-host` first |
 | `store create` without `--machine`, `store move` or `backup restore` on a host where no machine's calls run in this process (Windows) | `Unsupported`; no other machine is chosen |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
@@ -85,14 +85,14 @@ Also not built:
   process ends the command in the worker as it starts, in one attempt.
   If the worker cannot be reached for that one attempt, the command runs
   on although the cancel answered `cancelled`; cancel it again by its id.
-- **A command's children on macOS `native`.** `workspace cancel` ends
+- **A command's children on macOS `macos-host`.** `workspace cancel` ends
   the command's process group; a child that starts its own session
   (`setsid`) is not in it and keeps running. On Linux every command has its
   own cgroup and nothing it starts escapes.
 - **`workspace cancel` on a Linux Docker Engine** was not run for this
   manual (no such host; layerfs-project#114). The docker machine on Docker
   Desktop (macOS) and `native` were.
-- **`backup list` of a Store not on `native`.** Its heads are read on
+- **`backup list` of a Store not on the host machine.** Its heads are read on
   `native` only, so its state is `unknown` with a `reason`; reading heads
   through the machine's worker is not built.
 - **Background processes, operator and diagnostic calls, and the trace
@@ -161,7 +161,7 @@ step commits.
   C toolchain).
 - **R2.** Backups were run against MinIO only; R2 is `NOT_RUN` (no
   credentials).
-- **PostgreSQL.** `store connect`, Init and Sandboxes on `native` and
+- **PostgreSQL.** `store connect`, Init and Sandboxes on the host machine and
   `docker` (macOS) ran against a throwaway `postgres:17` container. Init cost against a sqlite Init was
   not measured. The O6 handling of a LayerFS schema with another name is
   not visible in the connect code, which names only the schema `layerfs`.

@@ -49,7 +49,7 @@ enum Binds {
 
 fn binds(backend: Backend) -> Binds {
     match backend {
-        Backend::Native => Binds::Refused,
+        Backend::Process => Binds::Refused,
         Backend::Namespaces => Binds::Accepted,
     }
 }
@@ -61,7 +61,7 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
         gid: nix::unistd::Gid::effective().as_raw(),
     };
     match backend {
-        Backend::Native => ProviderLaunchOptions::Local {
+        Backend::Process => ProviderLaunchOptions::Local {
             command_identity,
             environment: Vec::new(),
         },
@@ -86,7 +86,7 @@ fn record(backend: Backend) -> SandboxRecord {
         labels: Vec::new(),
     };
     match backend {
-        Backend::Native => SandboxRecord::Local(local),
+        Backend::Process => SandboxRecord::Local(local),
         Backend::Namespaces => SandboxRecord::Namespaces(NamespaceRecord {
             local,
             image: image(),
@@ -98,7 +98,7 @@ fn record(backend: Backend) -> SandboxRecord {
 /// The backend a record names.
 fn record_backend(record: &SandboxRecord) -> Backend {
     match record {
-        SandboxRecord::Local(_) => Backend::Native,
+        SandboxRecord::Local(_) => Backend::Process,
         SandboxRecord::Namespaces(_) => Backend::Namespaces,
     }
 }
@@ -109,8 +109,8 @@ fn record_backend(record: &SandboxRecord) -> Backend {
 fn runtime(backend: Backend, root: &Path) -> Option<Result<Runtime, RuntimeError>> {
     match backend {
         #[cfg(target_os = "macos")]
-        Backend::Native => {
-            Some(layerfs_sandbox_backend::NativeProvider::new(root).map(Runtime::Native))
+        Backend::Process => {
+            Some(layerfs_sandbox_backend::ProcessProvider::new(root).map(Runtime::Process))
         }
         #[cfg(target_os = "linux")]
         Backend::Namespaces => {
@@ -132,7 +132,7 @@ enum Lifecycle {
 
 fn lifecycle(backend: Backend) -> Lifecycle {
     match backend {
-        Backend::Native => Lifecycle::Runs,
+        Backend::Process => Lifecycle::Runs,
         Backend::Namespaces => Lifecycle::NeedsRoot,
     }
 }
@@ -323,7 +323,7 @@ fn native_backend_here() -> Option<Backend> {
     let rows = support_json::rows();
     let row = rows
         .iter()
-        .find(|r| r.host == host && r.platform == "native")
+        .find(|r| r.host == host && r.platform == "process")
         .expect("a native row for this host");
     row.backend
         .as_deref()
@@ -333,7 +333,7 @@ fn native_backend_here() -> Option<Backend> {
 #[test]
 fn each_runtime_here_is_its_backend_or_refused_before_any_effect() {
     if let Some(native) = native_backend_here() {
-        let root = Root::new("native");
+        let root = Root::new("process");
         assert!(
             runtime(native, &root.0).is_some(),
             "this host's native backend {native:?} has no runtime here"

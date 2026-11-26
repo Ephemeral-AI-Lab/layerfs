@@ -70,7 +70,7 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
             .to_string_lossy()
             .into_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: directory.display().to_string(),
@@ -85,9 +85,9 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
         &SdkValue::map([
             ("name", t(name)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(name)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -164,7 +164,7 @@ fn the_third_request_is_busy_and_a_stuck_one_is_abandoned_at_the_hard_deadline()
     assert!(did_run.try_recv().is_err(), "refused work ran");
     // the Local route of a call takes its permit from the same two
     assert_eq!(code(inspect::sandbox_log(&home, "s1", &window)), "Busy");
-    let sizes = inspect::overlay_sizes(&home, "native", "s1", &[1]);
+    let sizes = inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &[1]);
     assert_eq!(sizes.unwrap_err().code, "Busy");
 
     // each caller is answered at the hard deadline, before its work ends
@@ -282,14 +282,24 @@ fn the_local_route_reads_a_native_sandbox_s_log_from_its_recorded_run_folder() {
         .starts_with("sandbox.log: the cursor is stale"));
 
     // a native machine has no worker, so no worker log
-    let native = MachineName::parse("native").unwrap();
+    let native = MachineName::parse(layerfs_home::names::HOST_MACHINE).unwrap();
     let none = inspect::machine_log(&home, &native, &Window::default()).unwrap_err();
     assert_eq!(none.code, "Unsupported", "{none:?}");
     assert_eq!(none.detail.get_text("reason"), Some("no_worker"));
     // and a home is not asked for one, whatever names the kind
-    let asked = inspect::ask(&home, "native", "machine_log", SdkValue::map([]));
+    let asked = inspect::ask(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "machine_log",
+        SdkValue::map([]),
+    );
     assert_eq!(asked.unwrap_err().code, "Unsupported");
-    let unknown = inspect::ask(&home, "native", "nothing", SdkValue::map([]));
+    let unknown = inspect::ask(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "nothing",
+        SdkValue::map([]),
+    );
     assert_eq!(unknown.unwrap_err().code, "InvalidInput");
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -308,7 +318,7 @@ fn a_sandbox_with_no_run_folder_on_this_side_is_no_such_sandbox() {
         &SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ]),
     )
     .unwrap();
@@ -379,7 +389,8 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
     let asked = [1, 2, 3, 4];
     // the answer, as a worker sends it and the home side answers it: null
     // for a Workspace with no overlay file (2) and for the link (4)
-    let sizes = inspect::overlay_sizes(&home, "native", "s1", &asked).unwrap();
+    let sizes =
+        inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &asked).unwrap();
     // with them, what this side sees of the Sandbox's daemon process
     // (layerfs-project#164): the record names this test, a host process,
     // which has no cgroup for its Workspaces either
@@ -398,7 +409,7 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
         )
     );
     // a Sandbox with no Workspace is asked for its process alone
-    let none = inspect::overlay_sizes(&home, "native", "s1", &[]).unwrap();
+    let none = inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &[]).unwrap();
     assert_eq!(none.get("overlay_sizes"), Some(&SdkValue::List(Vec::new())));
     assert_eq!(none.get("daemon"), sizes.get("daemon"));
     // the request by its kind is the same read
@@ -409,7 +420,13 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
             SdkValue::List(asked.iter().map(|n| SdkValue::Int(*n)).collect()),
         ),
     ]);
-    let answer = inspect::ask(&home, "native", "overlay_sizes", request).unwrap();
+    let answer = inspect::ask(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "overlay_sizes",
+        request,
+    )
+    .unwrap();
     assert_eq!(answer, sizes);
     // what is not a list of namespaces is refused, and so is a lost Sandbox
     for namespaces in [
@@ -418,10 +435,16 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
         SdkValue::List(vec![SdkValue::Int(-1)]),
     ] {
         let request = SdkValue::map([("sandbox", t("s1")), ("namespaces", namespaces)]);
-        let refused = inspect::ask(&home, "native", "overlay_sizes", request);
+        let refused = inspect::ask(
+            &home,
+            layerfs_home::names::HOST_MACHINE,
+            "overlay_sizes",
+            request,
+        );
         assert_eq!(refused.unwrap_err().code, "InvalidInput");
     }
-    let lost = inspect::overlay_sizes(&home, "native", "s2", &asked).unwrap_err();
+    let lost =
+        inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s2", &asked).unwrap_err();
     assert_eq!(lost.code, "NoSuchSandbox", "{lost:?}");
     for name in ["overlay.sqlite", "1.sqlite", "3.sqlite"] {
         let path = overlay.join(name);

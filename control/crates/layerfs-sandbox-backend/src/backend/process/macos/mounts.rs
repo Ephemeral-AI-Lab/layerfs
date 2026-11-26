@@ -1,4 +1,4 @@
-//! Kernel mounts left under a native Sandbox's directory once its daemon is
+//! Kernel mounts left under a process Sandbox's directory once its daemon is
 //! gone. A container's mounts end with its namespace; this daemon's stay in
 //! the one kernel ("transport endpoint is not connected") until detached. The
 //! table is `mount`'s output and a mount is forced off with `umount -f`.

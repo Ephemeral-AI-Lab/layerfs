@@ -222,7 +222,7 @@ answers its last 1 MiB and names the file that holds all of it
 ## Where a call runs
 
 The package does not decide. The home's records do: a call on a sqlite
-Store on `native` or on a PostgreSQL Store runs in the calling process; a
+Store on the host machine or on a PostgreSQL Store runs in the calling process; a
 call on a Store on another machine goes to that machine's worker. See
 [routes](machines-and-stores.md#routes).
 

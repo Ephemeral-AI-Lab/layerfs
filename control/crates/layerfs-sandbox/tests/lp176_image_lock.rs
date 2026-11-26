@@ -615,11 +615,25 @@ fn a_native_copy_in_this_process_takes_the_same_lock() {
     // and takes the very lock a worker copy takes
     let (_scratch, standin, home) = setup("lp176-native-lock");
     let mut sink = |_: SdkValue| {};
-    let held = ImageLock::take(&home, "native", ID, &mut Events::new(&mut sink)).unwrap();
+    let held = ImageLock::take(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        ID,
+        &mut Events::new(&mut sink),
+    )
+    .unwrap();
     let events = Arc::new(Mutex::new(Vec::new()));
     let running = {
         let (docker, at_home, seen) = (standin.docker(), home.clone(), events.clone());
-        std::thread::spawn(move || copy(&docker, &at_home, "native", "demo/app:1", &seen))
+        std::thread::spawn(move || {
+            copy(
+                &docker,
+                &at_home,
+                layerfs_home::names::HOST_MACHINE,
+                "demo/app:1",
+                &seen,
+            )
+        })
     };
     wait_for("the in-process copy to wait on the same lock", || {
         !phases(&events, "lock").is_empty()

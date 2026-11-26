@@ -1,7 +1,7 @@
-//! A Sandbox's runtime: `LAYERFS_SANDBOX=native` on macOS (loopback NFS,
+//! A Sandbox's runtime: `LAYERFS_SANDBOX=process` on macOS (loopback NFS,
 //! caller identity) or `LAYERFS_SANDBOX=namespaces` on Linux (root FUSE
 //! daemon, nonroot commands; a VM's worker and the docker machine's worker
-//! container, D-8). Linux starts no native Sandbox (#533 O27), and a native
+//! container, D-8). Linux starts no process Sandbox (#533 O27), and a process
 //! record found there is refused, its fix the records-only `sandbox
 //! remove` (RV3 FAIL 3). The
 //! docker backend is retired (D-8): a deployment naming it is refused. All
@@ -25,23 +25,23 @@ use std::path::PathBuf;
 /// record from the former `local` runtime, which is never used (a record of
 /// the retired docker backend has no `runtime`).
 pub const LOCAL: &str = "local";
-/// A host-process Sandbox record's `runtime` (LAYERFS_SANDBOX=native; the
-/// `native` backend stores this word, G6): a local daemon serving
-/// loopback NFS on macOS. A runtime's name, not the machine `native`.
-pub const NATIVE: &str = "native";
-/// Why a native Sandbox does not start on Linux: its host-process pairing is
+/// A host-process Sandbox record's `runtime` (LAYERFS_SANDBOX=process; the
+/// `process` backend stores this word, G6): a local daemon serving
+/// loopback NFS on macOS. A runtime's name, not the machine `process`.
+pub const NATIVE: &str = "process";
+/// Why a process Sandbox does not start on Linux: its host-process pairing is
 /// removed (#533 O27), and a Linux host runs local Sandboxes in namespaces.
 /// Refused before any effect; another backend is never chosen in its place.
 #[cfg(target_os = "linux")]
 pub const NATIVE_ON_LINUX: &str =
-    "deploy.sandbox (LAYERFS_SANDBOX) native starts host-process Sandboxes on macOS only; \
+    "deploy.sandbox (LAYERFS_SANDBOX) process starts host-process Sandboxes on macOS only; \
      on Linux set LAYERFS_SANDBOX=namespaces";
 /// A namespace Sandbox record's `runtime` (LAYERFS_SANDBOX=namespaces,
 /// Linux): a local daemon in its own mount, PID and IPC namespaces and cgroup.
 pub const NAMESPACES: &str = "namespaces";
 
 /// Which local backend a deployment runs inside its Sandbox directory: the
-/// plain native one, or the Linux namespace one.
+/// plain process one, or the Linux namespace one.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Backend {
     HostProcess,
@@ -49,7 +49,7 @@ pub enum Backend {
 }
 
 /// The backend a deployment selects (#527 D3): `deploy.sandbox`
-/// (LAYERFS_SANDBOX) `native` or `namespaces`. Unset or `docker` named the
+/// (LAYERFS_SANDBOX) `process` or `namespaces`. Unset or `docker` named the
 /// docker backend, retired by D-8 (layerfs-project#111), and is refused.
 /// This is the one place the setting is validated; the agent only checks
 /// that each value's fields are present. The former refinement
@@ -65,7 +65,7 @@ pub fn backend(deploy: &Deploy) -> Result<Backend, SdkRefusal> {
             return Err(refused(
                 "Unsupported",
                 "deploy.sandbox (LAYERFS_SANDBOX) docker, or unset, named the docker Sandbox \
-                 backend, which is retired (D-8): set it to native (macOS) or namespaces (Linux); \
+                 backend, which is retired (D-8): set it to process (macOS) or namespaces (Linux); \
                  the docker machine's Sandboxes run in namespaces in its worker",
             ))
         }
@@ -73,7 +73,7 @@ pub fn backend(deploy: &Deploy) -> Result<Backend, SdkRefusal> {
             return Err(refused(
                 "InvalidInput",
                 format!(
-                    "deploy.sandbox (LAYERFS_SANDBOX) is native (macOS) or namespaces (Linux), \
+                    "deploy.sandbox (LAYERFS_SANDBOX) is process (macOS) or namespaces (Linux), \
                      not {other}"
                 ),
             ))
@@ -82,7 +82,7 @@ pub fn backend(deploy: &Deploy) -> Result<Backend, SdkRefusal> {
     if selected == Backend::Namespaces && !cfg!(target_os = "linux") {
         return Err(refused(
             "Unsupported",
-            "deploy.sandbox (LAYERFS_SANDBOX) namespaces is Linux only; use native",
+            "deploy.sandbox (LAYERFS_SANDBOX) namespaces is Linux only; use process",
         ));
     }
     Ok(selected)
@@ -95,8 +95,8 @@ pub const PLATFORMS: [&str; 5] = ["docker", "mac", "linux", "apple-container", "
 /// The platform a `sandbox.create` call names (`platform`), checked against
 /// the backend its deployment (`deploy`) selects before any effect:
 /// `docker` a namespaces daemon in the docker machine's worker container
-/// (D-8, which its deployment names as its `platform`); `mac` a native
-/// daemon on macOS; `linux` a namespaces daemon on Linux (a native one is
+/// (D-8, which its deployment names as its `platform`); `mac` a process
+/// daemon on macOS; `linux` a namespaces daemon on Linux (a process one is
 /// refused at start, #533 O27); a VM provider a namespaces daemon in the
 /// project's VM, which is Linux. The agent chooses which platforms a home
 /// allows and maps each to its deployment; this refuses a call whose two
@@ -146,13 +146,13 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
 pub fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
         #[cfg(target_os = "macos")]
-        Sandbox::Native(_) => NATIVE,
+        Sandbox::Process(_) => NATIVE,
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(_) => NAMESPACES,
     }
 }
 
-/// A record's `runtime` as a caller reads it: `native`, `namespaces`,
+/// A record's `runtime` as a caller reads it: `process`, `namespaces`,
 /// another recorded name as it is, or `docker` for a record with none
 /// (only the retired docker backend wrote none).
 pub fn runtime_name(record: &crate::record::DaemonRecord) -> &str {
@@ -160,7 +160,7 @@ pub fn runtime_name(record: &crate::record::DaemonRecord) -> &str {
 }
 
 /// The image a Sandbox reports: the digest a namespaces Sandbox's root is
-/// an overlay of, or `local` for a native one.
+/// an overlay of, or `local` for a process one.
 pub fn image(runtime: &Sandbox) -> String {
     match runtime.record() {
         #[cfg(target_os = "linux")]
@@ -170,7 +170,7 @@ pub fn image(runtime: &Sandbox) -> String {
 }
 
 /// A namespaces Sandbox's own network, `<host end> <guest address>/31`;
-/// none for a native one.
+/// none for a process one.
 pub fn network(runtime: &Sandbox) -> Option<String> {
     match runtime.record() {
         #[cfg(target_os = "linux")]

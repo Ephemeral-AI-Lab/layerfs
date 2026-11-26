@@ -197,11 +197,19 @@ esac
     let native = call(
         &home,
         "machine.stop",
-        &[("machine", t("native")), ("force", SdkValue::Bool(true))],
+        &[
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("force", SdkValue::Bool(true)),
+        ],
     )
     .unwrap();
     assert_eq!(native.get_text("outcome"), Some("stopped"));
-    let native = call(&home, "machine.get", &[("machine", t("native"))]).unwrap();
+    let native = call(
+        &home,
+        "machine.get",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    )
+    .unwrap();
     assert_eq!(native.get_text("state"), Some("ready"));
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -226,7 +234,7 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
     for (name, id, stopped) in sandboxes {
         let mut fields = vec![
             ("name", t(name)),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("project", t("shop/app")),
         ];
         if let Some(id) = id {
@@ -246,7 +254,10 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
     let refused = call(
         &home,
         "machine.stop",
-        &[("machine", t("native")), ("force", SdkValue::Bool(true))],
+        &[
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("force", SdkValue::Bool(true)),
+        ],
     )
     .unwrap_err();
     assert_eq!(refused.code, "Unavailable", "{refused:?}");
@@ -258,9 +269,12 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
         refused.detail.get("stopped_sandboxes"),
         Some(&SdkValue::List(vec![t("b-done")]))
     );
-    let op = read_record(&paths::machine_record(&home, "native"))
-        .unwrap()
-        .and_then(|record| record.get("op").cloned());
+    let op = read_record(&paths::machine_record(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+    ))
+    .unwrap()
+    .and_then(|record| record.get("op").cloned());
     assert!(
         op.is_none(),
         "a refusal before any signal left an op on native: {op:?}"

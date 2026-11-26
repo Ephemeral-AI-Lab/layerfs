@@ -398,7 +398,7 @@ fn every_platform_refusal_is_the_support_table_s() {
     .unwrap();
     for platform in Platform::ALL {
         let machine = match platform {
-            Platform::Native | Platform::Docker => platform.name().to_owned(),
+            Platform::Host | Platform::Docker => platform.name().to_owned(),
             _ => format!("m-{}", platform.name()),
         };
         if !platform.built_in() {
@@ -471,7 +471,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -494,7 +494,10 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     ok(
         &home,
         "store.attach",
-        &[("store", t("pg")), ("machine", t("native"))],
+        &[
+            ("store", t("pg")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     );
     ok(
         &home,
@@ -510,7 +513,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         &[
             ("project", t("pg/app")),
             ("name", t("n")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
     // the create proved `native` reaches the Store: its own row's reach
@@ -523,7 +526,11 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         panic!("{got:?}");
     };
     assert_eq!(rows.len(), 1, "{got:?}");
-    assert_eq!(rows[0].get_text("machine"), Some("native"), "{got:?}");
+    assert_eq!(
+        rows[0].get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE),
+        "{got:?}"
+    );
     assert_eq!(rows[0].get_text("reached"), Some("ok"), "{got:?}");
     work(&home, "pg/app", "n", "on-native", "native.txt");
     ok(&home, "sandbox.remove", &[("sandbox", t("n"))]);
@@ -906,7 +913,7 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         Some("layerfs store attach pg --machine <machine>")
     );
     // several attached: the call names one
-    pg_record(&home, &["box", "native"]);
+    pg_record(&home, &["box", layerfs_home::names::HOST_MACHINE]);
     let several = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
     assert_eq!(several.code, "InvalidInput", "{several:?}");
     assert!(
@@ -918,11 +925,14 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
             .detail
             .get("next")
             .and_then(|next| next.get("machines")),
-        Some(&SdkValue::List(vec![t("box"), t("native")])),
+        Some(&SdkValue::List(vec![
+            t("box"),
+            t(layerfs_home::names::HOST_MACHINE)
+        ])),
         "{several:?}"
     );
     // one attached (machine native, here): the Sandbox runs there
-    pg_record(&home, &["native"]);
+    pg_record(&home, &[layerfs_home::names::HOST_MACHINE]);
     let refused = call(
         &home,
         "sandbox.create",

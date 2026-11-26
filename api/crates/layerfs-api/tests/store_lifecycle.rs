@@ -48,7 +48,7 @@ fn machine(home: &Path, name: &str, platform: &str, state: Option<&str>) {
     let mut fields = vec![("name", t(name)), ("platform", t(platform))];
     // every 2.0 create records its provider name; `native` has none
     let vm_name = format!("layerfs-test-{name}");
-    fields.extend((platform != "native").then(|| ("vm_name", t(&vm_name))));
+    fields.extend((platform != "host").then(|| ("vm_name", t(&vm_name))));
     fields.extend(state.map(|state| ("state", t(state))));
     let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v));
     write_record(
@@ -63,7 +63,12 @@ fn machine(home: &Path, name: &str, platform: &str, state: Option<&str>) {
 fn home_with_shop() -> (PathBuf, PathBuf) {
     let home = tempdir("home");
     home::open(&home).unwrap();
-    machine(&home, "native", "native", Some("running"));
+    machine(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "host",
+        Some("running"),
+    );
     machine(&home, "box", "lima", Some("running"));
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -105,7 +110,10 @@ fn this_process_pushing(skew: u64, uncertain: bool) -> SdkValue {
         ("phase", t("record")),
         (
             "args",
-            SdkValue::map([("from", t("native")), ("to", t("box"))]),
+            SdkValue::map([
+                ("from", t(layerfs_home::names::HOST_MACHINE)),
+                ("to", t("box")),
+            ]),
         ),
         (
             "owner",
@@ -241,7 +249,10 @@ fn a_move_or_remove_waits_for_a_lease_another_thread_of_its_process_holds() {
         assert!(message.contains("this process"), "{name}: {message}");
         // nothing was sent: the refusal is certain, so `op` is dropped
         assert_eq!(record(&home).get("op"), None);
-        assert_eq!(record(&home).get_text("machine"), Some("native"));
+        assert_eq!(
+            record(&home).get_text("machine"),
+            Some(layerfs_home::names::HOST_MACHINE)
+        );
         assert!(paths::store_file(&home, "shop").is_file());
     }
     drop(held);
@@ -263,7 +274,12 @@ fn a_move_or_remove_waits_for_a_lease_another_thread_of_its_process_holds() {
 fn home_with_stopped(machine_field: SdkValue) -> PathBuf {
     let home = tempdir("stopped");
     home::open(&home).unwrap();
-    machine(&home, "native", "native", Some("running"));
+    machine(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "host",
+        Some("running"),
+    );
     machine(&home, "vm", "lima", None);
     write_record(
         &paths::store_record(&home, "shop"),
@@ -398,8 +414,11 @@ fn remove_reaches_a_stopped_machine_before_it_takes_the_home_lock() {
 #[test]
 fn a_move_refuses_the_wrong_side_and_a_stopped_machine_naming_machine_start() {
     // on native: a move here is refused, one to the stopped `vm` names its start
-    let home = home_with_stopped(t("native"));
-    let here = [("store", t("shop")), ("machine", t("native"))];
+    let home = home_with_stopped(t(layerfs_home::names::HOST_MACHINE));
+    let here = [
+        ("store", t("shop")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+    ];
     let (code, message) = call(&home, "store.move", &here).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
     assert!(message.contains("already on native"), "{message}");
@@ -422,7 +441,10 @@ fn a_move_refuses_the_wrong_side_and_a_stopped_machine_naming_machine_start() {
         None,
         "a certain refusal keeps no op"
     );
-    assert_eq!(record(&home).get_text("machine"), Some("native"));
+    assert_eq!(
+        record(&home).get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     std::fs::remove_dir_all(home).unwrap();
 
     // on the stopped `vm`: a move there is refused, one here names its start
@@ -482,7 +504,7 @@ fn a_move_names_what_holds_the_store_and_needs_room_on_the_target() {
             ("v", SdkValue::Int(1)),
             ("name", t("t1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ]),
     )
     .unwrap();
@@ -508,7 +530,10 @@ fn a_move_names_what_holds_the_store_and_needs_room_on_the_target() {
         (
             &root,
             "store.move",
-            vec![("store", t("shop")), ("machine", t("native"))],
+            vec![
+                ("store", t("shop")),
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ],
         ),
     ] {
         let wal = huge_wal(&paths::store_file(side, "shop"));
@@ -524,7 +549,10 @@ fn a_move_names_what_holds_the_store_and_needs_room_on_the_target() {
         let moved = call_ok(&home, call, &args);
         assert!(moved.get_int("moved_bytes").is_some(), "{moved:?}");
     }
-    assert_eq!(record(&home).get_text("machine"), Some("native"));
+    assert_eq!(
+        record(&home).get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }

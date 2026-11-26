@@ -103,7 +103,7 @@ fn docker_with_an_answering_socket_asks_the_engine_for_its_version() {
 
 #[test]
 fn native_names_only_linux_host_facts() {
-    let found = probe(Platform::Native, &Scratch::new("probe-native").tools());
+    let found = probe(Platform::Host, &Scratch::new("probe-native").tools());
     assert_eq!(found.missing, native_missing(HostOs::current()));
     match HostOs::current() {
         HostOs::Macos => assert!(found.ready),

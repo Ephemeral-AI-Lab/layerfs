@@ -1,4 +1,4 @@
-//! `native`: Sandboxes on the host's own OS (not the host itself).
+//! `host`: Sandboxes on the host's own OS (not the host itself).
 mod adapter;
 mod observe;
 mod power;

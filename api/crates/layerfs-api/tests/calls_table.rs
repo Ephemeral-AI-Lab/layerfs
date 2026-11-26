@@ -610,7 +610,10 @@ fn the_source_is_one_file_per_call_under_its_family() {
 #[cfg(all(feature = "machine", target_os = "macos"))]
 #[test]
 fn native_machine_images_reports_host_userland_without_a_bundle() {
-    let args = map(&[("machine", t("native")), ("detail", SdkValue::Bool(true))]);
+    let args = map(&[
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ("detail", SdkValue::Bool(true)),
+    ]);
     let (outcome, events) = run("machine.images", args);
     let result = outcome.unwrap();
     assert_eq!(result.get_text("mode"), Some("host"));
@@ -622,11 +625,17 @@ fn native_machine_images_reports_host_userland_without_a_bundle() {
     for (call, args) in [
         (
             "machine.load_image",
-            map(&[("machine", t("native")), ("image", t("alpine:3"))]),
+            map(&[
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
+                ("image", t("alpine:3")),
+            ]),
         ),
         (
             "machine.prune",
-            map(&[("machine", t("native")), ("unused", SdkValue::Bool(true))]),
+            map(&[
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
+                ("unused", SdkValue::Bool(true)),
+            ]),
         ),
     ] {
         let home = tempdir();

@@ -69,7 +69,7 @@ fn helper() {
                 &[
                     ("project", t("shop/api")),
                     ("name", t("t1")),
-                    ("machine", t("native")),
+                    ("machine", t(layerfs_home::names::HOST_MACHINE)),
                 ],
             );
         }
@@ -162,7 +162,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},

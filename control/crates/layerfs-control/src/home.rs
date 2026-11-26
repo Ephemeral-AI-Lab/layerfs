@@ -12,6 +12,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::layout::{detect, Layout};
 use layerfs_home::home::{generation, read_record, with_field};
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::state::{Reason, State};
 use std::path::Path;
@@ -254,7 +255,7 @@ impl NativeDaemon {
     /// leaves the default), or `None` when the user cache is unknown.
     pub fn of(home: &Path) -> Option<Self> {
         use layerfs_machine::record::MachineRecord;
-        let recorded = MachineRecord::read(home, "native")
+        let recorded = MachineRecord::read(home, layerfs_home::names::HOST_MACHINE)
             .ok()
             .flatten()
             .and_then(|r| r.daemon().map(std::path::PathBuf::from));
@@ -293,7 +294,7 @@ impl NativeDaemon {
     /// `DaemonMissing`'s message.
     pub fn missing(&self) -> String {
         format!(
-            "no native daemon at {}; the native machine needs this build's `layerfs-daemon`: `layerfs machine update native --daemon <path>`",
+            "no native daemon at {}; the native machine needs this build's `layerfs-daemon`: `layerfs machine update {HOST_MACHINE} --daemon <path>`",
             self.path.display()
         )
     }
@@ -304,7 +305,7 @@ impl NativeDaemon {
         let ours = build.commit?;
         (self.matches(build) == SdkValue::Bool(false)).then(|| {
             format!(
-                "the native daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update native --daemon <path>`",
+                "the native daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`",
                 self.path.display(),
                 short(theirs),
                 short(ours)
@@ -353,7 +354,7 @@ pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRe
     };
     let fix = match own_daemon(build) {
         Some(path) => format!(
-            "layerfs machine update native --daemon {}",
+            "layerfs machine update {HOST_MACHINE} --daemon {}",
             crate::doctor::shell(&path)
         ),
         None => "layerfs home doctor".to_owned(),

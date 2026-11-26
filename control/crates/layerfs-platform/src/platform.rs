@@ -3,7 +3,7 @@
 //! [`Platform::profile`] is the one match; every other per-platform value is
 //! read from the profile.
 use crate::options::OptSpec;
-use crate::platforms::{apple_container, docker, lima, native};
+use crate::platforms::{apple_container, docker, host, lima};
 pub use layerfs_bridge::KernelRoute;
 use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
@@ -11,7 +11,7 @@ use std::net::Ipv4Addr;
 /// Which kernel Sandboxes run on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Platform {
-    Native,
+    Host,
     Docker,
     AppleContainer,
     Lima,
@@ -38,7 +38,7 @@ pub enum ExecutorKind {
 /// How a machine of a platform comes to exist.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum How {
-    /// One each, never created or removed (`native`, `docker`).
+    /// One each, never created or removed (`host`, `docker`).
     BuiltIn,
     /// Made and removed by `machine create` / `machine remove`.
     Created,
@@ -137,7 +137,7 @@ pub(crate) fn worker(_: HostOs) -> ExecutorKind {
 
 impl Platform {
     pub const ALL: [Platform; 4] = [
-        Platform::Native,
+        Platform::Host,
         Platform::Docker,
         Platform::AppleContainer,
         Platform::Lima,
@@ -146,7 +146,7 @@ impl Platform {
     /// The platform's profile: the one match over platforms for its facts.
     pub fn profile(self) -> &'static Profile {
         match self {
-            Self::Native => &native::PROFILE,
+            Self::Host => &host::PROFILE,
             Self::Docker => &docker::PROFILE,
             Self::AppleContainer => &apple_container::PROFILE,
             Self::Lima => &lima::PROFILE,
@@ -162,7 +162,7 @@ impl Platform {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
     }
 
-    /// `native` and `docker`: one each, never created or removed.
+    /// `host` and `docker`: one each, never created or removed.
     pub fn built_in(self) -> bool {
         self.profile().how == How::BuiltIn
     }
@@ -179,14 +179,14 @@ impl Platform {
 
     /// Whether a provider holds a machine of this kind: a VM or worker
     /// container its tool makes, starts and stops, named by the record's
-    /// `vm_name`. A kind with none (`native`) runs Sandboxes on the host's
+    /// `vm_name`. A kind with none (`host`) runs Sandboxes on the host's
     /// own OS: such a machine is never stopped, never missing and has no
     /// provider name.
     pub fn provided(self) -> bool {
         self.tool().is_some()
     }
 
-    /// The Sandbox backend on this kind of machine, or none (`native` on
+    /// The Sandbox backend on this kind of machine, or none (`host` on
     /// Windows holds only records, §13 O5).
     pub fn backend(self, host: HostOs) -> Option<Backend> {
         (self.profile().backend)(host)
@@ -203,7 +203,7 @@ impl Platform {
     }
 
     /// Where Store calls for a sqlite Store on this machine run: in-process
-    /// for `native` (except Windows, whose Stores are in the WSL worker);
+    /// for `host` (except Windows, whose Stores are in the WSL worker);
     /// the machine's worker otherwise, `docker` on every host included (G8).
     pub fn route(self, host: HostOs) -> Route {
         match self.executor(host) {

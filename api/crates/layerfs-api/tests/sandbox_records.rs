@@ -40,7 +40,7 @@ fn unstarted(home: &Path, name: &str, owner: Option<(i64, bool)>) {
     let mut record = SdkValue::map([
         ("name", t(name)),
         ("project", t("shop/app")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ]);
     if let Some((pid, uncertain)) = owner {
         let op = SdkValue::map([
@@ -80,14 +80,14 @@ fn sandbox_records_without_a_sandbox() {
     .unwrap();
 
     // H §7.6: a Sandbox is not named after a built-in machine
-    for name in ["native", "docker"] {
+    for name in [layerfs_home::names::HOST_MACHINE, "docker"] {
         let (code, message) = call(
             &home,
             "sandbox.create",
             &[
                 ("project", t("shop/app")),
                 ("name", t(name)),
-                ("machine", t("native")),
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ],
         )
         .unwrap_err();
@@ -283,7 +283,7 @@ fn a_worker_replaces_a_removed_project_s_record() {
             SdkValue::map([("name", t("shop")), ("kind", t("sqlite"))]),
         ),
         ("project_record", fresh.clone()),
-        ("native", SdkValue::Map(Vec::new())),
+        (layerfs_home::names::HOST_MACHINE, SdkValue::Map(Vec::new())),
         ("more", SdkValue::Map(Vec::new())),
     ]);
     // the call itself fails here (no daemon beside this test); the record

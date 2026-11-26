@@ -9,12 +9,12 @@
 //! known by it; a leader found with another start time means the id was
 //! reused and the group is not this Sandbox's. A process that leaves its
 //! group (`setsid`) is not followed unless it is named here too
-//! ([`super::Sandbox::track`]). Only the native (macOS) runtime names and
+//! ([`super::Sandbox::track`]). Only the process (macOS) runtime names and
 //! ends groups; a group's stop handle ([`Led`]) is shared.
 use layerfs_bridge::process::{self, LocalProcess};
 use nix::sys::signal::Signal;
 use std::io;
-// naming and ending groups (the native runtime, macOS only)
+// naming and ending groups (the process runtime, macOS only)
 #[cfg(target_os = "macos")]
 use {
     nix::fcntl::OFlag,
@@ -161,7 +161,7 @@ fn parse(name: &str) -> Option<LocalProcess> {
 }
 
 /// One command's process group, `pgid`, led by `leader` (its stop handle on
-/// `native`, `crate::runtime::cancel`): it runs while any member of it does, and
+/// `process`, `crate::runtime::cancel`): it runs while any member of it does, and
 /// is never signalled once its leader's id names another process.
 pub(crate) struct Led(pub(crate) u32, pub(crate) LocalProcess);
 

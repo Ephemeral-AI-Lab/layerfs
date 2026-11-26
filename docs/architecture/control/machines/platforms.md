@@ -13,7 +13,7 @@ may run, and how to add one, within [Machines](README.md).
 
 | Platform | How | Tool | Hosts | Backend | Kernel | sqlite calls | Worker binds | Options |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `native` | built in | none | macOS, Linux, Windows | macOS `native` (`Native`); Linux `namespaces`; Windows none | macOS `nfs`; Linux `fuse` | in process; Windows `worker` | (no worker) | none |
+| `host` | built in | none | macOS, Linux, Windows | macOS `host` (`Native`); Linux `namespaces`; Windows none | macOS `nfs`; Linux `fuse` | in process; Windows `worker` | (no worker) | none |
 | `docker` | built in | `docker` | macOS, Linux | `namespaces` in the worker container | `fuse` | worker | `0.0.0.0:7070` (macOS); host network on Linux | none |
 | `apple-container` | created | `container` | macOS | `namespaces` | `fuse` | worker | `0.0.0.0:7070` | `cpus`, `memory`, `disk`, `image`, `os_image` |
 | `lima` | created | `limactl` | macOS | `namespaces` | `fuse` | worker | `127.0.0.1:7070` | `cpus`, `memory`, `disk`, `image`, `os_image` |
@@ -41,12 +41,12 @@ prepared one exists and records none
 | The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); else the automatic choice (`env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); no older record is given a fixed socket. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `docker_socket`, [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs) `Docker::of` |
 | Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `home.get --with platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 
-## native (`platforms/host/`)
+## host (`platforms/host/`)
 
 Sandboxes on the host's own OS, with no VM: one per home, never created or
-removed. `native` is a machine, not the host: this computer is the control
+removed. `host` is a machine, not the host: this computer is the control
 process (the home, records, secrets and the near end of a transfer), and
-nothing about it is written as `native`. What is special about `native`
+nothing about it is written as `host`. What is special about `host`
 comes from its platform on the host, never from its name: its executor is
 `Local` on macOS and Linux (Store calls in the caller's process, no worker)
 and `Worker` on Windows; its loopback is shared (`Loopback::Shared`); no
@@ -209,9 +209,9 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 
 | Symptom | Cause | Source |
 | --- | --- | --- |
-| `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `native` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
-| `missing: host:macos-or-linux` | `native` on Windows or another host | same |
-| `Unsupported` from a `native` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`native/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/observe.rs) |
+| `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `host` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
+| `missing: host:macos-or-linux` | `host` on Windows or another host | same |
+| `Unsupported` from a `host` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`native/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/observe.rs) |
 | `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
 | docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/unix.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/unix.rs) `not_ours` |
@@ -240,7 +240,7 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 
 | Cell: backend · kernel · sqlite · PostgreSQL Sandbox | macOS | Linux | Windows |
 | --- | --- | --- | --- |
-| `native` (built_in) | native · nfs · in_process · yes | namespaces · fuse · in_process · yes | — · — · worker · no |
+| `host` (built_in) | native · nfs · in_process · yes | namespaces · fuse · in_process · yes | — · — · worker · no |
 | `docker` (built_in) | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | — · — · — · no |
 | `apple-container` (created) | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
 | `lima` (created) | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
@@ -251,7 +251,7 @@ Windows column is table data, not a built host (`#![cfg(unix)]`).
 | Refusal text (word for word) | For |
 | --- | --- |
 | `LayerFS names no host other than macOS, Linux and Windows` | any platform on another host |
-| `no Sandbox backend on Windows` | `native` on Windows |
+| `no Sandbox backend on Windows` | `host` on Windows |
 | `docker through WSL2 is not designed yet` | `docker` on Windows |
 | `apple-container runs on macOS hosts only`, `lima runs on macOS hosts only` | those off macOS |
 
@@ -261,7 +261,7 @@ run on machine <m> (<platform>): <reason>". `machine.list` and `get` give
 each machine its row's `supports: {sqlite, postgresql_sandbox, reason, log}`;
 `log` is true where the row's sqlite call site is a worker and the table
 refuses the platform nothing on the host (a worker this build starts, so a
-worker log exists), false on every `native`.
+worker log exists), false on every `host`.
 
 ### SUPPORT.json
 
@@ -272,7 +272,7 @@ Generated by `support_json()`; never edited by hand. One block per host
 | Key | Value |
 | --- | --- |
 | `platform`, `how` | name; `built_in` or `created` |
-| `backend` | stored name (`native`, `namespaces`) or `null` off-host |
+| `backend` | stored name (`host`, `namespaces`) or `null` off-host |
 | `kernel` | `fuse`, `nfs` or `null` |
 | `sqlite` | `in_process`, `worker` or `null` off-host |
 | `postgresql` | `{store_calls: "in_process", sandbox, reason}` |
@@ -325,7 +325,7 @@ kind or kernel route is an engine change, not a platform.
 
 - [Machines](README.md): the profile and adapter contracts.
 - [Workers and reach](workers-and-reach.md): workers, `reach` and forwards per platform.
-- [Sandboxes: backends](../sandboxes/backends.md): `native` and `namespaces`.
+- [Sandboxes: backends](../sandboxes/backends.md): `host` and `namespaces`.
 - [Kernel routes](../../engine/kernel-routes/README.md): `fuse` and `nfs`.
 - User guide: [machines and Stores](../../../versioned/2.0.0/machines-and-stores.md).
 

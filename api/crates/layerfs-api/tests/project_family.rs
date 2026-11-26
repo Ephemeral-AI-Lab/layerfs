@@ -129,7 +129,10 @@ fn init_files_branches_move_and_remove() {
     let made = layerfs_api::call(Some(&home), "project.init", args, &mut |e| events.push(e))
         .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
-    assert_eq!(made.get_text("machine"), Some("native"));
+    assert_eq!(
+        made.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     assert_eq!(made.get_text("outcome"), Some("created"));
     // `commit` is main's first Layer, its full id
     assert_eq!(made.get_text("commit").map(str::len), Some(66), "{made:?}");
@@ -587,8 +590,11 @@ fn worker_box_home(tag: &str) -> (PathBuf, PathBuf) {
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     ok(&home, "home.init", &[]);
     write_record(
-        &paths::machine_record(&home, "native"),
-        &SdkValue::map([("name", t("native")), ("platform", t("native"))]),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &SdkValue::map([
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ]),
     )
     .unwrap();
     write_record(
@@ -648,7 +654,10 @@ fn worker_inited_project_keeps_manifest_across_move_to_native_and_back() {
     ok(
         &home,
         "store.move",
-        &[("store", t("shop")), ("machine", t("native"))],
+        &[
+            ("store", t("shop")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     );
     layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
         .expect("host project discovery succeeds after store move to native");
@@ -750,7 +759,10 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
     ok(
         &home,
         "store.move",
-        &[("store", t("shop")), ("machine", t("native"))],
+        &[
+            ("store", t("shop")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     );
     layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
         .expect("store move to native repairs incomplete host project record");
@@ -894,12 +906,18 @@ fn move_skips_unreadable_project_record_and_still_repairs_incomplete_ones() {
     ok(
         &home,
         "store.move",
-        &[("store", t("shop")), ("machine", t("native"))],
+        &[
+            ("store", t("shop")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     );
     let store_rec = layerfs_api::home::read_record(&paths::store_record(&home, "shop"))
         .unwrap()
         .unwrap();
-    assert_eq!(store_rec.get_text("machine"), Some("native"));
+    assert_eq!(
+        store_rec.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     assert_eq!(store_rec.get("op"), None);
     assert_eq!(std::fs::read(&damaged_path).unwrap(), b"{");
     let read = ok(

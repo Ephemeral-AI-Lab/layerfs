@@ -200,7 +200,7 @@ fn sqlite_store(home: &Path, name: &str, machine: &str) {
 fn a_project_s_record_is_checked_against_its_store() {
     let home = tempdir("project");
     short(&home, "home.init", &[]);
-    sqlite_store(&home, "shop", "native");
+    sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
     let manifest = layerfs_bridge::provision::StoreManifest {
         provider: layerfs_bridge::provision::ProviderKind::Sqlite,
         locator: "/layerfs-store/global/store.sqlite".into(),
@@ -319,7 +319,7 @@ fn what_is_not_there_is_refused_and_no_home_is_made() {
     assert!(!home.exists(), "a doctor made the home");
     // `--machine` probes a PostgreSQL Store; a sqlite Store is refused
     short(&home, "home.init", &[]);
-    sqlite_store(&home, "shop", "native");
+    sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
     let refused = call(
         &home,
         "store.doctor",
@@ -469,7 +469,7 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
 fn a_sqlite_project_without_a_manifest_fails_project_doctor() {
     let home = tempdir("missing-manifest");
     short(&home, "home.init", &[]);
-    sqlite_store(&home, "shop", "native");
+    sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
     write_entity(
         &paths::project_record(&home, "shop", "api"),
         &SdkValue::map([

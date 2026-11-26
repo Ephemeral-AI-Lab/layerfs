@@ -205,7 +205,7 @@ fn a_sandbox_with_no_cgroup_says_why_for_each_workspace() {
         assert_eq!(shown(&ids, Some(&read)), vec![null(reason), null(reason)]);
     };
     // a host-process Sandbox has no cgroup, whatever the kernel has
-    each(&daemon("native"), &root, "host_process");
+    each(&daemon("process"), &root, "host_process");
     // a runtime this build reads no usage of is not taken for a host process
     each(&daemon("firecracker"), &root, "not_supported");
     // a hierarchy that is not cgroup v2 (no `cgroup.controllers`)

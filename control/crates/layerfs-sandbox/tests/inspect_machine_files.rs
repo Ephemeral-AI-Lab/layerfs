@@ -127,7 +127,7 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
         platform: "linux".to_owned(),
         name: (directory.file_name().unwrap().to_string_lossy()).into_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: directory.display().to_string(),
@@ -142,9 +142,9 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
         &SdkValue::map([
             ("name", t(name)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(name)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -535,7 +535,7 @@ fn the_image_cache_keeps_its_locks_and_a_home_keeps_its_own_lock_files() {
 #[test]
 fn a_home_reads_only_its_layerfs_folders() {
     let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
-    let fx = machine("native");
+    let fx = machine(layerfs_home::names::HOST_MACHINE);
     let home = fx.scratch.join("home");
     home::private_dir(&home).unwrap();
     home::ensure(&home).unwrap();
@@ -553,7 +553,7 @@ fn a_home_reads_only_its_layerfs_folders() {
     std::fs::write(home.join("store/shop/store.sqlite"), "db").unwrap();
     std::fs::write(home.join("machine/box/worker.json"), "secret").unwrap();
     std::fs::write(home.join("secret/key"), "secret").unwrap();
-    let native = MachineName::parse("native").unwrap();
+    let native = MachineName::parse(layerfs_home::names::HOST_MACHINE).unwrap();
     let request = |path: &Path| FilesRequest {
         path: Some(path.to_str().unwrap().to_owned()),
         ..FilesRequest::default()

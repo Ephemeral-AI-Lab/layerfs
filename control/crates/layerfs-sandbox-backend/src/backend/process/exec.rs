@@ -6,7 +6,7 @@
 //! command leads a process group of its own, named in the Sandbox until it is
 //! empty, so what it leaves running ends with the Sandbox.
 use super::sandbox::Sandbox;
-use crate::backend::native::groups;
+use crate::backend::process::groups;
 use crate::runtime::cancel::{ExecSlot, Stop};
 use crate::shared::search_path::search_path;
 use crate::shared::streams;

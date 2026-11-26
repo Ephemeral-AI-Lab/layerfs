@@ -230,7 +230,7 @@ impl Spec {
         if !plain_name(&self.name) {
             return refuse(format!("machine name {:?} is not a plain name", self.name));
         }
-        if self.kind != Platform::Native && !plain_name(&self.vm_name) {
+        if self.kind != Platform::Host && !plain_name(&self.vm_name) {
             return refuse(format!("VM name {:?} is not a plain name", self.vm_name));
         }
         if !self.work_dir.is_absolute() {

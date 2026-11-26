@@ -108,7 +108,7 @@ fn unread_daemon(home: &Path, name: &str) -> SdkValue {
     let id = home::opened(home).unwrap().id;
     let given = format!("{}{name}", layerfs_home::names::provider_prefix(&id));
     SdkValue::map([
-        ("runtime", t("native")),
+        ("runtime", t("process")),
         ("platform", t("mac")),
         ("name", t(&given)),
         ("container", t(&"ab".repeat(32))),
@@ -152,11 +152,11 @@ fn native_store(home: &Path) -> bool {
     })
     .unwrap();
     layerfs_store::open::close_idle(std::time::Duration::ZERO);
-    let machine = paths::machine_record(home, "native");
+    let machine = paths::machine_record(home, layerfs_home::names::HOST_MACHINE);
     let record = read_record(&machine).unwrap().unwrap_or(SdkValue::Null);
     let record = home::with_field(record, "daemon", t("/bin/sh"));
     let record = home::with_field(record, "image_archive", t("/bin/sh"));
-    let record = home::with_field(record, "platform", t("native"));
+    let record = home::with_field(record, "platform", t(layerfs_home::names::HOST_MACHINE));
     write_record(&machine, &record).unwrap();
     true
 }
@@ -166,7 +166,13 @@ fn native_store(home: &Path) -> bool {
 #[test]
 fn an_unread_record_is_forgotten_without_a_tombstone() {
     let home = new_home("unread");
-    sandbox(&home, "s1", "native", unread_daemon(&home, "s1"), &[]);
+    sandbox(
+        &home,
+        "s1",
+        layerfs_home::names::HOST_MACHINE,
+        unread_daemon(&home, "s1"),
+        &[],
+    );
     let left = gone_left(removed(&home, "s1", false));
     assert!(
         left.iter().any(|said| said.contains("was not stopped")),
@@ -174,7 +180,7 @@ fn an_unread_record_is_forgotten_without_a_tombstone() {
     );
     assert!(!paths::sandbox_dir(&home, "s1").exists());
     assert!(
-        !tombstoned(&home, "native", "s1"),
+        !tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s1"),
         "a tombstone proves a daemon that may still run dead"
     );
     std::fs::remove_dir_all(home).unwrap();
@@ -203,11 +209,17 @@ fn a_sandbox_without_daemon_keys_is_removed_without_a_tombstone() {
         ("boot".to_owned(), t(&"0".repeat(32))),
         ("port".to_owned(), SdkValue::Int(1)),
     ]);
-    sandbox(&home, "s1", "native", SdkValue::Map(daemon), &[]);
+    sandbox(
+        &home,
+        "s1",
+        layerfs_home::names::HOST_MACHINE,
+        SdkValue::Map(daemon),
+        &[],
+    );
     gone_left(removed(&home, "s1", false));
     assert!(!dir.exists());
     assert!(
-        !tombstoned(&home, "native", "s1"),
+        !tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s1"),
         "no runtime was inspected, so nothing proves its mounts dead"
     );
     std::fs::remove_dir_all(home).unwrap();
@@ -326,17 +338,29 @@ fn the_close_forgets_docker_and_unread_records_without_a_tombstone() {
         started: None,
         reach_hint: None,
     };
-    sandbox(&home, "s1", "native", docker_daemon(), &[]);
+    sandbox(
+        &home,
+        "s1",
+        layerfs_home::names::HOST_MACHINE,
+        docker_daemon(),
+        &[],
+    );
     let answer = layerfs_sandbox::lifecycle::close(&host("s1"), false, &[]).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
-    assert!(!tombstoned(&home, "native", "s1"));
+    assert!(!tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s1"));
 
-    sandbox(&home, "s2", "native", unread_daemon(&home, "s2"), &[]);
+    sandbox(
+        &home,
+        "s2",
+        layerfs_home::names::HOST_MACHINE,
+        unread_daemon(&home, "s2"),
+        &[],
+    );
     let answer = layerfs_sandbox::lifecycle::close(&host("s2"), false, &[]).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert!(!paths::sandbox_dir(&home, "s2").exists());
-    assert!(!tombstoned(&home, "native", "s2"));
+    assert!(!tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s2"));
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -359,7 +383,7 @@ fn started_here(host: Host, call: layerfs_sandbox::host::Call) -> layerfs_home::
         name: text("lfs-stand-in"),
         image: text("local"),
         platform: text("mac"),
-        runtime: text("native"),
+        runtime: text("process"),
         route: text("nfs"),
         runtime_id: Some("ab".repeat(32)),
         network: None,
@@ -384,7 +408,7 @@ fn a_recreate_drops_the_older_tombstone() {
     let old = format!("p1:{id}.sandbox:0000000000000010:aa");
     layerfs_sandbox::record::SandboxTombstone {
         name: "s1".to_owned(),
-        machine: "native".to_owned(),
+        machine: layerfs_home::names::HOST_MACHINE.to_owned(),
         generation: old,
         retired_ms: 1,
     }
@@ -400,14 +424,17 @@ fn a_recreate_drops_the_older_tombstone() {
     let created = layerfs_sandbox::family::create_on(&home, &mut events, &request, started_here)
         .unwrap_or_else(|refusal| panic!("{refusal:?}"));
     let generation = created.record.generation().expect("a minted generation");
-    assert_eq!(created.record.machine(), "native");
+    assert_eq!(created.record.machine(), layerfs_home::names::HOST_MACHINE);
     assert_eq!(
         SENT.lock().unwrap().clone(),
-        Some(Some(("native".to_owned(), generation.to_owned()))),
+        Some(Some((
+            layerfs_home::names::HOST_MACHINE.to_owned(),
+            generation.to_owned()
+        ))),
         "the create sent its side another place"
     );
     assert!(
-        !tombstoned(&home, "native", "s1"),
+        !tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s1"),
         "the older tombstone stayed"
     );
     let _ = std::fs::remove_dir_all(&home);

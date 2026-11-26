@@ -152,7 +152,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
 }
 
 pub(super) fn directory(home: &Path, checks: &mut Checks) {
-    let directory = paths::machine_dir(home, "native");
+    let directory = paths::machine_dir(home, layerfs_home::names::HOST_MACHINE);
     if std::fs::symlink_metadata(&directory)
         .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
     {
@@ -161,7 +161,7 @@ pub(super) fn directory(home: &Path, checks: &mut Checks) {
     let verified = HostPaths::new(home).and_then(|paths| paths.check_worker_directories());
     if let Err(error) = verified {
         checks.fail("home.records", error.message);
-        checks.about("home.records", "machine", "native");
+        checks.about("home.records", "machine", layerfs_home::names::HOST_MACHINE);
         checks.evidence(
             "home.records",
             SdkValue::map([

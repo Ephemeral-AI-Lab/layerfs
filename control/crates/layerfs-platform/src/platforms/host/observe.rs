@@ -1,4 +1,4 @@
-//! `native`: Sandboxes on the host's own OS. Nothing is made, started or
+//! `host`: Sandboxes on the host's own OS. Nothing is made, started or
 //! stopped; its Sandbox backend runs in the caller's process. On Windows
 //! it holds only records and its Stores are in the WSL worker, which is
 //! not designed yet.
@@ -16,7 +16,7 @@ pub(crate) fn status() -> Result<Status, MachineError> {
     let missing = native_missing(HostOs::current());
     if !missing.is_empty() {
         return Err(MachineError::missing(
-            "the native machine cannot run Sandboxes on this host",
+            "the host machine cannot run Sandboxes on this host",
             missing,
         ));
     }

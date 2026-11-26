@@ -51,7 +51,7 @@ fn record(home: &Path, id: &str, name: &str, folder: &Path, pid: u32) -> DaemonR
         platform: "mac".to_owned(),
         name: name.to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -71,9 +71,9 @@ fn record(home: &Path, id: &str, name: &str, folder: &Path, pid: u32) -> DaemonR
         &SdkValue::map([
             ("name", t(id)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(id)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -100,9 +100,9 @@ fn rewrite(
         &SdkValue::map([
             ("name", t(id)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(id)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", SdkValue::Map(fields)),
         ]),
     )

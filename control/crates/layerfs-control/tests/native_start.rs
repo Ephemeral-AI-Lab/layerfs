@@ -6,6 +6,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_control::home::{native_start, Build};
 use layerfs_home::home::{paths, write_entity};
+use layerfs_home::names::HOST_MACHINE;
 use std::path::{Path, PathBuf};
 
 const OURS: &str = "1111111111111111111111111111111111111111";
@@ -54,13 +55,13 @@ fn a_native_start_with_a_daemon_of_another_build_names_both_builds_and_the_fix()
     };
     let pinned = home.join("old").join("layerfs-daemon");
     daemon(&pinned, THEIRS);
-    let record = paths::machine_record(&home, "native");
+    let record = paths::machine_record(&home, layerfs_home::names::HOST_MACHINE);
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
     write_entity(
         &record,
         &SdkValue::map([
-            ("name", SdkValue::text("native")),
-            ("platform", SdkValue::text("native")),
+            ("name", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
+            ("platform", SdkValue::text("host")),
             ("daemon", SdkValue::text(pinned.display().to_string())),
         ]),
     )
@@ -91,7 +92,13 @@ fn a_native_start_with_a_daemon_of_another_build_names_both_builds_and_the_fix()
     let said = native_start(&home, build, failed_start(&pinned));
     assert_eq!(
         said.detail.get_text("fix"),
-        Some(format!("layerfs machine update native --daemon {}", own.display()).as_str())
+        Some(
+            format!(
+                "layerfs machine update {HOST_MACHINE} --daemon {}",
+                own.display()
+            )
+            .as_str()
+        )
     );
 
     // a daemon that names no build is not this build

@@ -129,15 +129,21 @@ impl HostPaths {
     pub(super) fn verify_directories(&self) -> Result<(), SdkRefusal> {
         private_directory(&self.home)?;
         private_directory(&self.home.join("machine"))?;
-        private_directory(&paths::machine_dir(&self.home, "native"))
+        private_directory(&paths::machine_dir(
+            &self.home,
+            layerfs_home::names::HOST_MACHINE,
+        ))
     }
 
     /// Takes the worker lifetime lock without waiting. The existing Home
     /// supplies the private native machine directory.
     pub fn try_hold(&self) -> Result<Option<HostGuard>, SdkRefusal> {
         self.check_paths()?;
-        let directory = File::open(paths::machine_dir(&self.home, "native"))
-            .map_err(|error| unavailable("directory", error))?;
+        let directory = File::open(paths::machine_dir(
+            &self.home,
+            layerfs_home::names::HOST_MACHINE,
+        ))
+        .map_err(|error| unavailable("directory", error))?;
         let Some(lock) = hold(&paths::host_worker_lock(&self.home))? else {
             return Ok(None);
         };
@@ -178,7 +184,10 @@ impl HostPaths {
             Ok::<_, SdkRefusal>(held.dev() == current.dev() && held.ino() == current.ino())
         };
         if self.home_id != current_home.id
-            || !same(&guard.directory, paths::machine_dir(&self.home, "native"))?
+            || !same(
+                &guard.directory,
+                paths::machine_dir(&self.home, layerfs_home::names::HOST_MACHINE),
+            )?
             || !same(&guard.lock, paths::host_worker_lock(&self.home))?
         {
             return Err(refused(

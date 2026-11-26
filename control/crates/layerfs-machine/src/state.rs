@@ -286,7 +286,7 @@ impl MachineRecord {
 /// other machine a Store or Sandbox still names is `broken` `missing`.
 pub fn unrecorded(name: &str) -> State {
     match layerfs_home::names::BUILT_IN.contains(&name) {
-        true if !crate::local::provided(name) => State::Ready,
+        true if layerfs_home::names::built_in_platform(name) == Some("host") => State::Ready,
         true => State::Stopped,
         false => State::broken(Reason::Missing, None),
     }

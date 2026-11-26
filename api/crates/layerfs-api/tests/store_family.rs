@@ -54,7 +54,7 @@ fn home_with_box() -> (PathBuf, PathBuf) {
     home::open(&home).unwrap();
     // `box` records its provider name, as every 2.0 create does
     for (name, platform, vm_name) in [
-        ("native", "native", None),
+        (layerfs_home::names::HOST_MACHINE, "host", None),
         ("box", "lima", Some("layerfs-test-box")),
     ] {
         let mut record = SdkValue::map([
@@ -123,7 +123,10 @@ fn create_list_and_get() {
         "a Store's own folder is 0700"
     );
     assert_eq!(made.get_text("outcome"), Some("created"));
-    assert_eq!(made.get_text("machine"), Some("native"));
+    assert_eq!(
+        made.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     assert_eq!(made.get_text("engine"), Some("sqlite"));
     assert!(made.get_text("sqlite_version").is_some(), "{made:?}");
     assert!(
@@ -142,7 +145,8 @@ fn create_list_and_get() {
     let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&short),
-        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"HOST_MACHINE"}]}"#
+            .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
     let list = detail(&home, "store.list", &[]).unwrap();
     let SdkValue::List(items) = list.get("items").unwrap() else {
@@ -161,7 +165,8 @@ fn create_list_and_get() {
     let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&got),
-        r#"{"engine":"sqlite","state":"ready","machine":"native"}"#
+        r#"{"engine":"sqlite","state":"ready","machine":"HOST_MACHINE"}"#
+            .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
     // a live read finds the file and nobody holding it, and notes when
     let live = detail(
@@ -183,7 +188,8 @@ fn create_list_and_get() {
     let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
         layerfs_api::json::print(&short),
-        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}"#
+        r#"{"items":[{"store":"shop","engine":"sqlite","machine":"HOST_MACHINE"}]}"#
+            .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
     let long = detail(&home, "store.get", &[("store", t("shop"))]).unwrap();
     assert!(long.get_text("observed_at").is_some(), "{long:?}");
@@ -312,7 +318,7 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
         "store.move",
         SdkValue::map([
             ("store", t("shop")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("detail", SdkValue::Bool(true)),
         ]),
         &mut |event| {
@@ -347,7 +353,7 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
         ]
     );
     assert_eq!(back.get_text("from"), Some("box"));
-    assert_eq!(back.get_text("to"), Some("native"));
+    assert_eq!(back.get_text("to"), Some(layerfs_home::names::HOST_MACHINE));
     assert_eq!(back.get("heads_sha256"), Some(&heads));
     assert_eq!(
         std::fs::read(paths::store_file(&home, "shop")).unwrap(),
@@ -407,7 +413,10 @@ fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     let record = read_record(&paths::store_record(&home, "shop"))
         .unwrap()
         .unwrap();
-    assert_eq!(record.get_text("machine"), Some("native"));
+    assert_eq!(
+        record.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
 
     call(&home, "store.remove", &[("store", t("shop"))]).unwrap();
     assert!(!paths::store_dir(&home, "shop").exists());
@@ -555,10 +564,16 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
     let pulled = detail(
         &home,
         "store.move",
-        &[("store", t("shop")), ("machine", t("native"))],
+        &[
+            ("store", t("shop")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     )
     .unwrap();
-    assert_eq!(pulled.get_text("to"), Some("native"));
+    assert_eq!(
+        pulled.get_text("to"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     let read = call(
         &home,
         "file.read",

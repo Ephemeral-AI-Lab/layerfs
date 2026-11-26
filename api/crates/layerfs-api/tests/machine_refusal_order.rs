@@ -70,7 +70,7 @@ fn the_first_broken_rule_is_the_refusal() {
     let update = |args: &[(&str, SdkValue)]| refusal(home, "machine.update", args).1;
     assert_eq!(
         update(&[
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("cpus", SdkValue::Int(2)),
             ("docker", t("/tmp/docker.sock")),
         ]),
@@ -90,7 +90,7 @@ fn the_first_broken_rule_is_the_refusal() {
         "docker, wsl and daemon are the built-in machines' settings"
     );
     let daemon_and_wsl = update(&[
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ("daemon", t("relative")),
         ("wsl", t("Ubuntu")),
     ]);
@@ -100,7 +100,10 @@ fn the_first_broken_rule_is_the_refusal() {
     );
     #[cfg(not(windows))]
     assert_eq!(
-        update(&[("machine", t("native")), ("wsl", t("Ubuntu"))]),
+        update(&[
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("wsl", t("Ubuntu"))
+        ]),
         "wsl is a Windows host's setting"
     );
 }

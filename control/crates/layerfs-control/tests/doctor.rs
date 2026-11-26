@@ -137,18 +137,29 @@ fn findings(report: &SdkValue) -> Vec<(String, String, String, String, String)> 
 fn a_clean_home_is_ok_with_no_findings() {
     let home = new_home("clean");
     layerfs_home::home::open(&home).unwrap();
-    store(&home, "shop", sqlite("shop", "native"));
+    store(
+        &home,
+        "shop",
+        sqlite("shop", layerfs_home::names::HOST_MACHINE),
+    );
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
     let sandbox = SdkValue::map([
         ("name", t("sb")),
         ("project", t("shop/api")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ("id", t("sb")),
     ]);
     write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let native = SdkValue::map([
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
+    ]);
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
     let before = tree(&home);
     let report = doctor(&home).unwrap();
     assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
@@ -165,12 +176,22 @@ fn a_clean_home_is_ok_with_no_findings() {
 fn a_home_folder_is_0700_or_0701_and_the_message_names_both() {
     let home = new_home("modes-0701");
     layerfs_home::home::open(&home).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let native = SdkValue::map([
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
+    ]);
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
     let run = paths::run_root(&home);
     std::fs::create_dir(&run).unwrap();
     std::fs::set_permissions(&run, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let ancestors = [home.join("machine"), paths::machine_dir(&home, "native")];
+    let ancestors = [
+        home.join("machine"),
+        paths::machine_dir(&home, layerfs_home::names::HOST_MACHINE),
+    ];
     for mode in [0o700, 0o701] {
         for folder in &ancestors {
             std::fs::set_permissions(folder, std::fs::Permissions::from_mode(mode)).unwrap();
@@ -199,9 +220,20 @@ fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
     // doctor must not call 0701 fine there; other home folders keep 0701.
     let home = new_home("store-0701");
     layerfs_home::home::open(&home).unwrap();
-    store(&home, "shop", sqlite("shop", "native"));
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    store(
+        &home,
+        "shop",
+        sqlite("shop", layerfs_home::names::HOST_MACHINE),
+    );
+    let native = SdkValue::map([
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
+    ]);
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
     let dir = paths::store_dir(&home, "shop");
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o701)).unwrap();
     std::fs::set_permissions(home.join("store"), std::fs::Permissions::from_mode(0o701)).unwrap();
@@ -255,7 +287,11 @@ fn a_symlinked_store_entry_is_an_error_that_does_not_change_the_target() {
     // the remedy is not a chmod, which would change the link's target
     let home = new_home("store-entry-link");
     layerfs_home::home::open(&home).unwrap();
-    store(&home, "shop", sqlite("shop", "native"));
+    store(
+        &home,
+        "shop",
+        sqlite("shop", layerfs_home::names::HOST_MACHINE),
+    );
     let elsewhere =
         std::env::temp_dir().join(format!("layerfs-doctor-entry-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&elsewhere);
@@ -283,9 +319,20 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
     // with ENOTDIR and discard findings for the rest of the home
     let home = new_home("store-entry-file-link");
     layerfs_home::home::open(&home).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
-    store(&home, "other", sqlite("other", "native"));
+    let native = SdkValue::map([
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
+    ]);
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
+    store(
+        &home,
+        "other",
+        sqlite("other", layerfs_home::names::HOST_MACHINE),
+    );
     std::fs::set_permissions(
         paths::store_dir(&home, "other"),
         std::fs::Permissions::from_mode(0o701),
@@ -341,9 +388,20 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
 fn a_dangling_symlink_under_store_is_an_error_that_keeps_scanning() {
     let home = new_home("store-entry-dangling-link");
     layerfs_home::home::open(&home).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
-    store(&home, "other", sqlite("other", "native"));
+    let native = SdkValue::map([
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
+    ]);
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
+    store(
+        &home,
+        "other",
+        sqlite("other", layerfs_home::names::HOST_MACHINE),
+    );
     std::fs::set_permissions(
         paths::store_dir(&home, "other"),
         std::fs::Permissions::from_mode(0o701),
@@ -417,7 +475,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     let sandbox = SdkValue::map([
         ("name", t("sx")),
         ("project", t("gone/p")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ("id", t("sx")),
     ]);
     write_entity(&paths::sandbox_record(&home, "sx"), &sandbox).unwrap();
@@ -427,14 +485,14 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     let orphan = SdkValue::map([("name", t("p"))]);
     write_entity(&paths::project_record(&home, "orphan", "p"), &orphan).unwrap();
     // an uncertain intent and a dead certain one
-    let mut s3 = sqlite("s3", "native");
+    let mut s3 = sqlite("s3", layerfs_home::names::HOST_MACHINE);
     s3.push(("op", op(true)));
     store(&home, "s3", s3);
-    let mut s4 = sqlite("s4", "native");
+    let mut s4 = sqlite("s4", layerfs_home::names::HOST_MACHINE);
     s4.push(("op", op(false)));
     store(&home, "s4", s4);
     // a stale lease (a process id above every kernel's pid_max)
-    store(&home, "s5", sqlite("s5", "native"));
+    store(&home, "s5", sqlite("s5", layerfs_home::names::HOST_MACHINE));
     private_dir(&paths::lease_dir(&home, "s5")).unwrap();
     std::fs::write(paths::lease_dir(&home, "s5").join("99999999"), "1\n").unwrap();
     // a partial copy an interrupted pull left on native
@@ -448,11 +506,15 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     .unwrap();
     // a built-in machine whose recorded daemon is not there
     let native = SdkValue::map([
-        ("name", t("native")),
-        ("platform", t("native")),
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
         ("daemon", t("/no/such/layerfs-daemon")),
     ]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
 
     let before = tree(&home);
     let report = doctor(&home).unwrap();
@@ -497,7 +559,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         (
             "error",
             "machine",
-            "native",
+            layerfs_home::names::HOST_MACHINE,
             "recorded daemon /no/such/layerfs-daemon is not there",
             None,
         ),
@@ -548,18 +610,21 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     let boxed = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
     write_entity(&paths::machine_record(&home, "box"), &boxed).unwrap();
     // a move to box failed certain at `send`: box holds a partial copy
-    let mut failed = sqlite("failed", "native");
+    let mut failed = sqlite("failed", layerfs_home::names::HOST_MACHINE);
     failed.push(("incoming_on", t("box")));
     store(&home, "failed", failed);
     // a move whose process ended at `send`
-    let mut pushed = sqlite("pushed", "native");
+    let mut pushed = sqlite("pushed", layerfs_home::names::HOST_MACHINE);
     let push = SdkValue::map([
         ("id", t("op-00000000000000bb")),
         ("name", t("store.move")),
         ("phase", t("send")),
         (
             "args",
-            SdkValue::map([("from", t("native")), ("to", t("box"))]),
+            SdkValue::map([
+                ("from", t(layerfs_home::names::HOST_MACHINE)),
+                ("to", t("box")),
+            ]),
         ),
         ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
         ("started", SdkValue::Int(1)),
@@ -571,7 +636,7 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     // a move to box whose retire did not finish: native keeps its copy
     let mut kept = sqlite("kept", "box");
     let last = SdkValue::map([
-        ("from", t("native")),
+        ("from", t(layerfs_home::names::HOST_MACHINE)),
         ("to", t("box")),
         ("retired", SdkValue::Bool(false)),
     ]);
@@ -662,18 +727,29 @@ fn exec_record(home: &Path, wsid: &str, id: &str, pid: i64) -> PathBuf {
 fn exec_records_are_checked_and_left_as_they_are() {
     let home = new_home("execs");
     layerfs_home::home::open(&home).unwrap();
-    store(&home, "shop", sqlite("shop", "native"));
+    store(
+        &home,
+        "shop",
+        sqlite("shop", layerfs_home::names::HOST_MACHINE),
+    );
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
     let sandbox = SdkValue::map([
         ("name", t("sb")),
         ("project", t("shop/api")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ("id", t("sb")),
     ]);
     write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
-    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
-    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let native = SdkValue::map([
+        ("name", t(layerfs_home::names::HOST_MACHINE)),
+        ("platform", t("host")),
+    ]);
+    write_entity(
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        &native,
+    )
+    .unwrap();
     let (live, left) = ("a".repeat(64), "b".repeat(64));
     let workspace = SdkValue::map([("id", t(&live)), ("path", t("/w/1")), ("name", t("w"))]);
     let file = paths::workspace_dir(&home, "sb").join(format!("{live}.json"));

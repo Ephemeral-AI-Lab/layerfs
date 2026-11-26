@@ -7,16 +7,16 @@ use crate::ProviderCapabilities;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
     /// Host processes with loopback NFS (macOS).
-    Native,
+    Process,
     /// Linux namespaces and a cgroup.
     Namespaces,
 }
 
 impl Backend {
-    pub const ALL: [Backend; 2] = [Backend::Native, Backend::Namespaces];
+    pub const ALL: [Backend; 2] = [Backend::Process, Backend::Namespaces];
 
-    /// The value records and listings store and show: `"native"` (for
-    /// `Native`, G6) or `"namespaces"`.
+    /// The value records and listings store and show: `"process"` (for
+    /// `Process`, G6) or `"namespaces"`.
     pub fn stored_name(self) -> &'static str {
         adapter(self).stored_name()
     }

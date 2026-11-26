@@ -84,7 +84,10 @@ fn certain_push(phase: &str) -> SdkValue {
         ("phase", t(phase)),
         (
             "args",
-            SdkValue::map([("from", t("native")), ("to", t("box"))]),
+            SdkValue::map([
+                ("from", t(layerfs_home::names::HOST_MACHINE)),
+                ("to", t("box")),
+            ]),
         ),
         ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
         ("started", SdkValue::Int(1)),
@@ -100,7 +103,7 @@ fn shop_with_partial(home: &Path, root: &Path, fields: Vec<(&str, SdkValue)>) ->
         SdkValue::map([
             ("name", t("shop")),
             ("kind", t("sqlite")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ]),
     );
     for (field, value) in fields {
@@ -242,7 +245,11 @@ fn a_certain_install_failure_keeps_the_target_in_the_record() {
         "the target keeps the partial copy it wrote"
     );
     let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
-    assert_eq!(record.machine().unwrap(), "native", "the record moved on");
+    assert_eq!(
+        record.machine().unwrap(),
+        layerfs_home::names::HOST_MACHINE,
+        "the record moved on"
+    );
     assert!(record.op().is_none(), "the intent is left");
     assert_eq!(
         record.field("incoming_on"),
@@ -347,7 +354,14 @@ fn a_pull_reads_each_piece_once() {
 
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    let refused = phases::move_to(&home, &mut events, "shop", "native", related()).unwrap_err();
+    let refused = phases::move_to(
+        &home,
+        &mut events,
+        "shop",
+        layerfs_home::names::HOST_MACHINE,
+        related(),
+    )
+    .unwrap_err();
 
     assert_eq!(refused.code, "Unknown", "{}", refused.message);
     assert!(

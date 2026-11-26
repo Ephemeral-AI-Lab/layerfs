@@ -134,7 +134,7 @@ pub(super) fn local(home: &Path, record: &SandboxRecord, checks: &mut Checks) ->
         return true;
     };
     // another runtime has no process this check can match: it does not apply
-    if !matches!(daemon.runtime(), Some("native" | "namespaces")) {
+    if !matches!(daemon.runtime(), Some("process" | "namespaces")) {
         return true;
     }
     let pid = daemon.pid().and_then(|p| u32::try_from(p).ok());

@@ -387,7 +387,7 @@ process reaches it, so Workspace calls skip the worker
 
 The host exchange is versioned independently of the guest exchange. The
 ordinary socket is `worker.sock` and the management socket is `worker.ctl`
-in the native machine directory. Each listener has its own admission
+in the host machine directory. Each listener has its own admission
 capacity. A saturated ordinary listener leaves its backlog in the kernel,
 while management retains two slots.
 

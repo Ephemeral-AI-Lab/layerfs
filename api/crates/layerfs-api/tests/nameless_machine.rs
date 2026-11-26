@@ -298,10 +298,15 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
     assert!(!paths::machine_dir(&home, "old").exists());
 
     // `native` keeps its built-in refusal
-    let native = call(&home, "machine.remove", &[("machine", t("native"))]).unwrap_err();
+    let native = call(
+        &home,
+        "machine.remove",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    )
+    .unwrap_err();
     assert_eq!(native.code, "InvalidInput", "{native:?}");
     assert!(native.message.contains("built in"), "{}", native.message);
-    assert!(paths::machine_record(&home, "native").exists());
+    assert!(paths::machine_record(&home, layerfs_home::names::HOST_MACHINE).exists());
 
     // a Store record this build does not read: its file is kept and named
     write_record(
@@ -357,7 +362,10 @@ fn a_store_move_off_a_nameless_machine_is_unavailable_with_its_blocked_by() {
     let refused = call(
         &home,
         "store.move",
-        &[("store", t("shop")), ("machine", t("native"))],
+        &[
+            ("store", t("shop")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     )
     .unwrap_err();
     assert_eq!(refused.code, "Unavailable", "{refused:?}");

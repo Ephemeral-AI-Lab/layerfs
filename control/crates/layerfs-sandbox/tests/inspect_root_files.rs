@@ -232,7 +232,7 @@ fn the_roots_offer_the_root_of_a_namespaces_sandbox_only() {
 
     // a host-process Sandbox has no root of its own: no `/`, and a path
     // outside its home is refused as it always was
-    let native = fixture("native", "native", false);
+    let native = fixture(layerfs_home::names::HOST_MACHINE, "host", false);
     let roots = read(&native, &[]).unwrap();
     assert_eq!(
         shown(&roots, &native.run),

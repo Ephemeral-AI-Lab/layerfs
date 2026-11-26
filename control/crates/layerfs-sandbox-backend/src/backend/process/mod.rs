@@ -1,7 +1,7 @@
-//! Native process runtime: each Sandbox is one daemon process on this kernel,
+//! Process process runtime: each Sandbox is one daemon process on this kernel,
 //! started from a private directory, with no container, image or Engine.
-//! It runs on macOS only (`NativeProvider`): Linux starts no native
-//! Sandbox (#533 O27), and a native record found there is refused with the
+//! It runs on macOS only (`ProcessProvider`): Linux starts no process
+//! Sandbox (#533 O27), and a process record found there is refused with the
 //! records-only `sandbox remove` as its fix (RV3 FAIL 3).
 //!
 //! It is for a machine that is itself the isolation boundary (a microVM, a
@@ -12,7 +12,7 @@
 //! Sandbox. One attempt per operation, as in the Docker runtime; nothing is
 //! retried.
 //!
-//! Its adapter (stored name `"native"`, capabilities) builds on every Unix
+//! Its adapter (stored name `"process"`, capabilities) builds on every Unix
 //! host; the backend itself on macOS only.
 mod adapter;
 #[cfg(target_os = "macos")]
@@ -27,6 +27,6 @@ mod provider;
 pub(crate) mod sandbox;
 pub(crate) use adapter::ADAPTER;
 #[cfg(target_os = "macos")]
-pub use provider::NativeProvider;
+pub use provider::ProcessProvider;
 #[cfg(target_os = "macos")]
 pub use sandbox::Sandbox;

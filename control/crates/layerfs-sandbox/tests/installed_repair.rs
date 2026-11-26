@@ -64,7 +64,7 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
     let sandbox = if cfg!(target_os = "linux") {
         "namespaces"
     } else {
-        "native"
+        layerfs_home::names::HOST_MACHINE
     };
     let host = Host {
         home: home.clone(),

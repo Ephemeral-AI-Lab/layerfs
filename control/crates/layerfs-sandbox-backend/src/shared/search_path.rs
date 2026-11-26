@@ -1,5 +1,5 @@
 //! The search path a local daemon and its commands start with: a container's
-//! on Linux, this process's own on macOS (the native route).
+//! on Linux, this process's own on macOS (the process route).
 use std::ffi::OsString;
 
 /// A container's search path: what a local daemon and its commands start with

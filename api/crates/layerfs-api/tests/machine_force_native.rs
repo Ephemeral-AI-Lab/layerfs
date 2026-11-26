@@ -63,16 +63,23 @@ fn forced_stop(home: &Path) -> SdkValue {
         home,
         "machine.stop",
         &[
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("force", SdkValue::Bool(true)),
             ("detail", SdkValue::Bool(true)),
         ],
     );
-    assert_eq!(stopped.get_text("machine"), Some("native"), "{stopped:?}");
+    assert_eq!(
+        stopped.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE),
+        "{stopped:?}"
+    );
     assert_eq!(stopped.get("forced"), Some(&SdkValue::Bool(true)));
-    let record = read_record(&paths::machine_record(home, "native"))
-        .unwrap()
-        .unwrap();
+    let record = read_record(&paths::machine_record(
+        home,
+        layerfs_home::names::HOST_MACHINE,
+    ))
+    .unwrap()
+    .unwrap();
     assert_eq!(record.get_text("state"), Some("ready"));
     stopped
 }
@@ -83,7 +90,7 @@ fn live_case(home: &Path, name: &str, machine: bool) {
         &[
             ("project", t("shop/app")),
             ("name", t(name)),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
     let mounted = call(
@@ -164,7 +171,7 @@ fn live_case(home: &Path, name: &str, machine: bool) {
         "native mount remains attached"
     );
     assert!(paths::store_file(home, "shop").exists());
-    assert!(paths::machine_record(home, "native").exists());
+    assert!(paths::machine_record(home, layerfs_home::names::HOST_MACHINE).exists());
     let saved = call(
         home,
         "file.read",
@@ -186,7 +193,7 @@ fn identity_case(home: &Path) {
         &[
             ("project", t("shop/app")),
             ("name", t("moved")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
     let path = paths::sandbox_record(home, "moved");
@@ -199,7 +206,10 @@ fn identity_case(home: &Path) {
     let refused = layerfs_api::call(
         Some(home),
         "machine.stop",
-        SdkValue::map([("machine", t("native")), ("force", SdkValue::Bool(true))]),
+        SdkValue::map([
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("force", SdkValue::Bool(true)),
+        ]),
         &mut |_| {},
     )
     .unwrap_err();
@@ -213,9 +223,12 @@ fn identity_case(home: &Path) {
         "the unrelated process was signalled"
     );
     assert!(real.alive(), "the real daemon was signalled");
-    let op = read_record(&paths::machine_record(home, "native"))
-        .unwrap()
-        .and_then(|record| record.get("op").cloned());
+    let op = read_record(&paths::machine_record(
+        home,
+        layerfs_home::names::HOST_MACHINE,
+    ))
+    .unwrap()
+    .and_then(|record| record.get("op").cloned());
     assert!(
         op.is_none(),
         "a refusal before any signal left {op:?} on native"
@@ -269,7 +282,7 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},

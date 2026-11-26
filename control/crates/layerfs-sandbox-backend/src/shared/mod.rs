@@ -1,8 +1,8 @@
 //! The process lifecycle both backends use: starting and stopping a daemon
 //! process on this kernel, its listener, search path and streams. The
-//! `native` and `namespaces` backends build on it. Process groups and the
+//! `process` and `namespaces` backends build on it. Process groups and the
 //! operating-system facts live in the one backend that runs on each OS;
-//! `os` re-exports them for this module: `backend::native::macos` (the
+//! `os` re-exports them for this module: `backend::process::macos` (the
 //! `mount` table, `umount -f`) or `backend::namespaces::linux` (the
 //! `mountinfo` table, a lazy `MNT_DETACH`). Process identity
 //! (`LocalProcess`) is `layerfs_bridge::process` (layerfs-project#112).
@@ -16,7 +16,7 @@ pub(crate) mod streams;
 #[cfg(target_os = "linux")]
 pub(crate) use crate::backend::namespaces::linux as os;
 #[cfg(target_os = "macos")]
-pub(crate) use crate::backend::native::macos as os;
+pub(crate) use crate::backend::process::macos as os;
 #[cfg(target_os = "macos")]
 pub use daemon::LocalCreateFailure;
 #[cfg(target_os = "macos")]

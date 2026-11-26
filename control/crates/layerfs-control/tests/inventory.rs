@@ -41,8 +41,8 @@ fn record(path: &Path, text: &str) {
 fn home() -> PathBuf {
     let home = tempdir();
     record(
-        &paths::machine_record(&home, "native"),
-        r#"{"platform":"native"}"#,
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
+        r#"{"platform":"host"}"#,
     );
     record(
         &paths::machine_record(&home, "dev"),
@@ -68,7 +68,8 @@ fn home() -> PathBuf {
     );
     record(
         &paths::sandbox_record(&home, "b"),
-        r#"{"v":1,"name":"b","project":"docs/web","machine":"native"}"#,
+        &r#"{"v":1,"name":"b","project":"docs/web","machine":"HOST_MACHINE"}"#
+            .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE),
     );
     record(
         &paths::sandbox_record(&home, "c"),
@@ -86,7 +87,10 @@ fn home() -> PathBuf {
 fn relationships_are_read_from_the_records() {
     let home = home();
     assert_eq!(inventory::stores_on(&home, "dev").unwrap(), ["shop"]);
-    assert_eq!(inventory::stores_on(&home, "native").unwrap(), ["docs"]);
+    assert_eq!(
+        inventory::stores_on(&home, layerfs_home::names::HOST_MACHINE).unwrap(),
+        ["docs"]
+    );
     assert_eq!(inventory::sandboxes_on(&home, "dev").unwrap(), ["a", "c"]);
     assert_eq!(inventory::hosted_on(&home, "dev").unwrap(), ["fc"]);
     let names: Vec<_> = inventory::sandboxes(&home)
@@ -98,13 +102,13 @@ fn relationships_are_read_from_the_records() {
         names,
         [
             ("dev".into(), "a".into()),
-            ("native".into(), "b".into()),
+            (layerfs_home::names::HOST_MACHINE.into(), "b".into()),
             ("dev".into(), "c".into())
         ]
     );
     assert_eq!(
         inventory::sandbox(&home, "b").unwrap().unwrap().machine(),
-        "native"
+        layerfs_home::names::HOST_MACHINE
     );
     assert!(inventory::sandbox(&home, "d").unwrap().is_none());
     assert!(inventory::sandbox(&home, "z").unwrap().is_none());
@@ -221,7 +225,8 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
                 .collect()
         )
     );
-    let refusal = inventory::can_change_machine(&home, "native").unwrap_err();
+    let refusal =
+        inventory::can_change_machine(&home, layerfs_home::names::HOST_MACHINE).unwrap_err();
     assert_eq!(
         refusal.message,
         "Sandbox b runs on machine native: remove it before changing it"
@@ -260,7 +265,8 @@ fn a_move_checks_the_stores_side() {
     let on_dev = store("shop", r#"{"name":"shop","kind":"sqlite","machine":"dev"}"#);
     let here = store(
         "app",
-        r#"{"name":"app","kind":"sqlite","machine":"native"}"#,
+        &r#"{"name":"app","kind":"sqlite","machine":"HOST_MACHINE"}"#
+            .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE),
     );
     let pg = store(
         "pg",
@@ -269,10 +275,19 @@ fn a_move_checks_the_stores_side() {
     let code =
         |result: Result<String, layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
     // to or from this computer: the machine it goes from
-    assert_eq!(can_move(&home, &on_dev, "native").unwrap(), "dev");
-    assert_eq!(can_move(&home, &here, "dev").unwrap(), "native");
-    assert_eq!(code(can_move(&home, &here, "native")), "InvalidInput");
-    let refusal = can_move(&home, &pg, "native").unwrap_err();
+    assert_eq!(
+        can_move(&home, &on_dev, layerfs_home::names::HOST_MACHINE).unwrap(),
+        "dev"
+    );
+    assert_eq!(
+        can_move(&home, &here, "dev").unwrap(),
+        layerfs_home::names::HOST_MACHINE
+    );
+    assert_eq!(
+        code(can_move(&home, &here, layerfs_home::names::HOST_MACHINE)),
+        "InvalidInput"
+    );
+    let refusal = can_move(&home, &pg, layerfs_home::names::HOST_MACHINE).unwrap_err();
     assert!(
         refusal.message.contains("does not move"),
         "{}",

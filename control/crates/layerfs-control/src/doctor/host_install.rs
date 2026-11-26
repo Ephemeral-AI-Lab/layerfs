@@ -9,6 +9,7 @@ use super::{executable, Checks};
 use crate::home::{Build, NativeDaemon};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::read_record;
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_machine::{bundle_dir, IMAGE_ARCHIVE};
 use std::path::Path;
 
@@ -149,7 +150,11 @@ pub(super) fn bundle(home: &Path, records: &Scanned, checks: &mut Checks) {
 /// home whose machines configure none has nothing to check.
 pub(super) fn artifacts(records: &Scanned, budget: &super::Budget, checks: &mut Checks) {
     const ID: &str = "home.artifacts";
-    for machine in records.machines.iter().filter(|m| m.name() != "native") {
+    for machine in records
+        .machines
+        .iter()
+        .filter(|m| m.name() != layerfs_home::names::HOST_MACHINE)
+    {
         if budget.expired() {
             checks.timeout(ID, "its time ran out while the daemon files were read");
             return;
@@ -222,7 +227,7 @@ pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) 
     ]);
     if daemon.present && !executable(&daemon.path) {
         let message = format!(
-            "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update native --daemon <path>`"
+            "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update {HOST_MACHINE} --daemon <path>`"
         );
         match daemon.source {
             "recorded" => checks.fail(ID, message),
@@ -233,16 +238,16 @@ pub(super) fn native_daemon(home: &Path, build: Build<'_>, checks: &mut Checks) 
         match daemon.source {
             "recorded" => checks.fail(
                 ID,
-                layerfs_sandbox::deploy::missing_daemon("native", &shown),
+                layerfs_sandbox::deploy::missing_daemon(layerfs_home::names::HOST_MACHINE, &shown),
             ),
             _ => checks.warning(ID, daemon.missing()),
         }
-        if let Some(fix) = daemon_fix("native", build) {
+        if let Some(fix) = daemon_fix(layerfs_home::names::HOST_MACHINE, build) {
             checks.fix(ID, fix);
         }
     } else if let Some(message) = daemon.mismatch(build) {
         checks.warning(ID, message);
-        if let Some(fix) = daemon_fix("native", build) {
+        if let Some(fix) = daemon_fix(layerfs_home::names::HOST_MACHINE, build) {
             checks.fix(ID, fix);
         }
     } else if matched == SdkValue::Bool(true) {

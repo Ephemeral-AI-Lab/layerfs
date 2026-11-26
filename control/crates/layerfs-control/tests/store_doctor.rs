@@ -42,7 +42,7 @@ fn fields(name: &str) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text("sqlite")),
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("binding", SdkValue::Bytes(BINDING.to_vec())),
         ("cursor", SdkValue::Bytes(vec![9; 32])),
     ])

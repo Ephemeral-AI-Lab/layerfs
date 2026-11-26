@@ -94,7 +94,7 @@ fn machine_record(home: &Path, machine: &str, platform: &str, worker: Option<(So
     ];
     // every 2.0 record of a machine with a provider names its VM
     let vm_name = format!("layerfs-test-{machine}");
-    if platform != "native" {
+    if platform != "host" {
         fields.push(("vm_name", t(&vm_name)));
     }
     write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
@@ -169,7 +169,7 @@ fn local_sandbox(root: &Path, name: &str, machine: &str, process: LocalProcess) 
         platform: "macos".to_owned(),
         name: folder.clone(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: paths::run_root(root).join(folder).display().to_string(),
@@ -190,7 +190,7 @@ fn local_sandbox(root: &Path, name: &str, machine: &str, process: LocalProcess) 
             ("project", t("shop/api")),
             ("machine", t(machine)),
             ("id", t(name)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -428,25 +428,28 @@ fn call_err(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> (String, Stri
 #[test]
 fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     let _turn = serial();
-    let home = tempdir("native");
+    let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
-    machine_record(&home, "native", "native", None);
-    store_record(&home, "native");
+    machine_record(&home, layerfs_home::names::HOST_MACHINE, "host", None);
+    store_record(&home, layerfs_home::names::HOST_MACHINE);
     let (bytes, allocated) = store_files(&home);
-    local_sandbox(&home, "up", "native", me());
-    local_sandbox(&home, "dead", "native", ended());
+    local_sandbox(&home, "up", layerfs_home::names::HOST_MACHINE, me());
+    local_sandbox(&home, "dead", layerfs_home::names::HOST_MACHINE, ended());
     settle(&home);
-    held(&home, "native");
+    held(&home, layerfs_home::names::HOST_MACHINE);
     let _push = pushing(&home);
     // every file, the call log included
     let before = files(&home, false);
     let at = Instant::now();
-    let got = stats(&home, "native").unwrap();
+    let got = stats(&home, layerfs_home::names::HOST_MACHINE).unwrap();
     // the Store's lock and the machine were held throughout
     assert!(at.elapsed() < Duration::from_secs(10), "{:?}", at.elapsed());
     assert_eq!(keys(&got), PARTS, "{got:?}");
-    assert_eq!(got.get_text("machine"), Some("native"));
-    assert_eq!(got.get_text("platform"), Some("native"));
+    assert_eq!(
+        got.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
+    assert_eq!(got.get_text("platform"), Some("host"));
     assert!(is_time(got.get_text("observed_at")), "{got:?}");
     // no worker: its calls run in this process
     assert_eq!(got.get("worker"), Some(&SdkValue::Null));
@@ -478,7 +481,12 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     assert_eq!(items[0].get("started_at"), Some(&SdkValue::Null));
     assert_eq!(got.get("incomplete"), Some(&SdkValue::Bool(false)));
     // the short form: what the machine has and uses, nothing else
-    let short = call(&home, "machine.stats", &[("machine", t("native"))]).unwrap();
+    let short = call(
+        &home,
+        "machine.stats",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    )
+    .unwrap();
     assert_eq!(keys(&short), RESOURCES_SHORT, "{short:?}");
     // nothing changed in the home: no record, lock, lease or call-log line
     assert_eq!(files(&home, false), before, "machine.stats changed a file");
@@ -506,8 +514,8 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
     worker_sandbox(&home, "s1", "box", false);
     worker_sandbox(&home, "s2", "box", false);
     worker_sandbox(&home, "s3", "box", false);
-    local_sandbox(&root, "s1", "native", me());
-    local_sandbox(&root, "s2", "native", ended());
+    local_sandbox(&root, "s1", layerfs_home::names::HOST_MACHINE, me());
+    local_sandbox(&root, "s2", layerfs_home::names::HOST_MACHINE, ended());
     // `s3`: the worker holds no record of it
     settle(&home);
     held(&home, "box");
@@ -622,14 +630,14 @@ fn a_forwarded_sandbox_s_process_is_checked_in_its_machine() {
     // the home reaches the daemon directly: its record holds the forward
     // and no process; the daemon record with the process is the worker's
     worker_sandbox(&home, "s1", "box", true);
-    local_sandbox(&root, "s1", "native", me());
+    local_sandbox(&root, "s1", layerfs_home::names::HOST_MACHINE, me());
     settle(&home);
     let (before, guest) = (files(&home, true), files(&root, false));
     assert_eq!(counts(&stats(&home, "box").unwrap()), "1 of 1: s1=true");
     assert_eq!(files(&home, true), before);
     assert_eq!(files(&root, false), guest);
     // its daemon ended in the machine
-    local_sandbox(&root, "s1", "native", ended());
+    local_sandbox(&root, "s1", layerfs_home::names::HOST_MACHINE, ended());
     assert_eq!(counts(&stats(&home, "box").unwrap()), "0 of 1: s1=false");
     std::fs::remove_dir_all(scratch).unwrap();
 }
@@ -647,7 +655,7 @@ fn a_worker_answers_its_machine_s_space_and_writes_nothing() {
     store_files(&root);
     worker_sandbox(&home, "s1", "box", false);
     worker_sandbox(&home, "s2", "box", false);
-    local_sandbox(&root, "s1", "native", me());
+    local_sandbox(&root, "s1", layerfs_home::names::HOST_MACHINE, me());
     let run = paths::run_root(&root).join("layerfs-0a1b2c3d-s1");
     std::fs::create_dir_all(run.join("overlay").join("upper")).unwrap();
     std::fs::write(run.join("overlay").join("1.sqlite"), vec![3u8; 65_536]).unwrap();

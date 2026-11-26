@@ -62,7 +62,10 @@ fn the_reach_check_finds_the_binding_and_the_project_on_one_session() {
     call(
         &home,
         "store.attach",
-        &[("store", t("pg")), ("machine", t("native"))],
+        &[
+            ("store", t("pg")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ],
     )
     .unwrap();
     // a project record whose project the schema does not hold

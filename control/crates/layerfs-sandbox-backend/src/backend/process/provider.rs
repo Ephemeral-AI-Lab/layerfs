@@ -1,5 +1,5 @@
-//! The macOS native runtime as a concrete backend; no alternate process engine.
-//! Linux has no native provider (#533 O27): its local Sandboxes run in
+//! The macOS process runtime as a concrete backend; no alternate process engine.
+//! Linux has no process provider (#533 O27): its local Sandboxes run in
 //! namespaces.
 use super::sandbox::Sandbox;
 use crate::shared::{Local, LocalPhase};
@@ -10,16 +10,16 @@ use crate::{
 use layerfs_bridge::process::LocalProcess;
 use std::path::Path;
 
-/// Native macOS processes with loopback NFS and the caller's identity.
+/// Process macOS processes with loopback NFS and the caller's identity.
 #[derive(Clone, Debug)]
-pub struct NativeProvider {
+pub struct ProcessProvider {
     local: Local,
 }
-impl NativeProvider {
+impl ProcessProvider {
     /// Selects `root`; nothing is launched.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         Ok(Self {
-            local: Local::native(root)?,
+            local: Local::process(root)?,
         })
     }
     pub fn paths(&self, name: &str) -> Result<crate::shared::LocalPaths, RuntimeError> {
@@ -39,7 +39,7 @@ impl NativeProvider {
         } = request.options
         else {
             return Err(fail(RuntimeError::Unsupported(
-                "native provider requires local launch options",
+                "process provider requires local launch options",
             )));
         };
         command_identity.check().map_err(fail)?;
@@ -50,7 +50,7 @@ impl NativeProvider {
             })
         {
             return Err(fail(RuntimeError::Protocol(
-                "native command identity/environment",
+                "process command identity/environment",
             )));
         }
         let local = self
@@ -76,7 +76,7 @@ impl NativeProvider {
                     },
                     instance: failure
                         .sandbox
-                        .map(|sandbox| Box::new(crate::Sandbox::Native(sandbox))),
+                        .map(|sandbox| Box::new(crate::Sandbox::Process(sandbox))),
                     cause: failure.cause,
                 })
             })
@@ -88,7 +88,7 @@ impl NativeProvider {
     ) -> Result<Sandbox, Box<WireFailure>> {
         let Some(record) = record.local() else {
             return Err(WireFailure::local(RuntimeError::Unsupported(
-                "native provider requires a local record",
+                "process provider requires a local record",
             )));
         };
         let paths = self.paths(&record.name).map_err(WireFailure::local)?;
@@ -107,7 +107,7 @@ impl NativeProvider {
     ) -> Result<Sandbox, Box<WireFailure>> {
         let Some(record) = record.local() else {
             return Err(WireFailure::local(RuntimeError::Unsupported(
-                "native provider requires a local record",
+                "process provider requires a local record",
             )));
         };
         let paths = self.paths(&record.name).map_err(WireFailure::local)?;

@@ -1045,11 +1045,11 @@ fn home_get_answers_in_its_row_s_shape() {
     assert_eq!(keys(tree), ["machines", "stores", "buckets"]);
     // a ready machine and its ready sqlite Store say only what names them
     let native = (list(at(tree, "machines")).iter())
-        .find(|machine| machine.get_text("machine") == Some("native"))
+        .find(|machine| machine.get_text("machine") == Some(layerfs_home::names::HOST_MACHINE))
         .unwrap_or_else(|| panic!("{tree:?}"));
     assert_eq!(
         json::print(native),
-        r#"{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite"}]}"#
+        r#"{"machine":"HOST_MACHINE","platform":"host","stores":[{"store":"shop","engine":"sqlite"}]}"#.replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
     let long = call(&home, "home.get", &[DETAIL, with(&["tree"])]).unwrap();
     let mut top = spelled(&pending, "home.get", at(said, "long"));
@@ -1058,7 +1058,7 @@ fn home_get_answers_in_its_row_s_shape() {
     let tree = at(&long, "tree");
     assert_eq!(keys(tree), texts(at(at(at(said, "with"), "tree"), "keys")));
     let machine = (list(at(tree, "machines")).iter())
-        .find(|machine| machine.get_text("machine") == Some("native"))
+        .find(|machine| machine.get_text("machine") == Some(layerfs_home::names::HOST_MACHINE))
         .unwrap();
     let entry = layerfs_api::find("home.get").unwrap();
     let nodes = entry.section("tree").unwrap().form.unwrap();

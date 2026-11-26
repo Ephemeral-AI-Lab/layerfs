@@ -51,7 +51,10 @@ pub fn list(home: &Path, live: bool) -> Outcome {
 pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
     let answer = layerfs_machine::get(home, name, live, RELATED)?;
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    if live && name.as_str() == "native" && answer.get_text("platform") == Some("native") {
+    if live
+        && name.as_str() == layerfs_home::names::HOST_MACHINE
+        && answer.get_text("platform") == Some("host")
+    {
         return Ok(crate::doctor::host_worker::live(home, answer));
     }
     Ok(answer)

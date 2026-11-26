@@ -140,7 +140,7 @@ fn start_and_stop_a_machine() {
 
     // native answers both at once
     for name in ["machine.start", "machine.stop"] {
-        let native = call(&home, name, "native").unwrap();
+        let native = call(&home, name, layerfs_home::names::HOST_MACHINE).unwrap();
         assert_eq!(json(&native), r#"{"unchanged":true}"#, "{name}");
     }
 

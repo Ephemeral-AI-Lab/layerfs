@@ -13,6 +13,7 @@ use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_home::names::MachineName;
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
 use std::net::TcpListener;
@@ -208,7 +209,7 @@ fn home_records_findings_carry_evidence_and_their_fix() {
         &paths::store_record(&home, "dead"),
         &SdkValue::map([
             ("kind", t("sqlite")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             (
                 "op",
                 SdkValue::map([
@@ -227,7 +228,10 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     std::fs::write(&lease, "1\n").unwrap();
     write_entity(
         &paths::store_record(&home, "partial"),
-        &SdkValue::map([("kind", t("sqlite")), ("machine", t("native"))]),
+        &SdkValue::map([
+            ("kind", t("sqlite")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ]),
     )
     .unwrap();
     let incoming = paths::store_file(&home, "partial").with_file_name("store.sqlite.incoming");
@@ -236,14 +240,18 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     // a Sandbox naming no project, and a machine whose daemon is not there
     write_entity(
         &paths::sandbox_record(&home, "sb"),
-        &SdkValue::map([("name", t("sb")), ("machine", t("native")), ("id", t("sb"))]),
+        &SdkValue::map([
+            ("name", t("sb")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("id", t("sb")),
+        ]),
     )
     .unwrap();
     write_entity(
-        &paths::machine_record(&home, "native"),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
         &SdkValue::map([
-            ("name", t("native")),
-            ("platform", t("native")),
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
             ("daemon", t("/no/such/layerfs-daemon")),
         ]),
     )
@@ -318,10 +326,10 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     let plain = home.join("native-daemon");
     daemon_file(&plain, OURS, 0o644);
     write_entity(
-        &paths::machine_record(&home, "native"),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
         &SdkValue::map([
-            ("name", t("native")),
-            ("platform", t("native")),
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
             ("daemon", t(&plain.display().to_string())),
         ]),
     )
@@ -353,7 +361,10 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     assert_eq!(fix(&plain_vm), format!("chmod +x {}", vm2.display()));
     keys(&plain_vm, &["machine", "path", "executable"]);
     apply(&fix(&plain_vm));
-    let update = format!("layerfs machine update native --daemon {}", ours.display());
+    let update = format!(
+        "layerfs machine update {HOST_MACHINE} --daemon {}",
+        ours.display()
+    );
 
     // only `native` runs this host's daemon: no fix names it for others
     let artifact = found(&report, "home.artifacts", "docker's daemon");
@@ -379,7 +390,10 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     let other = found(&report, "home.native_daemon", "was built from");
     assert_eq!(
         fix(&other),
-        format!("layerfs machine update native --daemon {}", ours.display())
+        format!(
+            "layerfs machine update {HOST_MACHINE} --daemon {}",
+            ours.display()
+        )
     );
     // with no daemon of this build to point at, there is no fix
     std::fs::remove_file(&ours).unwrap();
@@ -400,7 +414,7 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
         fix(&found(
             &report,
             "home.records",
-            "machine native's recorded daemon"
+            "machine {HOST_MACHINE}'s recorded daemon"
         )),
         update
     );

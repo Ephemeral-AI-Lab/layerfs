@@ -17,7 +17,7 @@ fn refusal<T: std::fmt::Debug>(outcome: Result<T, MachineError>) -> String {
 fn built_in_machines_are_never_created_or_removed() {
     let scratch = Scratch::new("adapter-built-in");
     let bundle = scratch.bundle();
-    for kind in [Platform::Native, Platform::Docker] {
+    for kind in [Platform::Host, Platform::Docker] {
         let spec = scratch.spec(kind);
         let name = kind.name();
         assert_eq!(
@@ -31,7 +31,7 @@ fn built_in_machines_are_never_created_or_removed() {
     }
     assert_eq!(
         refusal(machine::copy_out(
-            &scratch.spec(Platform::Native),
+            &scratch.spec(Platform::Host),
             "/x",
             &scratch.path("x")
         )),

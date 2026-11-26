@@ -75,7 +75,7 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
         platform: "mac".to_owned(),
         name: folder.file_name().unwrap().to_str().unwrap().to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -95,9 +95,9 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
             ("v", SdkValue::Int(home::RECORD_VERSION)),
             ("name", t(id)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(id)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -167,7 +167,7 @@ fn the_run_root_sweep_removes_orphans_and_keeps_what_is_owned() {
             ("v", SdkValue::Int(home::RECORD_VERSION)),
             ("name", t("soon")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ]),
     )
     .unwrap();

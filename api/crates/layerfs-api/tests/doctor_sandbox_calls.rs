@@ -63,7 +63,7 @@ fn native_home() -> PathBuf {
         &SdkValue::map([
             ("name", t("s")),
             ("kind", t("sqlite")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("binding", SdkValue::Bytes(vec![1; 16])),
             ("cursor", SdkValue::Bytes(vec![7; 32])),
         ]),
@@ -79,13 +79,13 @@ fn native_home() -> PathBuf {
         &paths::sandbox_record(&home, "sb"),
         &SdkValue::map([
             ("name", t("sb")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("project", t("s/p")),
             ("id", t("sb")),
             (
                 "daemon",
                 SdkValue::map([
-                    ("runtime", t("native")),
+                    ("runtime", t("process")),
                     ("pid", SdkValue::Int(std::process::id().into())),
                     ("start", t(&start.to_string())),
                     ("boot", t(&format!("{boot:032x}"))),

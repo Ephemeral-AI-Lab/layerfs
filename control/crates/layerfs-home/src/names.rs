@@ -18,7 +18,27 @@ const DEVICES: [&str; 22] = [
 /// (its worker container), not a Sandbox backend: since D-8
 /// (layerfs-project#111) its Sandboxes run in namespaces, and the name stays
 /// so existing homes keep their machine record.
-pub const BUILT_IN: [&str; 2] = ["native", "docker"];
+#[cfg(target_os = "macos")]
+pub const HOST_MACHINE: &str = "macos-host";
+/// Linux host machine name on builds without the macOS host.
+#[cfg(not(target_os = "macos"))]
+pub const HOST_MACHINE: &str = "linux-host";
+
+/// The host machine and Docker are built in on supported Unix hosts.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub const BUILT_IN: [&str; 2] = [HOST_MACHINE, "docker"];
+/// Docker is the only built-in machine on other hosts.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub const BUILT_IN: [&str; 1] = ["docker"];
+
+/// Platform recorded for a built-in machine on this operating system.
+pub fn built_in_platform(name: &str) -> Option<&'static str> {
+    match name {
+        HOST_MACHINE if BUILT_IN.contains(&name) => Some("host"),
+        "docker" => Some("docker"),
+        _ => None,
+    }
+}
 
 /// The prefix of every name LayerFS gives outside its records, for the
 /// home with id `home_id`: `layerfs-<home id8>-` before a machine's VM,

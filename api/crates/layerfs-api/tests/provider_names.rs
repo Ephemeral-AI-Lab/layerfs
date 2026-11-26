@@ -155,9 +155,12 @@ fn provider_names_and_their_refusals() {
         .unwrap();
     let worker = format!("layerfs-{id8}-docker");
     assert_eq!(docker.get_text("vm_name"), Some(worker.as_str()));
-    let native = read_record(&paths::machine_record(&fresh, "native"))
-        .unwrap()
-        .unwrap();
+    let native = read_record(&paths::machine_record(
+        &fresh,
+        layerfs_home::names::HOST_MACHINE,
+    ))
+    .unwrap()
+    .unwrap();
     assert_eq!(native.get("vm_name"), None, "native has no provider name");
     write_record(
         &paths::machine_record(&fresh, "docker"),

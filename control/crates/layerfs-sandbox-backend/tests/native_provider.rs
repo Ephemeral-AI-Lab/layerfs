@@ -1,7 +1,7 @@
 //! Real native runtime lifecycle and partial launch custody through the Runtime enum.
 //! Native is macOS only (#533 O27).
 #![cfg(target_os = "macos")]
-use layerfs_sandbox_backend::native::NativeProvider;
+use layerfs_sandbox_backend::process::ProcessProvider;
 use layerfs_sandbox_backend::{
     CommandIdentity, Image, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
     SandboxRecord,
@@ -10,7 +10,7 @@ use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
 /// The native runtime this host offers, over `root`.
 fn native(root: &std::path::Path) -> Runtime {
-    Runtime::Native(NativeProvider::new(root).unwrap())
+    Runtime::Process(ProcessProvider::new(root).unwrap())
 }
 
 #[test]

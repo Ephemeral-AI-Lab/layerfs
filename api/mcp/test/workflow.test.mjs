@@ -10,6 +10,7 @@ import { ToolSchema } from "@modelcontextprotocol/sdk/types.js";
 import { tools as toolsOfProfile } from "../src/profiles.js";
 import { call, connect, value, workspace } from "./helpers.mjs";
 
+const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const calls = (profile) => toolsOfProfile(table, profile).length;
 const names = (profile) => toolsOfProfile(table, profile).map((spec) => `${spec.family}_${spec.call}`);
 
@@ -126,7 +127,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     assert.deepEqual(Object.keys(await run("home_get", {})), ["home", "state", "version", "generation"]);
     const long = await run("home_get", { detail: true, with: ["tree"] });
     assert.deepEqual(Object.keys(long).slice(-4), ["bundle", "daemon", "cache", "tree"]);
-    assert.ok(long.tree.machines.some((machine) => machine.machine === "native" && machine.stores.some((held) => held.store === "shop")));
+    assert.ok(long.tree.machines.some((machine) => machine.machine === hostMachine && machine.stores.some((held) => held.store === "shop")));
     // a section the entry does not list is the library's refusal, in its shape
     const unlisted = (await call(server.client, "home_get", { with: ["live"] })).result;
     assert.equal(unlisted.isError, true);

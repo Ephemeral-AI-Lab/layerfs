@@ -38,7 +38,7 @@ fn fields(name: &str) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text("sqlite")),
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("binding", SdkValue::Bytes(BINDING.to_vec())),
         ("cursor", SdkValue::Bytes(vec![9; 32])),
     ])
@@ -109,7 +109,10 @@ fn a_missing_file_fails_with_remove_only_when_there_is_no_backup() {
         "{found:?}"
     );
     assert_eq!(ev_text(&found, "reason"), Some("missing"));
-    assert_eq!(ev_text(&found, "machine"), Some("native"));
+    assert_eq!(
+        ev_text(&found, "machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     // with a backup link there is no valid in-place restore command either:
     // backup restore protects the recorded Store from replacement it cannot
     // prove unchanged

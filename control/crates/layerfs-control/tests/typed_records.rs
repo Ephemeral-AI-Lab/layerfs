@@ -28,7 +28,7 @@ fn a_project_answers_its_store_engine_machine_and_creation() {
     );
     assert_eq!(
         print_answer(project.answer(&sqlite)),
-        r#"{"project":"shop/api","store":"shop","engine":"sqlite","machine":"native","created_at":"1970-01-01T00:00:07Z"}"#
+        r#"{"project":"shop/api","store":"shop","engine":"sqlite","machine":"HOST_MACHINE","created_at":"1970-01-01T00:00:07Z"}"#.replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
     let placed = StoreRecord::from_record("shop", value(r#"{"kind":"sqlite","machine":"box"}"#));
     let missing = ProjectRecord::from_record("shop", "web", SdkValue::Null);
@@ -63,7 +63,7 @@ fn a_bucket_shows_its_record() {
 fn a_sandbox_shows_its_record() {
     use layerfs_home::state::State;
     use layerfs_sandbox::record::SandboxRecord;
-    let text = r#"{"name":"t1","project":"shop/api","machine":"native","created":3,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
+    let text = r#"{"name":"t1","project":"shop/api","machine":"macos-host","created":3,"id":"t1","platform":"macos","runtime":"process","image":null,"backend":"process","route":"nfs"}"#;
     let record = SandboxRecord::from_record("t1", value(text));
     let read = |record: &SandboxRecord| {
         (
@@ -81,11 +81,11 @@ fn a_sandbox_shows_its_record() {
     let shown = (
         "t1".to_owned(),
         Some("shop/api".to_owned()),
-        "native".to_owned(),
+        "macos-host".to_owned(),
         Some("t1".to_owned()),
         Some("macos".to_owned()),
         None,
-        Some("native".to_owned()),
+        Some("process".to_owned()),
         Some("nfs".to_owned()),
         Some(3),
     );
@@ -149,7 +149,7 @@ mod machines {
         // a `failed` word with no reason is no 2.0 record: it reads stopped
         assert_eq!(dev("failed").recorded(0), State::Stopped);
         assert_eq!(
-            machine("native", r#"{"platform":"native"}"#).recorded(0),
+            machine(layerfs_home::names::HOST_MACHINE, r#"{"platform":"host"}"#).recorded(0),
             State::Ready
         );
         // what a live read or a start found stays until it changes
@@ -191,7 +191,7 @@ mod machines {
         let unknown = machine("x", r#"{"platform":"vmware"}"#);
         assert_eq!(unknown.platform().unwrap_err().code, "Failed");
         // a machine a Store or Sandbox names with no record of its own
-        assert_eq!(unrecorded("native"), State::Ready);
+        assert_eq!(unrecorded(layerfs_home::names::HOST_MACHINE), State::Ready);
         assert_eq!(unrecorded("docker"), State::Stopped);
         assert_eq!(broken(&unrecorded("gone")).0, Reason::Missing);
     }
@@ -266,7 +266,7 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
         StoreRecord::from_record("s", value(&text))
     };
     assert_eq!(
-        recorded(&home, &on("native", ""), machines).unwrap(),
+        recorded(&home, &on(layerfs_home::names::HOST_MACHINE, ""), machines).unwrap(),
         State::Ready
     );
     // a machine the home does not record blocks the Store, naming it
@@ -276,7 +276,12 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     );
     // what a live read found and wrote is answered from the record
     assert_eq!(
-        recorded(&home, &on("native", r#","broken":"missing""#), machines).unwrap(),
+        recorded(
+            &home,
+            &on(layerfs_home::names::HOST_MACHINE, r#","broken":"missing""#),
+            machines
+        )
+        .unwrap(),
         State::broken(Reason::Missing, Some("layerfs store remove s"))
     );
     // a missing file with a backup link has no in-place restore fix:
@@ -286,7 +291,7 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
         recorded(
             &home,
             &on(
-                "native",
+                layerfs_home::names::HOST_MACHINE,
                 r#","broken":"missing","backups":{"b1":{"file":"s","heads":null}}"#
             ),
             machines
@@ -297,7 +302,15 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     // an unreachable server has no fix either: no command makes it answer,
     // and re-running the doctor only observes it again
     assert_eq!(
-        recorded(&home, &on("native", r#","broken":"unreachable""#), machines).unwrap(),
+        recorded(
+            &home,
+            &on(
+                layerfs_home::names::HOST_MACHINE,
+                r#","broken":"unreachable""#
+            ),
+            machines
+        )
+        .unwrap(),
         State::broken(Reason::Unreachable, None)
     );
     // a live operation (this process) wins over everything, named by its

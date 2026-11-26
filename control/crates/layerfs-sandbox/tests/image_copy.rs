@@ -61,7 +61,7 @@ fn run(
     let out = load(
         &standin.docker(),
         &mut events,
-        &mut Target::local(home, "native"),
+        &mut Target::local(home, layerfs_home::names::HOST_MACHINE),
         None,
         image,
     );
@@ -161,7 +161,7 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
     let found = load(
         &none,
         &mut Events::new(&mut sink),
-        &mut Target::local(&home, "native"),
+        &mut Target::local(&home, layerfs_home::names::HOST_MACHINE),
         None,
         "demo/pg:17",
     )
@@ -191,7 +191,7 @@ fn refusals_carry_their_detail() {
     let error = load(
         &none,
         &mut Events::new(&mut sink),
-        &mut Target::local(&home, "native"),
+        &mut Target::local(&home, layerfs_home::names::HOST_MACHINE),
         None,
         "demo/pg:17",
     )

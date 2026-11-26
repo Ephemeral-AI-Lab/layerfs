@@ -176,8 +176,8 @@ pub fn list(home: &Path, live: bool, related: Related) -> Outcome {
 fn unreadable(name: &str, refusal: &SdkRefusal) -> SdkValue {
     let state = crate::state::unreadable(name);
     // a built-in machine's platform is its name; another's is in the record
-    let platform = layerfs_home::names::BUILT_IN.contains(&name);
-    let mut fields = vec![("platform", SdkValue::opt_text(platform.then_some(name)))];
+    let platform = layerfs_home::names::built_in_platform(name);
+    let mut fields = vec![("platform", SdkValue::opt_text(platform))];
     fields.extend(state.fields());
     fields.extend([
         ("machine", SdkValue::text(name)),

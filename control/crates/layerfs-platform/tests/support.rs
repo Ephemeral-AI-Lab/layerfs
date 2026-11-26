@@ -51,7 +51,7 @@ fn every_refusal_is_the_rows_reason() {
 fn a_worker_log_is_supported_where_this_build_starts_the_worker() {
     let log = |platform, host| support(platform, host).supports().log;
     for host in HostOs::NAMED.into_iter().chain([HostOs::Other]) {
-        assert!(!log(Platform::Native, host), "native on {host:?}");
+        assert!(!log(Platform::Host, host), "native on {host:?}");
         for row in platforms(host) {
             let worker = row.sqlite == Some(CallSite::Worker);
             let allowed = sandbox_allowed(row.platform, host, StoreKind::Sqlite).is_ok();
@@ -67,7 +67,7 @@ fn a_worker_log_is_supported_where_this_build_starts_the_worker() {
     assert!(!log(Platform::Lima, HostOs::Linux));
     assert!(!log(Platform::AppleContainer, HostOs::Linux));
     // Windows `native` names a worker as its call site, and still has none
-    let windows = support(Platform::Native, HostOs::Windows);
+    let windows = support(Platform::Host, HostOs::Windows);
     assert_eq!(windows.sqlite, Some(CallSite::Worker));
     assert!(!windows.supports().log);
 }
@@ -79,14 +79,14 @@ fn a_worker_log_is_supported_where_this_build_starts_the_worker() {
 fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     let allowed = |p, h| sandbox_allowed(p, h, StoreKind::Postgresql);
     for host in [HostOs::Macos, HostOs::Linux] {
-        assert_eq!(allowed(Platform::Native, host), Ok(()));
+        assert_eq!(allowed(Platform::Host, host), Ok(()));
         assert_eq!(allowed(Platform::Docker, host), Ok(()));
     }
     for platform in [Platform::Lima, Platform::AppleContainer] {
         assert_eq!(allowed(platform, HostOs::Macos), Ok(()), "{platform:?}");
     }
     assert_eq!(
-        allowed(Platform::Native, HostOs::Windows),
+        allowed(Platform::Host, HostOs::Windows),
         Err("no Sandbox backend on Windows")
     );
     assert_eq!(
@@ -111,11 +111,11 @@ fn rows_carry_the_profile_on_hosts_it_is_on() {
     assert_eq!(lima.sqlite, Some(CallSite::Worker));
     assert_eq!(lima.options, Platform::Lima.profile().options);
     assert!(lima.description.starts_with("a Lima VM (vz); "));
-    let native = support(Platform::Native, HostOs::Macos);
-    assert_eq!(native.backend.map(Backend::stored_name), Some("native"));
+    let native = support(Platform::Host, HostOs::Macos);
+    assert_eq!(native.backend.map(Backend::stored_name), Some("process"));
     assert_eq!(native.kernel, Some(KernelRoute::Nfs));
     assert_eq!(native.sqlite, Some(CallSite::InProcess));
-    let windows = support(Platform::Native, HostOs::Windows);
+    let windows = support(Platform::Host, HostOs::Windows);
     assert_eq!(
         (windows.backend, windows.kernel, windows.sqlite),
         (None, None, Some(CallSite::Worker))

@@ -85,7 +85,7 @@ fn sandbox(root: &Path, name: &str, directory: &Path, uid: u32) {
         platform: "macos".to_owned(),
         name: (directory.file_name().unwrap().to_string_lossy()).into_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid,
         gid: home::flock::egid(),
         directory: directory.display().to_string(),
@@ -100,9 +100,9 @@ fn sandbox(root: &Path, name: &str, directory: &Path, uid: u32) {
         &SdkValue::map([
             ("name", t(name)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(name)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )

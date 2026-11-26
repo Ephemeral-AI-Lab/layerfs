@@ -21,7 +21,11 @@ impl Fixture {
         let folder = PathBuf::from("/tmp").join(format!("lfw-{}", hex(&random().unwrap()[..8])));
         fs::DirBuilder::new().mode(0o700).create(&folder).unwrap();
         home::open(&folder).unwrap();
-        home::private_dir(&home::paths::machine_dir(&folder, "native")).unwrap();
+        home::private_dir(&home::paths::machine_dir(
+            &folder,
+            layerfs_home::names::HOST_MACHINE,
+        ))
+        .unwrap();
         Self(folder)
     }
 
@@ -159,7 +163,7 @@ fn host_rejects_overlength_and_attachment_headers_without_reading_a_body() {
 fn cleanup_refuses_a_replaced_native_machine_directory() {
     let fixture = Fixture::new();
     let paths = fixture.paths();
-    let native = home::paths::machine_dir(&paths.home, "native");
+    let native = home::paths::machine_dir(&paths.home, layerfs_home::names::HOST_MACHINE);
     let old = paths.try_hold().unwrap().unwrap();
     let old_socket = paths.bind(true, &old).unwrap();
 

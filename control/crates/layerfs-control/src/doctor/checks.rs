@@ -30,7 +30,7 @@ fn built_in(machine: &str) -> bool {
 /// `native` runs this host's daemon, and only a daemon stamped with
 /// `build`'s commit is named (`None`: no daemon of this build is known).
 pub(super) fn daemon_fix(machine: &str, build: Build<'_>) -> Option<String> {
-    let own = (machine == "native")
+    let own = (machine == layerfs_home::names::HOST_MACHINE)
         .then(|| crate::home::own_daemon(build))
         .flatten()?;
     Some(format!(

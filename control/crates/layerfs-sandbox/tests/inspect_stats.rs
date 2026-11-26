@@ -109,7 +109,7 @@ fn sandbox(root: &Path, name: &str, machine: &str, daemon: Option<&DaemonRecord>
         ("project", t("shop/api")),
         ("machine", t(machine)),
         ("id", t(name)),
-        ("runtime", t("native")),
+        ("runtime", t("process")),
     ];
     fields.extend(daemon.map(|daemon| ("daemon", daemon.to_record())));
     let record = SdkValue::Map(
@@ -137,7 +137,7 @@ fn store_record(home: &Path, name: &str, machine: &str) {
 }
 
 fn native() -> MachineName {
-    MachineName::parse("native").unwrap()
+    MachineName::parse(layerfs_home::names::HOST_MACHINE).unwrap()
 }
 
 fn now() -> i64 {
@@ -170,7 +170,7 @@ fn refused(outcome: Result<SdkValue, SdkRefusal>) -> String {
 #[test]
 fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
     let run = Path::new("/nowhere");
-    let live = daemon(me(), "native", run);
+    let live = daemon(me(), "process", run);
     assert_eq!(process::live(&live), Ok(true));
     let shown = process::shown(&live, boot());
     assert_eq!(shown.get_int("pid"), Some(i64::from(std::process::id())));
@@ -185,7 +185,7 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
 
     // a process that ended, and its id under another start time
     let gone = ended();
-    let record = daemon(gone, "native", run);
+    let record = daemon(gone, layerfs_home::names::HOST_MACHINE, run);
     assert_eq!(process::live(&record), Ok(false));
     let shown = process::shown(&record, boot());
     assert_eq!(shown.get_int("pid"), Some(i64::from(gone.pid)));
@@ -194,12 +194,12 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
         start: me().start + 1,
         ..me()
     };
-    assert_eq!(process::live(&daemon(reused, "native", run)), Ok(false));
+    assert_eq!(process::live(&daemon(reused, "process", run)), Ok(false));
     let rebooted = LocalProcess {
         boot: Some(me().boot.unwrap() ^ 1),
         ..me()
     };
-    assert_eq!(process::live(&daemon(rebooted, "native", run)), Ok(false));
+    assert_eq!(process::live(&daemon(rebooted, "process", run)), Ok(false));
 
     // a record that names no process
     let none = DaemonRecord::from_record(&SdkValue::map([("name", t("lfs-x-s1"))]));
@@ -214,7 +214,7 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
 fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
     let root = scratch("cgroup");
     let id = "ab".repeat(32);
-    let host = daemon(me(), "native", &root);
+    let host = daemon(me(), "process", &root);
     let spaced = daemon(me(), "namespaces", &root);
     let print = |(usage, reason): (SdkValue, Option<&'static str>)| {
         (layerfs_home::json::print(&usage), reason)
@@ -349,22 +349,33 @@ fn machine_stats_checks_each_daemon_record_on_the_side_that_runs_it() {
     let _turn = serial();
     let home = new_home("live");
     let run = paths::run_root(&home);
-    sandbox(&home, "up", "native", Some(&daemon(me(), "native", &run)));
+    sandbox(&home, "up", "process", Some(&daemon(me(), "process", &run)));
     sandbox(
         &home,
         "dead",
-        "native",
-        Some(&daemon(ended(), "native", &run)),
+        layerfs_home::names::HOST_MACHINE,
+        Some(&daemon(ended(), "process", &run)),
     );
-    sandbox(&home, "new", "native", None);
+    sandbox(&home, "new", layerfs_home::names::HOST_MACHINE, None);
     let no_pid = DaemonRecord::from_record(&SdkValue::map([("name", t("lfs-x-old"))]));
-    sandbox(&home, "old", "native", Some(&no_pid));
+    sandbox(
+        &home,
+        "old",
+        layerfs_home::names::HOST_MACHINE,
+        Some(&no_pid),
+    );
     std::fs::create_dir_all(paths::sandbox_dir(&home, "bad")).unwrap();
     std::fs::write(paths::sandbox_record(&home, "bad"), "{ not json").unwrap();
 
     let asked = ["up", "dead", "new", "nobody", "old", "bad"];
     let request = SdkValue::map([("sandboxes", names(&asked))]);
-    let answer = inspect::ask(&home, "native", "machine_stats", request).unwrap();
+    let answer = inspect::ask(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "machine_stats",
+        request,
+    )
+    .unwrap();
     let items = listed(answer.get("sandboxes").unwrap(), "items");
     let shown: Vec<_> = (items.iter())
         .map(|item| {
@@ -395,12 +406,22 @@ fn machine_stats_checks_each_daemon_record_on_the_side_that_runs_it() {
         SdkValue::List(vec![t("up"); 4097]),
     ] {
         let request = SdkValue::map([("sandboxes", sandboxes)]);
-        let asked = inspect::ask(&home, "native", "machine_stats", request);
+        let asked = inspect::ask(
+            &home,
+            layerfs_home::names::HOST_MACHINE,
+            "machine_stats",
+            request,
+        );
         assert_eq!(refused(asked), "InvalidInput");
     }
     // the kind `sandbox.list`'s live option asked is gone with it
     let request = SdkValue::map([("sandboxes", names(&["up"]))]);
-    let asked = inspect::ask(&home, "native", "sandboxes_live", request);
+    let asked = inspect::ask(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "sandboxes_live",
+        request,
+    );
     assert_eq!(refused(asked), "InvalidInput");
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -408,14 +429,14 @@ fn machine_stats_checks_each_daemon_record_on_the_side_that_runs_it() {
 #[test]
 fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     let _turn = serial();
-    let home = new_home("native");
+    let home = new_home(layerfs_home::names::HOST_MACHINE);
     let run = paths::run_root(&home);
     // Stores: one on this machine with a write-ahead log, one sparse and
     // large, one recorded with no file, one on another machine
     for (store, machine) in [
-        ("shop", "native"),
-        ("big", "native"),
-        ("empty", "native"),
+        ("shop", layerfs_home::names::HOST_MACHINE),
+        ("big", layerfs_home::names::HOST_MACHINE),
+        ("empty", layerfs_home::names::HOST_MACHINE),
         ("far", "box"),
     ] {
         store_record(&home, store, machine);
@@ -434,14 +455,14 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     drop(sparse);
     std::fs::write(paths::store_file(&home, "far"), vec![3u8; 4_096]).unwrap();
     // Sandboxes: one live and one dead here, one on another machine
-    sandbox(&home, "up", "native", Some(&daemon(me(), "native", &run)));
+    sandbox(&home, "up", "process", Some(&daemon(me(), "process", &run)));
     sandbox(
         &home,
         "dead",
-        "native",
-        Some(&daemon(ended(), "native", &run)),
+        layerfs_home::names::HOST_MACHINE,
+        Some(&daemon(ended(), "process", &run)),
     );
-    sandbox(&home, "far", "box", Some(&daemon(me(), "native", &run)));
+    sandbox(&home, "far", "box", Some(&daemon(me(), "process", &run)));
 
     let before = now();
     let stats = inspect::machine_stats(&home, &native()).unwrap();
@@ -463,8 +484,11 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
             "complete"
         ]
     );
-    assert_eq!(stats.get_text("machine"), Some("native"));
-    assert_eq!(stats.get_text("platform"), Some("native"));
+    assert_eq!(
+        stats.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
+    assert_eq!(stats.get_text("platform"), Some("host"));
     let at = stats.get_int("observed_at").unwrap();
     assert!(at >= before && at <= now(), "{at}");
     assert_eq!(stats.get("worker"), Some(&SdkValue::Null));
@@ -578,7 +602,13 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
         ("sandboxes", names(&["up"])),
         ("worker", SdkValue::map([("pid", SdkValue::Int(1))])),
     ]);
-    let raw = inspect::ask(&home, "native", "machine_stats", request.clone()).unwrap();
+    let raw = inspect::ask(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "machine_stats",
+        request.clone(),
+    )
+    .unwrap();
     assert_eq!(raw.get("worker"), Some(&SdkValue::Null), "{raw:?}");
     assert!(raw.get("resources").unwrap().get("scope").is_none());
     assert_eq!(listed(&raw, "stores").len(), 1);
@@ -596,7 +626,12 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     // names that are none are refused before anything is read
     for (field, bad) in [("stores", "../shop"), ("sandboxes", "a/b")] {
         let request = SdkValue::map([(field, names(&[bad]))]);
-        let asked = inspect::ask(&home, "native", "machine_stats", request);
+        let asked = inspect::ask(
+            &home,
+            layerfs_home::names::HOST_MACHINE,
+            "machine_stats",
+            request,
+        );
         assert_eq!(refused(asked), "InvalidInput", "{field}");
     }
     for file in [&shop, &wal] {
@@ -610,9 +645,9 @@ fn a_request_past_its_soft_budget_answers_what_it_has_and_says_so() {
     let _turn = serial();
     let home = new_home("deadline");
     let run = paths::run_root(&home);
-    store_record(&home, "shop", "native");
+    store_record(&home, "shop", layerfs_home::names::HOST_MACHINE);
     std::fs::write(paths::store_file(&home, "shop"), vec![1u8; 4_096]).unwrap();
-    sandbox(&home, "up", "native", Some(&daemon(me(), "native", &run)));
+    sandbox(&home, "up", "process", Some(&daemon(me(), "process", &run)));
     let late = |kind: &'static str| {
         let (root, started) = (home.clone(), Instant::now());
         let answer = inspect::admit(move |budget| {
@@ -666,16 +701,21 @@ fn fifty_sandboxes_and_forty_stores_answer_inside_the_soft_budget() {
     let home = new_home("many");
     let run = paths::run_root(&home);
     let (up, dead) = (
-        daemon(me(), "native", &run),
-        daemon(ended(), "native", &run),
+        daemon(me(), "process", &run),
+        daemon(ended(), "process", &run),
     );
     for n in 0..50 {
         let daemon = if n % 5 == 0 { &dead } else { &up };
-        sandbox(&home, &format!("s{n}"), "native", Some(daemon));
+        sandbox(
+            &home,
+            &format!("s{n}"),
+            layerfs_home::names::HOST_MACHINE,
+            Some(daemon),
+        );
     }
     for n in 0..40 {
         let store = format!("store{n}");
-        store_record(&home, &store, "native");
+        store_record(&home, &store, layerfs_home::names::HOST_MACHINE);
         let file = std::fs::File::create(paths::store_file(&home, &store)).unwrap();
         file.set_len(1 << 30).unwrap();
     }

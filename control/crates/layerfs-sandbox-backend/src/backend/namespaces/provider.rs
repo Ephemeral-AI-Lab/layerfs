@@ -1,5 +1,5 @@
 //! The Linux namespace runtime as a concrete backend: the same local runtime
-//! root and daemon control as the native one, with each Sandbox's daemon in
+//! root and daemon control as the process one, with each Sandbox's daemon in
 //! its own mount, PID and IPC namespaces and its own cgroup, and its commands
 //! entering them as a nonroot identity. The VM that holds this kernel is the
 //! boundary; the namespaces keep Sandboxes on one Store out of each other.

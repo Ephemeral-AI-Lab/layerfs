@@ -61,7 +61,7 @@ pub(crate) fn log_start() -> String {
 /// `layerfs-worker`, and the root then gives its children the memory and
 /// pids controllers it lists and does not give yet, in one write. A cgroup
 /// that holds processes cannot give controllers; only the real root is
-/// exempt, and there (Lima, native Linux) nothing is moved or written.
+/// exempt, and there (Lima, host Linux) nothing is moved or written.
 /// Idempotent: a second start finds the leaf and the controllers there. It
 /// never sets a limit; a failed write leaves one line in the worker's log
 /// and the worker starts as before, its Sandboxes' memory and process

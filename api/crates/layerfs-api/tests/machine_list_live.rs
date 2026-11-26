@@ -193,7 +193,13 @@ fn list_and_get_answer_the_records_then_the_live_state() {
     // records only: what the records say, no probe and no write
     let moved = generation(&home);
     let list = call(&home, "machine.list", &[], false);
-    for name in ["quiet", "slow", "fwd", "up", "native"] {
+    for name in [
+        "quiet",
+        "slow",
+        "fwd",
+        "up",
+        layerfs_home::names::HOST_MACHINE,
+    ] {
         let machine = listed(&list, name);
         assert_eq!(machine.get_text("state"), Some("ready"), "{machine:?}");
         assert_eq!(machine.get("observed_at"), Some(&SdkValue::Null));
@@ -219,7 +225,10 @@ fn list_and_get_answer_the_records_then_the_live_state() {
         took >= Duration::from_secs(9) && took < Duration::from_secs(20),
         "the list waited {took:?}"
     );
-    assert_eq!(listed(&list, "native").get_text("state"), Some("ready"));
+    assert_eq!(
+        listed(&list, layerfs_home::names::HOST_MACHINE).get_text("state"),
+        Some("ready")
+    );
     let forward = listed(&list, "fwd");
     assert_eq!(forward.get_text("state"), Some("broken"), "{forward:?}");
     assert_eq!(forward.get_text("reason"), Some("not_answering"));
@@ -348,15 +357,20 @@ fn list_and_get_answer_the_records_then_the_live_state() {
 /// form shows the one value it has.
 #[test]
 fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
-    let home = tempdir("native");
-    let got = call(&home, "machine.get", &[("machine", "native")], true);
+    let home = tempdir(layerfs_home::names::HOST_MACHINE);
+    let got = call(
+        &home,
+        "machine.get",
+        &[("machine", layerfs_home::names::HOST_MACHINE)],
+        true,
+    );
     assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
     let live = got.get("live").unwrap();
     assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{live:?}");
     assert_eq!(live.get("tool_version"), Some(&SdkValue::Null));
     assert_eq!(live.get("worker"), Some(&SdkValue::Null));
     let args = SdkValue::map([
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("with", SdkValue::List(vec![SdkValue::text("live")])),
     ]);
     let short = layerfs_api::call(Some(&home), "machine.get", args, &mut |_| {}).unwrap();

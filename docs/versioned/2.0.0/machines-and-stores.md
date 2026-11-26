@@ -12,6 +12,8 @@ Storage is separate from compute (D1). A **machine** is one kernel where
 Sandboxes run. A **Store** holds projects and their history. A **backup** is
 a copy of a sqlite Store in a bucket.
 
+The built-in machine is `macos-host` on macOS and `linux-host` on Linux. Its platform is `host`. macOS Sandboxes use the `process` backend and Linux Sandboxes use `namespaces`. The examples below use a macOS home.
+
 ## Machines
 
 Firecracker, Microsandbox and SSH machines were removed in 2.0; see
@@ -20,7 +22,7 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
 
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
-| `native` | one, built in | — | macOS: host processes with a loopback NFS mount (each sqlite Store's directory must be owned by this user and private, mode `0700`). Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
+| `host` | `macos-host` or `linux-host`, built in | — | macOS: host processes with a loopback NFS mount (each sqlite Store's directory must be owned by this user and private, mode `0700`). Linux: namespaces (needs root). Windows has only the built-in Docker machine | — |
 | `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image or an image copied from the host's Docker (`--image`). The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
@@ -42,7 +44,7 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   (such as `tool:limactl`), the tool's `version` and the options `machine
   create` takes; the same rows as `control/SUPPORT.json`. See
   [`machine`](calls.md#machine-14) for every key.
-- `native` and `docker` are never created or removed.
+- The host machine and `docker` are built in.
 - Every namespaces Sandbox's commands have a network of their own: two
   Sandboxes can both listen on `127.0.0.1:3000`, a Sandbox reaches the
   internet, this computer and the machine's services as before, and it
@@ -53,14 +55,14 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   guarded by their secrets, which no command can read (owner to confirm).
   The daemon stays on the machine's network and resolves names with the
   machine's own resolver file, so a PostgreSQL Store URL is dialled as
-  before. On a Linux host (`native`,
+  before. On a Linux host (`linux-host`,
   `docker` on a Linux Engine) LayerFS adds the firewall table
   `inet layerfs` and one `lfs<id>` link per Sandbox to this host's network,
   never changes `net.ipv4.ip_forward`, and refuses `sandbox.create`
   (`Unavailable`, with the fix) when forwarding is off, when another
   table's forward chain would drop the Sandboxes' traffic (a Docker host's
   `FORWARD` policy, ufw), or when the resolver names no IPv4 server a
-  Sandbox reaches (only loopback or IPv6 ones, with no IPv4 upstream). macOS `native` Sandboxes keep this computer's network
+  Sandbox reaches (only loopback or IPv6 ones, with no IPv4 upstream). macOS `macos-host` Sandboxes keep this computer's network
   ([Backends](../../architecture/control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 ### Removed platforms: Firecracker, Microsandbox and SSH
@@ -118,7 +120,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   `layerfs-352-runtime:node24-https-apt-20261024` (image digest
   `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
-  `--image` (and `machine update native --image`) chooses another. On
+  `--image` (and `machine update macos-host --image`) chooses another. On
   `docker` the recorded `image` is only its worker container's image; its
   Sandboxes' root is the bundle's `sandbox-image.tar` (D-8) unless
   `sandbox create --image` names another. Any local Docker image (a
@@ -173,7 +175,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   that is gone after a known outcome holds nothing.
 - A remove is refused only while another process's `op`
   lives: it is the call that clears an `unresolved` machine.
-- `machine update native` and `machine update docker` set `image`,
+- `machine update macos-host` and `machine update docker` set `image`,
   `docker` (the Docker socket) and `daemon` (the daemon their Sandboxes
   run: an absolute path to a file, replacing what was recorded;
   `machine get` shows it); `wsl` is a Windows host's setting. Any
@@ -242,7 +244,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 ### Routes
 
 - Calls on a sqlite Store on a machine whose calls run in the caller's
-  process (`native` on macOS and Linux; on Windows `native` has a worker),
+  process (`macos-host` on macOS and `linux-host` on Linux; on Windows `native` has a worker),
   and calls on a PostgreSQL Store, run in the caller's process.
 - Calls on a sqlite Store on any other machine go to that machine's worker,
   behind a secret, over a forwarded loopback port. The caller sends the
@@ -326,7 +328,7 @@ profile label is `normal` (a record that says `disposable` reads as `normal`). A
 ```console
 $ layerfs store create shop
 {"ok":true}
-$ layerfs store move shop native
+$ layerfs store move shop macos-host
 {"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
 ```
 
@@ -335,7 +337,7 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
 `apple-container`, before the two became `store move`; not rerun.)
 
 - `store create <store>` makes an empty sqlite Store on the machine whose
-  calls run in this process (`native` on macOS and Linux), at
+  calls run in this process (`macos-host` on macOS and `linux-host` on Linux), at
   `store/<store>/store.sqlite`; `--machine M` makes it on a running machine
   directly, through its worker. On a host with no such machine (Windows) a
   create without `--machine` is `Unsupported`. `store get` and `store list` answer its
@@ -360,13 +362,13 @@ records close and checkpoint outcomes in
 `log/worker-close.jsonl`.
 
 - `store move <store> <machine>` moves the file between the machine whose
-  calls run in this process (`native` on macOS and Linux) and another
+  calls run in this process (`macos-host` on macOS and `linux-host` on Linux) and another
   machine: from `native` to a machine, or from its machine back to `native`
   (#536 H1). A Store on a machine moves to another machine by `store move
   <store> native` first; asked directly it is `InvalidInput`, naming that
   call. On a host with no such machine every move is `Unsupported`. The phases are `check`, `snapshot`, `send`, `verify`, `install`,
   `record` and `retire`, once each. The bytes pass through the calling
-  process in pieces. Retire deletes the source's copy: on `native` (in this process) the file
+  process in pieces. Retire deletes the source's copy: on the host machine (in this process) the file
   with its `-wal`, `-shm` and any partial copy (the folder keeps the home's
   records); on another machine the Store's whole folder under its worker's
   root (a symlink in it is removed, never followed). Short: `{moved_bytes}`.
@@ -455,7 +457,7 @@ for this manual's [`store`](calls.md#store-11) section against a local
 ```console
 $ printf '%s' "$PG_PASSWORD" | layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --user postgres --password-stdin
 {"ok":true}
-$ layerfs store attach shop-pg --machine native
+$ layerfs store attach shop-pg --machine macos-host
 {"outcome":"attached","latency_ms":1}
 $ layerfs project init shop-pg/load ./load        # not run here
 $ layerfs store attach shop-pg --machine build-vm  # not run: needs a reachable address
@@ -643,13 +645,13 @@ layerfs backup doctor lab --full
   machine), `hash`, `upload`. Short: `{file, size}`.
 - **`backup restore <bucket> <file> <store>`.** It downloads the file,
   verifies it and installs it as the sqlite Store `store` on the machine
-  whose calls run in this process (`native` on macOS and Linux;
+  whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux;
   `Unsupported` on a host with none): a new Store, or one that replaces an
   idle Store there. Replacing a Store
   that changed since its last backup or restore through that bucket is
   `Conflict`; one that a process holds open, or one of whose projects has a
   running Sandbox, is `InUse`. A Store on another machine is `Unsupported`
-  (`store move <store> native` first). Progress: `check`, `download`,
+  (`store move <store> macos-host` first). Progress: `check`, `download`,
   `verify`, `install`. Short: `{projects}`, or `{"ok":true}` for an empty
   Store.
 - A backup or restore is the Store's `op` (`backup`, `restore`), so every
@@ -699,13 +701,13 @@ reported as `Unknown` with a request ID. The CLI makes one attempt.
 Two installations sharing a home may need to wait for an existing worker's
 idle exit before the other installation can use that home worker.
 
-`layerfs machine get native --with live` reports `live.machine_state`
+`layerfs machine get macos-host --with live` reports `live.machine_state`
 and `live.worker.health` separately. The host machine is enabled at this
 stage. The probe reports an absent, stale, unreachable, ready or draining
 endpoint, with worker identity and activity when available. Before a
 worker publishes its socket, the probe can observe only an absent endpoint.
 
-`layerfs machine doctor native --detail` uses one authenticated probe and
+`layerfs machine doctor macos-host --detail` uses one authenticated probe and
 includes its evidence. An idle home passes the endpoint check. A worker
 of another build yields a compatibility notice before the ping. The
 diagnostic never starts or replaces a worker. `home doctor` checks the

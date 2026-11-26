@@ -1,4 +1,4 @@
-//! `native`'s adapter: Sandboxes on the host's own OS; nothing is made,
+//! `host`'s adapter: Sandboxes on the host's own OS; nothing is made,
 //! started or stopped.
 use super::{start, status};
 use crate::adapter::{refused, Adapter};
@@ -11,10 +11,10 @@ use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
-pub(crate) struct Native;
-pub(crate) static ADAPTER: Native = Native;
+pub(crate) struct Host;
+pub(crate) static ADAPTER: Host = Host;
 
-impl Adapter for Native {
+impl Adapter for Host {
     fn probe(&self, _tools: &Tools, host: HostOs, missing: &mut Vec<String>) -> Option<String> {
         missing.extend(native_missing(host));
         None

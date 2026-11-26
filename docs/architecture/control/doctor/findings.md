@@ -26,7 +26,7 @@ The doctor never runs a fix. A `fix` is one runnable shell line (two commands ar
 | `home.layout` | Home folder is a foreign/pre-2.0 layout, or the system refused to read it | `path`, `layout` (foreign); `path`, `code` (unreadable) | Foreign: `mv <home> <home>.old && layerfs home init`. Unreadable: no fix, the OS error is the finding | `disruptive` |
 | `home.records` | See the table below | See below | See below | `safe` / `destructive` |
 | `home.bundle` | Linux bundle manifest missing, malformed or of another build; or it lacks a program or image | `path`, `platform`, `expected_version`, `found_version`, `manifest`; or `path`, `missing` | No fix: no `layerfs` call installs a bundle, it ships with the install | `read` |
-| `home.native_daemon` | `layerfs-daemon` not executable, missing, or from another commit (missing is an error when recorded, a warning for the default) | `path`, `source`, `commit`, `dirty`, `matches` | Not executable: `chmod +x <daemon>`. Missing or another commit: `layerfs machine update native --daemon <path>`, only when this build's daemon is found; otherwise no fix | `safe` |
+| `home.native_daemon` | `layerfs-daemon` not executable, missing, or from another commit (missing is an error when recorded, a warning for the default) | `path`, `source`, `commit`, `dirty`, `matches` | Not executable: `chmod +x <daemon>`. Missing or another commit: `layerfs machine update macos-host --daemon <path>`, only when this build's daemon is found; otherwise no fix | `safe` |
 | `home.artifacts` | A machine's configured daemon file is not executable, or is not there | `machine`, `path`, `executable` (not executable) or `present` (missing) | Not executable: `chmod +x <file>`. Missing: no fix (the daemon of another machine is not one this host knows); the message names `layerfs machine update <m> --daemon <path>` | `safe` |
 | `home.capacity` | Free disk space under the home is critically low or cannot be measured | `filesystem`, `path`, `disk_free_bytes` | No fix: which Store to compact is a choice, and compaction needs room | `read` |
 
@@ -38,7 +38,7 @@ The doctor never runs a fix. A `fix` is one runnable shell line (two commands ar
 | Store on a machine with no record | `store`, `machine`, `machine_record` | No fix: both remedies are by hand |
 | Stale Store lease | `store`, `pid`, `path` | Cleanup occurs under the Store lock when an operation claims or checks leases |
 | Host-worker directory has unsafe ownership, type or modes | `path`, `code` | Inspect the directory named in the finding |
-| Built-in machine's recorded daemon not there | `machine`, `daemon`, `present` | `layerfs machine update native --daemon <path>` for `native` when this build's daemon is found; else no fix |
+| Built-in machine's recorded daemon not there | `machine`, `daemon`, `present` | `layerfs machine update macos-host --daemon <path>` for `native` when this build's daemon is found; else no fix |
 | Unresolved `op` on a Store, machine or Sandbox | `op`, `phase`, `op_id`, `standing` | The clearing call of that thing (for a Sandbox, `layerfs sandbox remove <x>`) |
 | Sandbox names no project, Store, project or machine with a record | `sandbox`, `reference`, `expected` | `layerfs sandbox remove <x>` |
 | Copy a Store move left on another machine | `store`, `call`, `from`, `to`, `on` | No fix: only the next `store move` of that Store deletes it |

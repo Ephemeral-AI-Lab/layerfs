@@ -292,8 +292,11 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     let machines = tree_machines(&home);
     assert_eq!(machines.len(), 1, "{machines:?}");
     let native = &machines[0];
-    assert_eq!(native.get_text("machine"), Some("native"));
-    assert_eq!(native.get_text("platform"), Some("native"));
+    assert_eq!(
+        native.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
+    assert_eq!(native.get_text("platform"), Some("host"));
     assert_eq!(native.get_text("state"), Some("ready"));
     let Some(SdkValue::List(stores)) = native.get("stores") else {
         panic!("{native:?}")
@@ -304,8 +307,9 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     // under a machine that says it is missing
     let record = home.join("store").join("shop").join("record.json");
     let text = std::fs::read_to_string(&record).unwrap();
-    assert!(text.contains(r#""machine":"native""#), "{text}");
-    let moved = text.replace(r#""machine":"native""#, r#""machine":"gone""#);
+    let placement = format!(r#""machine":"{}""#, layerfs_home::names::HOST_MACHINE);
+    assert!(text.contains(&placement), "{text}");
+    let moved = text.replace(&placement, r#""machine":"gone""#);
     std::fs::write(&record, moved).unwrap();
     let machines = tree_machines(&home);
     assert_eq!(machines.len(), 1, "{machines:?}");

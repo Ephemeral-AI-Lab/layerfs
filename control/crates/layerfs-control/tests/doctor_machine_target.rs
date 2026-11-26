@@ -177,10 +177,10 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
     let f = Fixture::new();
     is(&f.report("missing", SECOND), "machine.record", Some("fail"));
     // Native uses the host and its optional worker.
-    MachineRecord::built_in("native", &f.id)
+    MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
         .write(&f.home)
         .unwrap();
-    let native = f.report("native", SECOND);
+    let native = f.report(layerfs_home::names::HOST_MACHINE, SECOND);
     let mut native_checks = vec![
         "machine.record",
         "machine.operation",
@@ -434,20 +434,24 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
         SdkValue::text(sensitive),
         SdkValue::map([("secret", SdkValue::text(sensitive))]),
     ] {
-        MachineRecord::built_in("native", &f.id)
+        MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
             .with("state", state)
             .write(&f.home)
             .unwrap();
-        let report = f.report("native", SECOND);
+        let report = f.report(layerfs_home::names::HOST_MACHINE, SECOND);
         is(&report, "machine.record", Some("fail"));
         assert!(!format!("{report:?}").contains(sensitive));
     }
     for state in ["running", "stopped", "failed"] {
-        MachineRecord::built_in("native", &f.id)
+        MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
             .with("state", SdkValue::text(state))
             .write(&f.home)
             .unwrap();
-        is(&f.report("native", SECOND), "machine.record", Some("pass"));
+        is(
+            &f.report(layerfs_home::names::HOST_MACHINE, SECOND),
+            "machine.record",
+            Some("pass"),
+        );
     }
     let malformed_op = SdkValue::map([
         ("id", SdkValue::map([("secret", SdkValue::text(sensitive))])),
@@ -461,11 +465,11 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
         ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
         ("uncertain", SdkValue::Bool(true)),
     ]);
-    MachineRecord::built_in("native", &f.id)
+    MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
         .with("op", malformed_op)
         .write(&f.home)
         .unwrap();
-    let report = f.report("native", SECOND);
+    let report = f.report(layerfs_home::names::HOST_MACHINE, SECOND);
     assert!(!format!("{report:?}").contains(sensitive));
     assert_eq!(f.calls(), asked);
 }

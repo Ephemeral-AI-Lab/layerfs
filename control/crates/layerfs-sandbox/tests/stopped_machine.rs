@@ -147,7 +147,7 @@ fn worker_record(root: &Path, name: &str, process: LocalProcess) -> PathBuf {
         platform: "linux".to_owned(),
         name: format!("layerfs-0123abcd-{name}"),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
