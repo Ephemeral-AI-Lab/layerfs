@@ -344,7 +344,7 @@ and reads 0 until the first change.
 
 | Output | Written when | Source |
 | --- | --- | --- |
-| `LAYERFS_TRACE` file | each connection to a worker appends `{at, event: "worker.connection", op, worker, sent, ms}`; with `LAYERFS_TRACE_STEP` too, one `{at, event: "step", op, step, us, ms}` line per timed step (a worker-routed call asks its worker for its steps) | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
+| `LAYERFS_TRACE` file | each connection to a worker appends `{at, event: "worker.connection", op, worker, sent, ms}`; with `LAYERFS_TRACE_STEP` too, one `{at, event: "step", op, step, us, ms}` line per timed step: `dispatch`, then `lease`, `store_open` and `call` for a Store call in this process (a worker-routed call asks its worker for its steps), and op `close` (`stores`, `sessions`) when a process closes its Stores | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
 | `trace/calls.jsonl` | every public call through the dispatcher (CLI, Node, Python, direct `layerfs_api::call`) appends one line when it ends | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
 
 ```json

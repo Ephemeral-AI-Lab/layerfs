@@ -48,6 +48,7 @@ static SETTLED: Condvar = Condvar::new();
 /// The Store stays open while it runs.
 pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> Outcome {
     let running = Running(enter(open, lease, 1)?);
+    layerfs_home::trace::step("store_open");
     // An admitting call reads the bounded places this home can speak for,
     // once; no other call reads the home (`place_view::admits`). The engine
     // never opens a home record; a worker call installs its own view before
@@ -56,6 +57,7 @@ pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> O
         true => crate::place_view::scoped(open, || direct::call(op, open, args)),
         false => direct::call(op, open, args),
     };
+    layerfs_home::trace::step("call");
     drop(running);
     outcome
 }

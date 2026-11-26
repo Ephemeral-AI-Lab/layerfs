@@ -326,9 +326,15 @@ fn scoped(
 /// with no call running (`close_idle`), so a sqlite Store leaves no
 /// write-ahead log behind, and ends its idle Sandbox daemon sessions inside
 /// a short bound (layerfs-project#181), so its exit is not a dropped
-/// connection in a daemon's log. Answers how many Stores it closed.
+/// connection in a daemon's log. Answers how many Stores it closed. With
+/// `LAYERFS_TRACE_STEP` set its steps are traced as op `close`: `stores`
+/// and `sessions`.
 pub fn close() -> usize {
-    let closed = layerfs_control::store::close_idle(std::time::Duration::ZERO);
-    layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
-    closed
+    layerfs_home::trace::stepped("close", || {
+        let closed = layerfs_control::store::close_idle(std::time::Duration::ZERO);
+        layerfs_home::trace::step("stores");
+        layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
+        layerfs_home::trace::step("sessions");
+        closed
+    })
 }

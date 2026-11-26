@@ -31,6 +31,7 @@ pub fn store_call(
     // the lease is taken under the Store's lock with the record read there:
     // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
+    layerfs_home::trace::step("lease");
     if let StoreRef::Postgres { .. } = target.store_ref {
         return postgresql(&home, target, method, (args, &record), lease);
     }
