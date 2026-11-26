@@ -107,7 +107,8 @@ impl IndexedConstructionBacking for Records {
         assert!(changes
             .iter()
             .all(|c| (CONTEXT..=CONTEXT + 9).contains(&c.key.kind)
-                || (CONTEXT + 0x20..=LENGTHS).contains(&c.key.kind)));
+                || (CONTEXT + 0x20..=LENGTHS).contains(&c.key.kind)
+                || matches!(c.key.kind, 0x4653_0031 | 0x4653_0032)));
         let bytes = changes.capacity() * std::mem::size_of::<ConstructionRecordChange>()
             + changes
                 .iter()
@@ -925,7 +926,7 @@ fn canonical_logical_transitions_match_root_diff_across_the_length_window() {
     let rows = Rows(&input);
     let mut records = Records::default();
     let mut emitted = TreeStore::new();
-    let (built, changes) = update_filesystem_streamed_backed_counted(
+    let (built, mut changes) = update_filesystem_streamed_backed_counted(
         &mut FilesystemObjects::new(&store, &mut emitted),
         &prepared(&rows),
         &mut records,
@@ -942,6 +943,14 @@ fn canonical_logical_transitions_match_root_diff_across_the_length_window() {
         1
     );
     store.absorb(&emitted);
+    let plan = changes.take_bindings();
+    let mut staged_bindings = Vec::new();
+    plan.visit(&mut records, &mut |child, parent, name| {
+        staged_bindings.push((parent, name.clone(), child));
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(staged_bindings, [(1, name_of("zz-new"), fresh)]);
     let lengths = |ids: &[ObjectId]| -> Vec<u64> {
         ids.iter()
             .map(|id| if *id == new_root { 7 } else { 3 })
@@ -1084,4 +1093,74 @@ fn canonical_logical_transitions_count_dropped_descendants_and_skip_unchanged_va
         logical
     );
     assert_eq!(directories, ordinary);
+}
+
+#[test]
+fn certified_bindings_match_canonical_order_inside_a_large_directory() {
+    use layerfs_content::compare::{new_bindings, TreeTable};
+    let mut session = Session::new(1).unwrap();
+    let child = session.allocate();
+    session
+        .apply(
+            &[DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name_of("seed"), Some(child))],
+            }],
+            &[InodeUpdate {
+                serial: child,
+                value: typed(InodeKind::RegularFile),
+            }],
+            &[child],
+        )
+        .unwrap();
+    let before = FilesystemRootId(session.root);
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: (0..4_106)
+            .map(|i| (name_of(&format!("a{i:04}")), Some(child)))
+            .collect(),
+    }];
+    let input = FilesystemInput {
+        base: Some(before),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &[],
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let mut records = Records::default();
+    let mut emitted = TreeStore::new();
+    let (built, mut changes) = update_filesystem_streamed_backed_counted(
+        &mut FilesystemObjects::new(&session.store, &mut emitted),
+        &prepared(&Rows(&input)),
+        &mut records,
+    )
+    .unwrap();
+    assert!(changes.matches(before, built.root));
+    let bindings = changes.take_bindings();
+    assert_eq!(bindings.len(), 4_106);
+    let mut certified = Vec::new();
+    bindings
+        .visit(&mut records, &mut |child, parent, name| {
+            certified.push((parent, name.clone(), child));
+            Ok(())
+        })
+        .unwrap();
+    session.store.absorb(&emitted);
+    let base = TreeTable::open(&session.store, before).unwrap();
+    let final_tree = TreeTable::open(&session.store, built.root).unwrap();
+    let mut canonical = Vec::new();
+    new_bindings(
+        &session.store,
+        Some(&base),
+        &final_tree,
+        |child, parent, name| {
+            canonical.push((parent, name.clone(), child));
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(certified, canonical);
+    assert_eq!(certified[4095].0, certified[4096].0);
 }

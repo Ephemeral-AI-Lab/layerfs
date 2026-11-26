@@ -37,11 +37,13 @@ impl CapturedLogical {
     }
 
     pub(super) fn count(
-        self,
+        mut self,
         owner: &crate::OwnerClient,
         reader: &layerfs_storage::Reader<'_>,
         known: u64,
-    ) -> Result<(u64, ChangedDirectories), CommitError> {
+    ) -> Result<(u64, ChangedDirectories, super::hints::CapturedBindings), CommitError> {
+        let bindings =
+            super::hints::CapturedBindings::new(self.changes.take_bindings(), self.scope);
         let mut records = IndexedEditRecords::new(owner, self.scope);
         let counted = super::commit::with_file_lengths(reader, |lengths| {
             self.changes.count(&mut records, known, lengths)
@@ -50,7 +52,7 @@ impl CapturedLogical {
             (Err(CommitError::Content { error, .. }), Some(original)) => {
                 Err(original_cause(error, Some(original), || None))
             }
-            (counted, _) => counted,
+            (counted, _) => counted.map(|(size, directories)| (size, directories, bindings)),
         }
     }
 }
@@ -424,7 +426,7 @@ fn classify(
     Err(original_cause(label, original, provider))
 }
 
-fn original_cause(
+pub(super) fn original_cause(
     label: ContentError,
     original: Option<WorkspaceError>,
     provider: impl FnOnce() -> Option<Arc<super::PortError>>,

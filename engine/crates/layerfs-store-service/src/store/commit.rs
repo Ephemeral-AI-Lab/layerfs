@@ -372,27 +372,34 @@ impl BoundWorkspace {
                 // Use the canonical construction transitions only if the chosen
                 // comparison has exactly those roots. A merge or whiteout
                 // rewrite can require the ordinary inode-table difference.
-                let (logical, directories) = phase(timing, "logical.count", || {
-                    if let Some(changes) = captured_logical.filter(|changes| {
-                        changes.matches(FilesystemRootId(current.effective_root), root)
-                    }) {
-                        return changes.count(&self.owner, &reader, known);
+                let (logical, directories, prepared_bindings) =
+                    phase(timing, "logical.count", || {
+                        if let Some(changes) = captured_logical.filter(|changes| {
+                            changes.matches(FilesystemRootId(current.effective_root), root)
+                        }) {
+                            let (logical, directories, bindings) =
+                                changes.count(&self.owner, &reader, known)?;
+                            return Ok::<_, CommitError>((logical, directories, Some(bindings)));
+                        }
+                        let mut directories = ChangedDirectories::default();
+                        let logical = self.logical_after(
+                            &reader,
+                            current.effective_root,
+                            root,
+                            known,
+                            Some(&mut directories),
+                        )?;
+                        Ok((logical, directories, None))
+                    })?;
+                let collected = phase(timing, "bindings", || match (fused, prepared_bindings) {
+                    (true, Some(plan)) => plan.collect(&self.owner).map(Some),
+                    (false, Some(plan)) => {
+                        plan.record(&self.owner, &*self.store.history).map(|_| None)
                     }
-                    let mut directories = ChangedDirectories::default();
-                    let logical = self.logical_after(
-                        &reader,
-                        current.effective_root,
-                        root,
-                        known,
-                        Some(&mut directories),
-                    )?;
-                    Ok((logical, directories))
-                })?;
-                let collected = phase(timing, "bindings", || match fused {
-                    true => {
+                    (true, None) => {
                         super::hints::collect_directory_bindings(&reader, &directories).map(Some)
                     }
-                    false => super::hints::record_directory_bindings(
+                    (false, None) => super::hints::record_directory_bindings(
                         &reader,
                         &*self.store.history,
                         &directories,
@@ -426,7 +433,12 @@ impl BoundWorkspace {
                         retained.saved = Some(saved);
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         phase(timing, "bindings", || {
-                            overflow.record(&reader, &*self.store.history, &directories)
+                            overflow.record(
+                                &self.owner,
+                                &reader,
+                                &*self.store.history,
+                                &directories,
+                            )
                         })?;
                         (None, None)
                     }

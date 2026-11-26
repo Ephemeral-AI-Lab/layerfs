@@ -16,6 +16,7 @@ use crate::filesystem::inode::update::apply_inode_values;
 use crate::filesystem::objects::{
     FilesystemObjects, FilesystemPhases, ObjectWork, MAXIMUM_READ_DEMANDS,
 };
+use crate::filesystem::path::PathName;
 use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
 use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
@@ -24,7 +25,7 @@ use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::view::{OperationInput, ResidentInput, StreamedInput};
 use crate::filesystem::rows::{check_operation_input, PreparedDirectoryStreams, PreparedRows};
 use crate::filesystem::sorted::finish::apply_inode_changes_observed;
-use crate::filesystem::sorted::finish::{apply_directory_root, DirectoryRoot};
+use crate::filesystem::sorted::finish::{apply_directory_root_observed, DirectoryRoot};
 use crate::filesystem::sorted::SortedWork;
 use crate::filesystem::state::{DroppedParents, InitialRows, RebuiltRoots, SerialState};
 use crate::filesystem::statistics::{LogicalChanges, LogicalTransitions};
@@ -333,7 +334,7 @@ fn run_body<'b>(
     state: &SerialState<'_>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
-    logical: Option<&mut LogicalTransitions>,
+    mut logical: Option<&mut LogicalTransitions>,
 ) -> ContentResult<FilesystemResult> {
     // A directory this batch leaves with no binding is dead on arrival: its
     // parent already accounted the binding it lost, so there is no final count to
@@ -473,9 +474,19 @@ fn run_body<'b>(
                         } else {
                             None
                         };
-                        let mut observe = |before: Option<u64>,
+                        let mut observe = |name: &PathName,
+                                           before: Option<u64>,
                                            after: Option<u64>|
                          -> ContentResult<()> {
+                            if let Some(logical) = logical.as_mut() {
+                                logical.bindings.note(
+                                    state,
+                                    update.header.parent,
+                                    name,
+                                    before,
+                                    after,
+                                )?;
+                            }
                             if before == after {
                                 return Ok(());
                             }
@@ -498,13 +509,18 @@ fn run_body<'b>(
                             Ok(())
                         };
                         let fetched = ahead.take(objects, row)?;
-                        let (root, work) = apply_directory_root(
+                        let (root, work) = apply_directory_root_observed(
                             objects,
                             base_directory.map(|root| (root, fetched)),
                             update.changes()?,
                             resources.scratch_bytes,
                             &mut observe,
                         )?;
+                        if let Some(logical) = logical.as_mut() {
+                            logical
+                                .bindings
+                                .parent(state, update.header.parent, root.0)?;
+                        }
                         counters.directories.pages_read = counters
                             .directories
                             .pages_read
@@ -685,13 +701,18 @@ fn run_body<'b>(
             Err(error) => Some(Err(error)),
         });
         let built = phases.phase("inodes", || match logical {
-            Some(logical) => apply_inode_changes_observed(
-                objects,
-                base_table,
-                changes,
-                resources.scratch_bytes,
-                &mut |serial, before, after| logical.note(state, *serial, before, after),
-            ),
+            Some(logical) => {
+                logical.bindings.begin_proof(state)?;
+                let built = apply_inode_changes_observed(
+                    objects,
+                    base_table,
+                    changes,
+                    resources.scratch_bytes,
+                    &mut |serial, before, after| logical.note(state, *serial, before, after),
+                )?;
+                logical.certified_bindings = logical.bindings.finish(state)?;
+                Ok(built)
+            }
             None => apply_inode_values(objects, base_table, changes, resources.scratch_bytes),
         })?;
         counters.references = rows.work();

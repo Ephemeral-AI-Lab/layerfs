@@ -174,6 +174,22 @@ pub(crate) fn apply_directory_root(
     scratch_limit: usize,
     observe: &mut dyn FnMut(Option<u64>, Option<u64>) -> ContentResult<()>,
 ) -> ContentResult<(DirectoryRoot, SortedWork)> {
+    apply_directory_root_observed(objects, base, changes, scratch_limit, &mut |_, old, new| {
+        observe(old, new)
+    })
+}
+
+pub(crate) fn apply_directory_root_observed(
+    objects: &mut FilesystemObjects<'_>,
+    base: Option<(DirectoryRoot, Option<Vec<u8>>)>,
+    changes: impl Iterator<Item = ContentResult<(crate::filesystem::path::PathName, Option<u64>)>>,
+    scratch_limit: usize,
+    observe: &mut dyn FnMut(
+        &crate::filesystem::path::PathName,
+        Option<u64>,
+        Option<u64>,
+    ) -> ContentResult<()>,
+) -> ContentResult<(DirectoryRoot, SortedWork)> {
     let (root, fetched) = base.map_or((None, None), |(root, fetched)| (Some(root.0), fetched));
     let (root, work) = Engine::<CompactDirectory>::apply_root(
         objects,
@@ -181,7 +197,7 @@ pub(crate) fn apply_directory_root(
         fetched,
         changes,
         scratch_limit,
-        &mut |_, before, after| observe(before, after),
+        observe,
     )?;
     Ok((DirectoryRoot(root), work))
 }
