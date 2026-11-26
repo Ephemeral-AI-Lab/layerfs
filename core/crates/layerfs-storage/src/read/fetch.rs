@@ -16,18 +16,19 @@ use std::{
     sync::Arc,
 };
 
-/// Metadata pack bodies the Saves of this handle published, newest last, so
-/// a later Save's own reads and the readers that continue a Save
+/// Pack bodies the Saves of this handle published, newest last, so a later
+/// Save's own reads and the readers that continue a Save
 /// ([`crate::Storage::reader_after_save`]: a Commit's logical count and
 /// binding hints) need not fetch them back. Bounded by
-/// [`DEPENDENCY_PACK_CACHE_BYTES`], oldest evicted first; the bodies are the
-/// published `Arc`s themselves, added only after an acknowledged publication.
+/// [`DEPENDENCY_PACK_CACHE_BYTES`], with metadata retained before payloads.
+/// The bodies are the published `Arc`s, added after acknowledged publication.
 /// A Save that does not finish clears them (#768): the next Save starts from
 /// the Store. Any other reader still acquires every body it needs.
 #[derive(Default)]
 struct Published {
     bodies: VecDeque<(PackInfo, Arc<Vec<u8>>)>,
     bytes: usize,
+    payload_bytes: usize,
     /// Pooled inode values it published, oldest first, at most
     /// [`PUBLISHED_VALUES`] of them.
     values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
@@ -56,16 +57,33 @@ impl Published {
         // A body is kept once: a held tail's bodies live only in `Held`
         // until its publication is acknowledged (#768), and a later
         // acknowledgement of the same pack adds no second copy.
-        if body.len() > DEPENDENCY_PACK_CACHE_BYTES || self.get(info.pack_id).is_some() {
+        let payload = info.domain == PackDomain::Payload;
+        let reserved = if payload {
+            self.bytes - self.payload_bytes
+        } else {
+            0
+        };
+        if body.len() > DEPENDENCY_PACK_CACHE_BYTES - reserved || self.get(info.pack_id).is_some() {
             return;
         }
         while self.bytes + body.len() > DEPENDENCY_PACK_CACHE_BYTES {
-            let Some((_, old)) = self.bodies.pop_front() else {
+            let at = self
+                .bodies
+                .iter()
+                .position(|(info, _)| info.domain == PackDomain::Payload)
+                .unwrap_or(0);
+            let Some((removed, old)) = self.bodies.remove(at) else {
                 break;
             };
             self.bytes -= old.len();
+            if removed.domain == PackDomain::Payload {
+                self.payload_bytes -= old.len();
+            }
         }
         self.bytes += body.len();
+        if payload {
+            self.payload_bytes += body.len();
+        }
         self.bodies.push_back((info, body));
     }
 }
@@ -149,17 +167,20 @@ impl Fetch {
     /// After an acknowledged publication: the locations this Save won are
     /// the Store's winners, so they are kept instead of located again; lost
     /// ones were invalidated by the caller and are located again. Its
-    /// metadata pack bodies are kept for its own later reads (bounded).
+    /// metadata pack bodies are kept for its own later reads. A remote
+    /// captured Save may also keep payload packs with acknowledged winners.
     pub(crate) fn published(
         &self,
         batch: &crate::port::Publication,
         lost: &BTreeSet<ObjectId>,
+        keep_payloads: bool,
     ) -> StorageResult<()> {
         let infos: BTreeMap<i64, PackInfo> = batch
             .packs
             .iter()
             .map(|pack| (pack.info().pack_id, pack.info()))
             .collect();
+        let mut winner_packs = BTreeSet::new();
         for row in &batch.objects {
             let id = row.object_id;
             self.absent.borrow_mut().remove(&id);
@@ -173,14 +194,18 @@ impl Fetch {
             };
             check_info(pack)?;
             self.remember_pack(pack)?;
+            if keep_payloads && pack.domain == PackDomain::Payload {
+                winner_packs.insert(pack.pack_id);
+            }
             let location = *row;
             self.keep_locator(crate::location::LocatedObject { location, pack }, false);
         }
         self.published_directories(&batch.packs);
         let mut published = self.published.borrow_mut();
         for pack in &batch.packs {
-            if pack.info().domain == PackDomain::Metadata {
-                published.insert(pack.info(), pack.body().clone());
+            let info = pack.info();
+            if info.domain == PackDomain::Metadata || winner_packs.contains(&info.pack_id) {
+                published.insert(info, pack.body().clone());
             }
         }
         for row in &batch.inode_values {

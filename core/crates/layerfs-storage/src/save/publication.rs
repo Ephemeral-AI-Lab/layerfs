@@ -337,7 +337,9 @@ impl State<'_> {
                 }
             }
         }
-        self.storage.source.published(batch, &lost)?;
+        let source = &self.storage.source;
+        let keep_payloads = self.captured_output && source.metadata.batched_chain_reads();
+        source.published(batch, &lost, keep_payloads)?;
         counted(&mut self.outcome, batch, members, &lost);
         for row in &batch.signatures {
             self.signatures.borrow_mut().remove(&row.slot);

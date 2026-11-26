@@ -90,6 +90,16 @@ Before its rows are built, each captured inode page (at most `PAGE_ROWS` =
 | Failures | One attempt. A failed overlay question is that file's custody (as a failed preparation keeps it); a failed length demand or batch is the namespace's original failure | [`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs) |
 | Memory | One page's lengths and at most one batch in flight; fetched roots live in the existing bounded cache allowance | [`base/batch.rs`](../../../../engine/crates/layerfs-workspace/src/base/batch.rs) |
 
+### Acknowledged Save bodies
+
+While a PostgreSQL captured Commit accepts output, payload packs with
+acknowledged winning locators may occupy the unused portion of the existing
+2 MiB published-body cache. Metadata keeps its existing priority. Save
+reads authenticate a retained body through the same complete-pack checks as
+a fetched body. A missing or evicted body is fetched by its winning locator.
+
+[Published body admission and eviction](../../../../core/crates/layerfs-storage/src/read/fetch.rs)
+
 ### Batched inode leaf reads
 
 On captured Commits whose provider supports batched chain reads, the sorted
