@@ -18,6 +18,7 @@ pub mod compact;
 pub mod diagnostic;
 pub mod formats;
 pub mod get;
+pub mod host_maintenance;
 #[doc(hidden)]
 pub mod identity;
 pub mod intent;

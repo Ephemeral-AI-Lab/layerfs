@@ -6,10 +6,13 @@
 //! it; the phases are the same, only the sides swap. Between two other
 //! machines it is refused, naming the move to that machine that comes
 //! first; a host with no such machine refuses every move.
+use crate::host_maintenance::{self, Worker};
 use crate::intent;
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
-use crate::sqlite::family::{advance, begin, ended, progress, settle, step_observed, step_on};
+use crate::sqlite::family::{
+    advance, begin_maintenance, ended, progress, settle, step_observed, step_on,
+};
 use crate::sqlite::transfer::resolve::{note_incoming, retired};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
@@ -112,6 +115,10 @@ fn run(
     // machines, the target's file and its free disk; the side again under
     // the locks, where `op` is written
     progress(events, "check", None);
+    at(
+        "check",
+        host_maintenance::recover(&home, name, call, Some(target)),
+    )?;
     // first the copy an ended move left, which this call clears
     at(
         "check",
@@ -121,11 +128,12 @@ fn run(
     at("check", record.unheld())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
     // what holds the Store is refused before any machine is reached
-    at("check", held_now(&home, name, related))?;
+    let worker = host_maintenance::observe(&home, &record);
+    at("check", held_now(&home, name, related, worker.as_ref()))?;
     let (mut source, mut target_side) = at("check", reach(&home, name, &from, &to))?;
     let args = SdkValue::map([("from", SdkValue::text(&from)), ("to", SdkValue::text(&to))]);
     let op = at("check", Op::begin(call, "check", args))?;
-    let begun = begin(&home, name, &op, related, |record| {
+    let begun = begin_maintenance(&home, name, &op, related, worker, |record| {
         record.unheld()?;
         if sides(&home, record, target)? != (from.clone(), to.clone()) {
             return Err(refused(
@@ -135,9 +143,13 @@ fn run(
         }
         Ok(())
     });
-    at("check", begun)?;
+    let ((), worker) = at("check", begun)?;
+    at(
+        intent::WORKER_CLOSE,
+        host_maintenance::finish(&home, name, &op, worker.as_ref(), Some(related), None),
+    )?;
     let op = written.insert(op);
-    let _lease = at("check", settle(&home, name, related))?;
+    let _lease = at("check", settle(&home, name, related, op))?;
     phases(
         &home,
         events,
@@ -151,9 +163,11 @@ fn run(
 /// Refuses `InUse` while leases or Sandbox records hold Store `name`,
 /// read under the Store's lock (stale leases are dropped there). The
 /// check is repeated where `op` is written.
-fn held_now(home: &Path, name: &str, related: Related) -> Result<()> {
+fn held_now(home: &Path, name: &str, related: Related, worker: Option<&Worker>) -> Result<()> {
+    let _home = layerfs_home::home::lock::take(home)?;
     let _store = crate::record::lock(home, name)?;
-    (related.store_idle)(home, name)
+    let record = StoreRecord::of(home, name)?;
+    related.check_idle(home, name, Worker::holder(worker, home, name, &record)?)
 }
 
 /// The headroom a target keeps beyond the Store's bytes: at least 1 GiB,

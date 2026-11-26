@@ -231,6 +231,9 @@ fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
 /// Who uses a Store or a project, read from the Sandbox records.
 pub const RELATED: Related = Related {
     store_idle: inventory::store_idle,
+    store_idle_except: Some(|home, store, owner| {
+        inventory::store_idle_with(home, store, Some(owner))
+    }),
     can_remove_project: inventory::can_remove_project,
 };
 

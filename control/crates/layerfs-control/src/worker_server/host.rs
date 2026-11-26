@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::os::fd::AsFd;
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -52,6 +52,7 @@ struct Activity {
     admitted: usize,
     draining: bool,
     answered: u64,
+    last_close: Option<SdkValue>,
 }
 
 impl Activity {
@@ -62,6 +63,7 @@ impl Activity {
             admitted: 0,
             draining: false,
             answered: 0,
+            last_close: None,
         }
     }
 
@@ -72,6 +74,7 @@ impl Activity {
 
 pub(super) struct HostServer {
     pub(super) hello: HostHello,
+    home: PathBuf,
     home_id: String,
     identity: Vec<(&'static str, SdkValue)>,
     activity: Mutex<Activity>,
@@ -245,9 +248,13 @@ impl HostServer {
     ) -> Outcome {
         // Admission and drain share one lock. Store work later runs after
         // admission, outside this lock, on the ordinary pool.
+        let stores =
+            (control && op == "ping").then(|| layerfs_store::open::host_store_count(&self.home));
         let mut activity = self.lock();
         if activity.draining {
-            return Err(refused("Unavailable", "the host worker is draining"));
+            let mut error = refused("Unavailable", "the host worker is draining");
+            error.detail = SdkValue::map([("state", SdkValue::text("draining"))]);
+            return Err(error);
         }
         enum Operation {
             Ping,
@@ -258,7 +265,7 @@ impl HostServer {
         let operation = match (control, op) {
             (true, "ping") => Operation::Ping,
             (true, "drain") => Operation::Drain,
-            (true, "store.close") => Operation::CloseStore,
+            (true, layerfs_store::host_maintenance::CLOSE) => Operation::CloseStore,
             (false, "store.call") => Operation::StoreCall,
             _ => {
                 return Err(refused(
@@ -285,6 +292,22 @@ impl HostServer {
                         "control",
                         SdkValue::Int(activity.lanes[CONTROL.index].outstanding as i64),
                     ),
+                    ("admitted", SdkValue::Int(activity.admitted as i64)),
+                    ("stores", SdkValue::Int(stores.unwrap_or_default() as i64)),
+                    (
+                        "queued",
+                        SdkValue::Int(
+                            activity
+                                .lanes
+                                .iter()
+                                .map(|lane| lane.pending.len() as i64)
+                                .sum(),
+                        ),
+                    ),
+                    (
+                        "last_close",
+                        activity.last_close.clone().unwrap_or(SdkValue::Null),
+                    ),
                     (
                         "requests",
                         SdkValue::Int(i64::try_from(activity.answered).unwrap_or(i64::MAX)),
@@ -302,11 +325,84 @@ impl HostServer {
                 Ok(SdkValue::map([("state", SdkValue::text("draining"))]))
             }
             Operation::CloseStore => {
-                let store = args.get_text("store").unwrap_or_default();
-                layerfs_home::names::StoreName::parse(store)?;
-                Ok(SdkValue::map([("closed", SdkValue::Bool(false))]))
+                drop(activity);
+                self.close_store(args)
             }
             Operation::StoreCall => Err(refused("Unavailable", "the host Store route is disabled")),
+        }
+    }
+
+    fn close_store(&self, args: &SdkValue) -> Outcome {
+        let report =
+            layerfs_store::host_maintenance::close_at(&self.home, &self.hello.generation, args);
+        self.record_close(
+            args.get_text("store").unwrap_or_default(),
+            "maintenance",
+            &report,
+        );
+        report.map(|report| {
+            SdkValue::map([
+                ("closed", SdkValue::Bool(report.closed)),
+                (
+                    "wal_remaining",
+                    report.wal_remaining.map_or(SdkValue::Null, SdkValue::Bool),
+                ),
+            ])
+        })
+    }
+
+    fn record_close(
+        &self,
+        store: &str,
+        reason: &str,
+        report: &Result<layerfs_store::open::CloseReport, SdkRefusal>,
+    ) {
+        // Do not put an arbitrary request value into the worker log or ping.
+        if layerfs_home::names::StoreName::parse(store).is_err() {
+            return;
+        }
+        let (status, closed, wal) = match report {
+            Ok(report) => {
+                let status = match &report.checkpoint {
+                    Ok(Some(true)) => "checkpointed",
+                    Ok(Some(false)) => "checkpoint-deferred",
+                    Ok(None) => "no-checkpoint",
+                    Err(_) => "checkpoint-failed",
+                };
+                (status, SdkValue::Bool(report.closed), report.wal_remaining)
+            }
+            Err(error) => (error.code.as_str(), SdkValue::Null, None),
+        };
+        let summary = SdkValue::map([
+            ("store", SdkValue::text(store)),
+            ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+            ("status", SdkValue::text(status)),
+            ("closed", closed),
+            ("wal_remaining", wal.map_or(SdkValue::Null, SdkValue::Bool)),
+            ("generation", SdkValue::text(&self.hello.generation)),
+            ("reason", SdkValue::text(reason)),
+        ]);
+        // The home logger opens and closes its file per record and rotates
+        // it under its own log lock. No worker admission lock is held here.
+        if let Err(error) = layerfs_home::home::log_line(&self.home, "worker-close.jsonl", &summary)
+        {
+            log(&format!(
+                "could not record Store {store}'s close outcome: {}",
+                error.code
+            ));
+        }
+        self.lock().last_close = Some(summary);
+    }
+
+    fn close_drained_stores(&self) {
+        for (path, report) in layerfs_store::open::close_idle_report(Duration::ZERO) {
+            if let Some(store) = path
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+            {
+                self.record_close(store, "drain", &report);
+            }
         }
     }
 }
@@ -319,6 +415,7 @@ fn run(
     ordinary: UnixListener,
     control: UnixListener,
     hello: HostHello,
+    home: PathBuf,
     home_id: String,
 ) -> io::Result<super::Served> {
     ordinary.set_nonblocking(true)?;
@@ -328,13 +425,14 @@ fn run(
     wake.set_nonblocking(true)?;
     let server = HostServer {
         hello,
+        home,
         home_id,
         identity: layerfs_home::process::identity(),
         activity: Mutex::new(Activity::new()),
         queued: Default::default(),
         wake,
     };
-    std::thread::scope(|scope| {
+    let served = std::thread::scope(|scope| {
         let result = (|| {
             let server = &server;
             for lane in [CONTROL, ORDINARY] {
@@ -351,7 +449,9 @@ fn run(
         drop(control);
         // Scope exit joins accepted connections before releasing the owner.
         result
-    })?;
+    });
+    server.close_drained_stores();
+    served?;
     let requests = server.lock().answered;
     Ok(super::Served { requests })
 }
@@ -370,7 +470,14 @@ pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
         let hello = HostHello::own(&paths)?;
         let ordinary = paths.bind(false, &guard)?;
         let control = paths.bind(true, &guard)?;
-        run(ordinary, control, hello, paths.home_id.clone()).map_err(failed)
+        run(
+            ordinary,
+            control,
+            hello,
+            paths.home.clone(),
+            paths.home_id.clone(),
+        )
+        .map_err(failed)
     })();
     let cleanup = paths.remove_endpoints(&guard);
     if let Err(error) = &cleanup {

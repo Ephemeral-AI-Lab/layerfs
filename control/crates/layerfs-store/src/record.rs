@@ -295,7 +295,7 @@ impl StoreRecord {
     /// decides what may run beside it.
     pub fn unblocked(&self) -> Result<()> {
         match self.op() {
-            Some(op) if intent::exclusive(op.name()) => self.refuse(&op),
+            Some(op) if intent::blocks(&op) => self.refuse(&op),
             _ => Ok(()),
         }
     }

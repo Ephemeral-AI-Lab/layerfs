@@ -1,9 +1,10 @@
 //! `store.remove`: a sqlite Store deleted wherever it is, with its projects.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRef};
-use crate::sqlite::family::{advance, begin, ended, settle, step_on};
+use crate::sqlite::family::{advance, begin_maintenance, ended, settle, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
+use crate::{host_maintenance, intent};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::{Op, Standing};
@@ -18,6 +19,7 @@ use std::path::Path;
 /// build does not read, or on a machine whose record has no 2.0 name, goes
 /// by its records alone, and `left` says what may remain.
 pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
+    host_maintenance::recover(home, name, intent::REMOVE, None)?;
     let record = record::StoreRecord::of(home, name)?;
     let Ok(store_ref) = record.store_ref() else {
         let left = record::forget_unread(home, name, related)?;
@@ -57,8 +59,9 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         fields.push(("leftover", SdkValue::text(&left.on)));
     }
     let args = layerfs_home::helpers::map_of(fields);
-    let mut op = Op::begin(crate::intent::REMOVE, "check", args)?;
-    let previous = begin(home, name, &op, related, |record| {
+    let mut op = Op::begin(intent::REMOVE, "check", args)?;
+    let worker = host_maintenance::observe(home, &record);
+    let (previous, worker) = begin_maintenance(home, name, &op, related, worker, |record| {
         if record.machine()? != machine {
             return Err(refused(
                 "Conflict",
@@ -80,10 +83,18 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         }
         Ok(previous.filter(|held| held.standing() == Standing::Unresolved))
     })?;
+    host_maintenance::finish(
+        home,
+        name,
+        &op,
+        worker.as_ref(),
+        Some(related),
+        previous.as_ref(),
+    )?;
     // a machine whose Stores open in this process keeps the file under the
     // home: it goes with the Store's directory below
     let mut phase = "check";
-    let removed = settle(home, name, related).and_then(|lease| {
+    let removed = settle(home, name, related, &op).and_then(|lease| {
         drop(lease);
         // a crash from here on leaves the file's fate unknown
         phase = "remove";

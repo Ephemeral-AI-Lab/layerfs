@@ -23,6 +23,7 @@
 //! this process keeps the Store's lease and its marker. Decision D5 in
 //! `core/docs/issues/project-41/gc-42-decisions.md` records the change from
 //! the earlier local-only refusal.
+use crate::host_maintenance::{self, Worker};
 use crate::identity;
 use crate::identity::Kind;
 use crate::intent;
@@ -31,7 +32,7 @@ use crate::open::close;
 use crate::open_args::OpenArgs;
 use crate::place::{self, Executor};
 use crate::postgresql;
-use crate::record::{StoreRecord, StoreRef};
+use crate::record::{self, StoreRecord, StoreRef};
 use crate::sqlite::family::progress;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
@@ -140,23 +141,37 @@ impl<'a> Marker<'a> {
 /// record, which a live read shows, is written by the run, not from here.
 pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     let home = home.to_path_buf();
+    let fenced = close_before_compaction(&home, store)?;
     // A live operation is `Busy`, a dead owner's record `Unresolved`; the
     // refusal is a bounded metric label and never changes what is returned.
-    let (_lease, record) = match lease::claim(&home, store) {
-        Ok(claimed) => claimed,
-        Err(refusal) => {
-            note_refusal(&refusal);
-            return Err(refusal);
+    let prepared = (|| -> Result<_, SdkRefusal> {
+        let (lease, record) = lease::claim(&home, store).inspect_err(note_refusal)?;
+        let reference = record.store_ref()?;
+        let executor = match reference {
+            StoreRef::Postgres { .. } => None,
+            StoreRef::Sqlite { .. } => Some(place::plan(&home, reference)?),
+        };
+        Ok((lease, record, executor))
+    })();
+    if !matches!(prepared, Ok((_, _, Some(_)))) {
+        if let Some((op, previous)) = &fenced {
+            let _ = intent::replace(&home, store, op.id(), previous.as_ref());
         }
-    };
-    let store_ref = record.store_ref()?.clone();
-    if matches!(store_ref, StoreRef::Postgres { .. }) {
-        return compact_postgresql(&record, &home, events, store);
     }
-    let executor = place::plan(&home, &store_ref)?;
+    let (_lease, record, executor) = prepared?;
+    let Some(executor) = executor else {
+        return compact_postgresql(&record, &home, events, store);
+    };
     // The marker is this home's, whichever machine runs the rebuild: it is
     // written here, beside the caller's record, never under a worker's root.
-    let mut marker = Marker::begin(&home, store);
+    let mut marker = match fenced {
+        Some((op, _)) => Marker {
+            home: &home,
+            store,
+            op: Some(op),
+        },
+        None => Marker::begin(&home, store),
+    };
     let (outcome, left) = match executor {
         Executor::Local => {
             let outcome = compact_sqlite(
@@ -199,6 +214,41 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     };
     marker.end(left, &outcome);
     outcome
+}
+
+/// The local cache may hold readers between calls. Close its exact worker
+/// lease behind the temporary fence, then restore ordinary compaction admission.
+fn close_before_compaction(
+    home: &Path,
+    name: &str,
+) -> Result<Option<(Op, Option<Op>)>, SdkRefusal> {
+    host_maintenance::recover(home, name, intent::COMPACT, None)?;
+    let initial = StoreRecord::of(home, name)?;
+    let Some(worker) = host_maintenance::observe(home, &initial) else {
+        return Ok(None);
+    };
+    let previous = {
+        let _store = record::lock(home, name)?;
+        let record = StoreRecord::of(home, name)?;
+        record.unblocked()?;
+        let previous = record.op();
+        if previous
+            .as_ref()
+            .is_some_and(|op| op.standing() == layerfs_home::op::Standing::Running)
+            || Worker::holder(Some(&worker), home, name, &record)?.is_none()
+        {
+            return Ok(None);
+        }
+        let op = Op::begin(intent::COMPACT, "mark", SdkValue::Null)?.as_uncertain();
+        let fenced = worker.fence(&op);
+        record
+            .with(layerfs_home::op::FIELD, fenced.to_record().clone())
+            .write(home)?;
+        (op, previous)
+    };
+    let (op, previous) = previous;
+    host_maintenance::finish(home, name, &op, Some(&worker), None, previous.as_ref())?;
+    Ok(Some((op, previous)))
 }
 
 /// The worker operation that compacts a sqlite Store on its machine.

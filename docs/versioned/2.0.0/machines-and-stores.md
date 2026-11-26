@@ -340,6 +340,16 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
   directly, through its worker. On a host with no such machine (Windows) a
   create without `--machine` is `Unsupported`. `store get` and `store list` answer its
   `engine`, `state`, `machine` and `projects`, and never the Store's keys.
+
+For a local SQLite Store held open by a native CLI worker, move, remove,
+compact and upgrade record a `worker-close` phase and ask that worker to
+release its Store. The phase keeps new calls out until the caller verifies
+release. If the close reply is lost, the Store shows `unresolved`. The same
+maintenance command can proceed once the original worker releases its lease
+or is proved dead. SDK and Sandbox holders retain their normal admission
+rules. The worker records close and checkpoint outcomes in
+`log/worker-close.jsonl`.
+
 - `store move <store> <machine>` moves the file between the machine whose
   calls run in this process (`native` on macOS and Linux) and another
   machine: from `native` to a machine, or from its machine back to `native`

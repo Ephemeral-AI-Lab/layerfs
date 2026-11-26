@@ -45,6 +45,7 @@ fn unused(home: &Path, name: &str) -> Result<(), SdkRefusal> {
 fn related() -> Related {
     Related {
         store_idle: unused,
+        store_idle_except: None,
         can_remove_project: unused,
     }
 }

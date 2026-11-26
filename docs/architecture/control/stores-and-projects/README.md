@@ -85,7 +85,7 @@ full per-call table is "Where each call runs" in [Control](../README.md).
  lost answer            : keep op uncertain, log/uncertain.jsonl, Unknown
 ```
 
-A live `op` refuses every lease, Store call and new operation (`Busy`),
+A live exclusive `op` refuses every lease, Store call and new operation (`Busy`),
 this process included. A dead owner's uncertain `op` is `Unresolved`; its
 refusal names the clearing call: the same `store move <s> <to>` for a
 move, `store compact <s>` for a compaction, `store upgrade <s>` for an
@@ -97,6 +97,24 @@ Without an `op`, a Store's state comes from its records only
 ([`state.rs`](../../../../control/crates/layerfs-store/src/state.rs) `recorded`):
 `blocked` while its machine is not ready, `broken` with the reason the last
 live read found, else `ready`.
+
+For a local SQLite Store, move, remove, compact and upgrade first identify an
+existing worker through its authenticated management socket. Under the Store
+record lock they match its PID, start time and boot ID to one live lease.
+The caller writes the exclusive `worker-close` phase with the original
+operation ID and pinned worker generation before asking that worker to close.
+The worker checks the record under the same admission lock, then closes its
+cache entry outside the lock. The caller verifies lease release before
+continuing. Independent SDK leases and Sandbox records retain their existing
+admission rules. A compaction resumes its usual admission after this phase.
+
+The worker records maintenance and drain close outcomes in
+`log/worker-close.jsonl`, including the checkpoint result and observed WAL
+presence. Valid WAL may remain while another process holds the Store.
+
+A lost close answer leaves the phase unresolved. A later explicit invocation
+of the same maintenance operation can settle it after observing release or
+proved death of the recorded worker. It never sends the previous close again.
 
 ## Invariants
 

@@ -18,6 +18,7 @@
 //! each call's body is in its own file (`create`, `remove`,
 //! `transfer/phases` for a move). `store.list` and `store.get` are the
 //! kind-neutral root's (`list`, `get`).
+use crate::host_maintenance::Worker;
 use crate::intent;
 use crate::lease;
 use crate::place::Executor;
@@ -97,13 +98,38 @@ pub fn begin<T>(
     related: Related,
     check: impl FnOnce(&StoreRecord) -> Result<T>,
 ) -> Result<T> {
+    begin_maintenance(home, name, op, related, None, check).map(|(answer, _)| answer)
+}
+
+pub(crate) fn begin_maintenance<T>(
+    home: &Path,
+    name: &str,
+    op: &Op,
+    related: Related,
+    worker: Option<Worker>,
+    check: impl FnOnce(&StoreRecord) -> Result<T>,
+) -> Result<(T, Option<Worker>)> {
     let _lock = home::lock::take(home)?;
     let _store = record::lock(home, name)?;
     let record = StoreRecord::of(home, name)?;
+    if record
+        .op()
+        .is_some_and(|held| held.phase() == intent::WORKER_CLOSE)
+    {
+        record.unheld()?;
+    }
     let answer = check(&record)?;
-    (related.store_idle)(home, name)?;
-    record.with(op::FIELD, op.to_record().clone()).write(home)?;
-    Ok(answer)
+    let holder = Worker::holder(worker.as_ref(), home, name, &record)?;
+    related.check_idle(home, name, holder)?;
+    let has_holder = holder.is_some();
+    let worker = worker.filter(|_| has_holder);
+    let recorded = worker
+        .as_ref()
+        .map_or_else(|| op.clone(), |worker| worker.fence(op));
+    record
+        .with(op::FIELD, recorded.to_record().clone())
+        .write(home)?;
+    Ok((answer, worker))
 }
 
 /// After `op` is written: closes this process's own open copy (Store I/O,
@@ -111,10 +137,20 @@ pub fn begin<T>(
 /// home lock and the Store's lock, finds the Store idle once more: no other
 /// holder, no lease of this process, no Sandbox. Answers this process's
 /// lease, taken there.
-pub fn settle(home: &Path, name: &str, related: Related) -> Result<lease::Lease> {
+pub fn settle(home: &Path, name: &str, related: Related, op: &Op) -> Result<lease::Lease> {
     crate::open::close(&paths::store_file(home, name))?;
     let _lock = home::lock::take(home)?;
     let _store = record::lock(home, name)?;
+    let current = StoreRecord::of(home, name)?;
+    if !current
+        .op()
+        .is_some_and(|held| held.id() == op.id() && held.mine())
+    {
+        return Err(refused(
+            "Conflict",
+            "the Store's maintenance intent changed",
+        ));
+    }
     if lease::held_here(home, name) {
         return Err(refused(
             "InUse",

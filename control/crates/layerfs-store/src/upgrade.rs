@@ -22,6 +22,7 @@
 //! that machine's worker ([`WORKER_OP`], [`in_worker`]), the worker being
 //! of this build, with a cancel sent on a second connection
 //! ([`CANCEL_OP`]); a PostgreSQL Store from this process.
+use crate::host_maintenance;
 use crate::intent;
 use crate::lease;
 use crate::place::{self, Executor, Worker};
@@ -83,7 +84,11 @@ const WATCH: Duration = Duration::from_millis(25);
 /// processes' leases alone. `layerfs-control` passes its own
 /// ([`upgrade_with`]), which adds the Sandboxes of the Store's projects.
 fn leases_only(home: &Path, store: &str) -> Result<()> {
-    let holders = lease::holders(home, store)?;
+    check_leases(home, store, None)
+}
+
+fn check_leases(home: &Path, store: &str, owner: Option<&lease::Owner>) -> Result<()> {
+    let holders = lease::holders_except(home, store, owner)?;
     if holders.is_empty() {
         return Ok(());
     }
@@ -96,6 +101,7 @@ fn leases_only(home: &Path, store: &str) -> Result<()> {
 
 const LEASES_ONLY: Related = Related {
     store_idle: leases_only,
+    store_idle_except: Some(|home, store, owner| check_leases(home, store, Some(owner))),
     can_remove_project: |_, _| Ok(()),
 };
 
@@ -119,6 +125,7 @@ pub fn upgrade_with(
     layerfs_home::names::StoreName::parse(store)?;
     // read before the locks only to refuse early with nothing written: a
     // stopped machine is `Unavailable`, naming its start
+    host_maintenance::recover(home, store, intent::UPGRADE, None)?;
     let seen = StoreRecord::of(home, store)?;
     let postgres = matches!(seen.store_ref()?, StoreRef::Postgres { .. });
     if let Executor::Worker(mut worker) = place::plan(home, seen.store_ref()?)? {
@@ -128,10 +135,23 @@ pub fn upgrade_with(
     // the record as re-read under the locks decides everything after:
     // where the run goes, the URL and schema, the session closed
     let check = |record: &StoreRecord| adopt(record).map(|previous| (previous, record.clone()));
-    let (previous, record) = match postgres {
-        true => crate::postgresql::family::begin(home, store, &op, related, check)?,
-        false => family::begin(home, store, &op, related, check)?,
+    let ((previous, record), worker) = if postgres {
+        (
+            crate::postgresql::family::begin(home, store, &op, related, check)?,
+            None,
+        )
+    } else {
+        let worker = host_maintenance::observe(home, &seen);
+        family::begin_maintenance(home, store, &op, related, worker, check)?
     };
+    host_maintenance::finish(
+        home,
+        store,
+        &op,
+        worker.as_ref(),
+        Some(related),
+        previous.as_ref(),
+    )?;
     let mut run = Run {
         home,
         store,
@@ -146,7 +166,7 @@ pub fn upgrade_with(
         }
         let _lease = match store_ref {
             StoreRef::Postgres { .. } => crate::postgresql::family::settle(home, &record, related)?,
-            StoreRef::Sqlite { .. } => family::settle(home, store, related)?,
+            StoreRef::Sqlite { .. } => family::settle(home, store, related, &run.op)?,
         };
         match (store_ref, executor) {
             (StoreRef::Postgres { .. }, _) => run.postgresql(&record, events, cancel),
