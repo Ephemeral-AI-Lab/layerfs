@@ -177,7 +177,7 @@ files are not removed. Source:
 | --- | --- | --- |
 | `LocalProcess` | `observe` reads pid, kernel start time and boot once; `alive` needs all three to match and the process not a zombie; `signal` sends once, only to an observed live process, never to one recorded without a boot | [`process/identity.rs`](../../../../engine/crates/layerfs-bridge/src/process/identity.rs) |
 | Linux | `/proc/<pid>/stat`, `/proc/sys/kernel/random/boot_id`, the `/proc` table | [`process/linux.rs`](../../../../engine/crates/layerfs-bridge/src/process/linux.rs) |
-| macOS | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse); `kern.bootsessionuuid`, else `kern.boottime`. The crate's only `unsafe` | [`process/darwin.rs`](../../../../engine/crates/layerfs-bridge/src/process/darwin.rs), [`lib.rs`](../../../../engine/crates/layerfs-bridge/src/lib.rs) |
+| macOS | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse); `kern.bootsessionuuid`, else `kern.boottime`, read with `sysctlbyname` (no `sysctl` process is started). The crate's only `unsafe` | [`process/darwin.rs`](../../../../engine/crates/layerfs-bridge/src/process/darwin.rs), [`lib.rs`](../../../../engine/crates/layerfs-bridge/src/lib.rs) |
 
 It lives here so `layerfs-home` and the Sandbox driver share it without
 either reaching the other.

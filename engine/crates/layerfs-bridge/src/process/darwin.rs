@@ -1,40 +1,41 @@
 //! macOS process facts, which Linux reads from `/proc`: a process's state, group
 //! and start time (`proc_pidinfo`, a system call: `ps` is setuid root, which a
 //! Seatbelt-sandboxed caller may not execute) and this boot's identity
-//! (`sysctl`). Each tool is one run with a fixed path and the C locale, read
-//! once; nothing is retried. The mount table and a forced unmount stay with
+//! (`sysctlbyname`, the system call behind the `sysctl` tool, so reading it
+//! starts no process). Each fact is read once; nothing is retried. The mount table and a forced unmount stay with
 //! the Sandbox driver (layerfs-project#112 split them from this file).
 use super::Stat;
 use nix::libc;
-use std::{
-    ffi::CString,
-    io,
-    os::unix::ffi::OsStrExt,
-    path::Path,
-    process::{Command, Stdio},
-    sync::OnceLock,
-};
+use std::{ffi::CString, io, os::unix::ffi::OsStrExt, path::Path, sync::OnceLock};
 
-const SYSCTL: &str = "/usr/sbin/sysctl";
 /// Wait for volume writeback completion (`SYNC_VOLUME_WAIT = 0x02` in macOS
 /// SDK `<unistd.h>`; checked against `<sys/mount.h>`, where `MNT_WAIT = 1` is
 /// for `getfsstat(2)`/`vfs_sync` while `sync_volume_np(3)` and its flags live
 /// in `<unistd.h>`).
 const SYNC_VOLUME_WAIT: libc::c_int = 0x02;
 
-/// One tool's standard output, or its failure with what it said.
-fn output(program: &str, args: &[&str]) -> io::Result<(bool, String)> {
-    let out = Command::new(program)
-        .args(args)
-        .env_clear()
-        .env("LC_ALL", "C")
-        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
-        .stdin(Stdio::null())
-        .output()?;
-    Ok((
-        out.status.success(),
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-    ))
+/// The value of kernel variable `name` into `buffer` (`sysctlbyname`), or
+/// its failure; answers how many bytes the kernel wrote.
+#[allow(unsafe_code)]
+fn sysctl(name: &str, buffer: &mut [u8]) -> io::Result<usize> {
+    let name = CString::new(name).map_err(|_| invalid("sysctl name"))?;
+    let mut size: libc::size_t = buffer.len();
+    // SAFETY: `name` is NUL-terminated and alive for the call; the kernel
+    // writes at most `size` bytes into `buffer` and stores the count in
+    // `size`; no new value is set (null pointer, length 0).
+    let rc = unsafe {
+        libc::sysctlbyname(
+            name.as_ptr(),
+            buffer.as_mut_ptr().cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if rc != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(size.min(buffer.len()))
 }
 
 fn invalid(what: &'static str) -> io::Error {
@@ -130,38 +131,40 @@ pub fn boot() -> io::Result<u128> {
     if let Some(boot) = BOOT.get() {
         return Ok(*boot);
     }
-    let uuid = output(SYSCTL, &["-n", "kern.bootsessionuuid"])
+    let mut text = [0u8; 64];
+    let uuid = sysctl("kern.bootsessionuuid", &mut text)
         .ok()
-        .and_then(|(ran, text)| if ran { uuid(&text) } else { None });
+        .and_then(|len| std::str::from_utf8(&text[..len]).ok().and_then(uuid));
     let boot = match uuid {
         Some(boot) => boot,
-        None => {
-            let (_, text) = output(SYSCTL, &["-n", "kern.boottime"])?;
-            boottime(&text).ok_or_else(|| invalid("kern.boottime"))?
-        }
+        None => boottime()?,
     };
     Ok(*BOOT.get_or_init(|| boot))
 }
 
 fn uuid(text: &str) -> Option<u128> {
-    let hex: String = text.trim().chars().filter(|c| *c != '-').collect();
+    let text = text.trim_end_matches('\0').trim();
+    let hex: String = text.chars().filter(|c| *c != '-').collect();
     (hex.len() == 32)
         .then(|| u128::from_str_radix(&hex, 16).ok())
         .flatten()
 }
 
-/// `{ sec = 1729500000, usec = 123456 } Tue Oct 21 ...` as sec * 10^6 + usec.
-fn boottime(text: &str) -> Option<u128> {
-    let field = |name: &str| -> Option<u128> {
-        let after = text.split(name).nth(1)?;
-        let digits: String = after
-            .trim_start_matches([' ', '='])
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        digits.parse().ok()
-    };
-    Some(field("sec")? * 1_000_000 + field("usec")?)
+/// `kern.boottime` (a `timeval`) as seconds * 10^6 + microseconds: the
+/// number `sysctl -n kern.boottime`'s `{ sec, usec }` gave before.
+fn boottime() -> io::Result<u128> {
+    let mut raw = [0u8; std::mem::size_of::<libc::timeval>()];
+    let bad = || invalid("kern.boottime");
+    if sysctl("kern.boottime", &mut raw)? != raw.len() {
+        return Err(bad());
+    }
+    // `timeval` is `tv_sec` (`time_t`) then `tv_usec` (`suseconds_t`)
+    let (sec, rest) = raw.split_at(std::mem::size_of::<libc::time_t>());
+    let usec = &rest[..std::mem::size_of::<libc::suseconds_t>()];
+    let sec = libc::time_t::from_ne_bytes(sec.try_into().map_err(|_| bad())?);
+    let usec = libc::suseconds_t::from_ne_bytes(usec.try_into().map_err(|_| bad())?);
+    let sec = u128::try_from(sec).map_err(|_| bad())?;
+    Ok(sec * 1_000_000 + u128::try_from(usec).map_err(|_| bad())?)
 }
 
 /// Flush buffered writes on the volume containing `path` and wait for

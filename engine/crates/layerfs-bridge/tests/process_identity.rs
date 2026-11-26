@@ -59,3 +59,26 @@ fn sync_volume_wait_flushes_existing_directory_and_rejects_missing_path() {
     let err = process::sync_volume_wait(&missing).unwrap_err();
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 }
+
+/// The boot id read by system call is the number the `sysctl` tool's
+/// `kern.bootsessionuuid` gave before, so leases and records written by an
+/// earlier build keep naming this boot.
+#[cfg(target_os = "macos")]
+#[test]
+fn the_boot_id_is_the_sysctl_tools_boot_session_uuid() {
+    let out = std::process::Command::new("/usr/sbin/sysctl")
+        .args(["-n", "kern.bootsessionuuid"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let hex: String = String::from_utf8(out.stdout)
+        .unwrap()
+        .trim()
+        .chars()
+        .filter(|c| *c != '-')
+        .collect();
+    assert_eq!(
+        process::boot().unwrap(),
+        u128::from_str_radix(&hex, 16).unwrap()
+    );
+}
