@@ -34,8 +34,8 @@ Commits use; those are described under [Commit](../commit/README.md) and
    saved pages       one Commit
         |                 |                     |
         v                 v                     v
- StoreService { store: Arc<Store>, owner: OwnerClient, bound <= 64 }
-   kernel_guard::check -> open (Normal)     -> overlay template
+ StoreService { store: Arc<Store>, overlay: Later | Started, bound <= 64 }
+   kernel_guard::check -> open (Normal)     -> overlay template (first write)
         |                                     |
         v                                     v
    Store (SQLite file or PostgreSQL)     overlay owner: one private
@@ -64,9 +64,20 @@ StoreService::open_direct(store, binding, cursor_key, template)
        writer session + read-only control reader
                                             -> Busy("Store open: ..") /
                                                Failed("Store open: ..")
-  4 Owner::start(template, pager 4096 KiB, namespaces 64)
-                                            -> Failed("overlay template: ..")
+     the overlay owner is not started: the service keeps `template`
+
+StoreService::bind (the first file-changing call only)
+  Owner::start(template, pager 4096 KiB, namespaces 64)
+                                            -> that call fails "overlay template: .."
 ```
+
+The overlay owner and its template file start at the first file-changing call
+and serve every later one (#819). A process that only reads (`fs.read`,
+`fs.list`, `fs.stat`, ...) never creates the template, so a one-call process
+such as the `layerfs` command does not pay for creating and deleting it. A
+start that fails fails that call alone; the next file-changing call makes its
+own attempt. `StoreService::new(opened, &owner)` serves through an owner its
+caller started.
 
 A writable `Session::connect` takes the Store directory's writer lane, so two
 openers queue instead of meeting SQLite's `Busy`; a `Busy` open therefore
@@ -223,6 +234,7 @@ not in `methods::call`, and in this repository only tests call it.
 | [`sdk_method_golden.rs`](../../../../engine/crates/layerfs-store-service/tests/sdk_method_golden.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test sdk_method_golden` | macOS or Linux | Every public method's answer and main refusals against [`sdk_methods.txt`](../../../../engine/crates/layerfs-store-service/tests/golden/sdk_methods.txt); `LAYERFS_GOLDEN_PRINT=1` prints instead. |
 | [`method_refusal_order.rs`](../../../../engine/crates/layerfs-store-service/tests/method_refusal_order.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test method_refusal_order` | macOS or Linux | Two-fault calls are refused by the fault the engine meets first. |
 | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/tests/kernel_guard.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test kernel_guard` | Linux (tmpfs refused); macOS (apfs allowed) | `Unsupported` before any file opens: Store bytes unchanged, no template. |
+| [`overlay_template.rs`](../../../../engine/crates/layerfs-store-service/tests/overlay_template.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test overlay_template` | macOS or Linux | Open and a read create no overlay template; the first write starts the owner and later writes reuse it. |
 | [`sdk_reads_during_publish.rs`](../../../../engine/crates/layerfs-store-service/tests/sdk_reads_during_publish.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test sdk_reads_during_publish` | macOS or Linux | With the lane held 3 s, `fs.read`, `fs.stat` and `fs.list` each finish within 750 ms. |
 | [`merge_units.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_units` | macOS or Linux | A unit both sides changed comes whole from the later write. |
 | [`write_refusals.rs`](../../../../engine/crates/layerfs-store-service/tests/write_refusals.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test write_refusals` | macOS or Linux | A write onto a directory is `IsDirectory`, onto another non-file `NotFile`, a bad name `InvalidInput`; nothing is committed. |

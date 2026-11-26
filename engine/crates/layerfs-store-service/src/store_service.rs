@@ -1,5 +1,7 @@
 //! One opened global Store and the overlay owner its file-changing calls
 //! construct through: what a Store call needs, and nothing of a Sandbox.
+//! The owner and its template file start at the first file-changing call,
+//! so a process that only reads never creates them (#819).
 //!
 //! A file-changing call (`fs.write`, `fs.apply`, ...) binds one private
 //! Workspace, changes it, commits it once and closes it. The binding is this
@@ -17,7 +19,7 @@ use layerfs_overlay::ProfileConfig;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::ReservationBlocks;
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -89,22 +91,45 @@ fn outdated(error: &layerfs_storage::StorageError) -> Option<&'static str> {
 pub struct StoreService {
     pub opened: OpenedStore,
     pub store: Arc<Store>,
-    owned: Option<Owner>,
-    owner: OwnerClient,
+    /// The overlay owner, or where the first `bind` starts it.
+    overlay: Mutex<Overlay>,
     capacity: usize,
     bound: AtomicUsize,
     retained: Mutex<Vec<Retained>>,
 }
 
+/// A service's overlay owner: not started yet (the template it starts
+/// over), or started, by the service (`owned`) or by its caller.
+enum Overlay {
+    Later(PathBuf),
+    Started {
+        owned: Option<Owner>,
+        client: OwnerClient,
+    },
+}
+
 impl StoreService {
     /// Serves Store calls over `opened`, constructing through `owner`.
     pub fn new(opened: OpenedStore, owner: &Owner) -> Self {
+        let overlay = Overlay::Started {
+            owned: None,
+            client: owner.client(),
+        };
+        Self::serving(opened, overlay, owner.configuration().namespaces)
+    }
+
+    /// Serves Store calls over `opened`; the overlay owner starts over
+    /// `template` when the first file-changing call needs it.
+    fn later(opened: OpenedStore, template: &Path) -> Self {
+        Self::serving(opened, Overlay::Later(template.to_path_buf()), CALLS)
+    }
+
+    fn serving(opened: OpenedStore, overlay: Overlay, capacity: usize) -> Self {
         Self {
             store: opened.store.clone(),
             opened,
-            owned: None,
-            owner: owner.client(),
-            capacity: owner.configuration().namespaces,
+            overlay: Mutex::new(overlay),
+            capacity,
             bound: AtomicUsize::new(0),
             retained: Mutex::new(Vec::new()),
         }
@@ -112,10 +137,10 @@ impl StoreService {
 
     /// Opens the installed Store at `store` for this process's Store calls.
     /// The kernel guard runs first, before any file is opened; then the
-    /// Store, selected Normal explicitly, and the overlay template at
-    /// `template` (a local file, created here) for the calls' private
-    /// Workspaces. No busy handler, retry or fsync: one more opener, as a
-    /// daemon is.
+    /// Store, selected Normal explicitly. The overlay template at `template`
+    /// (a local file) for the calls' private Workspaces is created by the
+    /// first file-changing call, not here. No busy handler, retry or fsync:
+    /// one more opener, as a daemon is.
     pub fn open_direct(
         store: &Path,
         binding: &[u8],
@@ -138,7 +163,7 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(open_refusal)?;
-        Self::owning(opened, template)
+        Ok(Self::later(opened, template))
     }
 
     /// Opens a PostgreSQL Store (#506) for this process's Store calls, with
@@ -160,34 +185,44 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(open_refusal)?;
-        Self::owning(opened, template)
+        Ok(Self::later(opened, template))
     }
 
-    /// Serves `opened`, starting the overlay owner over `template`.
-    fn owning(opened: OpenedStore, template: &Path) -> Result<Self, OpenRefusal> {
-        let owner = Owner::start(
-            template,
-            ProfileConfig {
-                pager_kib: PAGER_KIB,
-                max_pages: None,
-            },
-            OwnerConfig { namespaces: CALLS },
-        )
-        .map_err(|error| OpenRefusal::Failed(format!("overlay template: {error}")))?;
-        let mut service = Self::new(opened, &owner);
-        service.owned = Some(owner);
-        Ok(service)
+    /// The overlay owner, started over the template by the first call that
+    /// needs it. A start that fails fails that call alone; nothing is retried
+    /// for it.
+    fn owner(&self) -> Result<OwnerClient, String> {
+        let mut overlay = self.overlay.lock().unwrap_or_else(|e| e.into_inner());
+        let template = match &*overlay {
+            Overlay::Started { client, .. } => return Ok(client.clone()),
+            Overlay::Later(template) => template,
+        };
+        let profile = ProfileConfig {
+            pager_kib: PAGER_KIB,
+            max_pages: None,
+        };
+        let owned = Owner::start(template, profile, OwnerConfig { namespaces: CALLS })
+            .map_err(|error| format!("overlay template: {error}"))?;
+        let client = owned.client();
+        *overlay = Overlay::Started {
+            owned: Some(owned),
+            client: client.clone(),
+        };
+        Ok(client)
     }
 
     /// Returns the Store's idle producer handle's kept ordinals
     /// ([`Store::release_producer`]), then stops the overlay owner this
     /// service started. Private Workspaces kept with an uncertain Commit stay
     /// with it until then.
-    pub fn close(mut self) -> Result<(), String> {
+    pub fn close(self) -> Result<(), String> {
         self.store.release_producer();
-        match self.owned.take() {
-            Some(owner) => owner.stop().map_err(|error| error.to_string()),
-            None => Ok(()),
+        let overlay = self.overlay.into_inner().unwrap_or_else(|e| e.into_inner());
+        match overlay {
+            Overlay::Started {
+                owned: Some(owner), ..
+            } => owner.stop().map_err(|error| error.to_string()),
+            _ => Ok(()),
         }
     }
 
@@ -198,11 +233,8 @@ impl StoreService {
         branch: BranchId,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, String> {
-        if let Some(stopped) = self
-            .owner
-            .maintenance_failure()
-            .map_err(|e| e.to_string())?
-        {
+        let owner = self.owner()?;
+        if let Some(stopped) = owner.maintenance_failure().map_err(|e| e.to_string())? {
             return Err(format!("overlay maintenance stopped: {stopped}"));
         }
         let admitted = self
@@ -215,7 +247,7 @@ impl StoreService {
         }
         let bound = crate::telemetry::phase(timing, "store.bind", || {
             self.store
-                .bind_private(self.owner.clone(), BindRequest { workspace, branch })
+                .bind_private(owner, BindRequest { workspace, branch })
         });
         match bound {
             Ok(success) => Ok(Arc::new(success.workspace)),
@@ -230,7 +262,7 @@ impl StoreService {
     pub fn release(&self, workspace: &BoundWorkspace) -> Result<(), String> {
         workspace.close().map_err(|e| format!("{e:?}"))?;
         self.bound.fetch_sub(1, Ordering::AcqRel);
-        self.owner
+        self.owner()?
             .retire_namespace(workspace.route().namespace())
             .map_err(|e| e.to_string())
     }
