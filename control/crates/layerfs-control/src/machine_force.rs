@@ -234,7 +234,7 @@ fn stop_locked(home: &Path, name: &str, mut phases: Phases<'_, '_>) -> Outcome {
 /// process left, or one whose owner has ended (`Unresolved`); one a live
 /// process still holds stays `Busy`. It never silently retries, nor clears
 /// another kind of unresolved operation.
-fn force_record(home: &Path, name: &str) -> Result<MachineRecord> {
+pub(crate) fn force_record(home: &Path, name: &str) -> Result<MachineRecord> {
     let record = MachineRecord::of(home, name)?;
     if record.op().is_some_and(|op| {
         op.name() == "machine.stop" && op.uncertain() && (op.mine() || !op.owner_alive())

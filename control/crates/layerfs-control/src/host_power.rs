@@ -26,10 +26,10 @@ fn set(home: &Path, name: &MachineName, stopped: bool) -> Result<bool, SdkRefusa
 }
 
 pub(crate) fn start(home: &Path, name: &MachineName) -> Outcome {
-    layerfs_machine::machine_of(home, name.as_str())?;
     let _operation = layerfs_machine::force_stop_lock(home, name.as_str())?;
+    let record = layerfs_machine::machine_of(home, name.as_str())?;
     let paths = HostPaths::new(home)?;
-    if MachineRecord::of(home, name.as_str())?.recorded_state() == Some("stopped") && paths.fits() {
+    if record.recorded_state() == Some("stopped") && paths.fits() {
         // A stop that reported holders may still have a draining worker.
         // Wait for its lifetime lock before the new start sends anything.
         let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
@@ -58,8 +58,12 @@ pub(crate) fn stop(
     name: &MachineName,
     force: bool,
 ) -> Outcome {
-    layerfs_machine::machine_of(home, name.as_str())?;
     let _operation = layerfs_machine::force_stop_lock(home, name.as_str())?;
+    if force {
+        crate::machine_force::force_record(home, name.as_str())?;
+    } else {
+        layerfs_machine::machine_of(home, name.as_str())?;
+    }
     let changed = set(home, name, true)?;
     let paths = HostPaths::new(home)?;
     let drained = if paths.fits()

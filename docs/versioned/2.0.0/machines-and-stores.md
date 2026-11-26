@@ -248,7 +248,8 @@ on this host then receive `Unavailable` with a start command. A previously admit
 call finishes. If holders remain, stop reports `InUse` with the Sandbox names
 and Store process IDs, and the host stays stopped. A later stop checks again.
 A forced stop performs the host Sandbox teardown and records its outcomes.
-Direct PostgreSQL calls continue while the host is stopped.
+A later explicit forced stop can reconcile an uncertain previous stop after
+its owner exits. Direct PostgreSQL calls continue while the host is stopped.
 
 ### Routes
 

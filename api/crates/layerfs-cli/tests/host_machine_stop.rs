@@ -131,3 +131,40 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
     assert_eq!(proof::commits(&home), history);
     cli(&home, &stop).ok();
 }
+
+#[test]
+fn force_reconciles_only_the_gone_owners_uncertain_stop() {
+    use layerfs_api::home::{paths, read_record, with_field, write_record};
+    let home = proof::create();
+    let path = paths::machine_record(&home.paths.home, HOST_MACHINE);
+    cli(&home, &["machine", "stop", HOST_MACHINE]).ok();
+    let stopped = read_record(&path).unwrap().unwrap();
+
+    for operation in ["machine.update", "machine.stop"] {
+        let intent = SdkValue::map([
+            ("id", SdkValue::text("op-1111222233334444")),
+            ("name", SdkValue::text(operation)),
+            ("phase", SdkValue::text("stop")),
+            (
+                "owner",
+                SdkValue::map([("pid", SdkValue::Int(2_000_000_000))]),
+            ),
+            ("uncertain", SdkValue::Bool(true)),
+        ]);
+        let pending = with_field(stopped.clone(), "op", intent);
+        write_record(&path, &pending).unwrap();
+        cli(&home, &["machine", "start", HOST_MACHINE]).refused("Unresolved");
+        cli(&home, &["machine", "stop", HOST_MACHINE]).refused("Unresolved");
+        assert_eq!(read_record(&path).unwrap().unwrap(), pending);
+        let mut force = cli(&home, &["machine", "stop", HOST_MACHINE, "--force"]);
+        if operation == "machine.stop" {
+            force.ok();
+            let resolved = read_record(&path).unwrap().unwrap();
+            assert_eq!(resolved.get_text("state"), Some("stopped"));
+            assert!(resolved.get("op").is_none());
+        } else {
+            force.refused("Unresolved");
+            assert_eq!(read_record(&path).unwrap().unwrap(), pending);
+        }
+    }
+}

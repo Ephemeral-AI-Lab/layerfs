@@ -434,3 +434,7 @@ inspects holders under each Store lock. This ordering lets earlier leases
 finish and exposes the process identities still holding the Store.
 Force uses the existing per-Sandbox stop with its recorded runtime identity.
 The machine remains stopped when a holder or teardown refusal is reported.
+
+Lifecycle calls recheck the machine intent after acquiring the lifecycle lock.
+An explicit forced stop can reconcile an uncertain stop from the same or
+a terminated owner. Other unresolved operations keep their custody.
