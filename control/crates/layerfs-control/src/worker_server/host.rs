@@ -29,6 +29,17 @@ const CONTROL: Lane = Lane {
     threads: 2,
     name: "layerfs-host-control",
 };
+/// PostgreSQL reads (#819 P-B), handed over by an ordinary thread once their
+/// request is read, so they never occupy an ordinary thread or slot while
+/// they wait for a session or the server: calls on other Stores keep
+/// progressing. `slots` bounds the reads handed over and not yet answered;
+/// past it the ordinary thread holding the next one waits for room.
+const POSTGRES: Lane = Lane {
+    index: 2,
+    slots: 64,
+    threads: layerfs_store::postgresql::pool::PER_PROCESS,
+    name: "layerfs-host-postgresql",
+};
 
 #[derive(Clone, Copy)]
 struct Lane {
@@ -40,6 +51,8 @@ struct Lane {
 
 struct Pending {
     stream: UnixStream,
+    /// A PostgreSQL read's request, already read by an ordinary thread.
+    request: Option<SdkValue>,
 }
 
 #[derive(Default)]
@@ -50,7 +63,7 @@ struct Queue {
 }
 
 struct Activity {
-    lanes: [Queue; 2],
+    lanes: [Queue; 3],
     last_call: Instant,
     admitted: usize,
     draining: bool,
@@ -82,7 +95,9 @@ pub(super) struct HostServer {
     home_id: String,
     identity: Vec<(&'static str, SdkValue)>,
     activity: Mutex<Activity>,
-    queued: [Condvar; 2],
+    queued: [Condvar; 3],
+    /// Signalled when a handed-over PostgreSQL read is answered.
+    room: Condvar,
     wake: UnixStream,
 }
 
@@ -103,6 +118,7 @@ impl HostServer {
         for ready in &self.queued {
             ready.notify_all();
         }
+        self.room.notify_all();
         self.notify();
     }
 
@@ -122,36 +138,81 @@ impl HostServer {
     }
 
     fn work(&self, lane: Lane) {
-        while let Some(connection) = self.pop(lane) {
+        while let Some(Pending { stream, request }) = self.pop(lane) {
             let mut admitted = false;
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                super::connection::serve_host_connection(
-                    self,
-                    &connection.stream,
-                    lane.index == CONTROL.index,
-                    &mut admitted,
-                )
-            }));
+            let serve = |stream: &UnixStream, request, admitted: &mut bool| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    super::connection::serve_host_connection(
+                        self,
+                        stream,
+                        lane.index == CONTROL.index,
+                        request,
+                        admitted,
+                    )
+                }))
+            };
+            let mut result = serve(&stream, request, &mut admitted);
+            let mut stream = Some(stream);
+            if let Ok(Served::Postgres(request)) = result {
+                // a PostgreSQL read goes to its own lane; draining, it is
+                // answered here (refused, as every call admitted then)
+                result = match stream.take().map(|open| self.hand_over(open, request)) {
+                    Some(Some((open, request))) => {
+                        let served = serve(&open, Some(request), &mut admitted);
+                        stream = Some(open);
+                        served
+                    }
+                    _ => Ok(Served::HandedOver),
+                };
+            }
             if result.is_err() {
                 let _ = layerfs_home::trace::steps_take();
                 log("a host connection panicked; its answer was lost");
             }
-            drop(connection);
+            drop(stream);
             let mut activity = self.lock();
             activity.lanes[lane.index].outstanding -= 1;
             if admitted {
                 activity.admitted -= 1;
                 // Only calls keep the worker warm (§8.3, §7.3). Management
                 // observes it: polling ping must not keep it alive (§12).
-                if lane.index == ORDINARY.index {
+                if lane.index != CONTROL.index {
                     activity.last_call = Instant::now();
                 }
             }
-            if matches!(result, Ok(true)) {
+            if matches!(result, Ok(Served::Answered(true))) {
                 activity.answered += 1;
             }
             drop(activity);
+            if lane.index == POSTGRES.index {
+                self.room.notify_one();
+            }
             self.notify();
+        }
+    }
+
+    /// Hands PostgreSQL read `request` on `stream` to its lane, waiting for
+    /// room there; while draining it is handed back, to be answered here.
+    fn hand_over(&self, stream: UnixStream, request: SdkValue) -> Option<(UnixStream, SdkValue)> {
+        let mut activity = self.lock();
+        loop {
+            if activity.draining {
+                return Some((stream, request));
+            }
+            let queue = &mut activity.lanes[POSTGRES.index];
+            if queue.outstanding < POSTGRES.slots {
+                queue.outstanding += 1;
+                queue.pending.push_back(Pending {
+                    stream,
+                    request: Some(request),
+                });
+                self.queued[POSTGRES.index].notify_one();
+                return None;
+            }
+            activity = self
+                .room
+                .wait(activity)
+                .unwrap_or_else(|error| error.into_inner());
         }
     }
 
@@ -170,7 +231,10 @@ impl HostServer {
             Ok((stream, _)) => {
                 stream.set_nonblocking(false)?;
                 queue.outstanding += 1;
-                queue.pending.push_back(Pending { stream });
+                queue.pending.push_back(Pending {
+                    stream,
+                    request: None,
+                });
                 self.queued[lane.index].notify_one();
                 Ok(())
             }
@@ -328,6 +392,7 @@ impl HostServer {
                     ),
                     ("admitted", SdkValue::Int(activity.admitted as i64)),
                     ("stores", SdkValue::Int(stores.unwrap_or_default() as i64)),
+                    ("postgresql", postgresql(&activity)),
                     (
                         "queued",
                         SdkValue::Int(
@@ -454,6 +519,32 @@ impl HostServer {
     }
 }
 
+/// What one connection came to on its thread.
+pub(super) enum Served {
+    /// Answered (`true`) or ended without an answer.
+    Answered(bool),
+    /// A PostgreSQL read whose request was read, for its own lane.
+    Postgres(SdkValue),
+    /// Handed to the PostgreSQL lane, which answers and accounts it.
+    HandedOver,
+}
+
+/// The ping's `postgresql` field (§11): held read sessions idle and lent,
+/// calls waiting for one, and reads handed over and not yet answered.
+fn postgresql(activity: &Activity) -> SdkValue {
+    let counts = layerfs_store::postgresql::pool::counts();
+    SdkValue::map([
+        ("stores", SdkValue::Int(counts.stores as i64)),
+        ("idle", SdkValue::Int(counts.idle as i64)),
+        ("lent", SdkValue::Int(counts.lent as i64)),
+        ("waiting", SdkValue::Int(counts.waiting as i64)),
+        (
+            "reads",
+            SdkValue::Int(activity.lanes[POSTGRES.index].outstanding as i64),
+        ),
+    ])
+}
+
 /// Whether a connection is waiting in the listener's kernel queue.
 fn queued(listener: &UnixListener) -> io::Result<bool> {
     let mut ready = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
@@ -490,12 +581,13 @@ fn run(
         identity: layerfs_home::process::identity(),
         activity: Mutex::new(Activity::new()),
         queued: Default::default(),
+        room: Condvar::new(),
         wake,
     };
     let served = std::thread::scope(|scope| {
         let result = (|| {
             let server = &server;
-            for lane in [CONTROL, ORDINARY] {
+            for lane in [CONTROL, ORDINARY, POSTGRES] {
                 for _ in 0..lane.threads {
                     std::thread::Builder::new()
                         .name(lane.name.to_owned())
@@ -519,6 +611,8 @@ fn run(
 /// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
 pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
+    // before any request, which may carry a PostgreSQL password, is read
+    layerfs_store::host_postgresql::limit_core_dumps();
     let paths = HostPaths::new(home)?;
     let guard = paths.try_hold()?.ok_or_else(|| {
         refused(

@@ -221,23 +221,58 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
     )])
 }
 
-/// Serves one Unix connection on a reserved host worker thread.
+/// Absolute deadlines apply to host protocol I/O. A Store producer is never
+/// cancelled merely because the peer stops reading.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+const INGRESS: Duration = Duration::from_secs(5);
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+const EGRESS: Duration = Duration::from_secs(5);
+
+/// Serves one Unix connection on a reserved host worker thread: its hello
+/// and request, unless `read` holds a request an ordinary thread already
+/// read, then its operation and answer. A PostgreSQL read read here is
+/// returned for the PostgreSQL lane instead (#819 P-B).
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub(super) fn serve_host_connection(
     server: &super::host::HostServer,
     socket: &std::os::unix::net::UnixStream,
     management: bool,
+    read: Option<SdkValue>,
     admitted: &mut bool,
-) -> bool {
-    use layerfs_home::trace;
-    use layerfs_machine::worker::{
-        host_check_peer, read_host_frame, write_host_frame, HOST_MAX_REPLY, HOST_MAX_REQUEST,
+) -> super::host::Served {
+    use super::host::Served;
+    let request = match read {
+        Some(request) => request,
+        None => match read_host_request(server, socket, management) {
+            Some(request) if !management && is_postgres_read(&request) => {
+                layerfs_store::host_postgresql::harden();
+                return Served::Postgres(request);
+            }
+            Some(request) => request,
+            None => return Served::Answered(false),
+        },
     };
+    Served::Answered(answer_host_request(
+        server, socket, management, &request, admitted,
+    ))
+}
 
-    // Absolute deadlines apply to protocol I/O. A Store producer is never
-    // cancelled merely because the peer stops reading.
-    const INGRESS: Duration = Duration::from_secs(5);
-    const EGRESS: Duration = Duration::from_secs(5);
+/// Whether `request` is a PostgreSQL read for the host worker's own lane.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+fn is_postgres_read(request: &SdkValue) -> bool {
+    request.get_text("op") == Some(layerfs_store::host_postgresql::OP)
+}
+
+/// The hello, then the one request frame, within their deadlines.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+fn read_host_request(
+    server: &super::host::HostServer,
+    socket: &std::os::unix::net::UnixStream,
+    management: bool,
+) -> Option<SdkValue> {
+    use layerfs_machine::worker::{
+        host_check_peer, read_host_frame, write_host_frame, HOST_MAX_REQUEST,
+    };
 
     if host_check_peer(socket).is_err()
         || write_host_frame(
@@ -250,16 +285,30 @@ pub(super) fn serve_host_connection(
         )
         .is_err()
     {
-        return false;
+        return None;
     }
     let max = if management {
         MAX_HELLO
     } else {
         HOST_MAX_REQUEST
     };
-    let Ok(Some(request)) = read_host_frame(socket, max, Some(Instant::now() + INGRESS)) else {
-        return false;
-    };
+    read_host_frame(socket, max, Some(Instant::now() + INGRESS))
+        .ok()
+        .flatten()
+}
+
+/// `request`'s operation and its answer: whether the answer was written.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+fn answer_host_request(
+    server: &super::host::HostServer,
+    socket: &std::os::unix::net::UnixStream,
+    management: bool,
+    request: &SdkValue,
+    admitted: &mut bool,
+) -> bool {
+    use layerfs_home::trace;
+    use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
+
     let Some(request_id) = request
         .get_text("request_id")
         .filter(|id| !id.is_empty() && id.len() <= 128)

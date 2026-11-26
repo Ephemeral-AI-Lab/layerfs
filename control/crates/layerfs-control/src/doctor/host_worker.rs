@@ -50,6 +50,7 @@ fn evidence(observation: &HostObservation) -> SdkValue {
             "admitted",
             "queued",
             "stores",
+            "postgresql",
             "last_close",
         ]
         .into_iter()

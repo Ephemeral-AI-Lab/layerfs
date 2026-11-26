@@ -209,6 +209,7 @@ impl PostgresHandles {
             .map_err(|_| PersistenceError::Uncertain)?
             .backend = Some(checked.backend);
         let (incarnation, tables) = (checked.incarnation, checked.acquisition);
+        let binding = checked.binding.clone();
         // Spec §5.2/§10: every write transaction this session runs compares
         // `history_meta.catalog_incarnation` with the generation the open read.
         session
@@ -219,6 +220,7 @@ impl PostgresHandles {
             Self {
                 storage: Arc::new(PostgresStorage {
                     session: session.clone(),
+                    binding,
                 }),
                 acquisition: PostgresAcquisition::new(session.clone(), tables),
                 history: HistoryProvider {

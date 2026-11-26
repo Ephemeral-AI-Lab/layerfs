@@ -455,13 +455,14 @@ impl Update {
             self.trial.text("user").unwrap_or_default(),
         );
         // every saved change is a new login for the host worker (#819 P-B)
+        let replaced = current.login_revision().map(str::to_owned);
         let current = current.with_new_login_revision()?;
         current.write(home_dir)?;
         if let Some(password) = &self.new_password {
             login::save(home_dir, name, password)?;
         }
         drop((store_lock, home_lock));
-        crate::host_postgresql::retire(home_dir, name);
+        crate::host_postgresql::retire(home_dir, name, replaced.as_deref());
         crate::observed::record(home_dir, name, None, &reach);
         Ok(answer(&current, "updated", None))
     }
@@ -478,8 +479,8 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
         login::forget(home_dir, name)?;
         return Ok(disconnected(name));
     }
-    let _lock = home::lock::take(home_dir)?;
-    let _store = crate::record::lock(home_dir, name)?;
+    let lock = home::lock::take(home_dir)?;
+    let store = crate::record::lock(home_dir, name)?;
     let record = StoreRecord::read(home_dir, name)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))?;
     if record.kind()? != StoreKind::Postgresql {
@@ -495,7 +496,9 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
     login::forget(home_dir, name)?;
     layerfs_home::home::generation::moved(home_dir);
-    crate::host_postgresql::retire(home_dir, name);
+    // the worker's retire takes the Store's lock: past this call's locks
+    drop((store, lock));
+    crate::host_postgresql::retire(home_dir, name, record.login_revision());
     Ok(disconnected(name))
 }
 

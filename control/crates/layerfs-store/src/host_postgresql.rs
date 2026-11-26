@@ -9,7 +9,8 @@
 //! non-secret login revision, only in the authenticated request. The worker
 //! reads no secret itself, from its environment or the home, and writes
 //! none: it puts the password into the record's own address for the
-//! session it opens and keeps it in that session's memory alone.
+//! Store's sessions and drops it when the Store's last session closes
+//! ([`crate::postgresql::pool`]).
 //!
 //! Under the Store's lock the worker re-reads the record: a Store that is
 //! gone, blocked by an operation, or at another login revision is refused
@@ -17,7 +18,8 @@
 //! route does, and holds it for the call alone: no lease is held between
 //! calls, so `store disconnect`, compaction and upgrade see a warm worker
 //! as idle. The call then runs once on a held session
-//! ([`crate::postgresql::pool`]).
+//! ([`crate::postgresql::pool`]). Only [`READS`] are served here, never a
+//! method the SQLite host route may add.
 use crate::host_read::Method;
 use crate::lease;
 use crate::open_args::OpenArgs;
@@ -30,9 +32,22 @@ use std::path::Path;
 
 /// The host worker's PostgreSQL read operation.
 pub const OP: &str = "store.postgresql_read";
-/// The host worker's management operation that retires a Store's held
-/// PostgreSQL sessions.
+/// The host worker's management operation that retires one login revision
+/// of a Store's held PostgreSQL sessions.
 pub const RETIRE: &str = "store.postgresql_retire";
+
+/// The methods this route serves: its own list, so that a method the
+/// SQLite host route adds (a write) never reaches a PostgreSQL read-only
+/// session.
+const READS: [&str; 3] = ["fs.read", "fs.stat", "fs.list"];
+
+/// `method`'s argument and answer checks when this route serves it.
+fn read_method(method: &str) -> Option<Method> {
+    READS
+        .contains(&method)
+        .then(|| Method::of(method))
+        .flatten()
+}
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) fn routed(
@@ -49,7 +64,7 @@ pub(crate) fn routed(
     let StoreRef::Postgres { .. } = &target.store_ref else {
         return None;
     };
-    let checked = Method::of(method)?;
+    let checked = read_method(method)?;
     let fields = SdkValue::Map(fields.to_vec());
     // a record connected before login revisions stays direct
     let revision = target.record.login_revision()?;
@@ -105,7 +120,7 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
         return Err(invalid());
     }
     let method = request.get_text("method").ok_or_else(invalid)?;
-    let allowed = Method::of(method).ok_or_else(|| {
+    let allowed = read_method(method).ok_or_else(|| {
         refused(
             "Unsupported",
             "the host worker only serves file read, stat and list",
@@ -134,7 +149,7 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
     let mut fields = fields.clone();
     fields.retain(|(name, _)| name != "project");
     fields.push(("project".to_owned(), SdkValue::text(project.as_str())));
-    let outcome = crate::postgresql::pool::run(revision, &open, |service| {
+    let outcome = crate::postgresql::pool::run(home, &store, revision, &open, |service| {
         crate::service::dispatch(service, method, SdkValue::Map(fields))
     });
     drop(lease);
@@ -167,36 +182,45 @@ fn admit(
     Ok((lease::claim_unblocked_locked(home, store)?, record))
 }
 
-/// Answers the management request that retires Store `store`'s held
-/// sessions: `{ closed }`, how many idle ones closed.
+/// Answers the management request that retires login revision `revision`
+/// of Store `store`'s held sessions, unless it is the record's current one:
+/// `{ closed }`, how many idle sessions closed.
 pub fn retire_request(home: &Path, request: &SdkValue) -> Outcome {
+    let invalid = || refused("InvalidInput", "a retire names its Store and revision");
     let store = request
         .get_text("store")
-        .ok_or_else(|| refused("InvalidInput", "a retire names its Store"))
+        .ok_or_else(invalid)
         .and_then(StoreName::parse)?;
-    let closed = crate::postgresql::pool::retire_store(home, &store);
+    let revision = (request.get_text("revision"))
+        .filter(|revision| !revision.is_empty())
+        .ok_or_else(invalid)?;
+    let closed = crate::postgresql::pool::retire(home, &store, revision)?;
     Ok(SdkValue::map([("closed", SdkValue::Int(closed as i64))]))
 }
 
-/// After a `store connect`, `disconnect` or upgrade of Store `store`: asks
-/// a running host worker of `home` to retire the Store's held sessions. It
-/// never starts a worker, and its failure changes nothing: the worker's
-/// admission refuses the old login revision regardless.
-pub fn retire(home: &Path, store: &str) {
-    crate::postgresql::pool::retire_store(home, store);
+/// After a `store connect` or `disconnect` replaced or removed login
+/// revision `revision` of Store `store`, and with the Store's locks
+/// dropped: asks a running host worker of `home` to retire it. It never
+/// starts a worker, and its failure changes nothing: a call at the old
+/// revision is refused when it is admitted or when it meets the sessions.
+pub fn retire(home: &Path, store: &str, revision: Option<&str>) {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    if layerfs_machine::in_process().is_some() {
+    if let (Some(revision), Some(_)) = (revision, layerfs_machine::in_process()) {
         if let Ok(paths) = layerfs_machine::worker::HostPaths::new(home) {
-            let args = SdkValue::map([("store", SdkValue::text(store))]);
+            let args = SdkValue::map([
+                ("store", SdkValue::text(store)),
+                ("revision", SdkValue::text(revision)),
+            ]);
             let _ = paths.call_existing(true, RETIRE, args);
         }
     }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let _ = (home, store, revision);
 }
 
-/// Keeps a held password out of core dumps: no core file, and on Linux a
-/// process no other process of its user may read or trace. Once, before
-/// the first PostgreSQL request is served.
-pub fn harden() {
+/// No core file from this process: the host worker sets it before it reads
+/// its first request, since any request may carry a PostgreSQL password.
+pub fn limit_core_dumps() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         #[cfg(unix)]
@@ -208,12 +232,28 @@ pub fn harden() {
                 format!("layerfs host worker: core dumps not limited: {error}\n").as_bytes(),
             );
         }
-        #[cfg(target_os = "linux")]
-        if let Err(error) = nix::sys::prctl::set_dumpable(false) {
-            let _ = std::io::Write::write_all(
-                &mut std::io::stderr(),
-                format!("layerfs host worker: process left dumpable: {error}\n").as_bytes(),
-            );
-        }
     });
+}
+
+/// Keeps a held password out of core dumps and, on Linux, out of reach of
+/// the user's other processes: no core file, and a process no other process
+/// of its user may read or trace (`PR_SET_DUMPABLE` 0), set once, as soon as
+/// a PostgreSQL request is decoded and before any session holds its
+/// password. A worker that served no PostgreSQL call stays observable by
+/// its user (`/proc/<pid>/environ`), which proves its cleared environment.
+/// macOS has no non-dumpable flag: there only the core file limit is set.
+pub fn harden() {
+    limit_core_dumps();
+    #[cfg(target_os = "linux")]
+    {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            if let Err(error) = nix::sys::prctl::set_dumpable(false) {
+                let _ = std::io::Write::write_all(
+                    &mut std::io::stderr(),
+                    format!("layerfs host worker: process left dumpable: {error}\n").as_bytes(),
+                );
+            }
+        });
+    }
 }

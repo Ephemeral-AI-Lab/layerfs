@@ -7,7 +7,7 @@ use super::{
 };
 use crate::backend::records::BackendError;
 use crate::PostgresSelection;
-use postgres::{types::ToSql, Row, SimpleQueryMessage, Statement};
+use postgres::{types::ToSql, Row, SimpleQueryMessage, SimpleQueryRow, Statement};
 use postgres_native_tls::MakeTlsConnector;
 use std::{
     future::Future,
@@ -471,10 +471,10 @@ impl Driver {
             Self::Closed => false,
         }
     }
-    /// The first column of the first row `sql` answers within `timeout`, as
-    /// an integer (one round trip): a held session's readiness check, never
-    /// a retry. `None` when nothing parsable answered in time.
-    pub(crate) fn first_integer(&mut self, sql: &str, timeout: Duration) -> Option<u64> {
+    /// The first row `sql` answers within `timeout` (one round trip): a
+    /// held session's readiness check, never a retry. `None` when no row
+    /// answered in time.
+    pub(crate) fn first_row(&mut self, sql: &str, timeout: Duration) -> Option<SimpleQueryRow> {
         let Self::Ordinary(client) = self else {
             return None;
         };
@@ -484,8 +484,8 @@ impl Driver {
             .block_on(async { tokio::time::timeout(timeout, query).await });
         let messages = answer.ok()?.ok()?;
         client.heard.set(Instant::now());
-        messages.iter().find_map(|message| match message {
-            SimpleQueryMessage::Row(row) => row.get(0)?.parse().ok(),
+        messages.into_iter().find_map(|message| match message {
+            SimpleQueryMessage::Row(row) => Some(row),
             _ => None,
         })
     }

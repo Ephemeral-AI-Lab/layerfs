@@ -15,6 +15,9 @@ use std::sync::Arc;
 /// Application-owned bounded physical persistence over a PostgreSQL Store.
 pub struct PostgresStorage {
     pub(crate) session: Arc<Session>,
+    /// The binding key the open's check read (#819 P-B: a held session's
+    /// readiness check compares it again).
+    pub(crate) binding: Vec<u8>,
 }
 
 impl PostgresStorage {
@@ -90,11 +93,14 @@ impl PostgresStorage {
         }
         alive
     }
-    /// Whether this idle read session can serve one more call at the
-    /// catalog generation its open checked: not quarantined, its connection
-    /// standing, and the Store's `catalog_incarnation`, read now in one
-    /// round trip answered within [`crate::READER_CHECK_TIMEOUT`] (counted),
-    /// still the session's. A compaction swap or an upgrade since the open,
+    /// Whether this idle read session can serve one more call as the Store
+    /// its open checked (#819 P-B): not quarantined, its connection
+    /// standing, and the Light check ([`crate::PostgresCheck::Light`]: the
+    /// schema and format version, the recorded binding and the catalog id
+    /// derived from it), run now in one round trip answered within
+    /// [`crate::READER_CHECK_TIMEOUT`] (counted), still matching the open's
+    /// binding, catalog generation (`catalog_incarnation`) and policy. A
+    /// compaction swap, an upgrade, a schema dropped and initialized again,
     /// a closed or silent connection, or a late answer quarantines it and
     /// its caller opens a new session. Nothing of the caller's operation has
     /// been sent, so no operation is retried.
@@ -109,17 +115,20 @@ impl PostgresStorage {
             .session
             .incarnation
             .load(std::sync::atomic::Ordering::SeqCst);
-        let sql = format!(
-            "SELECT catalog_incarnation::text FROM {}.history_meta WHERE id=1",
-            self.session.settings.schema
-        );
         state.work.round_trips += 1;
-        let current = opened != 0
-            && state.client.alive()
-            && state
-                .client
-                .first_integer(&sql, crate::READER_CHECK_TIMEOUT)
-                == Some(opened);
+        let checked = (opened != 0 && state.client.alive())
+            .then(|| {
+                super::super::schema::light_within(
+                    &mut state.client,
+                    &self.session.settings.schema,
+                    &self.binding,
+                    crate::READER_CHECK_TIMEOUT,
+                )
+            })
+            .flatten();
+        let current = checked.is_some_and(|checked| {
+            checked.incarnation == opened && Some(&checked.policy) == self.session.policy.get()
+        });
         if !current {
             state.quarantine();
         }

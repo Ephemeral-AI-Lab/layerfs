@@ -776,3 +776,233 @@ fn stopped_host_and_records_without_a_revision_stay_direct() {
     assert!(!home.paths.socket.exists(), "no revision: the direct route");
     assert!(db.settle(0).is_empty());
 }
+
+/// One management request on the worker's control socket.
+fn manage(home: &Fixture, op: &str, args: SdkValue) -> SdkValue {
+    let socket = UnixStream::connect(&home.paths.control).unwrap();
+    let end = Instant::now() + Duration::from_secs(10);
+    let hello = read_host_frame(&socket, MAX_HELLO, Some(end))
+        .unwrap()
+        .unwrap();
+    let request = SdkValue::map([
+        ("op", SdkValue::text(op)),
+        ("args", args),
+        ("generation", hello.get("generation").unwrap().clone()),
+        ("request_id", SdkValue::text("pb-manage-1")),
+    ]);
+    write_host_frame(&socket, &request, HOST_MAX_REPLY, end).unwrap();
+    read_host_frame(&socket, HOST_MAX_REPLY, Some(end))
+        .unwrap()
+        .unwrap()
+}
+
+/// The role's backends waiting on a lock.
+fn waiting_on_lock(db: &Db, count: usize) -> usize {
+    let mut admin = db.admin();
+    let end = Instant::now() + Duration::from_secs(20);
+    loop {
+        let row = admin
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = $1 AND usename = $1
+                 AND wait_event_type = 'Lock'",
+                &[&db.name],
+            )
+            .unwrap();
+        let waiting = row.get::<_, i64>(0) as usize;
+        if waiting >= count || Instant::now() > end {
+            return waiting;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn a_retire_names_its_revision_and_never_fences_the_current_login() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "fence");
+    let home = connected(&db, db.at());
+    let path = &home.paths.home;
+    ok(path, READ);
+    let held = db.settle(1);
+    let current = revision(path);
+
+    // a retire that names the record's current revision changes nothing
+    let answer = manage(
+        &home,
+        "store.postgresql_retire",
+        SdkValue::map([
+            ("store", SdkValue::text("pg")),
+            ("revision", SdkValue::text(&current)),
+        ]),
+    );
+    assert_eq!(
+        answer.get("ok").and_then(|ok| ok.get_int("closed")),
+        Some(0)
+    );
+    // one of another revision closes nothing of this login either
+    let answer = manage(
+        &home,
+        "store.postgresql_retire",
+        SdkValue::map([
+            ("store", SdkValue::text("pg")),
+            ("revision", SdkValue::text("00")),
+        ]),
+    );
+    assert_eq!(
+        answer.get("ok").and_then(|ok| ok.get_int("closed")),
+        Some(0)
+    );
+    // a retire that names no revision is refused
+    let answer = manage(
+        &home,
+        "store.postgresql_retire",
+        SdkValue::map([("store", SdkValue::text("pg"))]),
+    );
+    assert_eq!(error_code(&answer), Some("InvalidInput"), "{answer:?}");
+    for _ in 0..3 {
+        assert_eq!(ok(path, STAT).get_text("type"), Some("file"));
+    }
+    assert_eq!(db.backends(), held, "the current login kept its session");
+
+    // this route serves its own reads only
+    let socket = UnixStream::connect(&home.paths.socket).unwrap();
+    let end = Instant::now() + Duration::from_secs(10);
+    let hello = read_host_frame(&socket, MAX_HELLO, Some(end))
+        .unwrap()
+        .unwrap();
+    let args = SdkValue::map([
+        ("method", SdkValue::text("fs.write")),
+        ("store", SdkValue::text("pg")),
+        ("project", SdkValue::text("p")),
+        ("fields", SdkValue::map([])),
+        ("login_revision", SdkValue::text(&current)),
+        ("password", SdkValue::text(&db.password)),
+    ]);
+    let request = SdkValue::map([
+        ("op", SdkValue::text("store.postgresql_read")),
+        ("args", args),
+        ("generation", hello.get("generation").unwrap().clone()),
+        ("request_id", SdkValue::text("pb-write-1")),
+    ]);
+    write_host_frame(&socket, &request, HOST_MAX_REPLY, end).unwrap();
+    let answer = read_host_frame(&socket, HOST_MAX_REPLY, Some(end))
+        .unwrap()
+        .unwrap();
+    assert_eq!(error_code(&answer), Some("Unsupported"), "{answer:?}");
+
+    // the ping reports the held sessions (§11)
+    let ping = home.ping();
+    let postgresql = ping.get("postgresql").expect("the ping's postgresql field");
+    assert_eq!(postgresql.get_int("stores"), Some(1), "{ping:?}");
+    assert_eq!(postgresql.get_int("idle"), Some(1), "{ping:?}");
+    assert_eq!(postgresql.get_int("lent"), Some(0), "{ping:?}");
+    // and so does the doctor's ping evidence
+    let report = ok(path, &["machine", "doctor", HOST_MACHINE, "--detail"]);
+    let Some(SdkValue::List(checks)) = report.get("tree").and_then(|tree| tree.get("checks"))
+    else {
+        panic!("doctor checks: {report:?}")
+    };
+    let pinged = checks
+        .iter()
+        .find(|row| row.get_text("check") == Some("machine.worker.ping"))
+        .and_then(|row| row.get("evidence"))
+        .and_then(|evidence| evidence.get("postgresql"))
+        .expect("the doctor's postgresql evidence");
+    assert_eq!(pinged.get_int("idle"), Some(1), "{pinged:?}");
+    drain(&home);
+}
+
+#[test]
+fn postgresql_reads_leave_the_ordinary_threads_to_other_stores() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "fair");
+    let home = connected(&db, db.at());
+    let path = home.paths.home.clone();
+    let source = path.join("sqlite-source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("s.txt"), "sqlite\n").unwrap();
+    ok(&path, &["store", "create", "sq"]);
+    ok(
+        &path,
+        &["project", "init", "sq/q", source.to_str().unwrap()],
+    );
+    ok(&path, READ);
+    db.settle(1);
+
+    // more PostgreSQL reads than the worker has ordinary threads, all
+    // stuck behind a lock or waiting for a session
+    let lock = Locked::new(&db, "layer");
+    let callers: Vec<_> = (0..12).map(|_| spawn(&path, STAT, None)).collect();
+    assert_eq!(waiting_on_lock(&db, 4), 4, "four sessions in flight");
+    std::thread::sleep(Duration::from_millis(300));
+    let began = Instant::now();
+    let sqlite = spawn(&path, &["file", "read", "sq/q", "main", "/s.txt"], None);
+    let end = Instant::now() + Duration::from_secs(10);
+    let mut sqlite = sqlite;
+    let served = loop {
+        if let Some(status) = sqlite.try_wait().unwrap() {
+            break Some(status);
+        }
+        if Instant::now() > end {
+            let _ = sqlite.kill();
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let took = began.elapsed();
+    drop(lock);
+    let output = sqlite.wait_with_output().unwrap();
+    assert!(
+        served.is_some_and(|status| status.success()),
+        "a SQLite read on another Store waited {took:?} behind PostgreSQL reads: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(decode(&output).get_text("text"), Some("sqlite\n"));
+    for child in callers {
+        let output = finish(child);
+        assert!(output.status.success(), "{:?}", decode(&output));
+    }
+    drain(&home);
+}
+
+#[test]
+fn a_failed_probe_closes_the_idle_sessions_and_opens_one() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "probe");
+    let relay = Relay::new(&server.host, server.port);
+    // the relay listens in this process, beside the CLI and its worker
+    let home = connected(&db, ("127.0.0.1", relay.port));
+    let path = home.paths.home.clone();
+    ok(&path, READ);
+    // four held sessions: four reads in flight at once
+    let lock = Locked::new(&db, "layer");
+    let callers: Vec<_> = (0..4).map(|_| spawn(&path, STAT, None)).collect();
+    assert_eq!(waiting_on_lock(&db, 4), 4);
+    drop(lock);
+    for child in callers {
+        assert!(finish(child).status.success());
+    }
+    let held = db.settle(4);
+    assert_eq!(held.len(), 4);
+
+    // every held connection goes silent: one probe waits out its bound,
+    // then the call closes the other idle sessions unprobed and opens one
+    relay.cut();
+    let began = Instant::now();
+    assert_eq!(ok(&path, STAT).get_text("type"), Some("file"));
+    let took = began.elapsed();
+    assert!(took >= Duration::from_secs(5), "{took:?}");
+    assert!(
+        took < Duration::from_secs(10),
+        "one probe, not four: {took:?}"
+    );
+    let after = db.backends();
+    assert_eq!(after.difference(&held).count(), 1, "exactly one new login");
+    assert_eq!(
+        home.ping()
+            .get("postgresql")
+            .and_then(|p| p.get_int("idle")),
+        Some(1)
+    );
+    drain(&home);
+}

@@ -81,13 +81,18 @@ configured TLS mode. It closes the session before releasing the lease.
 The host worker's route for the same reads (#819 P-B) keeps such sessions
 open between calls: each is opened once with the Full check, then lent to
 one call at a time. Before a held session serves another call,
-`PostgresStorage::current` reads the Store's `catalog_incarnation` in one
-round trip answered within `READER_CHECK_TIMEOUT` (5 s, counted in
-`SqlWork::round_trips`). A quarantined session, a closed or silent
-connection, a late answer or a generation other than the one the open
-checked (a compaction swap, an upgrade) quarantines it and the caller opens
-another; nothing of the call has been sent, so nothing is retried. The
-control layer's pool owns the sessions
+`PostgresStorage::current` runs the Light check's one statement on it,
+answered within `READER_CHECK_TIMEOUT` (5 s, counted in
+`SqlWork::round_trips`), and compares what it reads with the open: the
+schema and format version, the recorded binding and the catalog id derived
+from it, `catalog_incarnation` and the policy. A quarantined session, a
+closed or silent connection, a late answer, a compaction swap, an upgrade,
+or a schema dropped and initialized again (even at the same incarnation,
+for another binding) quarantines it. The control layer's pool then closes
+the Store's other idle sessions and opens one new session for the call, at
+most one check per call: a route decision taken before any byte of the
+call's operation is sent, as the mount reader's `usable()` above is, so
+nothing is retried. The control layer's pool owns the sessions
 ([PostgreSQL credentials](../../control/stores-and-projects/sqlite-and-postgresql.md#credentials)).
 The in-process Store service still owns writable sessions and the Light
 checks for its control and pooled readers. The Sandbox reach and held-head

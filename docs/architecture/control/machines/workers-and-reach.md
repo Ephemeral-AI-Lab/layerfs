@@ -408,15 +408,22 @@ ordinary operations. The host resolves Store authority from its own home
 records.
 
 `store.postgresql_read` (#819 P-B) carries exactly `method`, `store`,
-`project`, `fields`, `login_revision` and `password`. The worker reads no
-secret from its environment or the home: it puts the sent password into
-the record's own address for the session it opens and keeps it only in that
-session's memory, with core dumps off (`RLIMIT_CORE` 0, and on Linux
-`PR_SET_DUMPABLE` 0) from the first such request. `store.postgresql_retire`
-(`{ store }`, answered `{ closed }`) closes that Store's idle held sessions
-and retires its current login; `store connect`, `store disconnect` and an
-upgrade send it to a running worker only, never starting one, and the
-admission check refuses the old revision whether or not it arrives.
+`project`, `fields`, `login_revision` and `password`, and serves only its own
+three read methods (`fs.read`, `fs.stat`, `fs.list`). An ordinary thread
+reads it and hands it to the worker's PostgreSQL lane (8 threads, at most
+64 handed over and unanswered), so a PostgreSQL read waiting for a session
+or the server holds no ordinary thread or slot. The worker reads no secret
+from its environment or the home: it puts the sent password into the
+record's own address for the sessions of that Store and drops the address
+when the Store's last session closes. It sets `RLIMIT_CORE` to 0 before it
+reads its first request, and on Linux clears `PR_SET_DUMPABLE` as soon as
+it decodes its first PostgreSQL request, before any session holds the
+password (a worker that served none stays readable by its user, which
+proves its cleared environment); macOS has no such flag. `store.postgresql_retire` (`{ store, revision }`, answered
+`{ closed }`) retires that login revision's held sessions unless it is the
+record's current one; `store connect` and `store disconnect` send it, past
+their locks, to a running worker only, never starting one. The ping
+answers `postgresql { stores, idle, lent, waiting, reads }`.
 
 The v1 host request and answer bodies are plain JSON with byte ceilings of
 64 KiB and 1 MiB respectively. Hello and management requests are limited to

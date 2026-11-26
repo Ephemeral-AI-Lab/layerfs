@@ -243,29 +243,62 @@ pub(crate) fn check(
             (row, acquisition)
         }
         PostgresCheck::Light => {
-            let present = ACQUISITION_TABLES
-                .iter()
-                .map(|t| format!("(to_regclass('{s}.{t}') IS NOT NULL)::int"))
-                .collect::<Vec<_>>()
-                .join("+");
-            let sql = format!(
-                "SELECT octet_length(h.schema_source),{present},{}",
-                meta_columns(&format!("{s}."))
-            );
-            let groups = session.simple(&sql, false)?;
-            let row = single(groups.into_iter().next().unwrap_or_default())?;
-            refuse_pre_2_0(&row, 2)?;
-            let acquisition = match int(&row, 1)? {
-                0 => false,
-                3 => true,
-                _ => return Err(BackendError::Integrity.into()),
-            };
-            if int(&row, 0)? != source(acquisition).len() as i64 {
-                return Err(BackendError::Integrity.into());
-            }
-            (row, acquisition)
+            let groups = session.simple(&light_sql(s), false)?;
+            light_row(single(groups.into_iter().next().unwrap_or_default())?)?
         }
     };
+    checked(row, acquisition, binding)
+}
+
+/// The Light check's one statement over schema `s`.
+fn light_sql(s: &str) -> String {
+    let present = ACQUISITION_TABLES
+        .iter()
+        .map(|t| format!("(to_regclass('{s}.{t}') IS NOT NULL)::int"))
+        .collect::<Vec<_>>()
+        .join("+");
+    format!(
+        "SELECT octet_length(h.schema_source),{present},{}",
+        meta_columns(&format!("{s}."))
+    )
+}
+
+/// The Light check's own columns of `row`: the schema source's length and
+/// the acquisition tables present.
+fn light_row(row: SimpleQueryRow) -> Result<(SimpleQueryRow, bool), PersistenceError> {
+    refuse_pre_2_0(&row, 2)?;
+    let acquisition = match int(&row, 1)? {
+        0 => false,
+        3 => true,
+        _ => return Err(BackendError::Integrity.into()),
+    };
+    if int(&row, 0)? != source(acquisition).len() as i64 {
+        return Err(BackendError::Integrity.into());
+    }
+    Ok((row, acquisition))
+}
+
+/// The Light check on a held session's connection (#819 P-B), its one
+/// round trip answered within `timeout`: what [`check`] with
+/// [`PostgresCheck::Light`] and `binding` reads, or `None` for no answer in
+/// time, a closed connection or any mismatch.
+pub(crate) fn light_within(
+    client: &mut super::session::driver::Driver,
+    schema: &str,
+    binding: &[u8],
+    timeout: std::time::Duration,
+) -> Option<Checked> {
+    let (row, acquisition) = light_row(client.first_row(&light_sql(schema), timeout)?).ok()?;
+    checked(row, acquisition, Some(binding)).ok()
+}
+
+/// What the check columns of `row` hold, after the two check columns,
+/// compared with `binding` when given.
+fn checked(
+    row: SimpleQueryRow,
+    acquisition: bool,
+    binding: Option<&[u8]>,
+) -> Result<Checked, PersistenceError> {
     let at = 2; // the meta columns follow the two check columns
     let recorded = unhex(text(&row, at + 2)?)?;
     let catalog_id = CatalogId::derive(&recorded).map_err(|_| PersistenceError::Malformed)?;
