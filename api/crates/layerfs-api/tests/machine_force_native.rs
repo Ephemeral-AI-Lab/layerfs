@@ -59,6 +59,8 @@ fn exec_helper() {
 /// `machine.stop native --force`, its long answer: a forced stop, and
 /// `native` stays `ready` (the host itself never stops).
 fn forced_stop(home: &Path) -> SdkValue {
+    // this process's own warm Store lease is a holder a stop names: close it
+    layerfs_api::close_idle(Duration::ZERO);
     let stopped = call(
         home,
         "machine.stop",
@@ -173,14 +175,11 @@ fn live_case(home: &Path, name: &str, machine: bool) {
     assert!(paths::store_file(home, "shop").exists());
     assert!(paths::machine_record(home, layerfs_home::names::HOST_MACHINE).exists());
     if machine {
-        let cli =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../target/debug/layerfs");
-        let status = Command::new(cli)
-            .env("LAYERFS_HOME", home)
-            .args(["machine", "start", layerfs_home::names::HOST_MACHINE])
-            .status()
-            .unwrap();
-        assert!(status.success());
+        call(
+            home,
+            "machine.start",
+            &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+        );
     }
     let saved = call(
         home,
@@ -257,7 +256,21 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
         eprintln!("NOT_RUN: explicit LAYERFS_DAEMON required for live native force proof");
         return;
     };
-    let home = std::env::temp_dir().join(format!("lfs-native-force-{}", std::process::id()));
+    // An SDK app manages the host worker through the matching `layerfs` on
+    // PATH: this build's, beside this test's binaries.
+    let debug = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../target/debug");
+    assert!(
+        debug.join("layerfs").is_file(),
+        "build the layerfs CLI first"
+    );
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(debug.canonicalize().unwrap()).chain(std::env::split_paths(&path)),
+    )
+    .unwrap();
+    std::env::set_var("PATH", path);
+    // short: `machine start` binds the host worker's sockets under the home
+    let home = std::path::PathBuf::from(format!("/tmp/lfs-nf-{}", std::process::id()));
     home::open(&home).unwrap();
     let source = home.join("source");
     std::fs::create_dir(&source).unwrap();
@@ -301,5 +314,12 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
     live_case(&home, "live", true);
     live_case(&home, "close", false);
     identity_case(&home);
+    // the worker `machine start` began drains before its home goes
+    layerfs_api::close_idle(Duration::ZERO);
+    call(
+        &home,
+        "machine.stop",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    );
     std::fs::remove_dir_all(&home).unwrap();
 }

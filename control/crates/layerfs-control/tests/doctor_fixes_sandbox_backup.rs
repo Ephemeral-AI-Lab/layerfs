@@ -416,11 +416,12 @@ fn a_store_on_another_machine_is_fixed_by_moving_it() {
     .unwrap();
     sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let report = run(&home);
+    let fix = format!("layerfs store move s {}", layerfs_home::names::HOST_MACHINE);
     let found = finding(
         &report,
         "sandbox.store_placement",
         "error",
-        Some("layerfs store move s native"),
+        Some(&fix),
         &["store", "store_machine", "sandbox_machine"],
     );
     let evidence = found.get("evidence").unwrap();

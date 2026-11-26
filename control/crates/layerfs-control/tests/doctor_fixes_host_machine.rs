@@ -410,14 +410,8 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
         fix(&found(&report, "home.native_daemon", "not there")),
         update
     );
-    assert_eq!(
-        fix(&found(
-            &report,
-            "home.records",
-            "machine {HOST_MACHINE}'s recorded daemon"
-        )),
-        update
-    );
+    let recorded = format!("machine {HOST_MACHINE}'s recorded daemon");
+    assert_eq!(fix(&found(&report, "home.records", &recorded)), update);
 }
 
 #[test]

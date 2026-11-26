@@ -349,7 +349,12 @@ fn machine_stats_checks_each_daemon_record_on_the_side_that_runs_it() {
     let _turn = serial();
     let home = new_home("live");
     let run = paths::run_root(&home);
-    sandbox(&home, "up", "process", Some(&daemon(me(), "process", &run)));
+    sandbox(
+        &home,
+        "up",
+        layerfs_home::names::HOST_MACHINE,
+        Some(&daemon(me(), "process", &run)),
+    );
     sandbox(
         &home,
         "dead",
@@ -455,7 +460,12 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     drop(sparse);
     std::fs::write(paths::store_file(&home, "far"), vec![3u8; 4_096]).unwrap();
     // Sandboxes: one live and one dead here, one on another machine
-    sandbox(&home, "up", "process", Some(&daemon(me(), "process", &run)));
+    sandbox(
+        &home,
+        "up",
+        layerfs_home::names::HOST_MACHINE,
+        Some(&daemon(me(), "process", &run)),
+    );
     sandbox(
         &home,
         "dead",
@@ -648,7 +658,12 @@ fn a_request_past_its_soft_budget_answers_what_it_has_and_says_so() {
     let run = paths::run_root(&home);
     store_record(&home, "shop", layerfs_home::names::HOST_MACHINE);
     std::fs::write(paths::store_file(&home, "shop"), vec![1u8; 4_096]).unwrap();
-    sandbox(&home, "up", "process", Some(&daemon(me(), "process", &run)));
+    sandbox(
+        &home,
+        "up",
+        layerfs_home::names::HOST_MACHINE,
+        Some(&daemon(me(), "process", &run)),
+    );
     let late = |kind: &'static str| {
         let (root, started) = (home.clone(), Instant::now());
         let answer = inspect::admit(move |budget| {

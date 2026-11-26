@@ -1553,7 +1553,8 @@ attached to the Store and dial with both.
   is not changed); long `outcome, store, engine, format_before,
   format_after, steps, warnings` (`steps` the steps applied, in order, as
   `"2->3"`; `warnings` what failed after COMMIT, which never fails the
-  call). Phases: `check, convert, verify, commit` (SQLite), `check,
+  call; a `-shm` an earlier read-only call left beside the Store is not
+  one). Phases: `check, convert, verify, commit` (SQLite), `check,
   convert` (PostgreSQL); `commit` is the point of no return. Ctrl-C
   (SIGINT) or SIGTERM cancels it before COMMIT: `Failed` with `detail.code:
   "Cancelled"`, "cancelled before COMMIT; nothing changed"; a second signal

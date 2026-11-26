@@ -574,3 +574,27 @@ fn format_evidence_reads_through_the_wal() {
         Some("d")
     );
 }
+
+/// A read-only session cannot remove its sidecars when it closes, so a
+/// `-shm` can be beside the Store before an upgrade (#819: a Store call's
+/// read-only control session). The run's exclusive connection keeps its
+/// WAL index in heap memory and never opens it, so that `-shm` is not the
+/// run's leftover and is no warning; a `-wal` left would still be one.
+#[test]
+fn a_shm_a_read_only_session_left_is_not_the_upgrades_leftover() {
+    let temp = Temp::new("upgrade-shm-before");
+    let path = sqlite_v2_copy(temp.path());
+    let side = |suffix: &str| path.with_file_name(format!("store.sqlite{suffix}"));
+    let reader =
+        Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let tables: i64 = reader
+        .query_row("SELECT count(*) FROM sqlite_schema", [], |r| r.get(0))
+        .unwrap();
+    assert!(tables > 0);
+    reader.close().unwrap();
+    assert!(side("-shm").exists(), "the read-only close keeps its -shm");
+    let (answer, _) = run(&path, &AtomicBool::new(false), None);
+    let report = answer.expect("upgraded");
+    assert_eq!(report.outcome, UpgradeOutcome::Upgraded);
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}

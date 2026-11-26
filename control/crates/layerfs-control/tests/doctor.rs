@@ -554,7 +554,8 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "store",
             "s5",
             "stale lease of process 99999999",
-            Some("store/s5/open/99999999"),
+            // the Store lock owns its removal: no hand-run fix
+            None,
         ),
         (
             "error",
@@ -601,7 +602,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
 /// A copy a move left on the machine its record does not name is one
 /// warning, read from the record with no machine asked: a target's whole or
 /// partial copy (a certain failure's `incoming_on`, or a gone process's move
-/// from `native` past `send`) and
+/// from the host machine past `send`) and
 /// a source's copy a move did not retire.
 #[test]
 fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
@@ -633,7 +634,7 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     ]);
     pushed.push(("op", push));
     store(&home, "pushed", pushed);
-    // a move to box whose retire did not finish: native keeps its copy
+    // a move to box whose retire did not finish: the host keeps its copy
     let mut kept = sqlite("kept", "box");
     let last = SdkValue::map([
         ("from", t(layerfs_home::names::HOST_MACHINE)),
@@ -646,18 +647,15 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     let before = tree(&home);
     let found = findings(&doctor(&home).unwrap());
     assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    let host = layerfs_home::names::HOST_MACHINE;
+    let left =
+        format!("store.move from {host} to box may have left a whole or partial copy on box");
     for (name, says) in [
-        (
-            "failed",
-            "store.move from native to box may have left a whole or partial copy on box",
-        ),
-        (
-            "pushed",
-            "store.move from native to box may have left a whole or partial copy on box",
-        ),
+        ("failed", left.clone()),
+        ("pushed", left),
         (
             "kept",
-            "store.move from native to box did not retire the copy on native",
+            format!("store.move from {host} to box did not retire the copy on {host}"),
         ),
     ] {
         let matching: Vec<_> = (found.iter())
@@ -665,7 +663,7 @@ fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
             .collect();
         assert_eq!(matching.len(), 1, "{name}: {found:#?}");
         assert_eq!(matching[0].0, "warning", "{name}");
-        assert!(matching[0].3.contains(says), "{name}: {}", matching[0].3);
+        assert!(matching[0].3.contains(&says), "{name}: {}", matching[0].3);
         assert!(matching[0]
             .3
             .contains(&format!("layerfs store move {name}")));
