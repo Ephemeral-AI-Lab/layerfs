@@ -347,9 +347,12 @@ fn boxed(param: crate::backend::records::Param) -> Value<'static> {
 /// Pack bytes bound by one pack insert statement. The driver encodes each
 /// statement into a buffer and copies it into the connection's write
 /// buffer, and both keep their grown capacity for the connection's life.
-/// Statements of at most one ordinary pack keep that retained capacity near
-/// one pack, however large the batch; they stay in the same message and
-/// transaction. A larger singleton pack is sent alone.
+/// Splitting keeps the pack statements' share of that capacity near one
+/// ordinary pack, however many packs the batch holds; they stay in the same
+/// message and transaction. A singleton pack, up to `SINGLETON_PACK_LIMIT`,
+/// cannot be split and is sent alone. The retained capacity is therefore
+/// the largest single statement: a singleton pack, or the rows or hint
+/// statement at their row limits (each about 1 MiB).
 const STATEMENT_PACK_BYTES: usize = layerfs_storage::policy::PACK_LIMIT;
 
 /// The pack insert parameters of `packs`, one entry per statement: the

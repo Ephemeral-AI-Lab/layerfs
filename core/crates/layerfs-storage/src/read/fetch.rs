@@ -843,6 +843,11 @@ impl Source for Fetch {
         } else {
             wanted
         };
+        // A paired read answers exactly the two pages `chunks` makes below,
+        // and its second half stays within one provider page.
+        const _: () = assert!(
+            crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES <= 2 * READ_OBJECT_LIMIT
+        );
         let mut batches = [Vec::new(), Vec::new()];
         let paired = if self.paired_inode_values.get()
             && wanted.len() > READ_OBJECT_LIMIT
