@@ -10,6 +10,7 @@ const ENDPOINT: &str = "machine.worker.endpoint";
 const AUTH: &str = "machine.worker.auth";
 const COMPAT: &str = "machine.worker.compatibility";
 const PING: &str = "machine.worker.ping";
+const RETAINED: &str = "machine.worker.retained";
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -157,6 +158,34 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
             };
             checks.pass_evidence(PING, message, evidence());
         }
+    }
+}
+
+/// `machine.worker.retained`: write outcomes the host worker kept because
+/// its caller may not know them (§8.5). Read from the home, so it answers
+/// whether or not a worker runs, and never starts or replaces one.
+pub(super) fn retained(home: &Path, checks: &mut Checks) {
+    const SHOWN: usize = 5;
+    match layerfs_store::host_write::retained(home, SHOWN) {
+        Ok((0, _)) => checks.pass(RETAINED, "no write outcome is kept for a caller"),
+        Ok((count, records)) => {
+            let dir = layerfs_store::host_write::retained_dir(home);
+            checks.notice(
+                RETAINED,
+                format!(
+                    "{count} write outcome(s) a caller may not know are kept in {}; check each Branch's head, then remove its record",
+                    dir.display()
+                ),
+            );
+            checks.evidence(
+                RETAINED,
+                SdkValue::map([
+                    ("count", SdkValue::Int(count as i64)),
+                    ("records", SdkValue::List(records)),
+                ]),
+            );
+        }
+        Err(error) => checks.fail(RETAINED, &error.message),
     }
 }
 

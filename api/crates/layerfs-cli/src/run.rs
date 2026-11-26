@@ -1,5 +1,5 @@
 //! One command line, start to exit code.
-use crate::parse::{parse, Usage};
+use crate::parse::{parse_cli, Usage};
 use crate::{help, output, view, worker};
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -119,7 +119,7 @@ fn wrong_call(call: &layerfs_api::Call, message: String) -> ExitCode {
 
 /// One call of the table, made once.
 fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
-    let parsed = match parse(call, words, &mut std::io::stdin()) {
+    let parsed = match parse_cli(call, words) {
         Ok(parsed) => parsed,
         Err(Usage(message)) => return wrong_call(call, message),
     };
@@ -194,7 +194,13 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
             }
         }
     };
-    let outcome = layerfs_api::call_cli(scope.as_ref(), &call.name(), parsed.args, &mut send);
+    let outcome = layerfs_api::call_cli(
+        scope.as_ref(),
+        &call.name(),
+        parsed.args,
+        parsed.input,
+        &mut send,
+    );
     // first thing after the call: a signal from now on changes nothing
     // (signals.rs names the residual window)
     crate::signals::answered();

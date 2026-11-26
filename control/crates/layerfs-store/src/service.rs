@@ -335,8 +335,24 @@ pub(crate) fn call_owned(method: &str, open: &OpenArgs, args: SdkValue, owner: O
     dispatch(&service, method, args)
 }
 
-pub(crate) fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> Outcome {
-    let args = match args {
+/// [`call_owned`] with the write's content or changes pulled from `source`.
+pub(crate) fn call_streamed(
+    method: &str,
+    open: &OpenArgs,
+    args: SdkValue,
+    owner: Owner,
+    source: &mut dyn layerfs_store_service::methods::Source,
+) -> Outcome {
+    let service = service(open, owner)?;
+    let call = SdkCall {
+        method: method.to_owned(),
+        args: routed_out(args),
+    };
+    layerfs_store_service::methods::call_streamed(&service, &call, source)
+}
+
+fn routed_out(args: SdkValue) -> SdkValue {
+    match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()
@@ -344,10 +360,13 @@ pub(crate) fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> 
                 .collect(),
         ),
         other => other,
-    };
+    }
+}
+
+pub(crate) fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> Outcome {
     let call = SdkCall {
         method: method.to_owned(),
-        args,
+        args: routed_out(args),
     };
     layerfs_store_service::methods::call(service, &call)
 }

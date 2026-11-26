@@ -149,6 +149,13 @@ pub(super) fn release(frame: Vec<u8>, secret: bool) {
     }
 }
 
+/// One JSON frame body, its decoded size bounded before it is parsed.
+pub(super) fn decode(body: &[u8]) -> Result<SdkValue, SdkRefusal> {
+    budget(body)?;
+    let text = std::str::from_utf8(body).map_err(|_| invalid("JSON must be UTF-8"))?;
+    json::parse(text).map_err(|error| invalid(&error.0))
+}
+
 pub(super) fn encode(value: &SdkValue, max: usize) -> Result<Vec<u8>, SdkRefusal> {
     let body = json::print(value);
     let secret = carries_login(value);

@@ -134,6 +134,33 @@ pub fn run_host(
     call(method, &open, SdkValue::Map(fields), running)
 }
 
+/// [`run_host`] for a write whose content or changes `source` streams.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn run_host_streamed(
+    home: &Path,
+    store: &str,
+    project: &str,
+    method: &str,
+    fields: SdkValue,
+    source: &mut dyn layerfs_store_service::methods::Source,
+) -> Outcome {
+    let SdkValue::Map(mut fields) = fields else {
+        return Err(refused(
+            "InvalidInput",
+            "a Store call needs an argument map",
+        ));
+    };
+    let (open, running) = enter_host(home, store, project)?;
+    fields.retain(|(name, _)| name != "project");
+    fields.push(("project".to_owned(), SdkValue::text(project)));
+    layerfs_home::trace::step("store_open");
+    let outcome =
+        crate::service::call_streamed(method, &open, SdkValue::Map(fields), running.owner, source);
+    layerfs_home::trace::step("call");
+    drop(running);
+    outcome
+}
+
 fn call(op: &str, open: &OpenArgs, args: SdkValue, running: Running) -> Outcome {
     layerfs_home::trace::step("store_open");
     // An admitting call reads the bounded places this home can speak for,

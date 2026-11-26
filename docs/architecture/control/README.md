@@ -185,5 +185,20 @@ lease for the call alone and runs it on a held session
 ([credentials](stores-and-projects/sqlite-and-postgresql.md#credentials)).
 A record without a revision, a stopped host machine, or a request that does
 not fit stays direct (P-A), chosen before dialing.
-SDK calls, PostgreSQL writes, other writes, and guest Stores use their existing routes.
+
+The CLI routes `file.write`, `file.edit`, `file.mkdir`, `file.rm`,
+`file.cp`, `file.mv` and `file.apply` on the same Stores to the worker as
+one `store.write` request each (S2.2). For `file write` and an unscoped
+`file apply`, the CLI opens its stdin or `--from` input but leaves it unread
+when the Store looks eligible. At the call boundary an eligible call
+streams that input in bounded frames, and any other call reads it whole
+and runs directly, as before. A single-change write sends one request
+frame when it fits 64 KiB, and otherwise runs directly. The worker
+commits only after it has read the input's end frame. A failure before the
+caller has written that frame commits nothing and is a definite refusal
+(the worker's own, when it refused early). After it, a lost or invalid
+answer is `Unknown` with the request ID. An engine-uncertain outcome and
+an answer the worker could not deliver are kept under
+`machine/<host>/retained/` and reported by `machine.worker.retained`.
+SDK calls, PostgreSQL writes and guest Stores use their existing routes.
 See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).

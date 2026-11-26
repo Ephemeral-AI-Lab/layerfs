@@ -42,7 +42,10 @@ pub(crate) use hello::sealed_hash;
 pub use hello::{is_mismatch, replace_with, Hello, PROTOCOL};
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub use host::{host_check_peer, HostGuard, HostPaths};
+pub use host::{
+    host_check_peer, HostGuard, HostPaths, StreamFrame, StreamReader, StreamSender,
+    STREAM_KEEPALIVE, STREAM_PIECE, STREAM_WAIT,
+};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host_diagnostic::{HostObservation, HostProbe};
 #[cfg(any(target_os = "macos", target_os = "linux"))]

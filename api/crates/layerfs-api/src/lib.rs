@@ -160,9 +160,20 @@ pub fn call_cli(
     scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
+    input: Option<CliInput>,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
-    machinery::call_cli(families(), scope, name, args, events)
+    machinery::call_cli(families(), scope, name, args, input, events)
+}
+
+/// A write input the CLI has not read yet.
+#[doc(hidden)]
+pub use layerfs_store::host_write::{Input as CliInput, InputKind as CliInputKind};
+
+/// Whether the CLI defers the input of write `name` to `project`.
+#[doc(hidden)]
+pub fn cli_defers(name: &str, project: &str) -> bool {
+    machinery::cli_defers(name, project)
 }
 
 /// [`call`] with JSON text on both sides, for the Node and Python bindings.

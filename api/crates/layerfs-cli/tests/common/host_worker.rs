@@ -152,6 +152,10 @@ pub struct Exchange {
 }
 
 impl Exchange {
+    pub fn socket(&self) -> &UnixStream {
+        &self.socket
+    }
+
     pub fn request(self, op: &str) -> SdkValue {
         let request = SdkValue::map([
             ("op", SdkValue::text(op)),

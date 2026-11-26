@@ -19,6 +19,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+mod stream;
+pub use stream::{
+    StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_WAIT,
+};
+
 const READY_WAIT: Duration = Duration::from_secs(10);
 const TRANSFER_WAIT: Duration = Duration::from_secs(10);
 const READY_POLL: Duration = Duration::from_millis(15);

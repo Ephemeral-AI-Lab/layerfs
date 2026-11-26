@@ -2,6 +2,7 @@
 //! once. Operator names are absent from this table.
 use crate::methods::args::{self, Answer};
 use crate::methods::{branch, file as fs, project, store};
+use crate::write::files::Source;
 use crate::StoreService;
 use layerfs_bridge::control::{SdkCall, SdkValue};
 
@@ -11,8 +12,47 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
     layerfs_persistence::one_call(|| call_once(service, call))
 }
 
-fn call_once(service: &StoreService, call: &SdkCall) -> Answer {
-    let args = &call.args;
+/// Runs `fs.write` or `fs.apply` once on `service` with its content or its
+/// changes pulled from `source` as they are applied: one logical call, one
+/// Commit after the source's whole input. Other methods take no source.
+pub fn call_streamed(service: &StoreService, call: &SdkCall, source: &mut dyn Source) -> Answer {
+    layerfs_persistence::one_call(|| {
+        message(&call.args)?;
+        match call.method.as_str() {
+            "fs.write" => {
+                let mut one = One {
+                    change: Some(args::single(&call.args, "write")),
+                    source,
+                };
+                args::commit_streamed(service, &call.args, &mut one)
+            }
+            "fs.apply" => args::commit_streamed(service, &call.args, source),
+            _ => call_once(service, call),
+        }
+    })
+}
+
+/// `fs.write`'s one change, its content from the streamed source.
+struct One<'s> {
+    change: Option<SdkValue>,
+    source: &'s mut dyn Source,
+}
+
+impl Source for One<'_> {
+    fn next(&mut self) -> Result<Option<SdkValue>, layerfs_bridge::control::SdkRefusal> {
+        match self.change.take() {
+            Some(change) => Ok(Some(change)),
+            None => self.source.next(),
+        }
+    }
+
+    fn piece(&mut self) -> Result<Option<&[u8]>, layerfs_bridge::control::SdkRefusal> {
+        self.source.piece()
+    }
+}
+
+/// A Commit message is checked before any change.
+fn message(args: &SdkValue) -> Result<(), layerfs_bridge::control::SdkRefusal> {
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {
             let SdkValue::Text(message) = value else {
@@ -23,6 +63,12 @@ fn call_once(service: &StoreService, call: &SdkCall) -> Answer {
             meta.check().map_err(|e| args::invalid(e.to_string()))?;
         }
     }
+    Ok(())
+}
+
+fn call_once(service: &StoreService, call: &SdkCall) -> Answer {
+    let args = &call.args;
+    message(args)?;
     match call.method.as_str() {
         "store.stats" => store::stats(service),
         "project.stats" => project::stats(service, args),

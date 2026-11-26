@@ -234,7 +234,8 @@ impl<'a> Mutation<'a> {
         Ok(())
     }
     pub fn write(&mut self, path: &str, bytes: &[u8], mode: Option<u32>) -> Result<()> {
-        let (serial, same) = self.target(path, bytes.len() as u64, mode)?;
+        let (serial, existing) = self.target(path, mode)?;
+        let same = existing == Some(bytes.len() as u64);
         let mut changed = !same;
         let mut offset = 0;
         for piece in bytes.chunks(layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES) {
@@ -243,6 +244,32 @@ impl<'a> Mutation<'a> {
         }
         if changed {
             self.truncate(serial, bytes.len() as u64)?;
+        }
+        Ok(())
+    }
+    /// Writes the file at `path` from `next`'s pieces, read one at a time as
+    /// they are needed, so only one piece is held whatever the file's size.
+    /// The length is known only at the end: a piece of an existing file is
+    /// compared while every byte before it was the same and it lies within
+    /// the old length; after the first difference the rest is written.
+    pub fn write_stream(
+        &mut self,
+        path: &str,
+        mode: Option<u32>,
+        next: &mut dyn super::files::Source,
+    ) -> Result<()> {
+        let (serial, existing) = self.target(path, mode)?;
+        let (mut changed, mut offset) = (existing.is_none(), 0u64);
+        while let Some(piece) = next.piece()? {
+            for part in piece.chunks(layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES) {
+                let end = offset + part.len() as u64;
+                let same = !changed && existing.is_some_and(|length| end <= length);
+                changed |= self.put(serial, same, offset, part)?;
+                offset = end;
+            }
+        }
+        if changed || existing != Some(offset) {
+            self.truncate(serial, offset)?;
         }
         Ok(())
     }
@@ -280,10 +307,10 @@ impl<'a> Mutation<'a> {
         })?;
         Ok(())
     }
-    /// The regular file a write of `length` bytes goes to, created when absent
-    /// with `mode` (default 0o644), and whether it already has that length. An
-    /// existing file takes `mode` only when one is given.
-    fn target(&mut self, path: &str, length: u64, mode: Option<u32>) -> Result<(u64, bool)> {
+    /// The regular file a write goes to, created when absent with `mode`
+    /// (default 0o644), and the length it had when it existed. An existing
+    /// file takes `mode` only when one is given.
+    fn target(&mut self, path: &str, mode: Option<u32>) -> Result<(u64, Option<u64>)> {
         Ok(match self.optional(path)? {
             Some(stat) => {
                 if stat.kind != InodeKind::RegularFile {
@@ -301,7 +328,7 @@ impl<'a> Mutation<'a> {
                     let mode = permitted(path, InodeKind::RegularFile, mode)?;
                     self.set_mode(stat.serial, mode)?;
                 }
-                (stat.serial, stat.logical_len == length)
+                (stat.serial, Some(stat.logical_len))
             }
             None => {
                 let mode = permitted(path, InodeKind::RegularFile, mode.unwrap_or(0o644))?;
@@ -310,7 +337,7 @@ impl<'a> Mutation<'a> {
                     .apply(Operation::Create { parent, name, mode })?
                     .ok_or_else(|| args::failed("created inode"))?
                     .serial;
-                (serial, false)
+                (serial, None)
             }
         })
     }

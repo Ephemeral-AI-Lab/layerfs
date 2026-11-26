@@ -394,7 +394,7 @@ while management retains two slots.
 Both peers check the other's effective UID before sending or reading frames.
 The server sends the first frame only after admission to the connection
 queue. It is a plain bounded JSON frame with `ready: true`, `kind: "host"`,
-`protocol: 1`, `home_id` (the current home's record ID), `generation`
+`protocol: 2`, `home_id` (the current home's record ID), `generation`
 (a fresh worker incarnation token), and `build`. The build combines the
 running CLI's embedded source identity and the executable's filesystem
 identity. The client validates the home, protocol and build before sending
@@ -403,8 +403,8 @@ Each request uses the guest envelope's `op` and `args` keys and adds a
 `generation` echo and a `request_id` correlation token. A final answer
 echoes the request ID and has exactly one of `ok` and `error`.
 `ping`, `store.close`, `store.postgresql_retire` and `drain` are
-management operations. `store.call` and `store.postgresql_read` are
-ordinary operations. The host resolves Store authority from its own home
+management operations. `store.call`, `store.postgresql_read` and `store.write` (file writes)
+are ordinary operations. The host resolves Store authority from its own home
 records.
 
 `store.postgresql_read` (#819 P-B) carries exactly `method`, `store`,
@@ -433,7 +433,7 @@ answers `postgresql { stores, idle, lent, reads, queued }`.
 The v1 host request and answer bodies are plain JSON with byte ceilings of
 64 KiB and 1 MiB respectively. Hello and management requests are limited to
 4 KiB. Check ceilings before reading a frame body and reject attachments on
-this read-only route. A deadline-bounded receive reads any reply bytes
+request and answer frames. A deadline-bounded receive reads any reply bytes
 buffered before the peer closed. An ordinary call waits for the first reply
 byte for the duration of the Store operation and bounds the transfer from
 that byte onward. That wait has no deadline by design (spec §8.5, §11): a
@@ -478,6 +478,42 @@ closes and checkpoints its Stores, so the next start is not guaranteed within
 the new caller's 10 s start deadline: that caller can get `Unavailable` with
 nothing sent, and maintenance meanwhile gets `InUse` naming the old worker's
 pid. No caller is reset mid-queue by an idle exit.
+
+A `store.write` request names its method, Store, project, field map and
+`body`: `none` (`edit`, `mkdir`, `rm`, `cp`, `mv`), `content` (`write`) or
+`changes` (`apply`). Content and changes never travel in the request. A
+streamed body follows the request on the same connection until one end
+frame:
+
+| Frame | Header | Body | Ceiling |
+| --- | --- | --- | --- |
+| change | top bit clear | `{"change": {...}}`, the Store's form of one change | 64 KiB |
+| spilled change | top bit clear | `{"spilled": true}`, then the change's JSON text as content | 64 KiB, then data frames |
+| wait | top bit clear | `{"wait": true}`: the caller's input is still coming | 64 KiB |
+| end | top bit clear | `{"end": {"changes": n, "bytes": b}}` | 64 KiB |
+| data | top bit set | content bytes; an empty data frame ends the content | 256 KiB |
+
+A streamed write in an apply is its change with `streamed: true`, then its
+data frames. The worker reads a frame only when the Store call asks for its
+next change or piece, so a faster caller blocks in the kernel socket buffer.
+Each side holds one frame plus, on the caller, at most two read pieces
+queued by its input thread. Memory does not grow with the input's size. One
+apply change is parsed whole by the caller, and by the worker when spilled.
+The worker waits at most 30 seconds for each frame. A caller whose input
+produced nothing for 10 seconds sends `wait`. A caller write may go 60
+seconds without progress. The end frame's counts must match what was
+received. The worker commits only after reading it, so input that stops
+earlier commits nothing. A change refused mid-stream answers at once and
+closes; the caller, whose next send fails, reads that early refusal. The
+request's frame and the end frame bound the custody boundary. Before the end
+frame is completely written the caller reports a definite refusal; after
+it, a missing or invalid answer is `Unknown` with the request ID.
+
+An engine `Unknown` is written to `machine/<host>/retained/<request id>.json`
+before its answer is sent. An answer the worker cannot write is kept there
+afterwards as `undelivered`. A record names the call, Store, project,
+Branch, path and outcome, never content. Drain, stop, crash and replacement
+leave the records; `machine.worker.retained` reports them.
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale

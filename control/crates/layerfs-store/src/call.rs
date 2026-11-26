@@ -25,13 +25,16 @@ pub fn store_call(
     target: &Target,
     op: &StoreOp<'_>,
 ) -> Outcome {
-    let (method, args) = (op.method(), op.engine_args());
+    let (method, mut args) = (op.method(), op.engine_args());
     let home = home.to_path_buf();
     target.record.unblocked()?;
     if let Some(outcome) = crate::host_read::routed(&home, target, method, &args) {
         return outcome;
     }
     if let Some(outcome) = crate::host_postgresql::routed(&home, target, method, &args) {
+        return outcome;
+    }
+    if let Some(outcome) = crate::host_write::routed(&home, target, method, &mut args) {
         return outcome;
     }
     // the lease is taken under the Store's lock with the record read there:

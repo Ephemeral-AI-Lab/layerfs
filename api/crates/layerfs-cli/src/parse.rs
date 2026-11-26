@@ -34,6 +34,9 @@ pub struct Switches {
 pub struct Parsed {
     pub args: SdkValue,
     pub switches: Switches,
+    /// A write's input left unread for the call's route to read
+    /// (`file write`'s content, an unscoped `file apply`'s changes).
+    pub input: Option<layerfs_api::CliInput>,
 }
 
 fn usage(message: impl Into<String>) -> Usage {
@@ -84,6 +87,21 @@ fn read_file(path: &str) -> Result<Vec<u8>, Usage> {
 /// Reads `call`'s command line `words`; `stdin` is read only when a piped
 /// positional needs it and no `--from` was given.
 pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Parsed, Usage> {
+    parse_with(call, words, stdin, false)
+}
+
+/// [`parse`] of this process's command line: a write input whose Store may
+/// take the host worker route is opened but left unread (`Parsed::input`).
+pub fn parse_cli(call: &Call, words: &[String]) -> Result<Parsed, Usage> {
+    parse_with(call, words, &mut std::io::stdin(), true)
+}
+
+fn parse_with(
+    call: &Call,
+    words: &[String],
+    stdin: &mut dyn Read,
+    may_defer: bool,
+) -> Result<Parsed, Usage> {
     let mut switches = Switches::default();
     let mut positionals: Vec<&str> = Vec::new();
     let mut fields: Vec<(String, SdkValue)> = Vec::new();
@@ -344,7 +362,38 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             )));
         }
     }
+    let mut input = None;
     for arg in call.args.iter().filter(|a| piped(a)) {
+        // a scoped apply checks every change's path before the call
+        let scoped = switches.scope.is_some() && arg.kind == Kind::Json;
+        let project = fields.iter().find(|(name, _)| name == "project");
+        let defer = may_defer
+            && secret.is_none()
+            && !scoped
+            && matches!(project, Some((_, SdkValue::Text(project)))
+                if layerfs_api::cli_defers(&call.name(), project));
+        if defer {
+            let source: Box<dyn Read + Send> = match &from {
+                Some(path) => Box::new(
+                    std::fs::File::open(path)
+                        .map_err(|why| usage(format!("cannot read {path}: {why}")))?,
+                ),
+                None => Box::new(std::io::stdin()),
+            };
+            let (kind, placeholder) = match arg.kind {
+                Kind::Json => (
+                    layerfs_api::CliInputKind::Changes,
+                    SdkValue::List(Vec::new()),
+                ),
+                _ => (
+                    layerfs_api::CliInputKind::Content,
+                    SdkValue::Bytes(Vec::new()),
+                ),
+            };
+            input = Some(layerfs_api::CliInput { kind, source });
+            fields.push((arg.name.to_owned(), placeholder));
+            continue;
+        }
         let bytes = match &from {
             Some(path) => read_file(path)?,
             None => {
@@ -366,6 +415,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     Ok(Parsed {
         args: SdkValue::Map(fields),
         switches,
+        input,
     })
 }
 

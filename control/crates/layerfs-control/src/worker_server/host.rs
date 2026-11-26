@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+mod write;
+
 const IDLE: Duration = Duration::from_secs(60);
 const IDLE_CHECK: Duration = Duration::from_secs(5);
 /// How long an idle worker keeps listening after it removed its socket

@@ -3,6 +3,7 @@
 //! `machine.operation`, `machine.configuration`, `machine.provider`,
 //! `machine.state`, `machine.worker.endpoint`, `machine.worker.auth`,
 //! `machine.worker.compatibility`, `machine.worker.ping`,
+//! `machine.worker.retained`,
 //! `machine.capacity`, `machine.network` (the Sandbox network, read by the
 //! worker, or here for `native` on Linux; left out for `native` on macOS).
 //! Nothing is started, stopped or written.
@@ -90,6 +91,7 @@ pub(super) fn diagnose(
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         if name == layerfs_home::names::HOST_MACHINE {
             super::host_worker::diagnose(home, budget, checks);
+            super::host_worker::retained(home, checks);
         }
         // `native` on Linux runs namespaces Sandboxes on this host's
         // network, and only for root: for anyone else it does not apply

@@ -30,7 +30,7 @@ impl Drop for Export {
 }
 
 #[test]
-fn worker_reads_share_a_store_with_direct_grep_and_a_large_write() {
+fn worker_reads_share_a_store_with_direct_grep_and_a_streamed_large_write() {
     let fixture = proof::create();
     let home = &fixture.paths.home;
     let source = home.join("proof-input");
@@ -64,6 +64,11 @@ fn worker_reads_share_a_store_with_direct_grep_and_a_large_write() {
         ],
     )
     .ok();
+    // that setup write started a worker (S2.2); the proof starts its own
+    fixture.drain();
+    proof::wait_for("the setup worker to exit", || {
+        (!fixture.paths.socket.exists()).then_some(())
+    });
 
     let payload: Vec<u8> = (0..SIZE)
         .map(|index| ((index ^ (index >> 8) ^ ((index >> 21) * 97)) & 0xff) as u8)
@@ -93,7 +98,9 @@ fn worker_reads_share_a_store_with_direct_grep_and_a_large_write() {
             "--detail",
         ],
     );
-    let reads = proof::spawn_reads(&fixture, 7, false);
+    // The large write streams through the worker (S2.2) and holds one
+    // pool thread while it waits for the Store; six reads hold six more.
+    let reads = proof::spawn_reads(&fixture, 6, false);
     proof::pool(&fixture, 7, 7, 0);
     assert_eq!(Cli::spawn(home, &other).ok(), other_before);
     // The extra ordinary lane finished the unrelated Store before the

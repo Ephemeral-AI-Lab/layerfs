@@ -624,17 +624,34 @@ known successful call on stderr and exits 125. The same three reads on a
 PostgreSQL Store go to the same worker, which keeps their connections open
 between calls ([PostgreSQL Stores](machines-and-stores.md#postgresql-stores));
 a Store connected before this release stays direct until `store connect` is
-run again. SDK local calls, other CLI PostgreSQL calls and writes run in the
-caller, and a SQLite Store on another machine runs through that machine's
+run again. SDK local calls and other CLI PostgreSQL calls run in the caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).
+
+The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
+`rm`, `cp`, `mv`, `apply`) also run in the host worker, each one call
+with one Commit (or none when nothing changed). `file write`'s content and
+an unscoped `file apply`'s changes stream from stdin or `--from` in bounded
+frames, so neither the CLI nor the worker holds the whole input; there is
+no new size limit. One `file apply` change is still read whole by the CLI.
+A call whose Store or socket path does not qualify reads its input whole
+and runs in the caller, as before; so does a single-change write whose
+arguments pass 64 KiB. Input that stops before its end (a killed CLI, a
+broken pipe, JSON that does not parse) commits nothing: the CLI refuses
+the call, with the worker's refusal when it refused a change early. Once
+the whole input was sent, a lost answer is `Unknown` with a request ID;
+check the Branch before writing again, since nothing is resent. The worker
+keeps the outcome of a call it could not answer, and an outcome its Store
+could not settle, in `machine/<host>/retained/<request id>.json`;
+`machine doctor` reports them as a `machine.worker.retained` notice until
+you remove the record. CLI PostgreSQL writes run in the caller.
 
 The host worker's SQLite cache keeps up to 16 Stores open per home.
 It checks the Store's current record before serving a call, including a
 call on a warm Store. A maintenance operation can ask the worker to close
 an idle Store and release its lease. The worker acknowledges the close
 after it removes its lease. A Store that is opening, serving a call,
-checkpointing or closing reports `InUse` without waiting. The read-only
-worker leaves WAL frames from other openers in place.
+checkpointing or closing reports `InUse` without waiting. The worker
+leaves WAL frames from other openers in place.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |

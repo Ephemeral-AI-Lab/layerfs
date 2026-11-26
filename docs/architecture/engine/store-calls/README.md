@@ -66,8 +66,9 @@ entries still opening or closing. At capacity it closes the least recently
 used idle Store or waits for a slot. Each admission checks the authoritative
 Store operation and identity under the Store record lock, even when it
 reuses an open entry. The worker holds its own real-home lease until physical
-release. A read-only host worker schedules no checkpoint for a WAL owned
-by another opener. A fenced close releases an idle Store and acknowledges
+release. The host worker schedules no idle checkpoint for a WAL owned by
+another opener; its own writes keep the log bounded through the writing
+session's background checkpoint thread. A fenced close releases an idle Store and acknowledges
 only after its lease is removed. An opening, active, checkpointing or
 closing Store answers `InUse` immediately. Close reports record the
 checkpoint outcome and whether WAL content was observed after release,
@@ -141,8 +142,19 @@ The table is [`methods/dispatch.rs`](../../../../engine/crates/layerfs-store-ser
 A non-null `message` is checked first (`CommitMeta::check`); any other name
 is `UnknownMethod`. A single-change method builds one change and goes
 through the same `commit` as `fs.apply`; a change that declares `streamed`
-bytes is refused, since no bytes follow a call on this route
+byte lengths is refused, since no route sends them
 ([`methods/args.rs`](../../../../engine/crates/layerfs-store-service/src/methods/args.rs)).
+
+`methods::call_streamed(service, call, source)` runs `fs.write` or
+`fs.apply` with its content or changes pulled from a `methods::Source`
+(#819 S2.2, the host worker's streamed writes). `Source::next` returns the
+next change and `Source::piece` the next piece of a write marked
+`streamed: true`. The call holds one change and one piece at a time. The
+source returns `None` only after its whole input was received, so an input
+that stops early is a refusal at that point, the private Workspace is closed
+and nothing commits. A refused change stops pulling: the rest of the input
+is never read. Without a source a `streamed: true` write is `InvalidInput`.
+Other methods ignore the source and run as `methods::call`.
 
 **Refusal order.** A method reads each argument just before the engine step
 that first uses it; an argument needed only after a lookup travels as
@@ -166,6 +178,7 @@ files::commit(service, project, branch, changes, message)
 | Change | Fields | Effect | Source |
 | --- | --- | --- | --- |
 | `write` | `path`, `content` or `bytes`, `mode?` | Replace bytes; a new file is 0o644, an existing one keeps its mode. Applied in pieces of `MAX_PLAINTEXT_BYTES` (65,519); an equal piece is not rewritten. | [`write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
+| `write`, streamed | `path`, `streamed: true`, `mode?` | The same, its bytes from the source (`Mutation::write_stream`). Its length is known only at the end: a piece within the old length is compared while every byte before it was equal; after the first difference the rest is written; the file is truncated to the streamed length when anything differed. | same |
 | `edit` | `path`, `oldText`, `newText` | Replace the one occurrence; scans and shifts in 32 KiB windows. `NoMatch`, `AmbiguousMatch`, `Binary`, `NotFile`. | [`write/edit.rs`](../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `mkdir` | `path`, `mode?` | Create with missing parents; `mode` default 0o755, parents 0o755. | [`write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
 | `chmod` | `path`, `mode` | Set permission bits. | same |

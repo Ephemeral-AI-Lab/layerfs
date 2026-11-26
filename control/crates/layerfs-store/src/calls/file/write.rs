@@ -250,7 +250,7 @@ pub fn cp(home: &Path, events: &mut Events<'_>, request: &FileMv) -> Outcome {
 /// One change of `file.apply` as the Store takes it: its fields under the
 /// Store's names, its mode a number, and a removal that is not recursive
 /// unless it says so.
-fn change(change: &Change) -> Result<SdkValue, SdkRefusal> {
+pub(crate) fn change(change: &Change) -> Result<SdkValue, SdkRefusal> {
     let mut fields = Vec::with_capacity(change.fields.len() + 1);
     for (name, value) in &change.fields {
         if !CHANGE_FIELDS.contains(&name.as_str()) {

@@ -120,21 +120,52 @@ pub fn call_scoped(
     )
 }
 
-/// The CLI executable's checked call, eligible for the native read route.
+/// The CLI executable's checked call, eligible for the host worker route,
+/// with the input of a write the CLI deferred.
 pub fn call_cli(
     families: &'static [Family],
     scope: Option<&super::Scope>,
     name: &str,
     args: SdkValue,
+    input: Option<layerfs_store::host_write::Input>,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
-    call_from(families, None, scope, name, args, events, FrontEnd::Cli)
+    let front = FrontEnd::Cli;
+    layerfs_store::host_write::with_input(input, || {
+        call_from(families, None, scope, name, args, events, front)
+    })
+}
+
+/// Whether the CLI defers the input of write `name` to `project`: true only
+/// for a host-machine sqlite Store whose worker endpoint fits (the call's
+/// route is still chosen at its boundary; a deferred input it does not
+/// stream is read whole there).
+pub fn cli_defers(name: &str, project: &str) -> bool {
+    cfg!(all(
+        feature = "machine",
+        any(target_os = "macos", target_os = "linux")
+    )) && matches!(name, "file.write" | "file.apply")
+        && home(None).is_ok_and(|home| layerfs_store::host_write::likely(&home, project))
 }
 
 enum FrontEnd {
     Cli,
     Library(Client),
 }
+
+/// The CLI calls that may take the host worker route.
+const HOST_ROUTE: [&str; 10] = [
+    "file.read",
+    "file.stat",
+    "file.list",
+    "file.write",
+    "file.edit",
+    "file.mkdir",
+    "file.rm",
+    "file.cp",
+    "file.mv",
+    "file.apply",
+];
 
 fn call_from(
     families: &'static [Family],
@@ -155,7 +186,7 @@ fn call_from(
             feature = "machine",
             any(target_os = "macos", target_os = "linux")
         ))
-        && matches!(name, "file.read" | "file.stat" | "file.list");
+        && HOST_ROUTE.contains(&name);
     let outcome = layerfs_home::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });

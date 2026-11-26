@@ -337,6 +337,7 @@ fn answer_host_request(
     if traced {
         trace::steps_begin();
     }
+    let mut write = None;
     let outcome = match refusal {
         Some(refusal) => Err(refusal),
         None => match (request.get_text("op"), request.get("args")) {
@@ -345,6 +346,12 @@ fn answer_host_request(
                     "Unavailable",
                     "the request names another host worker generation",
                 ))
+            }
+            (Some(layerfs_store::host_write::OP), Some(args @ SdkValue::Map(_)))
+                if !management =>
+            {
+                write = Some(args);
+                server.dispatch_write(args, socket, request_id, admitted)
             }
             (Some(op), Some(args @ SdkValue::Map(_))) => {
                 server.dispatch(management, op, args, admitted)
@@ -355,6 +362,7 @@ fn answer_host_request(
             )),
         },
     };
+    let kept = write.map(|args| (args, outcome.clone()));
     let answer = match outcome {
         Ok(value) => ("ok", value),
         Err(refusal) => (
@@ -374,11 +382,15 @@ fn answer_host_request(
         trace::step("host_dispatch");
         fields.push(("steps".to_owned(), trace::steps_value(trace::steps_take())));
     }
-    write_host_frame(
+    let delivered = write_host_frame(
         socket,
         &SdkValue::Map(fields),
         HOST_MAX_REPLY,
         Instant::now() + EGRESS,
     )
-    .is_ok()
+    .is_ok();
+    if let (false, Some((args, outcome))) = (delivered, kept) {
+        server.undelivered(request_id, args, &outcome);
+    }
+    delivered
 }

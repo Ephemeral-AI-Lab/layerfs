@@ -44,6 +44,7 @@ const MACHINE: &[CheckId] = &[
     CheckId::own("machine.worker.auth"),
     CheckId::own("machine.worker.compatibility"),
     CheckId::own("machine.worker.ping"),
+    CheckId::own("machine.worker.retained"),
     CheckId::own("machine.capacity"),
     CheckId::own("machine.network"),
 ];

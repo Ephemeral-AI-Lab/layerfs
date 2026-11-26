@@ -733,6 +733,10 @@ The host-worker transport uses private Unix sockets and checks the user of
 the other process before exchanging any operation bytes. A CLI call chooses
 its route before sending. A lost answer after an operation send starts is
 reported as `Unknown` with a request ID. The CLI makes one attempt.
+A streamed file write is sent once: input that stops before its end frame
+commits nothing and is refused; a lost answer after it is `Unknown`. The
+worker keeps outcomes its caller may not know in
+`machine/<host>/retained/` (see [`file`](calls.md#file-14)).
 Two installations sharing a home may need to wait for an existing worker's
 idle exit before the other installation can use that home worker.
 
@@ -747,7 +751,10 @@ worker publishes its socket, the probe can observe only an absent endpoint.
 `layerfs machine doctor macos-host --detail` uses one authenticated probe and
 includes its evidence. An idle home passes the endpoint check. A worker
 of another build yields a compatibility notice before the ping. The
-diagnostic never starts or replaces a worker. `home doctor` checks the
+diagnostic never starts or replaces a worker. `machine.worker.retained`
+passes when no write outcome is kept and is a notice that lists the kept
+records otherwise; it reads them from the home, so it answers with or
+without a running worker. `home doctor` checks the
 host-worker directory's ownership and permissions. `store doctor` shows
 an exact live worker lease beside other lease holders. Store operations
 perform stale lease cleanup under the Store lock.

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// Version of the host worker exchange.
-pub const HOST_PROTOCOL: i64 = 1;
+pub const HOST_PROTOCOL: i64 = 2;
 pub(super) const CORRELATION_LEN: usize = 32;
 
 static RUNNING_BUILD: OnceLock<&'static str> = OnceLock::new();

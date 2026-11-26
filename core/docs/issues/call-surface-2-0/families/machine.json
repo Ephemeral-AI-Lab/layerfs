@@ -1287,6 +1287,11 @@
             "full_only": false
           },
           {
+            "check": "machine.worker.retained",
+            "what": "the host worker keeps no write outcome its caller may not know",
+            "full_only": false
+          },
+          {
             "check": "machine.capacity",
             "what": "its data disk has room",
             "full_only": false
