@@ -5,7 +5,7 @@ use crate::{
         delta::{
             candidates::signature,
             record::{prefix_cannot_win, HEADER_BYTES},
-            select::{acquires, prepare_full, select, SelectInput},
+            select::{acquires, prepare_full, select_after_trial, SelectInput},
         },
         encode_prefix, raw_payload, EncodedRecord,
     },
@@ -27,7 +27,6 @@ impl State<'_> {
     ) -> StorageResult<()> {
         for reference in object.references() {
             if !self.packer.pending(*reference)
-                && !self.deferred.holds(*reference)
                 && self.packer.location(*reference).is_none()
                 && self
                     .storage
@@ -143,20 +142,20 @@ impl State<'_> {
             chain_total: &mut self.chain_total,
             signature: sig,
             full,
-            ring_lost,
             counters: &mut self.delta,
             profile: &mut self.profile,
         };
         let record = if object.role() == ObjectRole::InodeLeaf {
             self.select_pooled(object, &advisory)?
         } else {
-            select(
+            select_after_trial(
                 &mut input,
                 object.id(),
                 object.canonical(),
                 object.role(),
                 &advisory,
                 &mut self.compression,
+                ring_lost,
             )?
         };
         let lane = record.lane;
@@ -305,7 +304,6 @@ impl State<'_> {
             chain_total: &mut self.chain_total,
             signature: None,
             full: None,
-            ring_lost: false,
             counters: &mut counters,
             profile: &mut self.profile,
         };

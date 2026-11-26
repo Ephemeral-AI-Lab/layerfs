@@ -104,10 +104,7 @@ impl<'a> Save<'a> {
         // one publication of those bases.
         state.prepare(objects)?;
         if !state.deferred.is_empty() {
-            state.seal_deferred_bases()?;
-            state.flush_signatures()?;
-            state.register_ready(false)?;
-            state.readmit_deferred()?;
+            state.publish_wave()?;
         }
         let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;

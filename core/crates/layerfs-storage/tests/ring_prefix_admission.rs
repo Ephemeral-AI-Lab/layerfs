@@ -11,7 +11,16 @@
 mod metadata;
 mod support;
 
-use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
+use layerfs_content::{
+    filesystem::{
+        attributes::PortableMetadata,
+        inode::{encode_inode_page, InodePage},
+        root::scope_for_seed,
+    },
+    inode_leaf::{InodeKind, InodeMetadata, InodeValue},
+    object::codec::encode_bytes_object,
+    AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole,
+};
 use layerfs_storage::{Storage, StoragePolicy, WriteOutcome};
 use metadata::MemoryMetadata;
 use std::sync::Arc;
@@ -178,6 +187,63 @@ fn an_init_of_similar_files_in_one_save_admits_only_full_winners() {
     let outcome = save_each(&metadata, std::slice::from_ref(&next)).remove(0);
     assert_eq!(depth(&outcome), 1, "{outcome:?}");
     assert_eq!(ring_ids(&metadata), vec![objects[0].id(), next.id()]);
+}
+
+#[test]
+fn a_packed_inode_can_reference_a_same_wave_ring_delta() {
+    let metadata = store();
+    let files: Vec<_> = (0..2)
+        .map(|v| object(&version(8 * 1024, v), None))
+        .collect();
+    let reference = files[1].id();
+    let canonical = encode_inode_page(&InodePage::Leaf {
+        entries: vec![(
+            2,
+            InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: reference,
+                metadata_root: InodeMetadata::Inline(PortableMetadata {
+                    mode: 0o644,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                }),
+            },
+        )],
+    })
+    .unwrap();
+    let inode = layerfs_telemetry::timer::Timing::disabled("admission", |scope| {
+        FinalizedObject::admit(
+            ObjectId::for_bytes(&canonical),
+            ObjectRole::InodeLeaf,
+            canonical,
+            StoragePolicy::default().construction(),
+            scope_for_seed([13; 32]),
+            scope.child("inode"),
+        )
+    })
+    .0
+    .unwrap();
+    assert_eq!(inode.references(), &[reference]);
+
+    let storage = Storage::new(metadata.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    for file in &files {
+        save.accept(file.clone()).unwrap();
+    }
+    save.accept(inode.clone()).unwrap();
+    // Fill the ordinary pack queue behind the inode so it is ready before
+    // the end of this preparation wave.
+    for bytes in support::noise(512 * 1024).chunks(32 * 1024) {
+        let filler =
+            FinalizedObject::new(ObjectRole::FileState, encode_bytes_object(bytes).unwrap())
+                .unwrap();
+        save.accept(filler).unwrap();
+    }
+    let outcome = save.finish().unwrap();
+    assert_eq!(outcome.delta.whole_file_depths[1], 1, "{outcome:?}");
+    assert_reads_back(&metadata, &files);
+    assert_reads_back(&metadata, &[inode]);
 }
 
 #[test]

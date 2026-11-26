@@ -6,9 +6,9 @@
 //! the object used to wait for a publication of its own: one per similar
 //! file. When a trial against the base's kept bytes shows the PREFIX wins, the
 //! object is held here instead, and selected after the wave's own publication
-//! has published every held object's base. A held object is referenced by no
-//! other object (a file root is named only by inode values), so holding it
-//! delays nothing else; same-Save reads and exact reuse see it here.
+//! has published every held object's base. Admission drains this cohort before
+//! placing a dependent or using a held object as a declared predecessor.
+//! Same-Save reads and exact reuse see held objects here.
 use crate::store::policy::SAVE_DEFERRED_BYTES;
 use layerfs_content::{FinalizedObject, ObjectId};
 

@@ -47,6 +47,11 @@ impl State<'_> {
             return Ok(());
         }
         self.prepare(objects)?;
+        self.publish_wave()
+    }
+
+    /// Publishes ready packs and the acknowledged bases needed to place held objects.
+    pub(super) fn publish_wave(&mut self) -> StorageResult<()> {
         let flush = self.storage.work.span(super::Stage::Flush);
         // Keep the existing bounded partial queues until pressure, dependency
         // closure or finish requires them. Ready packs still publish this wave,
@@ -59,7 +64,7 @@ impl State<'_> {
     }
     /// Seals the lanes that hold the bases of the held objects, so the next
     /// publication publishes them (`save/deferred.rs`).
-    pub(super) fn seal_deferred_bases(&mut self) -> StorageResult<()> {
+    fn seal_deferred_bases(&mut self) -> StorageResult<()> {
         if self.deferred.is_empty() {
             return Ok(());
         }
@@ -76,7 +81,7 @@ impl State<'_> {
     }
     /// Selects every held object, once a publication published its base:
     /// located together first, then each admitted as `admit` would.
-    pub(super) fn readmit_deferred(&mut self) -> StorageResult<()> {
+    fn readmit_deferred(&mut self) -> StorageResult<()> {
         if self.deferred.is_empty() {
             return Ok(());
         }
@@ -220,6 +225,18 @@ impl State<'_> {
             }
             self.outcome.reused += 1;
         } else {
+            // A held root has no pack yet. Place it before admitting a
+            // dependent or selecting against it as a declared predecessor.
+            if !self.deferred.is_empty()
+                && object
+                    .references()
+                    .iter()
+                    .copied()
+                    .chain(object.predecessors().ids())
+                    .any(|id| self.deferred.holds(id))
+            {
+                self.publish_wave()?;
+            }
             // One new object group plus every currently unfinished group/queue.
             let required = self.packer.finish_pack_bound() + 1;
             self.reserve_packs(required)?;
