@@ -113,6 +113,7 @@ pub(crate) struct Fetch {
     pub(super) compact_inode_packs: Cell<bool>,
     /// Remote value requests may share a flight while a captured Save runs.
     paired_inode_values: Cell<bool>,
+    pub(super) captured_locators: RefCell<Option<super::LocatorMode>>,
     counters: Cell<Diagnostics>,
     /// Chain hints from chain locates (#758).
     pub(super) hints: RefCell<super::hints::Hints>,
@@ -173,6 +174,7 @@ impl Fetch {
             serve_published: Cell::new(false),
             compact_inode_packs: Cell::new(false),
             paired_inode_values: Cell::new(false),
+            captured_locators: RefCell::new(None),
             counters: Cell::new(Diagnostics::default()),
             hints: RefCell::default(),
             capacities: Cell::new(None),
@@ -402,9 +404,11 @@ impl Fetch {
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
             let mut chains = crate::location::LocatedChains::default();
-            self.note(|c| c.locate += 1);
             let mut bodies = Vec::new();
-            if let Some(packs) = packs.as_deref().filter(|_| page.len() > 1) {
+            if let Some((kept, closure)) = self.retained_locators(page) {
+                (rows, chains) = (kept, closure);
+            } else if let Some(packs) = packs.as_deref().filter(|_| page.len() > 1) {
+                self.note(|c| c.locate += 1);
                 let published = self.published.borrow();
                 let resident: Vec<_> = packs
                     .resident_ids()
@@ -429,6 +433,7 @@ impl Fetch {
                 }
                 self.note(|c| c.joined_pack_locates += 1);
             } else {
+                self.note(|c| c.locate += 1);
                 self.metadata.locate_chains(page, &mut rows, &mut chains)?;
             }
             if rows.len() > page.len() {
@@ -470,7 +475,7 @@ impl Fetch {
                     .ok_or(StorageError::Integrity("unsolicited packs"))?;
                 self.admit_joined_packs(packs, &rows, bodies)?;
             }
-            self.install_chains(&seen, chains)?;
+            self.install_chains(&seen, &rows, chains)?;
             for row in rows {
                 self.remember_pack(row.pack)?;
                 let mut cache = self.locators.borrow_mut();

@@ -273,11 +273,21 @@ impl State<'_> {
         batch: &mut Publication,
         members: &Members,
     ) -> StorageResult<()> {
+        self.acknowledge_with(batch, members, false)
+    }
+    pub(super) fn acknowledge_with(
+        &mut self,
+        batch: &mut Publication,
+        members: &Members,
+        captured_tail: bool,
+    ) -> StorageResult<()> {
         self.storage.source.note(|c| c.publish += 1);
         let result = {
             let _work = self.storage.work.span(super::Stage::Metadata);
             let provider = &self.storage.source.metadata;
-            if self.captured_output {
+            if captured_tail {
+                provider.publish_captured_tail(batch)
+            } else if self.captured_output {
                 provider.publish_captured(batch)
             } else {
                 provider.publish(batch)

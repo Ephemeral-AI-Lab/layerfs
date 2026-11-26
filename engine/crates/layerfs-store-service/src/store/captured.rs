@@ -180,7 +180,15 @@ impl BoundWorkspace {
         held: &mut CapturedConstruction,
         constructed: Option<&mut ConstructedObjects>,
     ) -> Result<Candidate, CommitError> {
-        let operation = self.operation().map_err(CommitError::Workspace)?;
+        let planned_reads = self.store.writer.batched_chain_reads();
+        let locators = self.admitted.as_ref().map(|admitted| {
+            std::sync::Arc::new(layerfs_storage::read::CapturedLocators::new(
+                admitted.clone(),
+            ))
+        });
+        let operation = self
+            .captured_operation(locators.clone())
+            .map_err(CommitError::Workspace)?;
         // Only Commit acquires these owners, one capture at a time, so the
         // capture's own generation is unique among their live requests.
         let request = u64::try_from(capture.generation.number())
@@ -207,7 +215,6 @@ impl BoundWorkspace {
         };
         let digests = super::digests::StoreDigests(&*self.store.history);
         let (workspace, overlay) = (operation.workspace(), operation.overlay());
-        let planned_reads = self.store.writer.batched_chain_reads();
         // The one producer runs on its own thread; this thread keeps the
         // Save and accepts what it builds (`pipeline`).
         let piped = crate::telemetry::timed("captured.namespace", |scope| {
@@ -238,9 +245,13 @@ impl BoundWorkspace {
             // A refused PostgreSQL demand or input window can leave objects
             // in the producer's private batch. Keep any acknowledged batches
             // in Save custody and drop that unsent batch.
-            let piped = super::pipeline::construct(save, &mut sink, produce, |(attempt, _)| {
-                !planned_reads || attempt.result.is_ok()
-            });
+            let piped = super::pipeline::construct(
+                save,
+                &mut sink,
+                locators.as_ref(),
+                produce,
+                |(attempt, _)| !planned_reads || attempt.result.is_ok(),
+            );
             if let Ok(Piped {
                 produced: (_, Some(report)),
                 accept,

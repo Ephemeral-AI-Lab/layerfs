@@ -427,7 +427,8 @@ impl BoundWorkspace {
                         let tail = tail
                             .ok_or(CommitError::Context("binding overflow without a held Save"))?;
                         let saved = phase(timing, "finish.tail", || {
-                            tail.publish().map_err(CommitError::Storage)
+                            tail.publish_captured_overflow()
+                                .map_err(CommitError::Storage)
                         })?;
                         self.store.note_save(&saved);
                         retained.saved = Some(saved);

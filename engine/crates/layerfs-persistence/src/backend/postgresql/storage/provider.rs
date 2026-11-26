@@ -306,7 +306,12 @@ impl PackPersistence for PostgresStorage {
         // per row for its fields and wire framing, including malformed replies.
         const _: () = assert!(VALUES * (crate::blocks::BODY_LIMIT + 64) < 32 * 1024 * 1024);
         let [first, last] = ordinals;
-        if !self.session.writable
+        if !self.session.paired_immutable_reads
+            || self
+                .session
+                .incarnation
+                .load(std::sync::atomic::Ordering::SeqCst)
+                == 0
             || first.len() != READ_OBJECT_LIMIT
             || last.is_empty()
             || last.len() > VALUES - READ_OBJECT_LIMIT
@@ -343,6 +348,13 @@ impl PackPersistence for PostgresStorage {
     fn batched_chain_reads(&self) -> bool {
         true
     }
+    fn captured_locator_generation(&self) -> Option<u64> {
+        let generation = self
+            .session
+            .incarnation
+            .load(std::sync::atomic::Ordering::SeqCst);
+        (self.session.paired_immutable_reads && generation != 0).then_some(generation)
+    }
     /// Each statement is a round trip and a publication costs about seven
     /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at
     /// once (owner decision, layerfs-project #61); SQLite keeps 4 MiB.
@@ -367,6 +379,14 @@ impl PackPersistence for PostgresStorage {
         publication::validate(batch, self.publication_bytes())?;
         match objects::publish_flight::eligible(&self.session, batch)? {
             true => objects::publish_flight::run(&self.session, batch).map_err(Into::into),
+            false => self.publish(batch),
+        }
+    }
+
+    fn publish_captured_tail(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        publication::validate(batch, self.publication_bytes())?;
+        match objects::publish_flight::eligible(&self.session, batch)? {
+            true => objects::publish_flight::run_tail(&self.session, batch).map_err(Into::into),
             false => self.publish(batch),
         }
     }

@@ -276,6 +276,11 @@ pub trait PackPersistence: Send + Sync {
     fn batched_chain_reads(&self) -> bool {
         false
     }
+
+    /// The checked catalog generation for captured immutable locator sharing.
+    fn captured_locator_generation(&self) -> Option<u64> {
+        None
+    }
     /// Canonical bytes one preparation wave holds and one publication carries,
     /// and the sealed bytes it publishes. The default is the shared
     /// transaction bound, 4 MiB less one byte; a provider whose every
@@ -302,6 +307,11 @@ pub trait PackPersistence: Send + Sync {
     /// Publishes a wave while accepting captured Commit output, before the
     /// history lane and before finish. Providers may select a bounded flight.
     fn publish_captured(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        self.publish(batch)
+    }
+    /// Publishes the held tail of captured Commit before binding continuation,
+    /// with the ordinary standalone publication's outcome and custody.
+    fn publish_captured_tail(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         self.publish(batch)
     }
 }

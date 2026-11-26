@@ -74,7 +74,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub(crate) const PACK: &str = include_str!("../../../../sql/postgresql/fused/pack.sql");
 const HEAD: &str = include_str!("../../../../sql/postgresql/fused/head.sql");
 pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/fused/rows.sql");
-const HINTS: &str = include_str!("../../../../sql/postgresql/fused/hints.sql");
+pub(crate) const HINTS: &str = include_str!("../../../../sql/postgresql/fused/hints.sql");
 const COMMIT: &str = include_str!("../../../../sql/postgresql/fused/commit.sql");
 const LINEAGE_PARENT: &str = include_str!("../../../../sql/postgresql/fused/lineage_parent.sql");
 const LINEAGE_BASE: &str = include_str!("../../../../sql/postgresql/fused/lineage_base.sql");

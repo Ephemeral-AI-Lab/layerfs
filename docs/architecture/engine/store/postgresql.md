@@ -1328,6 +1328,17 @@ a warm Commit whose Save holds similar files for that publication.
 
 ### Captured Save registration
 
+Captured construction on an admitted Workspace can carry positive inode leaf
+and branch locators, compact ancestor coordinates, and validated directories
+from its Workspace reader to its Save. One capture owns at most 196 KiB of
+retained metadata. The Save uses that metadata only for a complete bounded
+group at the same catalog incarnation, after its own pending and held objects
+are considered. Every decoded object passes the ordinary authentication.
+An incomplete group uses the ordinary locator path. The same Workspace reader
+can also pair two ready bounded ordinal requests on its existing connection.
+Terminal close disables retained locators before releasing the mount admission.
+The retention and pairing end when the captured construction ends.
+
 During captured construction, an eligible Save batch sends one fenced
 transaction on the existing writer connection. It binds up to 4 MiB of pack
 bodies, with catalog arrays subject to the existing publication row limit.
@@ -1338,9 +1349,20 @@ separate request in the same flight, so it also closes an aborted transaction.
 The row statement checks value and signature integrity on the server and
 returns inserted identities. The Save compares any lost identity with the
 first writer's bytes before dependent work continues. A lost acknowledgement
-keeps the outcome uncertain and quarantines the session. Large batches and nested lane calls use
-the ordinary publication path selected before sending. Save finish, the held history tail
-and Namespace Init use their existing registration paths.
+keeps the outcome uncertain and quarantines the session. Large batches and
+nested lane calls use ordinary publication, selected before sending.
+A captured Commit whose binding blocks overflow one transaction may also
+publish its held Save tail through this flight before recording the
+bindings. That tail settles through the ordinary Save path. Untrusted
+completion or rollback and lane cleanup withhold unused allocations. Save
+finish, final fused history publication and Namespace Init use their
+respective existing registration paths.
+
+After the tail acknowledges, each eligible overflow binding batch can send
+its existing sorted block append in one fenced write flight. The continuation
+waits for each batch's outcome before advancing and sends final history
+publication separately. The ordinary binding encoder and sequence allocation
+serve both paths.
 
 [Captured Save flight](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish_flight.rs)
 

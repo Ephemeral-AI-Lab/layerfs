@@ -32,6 +32,19 @@ pub(crate) fn eligible(session: &Session, batch: &Publication) -> Result<bool, B
 /// remains its own request in the same flight, so it closes an aborted
 /// transaction even when the preceding assertion fails.
 pub(crate) fn run(session: &Session, batch: &Publication) -> Result<Published, BackendError> {
+    send(session, batch, false)
+}
+
+/// Uses the existing captured transport with ordinary held-tail custody.
+pub(crate) fn run_tail(session: &Session, batch: &Publication) -> Result<Published, BackendError> {
+    send(session, batch, true)
+}
+
+fn send(
+    session: &Session,
+    batch: &Publication,
+    held_tail: bool,
+) -> Result<Published, BackendError> {
     let generation = session.incarnation.load(Ordering::SeqCst);
     let schema = session.settings.schema.as_str();
     let nonce = nonce();
@@ -77,7 +90,13 @@ pub(crate) fn run(session: &Session, batch: &Publication) -> Result<Published, B
 
     let release = barrier_leftover(schema);
     let outcome = session.pipeline_judged(&requests, &release, |replies, trusted| {
-        let verdict = decide(batch, &replies, trusted, row_index);
+        // Ordinary standalone publication withholds unused IDs if it
+        // cannot confirm rollback, cleanup or completion on the session.
+        let verdict = if held_tail && !trusted {
+            Err(BackendError::Unknown)
+        } else {
+            decide(batch, &replies, trusted, row_index)
+        };
         let unknown = verdict == Err(BackendError::Unknown);
         (verdict, unknown)
     })?;

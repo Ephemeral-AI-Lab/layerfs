@@ -12,6 +12,46 @@ use layerfs_storage::{
 
 const VALUE_ROOM: usize = POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES;
 
+#[test]
+fn pairs_pooled_values_on_an_ordinary_read_only_session() {
+    let Some(url) = chains::url() else { return };
+    let store = chains::Store::new(&url, "read_only_value_pair");
+    let end = READ_OBJECT_LIMIT as u32;
+    let first: Vec<_> = (1..=end).collect();
+    let last = [end + 1];
+    store
+        .handles
+        .storage
+        .publish(&Publication {
+            inode_values: vec![value(1), value(last[0])],
+            ..Publication::default()
+        })
+        .unwrap();
+    let read = layerfs_persistence::PostgresHandles::open_read_only(
+        &store.selection,
+        chains::BINDING,
+        chains::CURSOR,
+    )
+    .unwrap();
+    let provider = &read.storage;
+    let mut ordinary = [Vec::new(), Vec::new()];
+    provider.inode_values(&first, &mut ordinary[0]).unwrap();
+    provider.inode_values(&last, &mut ordinary[1]).unwrap();
+    assert_eq!(ordinary, [vec![value(1)], vec![value(last[0])]]);
+
+    let before = provider.diagnostics().unwrap();
+    let mut paired = [Vec::new(), Vec::new()];
+    assert!(provider
+        .inode_values_pair([&first, &last], &mut paired)
+        .unwrap());
+    let work = provider.diagnostics().unwrap().since(&before);
+    assert_eq!(paired, ordinary);
+    assert_eq!(
+        (work.round_trips, work.statements, work.write_transactions),
+        (1, 2, 0)
+    );
+}
+
 fn value(ordinal: u32) -> InodeValueRow {
     let mut value = [0; INODE_VALUE_BYTES];
     value[9..41].copy_from_slice(ObjectId::for_bytes(&ordinal.to_le_bytes()).as_bytes());

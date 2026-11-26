@@ -31,9 +31,10 @@ pub fn record_new_bindings(
         .transpose()
         .map_err(CommitError::from)?;
     let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
-    record_binding_rows(catalog, |visit| {
-        new_bindings(reader, left.as_ref(), &right, visit)
-    })
+    record_binding_rows(
+        |rows| catalog.record_bindings(rows),
+        |visit| new_bindings(reader, left.as_ref(), &right, visit),
+    )
 }
 
 /// Records the new bindings of the changed `directories`, read a window of
@@ -45,22 +46,27 @@ pub(super) fn record_directory_bindings(
     catalog: &dyn HistoryCatalog,
     directories: &ChangedDirectories,
 ) -> Result<u64, CommitError> {
-    record_directory_bindings_from(reader, catalog, directories, None)
+    record_directory_bindings_from(
+        reader,
+        |rows| catalog.record_bindings(rows),
+        directories,
+        None,
+    )
 }
 
 fn record_directory_bindings_from(
     reader: &dyn AuthenticatedObjects,
-    catalog: &dyn HistoryCatalog,
+    record: impl FnMut(&[BindingHint]) -> Result<(), HistoryError>,
     directories: &ChangedDirectories,
     start: Option<(u64, &PathName)>,
 ) -> Result<u64, CommitError> {
-    record_binding_rows(catalog, |visit| {
+    record_binding_rows(record, |visit| {
         directory_bindings_from(reader, directories, start, visit)
     })
 }
 
 fn record_binding_rows(
-    catalog: &dyn HistoryCatalog,
+    mut record: impl FnMut(&[BindingHint]) -> Result<(), HistoryError>,
     walk: impl FnOnce(&mut dyn FnMut(u64, u64, &PathName) -> ContentResult<()>) -> ContentResult<()>,
 ) -> Result<u64, CommitError> {
     let (mut rows, mut recorded, mut failure) = (Vec::new(), 0u64, None);
@@ -71,7 +77,7 @@ fn record_binding_rows(
             name: name.as_bytes().to_vec(),
         });
         if rows.len() == BATCH {
-            if let Err(error) = catalog.record_bindings(&rows) {
+            if let Err(error) = record(&rows) {
                 failure = Some(error);
                 return Err(ContentError::OutputRejected);
             }
@@ -85,9 +91,7 @@ fn record_binding_rows(
     }
     walked.map_err(CommitError::from)?;
     if !rows.is_empty() {
-        catalog
-            .record_bindings(&rows)
-            .map_err(CommitError::History)?;
+        record(&rows).map_err(CommitError::History)?;
         recorded += rows.len() as u64;
     }
     Ok(recorded)
@@ -143,6 +147,14 @@ impl CapturedBindings {
         owner: &crate::OwnerClient,
         catalog: &dyn HistoryCatalog,
     ) -> Result<(), CommitError> {
+        self.record_with(owner, |rows| catalog.record_bindings(rows))
+    }
+
+    fn record_with(
+        self,
+        owner: &crate::OwnerClient,
+        mut record: impl FnMut(&[BindingHint]) -> Result<(), HistoryError>,
+    ) -> Result<(), CommitError> {
         let mut rows = Vec::new();
         let mut failure = None;
         let walked = self.walk(owner, &mut |child, parent, name| {
@@ -152,7 +164,7 @@ impl CapturedBindings {
                 name: name.as_bytes().to_vec(),
             });
             if rows.len() == BATCH {
-                if let Err(error) = catalog.record_bindings(&rows) {
+                if let Err(error) = record(&rows) {
                     failure = Some(error);
                     return Err(ContentError::OutputRejected);
                 }
@@ -164,7 +176,10 @@ impl CapturedBindings {
             return Err(CommitError::History(error));
         }
         walked?;
-        record_rows(catalog, &rows)
+        if !rows.is_empty() {
+            record(&rows).map_err(CommitError::History)?;
+        }
+        Ok(())
     }
 }
 
@@ -192,17 +207,21 @@ impl BindingOverflow {
                 parent,
                 name,
             } => {
-                record_rows(catalog, &prefix)?;
+                catalog
+                    .record_overflow_bindings(&prefix)
+                    .map_err(CommitError::History)?;
                 drop(prefix);
                 record_directory_bindings_from(
                     reader,
-                    catalog,
+                    |rows| catalog.record_overflow_bindings(rows),
                     directories,
                     Some((parent, &name)),
                 )?;
                 Ok(())
             }
-            Self::Captured(plan) => plan.record(owner, catalog),
+            Self::Captured(plan) => {
+                plan.record_with(owner, |rows| catalog.record_overflow_bindings(rows))
+            }
         }
     }
 }

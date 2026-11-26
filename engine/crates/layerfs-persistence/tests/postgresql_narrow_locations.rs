@@ -293,11 +293,13 @@ fn publication_state(schema: &Schema) -> Vec<String> {
 #[test]
 fn captured_publication_keeps_the_winner_and_rolls_back_invalid_rows() {
     let Some(url) = url() else { return };
-    let exercise = |tag, captured| {
+    let exercise = |tag, captured, held_tail| {
         let (schema, first_writer) = Schema::new(url.clone(), tag);
         let writer = PostgresHandles::open_writable(&schema.selection, BINDING, CURSOR).unwrap();
         let publish = |batch: &Publication| {
-            if captured {
+            if held_tail {
+                writer.storage.publish_captured_tail(batch)
+            } else if captured {
                 writer.storage.publish_captured(batch)
             } else {
                 writer.storage.publish(batch)
@@ -309,15 +311,33 @@ fn captured_publication_keeps_the_winner_and_rolls_back_invalid_rows() {
         let winner_pack = seed.packs[0].info().pack_id;
         assert!(first_writer.storage.publish(&seed).unwrap().lost.is_empty());
         let initial = captured_batch(&writer, vec![(warm, 0)], 1, warm);
+        let start = writer.diagnostics().unwrap();
         assert!(publish(&initial).unwrap().lost.is_empty());
+        let cold = writer.diagnostics().unwrap().since(&start);
+        if held_tail {
+            assert_eq!(
+                (cold.round_trips, cold.prepares, cold.write_commits),
+                (2, 2, 1)
+            );
+            println!(
+                "HELD_TAIL_COLD trips={} prepares={}",
+                cold.round_trips, cold.prepares
+            );
+        }
 
         let mixed = captured_batch(&writer, vec![(winner, 0), (fresh, 1)], 2, fresh);
         let start = writer.diagnostics().unwrap();
         assert_eq!(publish(&mixed).unwrap().lost, vec![winner]);
         let work = writer.diagnostics().unwrap().since(&start);
-        if captured {
+        if captured || held_tail {
             assert_eq!(work.round_trips, 1, "{work:?}");
             assert_eq!(work.write_commits, 1, "{work:?}");
+        }
+        if held_tail {
+            println!(
+                "HELD_TAIL_WARM trips={} prepares={}",
+                work.round_trips, work.prepares
+            );
         }
         assert_eq!(
             located(&first_writer, &[winner, fresh]),
@@ -346,7 +366,9 @@ fn captured_publication_keeps_the_winner_and_rolls_back_invalid_rows() {
         );
         (publication_state(&schema), failure)
     };
-    assert_eq!(exercise("capture", true), exercise("ordinary", false));
+    let ordinary = exercise("ordinary", false, false);
+    assert_eq!(exercise("capture", true, false), ordinary);
+    assert_eq!(exercise("held_tail", false, true), ordinary);
 }
 
 #[test]

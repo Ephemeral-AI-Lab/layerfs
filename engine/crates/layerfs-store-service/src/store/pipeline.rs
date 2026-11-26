@@ -18,10 +18,10 @@
 use layerfs_content::{
     AuthenticatedObjects, ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId,
 };
-use layerfs_storage::Save;
+use layerfs_storage::{read::CapturedLocators, Save};
 use std::{
     cell::RefCell,
-    sync::mpsc,
+    sync::{mpsc, Arc},
     time::{Duration, Instant},
 };
 
@@ -144,6 +144,7 @@ fn next<T>(receiver: &mpsc::Receiver<T>) -> Option<T> {
 pub(super) fn construct<T: Send>(
     save: &Save<'_>,
     consumer: &mut dyn FinalizedConsumer,
+    locators: Option<&Arc<CapturedLocators>>,
     produce: impl FnOnce(&dyn AuthenticatedObjects, &mut dyn FinalizedConsumer) -> T + Send,
     handoff: impl FnOnce(&T) -> bool + Send,
 ) -> std::io::Result<Piped<T>> {
@@ -179,7 +180,7 @@ pub(super) fn construct<T: Send>(
                 }
                 // The Save keeps a failed read's original error, as before.
                 Message::Read(ids, reply) => {
-                    let _ = reply.send(save.read_canonical_batch(&ids));
+                    let _ = reply.send(save.read_captured_canonical_batch(&ids, locators));
                 }
             }
             accept += started.elapsed();

@@ -121,6 +121,7 @@ impl Fetch {
     pub(super) fn install_chains(
         &self,
         located: &BTreeMap<ObjectId, ObjectRole>,
+        rows: &[LocatedObject],
         answer: LocatedChains,
     ) -> StorageResult<()> {
         const BAD: StorageError = StorageError::Integrity("port chain locator");
@@ -143,6 +144,7 @@ impl Fetch {
         for directory in &answer.directories {
             check_directory(directory.pack, &directory.prefix).map_err(|_| BAD)?;
         }
+        self.remember_captured_locators(rows, &answer);
         let rows = answer.chains.len() as u64;
         self.note(|c| {
             c.chain_rows += rows;

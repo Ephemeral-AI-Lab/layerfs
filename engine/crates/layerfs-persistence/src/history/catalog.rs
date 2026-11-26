@@ -21,6 +21,19 @@ impl HistoryCatalog for HistoryProvider {
     fn record_bindings(&self, rows: &[BindingHint]) -> HistoryResult<()> {
         self.write(|tx| hints::record(tx, rows))
     }
+    fn record_overflow_bindings(&self, rows: &[BindingHint]) -> HistoryResult<()> {
+        if let crate::backend::Engine::Postgres(session) = &self.engine {
+            if let Some(blocks) = hints::overflow_blocks(rows) {
+                if crate::backend::postgresql::history::binding_append::eligible(session)? {
+                    return crate::backend::postgresql::history::binding_append::run(
+                        session, blocks,
+                    )
+                    .map_err(Into::into);
+                }
+            }
+        }
+        self.record_bindings(rows)
+    }
     fn bindings_of(&self, child: u64) -> HistoryResult<Vec<BindingHint>> {
         self.read(|tx| hints::of(tx, child))
     }

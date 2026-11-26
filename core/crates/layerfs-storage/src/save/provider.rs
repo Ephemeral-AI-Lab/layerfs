@@ -3,21 +3,35 @@ use super::{state::State, Save};
 use crate::{
     error::{StorageError, StorageResult},
     policy::READ_CANONICAL_BYTES_LIMIT,
+    read::{CapturedLocators, LocatorMode},
 };
 use layerfs_content::{AuthenticatedObjects, ContentResult, ObjectId};
+use std::sync::Arc;
+
 impl Save<'_> {
     /// Reads accepted pending objects or authenticated registered canonical bytes.
     pub fn read_objects(&self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
+        self.read_with_locators(ids, None)
+    }
+    fn read_with_locators(
+        &self,
+        ids: &[ObjectId],
+        locators: Option<&Arc<CapturedLocators>>,
+    ) -> StorageResult<Vec<Vec<u8>>> {
         if self.terminal.get() {
             return Err(StorageError::Aborted);
         }
-        let result = self.read_inner(ids);
+        let result = self.read_inner(ids, locators);
         if result.is_err() {
             self.terminal.set(true);
         }
         result
     }
-    fn read_inner(&self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
+    fn read_inner(
+        &self,
+        ids: &[ObjectId],
+        locators: Option<&Arc<CapturedLocators>>,
+    ) -> StorageResult<Vec<Vec<u8>>> {
         let mut state = self.state.borrow_mut();
         let storage = state.storage;
         let _published = storage.source.serving_published();
@@ -26,6 +40,11 @@ impl Save<'_> {
             && storage.source.metadata.batched_chain_reads();
         let _compact_inodes = storage.source.compact_inode_packs(remote_capture);
         let _paired = storage.source.pairing_inode_values(remote_capture);
+        let _locators = storage.source.scoped_locators(
+            locators
+                .filter(|_| remote_capture)
+                .map(|cache| LocatorMode::Reuse(cache.clone())),
+        );
         let capacities = state.storage.capacities();
         if ids.len() > capacities.read_objects {
             return Err(StorageError::CapacityExceeded {
@@ -149,12 +168,23 @@ impl Save<'_> {
         Ok(out)
     }
 }
-impl AuthenticatedObjects for Save<'_> {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        self.read_objects(ids).map_err(|error| {
+impl Save<'_> {
+    /// Canonical reads for the captured producer, using only positive
+    /// metadata from this attempt's exact Workspace reader on a complete hit.
+    pub fn read_captured_canonical_batch(
+        &self,
+        ids: &[ObjectId],
+        locators: Option<&Arc<CapturedLocators>>,
+    ) -> ContentResult<Vec<Vec<u8>>> {
+        self.read_with_locators(ids, locators).map_err(|error| {
             let mapped = crate::error::provider_error_ref(&error);
             self.remember_failure(error);
             mapped
         })
+    }
+}
+impl AuthenticatedObjects for Save<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        self.read_captured_canonical_batch(ids, None)
     }
 }

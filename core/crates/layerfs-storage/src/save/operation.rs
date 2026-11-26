@@ -284,7 +284,15 @@ impl PreparedTail<'_> {
     }
     /// Publishes [`Self::publication`] on its own, as `finish` does (lost
     /// locations compared with their winners), and completes the Save.
-    pub fn publish(mut self) -> StorageResult<WriteOutcome> {
+    pub fn publish(self) -> StorageResult<WriteOutcome> {
+        self.publish_with(false)
+    }
+    /// Publishes a captured Commit's held tail before recording overflow
+    /// bindings. The selected transport preserves the ordinary Save outcome.
+    pub fn publish_captured_overflow(self) -> StorageResult<WriteOutcome> {
+        self.publish_with(true)
+    }
+    fn publish_with(mut self, overflow: bool) -> StorageResult<WriteOutcome> {
         // Sent here: this Save's own write decides whether a failure is
         // uncertain (`State::written`); a caller that was handed the
         // publication had nothing applied (`Fused::Overflow`, a race).
@@ -296,7 +304,11 @@ impl PreparedTail<'_> {
             // A lost location's winner must be read from the Store, not
             // from the held batch.
             storage.source.release_held();
-            state.acknowledge(&mut held.batch, &held.members)?;
+            state.acknowledge_with(
+                &mut held.batch,
+                &held.members,
+                overflow && save.captured.get(),
+            )?;
         }
         self.held = None;
         let save = self.save.take().ok_or(StorageError::Aborted)?;
