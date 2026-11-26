@@ -66,8 +66,10 @@ pub(crate) fn stop(
     }
     let changed = set(home, name, true)?;
     let paths = HostPaths::new(home)?;
-    // uncertain write outcomes the drained worker could not record (§8.5)
-    let mut unrecorded: Option<(SdkValue, SdkValue)> = None;
+    // what the drain answered (also when it had begun already): uncertain
+    // write outcomes the worker could not record up to then (§8.5), and the
+    // admitted writes still running, which the drain lets finish
+    let mut drain = Drained::default();
     let drained = if paths.fits()
         && paths
             .control
@@ -79,13 +81,9 @@ pub(crate) fn stop(
             .call_existing(true, "drain", SdkValue::map([]))
         {
             Ok(reply) => {
-                unrecorded = reply.as_ref().and_then(|reply| {
-                    let count = reply
-                        .get_int("unrecorded_count")
-                        .filter(|count| *count > 0)?;
-                    let listed = reply.get("unrecorded").cloned().unwrap_or_default();
-                    Some((listed, SdkValue::Int(count)))
-                });
+                if let Some(reply) = &reply {
+                    drain = Drained::of(reply);
+                }
                 reply.is_some()
             }
             Err(error)
@@ -146,29 +144,30 @@ pub(crate) fn stop(
         let mut error = refused(
             "InUse",
             format!(
-                "host machine {name} is stopped; holders: {}",
-                blocking.join(", ")
+                "host machine {name} is stopped; holders: {}{}",
+                blocking.join(", "),
+                match drain.running {
+                    0 => String::new(),
+                    _ => format!("; {}", drain.note()),
+                }
             ),
         );
         error.detail = with_field(error.detail, "holders", texts(blocking));
         if let Some(outcome) = forced {
             error.detail = with_field(error.detail, "forced_outcome", outcome);
         }
-        error.detail = with_unrecorded(error.detail, unrecorded);
+        error.detail = drain.add(error.detail);
         return Err(error);
     }
     if let Some(outcome) = forced {
-        return Ok(with_unrecorded(outcome, unrecorded));
+        return Ok(drain.add(outcome));
     }
-    Ok(with_unrecorded(
-        layerfs_machine::with_stopped(
-            layerfs_machine::done(name, (changed || drained).then_some("stopped")),
-            false,
-            &[],
-            &[],
-        ),
-        unrecorded,
-    ))
+    Ok(drain.add(layerfs_machine::with_stopped(
+        layerfs_machine::done(name, (changed || drained).then_some("stopped")),
+        false,
+        &[],
+        &[],
+    )))
 }
 /// The holders of host Store `store` on machine `name`: this process's
 /// lease and every other live one.
@@ -193,16 +192,48 @@ fn store_holders(
     Ok(())
 }
 
-/// `value` with the uncertain write outcomes the drained worker could not
-/// record, when there are any.
-fn with_unrecorded(value: SdkValue, unrecorded: Option<(SdkValue, SdkValue)>) -> SdkValue {
-    match unrecorded {
-        Some((listed, count)) => with_field(
-            with_field(value, "unrecorded_writes", listed),
-            "unrecorded_writes_count",
-            count,
-        ),
-        None => value,
+/// What the host worker's drain answered.
+#[derive(Default)]
+struct Drained {
+    /// Uncertain write outcomes it could not record, up to the drain:
+    /// listed (the first 32) and counted, when there are any.
+    unrecorded: Option<(SdkValue, i64)>,
+    /// Admitted writes still running, which finish after the drain.
+    running: i64,
+}
+
+impl Drained {
+    fn of(reply: &SdkValue) -> Self {
+        let count = reply.get_int("unrecorded_count").filter(|count| *count > 0);
+        Self {
+            unrecorded: count.map(|count| {
+                let listed = reply.get("unrecorded").cloned().unwrap_or_default();
+                (listed, count)
+            }),
+            running: reply.get_int("writes_running").unwrap_or(0),
+        }
+    }
+
+    /// The running writes in words.
+    fn note(&self) -> String {
+        match self.running {
+            1 => "1 write still running; see worker.log".to_owned(),
+            n => format!("{n} writes still running; see worker.log"),
+        }
+    }
+
+    /// `value` with that account, when there is one. A running write may
+    /// still produce an outcome no record holds: it goes to `worker.log`.
+    fn add(&self, mut value: SdkValue) -> SdkValue {
+        if let Some((listed, count)) = &self.unrecorded {
+            value = with_field(value, "unrecorded_writes", listed.clone());
+            value = with_field(value, "unrecorded_writes_count", SdkValue::Int(*count));
+        }
+        if self.running > 0 {
+            value = with_field(value, "running_writes", SdkValue::Int(self.running));
+            value = with_field(value, "running_writes_note", SdkValue::Text(self.note()));
+        }
+        value
     }
 }
 fn texts(items: Vec<String>) -> SdkValue {

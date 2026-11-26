@@ -438,3 +438,16 @@ pub(super) fn reply(
     )
     .is_ok()
 }
+
+/// Tells a held write's caller to send its input now (`{"request_id",
+/// "go": true}`): sent when a write thread starts reading it, so the
+/// caller never streams into a queue; whether it was delivered.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub(super) fn go(socket: &std::os::unix::net::UnixStream, request_id: &str) -> bool {
+    use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
+    let frame = SdkValue::map([
+        ("request_id", SdkValue::text(request_id)),
+        ("go", SdkValue::Bool(true)),
+    ]);
+    write_host_frame(socket, &frame, HOST_MAX_REPLY, Instant::now() + EGRESS).is_ok()
+}

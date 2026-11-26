@@ -2,17 +2,19 @@
 //! and the records of outcomes their caller may not learn (§8.5).
 //!
 //! Fairness (§11): a `store.write` request, once read, leaves its ordinary
-//! connection slot and thread and is held apart, at most [`WRITES_HELD`]
-//! at once, for a lane of its own: [`WRITE_THREADS`] write threads. A
-//! write never runs on an ordinary thread, so however many writes stream,
-//! short calls keep every ordinary thread and slot. A held write waits for
-//! a write thread while its input fits the socket buffer; its caller's
-//! own send bound ends a wait that never gets one. Past [`WRITES_HELD`],
-//! or once the worker drains, a write is refused before any effect.
+//! connection slot and thread and is held apart for a lane of its own:
+//! [`WRITE_THREADS`] write threads. A write never runs on an ordinary
+//! thread, so short calls keep every ordinary thread. Held writes count
+//! against the worker's accept limit ([`super::ACCEPTED`]), so past it
+//! further callers wait in the listen queue and are refused only by their
+//! own hello bound, before they send anything. A held write waits for a
+//! write thread with nothing sent but its request: its caller streams
+//! input only after the worker's `go` frame, sent when a write thread
+//! starts reading it, so a queued write is never timed out. A write still
+//! waiting once the worker drains is refused before any effect.
 //!
-//! Drain (§8.3) stops the input of every running write: a write whose
-//! `end` frame was not read yet is then refused with nothing committed (its
-//! input was never complete), and one past `end` finishes as admitted.
+//! Drain (§8.3) never stops an admitted write: a running write reads its
+//! whole input and finishes as admitted; the drain answer counts it.
 //!
 //! Records (§8.5): an engine-uncertain outcome is written to its record
 //! before its answer is sent, and a Commit whose answer could not be
@@ -26,16 +28,11 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::StreamReader;
 use std::collections::VecDeque;
-use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::time::Instant;
 
 /// Write threads: streamed writes that run at once.
 pub(super) const WRITE_THREADS: usize = 4;
-/// Streamed writes held at once, running or waiting, apart from the
-/// ordinary connection slots: each holds one descriptor and no thread
-/// while it waits.
-pub(super) const WRITES_HELD: usize = 16;
 /// Unrecorded uncertain outcomes a drain answer lists; past it only their
 /// count grows.
 const UNRECORDED_LISTED: usize = 32;
@@ -54,9 +51,6 @@ pub(super) struct Writes {
     held: usize,
     running: usize,
     waiting: VecDeque<Held>,
-    /// The connections of running writes, whose input a drain stops.
-    inputs: Vec<(u64, UnixStream)>,
-    next: u64,
     /// Uncertain outcomes whose record could not be written, for the
     /// drain answer: the first [`UNRECORDED_LISTED`], and how many.
     unrecorded: Vec<SdkValue>,
@@ -72,13 +66,6 @@ impl Writes {
     /// Running writes and waiting writes.
     pub(super) fn counts(&self) -> (usize, usize) {
         (self.running, self.waiting.len())
-    }
-
-    /// Ends the input of every running write (drain).
-    pub(super) fn stop_inputs(&self) {
-        for (_, input) in &self.inputs {
-            let _ = input.shutdown(Shutdown::Read);
-        }
     }
 
     /// How many uncertain outcomes have no record.
@@ -99,34 +86,21 @@ impl Writes {
 }
 
 impl HostServer {
-    /// Holds a write read on an ordinary connection. Past [`WRITES_HELD`],
-    /// or while the worker drains (its write threads may have ended), it is
-    /// refused at once, before any effect: nothing committed.
+    /// Holds a write read on an ordinary connection. While the worker
+    /// drains (its write threads may have ended) it is refused at once,
+    /// before any effect: nothing committed. Otherwise it always waits:
+    /// the accept limit already bounds held writes.
     pub(in crate::worker_server) fn hold_write(&self, held: Held) {
         let mut activity = self.lock();
-        let refusal = if activity.draining {
-            Some((
-                "the host worker is draining; the write was not run and nothing was committed"
-                    .to_owned(),
-                "draining",
-            ))
-        } else if activity.writes.held >= WRITES_HELD {
-            Some((
-                format!(
-                    "the host worker already holds {WRITES_HELD} streamed writes; the write was not run and nothing was committed"
-                ),
-                "writes-full",
-            ))
-        } else {
-            None
-        };
-        if let Some((message, state)) = refusal {
+        if activity.draining {
             drop(activity);
-            let mut refusal = refused("Unavailable", message);
+            let mut refusal = refused(
+                "Unavailable",
+                "the host worker is draining; the write was not run and nothing was committed",
+            );
             refusal.detail = SdkValue::map([
                 ("request_id", SdkValue::text(&held.request_id)),
-                ("state", SdkValue::text(state)),
-                ("writes", SdkValue::Int(WRITES_HELD as i64)),
+                ("state", SdkValue::text("draining")),
             ]);
             super::super::connection::reply(&held.stream, &held.request_id, false, Err(refusal));
             return;
@@ -138,7 +112,7 @@ impl HostServer {
     }
 
     /// One write thread: runs held writes until the worker drains and none
-    /// waits (a write taken while draining is refused at once).
+    /// waits (a write taken while draining is refused at once, unrun).
     pub(super) fn work_writes(&self) {
         loop {
             let held = {
@@ -246,23 +220,21 @@ impl HostServer {
         refusal
     }
 
-    /// Admits one held write and runs its streamed Store call. Nothing is
-    /// resent; a stopped or lost input commits nothing.
+    /// Admits one held write, tells its caller to send its input (`go`,
+    /// for a streamed body), and runs its Store call. Nothing is resent; a lost input
+    /// commits nothing.
     fn dispatch_write(&self, held: &Held, admitted: &mut bool) -> Outcome {
-        let input = held.stream.try_clone().map_err(|error| {
-            refused("Failed", format!("cannot hold the write's input: {error}"))
-        })?;
-        let id = {
-            let mut activity = self.admit(admitted)?;
-            let writes = &mut activity.writes;
-            writes.next += 1;
-            writes.inputs.push((writes.next, input));
-            writes.next
-        };
+        drop(self.admit(admitted)?);
+        // a single-change write has no input to ask for
+        let streamed = matches!(held.args.get_text("body"), Some("content" | "changes"));
+        if streamed && !super::super::connection::go(&held.stream, &held.request_id) {
+            return Err(refused(
+                "Unavailable",
+                "the write's caller was gone before its input was sent; nothing was committed",
+            ));
+        }
         let mut reader = StreamReader::new(&held.stream);
-        let outcome = layerfs_store::host_stream::serve(&self.home, &held.args, &mut reader);
-        self.lock().writes.inputs.retain(|(other, _)| *other != id);
-        outcome
+        layerfs_store::host_stream::serve(&self.home, &held.args, &mut reader)
     }
 
     /// Writes one outcome's record, one attempt; on failure the outcome

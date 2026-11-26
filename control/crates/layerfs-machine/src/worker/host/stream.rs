@@ -1,7 +1,11 @@
 //! Streamed input of one host write, in bounded frames after its request.
 //!
 //! After an ordinary request whose arguments name a streamed `body`, the
-//! caller sends frames until one `end`. A JSON frame (header top bit clear,
+//! caller waits for the worker's `go` frame (`{"request_id", "go": true}`),
+//! sent when a write thread starts reading the input, with no time bound:
+//! a write queued behind busy write threads waits, and is never timed out
+//! for that. A refusal instead of `go` is definite: nothing was sent but
+//! the request. After `go` the caller sends frames until one `end`. A JSON frame (header top bit clear,
 //! at most [`HOST_MAX_REQUEST`] bytes) is `{"change": {...}}`,
 //! `{"spilled": true}` (the next content is one change's JSON text, for a
 //! change too large for one frame), `{"wait": true}` (the input is still
@@ -43,8 +47,6 @@ pub const STREAM_PROGRESS: usize = STREAM_PIECE;
 /// A caller whose input produced nothing for this long sends `wait`, which
 /// only shows the caller the worker is still there.
 pub const STREAM_KEEPALIVE: Duration = Duration::from_secs(10);
-/// The longest one caller write may go without progress.
-const SEND_WAIT: Duration = Duration::from_secs(60);
 /// How long a caller whose send failed reads for an early refusal.
 const EARLY_ANSWER: Duration = Duration::from_secs(2);
 
@@ -209,9 +211,6 @@ pub struct StreamSender<'a> {
     started: bool,
     /// A write failed: the exchange is lost.
     lost: Option<String>,
-    /// That write failed at its send bound: the worker read nothing for
-    /// [`SEND_WAIT`].
-    stalled: bool,
 }
 
 impl<'a> StreamSender<'a> {
@@ -222,7 +221,6 @@ impl<'a> StreamSender<'a> {
             bytes: 0,
             started: false,
             lost: None,
-            stalled: false,
         }
     }
 
@@ -230,12 +228,11 @@ impl<'a> StreamSender<'a> {
         if let Some(lost) = &self.lost {
             return Err(refused("Unavailable", lost.clone()));
         }
+        // no send bound: after `go` the worker is reading this input, and
+        // its Store work may hold it as long as a direct call would take
         let mut stream = self.stream;
         while !bytes.is_empty() {
-            let written = stream
-                .set_write_timeout(Some(SEND_WAIT))
-                .and_then(|()| stream.write(bytes));
-            match written {
+            match stream.write(bytes) {
                 Ok(0) => return Err(self.fail(io::ErrorKind::WriteZero.into())),
                 Ok(written) => {
                     self.started = true;
@@ -249,10 +246,6 @@ impl<'a> StreamSender<'a> {
     }
 
     fn fail(&mut self, error: io::Error) -> SdkRefusal {
-        self.stalled = matches!(
-            error.kind(),
-            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-        );
         let message = format!("host worker connection: {error}");
         self.lost = Some(message.clone());
         refused("Unavailable", message)
@@ -333,24 +326,6 @@ fn not_committed(op: &str, id: &str, why: &str) -> SdkRefusal {
     refusal
 }
 
-/// A write whose input the worker did not read for [`SEND_WAIT`]: queued
-/// behind busy write threads, or a worker that stopped reading. Named for
-/// the load, as the hello refusal is.
-fn stalled(op: &str, id: &str) -> SdkRefusal {
-    let mut refusal = refused(
-        "Unavailable",
-        format!(
-            "{op}: request {id}: the host worker read none of this write's input for {} s: earlier writes hold its write threads, or it is not responding; nothing was committed",
-            SEND_WAIT.as_secs()
-        ),
-    );
-    refusal.detail = SdkValue::map([
-        ("request_id", SdkValue::text(id)),
-        ("state", SdkValue::text("writes-busy")),
-    ]);
-    refusal
-}
-
 impl HostPaths {
     /// Makes one ordinary call whose input `body` streams after its request,
     /// launching a worker if the home has none. A failure before the end
@@ -371,19 +346,27 @@ impl HostPaths {
         // a write carries no login; its request is dropped once encoded
         let frame = host_frame::encode(greeted.request.get(), HOST_MAX_REQUEST)?;
         drop(greeted.request);
+        // a deadline an earlier frame set on this socket does not apply
+        stream
+            .set_write_timeout(None)
+            .map_err(|error| not_committed(op, &id, &error.to_string()))?;
         let mut sender = StreamSender::new(&stream);
-        let sent = (sender.raw(&frame))
-            .and_then(|()| body(&mut sender))
-            .and_then(|()| sender.end());
+        sender
+            .raw(&frame)
+            .map_err(|_| match sender.lost.as_deref() {
+                Some(why) => early(&stream, op, &id).unwrap_or_else(|| not_committed(op, &id, why)),
+                None => not_committed(op, &id, "the request was not sent"),
+            })?;
+        go(&stream, op, &id)?;
+        let sent = body(&mut sender).and_then(|()| sender.end());
         if let Err(refusal) = sent {
             trace::connection(&path.to_string_lossy(), op, sender.started, began);
             return Err(match sender.lost {
                 // the caller's own input stopped it: its refusal, as sent
                 None => refusal,
-                Some(why) => early(&stream, op, &id).unwrap_or_else(|| match sender.stalled {
-                    true => stalled(op, &id),
-                    false => not_committed(op, &id, &why),
-                }),
+                Some(why) => {
+                    early(&stream, op, &id).unwrap_or_else(|| not_committed(op, &id, &why))
+                }
             });
         }
         trace::step("request");
@@ -398,6 +381,22 @@ impl HostPaths {
         }
         Ok(answer)
     }
+}
+
+/// Waits, unbounded, for the worker's `go` before any input is sent. Any
+/// other frame is the worker's refusal of the request, or a broken
+/// exchange: definite either way, since no input was sent.
+fn go(stream: &UnixStream, op: &str, id: &str) -> Result<(), SdkRefusal> {
+    let frame = host_frame::read_host_frame(stream, HOST_MAX_REPLY, None)
+        .map_err(|refusal| not_committed(op, id, &refusal.message))?
+        .ok_or_else(|| not_committed(op, id, "endpoint closed"))?;
+    if frame.get_text("request_id") == Some(id) && frame.get_bool("go") {
+        return Ok(());
+    }
+    Err(match decode_answer(op, id, frame) {
+        Err(refusal) if refusal.code != "Unknown" => refusal,
+        _ => not_committed(op, id, "answered before its input was asked for"),
+    })
 }
 
 /// A refusal the worker answered before the input's end: it cannot have

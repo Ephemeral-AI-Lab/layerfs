@@ -7,7 +7,6 @@
 //! call streams the deferred input to the worker, any other call reads it
 //! whole and runs directly as before. Single-change writes (`edit`, `mkdir`,
 //! `rm`, `cp`, `mv`) go as one request frame when it fits, else directly.
-use crate::calls::Change;
 use crate::resolve::Target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
@@ -56,8 +55,8 @@ pub struct Input {
     pub source: Box<dyn Read + Send>,
     /// The same open file when the input is a regular file, sharing its
     /// offset: a `file apply` list is checked against the worker's budget
-    /// through it before anything is sent, and the offset restored. A
-    /// piped list gets one when the route is chosen (its spool file).
+    /// through it before anything is sent, and the offset restored. Any
+    /// other input gets one when the route is chosen (its spool file).
     pub file: Option<std::fs::File>,
 }
 
@@ -110,8 +109,9 @@ fn materialize(input: Input, args: &mut Vec<(String, SdkValue)>) -> Result<(), S
                 }
                 Err(error) => return Err(not_json(&error.0)),
             };
+            drop(text);
             let changes = list
-                .iter()
+                .into_iter()
                 .map(store_change)
                 .collect::<Result<Vec<_>, _>>()?;
             args.retain(|(name, _)| name != "changes");
@@ -130,11 +130,9 @@ fn not_json(why: &str) -> SdkRefusal {
 }
 
 /// One public change record as the Store takes it.
-pub(crate) fn store_change(change: &SdkValue) -> Result<SdkValue, SdkRefusal> {
+pub(crate) fn store_change(change: SdkValue) -> Result<SdkValue, SdkRefusal> {
     match change {
-        SdkValue::Map(fields) => crate::calls::file::store_change(&Change {
-            fields: fields.clone(),
-        }),
+        SdkValue::Map(fields) => crate::calls::file::owned_change(fields),
         _ => Err(refused("InvalidInput", "each change is a record")),
     }
 }
@@ -184,47 +182,9 @@ pub(crate) fn routed(
     if !crate::host_read::cli() || !METHODS.contains(&method) || !host_sqlite(target) {
         return direct(args, input);
     }
-    // a piped list is kept in a private unnamed file first, so its changes
-    // are checked before anything is sent
-    if let Some(held) = input.as_mut().filter(|held| {
-        method == "fs.apply" && held.kind == InputKind::Changes && held.file.is_none()
-    }) {
-        let source = std::mem::replace(&mut held.source, Box::new(std::io::empty()));
-        let (source, file) = crate::host_stream::spool(home, source);
-        held.source = source;
-        held.file = file;
-        if held.file.is_none() {
-            return direct(args, input);
-        }
-    }
-    let body = match (method, &input) {
-        (
-            "fs.write",
-            Some(Input {
-                kind: InputKind::Content,
-                ..
-            }),
-        ) => "content",
-        (
-            "fs.apply",
-            Some(Input {
-                kind: InputKind::Changes,
-                file,
-                ..
-            }),
-        ) => {
-            // a change past the worker's budget runs direct: a route, not
-            // a refusal (a list that cannot be checked runs direct too)
-            let fits = match file.as_ref().map(std::fs::File::try_clone) {
-                Some(Ok(mut file)) => crate::host_stream::fits_worker(&mut file),
-                _ => Ok(false),
-            };
-            match fits {
-                Ok(true) => "changes",
-                Ok(false) => return direct(args, input),
-                Err(error) => return Some(Err(error)),
-            }
-        }
+    let body = match (method, input.as_ref().map(|input| input.kind)) {
+        ("fs.write", Some(InputKind::Content)) => "content",
+        ("fs.apply", Some(InputKind::Changes)) => "changes",
         // content already read (a scoped apply): the direct route takes it
         ("fs.write" | "fs.apply", _) => return direct(args, input),
         (_, None) => "none",
@@ -251,6 +211,33 @@ pub(crate) fn routed(
     };
     if !paths.request_fits(OP, &header) {
         return direct(args, input);
+    }
+    // An input that is not a regular file (a pipe, FIFO or terminal) is
+    // first copied into a private unnamed file: the worker then reads it at
+    // disk speed, never at its producer's, and a list is checked before
+    // anything is sent. When that copy cannot be made the call runs direct.
+    if let Some(held) = input.as_mut().filter(|held| held.file.is_none()) {
+        let source = std::mem::replace(&mut held.source, Box::new(std::io::empty()));
+        let (source, file) = crate::host_stream::spool(home, source);
+        held.source = source;
+        held.file = file;
+        if held.file.is_none() {
+            return direct(args, input);
+        }
+    }
+    if body == "changes" {
+        // a change past the worker's budget runs direct: a route, not a
+        // refusal (a list that cannot be checked runs direct too)
+        let file = input.as_ref().and_then(|held| held.file.as_ref());
+        let fits = match file.map(std::fs::File::try_clone) {
+            Some(Ok(mut file)) => crate::host_stream::fits_worker(&mut file),
+            _ => Ok(false),
+        };
+        match fits {
+            Ok(true) => {}
+            Ok(false) => return direct(args, input),
+            Err(error) => return Some(Err(error)),
+        }
     }
     Some(match input {
         None => paths.call_validated(OP, header, valid_answer),

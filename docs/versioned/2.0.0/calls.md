@@ -632,21 +632,26 @@ The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
 with one Commit (or none when nothing changed). `file write`'s content and
 an unscoped `file apply`'s changes stream from stdin or `--from` in bounded
 frames, so neither the CLI nor the worker holds the whole input; there is
-no new size limit. One `file apply` change is still built whole by the
-CLI (the engine needs an edit's text whole); the input's text is not
-copied, and a write's content still streams. A list with any other change past the
-worker's budget for one change (4 MiB decoded) runs in the caller instead,
-decided before anything is sent; a piped list is first copied into a
-private unnamed temporary file under the home (removed on any exit), so
-it can be checked without being held in memory. A scoped
-`file apply --scope` runs in the caller. The worker runs writes on 4 write
-threads of their own, at most 16 held at once, so writes never take the
-threads of reads; past 16, or while the worker drains, a write is refused
-`Unavailable` before any effect. A write that waits 60 s for a write
-thread is refused `Unavailable`, naming the load, nothing committed. Input
-that delivers less than 262,076 bytes (four engine records) in 30 s of
-the worker waiting for it is refused `Unavailable`, nothing committed; the
-CLI's keepalives do not count as input.
+no new size limit. Input that is not a regular file (a pipe, FIFO or
+terminal) is first copied into a private unnamed file under the home
+(`machine/<host>/spool/`, removed on any exit), which takes disk equal to
+the input on the home's filesystem while the call runs; so the worker
+reads at disk speed, and a slow producer is never timed out. One `file
+apply` change is still built whole by the CLI (the engine needs an edit's
+text whole), a write's content included; its content then streams. A list
+with any other change past the worker's budget for one change (4 MiB
+decoded) runs in the caller instead, decided before anything is sent. A
+scoped `file apply --scope` runs in the caller. The worker runs writes on
+4 write threads of their own, so writes never take the threads of reads.
+Calls wait: a write queued behind busy write threads sends nothing until
+the worker asks for its input, and is never timed out for waiting; under
+heavier load further callers wait to connect, and only past their connect
+bound are refused `Unavailable`, naming the load, before sending anything.
+While the worker drains, a write not yet running is refused `Unavailable`
+before any effect; a running one finishes. Input that delivers less than
+262,076 bytes (four engine records) in 30 s of the worker reading it is
+refused `Unavailable`, nothing committed (only a caller other than the
+CLI can be that slow); keepalives do not count as input.
 A call whose Store or socket path does not qualify reads its input whole
 and runs in the caller, as before; so does a single-change write whose
 arguments pass 64 KiB. Input that stops before its end (a killed CLI, a
@@ -661,8 +666,12 @@ fix is `rm` of the records once their Branches were checked. At most 256
 are kept: the oldest `undelivered` records make room, `uncertain` ones are
 never removed by the worker. A record the worker cannot write is not
 retried: the `Unknown` answer says `recorded: false`, and the `machine
-stop` that ends the worker lists it (`unrecorded_writes`). A definite
-refusal is never recorded. CLI PostgreSQL writes run in
+stop` that ends the worker lists those up to its drain
+(`unrecorded_writes`). `machine stop` never stops a running write: it
+reports `running_writes` and "N writes still running; see worker.log"
+(`running_writes_note`), and `InUse` while such a write holds its Store;
+the write finishes, and the worker exits after it. A definite refusal is
+never recorded. CLI PostgreSQL writes run in
 the caller.
 
 The host worker's SQLite cache keeps up to 16 Stores open per home.

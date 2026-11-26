@@ -251,8 +251,14 @@ pub fn cp(home: &Path, events: &mut Events<'_>, request: &FileMv) -> Outcome {
 /// Store's names, its mode a number, and a removal that is not recursive
 /// unless it says so.
 pub(crate) fn change(change: &Change) -> Result<SdkValue, SdkRefusal> {
-    let mut fields = Vec::with_capacity(change.fields.len() + 1);
-    for (name, value) in &change.fields {
+    owned_change(change.fields.clone())
+}
+
+/// [`change`] of fields the caller gives up: each value is moved, never
+/// copied (a streamed `file apply` holds one change at a time).
+pub(crate) fn owned_change(input: Vec<(String, SdkValue)>) -> Result<SdkValue, SdkRefusal> {
+    let mut fields = Vec::with_capacity(input.len() + 1);
+    for (name, value) in input {
         if !CHANGE_FIELDS.contains(&name.as_str()) {
             return Err(refused(
                 "InvalidInput",
@@ -263,17 +269,17 @@ pub(crate) fn change(change: &Change) -> Result<SdkValue, SdkRefusal> {
             ));
         }
         let field = match (name.as_str(), value) {
-            ("content", SdkValue::Bytes(_)) => ("bytes", value.clone()),
-            ("old_string", _) => ("oldText", value.clone()),
-            ("new_string", _) => ("newText", value.clone()),
-            ("replace_all", _) => ("replaceAll", value.clone()),
-            ("mode", SdkValue::Text(text)) => match mode(Some(text))? {
+            ("content", value @ SdkValue::Bytes(_)) => ("bytes", value),
+            ("old_string", value) => ("oldText", value),
+            ("new_string", value) => ("newText", value),
+            ("replace_all", value) => ("replaceAll", value),
+            ("mode", SdkValue::Text(text)) => match mode(Some(&text))? {
                 Some(bits) => ("mode", SdkValue::Int(bits)),
                 None => ("mode", SdkValue::Null),
             },
             ("mode", SdkValue::Null) => ("mode", SdkValue::Null),
-            ("mode", other) => return Err(not_text_mode(other)),
-            (other, _) => (other, value.clone()),
+            ("mode", other) => return Err(not_text_mode(&other)),
+            (other, value) => (other, value),
         };
         fields.push((field.0.to_owned(), field.1));
     }

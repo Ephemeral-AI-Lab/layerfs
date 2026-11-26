@@ -922,7 +922,9 @@
           "unknown_workspaces",
           "unknown_workspaces_count",
           "unrecorded_writes",
-          "unrecorded_writes_count"
+          "unrecorded_writes_count",
+          "running_writes",
+          "running_writes_note"
         ]
       },
       "long": [
@@ -934,6 +936,8 @@
         "unknown_workspaces_count",
         "unrecorded_writes",
         "unrecorded_writes_count",
+        "running_writes",
+        "running_writes_note",
         "outcome",
         "machine",
         "forced"

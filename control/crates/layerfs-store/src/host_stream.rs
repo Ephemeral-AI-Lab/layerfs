@@ -2,20 +2,26 @@
 //! pieces on a reader thread and sends them as frames; the worker hands
 //! them to the Store call one change and one piece at a time.
 //!
-//! Memory on each side is independent of the input's size, except for
-//! `file apply` changes. The CLI holds at most [`QUEUED`] read items plus
-//! the one it sends; the worker one frame. A `file apply` element is built
-//! whole on the CLI (its reader thread parses it with no copy of its
-//! text), so the CLI's worst case per call is about three change values,
-//! a write's content included, plus one printed change text. A write's
-//! content then travels as data frames; any other change is printed once
-//! and must fit the worker's budget for one change (4 MiB decoded, 128
-//! fields per object, 32 levels), which the worker enforces as it builds a
-//! spilled change from its frames, holding one frame and that value. A
-//! list with a larger change is routed direct before anything is sent
-//! ([`fits_worker`]): a route, never a refusal. A piped list is first
-//! copied into an unnamed private file ([`spool`]) so it can be checked,
-//! then sent from it.
+//! Every input the CLI streams is a regular file: a pipe, FIFO or terminal
+//! is first copied into an unnamed private file ([`spool`]), which takes
+//! disk equal to the input on the home's filesystem until the call ends.
+//! So the worker reads at disk speed, and a `file apply` list is checked
+//! before anything is sent: a list with a change past the worker's budget
+//! for one change (4 MiB decoded, 128 fields per object, 32 levels) runs
+//! direct ([`fits_worker`]), a route, never a refusal.
+//!
+//! Memory. `file write` content: the CLI holds at most [`QUEUED`] pieces
+//! of [`STREAM_PIECE`] bytes plus the one it sends, the worker one frame.
+//! `file apply`: each element is parsed, then converted by moving its
+//! values, so the CLI holds one change being read and, through a
+//! rendezvous channel, one change being sent, plus that change's printed
+//! text (within the budget, at most about 1.4 MB). A write change's
+//! content is held whole in its change, so the CLI's worst case is about
+//! the two largest consecutive changes, contents included, plus 1.4 MB;
+//! [`fits_worker`] holds one element at a time and measures it without
+//! printing it. A write's content then travels as data frames; any other
+//! change is printed once, and the worker builds it from its frames under
+//! the same budget, holding one frame and that value.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::host_write::{header, InputKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -60,7 +66,12 @@ pub(crate) fn send(
     let source = source
         .take()
         .ok_or_else(|| refused("Failed", "the input was already read"))?;
-    let (items, received) = sync_channel::<Result<Item, SdkRefusal>>(QUEUED);
+    // pieces are bounded; a change is not, so changes pass hand to hand
+    let queued = match kind {
+        InputKind::Content => QUEUED,
+        InputKind::Changes => 0,
+    };
+    let (items, received) = sync_channel::<Result<Item, SdkRefusal>>(queued);
     // The reader is detached: on an early stop it ends at its next send,
     // or with this process, without the sender waiting for its input. It
     // parses and converts changes too, so the sender's keepalive goes on
@@ -143,7 +154,8 @@ fn send_change(change: SdkValue, sender: &mut StreamSender<'_>) -> Result<(), Sd
 /// Whether every change of the `file apply` list in `file`, from its
 /// current offset, fits the worker's budget for one change (a write's
 /// content excepted: it streams). Read before anything is sent, so a list
-/// with a larger change is routed direct; the offset is restored. A list
+/// with a larger change is routed direct; the offset is restored. One
+/// element is held at a time and measured without printing it. A list
 /// that does not parse is left to the streamed call, which refuses it.
 pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> {
     use std::io::{Seek, SeekFrom};
@@ -152,8 +164,9 @@ pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> 
         let mut input = BufReader::with_capacity(64 << 10, &mut *file);
         let mut fits = true;
         let _ = each_element(&mut input, &mut |change| {
-            let (change, _) = split_content(change)?;
-            fits = layerfs_machine::worker::within_budget(json::print(&change).as_bytes());
+            let (change, content) = split_content(change)?;
+            drop(content);
+            fits = layerfs_machine::worker::value_within_budget(&change);
             Ok(fits)
         });
         fits
@@ -162,14 +175,14 @@ pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> 
     Ok(fits)
 }
 
-/// A piped `file apply` list copied, in bounded pieces, into an unnamed
-/// private file, so its changes can be checked before anything is sent
-/// ([`fits_worker`]): the source to send from and that file. The file is
-/// made 0600 with an exclusive create in the host machine's 0700 `spool`
-/// folder and unlinked at once, so no exit, a signal's included, leaves
-/// it behind. When it cannot be made or written, the list read so far and
-/// the rest of the pipe are returned with no file: the call then runs
-/// direct, as without a worker.
+/// An input that is not a regular file, copied in bounded pieces into an
+/// unnamed private file: the source to send from and that file. The file
+/// is made 0600 with an exclusive create in the host machine's `spool`
+/// folder (0700, owned by this user, else not used) and unlinked at once,
+/// so no exit, a signal's included, leaves it behind; it takes disk equal
+/// to the input until the call ends. When it cannot be made or written,
+/// the input read so far and the rest are returned with no file: the call
+/// then runs direct, as without a worker.
 pub(crate) fn spool(
     home: &Path,
     mut source: Box<dyn Read + Send>,
@@ -217,14 +230,27 @@ fn kept_part(mut file: std::fs::File, kept: u64) -> Box<dyn Read + Send> {
 
 /// A new unnamed spool file, or None.
 fn spool_file(home: &Path) -> Option<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let dir = layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
         .join("spool");
     layerfs_home::home::private_dir(&dir).ok()?;
+    // an existing folder is used only when it is this user's and private
+    let folder = std::fs::symlink_metadata(&dir).ok()?;
+    if !folder.is_dir()
+        || folder.uid() != layerfs_home::home::flock::euid()
+        || folder.mode() & 0o077 != 0
+    {
+        return None;
+    }
+    remove_stale(&dir);
+    // `<pid>-<nanoseconds>-<n>`: never a name a killed process left
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos());
     let path = dir.join(format!(
-        "{}-{}",
+        "{}-{nanos}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
@@ -237,6 +263,24 @@ fn spool_file(home: &Path) -> Option<std::fs::File> {
         .ok()?;
     std::fs::remove_file(&path).ok()?;
     Some(file)
+}
+
+/// Removes spool files a killed process left between creating and
+/// unlinking one: those whose process is gone.
+fn remove_stale(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let pid = name
+            .to_str()
+            .and_then(|name| name.split('-').next())
+            .and_then(|pid| pid.parse::<u32>().ok());
+        if pid.is_some_and(|pid| !layerfs_home::process::alive(pid)) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// A read that fails once with the input's own error.
@@ -326,8 +370,7 @@ fn each_element(
     } else {
         loop {
             let element = json::read_value(input).map_err(|error| not_json(&error.0))?;
-            let change = crate::host_write::store_change(&element)?;
-            drop(element);
+            let change = crate::host_write::store_change(element)?;
             if !each(change)? {
                 return Ok(false);
             }

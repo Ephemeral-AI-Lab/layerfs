@@ -33,6 +33,12 @@ const ORDINARY: Lane = Lane {
     threads: 8,
     name: "layerfs-host-call",
 };
+/// Connections of the ordinary lane and held streamed writes together: the
+/// ordinary listener accepts only below it (and below the lane's own
+/// `slots`), so under load further callers wait in the listen queue, past
+/// it refused by their own hello bound before they send anything (§11).
+/// Bounds the write lane to this many held requests (64 KiB each).
+pub(super) const ACCEPTED: usize = 32;
 const CONTROL: Lane = Lane {
     index: 1,
     slots: 2,
@@ -99,6 +105,14 @@ impl Activity {
         }
     }
 
+    /// Whether `lane`'s listener may accept: below its slots and, for the
+    /// ordinary lane, below [`ACCEPTED`] with the held writes counted.
+    fn accepts(&self, lane: Lane) -> bool {
+        let outstanding = self.lanes[lane.index].outstanding;
+        outstanding < lane.slots
+            && (lane.index != ORDINARY.index || outstanding + self.writes.held() < ACCEPTED)
+    }
+
     /// Nothing in flight, counting connections accepted but not admitted
     /// and, as one of `lanes`, the PostgreSQL reads handed over and not yet
     /// answered: a queued or running read keeps the worker from idle exit.
@@ -135,7 +149,6 @@ impl HostServer {
 
     fn drain(&self, activity: &mut Activity) {
         activity.draining = true;
-        activity.writes.stop_inputs();
         for ready in &self.queued {
             ready.notify_all();
         }
@@ -366,10 +379,10 @@ impl HostServer {
         if activity.draining {
             return Ok(());
         }
-        let queue = &mut activity.lanes[lane.index];
-        if queue.outstanding == lane.slots {
+        if !activity.accepts(lane) {
             return Ok(());
         }
+        let queue = &mut activity.lanes[lane.index];
         match listener.accept() {
             Ok((stream, _)) => {
                 stream.set_nonblocking(false)?;
@@ -427,7 +440,7 @@ impl HostServer {
                 }
             }
             let interests = |lane: Lane| {
-                if activity.lanes[lane.index].outstanding < lane.slots {
+                if activity.accepts(lane) {
                     PollFlags::POLLIN
                 } else {
                     PollFlags::empty()
@@ -524,6 +537,10 @@ impl HostServer {
                 ))
             }
         };
+        // drain needs no admission: it is answered while draining too
+        if let Operation::Drain = operation {
+            return self.drain_answer();
+        }
         let activity = self.admit(admitted)?;
         match operation {
             Operation::Ping => {
@@ -582,17 +599,7 @@ impl HostServer {
             }
             Operation::Drain => {
                 drop(activity);
-                let mut activity = self.lock();
-                self.drain(&mut activity);
-                // uncertain write outcomes no record holds (§8.5)
-                let [listed, count] = activity.writes.unrecorded();
-                drop(activity);
-                self.close_drained_stores();
-                Ok(SdkValue::map([
-                    ("state", SdkValue::text("draining")),
-                    listed,
-                    count,
-                ]))
+                self.drain_answer()
             }
             Operation::CloseStore => {
                 drop(activity);
@@ -611,6 +618,25 @@ impl HostServer {
                 layerfs_store::host_postgresql::retire_request(&self.home, args)
             }
         }
+    }
+
+    /// Starts the drain, or answers one already started, with the same
+    /// account: uncertain write outcomes no record holds, up to now (§8.5),
+    /// and the admitted writes still running, which drain lets finish (a
+    /// write still waiting for a thread is refused unrun).
+    fn drain_answer(&self) -> Outcome {
+        let mut activity = self.lock();
+        self.drain(&mut activity);
+        let [listed, count] = activity.writes.unrecorded();
+        let held = activity.writes.counts().0;
+        drop(activity);
+        self.close_drained_stores();
+        Ok(SdkValue::map([
+            ("state", SdkValue::text("draining")),
+            listed,
+            count,
+            ("writes_running", SdkValue::Int(held as i64)),
+        ]))
     }
 
     fn close_store(&self, args: &SdkValue) -> Outcome {

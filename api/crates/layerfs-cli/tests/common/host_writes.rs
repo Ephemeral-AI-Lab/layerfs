@@ -287,14 +287,27 @@ pub fn write_request(
 }
 
 /// A streamed `file write` to `/unread` on Branch `work`: its request,
-/// content and end frames.
+/// content and end frames, sent together (the worker reads the input only
+/// after its `go`, which the raw caller need not wait for).
 pub fn content_frames(exchange: &super::fixture::Exchange, id: &str, content: &[u8]) -> Vec<u8> {
+    let mut out = content_request(exchange, id, "/unread");
+    out.extend(content_tail(content));
+    out
+}
+
+/// The request frame of a streamed `file write` to `path` on `work`.
+pub fn content_request(exchange: &super::fixture::Exchange, id: &str, path: &str) -> Vec<u8> {
     let fields = SdkValue::map([
         ("branch", SdkValue::text("work")),
-        ("path", SdkValue::text("/unread")),
+        ("path", SdkValue::text(path)),
         ("streamed", SdkValue::Bool(true)),
     ]);
-    let mut out = write_request(exchange, id, "fs.write", "content", fields);
+    write_request(exchange, id, "fs.write", "content", fields)
+}
+
+/// `content`'s data frames, its end and the input's end.
+pub fn content_tail(content: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
     for piece in content.chunks(64 << 10) {
         out.extend(frame(piece, true));
     }
@@ -304,15 +317,33 @@ pub fn content_frames(exchange: &super::fixture::Exchange, id: &str, content: &[
     out
 }
 
-/// The answer to a raw request on `socket`.
-pub fn raw_answer(socket: &UnixStream) -> SdkValue {
+fn next_frame(socket: &UnixStream) -> SdkValue {
     layerfs_api::worker::read_host_frame(
         socket,
         layerfs_api::worker::HOST_MAX_REPLY,
         Some(Instant::now() + WAIT),
     )
     .unwrap()
-    .expect("an answer")
+    .expect("a frame")
+}
+
+/// Waits for the worker's `go` for request `id`: a write thread reads it.
+pub fn read_go(socket: &UnixStream, id: &str) {
+    let frame = next_frame(socket);
+    assert!(
+        frame.get_text("request_id") == Some(id) && frame.get_bool("go"),
+        "expected go: {frame:?}"
+    );
+}
+
+/// The answer to a raw request on `socket`, after any `go` frame.
+pub fn raw_answer(socket: &UnixStream) -> SdkValue {
+    loop {
+        let frame = next_frame(socket);
+        if !frame.get_bool("go") {
+            return frame;
+        }
+    }
 }
 
 /// One raw streamed write on the worker's socket, its answer never read.

@@ -11,6 +11,7 @@ mod writes;
 use fixture::Fixture;
 use layerfs_api::json;
 use std::io::Write;
+use std::os::unix::net::UnixStream;
 use std::process::{Child, Command, Output, Stdio};
 use std::time::Duration;
 use writes::*;
@@ -196,7 +197,6 @@ fn stopped_or_refused_inputs_commit_nothing() {
 fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
     let home = prepare(&["work"]);
     let path = &home.paths.home;
-    let before = commits(path, "shop/api", "work");
     assert_eq!(
         retained_check(path).get_text("outcome"),
         Some("pass"),
@@ -204,22 +204,47 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
         retained_check(path)
     );
 
-    // SIGKILL mid-stream: a definite refusal the caller never reads;
-    // nothing commits and nothing is kept (the refusal changed nothing)
+    // SIGKILL while the CLI spools its piped input: nothing was sent, so
+    // nothing commits, nothing is kept and no spool file is left
+    ok(
+        path,
+        &["file", "write", "shop/api", "work", "/warm"],
+        b"w\n",
+    );
+    let before = commits(path, "shop/api", "work");
+    let routed_before = routed(path);
     let mut child = cli(path, &["file", "write", "shop/api", "work", "/killed"])
         .stdin(Stdio::piped())
         .spawn()
         .unwrap();
     let mut input = child.stdin.take().unwrap();
     input.write_all(&patterned(2 << 20)).unwrap();
-    wait_for("the stream to reach the worker", || {
-        (home.ping().get_int("admitted") >= Some(2)).then_some(())
-    });
     std::thread::sleep(Duration::from_millis(300));
     child.kill().unwrap();
     child.wait().unwrap();
     drop(input);
-    wait_for("the killed stream to end", || {
+    let spool = path.join("machine").join(host()).join("spool");
+    let left = std::fs::read_dir(&spool).map_or(0, |dir| dir.count());
+    assert_eq!(left, 0, "a spool file was left in {}", spool.display());
+    assert_eq!(routed(path), routed_before);
+
+    // a raw caller gone mid-stream, after `go`: a definite refusal it
+    // never reads; nothing commits and nothing is kept
+    let exchange = home.dial(false);
+    let id = "000000000000000000000000000dead0";
+    let mut socket: &UnixStream = exchange.socket();
+    socket
+        .write_all(&content_request(&exchange, id, "/killed"))
+        .unwrap();
+    read_go(exchange.socket(), id);
+    socket
+        .write_all(&frame(&patterned(64 << 10), true))
+        .unwrap();
+    wait_for("the stream to reach the worker", || {
+        (home.ping().get_int("admitted") >= Some(2)).then_some(())
+    });
+    drop(exchange);
+    wait_for("the dropped stream to end", || {
         (home.ping().get_int("admitted") == Some(1)).then_some(())
     });
     assert!(retained(path).is_empty(), "{:?}", retained(path));

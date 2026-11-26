@@ -62,6 +62,11 @@ steps.
     layerfs-<id8>-<sandbox>/   one run folder per Sandbox
     layerfs-<id8>-<sandbox>.root/  its private root (Linux; empty from outside)
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
+  machine/<host>/spool/        0700: a piped CLI write's input while it streams to the
+                               host worker, in unnamed files (unlinked at once); disk
+                               equal to the input, on the home's filesystem
+  machine/<host>/retained/     host worker write outcomes a caller may not know,
+                               <request id>.json each; at most 256; removed with `rm`
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
     control.json               the Sandbox daemon's keys (0600; the host machine, and machines reached directly)

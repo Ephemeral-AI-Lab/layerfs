@@ -13,5 +13,5 @@ pub use requests::{
     FileApply, FileBlame, FileCp, FileEdit, FileGlob, FileGrep, FileHistory, FileList, FileMkdir,
     FileMv, FileOp, FileRead, FileRm, FileSearch, FileStat, FileWrite, Guard,
 };
-pub(crate) use write::change as store_change;
+pub(crate) use write::owned_change;
 pub use write::{apply, cp, edit, mkdir, mv, rm, write};

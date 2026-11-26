@@ -496,78 +496,101 @@ frame:
 A streamed write in an apply is its change with `streamed: true`, then its
 data frames. The worker reads a frame only when the Store call asks for its
 next change or piece, so a faster caller blocks in the kernel socket buffer.
-Memory does not grow with a content's size: the caller holds one read piece
-being sent plus at most two queued by its input thread, the worker one
-frame. A data frame is at most four engine records (4 × 65,519 = 262,076
-bytes, about 256 KiB), so whole pieces are written as whole records.
+A data frame is at most four engine records (4 × 65,519 = 262,076 bytes,
+about 256 KiB), so whole pieces are written as whole records.
 
-`file apply` changes are the exception. The caller's input thread builds
-each list element whole, straight from the input (no copy of its text),
-and converts it to the Store's form; with two queued, the caller holds
-about three change values (a write's content included) plus one printed
-change text. A write's content then leaves its change and travels as data
-frames. Any other change is printed once and must fit the worker's budget
-for one change, the frame budget: a decoded-size estimate of 4 MiB (three
-bytes per text byte plus 256 per container, field and element), 128 fields
-per object and 32 levels. A change larger than a 64 KiB frame is sent
-spilled; the worker builds it from its data frames under that budget,
-holding one frame and the value, and refuses one past it `InvalidInput`
-before any effect. The caller checks before sending anything: it reads the list
-once and, if any change is past the budget, routes the whole call direct
-(a route, never a refusal). A regular file (`--from`, or stdin redirected
-from a file) is read through a shared descriptor and rewound. A piped list
-(or a FIFO) is first copied in 64 KiB pieces into an unnamed private file:
-created 0600 and exclusive in the host machine's 0700 `spool` folder and
-unlinked at once, so no exit, a signal's included, leaves it behind; the
-call is then checked and sent from it. If that file cannot be made or
-written (a full disk, say), the part already read and the rest of the
-pipe run direct, as without a worker. A caller that sends an over-budget
-change anyway is refused by the worker before effect. Object fields are checked for duplicate
-names by sorting, O(n log n) in the width. The caller keeps sending `wait`
-while it parses a large element, since parsing runs on its input thread.
+Spool. The caller streams only regular files. An input that is not one (a
+pipe, a FIFO, a terminal) is first copied in 64 KiB pieces into an unnamed
+private file: created 0600 and exclusive in the host machine's `spool`
+folder (`machine/<host>/spool/`, 0700; an existing folder that is not this
+user's or not private is not used), named `<pid>-<nanoseconds>-<n>`, and
+unlinked at once, so no exit, a signal's included, leaves it behind (the
+spooler also removes a name whose process is gone). The copy takes disk
+equal to the input, on the home's filesystem, until the call ends. So the
+worker always reads at disk speed: a slow or interactive producer is never
+timed out by the worker's progress rule. The request header is checked
+(`request_fits`) before the copy. If the file cannot be made or written (a
+full disk, say), the part already read and the rest of the input run
+direct, as without a worker.
+
+Memory. A content's size does not change it: the caller holds one read
+piece being sent plus at most two queued by its input thread, the worker
+one frame. `file apply` changes are the exception. The caller's input
+thread builds each list element whole from the input and converts it to
+the Store's form by moving its values; changes pass to the sender through a
+rendezvous channel, so the caller holds one change being read, one being
+sent and that change's printed text (within the budget below, at most
+about 1.4 MB). A write change's content is part of its change, so the
+caller's worst case is about the two largest consecutive changes, contents
+included, plus 1.4 MB. A write's content then leaves its change and
+travels as data frames. Any other change is printed once and must fit the
+worker's budget for one change, the frame budget: a decoded-size estimate
+of 4 MiB (three bytes per text byte plus 256 per container, field and
+element), 128 fields per object and 32 levels. A change larger than a 64
+KiB frame is sent spilled; the worker builds it from its data frames under
+that budget, holding one frame and the value, and refuses one past it
+`InvalidInput` before any effect. The caller checks before sending
+anything: it reads the list once (from its regular file or its spool),
+holding one element at a time and measuring it without printing it, and,
+if any change is past the budget, routes the whole call direct (a route,
+never a refusal). A caller that sends an over-budget change anyway is
+refused by the worker before effect. Object fields are checked for
+duplicate names by sorting, O(n log n) in the width. The caller keeps
+sending `wait` while it parses a large element, since parsing runs on its
+input thread. The write lane's own memory, beside the ordinary lane's: at
+most 4 spilled changes being built (4 × 4 MiB decoded estimate, one per
+write thread) and at most 32 held request maps (64 KiB each, 2 MiB). (The
+review cited a 64 MiB connection budget; no such bound is in this tree's
+code or docs, so none is claimed here.)
 
 A write needs a Commit per call, not a held connection. The worker reads a
 `store.write` request on an ordinary thread, checks its request ID,
 generation and arguments there, and then hands it, with its connection, to
-a separate write lane: 4 write threads (`WRITE_THREADS`) and at most 16
-held writes (`WRITES_HELD`), running or waiting, apart from the 16 ordinary
-slots. A write never runs on an ordinary thread, so however many writes
-stream, small reads keep all 8 ordinary threads. A write past 16 held
-ones, or one read once the worker drains (its write threads may have
-ended), is refused `Unavailable` at once, before any effect; the caller
-may already have sent some input, but nothing ran. A held write waits for
-a write thread while its input fits the socket buffer; a caller whose send
-makes no progress for 60 s is refused `Unavailable` naming the load
-("read none of this write's input for 60 s: earlier writes hold its write
-threads, or it is not responding"), before its end frame, so nothing was
-committed.
+a separate write lane: 4 write threads (`WRITE_THREADS`). A write never
+runs on an ordinary thread, so however many writes stream, small reads
+keep all 8 ordinary threads. Calls wait (§11): held writes count against
+the ordinary listener's accept limit (`ACCEPTED`, 32 connections of the
+ordinary lane and held writes together, beside the lane's 16 slots), so
+under load further callers wait in the listen queue, and past their hello
+bound get only the hello's `Unavailable` naming the load, before they send
+anything. A held write waits for a write thread with nothing sent but its
+request: its caller sends input only after the worker's `go` frame
+(`{"request_id", "go": true}`), sent when a write thread starts reading
+it, and waits for it without a time bound, so a queued write is never
+timed out. A refusal instead of `go` is definite. After `go` the caller's
+sends have no time bound either: the worker is reading, and its Store work
+may take as long as a direct call's. A write read once the worker drains,
+or still waiting for a thread then, is refused `Unavailable` before any
+effect.
 
-Minimum progress (§11): while the worker waits for a write's caller, the
-input must deliver 262,076 bytes (`STREAM_PROGRESS`, four engine records,
-frame headers included) within 30 s of waiting (`STREAM_WAIT`), or end.
-Only time the worker spends blocked on the input counts, never its own
-Store work. A `wait` frame is not progress, so a caller that sends
-keepalives but no input, or slower input, is refused `Unavailable`
-("delivered less than 262076 bytes (four engine records) in 30 s of
-waiting; nothing was committed"). No write thread is held longer than that
-by a stalled caller. A caller whose input produced nothing for 10 seconds
-sends `wait`, which only shows the worker is still there. The end frame's
-counts must match what was received. The worker commits only after reading
-it, so input that stops earlier commits nothing. A change refused
-mid-stream answers at once and closes; the caller, whose next send fails,
-reads that early refusal. The request's frame and the end frame bound the
-custody boundary. Before the end frame is completely written the caller
-reports a definite refusal; after it, a missing or invalid answer is
-`Unknown` with the request ID. Held writes are not PostgreSQL reads: the
-PostgreSQL lane's check for a caller that went away never looks at them.
+Minimum progress (§11): once the worker reads a write's input, the input
+must deliver 262,076 bytes (`STREAM_PROGRESS`, four engine records, frame
+headers included) within 30 s of waiting (`STREAM_WAIT`), or end. Only
+time the worker spends blocked on the input counts, never its own Store
+work or the wait for a write thread. A `wait` frame is not progress, so a
+caller that sends keepalives but no input, or slower input, is refused
+`Unavailable` ("delivered less than 262076 bytes (four engine records) in
+30 s of waiting; nothing was committed"). The CLI streams from a regular
+file, so only a misbehaving caller meets this rule. A caller whose input
+produced nothing for 10 seconds sends `wait`, which only shows the worker
+is still there. The end frame's counts must match what was received. The
+worker commits only after reading it, so input that stops earlier commits
+nothing. A change refused mid-stream answers at once and closes; the
+caller, whose next send fails, reads that early refusal. The request's
+frame and the end frame bound the custody boundary. Before the end frame
+is completely written the caller reports a definite refusal; after it, a
+missing or invalid answer is `Unknown` with the request ID. Held writes
+are not PostgreSQL reads: the PostgreSQL lane's check for a caller that
+went away never looks at them.
 
-Drain (`machine stop`, idle exit) ends the input of every running write
-(`shutdown(Read)` on its connection) and refuses held writes not yet
-running. A write whose end frame was not read is refused with nothing
-committed; one already past its end finishes as admitted. A stuck caller
-therefore cannot hold a drain: the worker exits once its running Store
-calls finish, and the stuck caller learns the refusal at its next send (10 s
-at most).
+Drain (`machine stop`, idle exit) never stops an admitted write (§8.3): a
+running write reads its whole input and finishes as admitted, and the
+worker exits after it. Held writes not yet running are refused unrun. The
+drain answer counts the running writes (`writes_running`); a drain asked
+again while draining answers the same account. `machine stop` does not
+wait for them: it reports `running_writes` and `running_writes_note` ("N
+writes still running; see worker.log") and, while a running write holds
+its Store, `InUse` naming the worker as a holder.
 
 Records (§8.5). Only an outcome the caller may not know is recorded: an
 engine `Unknown`, and a `Committed` answer the worker could not deliver.
@@ -590,7 +613,10 @@ with the request ID, the engine's detail and `recorded: false`. The worker
 counts such outcomes (`unrecorded` in its ping) and lists the first 32 in
 the answer of the drain that ends it (`unrecorded`, `unrecorded_count`),
 which `machine stop` passes on as `unrecorded_writes` and
-`unrecorded_writes_count`. An idle exit has no caller and only the log.
+`unrecorded_writes_count`. The list covers outcomes up to the drain; a
+write still running then (see `running_writes`) reports its own outcome to
+its caller, and one with no record only to `worker.log`. An idle exit has
+no caller and only the log.
 Drain, idle exit and a Store's close never wait for a record, so `machine
 stop` cannot be refused by one; a `machine stop --force` goes on without
 its worker's answer.

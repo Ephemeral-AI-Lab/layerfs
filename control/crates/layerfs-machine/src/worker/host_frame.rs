@@ -30,6 +30,81 @@ pub fn within_budget(body: &[u8]) -> bool {
     budget(body).is_ok()
 }
 
+/// Whether `value` printed as JSON would be [`within_budget`], computed
+/// from the value without printing it: the CLI checks a `file apply`
+/// change this way before sending, holding no copy of its text.
+pub fn value_within_budget(value: &SdkValue) -> bool {
+    let mut cost = Cost { bytes: 0 };
+    cost.value(value, 0).is_some()
+}
+
+/// [`budget`]'s count over a value: three per printed byte, 256 per
+/// container, field and comma; `None` once past a bound.
+struct Cost {
+    bytes: usize,
+}
+
+impl Cost {
+    fn add(&mut self, bytes: usize) -> Option<()> {
+        self.bytes = self.bytes.checked_add(bytes)?;
+        (self.bytes <= DECODED_BUDGET).then_some(())
+    }
+
+    /// A container at nesting `depth` (0 for the outermost) with `items`
+    /// items: its brackets, its commas and, for an object, its colons.
+    fn container(&mut self, depth: usize, items: usize, object: bool) -> Option<()> {
+        if depth >= DEPTH || (object && items > OBJECT_FIELDS as usize) {
+            return None;
+        }
+        let separators = items.saturating_sub(1) + if object { items } else { 0 };
+        self.add(3 * (2 + separators) + 256 * (1 + separators))
+    }
+
+    fn text(&mut self, text: &[u8]) -> Option<()> {
+        let escaped: usize = text
+            .iter()
+            .map(|byte| match byte {
+                b'"' | b'\\' | b'\n' | b'\r' | b'\t' => 1,
+                0..=0x1f => 5,
+                _ => 0,
+            })
+            .sum();
+        self.add(3 * (text.len() + escaped + 2))
+    }
+
+    fn value(&mut self, value: &SdkValue, depth: usize) -> Option<()> {
+        match value {
+            SdkValue::Null => self.add(3 * 4),
+            SdkValue::Bool(true) => self.add(3 * 4),
+            SdkValue::Bool(false) => self.add(3 * 5),
+            SdkValue::Int(number) => self.add(3 * number.to_string().len()),
+            SdkValue::Text(text) => self.text(text.as_bytes()),
+            SdkValue::Bytes(bytes) => match std::str::from_utf8(bytes) {
+                Ok(_) => self.text(bytes),
+                // {"base64":"..."}: one object, one field
+                Err(_) => {
+                    self.container(depth, 1, true)?;
+                    self.text(b"base64")?;
+                    self.add(3 * (bytes.len().div_ceil(3) * 4 + 2))
+                }
+            },
+            SdkValue::List(items) => {
+                self.container(depth, items.len(), false)?;
+                items
+                    .iter()
+                    .try_for_each(|item| self.value(item, depth + 1))
+            }
+            SdkValue::Map(fields) => {
+                self.container(depth, fields.len(), true)?;
+                fields.iter().try_for_each(|(name, item)| {
+                    self.text(name.as_bytes())?;
+                    self.value(item, depth + 1)
+                })
+            }
+        }
+    }
+}
+
 fn invalid(message: &str) -> SdkRefusal {
     refused("InvalidInput", format!("host worker frame: {message}"))
 }
