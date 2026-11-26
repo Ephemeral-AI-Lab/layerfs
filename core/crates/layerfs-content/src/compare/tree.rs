@@ -36,14 +36,20 @@ pub struct TreeTable {
 impl TreeTable {
     /// Decodes one filesystem root.
     pub fn open(reader: &dyn AuthenticatedObjects, root: FilesystemRootId) -> ContentResult<Self> {
-        let root = FilesystemRoot::decode(&reader.read_canonical(root.0)?)?;
-        Ok(Self {
+        Ok(Self::from_root(FilesystemRoot::decode(
+            &reader.read_canonical(root.0)?,
+        )?))
+    }
+
+    /// The table of a root already decoded.
+    pub fn from_root(root: FilesystemRoot) -> Self {
+        Self {
             root,
             table: InodeTable {
                 root: root.inode_table(),
                 root_serial: root.root_inode().serial(),
             },
-        })
+        }
     }
 
     /// Serial of the root directory.
@@ -256,7 +262,7 @@ pub fn new_bindings(
 
 /// Directories one [`directory_bindings`] window reads together: both root
 /// pages of each fit one read-ahead demand.
-const DIRECTORY_WINDOW: usize = 128;
+pub(crate) const DIRECTORY_WINDOW: usize = 128;
 const _: () = assert!(
     DIRECTORY_WINDOW * 2 * crate::filesystem::limits::MAXIMUM_PAGE_BYTES <= 2 * 1024 * 1024
 );
