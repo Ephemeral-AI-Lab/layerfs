@@ -27,19 +27,35 @@ static HELD: Mutex<BTreeMap<PathBuf, usize>> = Mutex::new(BTreeMap::new());
 
 /// One use of a Store's lease; the last drop in this process removes it.
 pub struct Lease {
-    path: PathBuf,
+    path: Option<PathBuf>,
+}
+
+impl Lease {
+    /// Releases this use and reports failure to remove the last lease file.
+    /// A file that is already absent is settled.
+    pub fn release(mut self) -> Result<(), SdkRefusal> {
+        self.release_file()
+    }
+
+    fn release_file(&mut self) -> Result<(), SdkRefusal> {
+        let Some(path) = self.path.take() else {
+            return Ok(());
+        };
+        let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(count) = held.get_mut(&path) {
+            *count -= 1;
+            if *count == 0 {
+                held.remove(&path);
+                remove_file(&path)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Lease {
     fn drop(&mut self) {
-        let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(count) = held.get_mut(&self.path) {
-            *count -= 1;
-            if *count == 0 {
-                held.remove(&self.path);
-                let _ = std::fs::remove_file(&self.path);
-            }
-        }
+        let _ = self.release_file();
     }
 }
 
@@ -86,7 +102,7 @@ pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
         }
     }
     *held.get_mut(&path).expect("counted above") += 1;
-    Ok(Lease { path })
+    Ok(Lease { path: Some(path) })
 }
 
 /// Whether this process holds Store `store`'s lease under `root` now.
@@ -205,11 +221,11 @@ fn leases(home: &Path, store: &str) -> Result<Vec<LeaseFile>, SdkRefusal> {
     Ok(found)
 }
 
-/// Removes the stale lease at `path`: `false` when it is gone already. A
+/// Removes the lease file at `path`: `false` when it is gone already. A
 /// holder drops its own lease without the Store's lock ([`Lease`]'s drop),
 /// so a lease read here can be gone by the time its holder is found ended:
 /// the holder dropped it and then ended, and nothing stale is left.
-fn remove_stale(path: &Path) -> Result<bool, SdkRefusal> {
+fn remove_file(path: &Path) -> Result<bool, SdkRefusal> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -237,7 +253,7 @@ pub fn holders_except(
             }
             continue;
         }
-        if !remove_stale(&lease.path)? {
+        if !remove_file(&lease.path)? {
             continue;
         }
         home::log_line(

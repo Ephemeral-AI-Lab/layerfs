@@ -105,7 +105,8 @@ The caller writes the exclusive `worker-close` phase with the original
 operation ID and pinned worker generation before asking that worker to close.
 The worker checks the record under the same admission lock, then closes its
 cache entry outside the lock. The caller verifies lease release before
-continuing. Independent SDK leases and Sandbox records retain their existing
+continuing. Explicit lease release reports a failed unlink to the cache close.
+Independent SDK leases and Sandbox records retain their existing
 admission rules. A compaction resumes its usual admission after this phase.
 
 The worker records maintenance and drain close outcomes in

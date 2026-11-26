@@ -344,7 +344,7 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
 For a local SQLite Store held open by a native CLI worker, move, remove,
 compact and upgrade record a `worker-close` phase and ask that worker to
 release its Store. The phase keeps new calls out until the caller verifies
-release. If the close reply is lost, the Store shows `unresolved`. The same
+release. A lease-file removal error appears as a close failure. If the close reply is lost, the Store shows `unresolved`. The same
 maintenance command can proceed once the original worker releases its lease
 or is proved dead. SDK and Sandbox holders retain their normal admission
 rules. The worker records close and checkpoint outcomes in
