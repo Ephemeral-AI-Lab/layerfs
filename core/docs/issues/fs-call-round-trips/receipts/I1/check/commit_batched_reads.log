@@ -1,0 +1,17 @@
+# load 6.97 6.45 6.32
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/commit_batched_reads.rs (target/debug/deps/commit_batched_reads-813c1cc7664b5b62)
+
+running 2 tests
+BATCHED_READS {"backend":"sqlite","scenario":"edits","work":[[0, 87], [0, 2], [0, 12], [0, 0], [0, 119], [0, 1]],"saved":[519, 0, 2, 38382],"root":"9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533"}
+BATCHED_READS {"backend":"sqlite","scenario":"adds","work":[[0, 61], [0, 10], [0, 14], [0, 7], [0, 116], [0, 0]],"saved":[782, 0, 4, 51408],"root":"35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4"}
+BATCHED_READS {"backend":"sqlite","scenario":"one","work":[[0, 26], [0, 5], [0, 13], [0, 0], [0, 58], [0, 0]],"saved":[5, 0, 2, 573],"root":"70ed856c5cc7ac85d11a4710a8abe1f6e2b81f9ad25c7c2158e2fa79c11204a8"}
+test sqlite_commit_batched_reads ... ok
+BATCHED_READS {"backend":"postgresql","scenario":"edits","work":[[24, 28], [3, 3], [0, 0], [0, 0], [28, 41], [1, 1]],"saved":[519, 0, 2, 38382],"root":"9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533"}
+BATCHED_READS {"backend":"postgresql","scenario":"adds","work":[[18, 23], [9, 9], [0, 0], [0, 0], [29, 43], [0, 0]],"saved":[782, 0, 4, 51408],"root":"35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4"}
+BATCHED_READS {"backend":"postgresql","scenario":"one","work":[[9, 9], [4, 4], [3, 3], [0, 0], [17, 26], [0, 0]],"saved":[5, 0, 2, 573],"root":"70ed856c5cc7ac85d11a4710a8abe1f6e2b81f9ad25c7c2158e2fa79c11204a8"}
+test postgresql_commit_batched_reads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.05s
+
+run_bounded: exit 0 after 8.0 s

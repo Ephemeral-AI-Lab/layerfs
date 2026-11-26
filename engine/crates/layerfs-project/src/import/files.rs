@@ -45,13 +45,17 @@ impl Job {
 }
 
 /// Constructs every host identity once and records its root in backing.
+///
+/// Returns the tree's logical bytes: each constructed identity's length once
+/// per path that names it (its first path and every later alias), which is
+/// what `statistics::logical_size` sums over the built root (#818 I1).
 pub(crate) fn save_files(
     backing: &Backing<'_>,
     aliases: usize,
     store: &Storage,
     save: &Save<'_>,
     progress: &mut ImportProgress,
-) -> Result<(), Failure> {
+) -> Result<u128, Failure> {
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let deadline = progress.deadline();
@@ -61,26 +65,31 @@ pub(crate) fn save_files(
     let jobs = Mutex::new(jobs);
     let mut host_files = backing.jobs();
     let mut roots: Vec<(u64, ObjectId)> = Vec::new();
-    std::thread::scope(|workers| -> Result<(), Failure> {
+    let mut logical = std::thread::scope(|workers| -> Result<u128, Failure> {
         let mut feed = Some(feed);
         let (sender, receiver) = mpsc::sync_channel::<ImportBatch>(QUEUE_SLOTS);
+        let mut constructors = Vec::with_capacity(INIT_WORKERS);
         for _ in 0..INIT_WORKERS {
             let sender = sender.clone();
             let jobs = &jobs;
             let counters = &counters;
-            workers.spawn(move || {
+            constructors.push(workers.spawn(move || {
+                // This constructor's logical bytes, merged once at the end.
+                let mut logical = 0u128;
                 let mut producer = BatchProducer::new(&sender);
                 while let Some(job) = next_job(jobs, &mut producer) {
                     let result = construct_file(&job, policy, &capacities, &mut producer, deadline);
                     if result.is_ok() {
                         counters.built(job.stamp.len);
+                        logical += u128::from(job.stamp.len);
                     }
                     if producer.done(job.id as usize, result).is_err() {
-                        return;
+                        return logical;
                     }
                 }
                 let _ = producer.flush();
-            });
+                logical
+            }));
         }
         drop(sender);
         let (mut sent, mut finished) = (0usize, 0usize);
@@ -111,7 +120,14 @@ pub(crate) fn save_files(
                 }
             }
             if feed.is_none() && finished == sent {
-                return Ok(());
+                // Every completion arrived and the job queue is closed, so
+                // each constructor ends with nothing left to send.
+                drop(receiver);
+                let mut logical = 0u128;
+                for constructor in constructors {
+                    logical += constructor.join().map_err(|_| Failure::WorkerUnavailable)?;
+                }
+                return Ok(logical);
             }
             let batch = match receiver.recv_timeout(Duration::from_millis(500)) {
                 Ok(batch) => batch,
@@ -136,9 +152,9 @@ pub(crate) fn save_files(
     })?;
     backing.complete_files(&mut roots)?;
     if aliases > 0 {
-        check_aliases(backing, progress)?;
+        logical += check_aliases(backing, progress)?;
     }
-    Ok(())
+    Ok(logical)
 }
 
 /// Takes one job. A constructor hands over its pending batch before it waits
@@ -160,7 +176,9 @@ fn next_job(jobs: &Mutex<mpsc::Receiver<Job>>, producer: &mut BatchProducer<'_>)
 ///
 /// Entries stream in acquisition order, so later paths of one directory share
 /// one path read and adjacent later paths of one identity share one evidence read.
-fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result<(), Failure> {
+/// Returns the later paths' logical bytes: the identity's length once per path.
+fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result<u128, Failure> {
+    let mut logical = 0u128;
     let mut entries = backing.entries();
     let mut directory: Option<(u64, PathBuf)> = None;
     let mut first: Option<(u64, Stamp)> = None;
@@ -185,8 +203,9 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
         if !stamp.matches_file(&fs::symlink_metadata(&path)?) {
             return Err(Failure::refused(SourceRefusal::Changed, path));
         }
+        logical += u128::from(stamp.len);
     }
-    Ok(())
+    Ok(logical)
 }
 
 fn construct_file(

@@ -1,0 +1,17 @@
+# load 6.90 6.21 6.07
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/init_round_trips_10k.rs (target/debug/deps/init_round_trips_10k-2a5d8f338507a3e6)
+
+running 4 tests
+RT_INIT {"pins":"init_round_trips_10k","backend":"sqlite","case":"nested_10k","entries":10101,"session":[0, 0, 1837, 57],"prepares":0,"ms":408.5,"logical":108000,"walked":108000,"root":"a68d83d36cfcc6aadac8f97073050befaa80196ce7a39e8973fe219bc7b35e54","canonical":1379418,"stored":225971,"metadata":1390128,"server":null}
+RT_INIT {"pins":"init_round_trips_10k","backend":"sqlite","case":"flat_10k","entries":10002,"session":[0, 0, 21560, 60],"prepares":0,"ms":485.7,"logical":118890,"walked":118890,"root":"a0b8d9600c933c0a8c1368687ea9e54ee4f1b1913c9256d0dc70539b1b838552","canonical":1380691,"stored":253476,"metadata":1391494,"server":null}
+test sqlite_init_nested_10k ... ok
+test sqlite_init_flat_10k ... ok
+RT_INIT {"pins":"init_round_trips_10k","backend":"postgresql","case":"flat_10k","entries":10002,"session":[0, 726, 387, 144],"prepares":49,"ms":6572.0,"logical":118890,"walked":118890,"root":"a0b8d9600c933c0a8c1368687ea9e54ee4f1b1913c9256d0dc70539b1b838552","canonical":1380691,"stored":253476,"metadata":2698118,"server":{"toplevel_calls":1343,"nested_calls":30264,"evicted":false,"distinct":67,"top":[[144,"COMMIT"],[144,"SET LOCAL search_path TO lfs818_init_flat_10k_51512"],[143,"SELECT $1"],[143,"SELECT catalog_incarnation::text FROM lfs818_init_flat_10k_51512.history_meta WHERE id=$1"],[125,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[110,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]}}
+test postgresql_init_flat_10k ... ok
+RT_INIT {"pins":"init_round_trips_10k","backend":"postgresql","case":"nested_10k","entries":10101,"session":[0, 624, 335, 120],"prepares":47,"ms":6543.6,"logical":108000,"walked":108000,"root":"a68d83d36cfcc6aadac8f97073050befaa80196ce7a39e8973fe219bc7b35e54","canonical":1379418,"stored":225971,"metadata":2717232,"server":{"toplevel_calls":1138,"nested_calls":30415,"evicted":false,"distinct":65,"top":[[120,"COMMIT"],[120,"SET LOCAL search_path TO lfs818_init_nested_10k_51512"],[119,"SELECT $1"],[119,"SELECT catalog_incarnation::text FROM lfs818_init_nested_10k_51512.history_meta WHERE id=$1"],[101,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[89,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]}}
+test postgresql_init_nested_10k ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.74s
+
+run_bounded: exit 0 after 26.5 s
