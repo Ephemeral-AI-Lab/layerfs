@@ -58,6 +58,11 @@
 //!   `.cold` call published on the same open) skips `logical.known`:
 //!   writer PostgreSQL -1 trip and statement, SQLite -3 statements and
 //!   -1 transaction; `.cold` unchanged (a new Store open).
+//! - W5: the recursive remove takes its listed page's kinds in one inode
+//!   lookup instead of a stat per child: `rm.dir_100_recursive` Workspace
+//!   reader PostgreSQL [1, 123, 121, 1] -> [1, 24, 22, 1] cold and
+//!   [0, 109, 109, 0] -> [0, 10, 10, 0] warm; SQLite 169 -> 70 and
+//!   116 -> 17 statements.
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -137,13 +142,13 @@ const SQLITE: &[Pin] = &[
         "rm.dir_100_recursive.cold",
         [0, 0, 68, 9],
         [0, 0, 0, 0],
-        [0, 0, 169, 4],
+        [0, 0, 70, 4],
     ),
     pin(
         "rm.dir_100_recursive.warm",
         [0, 0, 44, 6],
         [0, 0, 0, 0],
-        [0, 0, 116, 2],
+        [0, 0, 17, 2],
     ),
 ];
 
@@ -219,13 +224,13 @@ const POSTGRESQL: &[Pin] = &[
         "rm.dir_100_recursive.cold",
         [1, 68, 42, 6],
         [0, 0, 0, 0],
-        [1, 123, 121, 1],
+        [1, 24, 22, 1],
     ),
     pin(
         "rm.dir_100_recursive.warm",
         [0, 28, 26, 3],
         [0, 0, 0, 0],
-        [0, 109, 109, 0],
+        [0, 10, 10, 0],
     ),
 ];
 

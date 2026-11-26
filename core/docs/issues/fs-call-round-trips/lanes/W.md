@@ -173,3 +173,67 @@ immutable facts of that node), so `store/commit.rs` does not grow.
   `commit_batched_base_files`: green. No new message, no sweep. Deleted
   tests: none.
 - Production LOC: 227,712 -> 227,717 (delta +5), engine layerfs-store-service +5.
+
+## W5 — the kinds of a listed page in one demand
+
+Prediction (before coding). Recursive `rm` and `cp` stat every listed
+child (`SourceView::stat`: inode value, portable metadata, and a file's
+length or a directory's sub-directory count). `rm` needs only the kind, and
+`cp` needs the kind to descend (its `copy_one` keeps its own stat). The new
+`SourceView::kinds` answers a listed page's kinds from the overlay, then the
+rest with one `BaseView::values` (`lookup_many`, signature unchanged): the
+inode-table waves only, no metadata or length. W0: the 100-file remove's
+`files.change` Workspace reader is 106 single-object locates warm, about one
+per child (its metadata object or length). The listing is one page
+(`PAGE_ROWS` = 1,024), now with one batched inode lookup whose leaves the
+remove's own path resolution mostly already read.
+
+| Case | PG Workspace reader W3 → predicted | PG total W3 → predicted | SQLite Workspace reader W3 → predicted |
+|---|---|---|---|
+| `rm.dir_100_recursive.warm` | [0,109,109,0] → ~[0,6,6,0] (5–7) | 137 → ~34 | 116 → ~13 (12–14) |
+| `rm.dir_100_recursive.cold` | [1,123,121,1] → ~[1,20,18,1] (19–21) | 191 → ~88 | 169 → ~66 |
+| every other case | unchanged (no recursive walk) | unchanged | unchanged |
+
+Writer and control reader unchanged. Hand-off/SPEC expectation: "106
+locates → about 2–6 demands"; SPEC M1 "rm dir ~42 cold" is the probe's warm
+open, so it compares with `.warm` here (~34; R1's −2 is not on this base).
+
+**Measured** (`receipts/W5/pins-measured.log`; `sdk_write_round_trips.log`
+green on the new pins). Only `rm.dir_100_recursive` moves, only its
+Workspace reader; every other case and role is unchanged.
+
+| Case | PG trips W3 → predicted → measured | SQLite stmts W3 → predicted → measured |
+|---|---|---|
+| `rm.dir_100_recursive.cold` | 191 → ~88 → 92 (+4.5%) | 237 → ~134 → 138 (+3%) |
+| `rm.dir_100_recursive.warm` | 137 → ~34 → 38 (+11.8%) | 160 → ~57 → 61 (+7%) |
+
+PG Workspace reader: [1,123,121,1] → [1,24,22,1] cold, [0,109,109,0] →
+[0,10,10,0] warm; SQLite 169 → 70 and 116 → 17.
+
+Within 15% on every case total. The Workspace-reader role alone is over
+(warm 10 vs ~6), diagnosed once from the per-phase counts (probe `w0`
+group, PG, `receipts/W5/w0-rm-dir.log`): `files.change` is 7 (4 locates,
+2 span reads, 1 pack-block read: the path walk to `/src/d07`, its listing
+page and the one inode-table wave), and `validate` keeps its 3 Workspace
+trips from before. The prediction's residual left `validate`'s 3 out
+(W0 attributes 106 of the 109 to `files.change`); corrected, 7 + 3 = 10.
+The per-child cost is gone: 106 → 7 in `files.change`. No fix needed.
+
+- `cp` takes the page kinds too (it needs them to descend); `copy_one` keeps
+  its own stat for mode, length and link target. Its trips are not pinned
+  (`cp.file` copies one file, no walk) and its answers are checked below.
+- New `tests/sdk_write_recursive_kinds.rs` (both backends): a mixed tree
+  (files, nested and empty directories, symlinks to a file and to a
+  directory, two hard links, an executable mode, a path a marker hides) is
+  copied and removed: the copy equals the visible original by name, type,
+  mode, size, content and hard-link grouping, the hidden path is not
+  copied; a directory of 1,100 files (over the 1,024-row page) is copied and
+  then removed in one `fs.apply` after adding a file and nested directories
+  in the overlay (kinds the overlay answers).
+- Checks: equivalence driver, `method_refusal_order`, `sdk_method_golden`,
+  `write_refusals`, `sdk_path_whiteouts`, `sdk_path_reads`,
+  `sdk_path_hidden_semantics`, `history_diff_oracle`, workspace
+  `namespace_view`, `namespace`: green. No new server message (fewer of the
+  same demands), no sweep. Deleted tests: none.
+- Production LOC: 227,717 -> 227,748 (delta +31), engine
+  layerfs-store-service −2, layerfs-workspace +33.

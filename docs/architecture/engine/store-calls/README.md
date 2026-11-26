@@ -138,7 +138,10 @@ files::commit(service, project, branch, changes, message)
 A path is absolute, at most 4096 bytes, without NUL, trailing `/`, empty,
 `.` or `..` components; a mode is 0..=0o7777, and set-ID or sticky bits on a
 file are refused ([`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs)).
-Recursive walks hold one directory page per level, and the copy's hard-link
+Recursive walks hold one directory page per level and take the page's
+kinds in one demand (`SourceView::kinds`: the overlay's own inodes, then one
+`BaseView::values` inode lookup for the rest; no metadata or length, #818
+W5); the copy still stats each entry it copies. The copy's hard-link
 map lives in the private overlay's indexed operation records (kind
 `0x53444b43`), not in memory. Each change runs as short locked jobs on the
 private overlay; serials come from the Store's pooled reservation

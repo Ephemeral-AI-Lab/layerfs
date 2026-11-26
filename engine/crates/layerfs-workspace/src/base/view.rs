@@ -169,6 +169,13 @@ impl BaseView {
             value: value.ok_or(ContentError::PathNotFound)?,
         })
     }
+    /// The values of `serials`, each level of the inode table one demand
+    /// wave for all of them (`lookup_many`); a serial the table does not
+    /// hold is `None` (#818 W5).
+    pub fn values(&self, serials: &[u64]) -> ContentResult<Vec<Option<InodeValue>>> {
+        let work = &mut InodeReadWork::default();
+        lookup_many(self.client.as_ref(), self.table(), serials, work)
+    }
     pub fn list(
         &self,
         serial: u64,
