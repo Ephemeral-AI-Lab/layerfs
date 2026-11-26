@@ -89,7 +89,7 @@ fn seed(
             .map(|row| row.serial())
             .collect::<Vec<_>>();
         let bases = lookup_many(
-            objects.reader(),
+            objects.base_reader(),
             table,
             &serials,
             &mut InodeReadWork::default(),
@@ -288,7 +288,7 @@ impl Frontier {
         let reader = if frame.accepted {
             objects.accepted_reader()?
         } else {
-            objects.reader()
+            objects.base_reader()
         };
         let page = list_after(
             reader,
@@ -321,7 +321,7 @@ impl Frontier {
             .map(|(_, serial)| *serial)
             .collect::<Vec<_>>();
         let bases = lookup_many(
-            objects.reader(),
+            objects.base_reader(),
             table,
             &serials,
             &mut InodeReadWork::default(),

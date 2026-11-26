@@ -195,10 +195,13 @@ pub struct ChangedDirectories {
 
 impl ChangedDirectories {
     pub(crate) fn between(before: FilesystemRootId, after: FilesystemRootId) -> Self {
-        Self {
-            roots: Some((before, after)),
-            ..Self::default()
-        }
+        let mut changes = Self::default();
+        changes.bind_roots(before, after);
+        changes
+    }
+
+    pub(crate) fn bind_roots(&mut self, before: FilesystemRootId, after: FilesystemRootId) {
+        self.roots = Some((before, after));
     }
 
     /// Notes one changed inode row: kept when it is a directory on the right

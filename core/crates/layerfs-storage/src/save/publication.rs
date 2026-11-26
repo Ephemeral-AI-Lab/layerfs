@@ -273,10 +273,25 @@ impl State<'_> {
         batch: &mut Publication,
         members: &Members,
     ) -> StorageResult<()> {
+        self.acknowledge_with(batch, members, false)
+    }
+    pub(super) fn acknowledge_with(
+        &mut self,
+        batch: &mut Publication,
+        members: &Members,
+        captured_tail: bool,
+    ) -> StorageResult<()> {
         self.storage.source.note(|c| c.publish += 1);
         let result = {
             let _work = self.storage.work.span(super::Stage::Metadata);
-            self.storage.source.metadata.publish(batch)
+            let provider = &self.storage.source.metadata;
+            if captured_tail {
+                provider.publish_captured_tail(batch)
+            } else if self.captured_output {
+                provider.publish_captured(batch)
+            } else {
+                provider.publish(batch)
+            }
         };
         let result = self.written(result)?;
         if batch.release_ordinals.is_some() {
@@ -332,7 +347,12 @@ impl State<'_> {
                 }
             }
         }
-        self.storage.source.published(batch, &lost)?;
+        let source = &self.storage.source;
+        let keep_payloads = self.captured_output && source.metadata.batched_chain_reads();
+        source.published(batch, &lost, keep_payloads)?;
+        if keep_payloads {
+            source.keep_captured_ring_winners(batch, &lost);
+        }
         counted(&mut self.outcome, batch, members, &lost);
         for row in &batch.signatures {
             self.signatures.borrow_mut().remove(&row.slot);

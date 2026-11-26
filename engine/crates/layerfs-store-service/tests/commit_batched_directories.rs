@@ -290,9 +290,9 @@ fn directory_rewrites_are_batched_postgresql() {
     shapes(
         &store,
         Pins {
-            add: (11, 26),
-            again: (16, 31),
-            remove: (11, 23),
+            add: (4, 19),
+            again: (4, 24),
+            remove: (4, 16),
         },
     );
 }

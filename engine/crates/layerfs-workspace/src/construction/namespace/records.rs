@@ -290,6 +290,13 @@ impl<P: OverlayOperationRecords + ?Sized> IndexedEditBacking for Backing<'_, '_,
         }
         Ok(values)
     }
+    fn entries_after(
+        &mut self,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> ContentResult<Option<layerfs_content::IndexedRecordPage>> {
+        self.0.borrow_mut().entries_after(kind, after).map(Some)
+    }
     fn apply(&mut self, changes: Vec<EditRecordChange>) -> ContentResult<EditRecordApply> {
         let keys = changes.len();
         self.0

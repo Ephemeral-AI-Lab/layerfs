@@ -5,14 +5,16 @@ use layerfs_content::compare::tree::directory_bindings_from;
 use layerfs_content::compare::{
     directory_bindings, new_bindings, BindingHints, ChangedDirectories, TreeTable,
 };
-use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::FilesystemRootId;
+use layerfs_content::filesystem::{binding_changes::BindingChanges, path::PathName};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
 use layerfs_history::{BindingHint, HistoryCatalog, HistoryError};
+use layerfs_overlay::IndexedOperationRecordScope;
+use layerfs_workspace::IndexedEditRecords;
 use std::cell::RefCell;
 
 /// Rows one hint write transaction carries.
-const BATCH: usize = 4096;
+const BATCH: usize = layerfs_persistence::HINT_BATCH_ROWS;
 
 /// Records every name binding `right` holds that `left` does not, in bounded
 /// write transactions, and returns how many rows it recorded. `left` is a
@@ -29,9 +31,10 @@ pub fn record_new_bindings(
         .transpose()
         .map_err(CommitError::from)?;
     let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
-    record_binding_rows(catalog, |visit| {
-        new_bindings(reader, left.as_ref(), &right, visit)
-    })
+    record_binding_rows(
+        |rows| catalog.record_bindings(rows),
+        |visit| new_bindings(reader, left.as_ref(), &right, visit),
+    )
 }
 
 /// Records the new bindings of the changed `directories`, read a window of
@@ -43,22 +46,27 @@ pub(super) fn record_directory_bindings(
     catalog: &dyn HistoryCatalog,
     directories: &ChangedDirectories,
 ) -> Result<u64, CommitError> {
-    record_directory_bindings_from(reader, catalog, directories, None)
+    record_directory_bindings_from(
+        reader,
+        |rows| catalog.record_bindings(rows),
+        directories,
+        None,
+    )
 }
 
 fn record_directory_bindings_from(
     reader: &dyn AuthenticatedObjects,
-    catalog: &dyn HistoryCatalog,
+    record: impl FnMut(&[BindingHint]) -> Result<(), HistoryError>,
     directories: &ChangedDirectories,
     start: Option<(u64, &PathName)>,
 ) -> Result<u64, CommitError> {
-    record_binding_rows(catalog, |visit| {
+    record_binding_rows(record, |visit| {
         directory_bindings_from(reader, directories, start, visit)
     })
 }
 
 fn record_binding_rows(
-    catalog: &dyn HistoryCatalog,
+    mut record: impl FnMut(&[BindingHint]) -> Result<(), HistoryError>,
     walk: impl FnOnce(&mut dyn FnMut(u64, u64, &PathName) -> ContentResult<()>) -> ContentResult<()>,
 ) -> Result<u64, CommitError> {
     let (mut rows, mut recorded, mut failure) = (Vec::new(), 0u64, None);
@@ -69,7 +77,7 @@ fn record_binding_rows(
             name: name.as_bytes().to_vec(),
         });
         if rows.len() == BATCH {
-            if let Err(error) = catalog.record_bindings(&rows) {
+            if let Err(error) = record(&rows) {
                 failure = Some(error);
                 return Err(ContentError::OutputRejected);
             }
@@ -83,9 +91,7 @@ fn record_binding_rows(
     }
     walked.map_err(CommitError::from)?;
     if !rows.is_empty() {
-        catalog
-            .record_bindings(&rows)
-            .map_err(CommitError::History)?;
+        record(&rows).map_err(CommitError::History)?;
         recorded += rows.len() as u64;
     }
     Ok(recorded)
@@ -96,30 +102,127 @@ pub(super) enum CollectedBindings {
     Overflow(BindingOverflow),
 }
 
-pub(super) struct BindingOverflow {
-    prefix: Vec<BindingHint>,
-    parent: u64,
-    name: PathName,
+pub(super) struct CapturedBindings {
+    changes: BindingChanges,
+    scope: IndexedOperationRecordScope,
+}
+
+impl CapturedBindings {
+    pub(super) fn new(changes: BindingChanges, scope: IndexedOperationRecordScope) -> Self {
+        Self { changes, scope }
+    }
+
+    fn walk(
+        self,
+        owner: &crate::OwnerClient,
+        visit: &mut dyn FnMut(u64, u64, &PathName) -> ContentResult<()>,
+    ) -> Result<(), CommitError> {
+        let mut records = IndexedEditRecords::new(owner, self.scope);
+        self.changes.visit(&mut records, visit).map_err(|error| {
+            super::captured::original_cause(error, records.into_custody().failure, || None)
+        })
+    }
+
+    pub(super) fn collect(
+        self,
+        owner: &crate::OwnerClient,
+    ) -> Result<CollectedBindings, CommitError> {
+        if self.changes.len() > BATCH as u64 {
+            return Ok(CollectedBindings::Overflow(BindingOverflow::Captured(self)));
+        }
+        let mut rows = Vec::with_capacity(self.changes.len() as usize);
+        self.walk(owner, &mut |child, parent, name| {
+            rows.push(BindingHint {
+                child,
+                parent,
+                name: name.as_bytes().to_vec(),
+            });
+            Ok(())
+        })?;
+        Ok(CollectedBindings::Fits(rows))
+    }
+
+    pub(super) fn record(
+        self,
+        owner: &crate::OwnerClient,
+        catalog: &dyn HistoryCatalog,
+    ) -> Result<(), CommitError> {
+        self.record_with(owner, |rows| catalog.record_bindings(rows))
+    }
+
+    fn record_with(
+        self,
+        owner: &crate::OwnerClient,
+        mut record: impl FnMut(&[BindingHint]) -> Result<(), HistoryError>,
+    ) -> Result<(), CommitError> {
+        let mut rows = Vec::new();
+        let mut failure = None;
+        let walked = self.walk(owner, &mut |child, parent, name| {
+            rows.push(BindingHint {
+                child,
+                parent,
+                name: name.as_bytes().to_vec(),
+            });
+            if rows.len() == BATCH {
+                if let Err(error) = record(&rows) {
+                    failure = Some(error);
+                    return Err(ContentError::OutputRejected);
+                }
+                rows.clear();
+            }
+            Ok(())
+        });
+        if let Some(error) = failure {
+            return Err(CommitError::History(error));
+        }
+        walked?;
+        if !rows.is_empty() {
+            record(&rows).map_err(CommitError::History)?;
+        }
+        Ok(())
+    }
+}
+
+pub(super) enum BindingOverflow {
+    Canonical {
+        prefix: Vec<BindingHint>,
+        parent: u64,
+        name: PathName,
+    },
+    Captured(CapturedBindings),
 }
 
 impl BindingOverflow {
-    /// Records the already read first batch, then resumes at the next row.
-    /// The Save must be published before either write.
+    /// Records the prefix and remaining rows after the held Save publishes.
     pub(super) fn record(
         self,
+        owner: &crate::OwnerClient,
         reader: &dyn AuthenticatedObjects,
         catalog: &dyn HistoryCatalog,
         directories: &ChangedDirectories,
     ) -> Result<(), CommitError> {
-        record_rows(catalog, &self.prefix)?;
-        drop(self.prefix);
-        record_directory_bindings_from(
-            reader,
-            catalog,
-            directories,
-            Some((self.parent, &self.name)),
-        )?;
-        Ok(())
+        match self {
+            Self::Canonical {
+                prefix,
+                parent,
+                name,
+            } => {
+                catalog
+                    .record_overflow_bindings(&prefix)
+                    .map_err(CommitError::History)?;
+                drop(prefix);
+                record_directory_bindings_from(
+                    reader,
+                    |rows| catalog.record_overflow_bindings(rows),
+                    directories,
+                    Some((parent, &name)),
+                )?;
+                Ok(())
+            }
+            Self::Captured(plan) => {
+                plan.record_with(owner, |rows| catalog.record_overflow_bindings(rows))
+            }
+        }
     }
 }
 
@@ -145,7 +248,7 @@ pub(super) fn collect_directory_bindings(
         Ok(())
     });
     if let Some((parent, name)) = next {
-        return Ok(CollectedBindings::Overflow(BindingOverflow {
+        return Ok(CollectedBindings::Overflow(BindingOverflow::Canonical {
             prefix: rows,
             parent,
             name,

@@ -4,5 +4,6 @@
 //! keys and a per-block table of distinct modes only. Every block ends with
 //! a CRC32C of the bytes before it, checked on every decode.
 mod frame;
+pub(crate) use frame::BODY_LIMIT;
 pub(crate) mod hints;
 pub(crate) mod values;

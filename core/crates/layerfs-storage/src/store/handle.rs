@@ -67,6 +67,13 @@ impl Storage {
         self.keeps_ordinals = true;
         self
     }
+    /// A Workspace Commit's kept producer holds authoritative inode locators
+    /// through repeated walks on a backend that batches remote chain reads.
+    #[must_use]
+    pub fn retaining_inode_locators(mut self) -> Self {
+        self.source.retain_inode_locators();
+        self
+    }
     /// Returns the ordinals this handle kept from its last finished Save
     /// (#768): one publication of their release, which rewinds the Store's
     /// counter only while it still ends them (nothing was reserved after

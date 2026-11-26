@@ -10,14 +10,19 @@
 //! or unsorted change fails the attempt instead of being normalized.
 
 use crate::error::{ContentError, ContentResult};
+use crate::filesystem::sorted::budget::{Budget, Lease};
 use crate::filesystem::sorted::format::Format;
 use crate::filesystem::sorted::page::{Engine, Entry, Node, Page, ReadPage};
 use crate::object::ObjectId;
+use std::{collections::VecDeque, rc::Rc};
 
 /// One strictly ordered final-state change stream.
 pub(crate) struct Changes<I, K, V> {
     source: I,
     pub(crate) next: Option<(K, Option<V>)>,
+    ahead: VecDeque<(K, Option<V>)>,
+    ahead_lease: Option<Lease>,
+    end: bool,
 }
 
 impl<I, K, V> Changes<I, K, V>
@@ -28,7 +33,13 @@ where
     /// Starts the stream by checking its first row.
     pub(crate) fn new(mut source: I) -> ContentResult<Self> {
         let next = source.next().transpose()?;
-        Ok(Self { source, next })
+        Ok(Self {
+            source,
+            next,
+            ahead: VecDeque::new(),
+            ahead_lease: None,
+            end: false,
+        })
     }
 
     /// True while the next change still belongs to the current subtree.
@@ -38,10 +49,52 @@ where
             .is_some_and(|next| bound.is_none_or(|bound| &next.0 <= bound))
     }
 
+    /// The next ordered keys, including the current one. A source refusal
+    /// ends the merge before it can issue a lookup or emit another object.
+    pub(crate) fn keys_ahead(
+        &mut self,
+        budget: &Rc<Budget>,
+        limit: usize,
+    ) -> ContentResult<Option<impl Iterator<Item = &K>>> {
+        if self.ahead_lease.is_none() && !self.end {
+            let rows = limit - 1;
+            let bytes = rows * std::mem::size_of::<(K, Option<V>)>();
+            let Ok(lease) = budget.reserve(bytes) else {
+                return Ok(None);
+            };
+            self.ahead = VecDeque::with_capacity(rows);
+            self.ahead_lease = Some(lease);
+        }
+        while self.ahead.len() + 1 < limit && !self.end {
+            let Some(following) = self.source.next().transpose()? else {
+                self.end = true;
+                break;
+            };
+            let previous = self.ahead.back().or(self.next.as_ref());
+            if previous.is_some_and(|previous| previous.0 >= following.0) {
+                return Err(ContentError::NonCanonicalOrdering);
+            }
+            self.ahead.push_back(following);
+        }
+        Ok(Some(
+            self.next.iter().chain(&self.ahead).map(|(key, _)| key),
+        ))
+    }
+
     /// Takes the next change, rejecting a duplicate or descending key.
     pub(crate) fn take(&mut self) -> ContentResult<(K, Option<V>)> {
         let current = self.next.take().ok_or(ContentError::UnexpectedEof)?;
-        self.next = self.source.next().transpose()?;
+        self.next = if let Some(row) = self.ahead.pop_front() {
+            Some(row)
+        } else if self.end {
+            None
+        } else {
+            self.source.next().transpose()?
+        };
+        if self.ahead.is_empty() && self.ahead_lease.is_some() {
+            self.ahead = VecDeque::new();
+            self.ahead_lease = None;
+        }
         if self.next.as_ref().is_some_and(|next| next.0 <= current.0) {
             return Err(ContentError::NonCanonicalOrdering);
         }
@@ -212,7 +265,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
                     } else {
                         None
                     };
-                    (self.observe)(previous.flatten(), value.clone())?;
+                    (self.observe)(&key, previous.flatten(), value.clone())?;
                     (key, value)
                 } else {
                     let (key, value) = old.next().ok_or(ContentError::UnexpectedEof)?;
@@ -240,7 +293,8 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             let count = read.wire.entries.len();
             let mut pending = None;
             self.known[usize::from(level - 1)] = (0, 0);
-            for (index, entry) in read.wire.entries.into_iter().enumerate() {
+            let mut ahead = super::read_ahead::Leaves::default();
+            for (index, entry) in read.wire.entries.iter().enumerate() {
                 let child_id = entry
                     .child
                     .ok_or(ContentError::InvalidRecord("branch row"))?;
@@ -265,7 +319,14 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
                     emit(self, Node::stored(child_id, entry.key.clone(), level - 1))?;
                     continue;
                 }
-                let child = self.read(child_id, false)?;
+                let child = if level == 1
+                    && F::role(0) == super::format::INODE_LEAF_ROLE
+                    && self.objects.inode_read_ahead()
+                {
+                    ahead.read(self, child_id, &read.wire.entries[index..], bound, changes)?
+                } else {
+                    self.read(child_id, false)?
+                };
                 self.check_child(level, &entry.key, &child.wire)?;
                 self.credit(&child.wire)?;
                 self.edit(Some(child_id), child, child_bound, changes, &mut emit)?;

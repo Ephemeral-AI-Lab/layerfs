@@ -34,12 +34,19 @@ pub struct PackCache {
     retained: usize,
     clock: Cell<u64>,
     work: PackCacheWork,
+    sparse_whole_files: bool,
 }
 impl PackCache {
     /// Empty operation-owned cache.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Captured remote Saves often ask for one group from a whole-file pack.
+    /// Keep that authenticated group in this allowance once the pack is read.
+    pub(crate) fn retain_requested_whole_file_groups(&mut self) {
+        self.sparse_whole_files = true;
+    }
+
     /// Presence only; a body consult through `get` updates recency.
     pub fn contains_key(&self, id: &i64) -> bool {
         self.entries.contains_key(&(*id, None))
@@ -347,23 +354,66 @@ impl PackCache {
                     return Err(StorageError::Integrity("cached whole domain"));
                 }
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
-                crate::pack::layout::validate_group_demand(&body, header, wanted)?;
                 let bytes = body.len();
-                let keys: Vec<_> = self
+                // Retained units of this pack covering half its bytes make
+                // it dense: the whole body is kept (the rule `acquire_groups`
+                // applies when it asks for one) and serves its other groups.
+                let dense = self
                     .entries
-                    .keys()
-                    .filter(|(pack, group)| *pack == id && group.is_some())
-                    .copied()
-                    .collect();
-                for key in keys {
-                    let entry = &self.entries[&key];
-                    let (_, view) = entry
+                    .range((id, Some(0))..=(id, Some(usize::MAX)))
+                    .map(|(_, entry)| entry.body.len())
+                    .sum::<usize>()
+                    >= bytes.div_ceil(2);
+                let sparse = match (info, wanted.first()) {
+                    (Some(info), Some(&number))
+                        if self.sparse_whole_files
+                            && !dense
+                            && header.lane == crate::pack::layout::PackLane::WholeFile
+                            && header.group_count > 1
+                            && wanted.len() == 1 =>
+                    {
+                        let views = crate::pack::layout::directory_group_views(&body, header)?;
+                        Some((info, number, views))
+                    }
+                    _ => {
+                        crate::pack::layout::validate_group_demand(&body, header, wanted)?;
+                        None
+                    }
+                };
+                let retained = self.entries.range((id, Some(0))..=(id, Some(usize::MAX)));
+                let mut keys = Vec::new();
+                for (key, entry) in retained {
+                    let (cached_header, view) = entry
                         .unit
                         .ok_or(StorageError::Integrity("cached group view"))?;
                     if body.get(view.start..view.end) != Some(entry.body.as_slice()) {
                         return Err(StorageError::Integrity("immutable cached group changed"));
                     }
+                    let retained_view = sparse
+                        .as_ref()
+                        .and_then(|(_, _, views)| key.1.and_then(|number| views.get(number)));
+                    if cached_header != header || retained_view != Some(&view) {
+                        keys.push(*key);
+                    }
+                }
+                for key in keys {
                     self.remove_entry(key);
+                }
+                if let Some((info, number, views)) = sparse {
+                    if !self.entries.contains_key(&(id, Some(number))) {
+                        let view = *views
+                            .get(number)
+                            .ok_or(StorageError::Integrity("group ordinal"))?;
+                        let group = body
+                            .get(view.start..view.end)
+                            .ok_or(StorageError::Integrity("retained whole-file group"))?;
+                        self.admit_unit(info, number, header, view, group.to_vec())?;
+                    }
+                    source.note_pack_evictions(
+                        self.work.evictions - before.evictions,
+                        self.work.evicted_bytes - before.evicted_bytes,
+                    );
+                    return Ok((true, bytes));
                 }
                 self.reserve(&[(id, bytes)])?;
                 self.insert(id, body)?;
@@ -388,30 +438,7 @@ impl PackCache {
                     return Err(StorageError::Integrity("selected group reply"));
                 }
                 for unit in units {
-                    let length = unit.body.len();
-                    if length > policy::DEPENDENCY_PACK_CACHE_BYTES {
-                        return Err(StorageError::Integrity("selected cache bound"));
-                    }
-                    while !self.entries.is_empty()
-                        && (self.retained.saturating_add(length)
-                            > policy::DEPENDENCY_PACK_CACHE_BYTES
-                            || self.entries.len() >= policy::READ_OBJECT_LIMIT)
-                    {
-                        self.evict(&BTreeSet::new())?;
-                    }
-                    let next = self.clock.get().saturating_add(1);
-                    self.clock.set(next);
-                    self.retained += length;
-                    self.work.peak_bytes = self.work.peak_bytes.max(self.retained);
-                    self.entries.insert(
-                        (id, Some(unit.number)),
-                        Entry {
-                            body: unit.body,
-                            info: Some(info),
-                            unit: Some((unit.header, unit.view)),
-                            touched: Cell::new(next),
-                        },
-                    );
+                    self.admit_unit(info, unit.number, unit.header, unit.view, unit.body)?;
                 }
                 info.length
             }
@@ -429,6 +456,39 @@ impl PackCache {
             }
         }
         Ok((true, bytes))
+    }
+    fn admit_unit(
+        &mut self,
+        info: crate::location::PackInfo,
+        number: usize,
+        header: crate::pack::layout::PackHeader,
+        view: crate::pack::layout::GroupView,
+        body: Vec<u8>,
+    ) -> StorageResult<()> {
+        let length = body.len();
+        if length > policy::DEPENDENCY_PACK_CACHE_BYTES {
+            return Err(StorageError::Integrity("selected cache bound"));
+        }
+        while !self.entries.is_empty()
+            && (self.retained.saturating_add(length) > policy::DEPENDENCY_PACK_CACHE_BYTES
+                || self.entries.len() >= policy::READ_OBJECT_LIMIT)
+        {
+            self.evict(&BTreeSet::new())?;
+        }
+        let next = self.clock.get().saturating_add(1);
+        self.clock.set(next);
+        self.retained += length;
+        self.work.peak_bytes = self.work.peak_bytes.max(self.retained);
+        self.entries.insert(
+            (info.pack_id, Some(number)),
+            Entry {
+                body,
+                info: Some(info),
+                unit: Some((header, view)),
+                touched: Cell::new(next),
+            },
+        );
+        Ok(())
     }
     fn check_descriptor(&self, info: crate::location::PackInfo) -> StorageResult<()> {
         if self

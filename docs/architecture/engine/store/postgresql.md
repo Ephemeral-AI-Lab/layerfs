@@ -1326,13 +1326,57 @@ and [`commit_fault_similar_kill.rs`](../../../../engine/crates/layerfs-store-ser
 drop the connection or kill the backend at each of the 100 server messages of
 a warm Commit whose Save holds similar files for that publication.
 
+### Captured Save registration
+
+Captured construction on an admitted Workspace can carry positive inode leaf
+and branch locators, compact ancestor coordinates, and validated directories
+from its Workspace reader to its Save. One capture owns at most 196 KiB of
+retained metadata. The Save uses that metadata only for a complete bounded
+group at the same catalog incarnation, after its own pending and held objects
+are considered. Every decoded object passes the ordinary authentication.
+An incomplete group uses the ordinary locator path. The same Workspace reader
+can also pair two ready bounded ordinal requests on its existing connection.
+Terminal close disables retained locators before releasing the mount admission.
+The retention and pairing end when the captured construction ends.
+
+During captured construction, an eligible Save batch sends one fenced
+transaction on the existing writer connection. It binds up to 4 MiB of pack
+bodies, with catalog arrays subject to the existing publication row limit.
+The flight checks generation, inserts packs, acquires the Store lane, registers
+rows, checks the transaction token, and commits. The Commit command is a
+separate request in the same flight, so it also closes an aborted transaction.
+
+The row statement checks value and signature integrity on the server and
+returns inserted identities. The Save compares any lost identity with the
+first writer's bytes before dependent work continues. A lost acknowledgement
+keeps the outcome uncertain and quarantines the session. Large batches and
+nested lane calls use ordinary publication, selected before sending.
+A captured Commit whose binding blocks overflow one transaction may also
+publish its held Save tail through this flight before recording the
+bindings. That tail settles through the ordinary Save path. Untrusted
+completion or rollback and lane cleanup withhold unused allocations. Save
+finish, final fused history publication and Namespace Init use their
+respective existing registration paths.
+
+After the tail acknowledges, each eligible overflow binding batch can send
+its existing sorted block append in one fenced write flight. The continuation
+waits for each batch's outcome before advancing and sends final history
+publication separately. The ordinary binding encoder and sequence allocation
+serve both paths.
+
+[Captured Save flight](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish_flight.rs)
+
 ### Commit reads before the lane (#810)
 
 A wide change used to pay one round trip per changed directory, file or
 inode page it read before the lane. The reads are now collected first and
-sent a window at a time (campaign #810; Lane A fixes). A failed window read
-fails the Commit with the provider's own error before the lane; nothing is
-retried. The drop and kill sweeps of a wide Commit
+sent a window at a time (campaign #810; Lane A fixes). Each demand runs once.
+A failed construction window read ends the Commit before history publication
+and returns the provider's original error. Rows from earlier acknowledged Save batches
+remain in the Store. Each batch takes the lane in its own transaction
+before history publication. See
+[construction read failures](../commit/construction.md#base-directory-reads-810-f3).
+The drop and kill sweeps of a wide Commit
 (`commit_fault_wide_{drop,kill}_{0..3}.rs`, `Flight::Wide`) fault every
 server message of its flight:
 

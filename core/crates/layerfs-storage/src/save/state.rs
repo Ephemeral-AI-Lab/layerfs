@@ -161,6 +161,7 @@ pub(super) struct State<'a> {
     /// Set by `Save::finish`: the last publication releases the ordinal
     /// tail past the prefix the handle keeps.
     pub(super) finishing: bool,
+    pub(super) captured_output: bool,
     pub(super) depths: DepthCache,
     pub(super) losing: LosingBases,
     pub(super) chain: ChainCounters,
@@ -206,6 +207,7 @@ impl<'a> State<'a> {
             next_ordinal: 0,
             ordinal_end: 0,
             finishing: false,
+            captured_output: false,
             depths: DepthCache::new(),
             losing: LosingBases::new(),
             chain: ChainCounters::default(),

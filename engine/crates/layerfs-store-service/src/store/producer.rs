@@ -44,7 +44,13 @@ impl Producer {
                 let before = storage.diagnostics();
                 Ok((storage, before))
             }
-            None => Ok((store.producer()?.keeping_ordinals(), Diagnostics::default())),
+            None => Ok((
+                store
+                    .producer()?
+                    .keeping_ordinals()
+                    .retaining_inode_locators(),
+                Diagnostics::default(),
+            )),
         }
     }
     /// Keeps the handle of a completed Commit. Admission makes this the only

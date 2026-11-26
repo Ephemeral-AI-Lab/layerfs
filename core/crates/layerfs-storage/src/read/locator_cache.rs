@@ -1,11 +1,16 @@
 //! Positive locator retention with bounded second-chance victim selection.
 use crate::location::LocatedObject;
-use layerfs_content::ObjectId;
+use layerfs_content::{ObjectId, ObjectRole};
 use std::{cell::Cell, collections::BTreeMap, ops::Bound};
+
+const SECOND_CHANCE: u8 = 1;
+const RING_WINNER_CHANCES: u8 = 2;
+/// Pooled inode reads can rediscover the same ancestors in several waves.
+const INODE_CHANCES: u8 = 3;
 
 struct Entry {
     row: LocatedObject,
-    referenced: Cell<bool>,
+    chances: Cell<u8>,
     /// Bound from a chain member (#758), not located authoritatively.
     hinted: bool,
 }
@@ -13,6 +18,7 @@ struct Entry {
 pub(crate) struct LocatorCache {
     entries: BTreeMap<ObjectId, Entry>,
     hand: Option<ObjectId>,
+    prefer_inodes: bool,
     /// Entries that are hinted, so a demand with none skips the scan.
     hinted: usize,
 }
@@ -23,12 +29,38 @@ pub(crate) struct EvictionWork {
     pub(crate) second_chances: u64,
 }
 impl LocatorCache {
+    pub(super) fn retain_inodes(&mut self) {
+        self.prefer_inodes = true;
+    }
+    pub(super) fn keeps_ring_winners(&self) -> bool {
+        self.prefer_inodes
+    }
+    /// One initial extra pass for a newly acknowledged ring base. Ordinary
+    /// lookup credit can sustain but never renew this bonus.
+    pub(super) fn keep_ring_winner(&self, location: crate::location::ObjectLocation) {
+        if let Some(entry) = self.entries.get(&location.object_id) {
+            if !entry.hinted && entry.row.location == location {
+                entry.chances.set(RING_WINNER_CHANCES);
+            }
+        }
+    }
+    fn chances(&self, role: ObjectRole, hinted: bool) -> u8 {
+        if self.prefer_inodes
+            && !hinted
+            && matches!(role, ObjectRole::InodeLeaf | ObjectRole::InodeBranch)
+        {
+            INODE_CHANCES
+        } else {
+            SECOND_CHANCE
+        }
+    }
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
     pub(crate) fn get(&self, id: &ObjectId) -> Option<&LocatedObject> {
         let entry = self.entries.get(id)?;
-        entry.referenced.set(true);
+        let minimum = self.chances(entry.row.location.role, entry.hinted);
+        entry.chances.set(entry.chances.get().max(minimum));
         Some(&entry.row)
     }
     pub(crate) fn contains_key(&self, id: &ObjectId) -> bool {
@@ -50,10 +82,10 @@ impl LocatorCache {
         self.hinted = 0;
     }
     pub(crate) fn insert_as(&mut self, id: ObjectId, row: LocatedObject, hinted: bool) {
-        let referenced = Cell::new(true);
+        let chances = Cell::new(self.chances(row.location.role, hinted));
         let entry = Entry {
             row,
-            referenced,
+            chances,
             hinted,
         };
         if let Some(old) = self.entries.insert(id, entry) {
@@ -107,9 +139,14 @@ impl LocatorCache {
         work
     }
     fn evict_one(&mut self, protected: &[ObjectId], work: &mut EvictionWork) -> bool {
-        // Each unprotected entry gets at most one second chance during this call.
+        // Every unprotected entry can be evicted within this many revolutions.
         // If all entries are protected, the existing oversized-frontier guard acts.
-        for _ in 0..self.len().saturating_mul(2) {
+        let chances = if self.prefer_inodes {
+            INODE_CHANCES
+        } else {
+            SECOND_CHANCE
+        };
+        for _ in 0..self.len().saturating_mul(usize::from(chances) + 1) {
             let next = self
                 .hand
                 .and_then(|hand| {
@@ -127,7 +164,10 @@ impl LocatorCache {
             if protected.binary_search(&id).is_ok() {
                 continue;
             }
-            if self.entries[&id].referenced.replace(false) {
+            let credit = &self.entries[&id].chances;
+            let old = credit.get();
+            if old != 0 {
+                credit.set(old - 1);
                 work.second_chances += 1;
                 continue;
             }

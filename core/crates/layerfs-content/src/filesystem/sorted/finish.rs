@@ -10,7 +10,7 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::objects::FilesystemObjects;
 use crate::filesystem::sorted::format::{CompactDirectory, CompactInodes, Format};
 use crate::filesystem::sorted::merge::Changes;
-use crate::filesystem::sorted::page::{empty_page, Engine, SortedWork};
+use crate::filesystem::sorted::page::{empty_page, Engine, LeafObserver, SortedWork};
 use crate::object::ObjectId;
 
 impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
@@ -22,7 +22,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         fetched: Option<Vec<u8>>,
         source: impl Iterator<Item = ContentResult<(F::Key, Option<F::Value>)>>,
         scratch_limit: usize,
-        observe: &mut dyn FnMut(Option<F::Value>, Option<F::Value>) -> ContentResult<()>,
+        observe: &mut LeafObserver<'_, F>,
     ) -> ContentResult<(ObjectId, SortedWork)> {
         let mut changes = Changes::new(source)?;
         if changes.next.is_none() {
@@ -174,6 +174,21 @@ pub(crate) fn apply_directory_root(
     scratch_limit: usize,
     observe: &mut dyn FnMut(Option<u64>, Option<u64>) -> ContentResult<()>,
 ) -> ContentResult<(DirectoryRoot, SortedWork)> {
+    apply_directory_root_observed(objects, base, changes, scratch_limit, &mut |_, old, new| {
+        observe(old, new)
+    })
+}
+
+type DirectoryChangeObserver<'a> = dyn FnMut(&crate::filesystem::path::PathName, Option<u64>, Option<u64>) -> ContentResult<()>
+    + 'a;
+
+pub(crate) fn apply_directory_root_observed(
+    objects: &mut FilesystemObjects<'_>,
+    base: Option<(DirectoryRoot, Option<Vec<u8>>)>,
+    changes: impl Iterator<Item = ContentResult<(crate::filesystem::path::PathName, Option<u64>)>>,
+    scratch_limit: usize,
+    observe: &mut DirectoryChangeObserver<'_>,
+) -> ContentResult<(DirectoryRoot, SortedWork)> {
     let (root, fetched) = base.map_or((None, None), |(root, fetched)| (Some(root.0), fetched));
     let (root, work) = Engine::<CompactDirectory>::apply_root(
         objects,
@@ -193,9 +208,17 @@ pub fn apply_inode_changes(
     changes: impl Iterator<Item = ContentResult<(u64, Option<crate::object::inode_leaf::InodeValue>)>>,
     scratch_limit: usize,
 ) -> ContentResult<(ObjectId, SortedWork)> {
-    Engine::<CompactInodes>::apply_root(objects, base, None, changes, scratch_limit, &mut |_, _| {
-        Ok(())
-    })
+    apply_inode_changes_observed(objects, base, changes, scratch_limit, &mut |_, _, _| Ok(()))
+}
+
+pub(crate) fn apply_inode_changes_observed(
+    objects: &mut FilesystemObjects<'_>,
+    base: Option<ObjectId>,
+    changes: impl Iterator<Item = ContentResult<(u64, Option<crate::object::inode_leaf::InodeValue>)>>,
+    scratch_limit: usize,
+    observe: &mut LeafObserver<'_, CompactInodes>,
+) -> ContentResult<(ObjectId, SortedWork)> {
+    Engine::<CompactInodes>::apply_root(objects, base, None, changes, scratch_limit, observe)
 }
 
 /// Emits the canonical empty directory page as a real, final result.

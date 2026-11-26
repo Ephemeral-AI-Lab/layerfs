@@ -220,6 +220,51 @@ impl Transaction<'_> {
         result
     }
 
+    /// Two bounded typed immutable requests in one flight. Each statement has
+    /// its ordinary generation fence. Both replies are inspected for a lost
+    /// connection before the caller consumes them in statement order.
+    pub(crate) fn typed_pair(
+        &self,
+        sql: &str,
+        params: [&[&(dyn ToSql + Sync)]; 2],
+        bytes: [u64; 2],
+    ) -> Result<[Result<Vec<Row>, BackendError>; 2], BackendError> {
+        use super::pipeline::{Bound, Reply};
+        if self.single.is_some() || self.diagnostic {
+            return Err(BackendError::Integrity);
+        }
+        let started = Instant::now();
+        let mut state = self.state.borrow_mut();
+        let statement = self.checked(state.statement(&self.fenced(sql)))?;
+        let requests = params.map(|params| Bound::Prepared(&statement, params));
+        let flight = self.checked(state.client.pipeline(&requests))?;
+        let sent = flight.sent;
+        let work = &mut state.work;
+        work.round_trips += u64::from(sent != 0);
+        work.statements += sent as u64;
+        work.bound_bytes += bytes[..sent].iter().sum::<u64>();
+        work.statement_ns += started.elapsed().as_nanos() as u64;
+        let replies: [_; 2] = flight
+            .replies
+            .try_into()
+            .map_err(|_| BackendError::Integrity)?;
+        let replies = replies.map(|reply| match reply.map_err(|error| error.backend())? {
+            Reply::Rows(rows) => {
+                check_typed_fence(&rows, self.fence)?;
+                work.returned_rows += rows.len() as u64;
+                Ok(rows)
+            }
+            Reply::Messages(_) => Err(BackendError::Integrity),
+        });
+        if replies
+            .iter()
+            .any(|reply| matches!(reply, Err(BackendError::Unknown)))
+        {
+            state.quarantine();
+        }
+        Ok(replies)
+    }
+
     /// One `COPY … FROM STDIN (FORMAT binary)`; `rows` writes every row.
     pub(crate) fn copy_in(
         &self,

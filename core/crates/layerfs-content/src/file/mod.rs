@@ -22,7 +22,7 @@ pub use edit::{
     apply_edits, apply_edits_backed, apply_indexed_edits_view_backed, Edit, EditCounters,
     EditObjects, EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, EditRequest,
     EditSequence, EditSource, IndexedEditBacking, IndexedEditRequest, IndexedEditSource,
-    EDIT_DEFERRED_LIMIT,
+    IndexedRecordPage, EDIT_DEFERRED_LIMIT,
 };
 pub use mapping::{Extent, ExtentBuilder, ExtentCursor, PredecessorBase, ReadCounters};
 pub use read::{content_digest, read_all, read_all_bounded, read_range};

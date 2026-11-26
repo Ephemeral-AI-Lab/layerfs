@@ -367,6 +367,9 @@ pub(crate) struct Session {
     /// The connection that holds the publication lane, opened on first use.
     pub(crate) lane: Mutex<Option<crate::backend::postgresql::lane::lane::LaneConnection>>,
     pub(crate) writable: bool,
+    /// An ordinary session can send paired immutable requests on its one
+    /// connection. The diagnostic client uses a separate execution driver.
+    pub(crate) paired_immutable_reads: bool,
     pub(crate) settings: Settings,
     /// The server's version and the Store's frozen policy, read by the
     /// open's check (`schema::check`); unset on a session that only reads a
@@ -462,6 +465,7 @@ impl Session {
             }),
             lane: Mutex::new(None),
             writable: false,
+            paired_immutable_reads: false,
             settings,
             server_version: OnceLock::new(),
             policy: OnceLock::new(),
@@ -501,6 +505,7 @@ impl Session {
             }),
             lane: Mutex::new(None),
             writable,
+            paired_immutable_reads: true,
             settings,
             server_version: OnceLock::new(),
             policy: OnceLock::new(),

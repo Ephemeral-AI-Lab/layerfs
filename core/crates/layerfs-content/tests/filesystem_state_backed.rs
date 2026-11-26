@@ -1,6 +1,8 @@
 //! Public serial-state construction through the existing neutral raw port.
 mod support;
 use layerfs_content::filesystem::rows::RowSource;
+use layerfs_content::filesystem::statistics::{logical_size_and_directories, LENGTH_WINDOW};
+use layerfs_content::filesystem::update::update_filesystem_streamed_backed_counted;
 use layerfs_content::filesystem::{
     build_filesystem, build_filesystem_streamed_backed, scope_for_seed, update_filesystem,
     update_filesystem_streamed_backed, DirectoryChangeLookup, DirectoryChangeSource,
@@ -11,7 +13,8 @@ use layerfs_content::filesystem::{
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{
     ConstructionRecordApply, ConstructionRecordChange, ConstructionRecordExpected,
-    ConstructionRecordKey, ContentError, ContentResult, IndexedConstructionBacking, ObjectRole,
+    ConstructionRecordKey, ContentError, ContentResult, IndexedConstructionBacking, ObjectId,
+    ObjectRole,
 };
 use std::collections::BTreeMap;
 use support::filesystem::{name_of, synthetic, value, Session, TreeStore};
@@ -20,6 +23,9 @@ const CONTEXT: u32 = 0x4653_0000;
 const PARENT: u32 = CONTEXT + 1;
 const ROOT: u32 = CONTEXT + 2;
 const COUNT: u32 = CONTEXT + 3;
+const LENGTHS: u32 = CONTEXT + 0x30;
+const PROVISIONAL: u32 = CONTEXT + 0x31;
+const CERTIFIED: u32 = CONTEXT + 0x32;
 #[derive(Default)]
 struct Records {
     values: BTreeMap<ConstructionRecordKey, Vec<u8>>,
@@ -27,6 +33,7 @@ struct Records {
     after_failure: usize,
     terminal: bool,
     fail_apply: Option<u32>,
+    fail_get: Option<u32>,
     refuse_apply: Option<u32>,
     corrupt_root: bool,
     missing_root: bool,
@@ -36,6 +43,9 @@ struct Records {
     fail_count_read: Option<usize>,
     count_reads: usize,
     maximum_job: usize,
+    binding_pages: [usize; 2],
+    binding_writes: [usize; 2],
+    spare_binding_capacity: bool,
     original: Option<Vec<ConstructionRecordChange>>,
 }
 impl Records {
@@ -63,6 +73,9 @@ impl IndexedConstructionBacking for Records {
     }
     fn get(&mut self, key: ConstructionRecordKey) -> ContentResult<Option<Vec<u8>>> {
         self.enter()?;
+        if self.fail_get == Some(key.kind) {
+            return Err(self.fail());
+        }
         if self.disappear_replayed_root && key.kind == ROOT {
             self.root_reads += 1;
             if self.root_reads == 2 {
@@ -86,8 +99,41 @@ impl IndexedConstructionBacking for Records {
         if self.corrupt_root && key.kind == ROOT && self.values.contains_key(&key) {
             return Ok(Some(vec![255]));
         }
-        Ok(self.values.get(&key).cloned())
+        Ok(self.values.get(&key).map(|value| {
+            let mut value = value.clone();
+            if self.spare_binding_capacity && matches!(key.kind, PROVISIONAL | CERTIFIED) {
+                value.reserve(70_000);
+            }
+            value
+        }))
     }
+    fn entries_after(
+        &mut self,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> ContentResult<Option<layerfs_content::IndexedRecordPage>> {
+        let index = match kind {
+            PROVISIONAL if !self.spare_binding_capacity => 0,
+            CERTIFIED if !self.spare_binding_capacity => 1,
+            _ => return Ok(None),
+        };
+        self.enter()?;
+        self.binding_pages[index] += 1;
+        let mut bytes = 0;
+        let mut page = Vec::new();
+        for (key, value) in &self.values {
+            if key.kind == kind && after.is_none_or(|after| key.key > after) {
+                if page.len() == 64 || bytes + value.len() > 65_536 {
+                    return Ok(Some((page, false)));
+                }
+                bytes += value.len();
+                page.push((key.key, value.clone()));
+            }
+        }
+        let ended = page.len() < 64;
+        Ok(Some((page, ended)))
+    }
+
     fn apply(
         &mut self,
         changes: Vec<ConstructionRecordChange>,
@@ -99,7 +145,8 @@ impl IndexedConstructionBacking for Records {
         assert!(changes
             .iter()
             .all(|c| (CONTEXT..=CONTEXT + 9).contains(&c.key.kind)
-                || (CONTEXT + 0x20..=CONTEXT + 0x2F).contains(&c.key.kind)));
+                || (CONTEXT + 0x20..=LENGTHS).contains(&c.key.kind)
+                || matches!(c.key.kind, PROVISIONAL | CERTIFIED)));
         let bytes = changes.capacity() * std::mem::size_of::<ConstructionRecordChange>()
             + changes
                 .iter()
@@ -113,6 +160,13 @@ impl IndexedConstructionBacking for Records {
                 .sum::<usize>();
         assert!(bytes <= 65_536);
         self.maximum_job = self.maximum_job.max(bytes);
+        if let Some(index) = changes.first().and_then(|change| match change.key.kind {
+            PROVISIONAL => Some(0),
+            CERTIFIED => Some(1),
+            _ => None,
+        }) {
+            self.binding_writes[index] += 1;
+        }
         if changes.iter().any(|c| Some(c.key.kind) == self.fail_apply) {
             self.original = Some(changes);
             return Err(self.fail());
@@ -875,4 +929,359 @@ fn disappearing_replayed_root_cannot_be_overwritten_by_a_supplied_directory_valu
     )
     .unwrap();
     assert_eq!(unchanged.root.0, session.root);
+}
+
+#[test]
+fn canonical_logical_transitions_match_root_diff_across_the_length_window() {
+    let count = LENGTH_WINDOW / 2 + 1;
+    let fixture = file_fixture(count, true);
+    let mut store = TreeStore::new();
+    let base = build(
+        &fixture,
+        FilesystemResources::default(),
+        &mut Records::default(),
+        &mut store,
+    )
+    .unwrap()
+    .root;
+    // Remove one alias, update all other roots, and introduce a fresh file.
+    // The signed count for the former hardlink must use its actual old count.
+    let fresh = count as u64 + 2;
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![
+            (name_of("zz-alias"), None),
+            (name_of("zz-new"), Some(fresh)),
+        ],
+    }];
+    let new_root = synthetic("changed payload");
+    let inodes = (2..=fresh)
+        .map(|serial| InodeUpdate {
+            serial,
+            value: value(InodeKind::RegularFile, new_root, synthetic("metadata")),
+        })
+        .collect::<Vec<_>>();
+    let input = FilesystemInput {
+        base: Some(base),
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &[fresh],
+        ..fixture.input(FilesystemResources::default())
+    };
+    let rows = Rows(&input);
+    let mut records = Records {
+        spare_binding_capacity: true,
+        ..Records::default()
+    };
+    let mut emitted = TreeStore::new();
+    let (built, mut changes) = update_filesystem_streamed_backed_counted(
+        &mut FilesystemObjects::new(&store, &mut emitted),
+        &prepared(&rows),
+        &mut records,
+    )
+    .unwrap();
+    assert!(changes.matches(base, built.root));
+    assert!(!changes.matches(built.root, base));
+    assert_eq!(
+        records
+            .values
+            .keys()
+            .filter(|key| key.kind == LENGTHS)
+            .count(),
+        1
+    );
+    store.absorb(&emitted);
+    let plan = changes.take_bindings().unwrap();
+    let mut staged_bindings = Vec::new();
+    plan.visit(&mut records, &mut |child, parent, name| {
+        staged_bindings.push((parent, name.clone(), child));
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(staged_bindings, [(1, name_of("zz-new"), fresh)]);
+    let lengths = |ids: &[ObjectId]| -> Vec<u64> {
+        ids.iter()
+            .map(|id| if *id == new_root { 7 } else { 3 })
+            .collect()
+    };
+    let mut lookup_windows = Vec::new();
+    let known = (count as u64 + 1) * 3;
+    let (logical, directories) = changes
+        .count(&mut records, known, &mut |ids| {
+            lookup_windows.push(ids.to_vec());
+            Ok(lengths(ids))
+        })
+        .unwrap();
+    assert_eq!(logical, (count as u64 + 1) * 7);
+    assert_eq!(
+        lookup_windows.iter().map(Vec::len).collect::<Vec<_>>(),
+        [LENGTH_WINDOW, 3]
+    );
+    let mut ordinary_directories = layerfs_content::compare::ChangedDirectories::default();
+    let mut ordinary_windows = Vec::new();
+    let ordinary = logical_size_and_directories(
+        &store,
+        base,
+        built.root,
+        known,
+        &mut |ids| {
+            ordinary_windows.push(ids.to_vec());
+            Ok(lengths(ids))
+        },
+        Some(&mut ordinary_directories),
+    )
+    .unwrap();
+    assert_eq!(logical, ordinary);
+    assert_eq!(directories, ordinary_directories);
+    assert_eq!(lookup_windows, ordinary_windows);
+
+    // The first backing refusal is returned before any file length demand.
+    let mut records = Records::default();
+    let (_, changes) = update_filesystem_streamed_backed_counted(
+        &mut FilesystemObjects::new(&store, &mut TreeStore::new()),
+        &prepared(&rows),
+        &mut records,
+    )
+    .unwrap();
+    records.fail_get = Some(LENGTHS);
+    assert_eq!(
+        changes.count(&mut records, known, &mut |_| panic!(
+            "lengths after backing failure"
+        )),
+        Err(ContentError::ProviderFailure {
+            what: "original filesystem record refusal"
+        })
+    );
+    assert_eq!(records.after_failure, 0);
+}
+
+#[test]
+fn canonical_logical_transitions_count_dropped_descendants_and_skip_unchanged_values() {
+    let mut session = Session::new(1).unwrap();
+    let directory = session.allocate();
+    let detached = session.allocate();
+    let kept = session.allocate();
+    session
+        .apply(
+            &[
+                DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![
+                        (name_of("dir"), Some(directory)),
+                        (name_of("kept"), Some(kept)),
+                    ],
+                },
+                DirectoryUpdate {
+                    parent: directory,
+                    changes: vec![(name_of("file"), Some(detached))],
+                },
+            ],
+            &[
+                InodeUpdate {
+                    serial: directory,
+                    value: typed(InodeKind::Directory),
+                },
+                InodeUpdate {
+                    serial: detached,
+                    value: typed(InodeKind::RegularFile),
+                },
+                InodeUpdate {
+                    serial: kept,
+                    value: typed(InodeKind::RegularFile),
+                },
+            ],
+            &[directory, detached, kept],
+        )
+        .unwrap();
+    let before = FilesystemRootId(session.root);
+    let input = FilesystemInput {
+        base: Some(before),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &[DirectoryUpdate {
+            parent: 1,
+            changes: vec![(name_of("dir"), None)],
+        }],
+        inodes: &[InodeUpdate {
+            serial: kept,
+            value: typed(InodeKind::RegularFile),
+        }],
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let mut records = Records::default();
+    let mut emitted = TreeStore::new();
+    let (built, changes) = update_filesystem_streamed_backed_counted(
+        &mut FilesystemObjects::new(&session.store, &mut emitted),
+        &prepared(&Rows(&input)),
+        &mut records,
+    )
+    .unwrap();
+    session.store.absorb(&emitted);
+    let mut hits = 0;
+    let (logical, directories) = changes
+        .count(&mut records, 14, &mut |roots| {
+            hits += 1;
+            assert_eq!(roots, &[synthetic("content")]);
+            Ok(vec![7])
+        })
+        .unwrap();
+    assert_eq!((logical, hits), (7, 1));
+    let mut ordinary = layerfs_content::compare::ChangedDirectories::default();
+    assert_eq!(
+        logical_size_and_directories(
+            &session.store,
+            before,
+            built.root,
+            14,
+            &mut |_| Ok(vec![7]),
+            Some(&mut ordinary),
+        )
+        .unwrap(),
+        logical
+    );
+    assert_eq!(directories, ordinary);
+}
+
+#[test]
+fn certified_bindings_match_canonical_order_inside_a_large_directory() {
+    use layerfs_content::compare::{new_bindings, TreeTable};
+    let mut session = Session::new(1).unwrap();
+    let child = session.allocate();
+    session
+        .apply(
+            &[DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name_of("seed"), Some(child))],
+            }],
+            &[InodeUpdate {
+                serial: child,
+                value: typed(InodeKind::RegularFile),
+            }],
+            &[child],
+        )
+        .unwrap();
+    let before = FilesystemRootId(session.root);
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: (0..4_106)
+            .map(|i| (name_of(&format!("a{i:04}")), Some(child)))
+            .collect(),
+    }];
+    let input = FilesystemInput {
+        base: Some(before),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &[],
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let mut records = Records::default();
+    let mut emitted = TreeStore::new();
+    let (built, mut changes) = update_filesystem_streamed_backed_counted(
+        &mut FilesystemObjects::new(&session.store, &mut emitted),
+        &prepared(&Rows(&input)),
+        &mut records,
+    )
+    .unwrap();
+    assert!(changes.matches(before, built.root));
+    let bindings = changes.take_bindings().unwrap();
+    assert_eq!(bindings.len(), 4_106);
+    let mut certified = Vec::new();
+    bindings
+        .visit(&mut records, &mut |child, parent, name| {
+            certified.push((parent, name.clone(), child));
+            Ok(())
+        })
+        .unwrap();
+    session.store.absorb(&emitted);
+    let base = TreeTable::open(&session.store, before).unwrap();
+    let final_tree = TreeTable::open(&session.store, built.root).unwrap();
+    let mut canonical = Vec::new();
+    new_bindings(
+        &session.store,
+        Some(&base),
+        &final_tree,
+        |child, parent, name| {
+            canonical.push((parent, name.clone(), child));
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(certified, canonical);
+    assert_eq!(certified[4095].0, certified[4096].0);
+    assert_eq!(records.binding_writes, [22, 22]);
+    assert_eq!(records.binding_pages, [2, 2]);
+}
+
+#[test]
+fn supplied_directory_root_without_a_merge_uses_authoritative_bindings() {
+    use layerfs_content::compare::{new_bindings, TreeTable};
+    use layerfs_content::filesystem::directory::update::build_directory;
+    let mut session = Session::new(1).unwrap();
+    let child = session.allocate();
+    session
+        .apply(
+            &[DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name_of("seed"), Some(child))],
+            }],
+            &[InodeUpdate {
+                serial: child,
+                value: typed(InodeKind::RegularFile),
+            }],
+            &[child],
+        )
+        .unwrap();
+    let before = FilesystemRootId(session.root);
+    let mut listing = TreeStore::new();
+    let root = build_directory(
+        &mut FilesystemObjects::new(&session.store, &mut listing),
+        std::iter::once(Ok((name_of("renamed"), child))),
+    )
+    .unwrap()
+    .0;
+    session.store.absorb(&listing);
+    let inodes = [InodeUpdate {
+        serial: 1,
+        value: InodeValue {
+            content_root: root.0,
+            ..typed(InodeKind::Directory)
+        },
+    }];
+    let input = FilesystemInput {
+        base: Some(before),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &[],
+        inodes: &inodes,
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let mut records = Records::default();
+    let mut emitted = TreeStore::new();
+    let (built, mut changes) = update_filesystem_streamed_backed_counted(
+        &mut FilesystemObjects::new(&session.store, &mut emitted),
+        &prepared(&Rows(&input)),
+        &mut records,
+    )
+    .unwrap();
+    assert!(changes.matches(before, built.root));
+    assert!(changes.take_bindings().is_none());
+    session.store.absorb(&emitted);
+    let base = TreeTable::open(&session.store, before).unwrap();
+    let final_tree = TreeTable::open(&session.store, built.root).unwrap();
+    let mut canonical = Vec::new();
+    new_bindings(
+        &session.store,
+        Some(&base),
+        &final_tree,
+        |child, parent, name| {
+            canonical.push((parent, name.clone(), child));
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(canonical, [(1, name_of("renamed"), child)]);
 }
