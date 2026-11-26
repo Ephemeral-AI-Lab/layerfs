@@ -133,10 +133,16 @@ fn sample(
             if fault == Fault::HoldKill {
                 assert_eq!(fired.killed, Some(true), "the target backend died");
             }
-            assert!(
-                matches!(result, Ok(_) | Err(PersistenceError::Uncertain)),
-                "message {at} {fired:?}: {result:?}"
-            );
+            if fault == Fault::Drop {
+                // Dropping any reply prevents a complete acknowledgement,
+                // even if the server committed before the connection closed.
+                assert_eq!(result, Err(PersistenceError::Uncertain), "message {at}");
+            } else {
+                assert!(
+                    matches!(result, Ok(_) | Err(PersistenceError::Uncertain)),
+                    "message {at} {fired:?}: {result:?}"
+                );
+            }
             let pid = proxy.pids()[fired.connection].expect("the writer's backend pid");
             wait_backend_gone(&mut admin, pid);
             eprintln!(
