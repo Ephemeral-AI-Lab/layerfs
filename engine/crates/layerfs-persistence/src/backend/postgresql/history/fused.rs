@@ -71,9 +71,9 @@ use postgres::error::SqlState;
 use postgres::types::ToSql;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const PACK: &str = include_str!("../../../../sql/postgresql/fused/pack.sql");
+pub(crate) const PACK: &str = include_str!("../../../../sql/postgresql/fused/pack.sql");
 const HEAD: &str = include_str!("../../../../sql/postgresql/fused/head.sql");
-const ROWS: &str = include_str!("../../../../sql/postgresql/fused/rows.sql");
+pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/fused/rows.sql");
 const HINTS: &str = include_str!("../../../../sql/postgresql/fused/hints.sql");
 const COMMIT: &str = include_str!("../../../../sql/postgresql/fused/commit.sql");
 const LINEAGE_PARENT: &str = include_str!("../../../../sql/postgresql/fused/lineage_parent.sql");
@@ -124,7 +124,7 @@ impl Message {
 /// A token no other transaction of this process holds: the process, a
 /// counter and the clock, hashed. It only tells this transaction from an
 /// implicit one; it is not a secret.
-pub(super) fn nonce() -> String {
+pub(crate) fn nonce() -> String {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/fused-commit/v1\0");
@@ -206,7 +206,9 @@ pub(crate) fn commit(
     );
     if let Some(batch) = tail {
         let (values, bound) = row_values(batch)?;
-        message.statement(Step::Rows, qualified(ROWS), with(values, &nonce), bound);
+        let mut values = with(values, &nonce);
+        values.push(Box::new(false));
+        message.statement(Step::Rows, qualified(ROWS), values, bound);
     }
     if !blocks.is_empty() {
         let groups: Vec<i64> = blocks.iter().map(|block| block.group).collect();
@@ -337,7 +339,7 @@ fn boxed(param: crate::backend::records::Param) -> Value {
 }
 
 /// The pack rows of `batch`, as `objects::publish::packs` writes them.
-fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
+pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
     let mut columns = (
         Vec::new(),
         Vec::new(),
@@ -379,7 +381,7 @@ fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
 }
 
 /// The 22 columns of `publish_rows`, as `objects::publish::rows` binds them.
-fn row_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
+pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
     use crate::backend::postgresql::objects::publish::prefix;
     let objects = &batch.objects;
     let column = |f: fn(&layerfs_storage::location::ObjectLocation) -> i64| -> Vec<i64> {

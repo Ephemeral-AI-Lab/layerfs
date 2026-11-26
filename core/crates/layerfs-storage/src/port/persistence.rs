@@ -274,4 +274,9 @@ pub trait PackPersistence: Send + Sync {
     /// byte budget, with first-wins object insertion. All sealed bodies, inode
     /// value rows, signature changes and ordinal changes belong to this unit.
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError>;
+    /// Publishes a wave while accepting captured Commit output, before the
+    /// history lane and before finish. Providers may select a bounded flight.
+    fn publish_captured(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        self.publish(batch)
+    }
 }

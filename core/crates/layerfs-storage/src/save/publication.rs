@@ -276,7 +276,12 @@ impl State<'_> {
         self.storage.source.note(|c| c.publish += 1);
         let result = {
             let _work = self.storage.work.span(super::Stage::Metadata);
-            self.storage.source.metadata.publish(batch)
+            let provider = &self.storage.source.metadata;
+            if self.captured_output {
+                provider.publish_captured(batch)
+            } else {
+                provider.publish(batch)
+            }
         };
         let result = self.written(result)?;
         if batch.release_ordinals.is_some() {

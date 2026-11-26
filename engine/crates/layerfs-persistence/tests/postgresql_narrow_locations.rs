@@ -7,16 +7,23 @@
 //! TOAST relation.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-use layerfs_content::{ObjectId, ObjectRole};
+use layerfs_content::filesystem::attributes::portable::PortableMetadata;
+use layerfs_content::{
+    inode_leaf::{encode_inode_value, InodeKind, InodeMetadata, InodeValue},
+    ObjectId, ObjectRole,
+};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, SignatureRow},
+    location::{InodeValueRow, ObjectLocation, PackDomain, SignatureRow},
     pack::{assemble, build_group, PackLane},
     port::*,
     StoragePolicy,
 };
 use std::sync::Arc;
+
+const BINDING: &[u8] = b"postgresql-narrow-locations";
+const CURSOR: [u8; 32] = [90; 32];
 
 struct Schema {
     url: String,
@@ -34,8 +41,8 @@ impl Schema {
             &schema.selection,
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {
-                binding_key: b"postgresql-narrow-locations".to_vec(),
-                cursor_key: [90; 32],
+                binding_key: BINDING.to_vec(),
+                cursor_key: CURSOR,
                 incarnation: 5,
             },
         )
@@ -219,6 +226,127 @@ fn a_signature_that_names_no_location_refuses_its_publication() {
         schema.count(&format!("SELECT count(*) FROM {s}.object_location")),
         2
     );
+}
+
+fn captured_batch(
+    handles: &PostgresHandles,
+    objects: Vec<(ObjectId, usize)>,
+    slot: usize,
+    signed: ObjectId,
+) -> Publication {
+    let mut batch = unit(handles, objects);
+    let ordinal = handles
+        .storage
+        .reserve(Reserve {
+            packs: 0,
+            ordinals: 1,
+        })
+        .unwrap()
+        .first_ordinal;
+    batch.inode_values.push(InodeValueRow {
+        ordinal,
+        value: encode_inode_value(InodeValue {
+            kind: InodeKind::RegularFile,
+            namespace_ref_count: 1,
+            content_root: signed,
+            metadata_root: InodeMetadata::Inline(PortableMetadata {
+                mode: 0o644,
+                mtime_seconds: 1,
+                mtime_nanoseconds: 0,
+            }),
+        }),
+    });
+    batch.signatures.push(SignatureRow {
+        slot,
+        stamp: slot as u64 + 1,
+        object_id: signed,
+        signature: [slot as u8; 32],
+    });
+    batch
+}
+
+fn publication_state(schema: &Schema) -> Vec<String> {
+    let mut admin = postgres::Client::connect(&schema.url, postgres::NoTls).unwrap();
+    admin
+        .batch_execute(&format!("SET search_path TO {}", schema.selection.schema))
+        .unwrap();
+    [
+        ("pack", "pack_id"),
+        ("object_location", "object_id"),
+        ("inode_value_block", "first_ordinal"),
+        ("content_signature", "slot"),
+        ("store_totals", "id"),
+    ]
+    .into_iter()
+    .map(|(table, key)| {
+        admin
+            .query_one(
+                &format!("SELECT coalesce(json_agg(t ORDER BY {key})::text,'[]') FROM {table} t"),
+                &[],
+            )
+            .unwrap()
+            .get(0)
+    })
+    .collect()
+}
+
+#[test]
+fn captured_publication_keeps_the_winner_and_rolls_back_invalid_rows() {
+    let Some(url) = url() else { return };
+    let exercise = |tag, captured| {
+        let (schema, first_writer) = Schema::new(url.clone(), tag);
+        let writer = PostgresHandles::open_writable(&schema.selection, BINDING, CURSOR).unwrap();
+        let publish = |batch: &Publication| {
+            if captured {
+                writer.storage.publish_captured(batch)
+            } else {
+                writer.storage.publish(batch)
+            }
+        };
+        let (winner, warm, fresh, refused, absent, next) =
+            (id(4, 1), id(4, 2), id(4, 3), id(4, 4), id(4, 5), id(4, 6));
+        let seed = unit(&first_writer, vec![(winner, 0)]);
+        let winner_pack = seed.packs[0].info().pack_id;
+        assert!(first_writer.storage.publish(&seed).unwrap().lost.is_empty());
+        let initial = captured_batch(&writer, vec![(warm, 0)], 1, warm);
+        assert!(publish(&initial).unwrap().lost.is_empty());
+
+        let mixed = captured_batch(&writer, vec![(winner, 0), (fresh, 1)], 2, fresh);
+        let start = writer.diagnostics().unwrap();
+        assert_eq!(publish(&mixed).unwrap().lost, vec![winner]);
+        let work = writer.diagnostics().unwrap().since(&start);
+        if captured {
+            assert_eq!(work.round_trips, 1, "{work:?}");
+            assert_eq!(work.write_commits, 1, "{work:?}");
+        }
+        assert_eq!(
+            located(&first_writer, &[winner, fresh]),
+            vec![
+                (winner, winner_pack, 0),
+                (fresh, mixed.packs[0].info().pack_id, 1)
+            ]
+        );
+
+        // This new pack, object and inode value would be publishable on
+        // their own. The signature names an absent object, which the row
+        // statement discovers only when the server runs the transaction.
+        let invalid = captured_batch(&writer, vec![(refused, 0)], 3, absent);
+        let before = publication_state(&schema);
+        let failure = publish(&invalid).unwrap_err();
+        assert_eq!(publication_state(&schema), before);
+        assert!(located(&first_writer, &[refused, absent]).is_empty());
+
+        // An independent valid call on that session succeeds after the
+        // refusal. The prior request never publishes its pack or values.
+        let valid = captured_batch(&writer, vec![(next, 0)], 4, next);
+        assert!(publish(&valid).unwrap().lost.is_empty());
+        assert_eq!(
+            located(&first_writer, &[next]),
+            vec![(next, valid.packs[0].info().pack_id, 0)]
+        );
+        (publication_state(&schema), failure)
+    };
+    assert_eq!(exercise("capture", true), exercise("ordinary", false));
 }
 
 #[test]

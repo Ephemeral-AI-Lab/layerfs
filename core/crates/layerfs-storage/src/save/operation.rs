@@ -40,6 +40,9 @@ impl<'a> Save<'a> {
     }
     /// Accepts a finalized object, preparing the preceding bounded wave as needed.
     pub fn accept(&self, object: FinalizedObject) -> StorageResult<()> {
+        self.accept_output(object, false)
+    }
+    fn accept_output(&self, object: FinalizedObject, captured: bool) -> StorageResult<()> {
         if self.terminal.get() {
             return Err(StorageError::Aborted);
         }
@@ -48,7 +51,10 @@ impl<'a> Save<'a> {
             let storage = state.storage;
             let _published = storage.source.serving_published();
             if let Some(objects) = state.pending.push(object)? {
-                state.wave(objects)?;
+                state.captured_output = captured;
+                let written = state.wave(objects);
+                state.captured_output = false;
+                written?;
             }
             Ok(())
         })();
@@ -59,7 +65,17 @@ impl<'a> Save<'a> {
     }
     /// C1 handoff consumer sharing this save's same-operation provider.
     pub fn sink(&self) -> SaveSink<'_, 'a> {
-        SaveSink { save: self }
+        SaveSink {
+            save: self,
+            captured: false,
+        }
+    }
+    /// Accepts output from the captured Commit producer before history work.
+    pub fn captured_sink(&self) -> SaveSink<'_, 'a> {
+        SaveSink {
+            save: self,
+            captured: true,
+        }
     }
     /// Seals and registers the remaining reference-closed output once.
     pub fn finish(self) -> StorageResult<WriteOutcome> {
@@ -308,12 +324,15 @@ impl Drop for PreparedTail<'_> {
 /// C1's consumer adapter; the original typed storage error is retained for finish.
 pub struct SaveSink<'s, 'a> {
     save: &'s Save<'a>,
+    captured: bool,
 }
 impl FinalizedConsumer for SaveSink<'_, '_> {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        self.save.accept(object).map_err(|error| {
-            self.save.remember_failure(error);
-            ContentError::OutputRejected
-        })
+        self.save
+            .accept_output(object, self.captured)
+            .map_err(|error| {
+                self.save.remember_failure(error);
+                ContentError::OutputRejected
+            })
     }
 }

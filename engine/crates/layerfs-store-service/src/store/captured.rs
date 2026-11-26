@@ -155,7 +155,7 @@ impl BoundWorkspace {
         let policy = self.store.policy().construction();
         let capacities = policy.capacities();
         let mut sink = Staging {
-            sink: save.sink(),
+            sink: save.captured_sink(),
             constructed,
         };
         let digests = super::digests::StoreDigests(&*self.store.history);
