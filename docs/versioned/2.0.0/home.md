@@ -33,8 +33,9 @@ accept the UID that owns the home. The worker keeps `worker.lock` through
 shutdown, releases both sockets after draining its connections, and becomes
 eligible to exit after one minute with no calls and no waiting connections.
 Status checks (`machine doctor`, `machine get --with live`) do not keep it
-running. A call made while the worker is busy waits for it, however long the
-calls ahead of it take. The worker starts with only `LAYERFS_HOME`, `PATH`,
+running. A call made while the worker is busy waits up to 30 seconds for a
+free call thread; past that it is refused `Unavailable` before anything is
+sent, naming the load, and can be made again. The worker starts with only `LAYERFS_HOME`, `PATH`,
 `HOME`, `TMPDIR`, the locale and the OpenSSL certificate settings from the
 command that started it, in `/`. The home itself keeps its permissions.
 The CLI checks the worker's build before it sends a request. If they differ,

@@ -22,6 +22,11 @@ use std::time::{Duration, Instant};
 const READY_WAIT: Duration = Duration::from_secs(10);
 const TRANSFER_WAIT: Duration = Duration::from_secs(10);
 const READY_POLL: Duration = Duration::from_millis(15);
+/// How long an ordinary call waits for its hello once connected to a
+/// running worker: three times the start and management deadline, so a call
+/// queued behind 8 calls of ordinary length still gets a pool thread (§16.1
+/// C7), while a stopped or wedged worker gives a pre-send `Unavailable` (§11).
+const CALL_HELLO_WAIT: Duration = Duration::from_secs(30);
 /// The caller's environment a spawned host worker keeps: `PATH` and `HOME`
 /// for the platform's ordinary process lookups, `TMPDIR` for SQLite's
 /// temporary files, the locale, and OpenSSL's trust-store overrides for a
@@ -351,13 +356,29 @@ impl HostPaths {
             return Ok(None);
         };
         trace::step("connect");
+        // Starting a worker and management keep the 10 s deadline; an
+        // ordinary call to a running worker may wait in its queue longer.
+        let queued = !control && startup.is_none();
+        let hello_by = if queued {
+            Instant::now() + CALL_HELLO_WAIT
+        } else {
+            end
+        };
         let generation = (|| {
             host_check_peer(&stream)?;
-            // An ordinary caller connected to a live worker waits for a pool
-            // thread however long earlier calls take (§16.1 C7): the kernel
-            // queue and the worker's slots bound what waits, and a worker
-            // that exits closes the stream before anything was sent.
-            let hello = Self::read_hello(&stream, control.then_some(end))?;
+            let hello = Self::read_hello(&stream, Some(hello_by)).map_err(|error| {
+                if queued && Instant::now() >= hello_by {
+                    unavailable(
+                        "admission",
+                        format!(
+                            "no call thread was free within {} s: earlier calls are busy or the worker is not responding",
+                            CALL_HELLO_WAIT.as_secs()
+                        ),
+                    )
+                } else {
+                    error
+                }
+            })?;
             let generation = HostHello::generation_of(&hello, self, &build)?;
             if expected_generation.is_some_and(|expected| expected != generation) {
                 return Err(unavailable("hello", "worker generation changed"));

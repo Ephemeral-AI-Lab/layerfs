@@ -421,20 +421,31 @@ only a live worker keeps it waiting, as an in-process SDK call would. The
 caller can still be interrupted by its own caller. The guest exchange keeps
 its existing framing and hello.
 
-Admission is bounded by slots, not by time. An ordinary caller that has
-connected waits for its hello as long as the worker keeps the connection:
-behind 8 busy pool threads, in the 16-slot queue or in the kernel's listen
-queue (§16.1 C7). The worker writes the hello within 10 s of a pool thread
-taking the connection, not of its accept. A worker that exits closes every
-waiting connection before anything was sent, which is a definite
-`Unavailable`. Connecting, starting a worker, and management hellos keep
-their 10 s deadline.
+Each side has its own hello deadline (§11). The worker writes the hello
+within 10 s of a pool thread taking the connection, not of its accept, so a
+connection that waited in the queue is still greeted. An ordinary caller
+connected to a running worker waits up to 30 s (`CALL_HELLO_WAIT`) for its
+hello: behind 8 busy pool threads, in the 16-slot queue or in the kernel's
+listen queue. 30 s is three times the start deadline; it lets the §16.1 C7
+load (20 callers, small calls) and a queue behind calls of ordinary length
+complete. A caller still waiting at 30 s (all 8 threads held by long calls,
+or a stopped or wedged worker) gets a pre-send `Unavailable` naming the load
+("no call thread was free within 30 s"), so nothing is half sent. A caller
+that holds the startup lock (it started, or is starting, the worker),
+management calls and connecting keep the 10 s deadline. A worker that exits
+closes every waiting connection, also before anything was sent.
 
 The worker counts only ordinary calls toward its idle clock: a `ping` from
 doctor or `machine get --with live` observes it without keeping it alive
-(§8.3, §12). It becomes idle only when no connection is outstanding in
-either lane and none waits in a listen queue, so a caller accepted at the
-60 s mark is served instead of refused `draining`.
+(§8.3, §12). It is idle after 60 s without a call and with nothing in flight,
+including connections accepted but not yet admitted. It then first removes
+both socket names under its lifetime lock, so no new caller can join a listen
+queue, keeps serving anything already queued (a `connect` that resolved the
+name just before is in the queue within microseconds; the worker keeps reading
+for 1 s, `UNPUBLISHED`), and drains only when it is quiet with both queues
+empty. A caller after the removal finds no endpoint and, once this worker
+releases `worker.lock`, starts the next one within its 10 s start deadline;
+no caller is reset mid-queue by an idle exit.
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale

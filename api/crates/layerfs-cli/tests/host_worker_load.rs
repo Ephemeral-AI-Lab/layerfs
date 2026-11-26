@@ -5,7 +5,8 @@ mod fixture;
 #[path = "common/host_worker_proof.rs"]
 mod proof;
 
-use std::time::Duration;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
 
 fn check_readers(callers: usize, accepted: i64) {
     let home = proof::create();
@@ -81,6 +82,62 @@ fn callers_queued_behind_slow_calls_wait_past_the_hello_deadline() {
         Some(worker.pid())
     );
     assert_eq!(proof::commits(&home), before);
+    home.drain();
+    assert!(worker.wait(Duration::from_secs(5)).success());
+}
+
+#[test]
+fn a_caller_behind_a_wedged_worker_is_refused_before_sending() {
+    // §11: a caller that gets no hello within its 30 s bound is refused
+    // `Unavailable` naming the load, and nothing was sent. Runs about 31 s.
+    let home = proof::create();
+    let mut worker = home.start();
+    proof::assert_reads(proof::spawn_reads(&home, 1, false));
+    let signal = |name: &str| {
+        let status = std::process::Command::new("kill")
+            .args([name, &worker.pid().to_string()])
+            .status()
+            .unwrap();
+        assert!(status.success());
+    };
+    signal("-STOP");
+    let began = Instant::now();
+    let mut read = std::process::Command::new(env!("CARGO_BIN_EXE_layerfs"))
+        .args(["file", "read", "shop/api", "main", "/hello"])
+        .env("LAYERFS_HOME", &home.paths.home)
+        .env_remove("LAYERFS_TRACE")
+        .env_remove("LAYERFS_TRACE_STEP")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    while read.try_wait().unwrap().is_none() {
+        if began.elapsed() > Duration::from_secs(45) {
+            let _ = read.kill();
+            signal("-CONT");
+            panic!("the queued read was not bounded");
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let waited = began.elapsed();
+    signal("-CONT");
+    let output = read.wait_with_output().unwrap();
+    assert!(!output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(if output.stdout.is_empty() {
+        &output.stderr
+    } else {
+        &output.stdout
+    })
+    .into_owned();
+    let refusal = layerfs_api::json::parse(text.trim()).unwrap();
+    assert_eq!(refusal.get_text("error"), Some("Unavailable"), "{text}");
+    let message = refusal.get_text("message").unwrap_or_default();
+    assert!(message.contains("no call thread was free"), "{text}");
+    assert!(message.contains("no operation was sent"), "{text}");
+    assert!(waited >= Duration::from_secs(29), "{waited:?}");
+    // The resumed worker serves the next call.
+    proof::assert_reads(proof::spawn_reads(&home, 1, false));
     home.drain();
     assert!(worker.wait(Duration::from_secs(5)).success());
 }

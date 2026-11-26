@@ -13,6 +13,10 @@ use std::time::{Duration, Instant};
 
 const IDLE: Duration = Duration::from_secs(60);
 const IDLE_CHECK: Duration = Duration::from_secs(5);
+/// How long an idle worker keeps listening after it removed its socket
+/// names, so a `connect` that already resolved a name lands in a listen
+/// queue that is still read.
+const UNPUBLISHED: Duration = Duration::from_secs(1);
 const ORDINARY: Lane = Lane {
     index: 0,
     slots: 16,
@@ -66,12 +70,9 @@ impl Activity {
         }
     }
 
-    /// §8.3: no ordinary call for 60 s and nothing in flight, counting
-    /// connections accepted but not yet admitted.
-    fn idle(&self) -> bool {
-        self.admitted == 0
-            && self.lanes.iter().all(|lane| lane.outstanding == 0)
-            && self.last_call.elapsed() >= IDLE
+    /// Nothing in flight, counting connections accepted but not admitted.
+    fn quiet(&self) -> bool {
+        self.admitted == 0 && self.lanes.iter().all(|lane| lane.outstanding == 0)
     }
 }
 
@@ -183,20 +184,40 @@ impl HostServer {
         ordinary: &UnixListener,
         control: &UnixListener,
         mut wake_read: UnixStream,
+        unpublish: &dyn Fn(),
     ) -> io::Result<()> {
         let mut limited = super::Limited {
             every: Duration::from_secs(10),
             kinds: Vec::new(),
         };
+        // §8.3 idle exit: first remove the socket names, so no new caller can
+        // join a listen queue; keep serving whatever is already queued; drain
+        // only once quiet with both queues empty. A caller after the removal
+        // finds no endpoint and starts the next worker once this one exits.
+        let mut unpublished: Option<Instant> = None;
         loop {
             let mut activity = self.lock();
             if activity.draining {
                 return Ok(());
             }
-            // A caller still in the listen queue is accepted, not drained.
-            if activity.idle() && !queued(ordinary)? && !queued(control)? {
-                self.drain(&mut activity);
-                return Ok(());
+            if activity.quiet() {
+                match unpublished {
+                    None if activity.last_call.elapsed() >= IDLE => {
+                        drop(activity);
+                        unpublish();
+                        unpublished = Some(Instant::now());
+                        continue;
+                    }
+                    Some(at)
+                        if at.elapsed() >= UNPUBLISHED
+                            && !queued(ordinary)?
+                            && !queued(control)? =>
+                    {
+                        self.drain(&mut activity);
+                        return Ok(());
+                    }
+                    _ => {}
+                }
             }
             let interests = |lane: Lane| {
                 if activity.lanes[lane.index].outstanding < lane.slots {
@@ -211,7 +232,12 @@ impl HostServer {
                 PollFd::new(ordinary.as_fd(), interests(ORDINARY)),
             ];
             drop(activity);
-            match poll(&mut ready, IDLE_CHECK.as_millis() as u16) {
+            let check = if unpublished.is_some() {
+                UNPUBLISHED
+            } else {
+                IDLE_CHECK
+            };
+            match poll(&mut ready, check.as_millis() as u16) {
                 Ok(_) => {}
                 Err(nix::errno::Errno::EINTR) => continue,
                 Err(error) => return Err(error.into()),
@@ -438,6 +464,7 @@ fn run(
     hello: HostHello,
     home: PathBuf,
     home_id: String,
+    unpublish: &dyn Fn(),
 ) -> io::Result<super::Served> {
     ordinary.set_nonblocking(true)?;
     control.set_nonblocking(true)?;
@@ -463,7 +490,7 @@ fn run(
                         .spawn_scoped(scope, move || server.work(lane))?;
                 }
             }
-            server.listen(&ordinary, &control, wake_read)
+            server.listen(&ordinary, &control, wake_read, unpublish)
         })();
         server.drain(&mut server.lock());
         drop(ordinary);
@@ -477,7 +504,7 @@ fn run(
     Ok(super::Served { requests })
 }
 
-/// Runs the native host worker with the real home and its lifetime lock.
+/// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
 pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
     let paths = HostPaths::new(home)?;
@@ -503,6 +530,11 @@ pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
             hello,
             paths.home.clone(),
             paths.home_id.clone(),
+            &|| {
+                if let Err(error) = paths.remove_endpoints(&guard) {
+                    log(&format!("idle socket removal failed: {}", error.message));
+                }
+            },
         )
         .map_err(failed)
     })();
