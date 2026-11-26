@@ -315,6 +315,18 @@ impl DepthCache {
         Ok(Some(result))
     }
 
+    /// Offers the exact cost of a newly acknowledged whole-file FULL
+    /// record. A seed does not displace a cost the reader already learned.
+    pub(crate) fn seed_full(&mut self, id: ObjectId, canonical: u64, encoded: u64) {
+        if self.costs.len() < DEPTH_CACHE_ENTRIES {
+            self.costs.entry(id).or_insert(ChainCost {
+                depth: 0,
+                canonical,
+                encoded,
+            });
+        }
+    }
+
     /// Records the depth and chain cost of one identity.
     pub fn record(&mut self, id: ObjectId, cost: ChainCost) {
         if self.costs.len() >= DEPTH_CACHE_ENTRIES {
