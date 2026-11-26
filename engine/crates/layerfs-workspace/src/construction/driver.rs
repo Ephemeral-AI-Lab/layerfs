@@ -59,6 +59,7 @@ pub struct CapturedNamespace<'a, P: OverlayCapturedNamespace + OverlayOperationR
     reader: CapturedReader,
     operation: OperationOwner,
     digests: Option<&'a dyn FileDigests>,
+    inode_read_ahead: bool,
 }
 /// The borrowed inputs of the single running attempt.
 struct Attempt<'s, 'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> {
@@ -71,6 +72,7 @@ struct Attempt<'s, 'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?
     capacities: &'s ConstructionCapacities,
     objects: &'s dyn AuthenticatedObjects,
     digests: Option<&'a dyn FileDigests>,
+    inode_read_ahead: bool,
 }
 impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> CapturedNamespace<'a, P> {
     /// Binds exact inputs. Performs no I/O: the Workspace's selected binding
@@ -104,6 +106,7 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
             reader,
             operation,
             digests: None,
+            inode_read_ahead: false,
         }
     }
     /// Records each fresh file's whole-content digest, when the overlay
@@ -112,6 +115,12 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
         self.digests = Some(digests);
         self
     }
+    /// Enables bounded inode-leaf demands for a remote Store's Commit.
+    pub fn with_inode_read_ahead(mut self, enabled: bool) -> Self {
+        self.inode_read_ahead = enabled;
+        self
+    }
+
     /// One attempt: normalize, construct changed files and metadata, then the
     /// canonical update, with the caller's actual Store-derived file policy and
     /// consumer. `objects` serves base reads and same-Save reads. It neither
@@ -132,6 +141,7 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
             reader,
             operation,
             digests,
+            inode_read_ahead,
         } = self;
         let attempt = Attempt {
             provider,
@@ -143,6 +153,7 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
             capacities,
             objects,
             digests,
+            inode_read_ahead,
         };
         let result = scope.run(|timing| attempt.run(base, consumer, timing));
         if let Err(original) = &result {
@@ -271,7 +282,8 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
         };
         let mut timed = Timed { consumer, ns: 0 };
         let mut output =
-            FilesystemObjects::new_with_accepted(self.objects, &mut timed, self.objects);
+            FilesystemObjects::new_with_accepted(self.objects, &mut timed, self.objects)
+                .with_inode_read_ahead(self.inode_read_ahead);
         let recorded = shared.borrow().record_ns;
         let started = Instant::now();
         let result = timing.child("update").run(|_| {

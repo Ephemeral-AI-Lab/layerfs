@@ -842,6 +842,46 @@ fn a_three_leaf_change_in_an_eighty_leaf_page_demands_three_leaves() {
 }
 
 #[test]
+fn planned_inode_leaf_reads_preserve_emission_and_batch_only_touched_leaves() {
+    let (tree, children, firsts) = page_of_eighty();
+    let changed: Vec<_> = [10, 40, 70]
+        .into_iter()
+        .map(|child| (firsts[child], Some(7)))
+        .collect();
+    let apply = |planned| {
+        let reader = Counted {
+            store: &tree.store,
+            demands: RefCell::new(Vec::new()),
+        };
+        let mut emitted = TreeStore::new();
+        let (root, work) = Inodes::apply(
+            &mut FilesystemObjects::new(&reader, &mut emitted).with_inode_read_ahead(planned),
+            Some(tree.root),
+            changed.clone(),
+            &mut Vec::new(),
+        )
+        .unwrap();
+        (root, work, reader.demands.into_inner(), emitted)
+    };
+    let (ordinary, ordinary_work, _, ordinary_emitted) = apply(false);
+    let (planned, work, demands, planned_emitted) = apply(true);
+    assert_eq!(ordinary, planned);
+    assert_eq!(ordinary_emitted.order(), planned_emitted.order());
+    assert_eq!(work.pages_read, ordinary_work.pages_read);
+    assert_eq!(work.untouched_subtrees, ordinary_work.untouched_subtrees);
+    assert_eq!(work.read_waves, 2);
+    assert_eq!(work.prefetched_waves, 1);
+    assert_eq!(work.prefetched_bytes, work.prefetched_consumed);
+    assert_eq!(
+        demands,
+        [
+            vec![tree.root],
+            vec![children[10], children[40], children[70]]
+        ]
+    );
+}
+
+#[test]
 fn a_leaf_that_underflows_demands_one_neighbour_and_no_other() {
     // Every leaf of the built page holds the minimum, so one removal underflows.
     let (mut tree, children, firsts) = page_of_eighty();

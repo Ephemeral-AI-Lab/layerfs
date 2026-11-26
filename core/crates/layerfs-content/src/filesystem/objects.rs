@@ -40,6 +40,7 @@ pub struct FilesystemObjects<'a> {
     consumer: &'a mut dyn FinalizedConsumer,
     accepted: Option<&'a dyn AuthenticatedObjects>,
     work: ObjectWork,
+    inode_read_ahead: bool,
 }
 
 impl<'a> FilesystemObjects<'a> {
@@ -53,6 +54,7 @@ impl<'a> FilesystemObjects<'a> {
             consumer,
             accepted: None,
             work: ObjectWork::default(),
+            inode_read_ahead: false,
         }
     }
 
@@ -70,7 +72,18 @@ impl<'a> FilesystemObjects<'a> {
             consumer,
             accepted: Some(accepted),
             work: ObjectWork::default(),
+            inode_read_ahead: false,
         }
+    }
+
+    /// Allows the inode merge to batch reads of touched stored leaf pages.
+    pub fn with_inode_read_ahead(mut self, enabled: bool) -> Self {
+        self.inode_read_ahead = enabled;
+        self
+    }
+
+    pub(crate) const fn inode_read_ahead(&self) -> bool {
+        self.inode_read_ahead
     }
 
     /// The explicitly supplied same-Save accepted-object capability.

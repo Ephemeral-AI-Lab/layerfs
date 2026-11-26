@@ -5,6 +5,7 @@ pub mod finish;
 pub mod format;
 pub mod merge;
 pub mod page;
+mod read_ahead;
 
 pub use finish::{
     apply_directory_changes, apply_inode_changes, emit_empty_directory, DirectoryRoot,

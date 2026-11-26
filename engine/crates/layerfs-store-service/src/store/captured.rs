@@ -166,7 +166,8 @@ impl BoundWorkspace {
             let recording = scope.is_recording();
             let piped = super::pipeline::construct(save, &mut sink, |objects, consumer| {
                 let namespace = CapturedNamespace::new(workspace, overlay, reader, owner)
-                    .with_digests(&digests);
+                    .with_digests(&digests)
+                    .with_inode_read_ahead(self.store.writer.batched_chain_reads());
                 if !recording {
                     let attempt =
                         namespace.construct_untimed(policy, &capacities, objects, consumer);

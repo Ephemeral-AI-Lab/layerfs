@@ -34,8 +34,8 @@ pub const MAXIMUM_SCRATCH_BYTES: usize = crate::filesystem::limits::MAXIMUM_OPER
 /// reserve of 256 x 8,280 B plus one decode slot is about 2.08 MiB against the
 /// 4 MiB operation lease, while 4,096 x 8,280 B would be 33.9 MiB and the
 /// narrowing loop below would clamp it on every call. A batch serves a page
-/// whose every child is needed: one that is joined or split. The merge itself
-/// reads the children its changes reach one at a time, as it reaches them.
+/// whose every child is needed, including grouped touched inode leaves and
+/// pages that are joined or split.
 pub const BATCH_CHILDREN: usize = 256;
 
 /// Page levels a tree may have.
@@ -55,6 +55,12 @@ pub struct SortedWork {
     pub pages_read: u64,
     /// Canonical read waves issued.
     pub read_waves: u64,
+    /// Read-ahead groups of touched inode leaves.
+    pub prefetched_waves: u64,
+    /// Canonical bytes fetched for the merge's read-ahead.
+    pub prefetched_bytes: u64,
+    /// Prefetched canonical bytes the merge consumed.
+    pub prefetched_consumed: u64,
     /// Pages this operation created and emitted.
     pub pages_created: u64,
     /// Stored pages whose canonical bytes were reproduced exactly.

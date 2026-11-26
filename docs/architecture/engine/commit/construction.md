@@ -90,6 +90,19 @@ Before its rows are built, each captured inode page (at most `PAGE_ROWS` =
 | Failures | One attempt. A failed overlay question is that file's custody (as a failed preparation keeps it); a failed length demand or batch is the namespace's original failure | [`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs) |
 | Memory | One page's lengths and at most one batch in flight; fetched roots live in the existing bounded cache allowance | [`base/batch.rs`](../../../../engine/crates/layerfs-workspace/src/base/batch.rs) |
 
+### Batched inode leaf reads
+
+On captured Commits whose provider supports batched chain reads, the sorted
+inode merge uses the next 1,024 checked final serials to identify stored
+leaf siblings that the edit reaches. It requests up to 64 leaves through
+the existing authenticated read port. Canonical pages, IDs, inline
+change records and one decode slot fit within 1 MiB. The pages also
+charge the existing sorted scratch budget. The merge consumes the
+pages in serial order and fetches newly required neighbours on demand.
+A failed group returns its original provider error.
+
+[Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
+
 ### Base directory reads (#810 F3)
 
 Step 6 rewrites every changed base directory from its stored root page, and
