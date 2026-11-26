@@ -20,7 +20,9 @@ layerfs-machine = { path = "../layerfs-machine" }
 # Store backup to a bucket (#535).
 layerfs-bucket = { path = "../layerfs-bucket" }
 libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }
+# `resource` and `process`: the host worker keeps a held PostgreSQL
+# password out of core dumps (#819 P-B).
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "resource", "process"] }
 
 [features]
 # https:// remotes: Cloudflare R2, MinIO behind TLS.

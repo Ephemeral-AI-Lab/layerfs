@@ -77,6 +77,18 @@ Each direct CLI `file read`, `file stat` and `file list` holds the Store's lease
 while one read-only PostgreSQL session checks the live schema and binding and
 serves the entire query. Each invocation performs the Full check with the
 configured TLS mode. It closes the session before releasing the lease.
+
+The host worker's route for the same reads (#819 P-B) keeps such sessions
+open between calls: each is opened once with the Full check, then lent to
+one call at a time. Before a held session serves another call,
+`PostgresStorage::current` reads the Store's `catalog_incarnation` in one
+round trip answered within `READER_CHECK_TIMEOUT` (5 s, counted in
+`SqlWork::round_trips`). A quarantined session, a closed or silent
+connection, a late answer or a generation other than the one the open
+checked (a compaction swap, an upgrade) quarantines it and the caller opens
+another; nothing of the call has been sent, so nothing is retried. The
+control layer's pool owns the sessions
+([PostgreSQL credentials](../../control/stores-and-projects/sqlite-and-postgresql.md#credentials)).
 The in-process Store service still owns writable sessions and the Light
 checks for its control and pooled readers. The Sandbox reach and held-head
 paths keep their existing Light sessions.

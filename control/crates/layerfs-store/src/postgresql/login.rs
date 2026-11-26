@@ -75,8 +75,14 @@ pub fn password_fix(record: &StoreRecord) -> String {
 /// saved ([`password_fix`]), or when `url` is not an address alone
 /// (`with_login`).
 pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
-    let name = record.name();
     let user = crate::record::required(record.text("user").map(str::to_owned), "user")?;
+    with_login(url, &user, saved(record)?.password())
+}
+
+/// Store `record`'s saved password, read from the home the record was read
+/// from; refused as [`dial`] refuses when the home holds none.
+pub(crate) fn saved(record: &StoreRecord) -> Result<Saved> {
+    let name = record.name();
     let home = record.home().ok_or_else(|| {
         refused(
             "Failed",
@@ -90,5 +96,14 @@ pub fn dial(record: &StoreRecord, url: &str) -> Result<String> {
             password_fix(record),
         ));
     };
-    with_login(url, &user, saved.password())
+    Ok(saved)
+}
+
+/// The record's own address with its user and `password`, a login a caller
+/// resolved and sent with one request (#819 P-B): what a host worker dials.
+/// The worker reads no password itself.
+pub(crate) fn dial_sent(record: &StoreRecord, password: &str) -> Result<String> {
+    let url = crate::record::required(record.text("url").map(str::to_owned), "url")?;
+    let user = crate::record::required(record.text("user").map(str::to_owned), "user")?;
+    with_login(&url, &user, password)
 }

@@ -188,8 +188,10 @@ impl StoreService {
         Ok(Self::later(opened, template))
     }
 
-    /// Opens the CLI's one-shot PostgreSQL read path over one Full-checked
-    /// session. There is no writer or private Workspace.
+    /// Opens the CLI's PostgreSQL read path over one Full-checked session:
+    /// one call's (P-A), or a host worker's held read session (P-B), which
+    /// checks `opened.read_session_current()` before each later call. There
+    /// is no writer or private Workspace.
     pub fn open_postgres_read_only(
         selection: &layerfs_persistence::PostgresSelection,
         binding: &[u8],

@@ -471,6 +471,24 @@ impl Driver {
             Self::Closed => false,
         }
     }
+    /// The first column of the first row `sql` answers within `timeout`, as
+    /// an integer (one round trip): a held session's readiness check, never
+    /// a retry. `None` when nothing parsable answered in time.
+    pub(crate) fn first_integer(&mut self, sql: &str, timeout: Duration) -> Option<u64> {
+        let Self::Ordinary(client) = self else {
+            return None;
+        };
+        let query = client.client.simple_query(sql);
+        let answer = client
+            .runtime
+            .block_on(async { tokio::time::timeout(timeout, query).await });
+        let messages = answer.ok()?.ok()?;
+        client.heard.set(Instant::now());
+        messages.iter().find_map(|message| match message {
+            SimpleQueryMessage::Row(row) => row.get(0)?.parse().ok(),
+            _ => None,
+        })
+    }
     /// How long the server has not answered on this connection: zero for
     /// the diagnostic driver and a closed one.
     pub(crate) fn silent(&self) -> Duration {

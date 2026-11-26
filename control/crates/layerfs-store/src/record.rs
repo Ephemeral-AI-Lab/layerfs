@@ -17,6 +17,9 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
+/// The record field of a PostgreSQL Store's [`StoreRecord::login_revision`].
+const LOGIN_REVISION: &str = "login_revision";
+
 /// The kind a Store record names; a record with no `kind`, or any other
 /// text, is refused, never read as sqlite.
 pub fn kind_of(record: &SdkValue) -> Result<StoreKind> {
@@ -289,6 +292,21 @@ impl StoreRecord {
             Some(SdkValue::Bytes(bytes)) => Some(bytes),
             _ => None,
         }
+    }
+
+    /// A PostgreSQL Store's login revision (#819 P-B): a non-secret token
+    /// `store connect` writes with every login it saves and an upgrade
+    /// renews. A host worker serves a call only at the revision the record
+    /// holds now, and never on a session opened at another one.
+    pub fn login_revision(&self) -> Option<&str> {
+        self.text(LOGIN_REVISION)
+            .filter(|revision| !revision.is_empty())
+    }
+
+    /// The record with a new [`Self::login_revision`].
+    pub fn with_new_login_revision(self) -> Result<Self> {
+        let token = layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..16]);
+        Ok(self.with(LOGIN_REVISION, SdkValue::text(token)))
     }
 
     /// The record without field `field`.

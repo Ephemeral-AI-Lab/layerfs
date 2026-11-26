@@ -14,7 +14,8 @@ use std::{
 /// The Store's writer session on its engine (#506).
 #[derive(Clone)]
 enum Writer {
-    ReadOnly,
+    /// A one-shot or held PostgreSQL read service's only session.
+    ReadOnly(Arc<layerfs_persistence::PostgresStorage>),
     Sqlite(Arc<StorageProvider>),
     DeferredSqlite {
         writer: Arc<DeferredSqliteWriter>,
@@ -25,7 +26,7 @@ enum Writer {
 impl Writer {
     fn diagnostics(&self) -> Result<Option<SqlWork>, PersistenceError> {
         match self {
-            Self::ReadOnly => Ok(None),
+            Self::ReadOnly(_) => Ok(None),
             Self::Sqlite(provider) => provider.diagnostics().map(Some),
             Self::DeferredSqlite { writer, .. } => writer
                 .get()
@@ -133,7 +134,7 @@ impl OpenedStore {
     /// SQLite.
     pub fn prepare_mounts(&self) -> StorageResult<()> {
         match &self.writer {
-            Writer::ReadOnly | Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
+            Writer::ReadOnly(_) | Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
             Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
         }
     }
@@ -150,7 +151,7 @@ impl OpenedStore {
                     .map_or(reader, |writer| &writer.storage)
                     .as_ref(),
             ),
-            Writer::ReadOnly | Writer::Postgres(_) => None,
+            Writer::ReadOnly(_) | Writer::Postgres(_) => None,
         }
     }
     /// Checkpoints an owned SQLite writer. Explicit maintenance can start
@@ -161,9 +162,19 @@ impl OpenedStore {
             Writer::Sqlite(provider) => Some(provider),
             Writer::DeferredSqlite { writer, .. } if explicit => Some(&writer.start()?.storage),
             Writer::DeferredSqlite { writer, .. } => writer.get().map(|writer| &writer.storage),
-            Writer::ReadOnly | Writer::Postgres(_) => None,
+            Writer::ReadOnly(_) | Writer::Postgres(_) => None,
         };
         provider.map(|provider| provider.checkpoint()).transpose()
+    }
+    /// Whether a PostgreSQL read service's one session can serve another
+    /// call at the generation it opened at (`PostgresStorage::current`: one
+    /// round trip). `None` for every other service, which holds no such
+    /// session.
+    pub fn read_session_current(&self) -> Option<bool> {
+        match &self.writer {
+            Writer::ReadOnly(session) => Some(session.current()),
+            _ => None,
+        }
     }
     pub fn reader_indices(&self) -> Vec<usize> {
         let readers = self
@@ -353,6 +364,7 @@ pub(crate) fn open_postgres_read_only(
     use layerfs_persistence::{PostgresCheck, PostgresHandles};
     let selection = selection.clone().with_check(PostgresCheck::Full);
     let opened = PostgresHandles::open_read_only(&selection, binding, cursor_key)?;
+    let session = opened.storage.clone();
     let version = format!("postgresql {}", opened.storage.server_version());
     let observations = registry();
     let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
@@ -374,7 +386,7 @@ pub(crate) fn open_postgres_read_only(
     Ok(OpenedStore {
         store: Arc::new(store),
         sqlite_version: version,
-        writer: Writer::ReadOnly,
+        writer: Writer::ReadOnly(session),
         readers: observations,
     })
 }

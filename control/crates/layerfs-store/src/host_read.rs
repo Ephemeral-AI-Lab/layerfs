@@ -14,6 +14,11 @@ thread_local! {
     static CLI: Cell<bool> = const { Cell::new(false) };
 }
 
+/// Whether this thread runs a checked operation of the CLI executable.
+pub(crate) fn cli() -> bool {
+    CLI.get()
+}
+
 /// Enables planning for one checked operation of the CLI executable.
 pub fn with_cli<T>(enabled: bool, call: impl FnOnce() -> T) -> T {
     struct Restore(bool);
@@ -26,15 +31,17 @@ pub fn with_cli<T>(enabled: bool, call: impl FnOnce() -> T) -> T {
     call()
 }
 
+/// One allowlisted read method, shared with the PostgreSQL route
+/// ([`crate::host_postgresql`]).
 #[derive(Clone, Copy)]
-enum Method {
+pub(crate) enum Method {
     Read,
     Stat,
     List,
 }
 
 impl Method {
-    fn of(name: &str) -> Option<Self> {
+    pub(crate) fn of(name: &str) -> Option<Self> {
         match name {
             "fs.read" => Some(Self::Read),
             "fs.stat" => Some(Self::Stat),
@@ -45,7 +52,7 @@ impl Method {
 
     // Check only the bounded transport contract. The engine still validates
     // names, paths, snapshot pins and operands exactly as for direct calls.
-    fn accepts(self, args: &SdkValue) -> bool {
+    pub(crate) fn accepts(self, args: &SdkValue) -> bool {
         let SdkValue::Map(fields) = args else {
             return false;
         };
@@ -84,7 +91,7 @@ impl Method {
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    fn valid_answer(self, value: &SdkValue) -> bool {
+    pub(crate) fn valid_answer(self, value: &SdkValue) -> bool {
         let Some(at) = value.get("at") else {
             return false;
         };
@@ -146,7 +153,7 @@ pub(crate) fn routed(
     use crate::record::StoreRef;
     use layerfs_machine::worker::{HostPaths, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 
-    if !CLI.get() {
+    if !cli() {
         return None;
     }
     let StoreRef::Sqlite { machine, .. } = &target.store_ref else {

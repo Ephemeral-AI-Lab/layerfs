@@ -73,6 +73,12 @@ closing Store answers `InUse` immediately. Close reports record the
 checkpoint outcome and whether WAL content was observed after release,
 since another opener can retain WAL frames.
 
+A PostgreSQL read service (`StoreService::open_postgres_read_only`) holds
+one Full-checked read-only session and no writer. The host worker may keep
+it open between CLI reads (#819 P-B); `OpenedStore::read_session_current`
+answers whether it still serves the generation it opened at, in one round
+trip, before it serves another call.
+
 ```text
 StoreService::open_direct(store, binding, cursor_key, template)
   1 kernel_guard::check(store)              -> Unsupported (nothing opened)

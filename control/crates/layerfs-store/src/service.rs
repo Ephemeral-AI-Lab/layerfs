@@ -178,15 +178,22 @@ pub(crate) fn is_one_shot_read(method: &str) -> bool {
 
 /// Checks the authoritative record's binding on the only session this read uses.
 pub(crate) fn postgres_read(method: &str, args: &OpenArgs, fields: SdkValue) -> Outcome {
-    let identity = crate::identity::identity(args)?;
-    let service = crate::postgresql::open::open_read_only(args.postgresql.as_ref(), &identity)
-        .map_err(|refusal| with_upgrade_fix(args, &identity, refusal))?;
+    let service = open_postgres_read(args)?;
     layerfs_home::trace::step("store_open");
     let outcome = dispatch(&service, method, fields);
     layerfs_home::trace::step("call");
     drop(service);
     layerfs_home::trace::step("store_close");
     outcome
+}
+
+/// A PostgreSQL read service over one new session, Full-checked against
+/// the authoritative record's binding: one call's (P-A), or a host
+/// worker's held session (#819 P-B, [`crate::postgresql::pool`]).
+pub(crate) fn open_postgres_read(args: &OpenArgs) -> Result<StoreService, SdkRefusal> {
+    let identity = crate::identity::identity(args)?;
+    crate::postgresql::open::open_read_only(args.postgresql.as_ref(), &identity)
+        .map_err(|refusal| with_upgrade_fix(args, &identity, refusal))
 }
 
 /// One more client of the Store a call names, opening it first.
@@ -328,7 +335,7 @@ pub(crate) fn call_owned(method: &str, open: &OpenArgs, args: SdkValue, owner: O
     dispatch(&service, method, args)
 }
 
-fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> Outcome {
+pub(crate) fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> Outcome {
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields

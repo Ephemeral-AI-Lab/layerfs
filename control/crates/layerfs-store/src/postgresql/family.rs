@@ -39,8 +39,11 @@ pub fn begin<T>(
     }
     let answer = check(&record)?;
     (related.store_idle)(home_dir, name)?;
+    // the operation renews the login revision: a host worker's held
+    // sessions retire and later calls admitted at the old one are refused
     record
         .with(op::FIELD, op.to_record().clone())
+        .with_new_login_revision()?
         .write(home_dir)?;
     Ok(answer)
 }
@@ -51,6 +54,7 @@ pub fn begin<T>(
 /// lease, taken there.
 pub fn settle(home_dir: &Path, record: &StoreRecord, related: Related) -> Result<lease::Lease> {
     let name = record.name();
+    crate::host_postgresql::retire(home_dir, name);
     crate::open::close(&record.postgresql_key(home_dir, name))?;
     let _lock = home::lock::take(home_dir)?;
     let _store = record::lock(home_dir, name)?;

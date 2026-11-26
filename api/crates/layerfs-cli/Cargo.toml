@@ -28,3 +28,9 @@ layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 # `store upgrade` blocks SIGINT and SIGTERM and waits for them on a thread
 # (#804 §6), in safe code
 nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
+
+[dev-dependencies]
+# The host worker's PostgreSQL proof (#819 P-B) counts a test role's
+# backends and changes its password: the pinned client the persistence
+# crate already locks, no new version.
+postgres = "=0.19.14"

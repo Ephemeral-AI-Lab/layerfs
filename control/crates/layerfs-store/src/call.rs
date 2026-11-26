@@ -31,6 +31,9 @@ pub fn store_call(
     if let Some(outcome) = crate::host_read::routed(&home, target, method, &args) {
         return outcome;
     }
+    if let Some(outcome) = crate::host_postgresql::routed(&home, target, method, &args) {
+        return outcome;
+    }
     // the lease is taken under the Store's lock with the record read there:
     // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;

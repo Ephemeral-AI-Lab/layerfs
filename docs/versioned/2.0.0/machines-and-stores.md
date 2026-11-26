@@ -476,9 +476,19 @@ $ layerfs store doctor shop-pg
 {"ok":true}
 ```
 
-The CLI opens one read-only PostgreSQL connection for each `file read`,
-`file stat`, or `file list`. It checks the schema and the Store binding on
-that connection before reading, using the TLS mode from the Store's URL.
+On macOS and Linux, the CLI sends `file read`, `file stat` and `file list`
+on a PostgreSQL Store to the host worker on this computer, which keeps
+read-only PostgreSQL connections open between calls, so a later read logs
+in nothing. The CLI sends the saved password in its request; the worker
+saves it nowhere and keeps it only in the memory of its open connections.
+Each connection checks the schema and the Store binding when it opens,
+using the TLS mode from the Store's URL, and answers one short query before
+each later call. A Store keeps at most 4 such connections and a worker 8;
+they close after a minute unused, and `store connect` (a new password) or
+`store disconnect` closes them. A Store connected before this release keeps
+the direct route, one read-only connection per call opened and checked the
+same way, until `store connect` is run for it again; so do a stopped host
+machine, other platforms, and SDK calls.
 
 - **`store connect <store> <url> --user U --password-stdin`.** The user and
   password are required on a Store's first connect and are checked from

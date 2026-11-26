@@ -620,7 +620,11 @@ when they do not fit. An error identifying the worker's home refuses the
 call before any send. The CLI reports an uncertain exchange as `Unknown`
 with a request ID, including when the success payload has an invalid
 shape. If writing stdout fails after a valid result, the CLI reports the
-known successful call on stderr and exits 125. SDK local calls, CLI PostgreSQL and writes run in the
+known successful call on stderr and exits 125. The same three reads on a
+PostgreSQL Store go to the same worker, which keeps their connections open
+between calls ([PostgreSQL Stores](machines-and-stores.md#postgresql-stores));
+a Store connected before this release stays direct until `store connect` is
+run again. SDK local calls, other CLI PostgreSQL calls and writes run in the
 caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).
 

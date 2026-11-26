@@ -499,14 +499,16 @@ fn check_identity(args: &OpenArgs, record: &StoreRecord) -> Result<(), SdkRefusa
 }
 
 /// Starts the reaper thread once per process: every 5 s it closes the open
-/// Stores and the PostgreSQL host sessions ([`crate::postgresql::reader`]) unused for
-/// [`IDLE`].
+/// Stores, the PostgreSQL host sessions ([`crate::postgresql::reader`]) and
+/// a host worker's held PostgreSQL read sessions
+/// ([`crate::postgresql::pool`]) unused for [`IDLE`].
 pub fn reaper() {
     REAPER.call_once(|| {
         std::thread::spawn(|| loop {
             std::thread::sleep(Duration::from_secs(5));
             close_idle(IDLE);
             crate::postgresql::reader::close_idle(IDLE);
+            crate::postgresql::pool::close_idle(IDLE);
         });
     });
 }
@@ -637,8 +639,12 @@ pub fn close_idle(idle: Duration) -> usize {
 }
 
 /// As in [`close_idle`], with one outcome per settled Store. A final drain
-/// also awaits entries whose physical close is already underway.
+/// also awaits entries whose physical close is already underway, and
+/// closes every idle held PostgreSQL read session.
 pub fn close_idle_report(idle: Duration) -> Vec<(PathBuf, Result<CloseReport, SdkRefusal>)> {
+    if idle.is_zero() {
+        crate::postgresql::pool::close_idle(Duration::ZERO);
+    }
     let names: Vec<_> = cache()
         .iter()
         .filter_map(|(path, cached)| match &cached.state {

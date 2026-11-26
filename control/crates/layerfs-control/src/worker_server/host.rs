@@ -291,12 +291,16 @@ impl HostServer {
             Drain,
             CloseStore,
             StoreCall,
+            PostgresRead,
+            PostgresRetire,
         }
         let operation = match (control, op) {
             (true, "ping") => Operation::Ping,
             (true, "drain") => Operation::Drain,
             (true, layerfs_store::host_maintenance::CLOSE) => Operation::CloseStore,
             (false, layerfs_store::host_read::OP) => Operation::StoreCall,
+            (false, layerfs_store::host_postgresql::OP) => Operation::PostgresRead,
+            (true, layerfs_store::host_postgresql::RETIRE) => Operation::PostgresRetire,
             _ => {
                 return Err(refused(
                     "Unsupported",
@@ -363,6 +367,14 @@ impl HostServer {
             Operation::StoreCall => {
                 drop(activity);
                 layerfs_store::host_read::serve(&self.home, args)
+            }
+            Operation::PostgresRead => {
+                drop(activity);
+                layerfs_store::host_postgresql::serve(&self.home, args)
+            }
+            Operation::PostgresRetire => {
+                drop(activity);
+                layerfs_store::host_postgresql::retire_request(&self.home, args)
             }
         }
     }

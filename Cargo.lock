@@ -757,6 +757,7 @@ dependencies = [
  "layerfs-api",
  "layerfs-bridge",
  "nix",
+ "postgres",
 ]
 
 [[package]]

@@ -236,6 +236,32 @@ is refused `InvalidInput` with `layerfs store connect <store> <url>
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 
+#### Held sessions in the host worker (#819 P-B)
+
+A Store record written by `store connect` (new or updated) or by an
+upgrade's start carries `login_revision`: 16 random bytes in hex, not a
+secret, changed by every such write. The CLI's `file.read`, `file.stat` and
+`file.list` send the saved password with that revision to the host worker
+(`store.postgresql_read`). Under the Store's lock the worker re-reads the
+record and refuses `Conflict` unless the revision matches, the record is
+unblocked and the host is admitted; it takes the call's lease there and
+drops it when the call ends, so no lease stands between calls. It then runs
+the call once on a held read-only session
+([`postgresql/pool.rs`](../../../../control/crates/layerfs-store/src/postgresql/pool.rs)).
+
+| Rule | Value |
+| --- | --- |
+| Session identity | Store key, login revision and the address dialled with the sent password; a call at another identity retires the old one: idle sessions close, lent ones close when they come back, and a call still naming a retired revision (last 16 kept) is refused `Conflict` with nothing run |
+| Before reuse | one `catalog_incarnation` round trip within 5 s ([engine](../../engine/store/postgresql.md)); a lost or silent connection or another generation drops the session first, nothing sent |
+| After the call | `Unknown` or `StaleStore` drops the session; any other outcome keeps it |
+| Bounds | 4 sessions per Store and 8 per worker process, idle and lent; a call with no free session waits, never `Busy`; an idle session of another Store closes to make room; idle ones close after the open-Store reaper's idle time, and on drain |
+| Rotation | `store connect` (update), `store disconnect` and an upgrade change or remove the revision and send `store.postgresql_retire` to a running worker |
+| Older records | a record without `login_revision` stays on the direct route until `store connect` is run again |
+
+A rotation made by a build without login revisions keeps the record's
+revision; the session key also holds the dialled address, so a call with
+the new password still retires the old sessions.
+
 The URL is never rewritten for a machine; which URLs a machine refuses is
 [Reach](../machines/workers-and-reach.md#reach-reachrs).
 

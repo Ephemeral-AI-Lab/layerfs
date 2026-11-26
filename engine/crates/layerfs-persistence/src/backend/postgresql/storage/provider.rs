@@ -90,6 +90,41 @@ impl PostgresStorage {
         }
         alive
     }
+    /// Whether this idle read session can serve one more call at the
+    /// catalog generation its open checked: not quarantined, its connection
+    /// standing, and the Store's `catalog_incarnation`, read now in one
+    /// round trip answered within [`crate::READER_CHECK_TIMEOUT`] (counted),
+    /// still the session's. A compaction swap or an upgrade since the open,
+    /// a closed or silent connection, or a late answer quarantines it and
+    /// its caller opens a new session. Nothing of the caller's operation has
+    /// been sent, so no operation is retried.
+    pub fn current(&self) -> bool {
+        let Ok(mut state) = self.session.state.lock() else {
+            return false;
+        };
+        if state.quarantined {
+            return false;
+        }
+        let opened = self
+            .session
+            .incarnation
+            .load(std::sync::atomic::Ordering::SeqCst);
+        let sql = format!(
+            "SELECT catalog_incarnation::text FROM {}.history_meta WHERE id=1",
+            self.session.settings.schema
+        );
+        state.work.round_trips += 1;
+        let current = opened != 0
+            && state.client.alive()
+            && state
+                .client
+                .first_integer(&sql, crate::READER_CHECK_TIMEOUT)
+                == Some(opened);
+        if !current {
+            state.quarantine();
+        }
+        current
+    }
     /// Prepares the statements a Workspace mount sends on this reader
     /// session in one flight (#768): one round trip when the reader opens,
     /// so the mount prepares none.

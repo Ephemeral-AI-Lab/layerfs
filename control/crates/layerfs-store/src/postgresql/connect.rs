@@ -281,6 +281,7 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     unclaimed_by_others(home_dir, name, &binding)?;
     let record = record.with("binding", SdkValue::Bytes(binding.clone()));
     let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
+    let record = record.with_new_login_revision()?;
     let directory = paths::store_dir(home_dir, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
@@ -453,11 +454,14 @@ impl Update {
             request,
             self.trial.text("user").unwrap_or_default(),
         );
+        // every saved change is a new login for the host worker (#819 P-B)
+        let current = current.with_new_login_revision()?;
         current.write(home_dir)?;
         if let Some(password) = &self.new_password {
             login::save(home_dir, name, password)?;
         }
         drop((store_lock, home_lock));
+        crate::host_postgresql::retire(home_dir, name);
         crate::observed::record(home_dir, name, None, &reach);
         Ok(answer(&current, "updated", None))
     }
@@ -491,6 +495,7 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
     login::forget(home_dir, name)?;
     layerfs_home::home::generation::moved(home_dir);
+    crate::host_postgresql::retire(home_dir, name);
     Ok(disconnected(name))
 }
 

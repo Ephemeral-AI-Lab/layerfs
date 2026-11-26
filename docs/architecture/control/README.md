@@ -64,7 +64,7 @@ machine's worker, or in a Sandbox's daemon.
 
 | Call | Caller's process | Machine's worker (when the Store's or Sandbox's machine is not local) | Sandbox daemon | Source |
 | --- | --- | --- | --- | --- |
-| `branch.*`, `commit.*`, `file.*` on a PostgreSQL Store | all of it: URL from the record, password resolved now, under the Store's lease | — | — | [`call.rs`](../../../control/crates/layerfs-store/src/call.rs) |
+| `branch.*`, `commit.*`, `file.*` on a PostgreSQL Store | all of it: URL from the record, password resolved now, under the Store's lease; except the CLI's `file.read`, `file.stat` and `file.list` on a Store whose record holds a `login_revision`, which go to the host worker's held sessions (#819 P-B) | — | — | [`call.rs`](../../../control/crates/layerfs-store/src/call.rs), [`host_postgresql.rs`](../../../control/crates/layerfs-store/src/host_postgresql.rs) |
 | the same on a sqlite Store, machine local | all of it, on `store/<s>/store.sqlite` | — | — | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs) |
 | the same on a sqlite Store, other machine | holds the lease, sends the record | `store.call`: opens `<root>/store/<s>/store.sqlite`, holds the lease there | — | `place.rs`, [`worker_server.rs`](../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `project.init` | checks; walks and copies the folder | `project.stage` (parts), then `project.init` | — | [`project/family.rs`](../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs) |
@@ -135,9 +135,9 @@ kind or kernel route is an engine change.
 
 | Rule | Enforced by |
 | --- | --- |
-| sqlite Store calls run in a process on the Store's kernel (the caller on the local host machine, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process; a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
+| sqlite Store calls run in a process on the Store's kernel (the caller on the local host machine, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process (the CLI's PostgreSQL file reads in the host worker on this computer); a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
 | Workers listen on loopback behind a secret; one attempt per call, no retry, no replay; an uncertain outcome is reported, never resent | [`worker/client.rs`](../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
+| A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output; the host worker keeps one only in the memory of the sessions it holds, with core dumps off | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
 | Drivers know nothing of the home and write no records | [`layerfs-platform/src/lib.rs`](../../../control/crates/layerfs-platform/src/lib.rs) |
 | Stored and displayed values do not follow internal renames: the `NativeBackend` adapter is stored and shown as `"process"` | [`process/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) |
 | sqlite Stores open with the Normal profile (WAL, synchronous=NORMAL), the only SQLite profile; their records carry the label `normal`; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../control/crates/layerfs-store/src/record.rs) |
@@ -176,5 +176,14 @@ bytes may have been sent and no valid reply arrives, the caller reports
 `Unknown` with a request ID, including when a success payload fails the
 requested method’s schema. The caller owns the single public audit line.
 A stdout failure after a complete result reports the known call outcome.
-SDK calls, PostgreSQL, writes, and guest Stores use their existing routes.
+The CLI's `file.read`, `file.stat` and `file.list` on a PostgreSQL Store
+whose record holds a `login_revision` go to the same worker
+(`store.postgresql_read`, #819 P-B) with the saved password and that
+revision in the authenticated request. The worker re-reads the record under
+the Store's lock, refuses another revision `Conflict`, takes the call's
+lease for the call alone and runs it on a held session
+([credentials](stores-and-projects/sqlite-and-postgresql.md#credentials)).
+A record without a revision, a stopped host machine, or a request that does
+not fit stays direct (P-A), chosen before dialing.
+SDK calls, PostgreSQL writes, other writes, and guest Stores use their existing routes.
 See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).
