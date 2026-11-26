@@ -24,8 +24,30 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 
+/// The entry points allowed to borrow the service. A host call's outer
+/// cache slot accounts for every host borrower until its reply is ready.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum Owner {
+    Direct,
+    Host,
+}
+
+impl Owner {
+    fn check(self, opened: &Opened) -> Result<(), SdkRefusal> {
+        if self == opened.owner {
+            Ok(())
+        } else {
+            Err(refused(
+                "InUse",
+                "the Store service belongs to another route",
+            ))
+        }
+    }
+}
+
 /// One opened Store and the clients that hold it.
 struct Opened {
+    owner: Owner,
     service: Arc<StoreService>,
     clients: usize,
     /// This service's private overlay directory.
@@ -94,7 +116,7 @@ pub(crate) fn transition<T, R>(
 }
 
 /// Opens the Store at `store` for this process, or refuses.
-fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
+fn open(store: &Path, args: &OpenArgs, owner: Owner) -> Result<Opened, SdkRefusal> {
     let identity = crate::identity::identity(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
@@ -122,6 +144,7 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
     let opened = opened.map_err(|refusal| with_upgrade_fix(args, &identity, refusal));
     match opened {
         Ok(service) => Ok(Opened {
+            owner,
             service: Arc::new(service),
             clients: 0,
             directory,
@@ -167,12 +190,13 @@ pub(crate) fn postgres_read(method: &str, args: &OpenArgs, fields: SdkValue) -> 
 }
 
 /// One more client of the Store a call names, opening it first.
-pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
+pub(crate) fn acquire(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let pending = loop {
         let mut stores = lock(&STORES)?;
         match stores.get_mut(&store) {
             Some(Slot::Ready(opened)) => {
+                owner.check(opened)?;
                 opened.clients += 1;
                 return Ok(());
             }
@@ -189,7 +213,7 @@ pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
         }
     };
     transition(
-        || open(&store, args),
+        || open(&store, args, owner),
         |result| {
             let mut stores = lock(&STORES)?;
             pending.finish(match result {
@@ -212,7 +236,7 @@ pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
 /// returns, and the service closes when it is dropped then: its idle
 /// producer handle's kept ordinals are returned here, and only a handle
 /// that running call gives back later is dropped without that release.
-pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
+pub(crate) fn release(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let pending = Arc::new(Completion::new());
     let opened = {
@@ -220,6 +244,7 @@ pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
         let Some(Slot::Ready(opened)) = stores.get_mut(&store) else {
             return Err(refused("InvalidInput", "this process holds no such Store"));
         };
+        owner.check(opened)?;
         opened.clients -= 1;
         if opened.clients > 0 {
             return Ok(());
@@ -246,25 +271,31 @@ fn close_service(opened: Opened) -> Result<(), SdkRefusal> {
         // A call still running holds the service; its idle producer handle
         // returns its kept ordinals now (#768). A handle that call hands
         // back after this is dropped with the service, unreleased.
-        Err(service) => {
+        Err(service) if opened.owner == Owner::Direct => {
             service.store.release_producer();
             Ok(())
         }
+        Err(_) => Err(refused(
+            "InUse",
+            "a host call still holds the Store service",
+        )),
     };
     let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
     closed.and(removed)
 }
 
 /// The open service of the Store a call names.
-fn service(args: &OpenArgs) -> Result<Arc<StoreService>, SdkRefusal> {
+fn service(args: &OpenArgs, owner: Owner) -> Result<Arc<StoreService>, SdkRefusal> {
     let store = args.store_path()?;
-    lock(&STORES)?
-        .get(&store)
-        .and_then(|slot| match slot {
-            Slot::Ready(opened) => Some(opened.service.clone()),
-            _ => None,
-        })
-        .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
+    let stores = lock(&STORES)?;
+    let Some(Slot::Ready(opened)) = stores.get(&store) else {
+        return Err(refused(
+            "InvalidInput",
+            "the client has not opened its Store",
+        ));
+    };
+    owner.check(opened)?;
+    Ok(opened.service.clone())
 }
 
 /// Runs `work` on the Store a call names, opened for it when this process
@@ -274,11 +305,11 @@ pub fn with_service<T>(
     args: &OpenArgs,
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
-    acquire(args)?;
+    acquire(args, Owner::Direct)?;
     transition(
-        || service(args).and_then(|service| work(&service)),
+        || service(args, Owner::Direct).and_then(|service| work(&service)),
         |result| {
-            let released = release(args);
+            let released = release(args, Owner::Direct);
             let value = result?;
             released?;
             Ok(value)
@@ -289,7 +320,11 @@ pub fn with_service<T>(
 /// Runs one Store call in this process on the Store `open` names, with
 /// the call's own arguments `args` (any routing key in them is dropped).
 pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
-    let service = service(open)?;
+    call_owned(method, open, args, Owner::Direct)
+}
+
+pub(crate) fn call_owned(method: &str, open: &OpenArgs, args: SdkValue, owner: Owner) -> Outcome {
+    let service = service(open, owner)?;
     dispatch(&service, method, args)
 }
 
@@ -318,7 +353,7 @@ pub fn head(
     if args.postgresql.is_some() {
         return crate::postgresql::reader::head(args, branch);
     }
-    let service = service(args)?;
+    let service = service(args, Owner::Direct)?;
     let page = service
         .store
         .published(|history| {

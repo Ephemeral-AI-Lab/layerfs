@@ -66,10 +66,12 @@ entries still opening or closing. At capacity it closes the least recently
 used idle Store or waits for a slot. Each admission checks the authoritative
 Store operation and identity under the Store record lock, even when it
 reuses an open entry. The worker holds its own real-home lease until physical
-release. A fenced close can release an idle entry once its checkpoint
-settles. An active call or opening Store answers `InUse`. Close reports
-record the checkpoint outcome and whether WAL content was observed after
-release, since another opener can retain WAL frames.
+release. A read-only host worker schedules no checkpoint for a WAL owned
+by another opener. A fenced close releases an idle Store and acknowledges
+only after its lease is removed. An opening, active, checkpointing or
+closing Store answers `InUse` immediately. Close reports record the
+checkpoint outcome and whether WAL content was observed after release,
+since another opener can retain WAL frames.
 
 ```text
 StoreService::open_direct(store, binding, cursor_key, template)

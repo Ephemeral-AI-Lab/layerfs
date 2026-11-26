@@ -621,8 +621,10 @@ on another machine through that machine's worker (see
 The native host worker's SQLite cache keeps up to 16 Stores open per home.
 It checks the Store's current record before serving a call, including a
 call on a warm Store. A maintenance operation can ask the worker to close
-an idle Store and release its lease. If a call or open is in progress, the
-worker reports `InUse`.
+an idle Store and release its lease. The worker acknowledges the close
+after it removes its lease. A Store that is opening, serving a call,
+checkpointing or closing reports `InUse` without waiting. The read-only
+worker leaves WAL frames from other openers in place.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |

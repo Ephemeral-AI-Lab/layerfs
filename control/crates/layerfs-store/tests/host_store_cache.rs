@@ -4,10 +4,12 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{layout, paths};
 use layerfs_home::names::StoreName;
 use layerfs_home::op::{Op, FIELD};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_store::open;
 use layerfs_store::open_args::{OpenArgs, PgSelection};
 use layerfs_store::record::{self, StoreRecord};
 use layerfs_store::sqlite::create::create;
+use layerfs_store::{identity, service};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -152,6 +154,71 @@ fn the_seventeenth_store_evicts_the_least_recent_idle_owner() {
     assert!(!layerfs_store::lease::held_here(&home.0, "s0"));
     assert!(layerfs_store::lease::held_here(&home.0, "s1"));
     assert!(layerfs_store::lease::held_here(&home.0, "s16"));
+}
+
+#[test]
+fn a_host_read_leaves_an_independent_writers_wal_to_its_owner() {
+    let home = Home::new("foreign-wal");
+    home.create("shop");
+    let record = StoreRecord::of(&home.0, "shop").unwrap();
+    let identity = identity::identity_in(&record).unwrap();
+    // Keep the separate writable connection live across the host close.
+    let writer = SqliteHandles::open_writable(
+        PersistenceConfig::sqlite(&home.entry("shop"))
+            .with_sqlite_profile(SqlitePersistenceProfile::Normal),
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .unwrap();
+    let storage = layerfs_storage::Storage::new(writer.storage.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    let policy = storage.policy();
+    layerfs_telemetry::timer::Timing::disabled("construct", |scope| {
+        layerfs_content::construct_bytes(
+            policy.construction(),
+            &policy.construction().capacities(),
+            b"foreign writer keeps these committed frames",
+            &mut save.sink(),
+            scope.child("content"),
+        )
+    })
+    .0
+    .unwrap();
+    save.finish().unwrap();
+    let wal = home.entry("shop").with_file_name("store.sqlite-wal");
+    let wal_bytes = std::fs::read(&wal).unwrap();
+    assert!(!wal_bytes.is_empty());
+
+    stats(&home.0, "shop").unwrap();
+    let args = OpenArgs::of_record(&home.0, "shop", &record).unwrap();
+    let side_call: Result<(), _> =
+        service::with_service(&args, |_| panic!("direct caller borrowed the host service"));
+    assert_eq!(side_call.unwrap_err().code, "InUse");
+    let report = open::close_host(&home.0, "shop", |_| Ok(()))
+        .unwrap_or_else(|refusal| panic!("host read left close work: {refusal:?}"));
+    assert!(report.closed);
+    assert_eq!(report.checkpoint.unwrap(), None);
+    assert_eq!(report.wal_remaining, Some(true));
+    assert_eq!(std::fs::read(wal).unwrap(), wal_bytes);
+    drop(storage);
+    drop(writer);
+}
+
+#[test]
+fn host_close_reports_lease_unlink_failure_without_a_release_acknowledgment() {
+    let home = Home::new("failed-release");
+    home.create("shop");
+    stats(&home.0, "shop").unwrap();
+    let lease = paths::lease_dir(&home.0, "shop").join(std::process::id().to_string());
+    std::fs::remove_file(&lease).unwrap();
+    std::fs::create_dir(&lease).unwrap();
+
+    match open::close_host(&home.0, "shop", |_| Ok(())) {
+        Ok(_) => panic!("host close acknowledged a failed lease release"),
+        Err(refusal) => assert_eq!(refusal.code, "Failed", "{refusal:?}"),
+    }
+    assert!(lease.is_dir());
+    assert_eq!(open::host_store_count(&home.0), 0);
 }
 
 fn accept(listener: &TcpListener) -> TcpStream {

@@ -16,10 +16,10 @@
 use crate::lease::{self, Lease};
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord, StoreRef};
-use crate::service::{self as direct, Completion, Slot};
+use crate::service::{self as direct, Completion, Owner, Slot};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::outcome::{failed, refused, with_next, Outcome};
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -104,7 +104,10 @@ pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> O
         let _lease = lease;
         return direct::postgres_read(op, open, args);
     }
-    let running = Running(enter(open, lease, 1)?);
+    let running = Running {
+        path: enter(open, lease, 1)?,
+        owner: Owner::Direct,
+    };
     call(op, open, args, running)
 }
 
@@ -138,8 +141,10 @@ fn call(op: &str, open: &OpenArgs, args: SdkValue, running: Running) -> Outcome 
     // never opens a home record; a worker call installs its own view before
     // this, and that view is kept.
     let outcome = match crate::place_view::admits(op) {
-        true => crate::place_view::scoped(open, || direct::call(op, open, args)),
-        false => direct::call(op, open, args),
+        true => {
+            crate::place_view::scoped(open, || direct::call_owned(op, open, args, running.owner))
+        }
+        false => direct::call_owned(op, open, args, running.owner),
     };
     layerfs_home::trace::step("call");
     drop(running);
@@ -147,14 +152,19 @@ fn call(op: &str, open: &OpenArgs, args: SdkValue, running: Running) -> Outcome 
 }
 
 /// One call running on an open Store; its drop ends it.
-struct Running(PathBuf);
+struct Running {
+    path: PathBuf,
+    owner: Owner,
+}
 
 impl Drop for Running {
     fn drop(&mut self) {
-        let logged = has_log(&self.0);
+        // The current host route admits only reads. A foreign writer can
+        // have WAL frames even though this service has no writer to settle.
+        let logged = self.owner == Owner::Direct && has_log(&self.path);
         let args = {
             let mut open = cache();
-            let Some(entry) = open.get_mut(&self.0).and_then(Cached::ready) else {
+            let Some(entry) = open.get_mut(&self.path).and_then(Cached::ready) else {
                 return;
             };
             entry.calls -= 1;
@@ -169,14 +179,14 @@ impl Drop for Running {
             return;
         };
         // the call is answered first: its checkpoint runs on its own thread
-        let path = self.0.clone();
+        let path = self.path.clone();
         let spawned = std::thread::Builder::new()
             .name("layerfs-store-checkpoint".to_owned())
             .spawn(move || {
                 direct::transition(|| checkpoint(&args, false), |result| settled(&path, result));
             });
         if let Err(error) = spawned {
-            settled(&self.0, Err(failed(error)));
+            settled(&self.path, Err(failed(error)));
         }
     }
 }
@@ -242,7 +252,11 @@ pub fn released(path: &Path) -> Option<bool> {
     }
     let args = {
         let mut open = cache();
-        settle(open.get_mut(path)?.ready()?)?
+        let cached = open.get_mut(path)?;
+        if cached.host.is_some() {
+            return None;
+        }
+        settle(cached.ready()?)?
     };
     direct::transition(
         || checkpoint(&args, true),
@@ -266,6 +280,9 @@ fn enter(args: &OpenArgs, lease: Option<Lease>, calls: usize) -> Result<PathBuf,
     let path = args.store_path()?;
     let pending = loop {
         let mut open = cache();
+        if open.get(&path).is_some_and(|cached| cached.host.is_some()) {
+            return Err(in_use(&path, "host"));
+        }
         match open.get_mut(&path).map(|cached| &mut cached.state) {
             Some(Slot::Ready(entry)) => {
                 entry.admit(calls);
@@ -284,7 +301,7 @@ fn enter(args: &OpenArgs, lease: Option<Lease>, calls: usize) -> Result<PathBuf,
             None => break reserve(&mut open, path.clone(), None),
         }
     };
-    opened(&path, args, calls, pending, || Ok(lease))?;
+    opened(&path, args, calls, Owner::Direct, pending, || Ok(lease))?;
     Ok(path)
 }
 
@@ -304,13 +321,21 @@ fn opened(
     path: &Path,
     args: &OpenArgs,
     calls: usize,
+    owner: Owner,
     pending: Arc<Completion<()>>,
     claim: impl FnOnce() -> Result<Option<Lease>, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
     direct::transition(
         || {
             let lease = claim()?;
-            direct::acquire(args)?;
+            if let Err(refusal) = direct::acquire(args, owner) {
+                return Err(match release_lease(lease, owner, args) {
+                    Ok(()) => refusal,
+                    Err(release) => {
+                        with_next(refusal, "lease_release", SdkValue::text(release.message))
+                    }
+                });
+            }
             Ok(Entry {
                 args: args.clone(),
                 last: Instant::now(),
@@ -381,7 +406,13 @@ fn enter_host(home: &Path, store: &str, project: &str) -> Result<(OpenArgs, Runn
                     if cached.host.is_some() {
                         entry.admit(1);
                         let args = OpenArgs::in_root(home, store, None).with_project(project);
-                        return Ok((args, Running(path)));
+                        return Ok((
+                            args,
+                            Running {
+                                path,
+                                owner: Owner::Host,
+                            },
+                        ));
                     }
                     // A direct owner cannot be displaced while it holds this
                     // path. A dedicated host worker acquires its own lease.
@@ -408,13 +439,19 @@ fn enter_host(home: &Path, store: &str, project: &str) -> Result<(OpenArgs, Runn
             drop(open);
             let args = OpenArgs::in_root(home, store, Some(record.to_record().clone()))
                 .with_project(project);
-            opened(&path, &args, 1, pending, || {
+            opened(&path, &args, 1, Owner::Host, pending, || {
                 lease::holders(home, store)?;
                 let lease = lease::hold_locked(home, store)?;
                 drop(record_lock);
                 Ok(Some(lease))
             })?;
-            return Ok((args, Running(path)));
+            return Ok((
+                args,
+                Running {
+                    path,
+                    owner: Owner::Host,
+                },
+            ));
         } else {
             let victim = open
                 .iter()
@@ -494,7 +531,7 @@ impl CloseReport {
 
 struct Closing {
     entry: Entry,
-    host: bool,
+    owner: Owner,
     pending: Arc<Completion<CloseReport>>,
 }
 
@@ -507,20 +544,28 @@ fn start_close(open: &mut Cache, path: &Path) -> Closing {
     };
     Closing {
         entry,
-        host: cached.host.is_some(),
+        owner: if cached.host.is_some() {
+            Owner::Host
+        } else {
+            Owner::Direct
+        },
         pending,
     }
 }
 
 fn finish_close(
     path: &Path,
-    Closing { entry, pending, .. }: Closing,
+    Closing {
+        entry,
+        owner,
+        pending,
+    }: Closing,
 ) -> Result<CloseReport, SdkRefusal> {
     direct::transition(
         || {
-            let closed = direct::release(&entry.args);
-            drop(entry.lease);
-            closed?;
+            let closed = direct::release(&entry.args, owner);
+            let released = release_lease(entry.lease, owner, &entry.args);
+            closed.and(released)?;
             Ok(CloseReport {
                 closed: true,
                 checkpoint: entry.checkpoint,
@@ -539,8 +584,28 @@ fn finish_close(
     )
 }
 
+fn release_lease(lease: Option<Lease>, owner: Owner, args: &OpenArgs) -> Result<(), SdkRefusal> {
+    match owner {
+        Owner::Direct => {
+            drop(lease);
+            Ok(())
+        }
+        Owner::Host => {
+            lease
+                .ok_or_else(|| refused("Failed", "the host Store entry lost its lease"))?
+                .release()?;
+            let home = args.home.as_deref().expect("host lease home");
+            let store = args.store.as_deref().expect("host lease Store");
+            if lease::held_here(home, store) {
+                return Err(in_use(&paths::store_file(home, store), "leased"));
+            }
+            Ok(())
+        }
+    }
+}
+
 fn finish_idle(path: &Path, closing: Closing) -> Result<CloseReport, SdkRefusal> {
-    let host = closing.host;
+    let host = closing.owner == Owner::Host;
     let outcome = finish_close(path, closing);
     if host {
         let mut log = io::stderr().lock();
@@ -633,7 +698,25 @@ pub fn close(path: &Path) -> Result<bool, SdkRefusal> {
 /// Releases the cached Store at `path` and reports its checkpoint and close.
 pub fn close_report(path: &Path) -> Result<CloseReport, SdkRefusal> {
     crate::postgresql::reader::forget(path);
-    close_checked(path, || Ok(()))
+    loop {
+        let mut open = cache();
+        match open.get(path).map(|cached| &cached.state) {
+            None => return Ok(CloseReport::absent()),
+            Some(Slot::Opening(_)) => return Err(in_use(path, "opening")),
+            Some(Slot::Ready(entry)) if entry.calls > 0 => return Err(in_use(path, "active")),
+            Some(Slot::Ready(entry)) if entry.settling > 0 => wait_changed(open),
+            Some(Slot::Closing(pending)) => {
+                let pending = pending.clone();
+                drop(open);
+                return pending.wait();
+            }
+            Some(Slot::Ready(_)) => {
+                let closing = start_close(&mut open, path);
+                drop(open);
+                return finish_close(path, closing);
+            }
+        }
+    }
 }
 
 /// Validates a host close against the authoritative record under the same
@@ -641,50 +724,40 @@ pub fn close_report(path: &Path) -> Result<CloseReport, SdkRefusal> {
 pub fn close_host(
     home: &Path,
     store: &str,
-    check: impl Fn(&StoreRecord) -> Result<(), SdkRefusal>,
+    check: impl FnOnce(&StoreRecord) -> Result<(), SdkRefusal>,
 ) -> Result<CloseReport, SdkRefusal> {
     crate::identity::store_dir(home, store)?;
-    close_checked(&paths::store_file(home, store), || {
-        let guard = record::lock(home, store)?;
-        check(&StoreRecord::of(home, store)?)?;
-        Ok(guard)
-    })
-}
-
-fn close_checked<G>(
-    path: &Path,
-    check: impl Fn() -> Result<G, SdkRefusal>,
-) -> Result<CloseReport, SdkRefusal> {
-    loop {
-        let guard = check()?;
-        let mut open = cache();
-        match open.get(path).map(|cached| &cached.state) {
-            None => return Ok(CloseReport::absent()),
-            Some(Slot::Opening(_)) => return Err(in_use(path)),
-            Some(Slot::Ready(entry)) if entry.calls > 0 => return Err(in_use(path)),
-            Some(Slot::Ready(entry)) if entry.settling > 0 => {
-                drop(guard);
-                wait_changed(open);
-            }
-            Some(Slot::Closing(pending)) => {
-                let pending = pending.clone();
-                drop(open);
-                drop(guard);
-                return pending.wait();
-            }
-            Some(Slot::Ready(_)) => {
-                let closing = start_close(&mut open, path);
-                drop(open);
-                drop(guard);
-                return finish_close(path, closing);
-            }
+    let path = paths::store_file(home, store);
+    let guard = record::lock(home, store)?;
+    check(&StoreRecord::of(home, store)?)?;
+    let mut open = cache();
+    let Some(cached) = open.get(&path) else {
+        return Ok(CloseReport::absent());
+    };
+    let state = match &cached.state {
+        Slot::Opening(_) => "opening",
+        Slot::Closing(_) => "closing",
+        Slot::Ready(entry) if entry.calls > 0 => "active",
+        Slot::Ready(entry) if entry.settling > 0 => "checkpointing",
+        Slot::Ready(_) if cached.host.is_none() => "direct",
+        Slot::Ready(_) => {
+            let closing = start_close(&mut open, &path);
+            drop(open);
+            drop(guard);
+            return finish_close(&path, closing);
         }
-    }
+    };
+    Err(with_next(
+        in_use(&path, state),
+        "store",
+        SdkValue::text(store),
+    ))
 }
 
-fn in_use(path: &Path) -> SdkRefusal {
-    refused(
+fn in_use(path: &Path, state: &str) -> SdkRefusal {
+    let refusal = refused(
         "InUse",
-        format!("a call is running on {} in this process", path.display()),
-    )
+        format!("Store {} is {state} in this process", path.display()),
+    );
+    with_next(refusal, "state", SdkValue::text(state))
 }
