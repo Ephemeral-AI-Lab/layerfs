@@ -57,6 +57,12 @@ pub(crate) struct Turn<'a> {
 }
 
 impl Admission {
+    /// Lane ownership is thread-local; only its holder can end it.
+    pub(crate) fn held_by_caller(&self) -> Result<bool, BackendError> {
+        let queue = self.queue.lock().map_err(|_| BackendError::Unknown)?;
+        Ok(queue.holder == Some(std::thread::current().id()))
+    }
+
     /// Waits, first come first served, for this connection's turn. Time spent
     /// queued is added to the calling thread's wait total for `kind`.
     pub(crate) fn enter(&self, kind: Wait) -> Result<Turn<'_>, BackendError> {

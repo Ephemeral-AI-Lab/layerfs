@@ -350,6 +350,37 @@ fn captured_publication_keeps_the_winner_and_rolls_back_invalid_rows() {
 }
 
 #[test]
+fn captured_publication_preserves_generation_refusals() {
+    let Some(url) = url() else { return };
+    let (schema, writer) = Schema::new(url, "capture_fence");
+    let batch = unit(&writer, vec![(id(9, 1), 0)]);
+    let before = publication_state(&schema);
+
+    schema.sql(&format!(
+        "UPDATE {}.history_meta SET catalog_incarnation=catalog_incarnation + 1 WHERE id=1",
+        schema.selection.schema
+    ));
+    let stale = writer.storage.publish(&batch).unwrap_err();
+    assert_ne!(stale, PersistenceError::Uncertain);
+    assert_eq!(writer.storage.publish_captured(&batch), Err(stale));
+    assert_eq!(publication_state(&schema), before);
+
+    schema.sql(&format!(
+        "DELETE FROM {}.history_meta WHERE id=1",
+        schema.selection.schema
+    ));
+    assert_eq!(
+        writer.storage.publish(&batch),
+        Err(PersistenceError::Malformed)
+    );
+    assert_eq!(
+        writer.storage.publish_captured(&batch),
+        Err(PersistenceError::Malformed)
+    );
+    assert_eq!(publication_state(&schema), before);
+}
+
+#[test]
 fn only_tables_with_unbounded_values_have_a_toast_relation() {
     let Some(url) = url() else { return };
     let (schema, _handles) = Schema::new(url, "toast");

@@ -1338,8 +1338,8 @@ separate request in the same flight, so it also closes an aborted transaction.
 The row statement checks value and signature integrity on the server and
 returns inserted identities. The Save compares any lost identity with the
 first writer's bytes before dependent work continues. A lost acknowledgement
-keeps the outcome uncertain and quarantines the session. Large batches use
-the COPY path selected before sending. Save finish, the held history tail
+keeps the outcome uncertain and quarantines the session. Large batches and nested lane calls use
+the ordinary publication path selected before sending. Save finish, the held history tail
 and Namespace Init use their existing registration paths.
 
 [Captured Save flight](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish_flight.rs)

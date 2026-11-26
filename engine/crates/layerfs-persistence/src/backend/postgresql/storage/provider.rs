@@ -285,7 +285,7 @@ impl PackPersistence for PostgresStorage {
 
     fn publish_captured(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         publication::validate(batch, self.publication_bytes())?;
-        match objects::publish_flight::eligible(&self.session, batch) {
+        match objects::publish_flight::eligible(&self.session, batch)? {
             true => objects::publish_flight::run(&self.session, batch).map_err(Into::into),
             false => self.publish(batch),
         }

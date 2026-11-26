@@ -109,16 +109,18 @@ const SQLITE: &[Pin] = &[
         root: "70ed856c5cc7ac85d11a4710a8abe1f6e2b81f9ad25c7c2158e2fa79c11204a8",
     },
 ];
+// Captured Save registration sends one bounded flight. It reduces trips
+// in the two wave-producing shapes; the single-file shape stays pinned.
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "edits",
-        work: [[34, 29], [2, 2], [10, 10], [0, 0], [47, 51], [1, 1]],
+        work: [[31, 32], [2, 2], [10, 10], [0, 0], [44, 54], [1, 1]],
         saved: [519, 0, 2, 38382],
         root: "9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533",
     },
     Pin {
         scenario: "adds",
-        work: [[37, 32], [9, 7], [10, 10], [2, 2], [60, 62], [0, 0]],
+        work: [[31, 35], [9, 7], [10, 10], [2, 2], [54, 65], [0, 0]],
         saved: [782, 0, 4, 51408],
         root: "35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4",
     },

@@ -17,14 +17,15 @@ use std::{collections::BTreeSet, sync::atomic::Ordering};
 /// are independently bounded by the existing publication row limit.
 const PACK_BYTES: usize = 4 * 1024 * 1024;
 
-pub(crate) fn eligible(session: &Session, batch: &Publication) -> bool {
-    batch
+pub(crate) fn eligible(session: &Session, batch: &Publication) -> Result<bool, BackendError> {
+    Ok(batch
         .packs
         .iter()
         .map(|pack| pack.body().len())
         .sum::<usize>()
         <= PACK_BYTES
         && session.incarnation.load(Ordering::SeqCst) != 0
+        && !session.admission.held_by_caller()?)
 }
 
 /// Uploads pack bodies before acquiring the existing lane. The final COMMIT
@@ -35,8 +36,9 @@ pub(crate) fn run(session: &Session, batch: &Publication) -> Result<Published, B
     let schema = session.settings.schema.as_str();
     let nonce = nonce();
     let begin = format!(
-        "{}; SELECT 1/COALESCE((SELECT (catalog_incarnation={generation})::int \
-         FROM {schema}.history_meta WHERE id=1),0); \
+        "{}; SELECT CASE WHEN g IS NULL THEN (32768 + (g IS NULL)::int)::smallint::int \
+         ELSE 1/(g={generation})::int END FROM \
+         (SELECT (SELECT catalog_incarnation FROM {schema}.history_meta WHERE id=1) AS g) m; \
          SELECT set_config('layerfs.attempt','{nonce}',true)",
         session.settings.publish_begin()
     );
