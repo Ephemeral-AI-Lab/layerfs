@@ -193,23 +193,17 @@ fn sidecar(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// The Store open rule (#776 C3, S6). A writable open runs PRAGMA and schema
-/// statements that write, so it takes the same local-volume lane a
-/// transaction takes: another opener waits for it instead of meeting
-/// SQLite's Busy (#534, #647). A read-only open takes it only when the Store
-/// has no `-shm`: its first read creates the sidecars by path and runs
-/// SQLite's WAL recovery, so unadmitted it could leave sidecars beside the
-/// file a compaction is installing, or recover under an admitted writer's
-/// transaction. With `-shm` there, another connection holds the Store and the
-/// open maps it without the lane. Returns the lane, if taken, and the file
-/// the path names before the open; it must still name it after the first
-/// read, or the open may have reached a file a compaction replaced meanwhile
-/// (#776 C3).
+/// Takes the directory lane for an ordinary Session open, or for a raw or
+/// diagnostic reader when the Store has no WAL index file (#776 C3/S6).
+/// An ordinary read-only open must wait even if `-shm` exists. SQLite may
+/// still be initializing that file or a writable last close may remove it.
+/// Capture the identity on the admitted path before opening so a connection
+/// cannot be associated with a file that compaction replaced.
 fn admit_open(
     path: &Path,
-    writable: bool,
+    ordinary_session: bool,
 ) -> Result<(Option<Writer>, Option<FileIdentity>), BackendError> {
-    let writer = if writable || !sidecar(path, "-shm").exists() {
+    let writer = if ordinary_session || !sidecar(path, "-shm").exists() {
         Some(Writer::acquire(path)?)
     } else {
         None
@@ -316,16 +310,16 @@ impl Session {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
         }
-        // The lane, when the open rule takes it, is released below, after
-        // the last step that can fail, before this session serves its first
-        // call.
-        let (writer, before) = admit_open(path, writable)?;
+        // First WAL access can occur while applying connection settings.
+        // Admit the whole connection setup before attempting any SQLite work.
+        // Ordinary sessions release the lane after setup and identity capture.
+        let diagnostic = matches!(mode, OpenMode::Diagnostic);
+        let (writer, before) = admit_open(path, !diagnostic)?;
         if let OpenMode::Pinned(expected) = mode {
             if before != Some(expected) {
                 return Err(BackendError::Stale);
             }
         }
-        let diagnostic = matches!(mode, OpenMode::Diagnostic);
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {

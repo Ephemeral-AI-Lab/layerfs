@@ -341,6 +341,11 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
   create without `--machine` is `Unsupported`. `store get` and `store list` answer its
   `engine`, `state`, `machine` and `projects`, and never the Store's keys.
 
+Opening a new local SQLite connection for ordinary Store calls waits for
+the Store directory's writer lane before SQLite attaches to the WAL. A new
+connection may wait while a write or maintenance holds the lane. Reads on
+an open connection continue without that wait.
+
 For a local SQLite Store held open by a native CLI worker, move, remove,
 compact and upgrade record a `worker-close` phase and ask that worker to
 release its Store. The phase keeps new calls out until the caller verifies

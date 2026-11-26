@@ -14,10 +14,42 @@ use std::{
     time::{Duration, Instant},
 };
 
-struct RawWriter(Child);
-impl RawWriter {
+struct RawLockHolder(Child);
+impl RawLockHolder {
     fn acquire(path: &Path) -> Self {
         let script = "import sqlite3,sys,select\nc=sqlite3.connect(sys.argv[1],timeout=0)\nc.execute('BEGIN IMMEDIATE')\nprint('held',flush=True)\nselect.select([sys.stdin],[],[],5)\nc.rollback()\nc.close()\n";
+        Self::start(path, script)
+    }
+
+    fn hold_wal_recovery(path: &Path) -> Self {
+        // SQLite's Unix VFS uses write/recovery bytes 120/122 and the
+        // dead-man-switch byte 128. The first opener has published a SHM file
+        // with space for the index, but its index header is not ready yet.
+        // Only the external process handles raw SQLite lock descriptors.
+        let script = r#"
+import fcntl, os, select, sys
+
+path = sys.argv[1]
+directory = os.open(os.path.dirname(path), os.O_RDONLY)
+fcntl.flock(directory, fcntl.LOCK_EX)
+shm = path + "-shm"
+fd = os.open(shm, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+try:
+    os.ftruncate(fd, 32768)
+    fcntl.lockf(fd, fcntl.LOCK_EX, 1, 120)
+    fcntl.lockf(fd, fcntl.LOCK_EX, 1, 122)
+    fcntl.lockf(fd, fcntl.LOCK_SH, 1, 128)
+    print("held", flush=True)
+    select.select([sys.stdin], [], [], 5)
+finally:
+    os.unlink(shm)
+    os.close(fd)
+    os.close(directory)
+"#;
+        Self::start(path, script)
+    }
+
+    fn start(path: &Path, script: &str) -> Self {
         let child = Command::new("python3")
             .args(["-c", script])
             .arg(path)
@@ -60,7 +92,7 @@ impl RawWriter {
         }
     }
 }
-impl Drop for RawWriter {
+impl Drop for RawLockHolder {
     fn drop(&mut self) {
         if matches!(self.0.try_wait(), Ok(None)) {
             let _ = self.0.kill();
@@ -138,7 +170,7 @@ fn check(drop_peer: bool) {
         drop(second.take());
     }
     let main_shared = main_shared_lock(&path);
-    let held = RawWriter::acquire(&path);
+    let held = RawLockHolder::acquire(&path);
     let before = first.diagnostics().unwrap();
     let result = first.storage.reserve(reserve());
     let after = first.diagnostics().unwrap();
@@ -166,4 +198,43 @@ fn cooperative_release_preserves_sqlite_locks_with_two_live_sessions() {
 #[test]
 fn dropping_one_session_preserves_the_other_sessions_sqlite_locks() {
     check(true);
+}
+
+#[test]
+fn fresh_read_open_waits_for_partial_wal_index_recovery() {
+    let temp = support::Temp::new("sqlite-lock-custody-recovery");
+    let path = temp.join("store.sqlite");
+    let authority = HistoryCatalogConfig {
+        binding_key: b"sqlite-lock-custody-recovery".to_vec(),
+        cursor_key: [67; 32],
+        incarnation: 1,
+    };
+    SqliteHandles::create(config(&path), StoragePolicy::frozen_default(), &authority)
+        .unwrap()
+        .seal()
+        .unwrap();
+    let recovery = RawLockHolder::hold_wal_recovery(&path);
+    let (starting, started) = mpsc::channel();
+    let (done, finished) = mpsc::channel();
+    std::thread::spawn(move || {
+        starting.send(()).unwrap();
+        let opened = SqliteHandles::open_read_only(
+            config(&path),
+            &authority.binding_key,
+            authority.cursor_key,
+        )
+        .map(|_| ());
+        let _ = done.send(opened);
+    });
+    started.recv_timeout(Duration::from_secs(3)).unwrap();
+    let early = finished.recv_timeout(Duration::from_millis(350));
+    recovery.release();
+    assert!(
+        matches!(early, Err(mpsc::RecvTimeoutError::Timeout)),
+        "fresh reader returned while SQLite was recovering the index: {early:?}",
+    );
+    finished
+        .recv_timeout(Duration::from_secs(3))
+        .expect("fresh reader completes after recovery")
+        .expect("fresh reader attaches with one attempt");
 }
