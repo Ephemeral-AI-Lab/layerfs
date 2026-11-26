@@ -1,9 +1,10 @@
 //! S2.2 write admission and budgets (§11, review round 3): a write whose
 //! request is read while the worker drains is refused before any effect,
-//! never queued for a write thread that has ended; one `file apply` change
-//! past the worker's budget for one change (4 MiB decoded) runs direct when
-//! its list comes from a file, is refused at that change from a pipe, and
-//! is refused by the worker itself, before effect, when sent anyway.
+//! never queued for a write thread that has ended; a `file apply` list with
+//! a change past the worker's budget for one change (4 MiB decoded) runs
+//! direct, decided before anything is sent, whether it comes from a file or
+//! a pipe (spooled to an unnamed private file first): no size refusal. The
+//! worker itself refuses such a change before effect when sent anyway.
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
 #[path = "common/host_worker.rs"]
@@ -73,7 +74,7 @@ fn a_write_read_while_the_worker_drains_is_refused_unrun() {
 }
 
 #[test]
-fn a_change_past_the_budget_runs_direct_from_a_file_and_is_refused_from_a_pipe() {
+fn a_change_past_the_budget_runs_direct_from_a_pipe_or_a_file() {
     let home = prepare(&["work"]);
     let path = &home.paths.home;
     ok(
@@ -83,30 +84,34 @@ fn a_change_past_the_budget_runs_direct_from_a_file_and_is_refused_from_a_pipe()
     );
     let before = commits(path, "shop/api", "work");
     let list = large_edit();
-    // a pipe: the list streams, and the change is refused, nothing committed
+    // a pipe: spooled, checked, then run direct with one Commit
     let routed_before = routed(path);
-    let answer = refused(
+    let (success, answer, peak) = run_sampled(
         path,
         &["file", "apply", "shop/api", "work"],
         list.as_bytes(),
-        "InvalidInput",
     );
-    // the CLI folds TooLarge into InvalidInput, keeping the code
-    assert_eq!(
-        answer.get("detail").and_then(|d| d.get_text("code")),
-        Some("TooLarge"),
-        "{answer:?}"
+    assert!(success, "{answer:?}");
+    eprintln!(
+        "RECEIPT piped over-budget apply: list {} bytes, CLI sampled peak RSS {} bytes",
+        list.len(),
+        peak
     );
-    assert!(
-        answer
-            .get_text("message")
-            .unwrap()
-            .contains("nothing was committed"),
-        "{answer:?}"
+    // loose: the direct route holds the list once, not a copy per stage
+    assert!(peak < 256 << 20, "CLI sampled peak RSS {peak}");
+    assert_eq!(routed(path), routed_before, "the piped list was sent");
+    assert_eq!(commits(path, "shop/api", "work"), before + 1);
+    assert_eq!(size(path, "work", "/big"), 1);
+    let spool = path.join("machine").join(host()).join("spool");
+    let left = std::fs::read_dir(&spool).map_or(0, |dir| dir.count());
+    assert_eq!(left, 0, "a spool file was left in {}", spool.display());
+    // a file: checked before sending, so it is routed direct too
+    ok(
+        path,
+        &["file", "write", "shop/api", "work", "/big"],
+        big().as_bytes(),
     );
-    assert_eq!(routed(path), routed_before + 1);
-    assert_eq!(commits(path, "shop/api", "work"), before);
-    // a file: checked before sending, so it is routed direct and commits
+    let routed_before = routed(path);
     let from = path.join("large.json");
     std::fs::write(&from, &list).unwrap();
     ok(
@@ -121,16 +126,13 @@ fn a_change_past_the_budget_runs_direct_from_a_file_and_is_refused_from_a_pipe()
         ],
         b"",
     );
-    assert_eq!(routed(path), routed_before + 1, "the file list was sent");
-    assert_eq!(commits(path, "shop/api", "work"), before + 1);
+    assert_eq!(routed(path), routed_before, "the file list was sent");
+    assert_eq!(commits(path, "shop/api", "work"), before + 3);
     assert_eq!(size(path, "work", "/big"), 1);
-    // a list within the budget still streams from a file
-    let small = path.join("small.json");
-    std::fs::write(
-        &small,
-        r#"[{"op":"write","path":"/s","content":"s\n"},{"op":"mkdir","path":"/d"}]"#,
-    )
-    .unwrap();
+    // lists within the budget still stream, from a file or a pipe
+    let small = r#"[{"op":"write","path":"/s","content":"s\n"},{"op":"mkdir","path":"/d"}]"#;
+    let from = path.join("small.json");
+    std::fs::write(&from, small).unwrap();
     ok(
         path,
         &[
@@ -139,12 +141,17 @@ fn a_change_past_the_budget_runs_direct_from_a_file_and_is_refused_from_a_pipe()
             "shop/api",
             "work",
             "--from",
-            small.to_str().unwrap(),
+            from.to_str().unwrap(),
         ],
         b"",
     );
+    ok(
+        path,
+        &["file", "apply", "shop/api", "work"],
+        r#"[{"op":"write","path":"/t","content":"t\n"}]"#.as_bytes(),
+    );
     assert_eq!(routed(path), routed_before + 2);
-    assert_eq!(commits(path, "shop/api", "work"), before + 2);
+    assert_eq!(commits(path, "shop/api", "work"), before + 5);
     drain(&home);
 }
 

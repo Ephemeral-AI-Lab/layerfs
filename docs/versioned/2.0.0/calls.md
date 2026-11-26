@@ -634,11 +634,11 @@ an unscoped `file apply`'s changes stream from stdin or `--from` in bounded
 frames, so neither the CLI nor the worker holds the whole input; there is
 no new size limit. One `file apply` change is still built whole by the
 CLI (the engine needs an edit's text whole); the input's text is not
-copied, and a write's content still streams. Any other change must fit the
-worker's budget for one change (4 MiB decoded): a list from a file
-(`--from`, or stdin redirected from a file) with a larger change runs in
-the caller instead, and a piped one is refused at that change
-(`InvalidInput` with detail `code: TooLarge`), nothing committed. A scoped
+copied, and a write's content still streams. A list with any other change past the
+worker's budget for one change (4 MiB decoded) runs in the caller instead,
+decided before anything is sent; a piped list is first copied into a
+private unnamed temporary file under the home (removed on any exit), so
+it can be checked without being held in memory. A scoped
 `file apply --scope` runs in the caller. The worker runs writes on 4 write
 threads of their own, at most 16 held at once, so writes never take the
 threads of reads; past 16, or while the worker drains, a write is refused

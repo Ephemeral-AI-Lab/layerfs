@@ -377,7 +377,12 @@ fn parse_with(
                 Some(path) => {
                     let file = std::fs::File::open(path)
                         .map_err(|why| usage(format!("cannot read {path}: {why}")))?;
-                    let shared = file.try_clone().ok();
+                    // a FIFO or device is read once, like a pipe
+                    let shared = file
+                        .metadata()
+                        .is_ok_and(|meta| meta.is_file())
+                        .then(|| file.try_clone().ok())
+                        .flatten();
                     (Box::new(file), shared)
                 }
                 None => (Box::new(std::io::stdin()), stdin_file()),
@@ -495,7 +500,7 @@ fn option(
 
 /// Stdin as a file sharing its offset when it is a regular file (a
 /// redirected `file apply` list), so the list can be checked before it is
-/// sent; None for a pipe or terminal.
+/// sent; None for a pipe or terminal (a piped list is spooled first).
 #[cfg(unix)]
 fn stdin_file() -> Option<std::fs::File> {
     use std::os::fd::AsFd;
@@ -505,7 +510,7 @@ fn stdin_file() -> Option<std::fs::File> {
         .then_some(file)
 }
 
-/// No shared stdin file off Unix: the list is checked as it streams.
+/// No shared stdin file off Unix, where no host worker runs.
 #[cfg(not(unix))]
 fn stdin_file() -> Option<std::fs::File> {
     None

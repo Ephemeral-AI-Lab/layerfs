@@ -274,23 +274,14 @@ impl<'a> StreamSender<'a> {
 
     /// Sends one change in the Store's form, printed once. A change whose
     /// frame would exceed the JSON ceiling is sent spilled, its text as
-    /// content; the value is dropped before that text is sent.
+    /// content; the value is dropped before that text is sent. Its caller
+    /// routes a list with a change past the worker's budget direct before
+    /// sending; the worker refuses such a change before effect anyway.
     pub fn change(&mut self, change: SdkValue) -> Result<(), SdkRefusal> {
         const WRAP: &str = "{\"change\":";
         self.changes += 1;
         let text = json::print(&change);
         drop(change);
-        if !host_frame::within_budget(text.as_bytes()) {
-            // a file input is routed direct before sending (`fits_worker`);
-            // a piped one cannot be, once it started
-            return Err(refused(
-                "TooLarge",
-                format!(
-                    "change {} exceeds the host worker's budget for one change (4 MiB decoded, 128 fields per object, 32 levels); nothing was committed. A change this large runs directly when the changes come from a file (--from)",
-                    self.changes
-                ),
-            ));
-        }
         if WRAP.len() + text.len() < HOST_MAX_REQUEST {
             let frame = format!("{WRAP}{text}}}");
             self.raw(&(frame.len() as u32).to_be_bytes())?;

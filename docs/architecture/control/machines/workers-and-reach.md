@@ -512,12 +512,17 @@ bytes per text byte plus 256 per container, field and element), 128 fields
 per object and 32 levels. A change larger than a 64 KiB frame is sent
 spilled; the worker builds it from its data frames under that budget,
 holding one frame and the value, and refuses one past it `InvalidInput`
-before any effect. The caller checks before sending: when the list is a
-regular file (`--from`, or stdin redirected from a file) it reads the list
-once through a shared descriptor and, if any change is past the budget,
-routes the whole call direct (a route, not a refusal), then rewinds. A
-piped list cannot be read twice; a change past the budget is refused there
-(`TooLarge`, nothing committed). Object fields are checked for duplicate
+before any effect. The caller checks before sending anything: it reads the list
+once and, if any change is past the budget, routes the whole call direct
+(a route, never a refusal). A regular file (`--from`, or stdin redirected
+from a file) is read through a shared descriptor and rewound. A piped list
+(or a FIFO) is first copied in 64 KiB pieces into an unnamed private file:
+created 0600 and exclusive in the host machine's 0700 `spool` folder and
+unlinked at once, so no exit, a signal's included, leaves it behind; the
+call is then checked and sent from it. If that file cannot be made or
+written (a full disk, say), the part already read and the rest of the
+pipe run direct, as without a worker. A caller that sends an over-budget
+change anyway is refused by the worker before effect. Object fields are checked for duplicate
 names by sorting, O(n log n) in the width. The caller keeps sending `wait`
 while it parses a large element, since parsing runs on its input thread.
 

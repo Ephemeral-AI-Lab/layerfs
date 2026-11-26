@@ -12,9 +12,10 @@
 //! and must fit the worker's budget for one change (4 MiB decoded, 128
 //! fields per object, 32 levels), which the worker enforces as it builds a
 //! spilled change from its frames, holding one frame and that value. A
-//! file input with a larger change is routed direct before sending
-//! ([`fits_worker`]); a piped one is refused at that change, nothing
-//! committed.
+//! list with a larger change is routed direct before anything is sent
+//! ([`fits_worker`]): a route, never a refusal. A piped list is first
+//! copied into an unnamed private file ([`spool`]) so it can be checked,
+//! then sent from it.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::host_write::{header, InputKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -159,6 +160,95 @@ pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> 
     };
     file.seek(SeekFrom::Start(start)).map_err(unreadable)?;
     Ok(fits)
+}
+
+/// A piped `file apply` list copied, in bounded pieces, into an unnamed
+/// private file, so its changes can be checked before anything is sent
+/// ([`fits_worker`]): the source to send from and that file. The file is
+/// made 0600 with an exclusive create in the host machine's 0700 `spool`
+/// folder and unlinked at once, so no exit, a signal's included, leaves
+/// it behind. When it cannot be made or written, the list read so far and
+/// the rest of the pipe are returned with no file: the call then runs
+/// direct, as without a worker.
+pub(crate) fn spool(
+    home: &Path,
+    mut source: Box<dyn Read + Send>,
+) -> (Box<dyn Read + Send>, Option<std::fs::File>) {
+    use std::io::{Seek, SeekFrom, Write};
+    let Some(mut file) = spool_file(home) else {
+        return (source, None);
+    };
+    let mut kept = 0u64;
+    let mut buffer = vec![0; 64 << 10];
+    loop {
+        let read = match source.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            // the direct route reads the same failure
+            Err(error) => {
+                return (
+                    Box::new(kept_part(file, kept).chain(Failed(Some(error)))),
+                    None,
+                )
+            }
+        };
+        if file.write_all(&buffer[..read]).is_err() {
+            buffer.truncate(read);
+            let rest = std::io::Cursor::new(buffer).chain(source);
+            return (Box::new(kept_part(file, kept).chain(rest)), None);
+        }
+        kept += read as u64;
+    }
+    match file.seek(SeekFrom::Start(0)).and_then(|_| file.try_clone()) {
+        Ok(shared) => (Box::new(file), Some(shared)),
+        Err(error) => (Box::new(Failed(Some(error))), None),
+    }
+}
+
+/// The first `kept` bytes of the spool file, from its start.
+fn kept_part(mut file: std::fs::File, kept: u64) -> Box<dyn Read + Send> {
+    use std::io::{Seek, SeekFrom};
+    match file.seek(SeekFrom::Start(0)) {
+        Ok(_) => Box::new(file.take(kept)),
+        Err(error) => Box::new(Failed(Some(error))),
+    }
+}
+
+/// A new unnamed spool file, or None.
+fn spool_file(home: &Path) -> Option<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let dir = layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
+        .join("spool");
+    layerfs_home::home::private_dir(&dir).ok()?;
+    let path = dir.join(format!(
+        "{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)
+        .ok()?;
+    std::fs::remove_file(&path).ok()?;
+    Some(file)
+}
+
+/// A read that fails once with the input's own error.
+struct Failed(Option<std::io::Error>);
+
+impl Read for Failed {
+    fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+        Err(self
+            .0
+            .take()
+            .unwrap_or_else(|| std::io::Error::other("the input failed")))
+    }
 }
 
 /// Content in pieces of [`STREAM_PIECE`] bytes, the last one shorter.

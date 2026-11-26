@@ -56,7 +56,8 @@ pub struct Input {
     pub source: Box<dyn Read + Send>,
     /// The same open file when the input is a regular file, sharing its
     /// offset: a `file apply` list is checked against the worker's budget
-    /// through it before anything is sent, and the offset restored.
+    /// through it before anything is sent, and the offset restored. A
+    /// piped list gets one when the route is chosen (its spool file).
     pub file: Option<std::fs::File>,
 }
 
@@ -176,12 +177,25 @@ pub(crate) fn routed(
 ) -> Option<Outcome> {
     use layerfs_machine::worker::HostPaths;
 
-    let input = take(method);
+    let mut input = take(method);
     let direct = |args: &mut Vec<(String, SdkValue)>, input: Option<Input>| {
         input.and_then(|input| materialize(input, args).err().map(Err))
     };
     if !crate::host_read::cli() || !METHODS.contains(&method) || !host_sqlite(target) {
         return direct(args, input);
+    }
+    // a piped list is kept in a private unnamed file first, so its changes
+    // are checked before anything is sent
+    if let Some(held) = input.as_mut().filter(|held| {
+        method == "fs.apply" && held.kind == InputKind::Changes && held.file.is_none()
+    }) {
+        let source = std::mem::replace(&mut held.source, Box::new(std::io::empty()));
+        let (source, file) = crate::host_stream::spool(home, source);
+        held.source = source;
+        held.file = file;
+        if held.file.is_none() {
+            return direct(args, input);
+        }
     }
     let body = match (method, &input) {
         (
@@ -199,14 +213,11 @@ pub(crate) fn routed(
                 ..
             }),
         ) => {
-            // a change past the worker's budget runs direct (a route, not
-            // a refusal); a piped list is checked as it streams
-            let fits = match file {
-                Some(file) => match file.try_clone() {
-                    Ok(mut file) => crate::host_stream::fits_worker(&mut file),
-                    Err(_) => Ok(true),
-                },
-                None => Ok(true),
+            // a change past the worker's budget runs direct: a route, not
+            // a refusal (a list that cannot be checked runs direct too)
+            let fits = match file.as_ref().map(std::fs::File::try_clone) {
+                Some(Ok(mut file)) => crate::host_stream::fits_worker(&mut file),
+                _ => Ok(false),
             };
             match fits {
                 Ok(true) => "changes",

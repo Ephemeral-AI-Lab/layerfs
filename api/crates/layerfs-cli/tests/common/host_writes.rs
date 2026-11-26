@@ -58,6 +58,53 @@ pub fn run(home: &Path, words: &[&str], stdin: &[u8]) -> (bool, SdkValue) {
     (output.status.success(), value)
 }
 
+/// [`run`], sampling the CLI's resident memory every few milliseconds:
+/// also the largest sample, in bytes (a diagnostic, not a peak proof).
+pub fn run_sampled(home: &Path, words: &[&str], stdin: &[u8]) -> (bool, SdkValue, u64) {
+    let mut child = cli(home, words).stdin(Stdio::piped()).spawn().unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let bytes = stdin.to_vec();
+    let feeder = std::thread::spawn(move || {
+        let _ = input.write_all(&bytes);
+    });
+    let (end, mut peak) = (Instant::now() + WAIT, 0);
+    while child.try_wait().unwrap().is_none() {
+        assert!(Instant::now() < end, "a CLI call did not finish");
+        peak = peak.max(resident(child.id()));
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let output = child.wait_with_output().unwrap();
+    feeder.join().unwrap();
+    let text = if output.stdout.is_empty() {
+        &output.stderr
+    } else {
+        &output.stdout
+    };
+    let value = json::parse(String::from_utf8_lossy(text).trim())
+        .unwrap_or_else(|_| panic!("not JSON: {}", String::from_utf8_lossy(text)));
+    (output.status.success(), value, peak)
+}
+
+/// A process's current resident bytes, or 0 once it is gone.
+fn resident(pid: u32) -> u64 {
+    #[cfg(target_os = "linux")]
+    let kib = std::fs::read_to_string(format!("/proc/{pid}/status"))
+        .ok()
+        .and_then(|status| {
+            status
+                .lines()
+                .find_map(|line| line.strip_prefix("VmRSS:"))
+                .and_then(|kib| kib.trim().trim_end_matches("kB").trim().parse().ok())
+        });
+    #[cfg(not(target_os = "linux"))]
+    let kib = Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .and_then(|out| String::from_utf8_lossy(&out.stdout).trim().parse().ok());
+    kib.unwrap_or(0u64) * 1024
+}
+
 pub fn ok(home: &Path, words: &[&str], stdin: &[u8]) -> SdkValue {
     let (success, value) = run(home, words, stdin);
     assert!(success, "{words:?}: {value:?}");
