@@ -127,34 +127,50 @@ pub fn read_host_frame(
             .map(Some)
             .map_err(|error| invalid(&error.0))
     });
-    // a request may carry a login (#819 P-B): its bytes go once decoded
-    wipe(body);
+    // a request that carries a login (#819 P-B) has its bytes overwritten
+    // once decoded; so has a frame that did not decode, unread
+    if !matches!(&parsed, Ok(Some(value)) if !carries_login(value)) {
+        crate::wipe::bytes(body);
+    }
     parsed
 }
 
-/// Overwrites `bytes`, which may hold a login, before freeing them.
-pub fn wipe(mut bytes: Vec<u8>) {
-    bytes.fill(0);
-    std::hint::black_box(&bytes);
+/// Whether host frame `value` carries a login: a request whose `args` hold
+/// a `password` (#819 P-B). Only such frames are overwritten.
+pub fn carries_login(value: &SdkValue) -> bool {
+    (value.get("args")).is_some_and(|args| args.get("password").is_some())
+}
+
+/// Frees an encoded `frame`, overwritten first when it carries a login
+/// (`secret`, [`carries_login`]).
+pub(super) fn release(frame: Vec<u8>, secret: bool) {
+    if secret {
+        crate::wipe::bytes(frame);
+    }
 }
 
 pub(super) fn encode(value: &SdkValue, max: usize) -> Result<Vec<u8>, SdkRefusal> {
     let body = json::print(value);
+    let secret = carries_login(value);
+    let fail = |body: String, refusal: SdkRefusal| {
+        if secret {
+            crate::wipe::text(body);
+        }
+        Err(refusal)
+    };
     if body.len() > max.min(HOST_MAX_REPLY) {
-        wipe(body.into_bytes());
-        return Err(refused(
-            "TooLarge",
-            "host worker frame exceeds its byte ceiling",
-        ));
+        let refusal = refused("TooLarge", "host worker frame exceeds its byte ceiling");
+        return fail(body, refusal);
     }
     if let Err(refusal) = budget(body.as_bytes()) {
-        wipe(body.into_bytes());
-        return Err(refusal);
+        return fail(body, refusal);
     }
     let mut frame = Vec::with_capacity(4 + body.len());
     frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
     frame.extend_from_slice(body.as_bytes());
-    wipe(body.into_bytes());
+    if secret {
+        crate::wipe::text(body);
+    }
     Ok(frame)
 }
 

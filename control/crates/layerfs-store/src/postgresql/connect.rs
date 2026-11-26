@@ -295,8 +295,15 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     home::private_dir(&directory)?;
     // the password first: a login revision is never visible without it
     login::save(home_dir, name, password)?;
-    if let Err(refusal) = record.write(home_dir) {
-        let _ = login::forget(home_dir, name);
+    if let Err(mut refusal) = record.write(home_dir) {
+        // a forget that fails is said: the home then holds a password for
+        // a Store it has no record of, which the next connect replaces
+        if let Err(back) = login::forget(home_dir, name) {
+            refusal.message = format!(
+                "{}; its saved password could not be removed either ({})",
+                refusal.message, back.message
+            );
+        }
         return Err(refusal);
     }
     let mut projects = Vec::new();
@@ -461,11 +468,38 @@ impl Update {
         // every saved change is a new login for the host worker (#819 P-B)
         let replaced = current.login_revision().map(str::to_owned);
         let current = current.with_new_login_revision()?;
-        // the password first: a login revision is never visible without it
+        // the password first: a login revision is never visible without it;
+        // a record that cannot be written puts the login it replaced back
+        let mut before = None;
         if let Some(password) = &self.new_password {
-            login::save(home_dir, name, password)?;
+            let kept = login::kept(home_dir, name)?;
+            if let Err(refusal) = login::save(home_dir, name, password) {
+                if let Some(kept) = kept {
+                    layerfs_machine::wipe::value(kept);
+                }
+                return Err(refusal);
+            }
+            before = Some(kept);
         }
-        current.write(home_dir)?;
+        let written = current.write(home_dir);
+        let put = match (&written, &before) {
+            (Err(_), Some(kept)) => login::put_back(home_dir, name, kept.as_ref()),
+            _ => Ok(()),
+        };
+        if let Some(Some(kept)) = before {
+            layerfs_machine::wipe::value(kept);
+        }
+        if let Err(mut refusal) = written {
+            if let Err(back) = put {
+                refusal.message = format!(
+                    "{}; the password it replaced could not be put back either ({}): \
+                     Store {name} now holds the new password with its old login, and \
+                     connecting it again settles it",
+                    refusal.message, back.message
+                );
+            }
+            return Err(refusal);
+        }
         drop((store_lock, home_lock));
         crate::host_postgresql::retire(home_dir, name, replaced.as_deref());
         crate::observed::record(home_dir, name, None, &reach);

@@ -343,9 +343,12 @@ impl HostPaths {
         let began = Instant::now();
         let end = began + READY_WAIT;
         let id = token()?;
+        // a request carrying a login (#819 P-B) is overwritten on every path
         let request = request(op, args, &id, &"0".repeat(CORRELATION_LEN));
+        let secret = host_frame::carries_login(&request);
+        let request = crate::wipe::Guard::new(request, secret);
         let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
-        host_frame::wipe(host_frame::encode(&request, max)?);
+        host_frame::release(host_frame::encode(request.get(), max)?, secret);
         let build = match &self.cli {
             Some((_, build)) => build.clone(),
             None => build_identity()?,
@@ -394,10 +397,12 @@ impl HostPaths {
 
         // Generation tokens are fixed-size hex, so exchanging the placeholder
         // leaves the already checked envelope size unchanged.
-        let request = home::with_field(request, "generation", SdkValue::Text(generation));
-        let body = host_frame::encode(&request, max)?;
+        let request = home::with_field(request.take(), "generation", SdkValue::Text(generation));
+        let request = crate::wipe::Guard::new(request, secret);
+        let body = host_frame::encode(request.get(), max)?;
         let answer = send_request(&stream, path, (op, &id), &body, began, control, None);
-        host_frame::wipe(body);
+        host_frame::release(body, secret);
+        drop(request);
         let answer = answer?;
         if !valid(&answer) {
             return Err(unknown(op, &id, "invalid success payload"));

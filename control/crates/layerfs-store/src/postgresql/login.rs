@@ -51,7 +51,23 @@ pub fn save(home: &Path, store: &str, password: &str) -> Result<()> {
         ("password", SdkValue::text(password)),
         ("changed", SdkValue::Int(layerfs_home::home::now_ms())),
     ]);
-    save_secret(home, KIND, store, &value)
+    let saved = save_secret(home, KIND, store, &value);
+    layerfs_machine::wipe::value(value);
+    saved
+}
+
+/// Store `store`'s saved login as kept, whole, to put back with
+/// [`put_back`]; `None` when there is none. No `Debug` reaches it.
+pub(crate) fn kept(home: &Path, store: &str) -> Result<Option<SdkValue>> {
+    read_secret(home, KIND, store)
+}
+
+/// Puts back what [`kept`] read: that login, or none.
+pub(crate) fn put_back(home: &Path, store: &str, kept: Option<&SdkValue>) -> Result<()> {
+    match kept {
+        Some(value) => save_secret(home, KIND, store, value),
+        None => forget(home, store),
+    }
 }
 
 /// Forgets Store `store`'s saved password, if any.

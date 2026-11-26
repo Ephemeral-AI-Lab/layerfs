@@ -482,7 +482,8 @@ read-only PostgreSQL connections open between calls, so a later read logs
 in nothing. The CLI sends the saved password in its request; the worker
 saves it nowhere, overwrites its own copies once a call no longer needs
 them, keeps it only in the settings of that Store's open connections (and
-in memory its PostgreSQL client used, freed but not overwritten), and runs
+in memory its PostgreSQL client and JSON decoder used, freed but not
+overwritten), and runs
 with core dumps off (on Linux it also cannot be read by your other
 processes; macOS has no such setting). Each connection
 checks the schema and the Store binding when it opens, using the TLS mode
@@ -495,9 +496,9 @@ reads wait on their own threads, and a read waits for a connection of its
 Store without holding a thread, so reads of other Stores never wait behind
 a busy Store. A read that has not started yet does not keep `store
 disconnect` or `store upgrade` waiting. When 64 PostgreSQL reads are
-already waiting or running, the next one is refused `Unavailable` within
-about 5 s, without being run; a read whose caller went away before it
-started is never run. A Store connected before this release has no login revision:
+already waiting or running, the next one is refused `Unavailable` at once,
+without being run; a read whose caller went away before it started is never
+run. `store upgrade` closes the worker's connections to that Store too. A Store connected before this release has no login revision:
 it keeps the direct route, one read-only connection per call opened and
 checked the same way, until `store connect` is run for it again. So do a
 stopped host machine, other platforms, and SDK calls.

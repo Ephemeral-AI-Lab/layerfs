@@ -415,9 +415,9 @@ reads it and hands it to the worker's PostgreSQL lane (8 threads, at most
 thread or slot. A lane thread starts the oldest queued read whose Store has
 a free session slot, so a read of a busy Store waits in the queue on no
 thread and never holds a thread another Store could use. Queued reads whose
-caller closed its socket are dropped unrun. At 64 the ordinary thread waits
-at most 5 s for room, then answers `Unavailable` (`postgresql-reads-full`),
-unrun. The worker reads no secret from its environment or the home: it puts
+caller closed its socket are dropped unrun. At 64 the ordinary thread
+answers `Unavailable` (`postgresql-reads-full`) at once, unrun: the answer
+follows the request it read, which §8.5 allows because nothing ran. The worker reads no secret from its environment or the home: it puts
 the sent password into the record's own address for the sessions of that
 Store and overwrites the copies it owns once they are no longer needed
 ([password lifetime](../stores-and-projects/sqlite-and-postgresql.md#held-sessions-in-the-host-worker-819-p-b)). It sets `RLIMIT_CORE` to 0 before it

@@ -331,3 +331,110 @@ fn reservations_keep_both_bounds_and_never_wait() {
     assert_eq!(pool::counts().idle, 1);
     pool::close_idle(Duration::ZERO);
 }
+
+#[test]
+fn three_stores_meet_the_process_bound_and_evict_idle_sessions() {
+    let Some(source) = url() else { return };
+    let _serial = serial();
+    // the sessions are process-wide: none of another test's are left
+    pool::close_idle(Duration::ZERO);
+    let (_one, first, _) = connected(&source);
+    let (two, second, open) = connected(&source);
+    let (_three, third, _) = connected(&source);
+
+    // Store two keeps three idle sessions: three calls at once
+    let together = Arc::new(std::sync::Barrier::new(3));
+    let (second, open) = (Arc::new(second), Arc::new(open));
+    let calls: Vec<_> = (0..3)
+        .map(|_| {
+            let (home, open, together) = (second.clone(), open.clone(), together.clone());
+            std::thread::spawn(move || {
+                pool::run(&home, "pgs", "r1", &open, |_| {
+                    together.wait();
+                    Ok(SdkValue::Null)
+                })
+            })
+        })
+        .collect();
+    for call in calls {
+        call.join().unwrap().unwrap();
+    }
+    assert_eq!(pool::counts().idle, 3);
+    assert_eq!(two.backends(), 3);
+
+    // Store one takes its four slots; a fifth is refused at once
+    let ones: Vec<_> = (0..pool::PER_STORE)
+        .map(|_| pool::reserve(&first, "pgs").expect("a slot of Store one"))
+        .collect();
+    assert!(
+        pool::reserve(&first, "pgs").is_none(),
+        "the per-Store bound"
+    );
+    // Store three fills the process's eight; its next slot closes Store
+    // two's least recently used idle session, without waiting
+    let three = pool::reserve(&third, "pgs").expect("room under the bound");
+    assert_eq!(pool::counts().lent + pool::counts().idle, pool::PER_PROCESS);
+    let began = std::time::Instant::now();
+    let evicting = pool::reserve(&third, "pgs").expect("an idle session evicted");
+    assert!(began.elapsed() < Duration::from_secs(1));
+    assert_eq!(
+        pool::counts().idle,
+        2,
+        "one idle session of Store two closed"
+    );
+    drop(evicting);
+    let end = std::time::Instant::now() + Duration::from_secs(10);
+    while two.backends() != 2 && std::time::Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(two.backends(), 2, "the evicted session's backend ended");
+    // with no idle session left to close, a full process refuses at once
+    let held: Vec<_> = (0..2)
+        .map(|_| pool::reserve(&second, "pgs").expect("an idle session"))
+        .collect();
+    assert_eq!(pool::counts().idle, 0);
+    assert_eq!(pool::counts().lent, pool::PER_PROCESS - 1);
+    let last = pool::reserve(&third, "pgs").expect("the eighth slot");
+    assert!(pool::reserve(&third, "pgs").is_none(), "the process bound");
+    drop((ones, three, held, last));
+    assert_eq!(pool::counts().lent, 0);
+    pool::close_idle(Duration::ZERO);
+}
+
+#[test]
+fn an_upgrade_renews_the_login_revision() {
+    let Some(source) = url() else { return };
+    let _serial = serial();
+    // the sessions are process-wide: none of another test's are left
+    pool::close_idle(Duration::ZERO);
+    let (_database, home, open) = connected(&source);
+    pool::run(&home, "pgs", "r1", &open, ok).unwrap();
+    assert_eq!(pool::counts().idle, 1);
+    assert_eq!(
+        pool::retire(&home, "pgs", "r1").unwrap(),
+        0,
+        "r1 is current"
+    );
+    let op = layerfs_home::op::Op::begin("upgrade", "check", SdkValue::Null).unwrap();
+    let related = layerfs_store::Related {
+        store_idle: idle,
+        store_idle_except: None,
+        can_remove_project: idle,
+    };
+    layerfs_store::postgresql::family::begin(&home, "pgs", &op, related, |_| Ok(())).unwrap();
+    let record = StoreRecord::read(&home, "pgs").unwrap().unwrap();
+    let renewed = record.login_revision().expect("a revision").to_owned();
+    assert_ne!(renewed, "r1", "the upgrade renewed the login revision");
+    // the retire the upgrade sends a worker now closes the session held at
+    // r1, which is no longer the record's revision
+    assert_eq!(pool::retire(&home, "pgs", "r1").unwrap(), 1);
+    assert_eq!(pool::counts(), pool::Counts::default());
+    // and a call at the renewed revision logs in again
+    pool::run(&home, "pgs", &renewed, &open, ok).unwrap();
+    assert_eq!(pool::counts().idle, 1);
+    pool::close_idle(Duration::ZERO);
+}
+
+fn idle(_: &std::path::Path, _: &str) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+    Ok(())
+}

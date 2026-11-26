@@ -28,8 +28,8 @@ pub fn begin<T>(
     related: Related,
     check: impl FnOnce(&StoreRecord) -> Result<T>,
 ) -> Result<T> {
-    let _lock = home::lock::take(home_dir)?;
-    let _store = record::lock(home_dir, name)?;
+    let lock = home::lock::take(home_dir)?;
+    let store = record::lock(home_dir, name)?;
     let record = StoreRecord::of(home_dir, name)?;
     if record.kind()? != StoreKind::Postgresql {
         return Err(refused(
@@ -39,11 +39,19 @@ pub fn begin<T>(
     }
     let answer = check(&record)?;
     (related.store_idle)(home_dir, name)?;
-    // a host worker admits no PostgreSQL read while `op` stands, and its
-    // held sessions fail their next Light check after the upgrade (#819)
-    record
-        .with(op::FIELD, op.to_record().clone())
-        .write(home_dir)?;
+    // the upgrade renews the login revision (#819 §8.7): a host worker
+    // admits no PostgreSQL read while `op` stands, refuses calls admitted at
+    // the old revision, and retires the sessions it held at it. A record
+    // with no revision gets none: it stays on the direct route
+    let replaced = record.login_revision().map(str::to_owned);
+    let record = record.with(op::FIELD, op.to_record().clone());
+    let record = match replaced {
+        Some(_) => record.with_new_login_revision()?,
+        None => record,
+    };
+    record.write(home_dir)?;
+    drop((store, lock));
+    crate::host_postgresql::retire(home_dir, name, replaced.as_deref());
     Ok(answer)
 }
 

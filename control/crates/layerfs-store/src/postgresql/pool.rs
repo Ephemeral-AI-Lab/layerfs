@@ -43,6 +43,7 @@ use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_machine::wipe::text as wipe;
 use layerfs_store_service::StoreService;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -56,14 +57,6 @@ pub const PER_STORE: usize = 4;
 pub const PER_PROCESS: usize = 8;
 
 type Idle = Vec<(StoreService, Instant)>;
-
-/// Overwrites `text` before it is freed: a password, or an address that
-/// holds one.
-pub fn wipe(text: String) {
-    let mut bytes = text.into_bytes();
-    bytes.fill(0);
-    std::hint::black_box(&bytes);
-}
 
 /// One Store's sessions and identity. No `Debug`: `dial` holds the
 /// password.

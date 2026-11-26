@@ -41,6 +41,11 @@ pub const RETIRE: &str = "store.postgresql_retire";
 /// session.
 const READS: [&str; 3] = ["fs.read", "fs.stat", "fs.list"];
 
+/// Whether this route serves `method`.
+pub fn serves(method: &str) -> bool {
+    read_method(method).is_some()
+}
+
 /// `method`'s argument and answer checks when this route serves it.
 fn read_method(method: &str) -> Option<Method> {
     READS
@@ -161,7 +166,7 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
         .as_mut()
         .and_then(|selection| selection.url.take())
     {
-        crate::postgresql::pool::wipe(url);
+        layerfs_machine::wipe::text(url);
     }
     outcome
 }
@@ -215,21 +220,10 @@ fn admit(
     lease::claim_unblocked_locked(home, store)
 }
 
-/// Overwrites the password a PostgreSQL read `request` carried, once its
-/// answer is written or it is dropped unrun.
+/// Overwrites a PostgreSQL read `request`, which carries a password, once
+/// its answer is written or it is dropped unrun.
 pub fn wipe_request(request: SdkValue) {
-    let SdkValue::Map(fields) = request else {
-        return;
-    };
-    for (name, value) in fields {
-        if let ("args", SdkValue::Map(args)) = (name.as_str(), value) {
-            for (name, value) in args {
-                if let ("password", SdkValue::Text(password)) = (name.as_str(), value) {
-                    crate::postgresql::pool::wipe(password);
-                }
-            }
-        }
-    }
+    layerfs_machine::wipe::value(request);
 }
 
 /// Answers the management request that retires login revision `revision`

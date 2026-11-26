@@ -5,7 +5,7 @@ use layerfs_machine::worker::{HostHello, HostPaths};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
-use std::os::fd::AsFd;
+use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex};
@@ -35,21 +35,15 @@ const CONTROL: Lane = Lane {
 /// the oldest queued read whose Store has a free session slot
 /// (`pool::reserve`), so a read of a busy Store waits in the queue, on no
 /// thread, and never holds a thread another Store could use. `slots` bounds
-/// the reads handed over and not yet answered; at it an ordinary thread
-/// waits at most [`HAND_OVER_WAIT`] for room, then answers the read
-/// `Unavailable`, unrun. Reads whose caller has gone are dropped unrun.
+/// the reads handed over and not yet answered; at it the ordinary thread
+/// answers the read `Unavailable` at once, unrun, and never waits on this
+/// lane. Reads whose caller has gone are dropped unrun.
 const POSTGRES: Lane = Lane {
     index: 2,
     slots: 64,
     threads: layerfs_store::postgresql::pool::PER_PROCESS,
     name: "layerfs-host-postgresql",
 };
-
-/// The longest an ordinary thread waits for room on the PostgreSQL lane.
-const HAND_OVER_WAIT: Duration = Duration::from_secs(5);
-/// How often an idle PostgreSQL lane thread looks again for a read it may
-/// start; a finished read wakes it sooner.
-const POSTGRES_RECHECK: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy)]
 struct Lane {
@@ -108,8 +102,6 @@ pub(super) struct HostServer {
     identity: Vec<(&'static str, SdkValue)>,
     activity: Mutex<Activity>,
     queued: [Condvar; 3],
-    /// Signalled when a handed-over PostgreSQL read is answered.
-    room: Condvar,
     wake: UnixStream,
 }
 
@@ -130,7 +122,6 @@ impl HostServer {
         for ready in &self.queued {
             ready.notify_all();
         }
-        self.room.notify_all();
         self.notify();
     }
 
@@ -225,42 +216,32 @@ impl HostServer {
             }
         }
         if lane.index == POSTGRES.index {
-            // a session slot and room on the lane are free again
-            self.room.notify_all();
+            // a session slot is free again
             self.queued[POSTGRES.index].notify_all();
         }
         self.notify();
     }
 
-    /// Hands PostgreSQL read `request` on `stream` to its lane, waiting at
-    /// most [`HAND_OVER_WAIT`] for room there; while draining it is handed
-    /// back, to be answered here.
+    /// Hands PostgreSQL read `request` on `stream` to its lane, or hands it
+    /// back at once: while draining, or when the lane holds its `slots`
+    /// reads (`Full`); the ordinary thread never waits here.
     fn hand_over(&self, stream: UnixStream, request: SdkValue) -> HandOver {
-        let end = Instant::now() + HAND_OVER_WAIT;
         let mut activity = self.lock();
-        loop {
-            if activity.draining {
-                return HandOver::Back(stream, request);
-            }
-            purge_gone(&mut activity);
-            let queue = &mut activity.lanes[POSTGRES.index];
-            if queue.outstanding < POSTGRES.slots {
-                queue.outstanding += 1;
-                queue.pending.push_back(Pending {
-                    stream,
-                    request: Some(request),
-                });
-                self.queued[POSTGRES.index].notify_all();
-                return HandOver::Queued;
-            }
-            let left = end.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                return HandOver::Full(stream, request);
-            }
-            let wait = left.min(Duration::from_millis(250));
-            activity = (self.room.wait_timeout(activity, wait))
-                .map_or_else(|error| error.into_inner().0, |(activity, _)| activity);
+        if activity.draining {
+            return HandOver::Back(stream, request);
         }
+        purge_gone(&mut activity);
+        let queue = &mut activity.lanes[POSTGRES.index];
+        if queue.outstanding >= POSTGRES.slots {
+            return HandOver::Full(stream, request);
+        }
+        queue.outstanding += 1;
+        queue.pending.push_back(Pending {
+            stream,
+            request: Some(request),
+        });
+        self.queued[POSTGRES.index].notify_all();
+        HandOver::Queued
     }
 
     /// The oldest queued PostgreSQL read whose Store has a free session
@@ -278,10 +259,11 @@ impl HostServer {
             let pending = &mut activity.lanes[POSTGRES.index].pending;
             let mut chosen = None;
             for (at, job) in pending.iter().enumerate() {
-                let store = (job.request.as_ref())
-                    .and_then(|request| request.get("args"))
-                    .and_then(|args| args.get_text("store"))
-                    .filter(|store| layerfs_home::names::StoreName::parse(store).is_ok());
+                // a read refused by its request alone takes no slot
+                let store = job
+                    .request
+                    .as_ref()
+                    .and_then(|request| self.runnable(request));
                 match store {
                     Some(store) if !draining => {
                         if let Some(slot) =
@@ -304,9 +286,25 @@ impl HostServer {
             if draining {
                 return None;
             }
-            activity = (self.queued[POSTGRES.index].wait_timeout(activity, POSTGRES_RECHECK))
-                .map_or_else(|error| error.into_inner().0, |(activity, _)| activity);
+            // every slot given back ends a read, whose `finish` wakes us
+            activity = (self.queued[POSTGRES.index].wait(activity))
+                .unwrap_or_else(|error| error.into_inner());
         }
+    }
+
+    /// The Store of PostgreSQL read `request` when nothing in the request
+    /// alone refuses it: this worker's generation, a method the route
+    /// serves and a Store name. The record is checked when it runs.
+    fn runnable<'a>(&self, request: &'a SdkValue) -> Option<&'a str> {
+        if request.get_text("generation") != Some(self.hello.generation.as_str()) {
+            return None;
+        }
+        let args = request.get("args")?;
+        let method = args.get_text("method")?;
+        layerfs_store::host_postgresql::serves(method).then_some(())?;
+        let store = args.get_text("store")?;
+        layerfs_home::names::StoreName::parse(store).ok()?;
+        Some(store)
     }
 
     fn work_postgres(&self) {
@@ -642,7 +640,8 @@ enum HandOver {
     Queued,
     /// Draining: answered by the ordinary thread.
     Back(UnixStream, SdkValue),
-    /// No room within [`HAND_OVER_WAIT`]: answered `Unavailable`, unrun.
+    /// The lane holds its `slots` reads: answered `Unavailable` at once,
+    /// unrun.
     Full(UnixStream, SdkValue),
 }
 
@@ -665,15 +664,36 @@ fn purge_gone(activity: &mut Activity) {
     }
 }
 
-/// Whether the caller of `stream`, which sends nothing after its request,
-/// has closed or reset its end.
+/// Whether the caller of `stream` has closed or reset its end: a hang-up,
+/// an error, or end of file seen by a peek that consumes nothing. Bytes the
+/// caller sends are not a close: a streamed P-B write (#819, Step 7) may
+/// send more after its request, and stays queued.
 fn peer_gone(stream: &UnixStream) -> bool {
+    use nix::sys::socket::{recv, MsgFlags};
     let mut ready = [PollFd::new(stream.as_fd(), PollFlags::POLLIN)];
-    match poll(&mut ready, 0u16) {
-        Ok(_) => ready[0].revents().is_some_and(|events| {
-            events.intersects(PollFlags::POLLIN | PollFlags::POLLHUP | PollFlags::POLLERR)
-        }),
-        Err(_) => false,
+    let Ok(_) = poll(&mut ready, 0u16) else {
+        return false;
+    };
+    let Some(events) = ready[0].revents() else {
+        return false;
+    };
+    if events.intersects(PollFlags::POLLHUP | PollFlags::POLLERR) {
+        return true;
+    }
+    if !events.contains(PollFlags::POLLIN) {
+        return false;
+    }
+    let mut byte = [0u8; 1];
+    let peeked = recv(
+        stream.as_raw_fd(),
+        &mut byte,
+        MsgFlags::MSG_PEEK | MsgFlags::MSG_DONTWAIT,
+    );
+    match peeked {
+        Ok(0) => true,
+        Ok(_) => false,
+        Err(nix::errno::Errno::EAGAIN | nix::errno::Errno::EINTR) => false,
+        Err(_) => true,
     }
 }
 
@@ -742,7 +762,6 @@ fn run(
         identity: layerfs_home::process::identity(),
         activity: Mutex::new(Activity::new()),
         queued: Default::default(),
-        room: Condvar::new(),
         wake,
     };
     let served = std::thread::scope(|scope| {

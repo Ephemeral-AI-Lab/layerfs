@@ -22,7 +22,7 @@ layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 # The errno names of the worker's accept loop (constants only).
 libc = "=0.2.189"
 # Safe polling of the host worker’s Unix sockets.
-nix = { version = "=0.31.3", default-features = false, features = ["poll"], optional = true }
+nix = { version = "=0.31.3", default-features = false, features = ["poll", "socket"], optional = true }
 
 [features]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the

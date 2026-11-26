@@ -38,6 +38,7 @@ mod spec;
 pub mod state;
 #[cfg(feature = "machine")]
 mod update;
+pub mod wipe;
 pub mod worker;
 
 #[cfg(feature = "machine")]
