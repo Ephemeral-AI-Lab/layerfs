@@ -1,0 +1,109 @@
+=== sqlite init_nested_1k  2026-11-26T22:47:56Z load { 9.04 7.93 7.13 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_nested_1k ... FS_RT {"arm":"sqlite","case":"init.nested_1k","method":"project.init","entries":1011,"ms":50.5,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":308,"transactions":24,"returned_rows":9297},"server":null,"logical":9900,"walked":9900,"stored":22153,"canonical":137268,"load1":"9.60"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.25s
+
+run_bounded: exit 0 after 0.8 s
+exit 0
+=== sqlite init_flat_1k  2026-11-26T22:47:57Z load { 9.60 8.07 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_flat_1k ... FS_RT {"arm":"sqlite","case":"init.flat_1k","method":"project.init","entries":1002,"ms":52.7,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":2284,"transactions":25,"returned_rows":12257},"server":null,"logical":10890,"walked":10890,"stored":24725,"canonical":137359,"load1":"9.60"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.26s
+
+run_bounded: exit 0 after 0.3 s
+exit 0
+=== sqlite init_nested_10k  2026-11-26T22:47:58Z load { 9.60 8.07 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_nested_10k ... FS_RT {"arm":"sqlite","case":"init.nested_10k","method":"project.init","entries":10101,"ms":491.5,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":12169,"transactions":57,"returned_rows":102986},"server":null,"logical":108000,"walked":108000,"stored":225949,"canonical":1379418,"load1":"9.60"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 2.07s
+
+run_bounded: exit 0 after 2.1 s
+exit 0
+=== sqlite init_flat_10k  2026-11-26T22:48:00Z load { 9.60 8.07 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_flat_10k ... FS_RT {"arm":"sqlite","case":"init.flat_10k","method":"project.init","entries":10002,"ms":510.0,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":31882,"transactions":60,"returned_rows":132438},"server":null,"logical":118890,"walked":118890,"stored":253476,"canonical":1380691,"load1":"9.60"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 1.81s
+
+run_bounded: exit 0 after 1.8 s
+exit 0
+=== pg init_nested_1k  2026-11-26T22:48:02Z load { 9.60 8.07 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_nested_1k ... FS_RT {"arm":"pg","case":"init.nested_1k","method":"project.init","entries":1011,"ms":409.5,"client_storage":{"connects":0,"round_trips":229,"prepares":47,"statements":118,"transactions":33,"returned_rows":9182},"server":{"toplevel_calls":363,"nested_calls":3050,"evicted":false,"distinct":65,"top":[[33,"COMMIT"],[33,"SET LOCAL search_path TO lfs818_init_29404"],[32,"SELECT $1"],[32,"SELECT catalog_incarnation::text FROM lfs818_init_29404.history_meta WHERE id=$1"],[21,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[20,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "]]},"logical":9900,"walked":9900,"stored":22160,"canonical":137268,"load1":"9.39"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.76s
+
+run_bounded: exit 0 after 0.8 s
+exit 0
+=== pg init_flat_1k  2026-11-26T22:48:03Z load { 9.39 8.05 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_flat_1k ... FS_RT {"arm":"pg","case":"init.flat_1k","method":"project.init","entries":1002,"ms":1016.3,"client_storage":{"connects":0,"round_trips":2246,"prepares":49,"statements":2125,"transactions":37,"returned_rows":12128},"server":{"toplevel_calls":2397,"nested_calls":3036,"evicted":false,"distinct":67,"top":[[1000,"INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) VALUES($1::bigint,"],[1000,"UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=$6 WHERE operation_id=$1"],[37,"COMMIT"],[37,"SET LOCAL search_path TO lfs818_init_29426"],[36,"SELECT $1"],[36,"SELECT catalog_incarnation::text FROM lfs818_init_29426.history_meta WHERE id=$1"]]},"logical":10890,"walked":10890,"stored":24735,"canonical":137359,"load1":"9.39"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 1.37s
+
+run_bounded: exit 0 after 1.4 s
+exit 0
+=== pg init_nested_10k  2026-11-26T22:48:04Z load { 9.39 8.05 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_nested_10k ... FS_RT {"arm":"pg","case":"init.nested_10k","method":"project.init","entries":10101,"ms":9152.9,"client_storage":{"connects":0,"round_trips":10952,"prepares":47,"statements":10663,"transactions":120,"returned_rows":111940},"server":{"toplevel_calls":11466,"nested_calls":30415,"evicted":true,"distinct":65,"top":[[10141,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[205,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[120,"COMMIT"],[120,"SET LOCAL search_path TO lfs818_init_29448"],[119,"SELECT $1"],[119,"SELECT catalog_incarnation::text FROM lfs818_init_29448.history_meta WHERE id=$1"]]},"logical":108000,"walked":108000,"stored":225969,"canonical":1379418,"load1":"8.72"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 13.96s
+
+run_bounded: exit 0 after 14.0 s
+exit 0
+=== pg init_flat_10k  2026-11-26T22:48:18Z load { 8.72 7.96 7.17 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_flat_10k ... FS_RT {"arm":"pg","case":"init.flat_10k","method":"project.init","entries":10002,"ms":16202.2,"client_storage":{"connects":0,"round_trips":31042,"prepares":49,"statements":30703,"transactions":144,"returned_rows":141259},"server":{"toplevel_calls":31659,"nested_calls":30264,"evicted":false,"distinct":67,"top":[[10136,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[10000,"INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) VALUES($1::bigint,"],[10000,"UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=$6 WHERE operation_id=$1"],[203,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[144,"COMMIT"],[144,"SET LOCAL search_path TO lfs818_init_29518"]]},"logical":118890,"walked":118890,"stored":253527,"canonical":1380691,"load1":"8.55"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 20.90s
+
+run_bounded: exit 0 after 21.0 s
+exit 0
+=== pg2 init_nested_1k  2026-11-26T22:48:39Z load { 8.55 7.98 7.19 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_nested_1k ... FS_RT {"case":"calibration.select1","delay_ms":2,"min_us":2627,"median_us":3031,"p90_us":4097}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":258,"median_us":351,"p90_us":701}
+FS_RT {"arm":"pg2","case":"init.nested_1k","method":"project.init","entries":1011,"ms":1239.4,"client_storage":{"connects":0,"round_trips":229,"prepares":47,"statements":118,"transactions":33,"returned_rows":9182},"server":{"toplevel_calls":363,"nested_calls":3050,"evicted":false,"distinct":65,"top":[[33,"COMMIT"],[33,"SET LOCAL search_path TO lfs818_init_29655"],[32,"SELECT $1"],[32,"SELECT catalog_incarnation::text FROM lfs818_init_29655.history_meta WHERE id=$1"],[21,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[20,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "]]},"logical":9900,"walked":9900,"stored":22160,"canonical":137268,"load1":"8.19"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":243,"median_us":365,"p90_us":838}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 9.06s
+
+run_bounded: exit 0 after 9.1 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
+=== pg2 init_flat_1k  2026-11-26T22:48:50Z load { 7.93 7.87 7.16 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069
+
+running 1 test
+test init_flat_1k ... FS_RT {"case":"calibration.select1","delay_ms":2,"min_us":2603,"median_us":3752,"p90_us":4445}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":2608,"median_us":3674,"p90_us":4278}
+FS_RT {"arm":"pg2","case":"init.flat_1k","method":"project.init","entries":1002,"ms":9457.4,"client_storage":{"connects":0,"round_trips":2246,"prepares":49,"statements":2125,"transactions":37,"returned_rows":12128},"server":{"toplevel_calls":2397,"nested_calls":3036,"evicted":true,"distinct":67,"top":[[1000,"INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) VALUES($1::bigint,"],[1000,"UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=$6 WHERE operation_id=$1"],[37,"COMMIT"],[37,"SET LOCAL search_path TO lfs818_init_29856"],[36,"SELECT $1"],[36,"SELECT catalog_incarnation::text FROM lfs818_init_29856.history_meta WHERE id=$1"]]},"logical":10890,"walked":10890,"stored":24727,"canonical":137359,"load1":"6.82"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":215,"median_us":392,"p90_us":982}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 27.94s
+
+run_bounded: exit 0 after 27.9 s
+exit 0
+netem after: 
+netem check after the run (the line above came back empty: the check's apk fetch printed nothing): qdisc noqueue 0: root refcnt 2 
