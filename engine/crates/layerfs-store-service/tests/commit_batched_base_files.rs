@@ -132,10 +132,10 @@ const POSTGRESQL: &[Wire] = &[
     },
     Wire {
         scenario: "commit.metadata",
-        writer: [0, 11, 17, 2],
+        writer: [0, 12, 17, 2],
         workspace: [0, 0, 0, 0],
         phases: &[
-            ("construct", 1),
+            ("construct", 2),
             ("finish", 5),
             ("logical.count", 3),
             ("publish.fused", 2),
@@ -145,11 +145,7 @@ const POSTGRESQL: &[Wire] = &[
         scenario: "commit.edits",
         writer: [0, 13, 25, 3],
         workspace: [0, 3, 3, 0],
-        phases: &[
-            ("construct", 9),
-            ("finish", 6),
-            ("publish.fused", 1),
-        ],
+        phases: &[("construct", 9), ("finish", 6), ("publish.fused", 1)],
     },
 ];
 
