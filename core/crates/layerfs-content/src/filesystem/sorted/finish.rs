@@ -179,16 +179,15 @@ pub(crate) fn apply_directory_root(
     })
 }
 
+type DirectoryChangeObserver<'a> = dyn FnMut(&crate::filesystem::path::PathName, Option<u64>, Option<u64>) -> ContentResult<()>
+    + 'a;
+
 pub(crate) fn apply_directory_root_observed(
     objects: &mut FilesystemObjects<'_>,
     base: Option<(DirectoryRoot, Option<Vec<u8>>)>,
     changes: impl Iterator<Item = ContentResult<(crate::filesystem::path::PathName, Option<u64>)>>,
     scratch_limit: usize,
-    observe: &mut dyn FnMut(
-        &crate::filesystem::path::PathName,
-        Option<u64>,
-        Option<u64>,
-    ) -> ContentResult<()>,
+    observe: &mut DirectoryChangeObserver<'_>,
 ) -> ContentResult<(DirectoryRoot, SortedWork)> {
     let (root, fetched) = base.map_or((None, None), |(root, fetched)| (Some(root.0), fetched));
     let (root, work) = Engine::<CompactDirectory>::apply_root(
