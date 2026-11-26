@@ -74,6 +74,8 @@ fn machine_in(parent: &Path, tag: &str) -> Machine {
     let _ = std::fs::remove_dir_all(&scratch);
     let layerfs = scratch.join("layerfs");
     let data = layerfs.join("data");
+    // a worker's root: its run root is the guest's (#819 R)
+    home::guest::serve_root(&data);
     let run = paths::run_root(&data).join("layerfs-0a1b2c3d-s1");
     for folder in ["tmp", "workspaces", "config", "overlay"] {
         std::fs::create_dir_all(run.join(folder)).unwrap();
@@ -251,8 +253,8 @@ fn the_roots_are_the_layerfs_folders_ranked_by_role_then_the_machine() {
             fx.data.display().to_string(),
             data("store"),
             data("sandbox"),
-            data("machine/native/run"),
-            data("machine/native/run/images"),
+            data("machine/linux-guest/run"),
+            data("machine/linux-guest/run/images"),
             data("incoming"),
             data("log"),
             beside("state"),
@@ -302,9 +304,10 @@ fn the_roots_are_the_layerfs_folders_ranked_by_role_then_the_machine() {
     let home = fx.scratch.join("home");
     home::private_dir(&home).unwrap();
     home::ensure(&home).unwrap();
-    for folder in ["store", "sandbox", "machine/native/run", "log", "secret"] {
+    for folder in ["store", "sandbox", "log", "secret"] {
         std::fs::create_dir_all(home.join(folder)).unwrap();
     }
+    std::fs::create_dir_all(paths::run_root(&home)).unwrap();
     let native = inspect::machine_page(&Side::Home(&home), &args(&[]), &|| false).unwrap();
     println!("machine.files native roots: {}", json(&native));
     assert_eq!(
@@ -339,10 +342,10 @@ fn a_layerfs_folder_is_read_beneath_itself_and_keeps_what_layerfs_keeps() {
     assert_eq!(
         shown(&deep, &data.join("machine")),
         [
-            "native folder",
-            "native/run folder run_folders",
-            "native/run/images folder images",
-            "native/run/layerfs-0a1b2c3d-s1 folder"
+            "linux-guest folder",
+            "linux-guest/run folder run_folders",
+            "linux-guest/run/images folder images",
+            "linux-guest/run/layerfs-0a1b2c3d-s1 folder"
         ]
     );
 
@@ -502,6 +505,44 @@ fn a_layerfs_folder_is_read_beneath_itself_and_keeps_what_layerfs_keeps() {
     );
 }
 
+/// A run folder outside the side's run root (the `machine/native/run/`
+/// an earlier build left on a data disk) keeps what a run folder keeps:
+/// its key and overlay databases restricted, its log a log, its
+/// Workspaces mounts. Privacy does not follow which run root is read.
+#[test]
+fn a_leftover_run_folder_under_another_machine_folder_keeps_its_secrets() {
+    let fx = machine("leftover");
+    let data = &fx.data;
+    let old = data.join("machine/native/run/layerfs-0a1b2c3d-old");
+    for folder in ["tmp", "workspaces/1", "config", "overlay"] {
+        std::fs::create_dir_all(old.join(folder)).unwrap();
+    }
+    std::fs::write(old.join("daemon.log"), "listening\n").unwrap();
+    std::fs::write(old.join("config/daemon.setup"), "private key").unwrap();
+    std::fs::write(old.join("overlay/1.sqlite"), "overlay").unwrap();
+    std::fs::write(old.join("tmp/notes.txt"), "by a command\n").unwrap();
+    let listed = at(data, &old, &[]).unwrap();
+    assert_eq!(
+        shown(&listed, &old),
+        [
+            "config restricted",
+            "daemon.log file log",
+            "overlay restricted",
+            "tmp folder",
+            "workspaces folder"
+        ]
+    );
+    for secret in ["config/daemon.setup", "overlay/1.sqlite"] {
+        let (code, message) = refused(at(data, &old.join(secret), &[]));
+        assert_eq!(code, "InvalidInput", "{secret}: {message}");
+        assert!(!message.contains("private key") && !message.contains("overlay\n"));
+    }
+    invalid(at(data, &old.join("daemon.log"), &[]), "is a log");
+    invalid(at(data, &old.join("workspaces/1"), &[]), "is a mount point");
+    let notes = at(data, &old.join("tmp/notes.txt"), &[]).unwrap();
+    assert_eq!(notes.get_text("content"), Some("by a command\n"));
+}
+
 #[test]
 fn the_image_cache_keeps_its_locks_and_a_home_keeps_its_own_lock_files() {
     let fx = machine("locks");
@@ -539,16 +580,11 @@ fn a_home_reads_only_its_layerfs_folders() {
     let home = fx.scratch.join("home");
     home::private_dir(&home).unwrap();
     home::ensure(&home).unwrap();
-    for folder in [
-        "store/shop",
-        "sandbox",
-        "machine/native/run",
-        "machine/box",
-        "log",
-        "secret",
-    ] {
+    for folder in ["store/shop", "sandbox", "machine/box", "log", "secret"] {
         std::fs::create_dir_all(home.join(folder)).unwrap();
     }
+    let run = paths::run_root(&home);
+    std::fs::create_dir_all(&run).unwrap();
     std::fs::write(home.join("store/shop/record.json"), "{}").unwrap();
     std::fs::write(home.join("store/shop/store.sqlite"), "db").unwrap();
     std::fs::write(home.join("machine/box/worker.json"), "secret").unwrap();
@@ -581,7 +617,7 @@ fn a_home_reads_only_its_layerfs_folders() {
         home.clone(),
         home.join("secret/key"),
         home.join("machine/box/worker.json"),
-        home.join("machine/native"),
+        run.parent().unwrap().to_owned(),
     ];
     for path in outside {
         let refusal = inspect::machine_files(&home, &native, &request(&path)).unwrap_err();

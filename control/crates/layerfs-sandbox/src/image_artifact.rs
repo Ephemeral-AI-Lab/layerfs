@@ -39,9 +39,9 @@ fn hex(value: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-/// The image cache under a home or worker root:
-/// `<root>/machines/native/run/images`, where the namespaces backend
-/// unpacks images (`rootfs::cache` of the runtime root).
+/// The image cache under a home or worker root: `images/` of its
+/// run root ([`paths::run_root`]), where the namespaces backend unpacks
+/// images (`rootfs::cache` of the runtime root).
 pub fn cache(root: &Path) -> PathBuf {
     rootfs::cache(&paths::run_root(root))
 }

@@ -52,7 +52,8 @@ steps.
     worker.json                endpoint, secret, live forward (0600)
     start.lock                 taken while a process starts, makes or removes the machine
     forward.log, forward.1.log what a lima machine's ssh forwards said, and its one rotated file
-  machine/native/run/          native Sandboxes' run folders, and their image cache
+  machine/<host>/run/          the host machine's Sandboxes' run folders and image cache
+                               (<host> is macos-host or linux-host)
     layerfs-<id8>-<sandbox>/   one run folder per Sandbox
     layerfs-<id8>-<sandbox>.root/  its private root (Linux; empty from outside)
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
@@ -86,11 +87,10 @@ worker's root:
 
 ```
 /layerfs/data/
-  .layout-3                    what an earlier bundle left here was cleared
   store/<name>/                record.json (v, name, kind), store.sqlite, store.sqlite.incoming
                                (a store move's partial copy), store.sqlite.backup
   sandbox/<name>/              record.json, control.json, lock, workspace/ as above
-  machine/native/run/          the machine's Sandboxes' run folders and image cache, as above
+  machine/linux-guest/run/     the machine's Sandboxes' run folders and image cache, as above
   incoming/init-<16 hex>/      the folder copy of a project init, while it runs
   log/                         worker.log, worker.1.log (private to root), exec.jsonl,
                                exec.1.jsonl, rotate.lock
@@ -105,9 +105,9 @@ worker's root:
   and the entity's own lock (`store/<s>/lock`, `sandbox/<name>/lock`) for
   its record's other changes. Locks are taken home first, then a machine's
   `start.lock`, then a Store's, then a Sandbox's (#536 §8).
-  Files are 0600 and folders 0700. The run root `machine/native/run/` is
+  Files are 0600 and folders 0700. The run root `machine/<host>/run/` is
   0755. On Linux, where a Sandbox's commands run as another user, the
-  folders above the run root (`machine/native/`, `machine/` and the home)
+  folders above the run root (`machine/linux-host/`, `machine/` and the home)
   also let others pass through, never list: 0701. `layerfs home doctor` accepts
   0700 and 0701 for the home's folders, reports any group bit or any read
   or write bit for others, and wants exactly 0700 for a Store's own folder
@@ -162,7 +162,7 @@ worker's root:
   and boot. Its Workspace records are then in the home's `workspace/`,
   not the machine's. `runtime_id` and `daemon` are never shown. The
   Sandbox's `id` is its name.
-- **`machine/native/run/`** holds each native Sandbox's run folder
+- **`machine/<host>/run/`**, the run root, holds each host Sandbox's run folder
   (`layerfs-<id8>-<name>`) and the image cache the namespaces backend
   unpacks once (`images/<64 hex>.2`; `.2` is the cache's layout version).
   A Sandbox's run folder is created by its create and deleted by its
@@ -171,7 +171,14 @@ worker's root:
   is the number in the Workspace's record `workspace/<id>.json`), and
   `tmp/`, the `HOME` of the Sandbox's commands. Nothing limits what a
   Sandbox writes there: it shares the disk of the home, or of the
-  machine's data disk, with the Stores.
+  machine's data disk, with the Stores. The run root is named for its
+  side: `machine/macos-host/run/` in a home on a Mac,
+  `machine/linux-host/run/` in a home on Linux and
+  `machine/linux-guest/run/` on a machine's data disk. A
+  `machine/native/` that an earlier development build left is not read.
+  In a home, `layerfs home doctor` names it with the command that removes
+  it, or that first unmounts what is still mounted under it; doctor does
+  not check a machine's data disk.
 - **Command records** (`sandbox/<name>/workspace/<id>/exec/<x>.json`)
   are written new when a command starts and removed when it ends, on the
   side that keeps the Workspace's record: here on `native` and for a
@@ -242,7 +249,7 @@ worker's root:
 
 | Sandbox on | Its record | Daemon keys (`control.json`) | Workspace and command records | Run folder |
 | --- | --- | --- | --- | --- |
-| `native` | the home | the home | the home | the home's `machine/native/run/` |
+| `native` | the home | the home | the home | the home's `machine/<host>/run/` |
 | `lima`, daemon reached directly (its port forwarded to the host) | the home, and the machine | both | the home | the machine |
 | any other machine | the home (without `daemon`), and the machine | the machine | the machine | the machine |
 
@@ -254,16 +261,10 @@ with a thin `store/<name>/record.json` (`{"v":1,"name","kind"}`, written
 only when it changed), and `sandbox/<name>/` for the Sandboxes on that
 machine (`record.json`: `v`, `name`, `project`, `backend`, `runtime_id`
 and `daemon`; `control.json`; `workspace/`), with their local directories
-under `machine/native/run/`. The worker's own output is in
+under `machine/linux-guest/run/`. The worker's own output is in
 `/layerfs/data/log/worker.log` on every machine kind, docker included
 (private to root; a start that finds it past 16 MiB renames it to
-`worker.1.log` first). On its first start from a layout 3 bundle the
-worker deletes what an earlier bundle left there, once, and logs each
-deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
-`machine/*/sandbox/`, old local directories in
-`machine/native/sandbox-root/` (renamed `machine/native/run/`, its
-`images/` kept) and full Store records (rewritten thin). The marker
-`/layerfs/data/.layout-3` keeps it from running again.
+`worker.1.log` first).
 
 ## Secrets, and moving or copying a home
 

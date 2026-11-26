@@ -868,7 +868,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   completion or error; one a `SIGKILL`ed copy left is swept by the next copy
   of the same image to the same machine, and any other by the next copy of
   an image no copy holds), sent in 1 MiB frames and unpacked on the
-  machine under `machines/native/run/images/<hex>.2/` with a sidecar
+  machine under `machine/linux-guest/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
   `{what: "machine"}`. One copy of an image on one machine at a time: a
@@ -1087,7 +1087,7 @@ home; ids shortened to 8 characters and `…`):
 
 ```console
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
 $ layerfs workspace list
 {"items":[{"workspace":"tests:agent","branch":"agent"}]}
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'

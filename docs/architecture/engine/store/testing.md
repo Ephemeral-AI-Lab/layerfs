@@ -119,8 +119,8 @@ findmnt -n -o FSTYPE --target /path/to/candidate   # ext4, xfs or btrfs
 
 Inside a Docker Sandbox (the `namespaces` runtime), the sandbox run directory
 is ext4 while `/tmp` is tmpfs and the checkout is an overlay: `$HOME` and
-`/layerfs/data/machine/native/run/<sandbox>` report ext4, so a directory such
-as `/layerfs/data/machine/native/run/<sandbox>/tmp/layerfs-store-tests` is a
+`/layerfs/data/machine/linux-guest/run/<sandbox>` report ext4, so a directory such
+as `/layerfs/data/machine/linux-guest/run/<sandbox>/tmp/layerfs-store-tests` is a
 valid `LAYERFS_TEST_TMPDIR`. Never use `/tmp`.
 
 On macOS the corresponding local filesystems are `apfs` and `hfs`; the

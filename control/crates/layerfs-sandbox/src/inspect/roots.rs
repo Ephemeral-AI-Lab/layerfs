@@ -57,10 +57,12 @@ pub(super) enum Kept {
 ///
 /// - A Store's database and its companions, `store.sqlite*`, wherever
 ///   they are.
-/// - In a run folder (`machine/native/run/<name>/`): `config/` (the
-///   daemon's private key) and `overlay/` (the Workspaces' databases) are
-///   restricted, `daemon.log` is a log, and what is under `workspaces/` is
-///   a Workspace mount. Its `tmp/` is the commands' home: theirs, open.
+/// - In a run folder (`machine/<folder>/run/<name>/`, whatever the
+///   machine folder is named: the side's own run root, or one another
+///   build left): `config/` (the daemon's private key) and `overlay/` (the
+///   Workspaces' databases) are restricted, `daemon.log` is a log, and
+///   what is under `workspaces/` is a Workspace mount. Its `tmp/` is the
+///   commands' home: theirs, open.
 /// - Elsewhere under `root`: `control.json` and `worker.json` (keys),
 ///   `lock` and `*.lock` (locks), a Store's `open/` (its leases), and
 ///   `log/worker.log` with `worker.1.log` (logs).
@@ -90,7 +92,9 @@ pub(super) fn kept(root: &Path, path: &Path) -> Kept {
         };
     }
     let named = |at: usize, name: &str| names.get(at).is_some_and(|found| *found == name);
-    if named(0, "machine") && named(1, "native") && named(2, "run") && names.len() > 4 {
+    // a run folder under any machine folder: privacy does not depend on
+    // which run root this build reads
+    if named(0, "machine") && named(2, "run") && names.len() > 4 {
         return match names[4].to_str() {
             Some("config" | "overlay") => Kept::Restricted,
             Some(LOG) if names.len() == 5 => Kept::Log,
@@ -177,11 +181,12 @@ pub(super) fn recorded_under(root: &Path) -> SdkValue {
 /// The LayerFS folders of the machine `side` serves, in the order a
 /// client shows them, each with its role. On a worker's root
 /// (`/layerfs/data`): the root itself (`data`), in it `store` (`stores`),
-/// `sandbox` (`sandbox_records`), `machine/native/run` (`run_folders`)
+/// `sandbox` (`sandbox_records`), `machine/linux-guest/run` (`run_folders`)
 /// with its `images` (`images`), `incoming` (`staging`) and `log`
 /// (`logs`), then beside it `state` (`state`), `bundle` (`bundle`) and
 /// `image` (`image`). In a home, which is its owner's own computer:
-/// `store`, `sandbox`, `machine/native/run` and `log` only.
+/// `store`, `sandbox`, the run root `machine/<host machine>/run` and `log`
+/// only.
 pub(super) fn folders(side: &Side<'_>) -> Vec<(PathBuf, &'static str)> {
     let (Side::Home(root) | Side::Worker(root)) = side;
     let run = paths::run_root(root);

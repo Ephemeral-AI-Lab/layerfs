@@ -45,6 +45,7 @@ The doctor never runs a fix. A `fix` is one runnable shell line (two commands ar
 | Partial `store.sqlite.incoming` copy | `store`, `path` | `rm <file>` |
 | File mode wrong (`0644`, `0755`) | default (`kind`, `name`) | `chmod 600 <record>`, `chmod 700 <dir>` or `chmod g-rwx,o-rw <path>` |
 | Leftover Workspace folder | default | `rm -r <folder>` |
+| Leftover `machine/native/` of an earlier development build (its run root before #819 R; nothing reads it), a `warning` | default | `rm -rf <home>/machine/native`; while something is mounted under it, `umount <mounts>` (deepest first) instead, so the removal never walks into a Workspace an older daemon serves |
 | Stale exec record | default | `layerfs workspace cancel <workspace> --exec <id>` |
 | Symlink, integrity or other by-hand repair | default | No fix: no command repairs it |
 

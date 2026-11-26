@@ -274,8 +274,9 @@ not prove descendants ended.
 
 ### The run folder
 
-`<root>` is the run root, `machine/native/run/` of the home or of a worker's
-root, and `<name>` the Sandbox's run folder name
+`<root>` is the run root, `machine/<host>/run/` of the home or
+`machine/linux-guest/run/` of a worker's root, and `<name>` the Sandbox's
+run folder name
 ([Home: names outside the records](../home/README.md#names-outside-the-records)).
 A `process` Sandbox's entries are this user's; a `namespaces` Sandbox's are
 root's, and its commands run as another, nonroot identity. Everything in

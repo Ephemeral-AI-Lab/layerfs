@@ -116,7 +116,7 @@ $ layerfs sandbox create shop/api tests --progress
 {"phase":"start","done":1,"total":1}
 {"ok":true}
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
 {"exit_code":0,"stdout":"Darwin\n"}
 $ layerfs workspace status tests:agent

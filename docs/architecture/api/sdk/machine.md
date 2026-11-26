@@ -188,7 +188,7 @@ Python  layerfs.machine.images(machine, *, with_=None)
 The Sandbox images a machine holds, read without starting it
 ([`images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs)):
 one item per image, published unpacked images with their sidecars
-(`machine/native/run/images/<hex>.2.json`), what the archives its Sandboxes
+(`images/<hex>.2.json` in the machine's run root, `machine/<host machine>/run` or `machine/linux-guest/run`), what the archives its Sandboxes
 read hold, and what copies left. A published image is `ready` (a stale part
 beside it is its `staged_bytes`); a part a live copy holds is `busy` with
 `op {name: load_image, phase, started_at}` (the phase the copy recorded in
@@ -449,8 +449,8 @@ A client shows roles and never writes a path of its own.
 | `data` | `/layerfs/data`, the worker's root, with `disk_free_bytes` | — |
 | `stores` | `/layerfs/data/store` | `<home>/store` |
 | `sandbox_records` | `/layerfs/data/sandbox` | `<home>/sandbox` |
-| `run_folders` | `/layerfs/data/machine/native/run`: one folder per Sandbox | `<home>/machine/native/run` |
-| `images` | `/layerfs/data/machine/native/run/images`: the image cache | — (inside `run_folders`) |
+| `run_folders` | `/layerfs/data/machine/linux-guest/run`: one folder per Sandbox | `<home>/machine/<host machine>/run` |
+| `images` | `/layerfs/data/machine/linux-guest/run/images`: the image cache | — (inside `run_folders`) |
 | `staging` | `/layerfs/data/incoming`: folder copies of a `project init` | — |
 | `logs` | `/layerfs/data/log` | `<home>/log` |
 | `state` | `/layerfs/state`: the worker's pid and secret | — |
@@ -476,7 +476,7 @@ Refusals are `sandbox files`'s.
 
 ```console
 $ layerfs machine files native
-{"items":[{"path":"/tmp/demo/home/store","type":"dir"},{"path":"/tmp/demo/home/sandbox","type":"dir"},{"path":"/tmp/demo/home/machine/native/run","type":"dir"}]}
+{"items":[{"path":"/tmp/demo/home/store","type":"dir"},{"path":"/tmp/demo/home/sandbox","type":"dir"},{"path":"/tmp/demo/home/machine/macos-host/run","type":"dir"}]}
 ```
 
 ### machine.log

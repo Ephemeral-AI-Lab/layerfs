@@ -386,12 +386,17 @@ fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write()
     let roots = files_of(&home, layerfs_home::names::HOST_MACHINE, &[]).unwrap();
     // the Store's lock was held throughout
     assert!(at.elapsed() < Duration::from_secs(10), "{:?}", at.elapsed());
+    // the home's run root is its host machine's (#819 R)
+    let run_root = format!(
+        "machine/{}/run dir run_folders",
+        layerfs_home::names::HOST_MACHINE
+    );
     assert_eq!(
         shown(&roots, &home),
         [
             "store dir stores",
             "sandbox dir sandbox_records",
-            "machine/native/run dir run_folders",
+            run_root.as_str(),
             "log dir logs"
         ]
     );
@@ -511,7 +516,7 @@ fn a_worker_reads_its_machine_s_files_and_neither_side_changes() {
             "data dir data",
             "data/store dir stores",
             "data/sandbox dir sandbox_records",
-            "data/machine/native/run dir run_folders",
+            "data/machine/linux-guest/run dir run_folders",
             "state dir state",
             "/ dir machine"
         ]

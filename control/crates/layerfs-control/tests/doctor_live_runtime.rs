@@ -21,7 +21,7 @@ fn records(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     let mut result = BTreeMap::new();
     let mut pending = vec![root.to_owned()];
     while let Some(path) = pending.pop() {
-        if path == root.join("machine/native/run") {
+        if path == paths::run_root(root) {
             continue;
         }
         for entry in std::fs::read_dir(&path).unwrap() {

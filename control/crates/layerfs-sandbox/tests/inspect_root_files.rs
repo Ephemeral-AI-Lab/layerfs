@@ -77,7 +77,10 @@ fn fixture(tag: &str, runtime: &'static str, live: bool) -> Fixture {
     ));
     let _ = std::fs::remove_dir_all(&scratch);
     let data = scratch.join("layerfs/data");
+    // a worker's root: its run root is the guest's (#819 R)
+    layerfs_home::home::guest::serve_root(&data);
     let run = paths::run_root(&data).join("layerfs-0a1b2c3d-s1");
+    assert!(run.starts_with(data.join("machine/linux-guest/run")));
     for folder in ["tmp", "workspaces/1", "config", "overlay"] {
         std::fs::create_dir_all(run.join(folder)).unwrap();
     }

@@ -6,8 +6,8 @@
 //! refused before any effect.
 //!
 //! Each Sandbox gets a directory `<deploy.localDir>/<prefix><name>` (the
-//! machine's `machine/native/run/`, beside the image cache the namespaces
-//! backend keeps there) holding its setup, overlay template and Workspace
+//! side's run root, `paths::run_root`, beside the image cache the
+//! namespaces backend keeps there) holding its setup, overlay template and Workspace
 //! mounts. The daemon opens the installed Store where this process opens it
 //! (`storePath`), so the daemon setup and the Store's locator name that
 //! path. The daemon
@@ -60,7 +60,7 @@ pub fn start(
     let root = deploy.local_dir.as_deref().ok_or_else(|| {
         refused(
             "InvalidInput",
-            "deploy.localDir is not configured; a native Sandbox needs it (the machine's machine/native/run)",
+            "deploy.localDir is not configured; a native Sandbox needs it (the machine's run root)",
         )
     })?;
     let runtime = native_runtime(root, backend)

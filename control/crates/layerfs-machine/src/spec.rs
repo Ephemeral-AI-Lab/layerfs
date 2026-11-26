@@ -28,8 +28,9 @@ pub const DEFAULT_DISK: i64 = 20 << 30;
 /// found or written (#535 R6).
 static ENSURED: Mutex<BTreeSet<(PathBuf, String)>> = Mutex::new(BTreeSet::new());
 
-/// `machine/native/` and `machine/docker/` exist from the first call and
-/// are never removed. Checked once per process for each home, by its path
+/// The host machine's folder (`machine/macos-host/` or
+/// `machine/linux-host/`) and `machine/docker/` exist from the first call
+/// and are never removed. Checked once per process for each home, by its path
 /// and its id `id` (a home made again at the same path is checked again),
 /// not on every call (#535 R6). Read first; the home lock is taken only to
 /// write one.

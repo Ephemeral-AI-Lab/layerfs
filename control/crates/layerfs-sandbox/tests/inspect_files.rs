@@ -886,7 +886,10 @@ fn the_roots_are_the_workspaces_from_their_records_then_home_and_log() {
     // what the home sends for a Sandbox whose daemon it reaches directly
     let sent = SdkValue::List(vec![SdkValue::map([
         ("id", t("7f")),
-        ("path", t("/layerfs/data/machine/native/run/x/workspaces/7")),
+        (
+            "path",
+            t("/layerfs/data/machine/linux-guest/run/x/workspaces/7"),
+        ),
     ])]);
     let carried = read(&fx, &[("workspaces", sent)]).unwrap();
     let shown: Vec<_> = entries(&carried)

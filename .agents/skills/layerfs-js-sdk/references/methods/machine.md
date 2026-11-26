@@ -113,7 +113,7 @@ LayerFS folders is `InvalidInput`.
 
 ```bash
 $ layerfs machine files native                                                 # seen
-{"items":[{"path":"/tmp/demo/home/store","type":"dir"},{"path":"/tmp/demo/home/sandbox","type":"dir"},{"path":"/tmp/demo/home/machine/native/run","type":"dir"}]}
+{"items":[{"path":"/tmp/demo/home/store","type":"dir"},{"path":"/tmp/demo/home/sandbox","type":"dir"},{"path":"/tmp/demo/home/machine/macos-host/run","type":"dir"}]}
 ```
 
 `log` reads the machine's worker log: `items` (`[{ text, continued? }]`),

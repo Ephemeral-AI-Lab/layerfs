@@ -113,7 +113,7 @@ if [ -z "$dir" ]; then
     "  LAYERFS_TEST_TMPDIR=/mnt/ext4/layerfs-store-tests $0 --quick" \
     "" \
     "Inside a Docker Sandbox the run directory is ext4 (\$HOME and" \
-    "/layerfs/data/machine/native/run/<sandbox>); /tmp is tmpfs there."
+    "/layerfs/data/machine/linux-guest/run/<sandbox>); /tmp is tmpfs there."
 fi
 
 case "$dir" in
@@ -178,7 +178,7 @@ refuse_filesystem() {
     "  LAYERFS_TEST_TMPDIR=/mnt/ext4/layerfs-store-tests $0 --quick" \
     "" \
     "Inside a Docker Sandbox the run directory is ext4 (\$HOME and" \
-    "/layerfs/data/machine/native/run/<sandbox>); /tmp is tmpfs there."
+    "/layerfs/data/machine/linux-guest/run/<sandbox>); /tmp is tmpfs there."
 }
 
 check_supported() {

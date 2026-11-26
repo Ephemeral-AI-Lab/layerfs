@@ -248,7 +248,7 @@ fn exec_ids_records_and_cancel_on_native() {
     assert!(record.get_int("started").is_some(), "{record:?}");
     let running = SdkValue::List(vec![t(&long_1)]);
     assert_eq!(workspace.get("running"), Some(&running), "{got:?}");
-    let run = std::fs::read_dir(home.join("machine/native/run"))
+    let run = std::fs::read_dir(home::paths::run_root(&home))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .find(|path| path.join("overlay").is_dir())

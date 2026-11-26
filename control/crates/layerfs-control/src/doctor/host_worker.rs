@@ -152,10 +152,21 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
 }
 
 pub(super) fn directory(home: &Path, checks: &mut Checks) {
+    use std::os::unix::fs::MetadataExt;
     let directory = paths::machine_dir(home, layerfs_home::names::HOST_MACHINE);
     if std::fs::symlink_metadata(&directory)
         .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
     {
+        return;
+    }
+    // a link or a mode others may use is the home scan's finding, with its
+    // fix: the same folder is not named twice
+    let scanned = [home.to_owned(), home.join("machine"), directory.clone()]
+        .iter()
+        .any(|folder| {
+            std::fs::symlink_metadata(folder).is_ok_and(|m| m.is_symlink() || m.mode() & 0o076 != 0)
+        });
+    if scanned {
         return;
     }
     let verified = HostPaths::new(home).and_then(|paths| paths.check_worker_directories());

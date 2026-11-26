@@ -292,7 +292,7 @@ its owner exits. Direct PostgreSQL calls continue while the host is stopped.
   `sandbox-image.tar`, or the image `--image` names: a digest that archive
   holds, or a host Docker image (reference or Id) that the host exports
   and sends to the worker once, unpacked under the worker's
-  `machines/native/run/images/`. The worker never sees the Docker socket.
+  `machine/linux-guest/run/images/`. The worker never sees the Docker socket.
   Its record keeps `platform: "docker"` and shows
   `backend: "namespaces"`. A PostgreSQL Store's Sandbox starts the same way
   as a sqlite Store's on that machine; it binds no Store file. A Sandbox

@@ -1960,7 +1960,7 @@ esac
                         ("free", SdkValue::Int(512 * 1024)),
                         (
                             "root",
-                            SdkValue::text("/layerfs/data/machine/native/run/images"),
+                            SdkValue::text("/layerfs/data/machine/linux-guest/run/images"),
                         ),
                         ("present", SdkValue::Bool(false)),
                     ]),

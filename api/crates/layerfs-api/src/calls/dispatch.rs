@@ -344,8 +344,8 @@ fn scoped(
     super::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
         let id = layerfs_home::home::open(&home)?.id;
-        // `machine/native/` and `machine/docker/` exist from the first call;
-        // checked once per process for each home (R6)
+        // the host machine's folder and `machine/docker/` exist from the
+        // first call; checked once per process for each home (R6)
         #[cfg(feature = "machine")]
         layerfs_machine::ensure_built_ins(&home, &id)?;
         #[cfg(not(feature = "machine"))]

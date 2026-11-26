@@ -709,7 +709,7 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
     worker_sandbox(&home);
     settle(&home);
     let before = files(&home);
-    for path in [None, Some("/layerfs/data/machine/native/run/x/tmp")] {
+    for path in [None, Some("/layerfs/data/machine/linux-guest/run/x/tmp")] {
         let mut asked = vec![("sandbox", t("s1"))];
         asked.extend(path.map(|path| ("path", t(path))));
         let (code, message) = call(&home, "sandbox.files", &asked).unwrap_err();

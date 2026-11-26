@@ -796,3 +796,131 @@ fn exec_records_are_checked_and_left_as_they_are() {
         .any(|f| f.0 == "error" && f.3.contains("not an exec record")));
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// A `machine/native/` an earlier development build left (its run root
+/// before #819 R) is one warning that names it and the command that
+/// removes it; nothing else reads it.
+#[test]
+fn a_leftover_machine_native_folder_is_one_warning_with_its_removal() {
+    let home = new_home("native-left");
+    layerfs_home::home::open(&home).unwrap();
+    let left = paths::machine_dir(&home, "native");
+    private_dir(&left.join("run/layerfs-0123abcd-old")).unwrap();
+    let report = doctor(&home).unwrap();
+    let named = naming(&report, &left);
+    assert_eq!(named.len(), 1, "{report:?}");
+    assert_eq!(named[0].get_text("severity"), Some("warning"));
+    assert!(named[0]
+        .get_text("message")
+        .unwrap()
+        .contains("earlier development build"));
+    assert_eq!(
+        named[0].get_text("fix"),
+        Some(format!("rm -rf {}", left.display()).as_str())
+    );
+    assert!(
+        left.join("run/layerfs-0123abcd-old").is_dir(),
+        "doctor removed nothing"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The findings of `report` whose message names `path`.
+fn naming(report: &SdkValue, path: &Path) -> Vec<SdkValue> {
+    let Some(SdkValue::List(found)) = report.get("findings") else {
+        panic!("{report:?}")
+    };
+    (found.iter())
+        .filter(|finding| {
+            finding
+                .get_text("message")
+                .is_some_and(|message| message.contains(&path.display().to_string()))
+        })
+        .cloned()
+        .collect()
+}
+
+/// A file system mounted for a test at `point`, unmounted when dropped.
+struct Mounted(PathBuf);
+
+impl Mounted {
+    /// Mounts a small file system at `point` as this user can: a disk
+    /// image on macOS, a tmpfs on Linux (none where this process may not
+    /// mount).
+    fn at(scratch: &Path, point: &Path) -> Option<Self> {
+        let run = |program: &str, args: &[&std::ffi::OsStr]| {
+            let out = std::process::Command::new(program).args(args).output();
+            out.is_ok_and(|out| out.status.success())
+        };
+        let image = scratch.join("leftover.dmg");
+        let (image, point) = (image.as_os_str(), point.as_os_str());
+        let made = match cfg!(target_os = "macos") {
+            true => {
+                let create = [
+                    "create", "-size", "1m", "-fs", "HFS+", "-volname", "leftover",
+                ];
+                let mut args: Vec<&std::ffi::OsStr> = create.map(AsRef::as_ref).to_vec();
+                args.push(image);
+                let attach = ["attach", "-nobrowse", "-mountpoint"].map(AsRef::as_ref);
+                run("hdiutil", &args) && run("hdiutil", &[&attach[..], &[point, image]].concat())
+            }
+            false => run(
+                "mount",
+                &["-t".as_ref(), "tmpfs".as_ref(), "tmpfs".as_ref(), point],
+            ),
+        };
+        made.then(|| Self(PathBuf::from(point)))
+    }
+}
+
+impl Drop for Mounted {
+    fn drop(&mut self) {
+        let (program, first) = match cfg!(target_os = "macos") {
+            true => ("hdiutil", "detach"),
+            false => ("umount", "-l"),
+        };
+        let _ = (std::process::Command::new(program).arg(first).arg(&self.0)).status();
+    }
+}
+
+/// While something is mounted under a leftover `machine/native/`, its
+/// warning offers to unmount it, never `rm -rf`, which would walk into a
+/// Workspace an older daemon still serves; once unmounted, the removal.
+#[test]
+fn a_leftover_machine_native_folder_with_a_mount_beneath_is_not_offered_rm() {
+    let home = new_home("native-mounted");
+    layerfs_home::home::open(&home).unwrap();
+    let left = paths::machine_dir(&home, "native");
+    let point = left.join("run/layerfs-0123abcd-old/workspaces/1");
+    private_dir(&point).unwrap();
+    let scratch = home.with_extension("image");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let Some(mounted) = Mounted::at(&scratch, &point) else {
+        eprintln!("NOT_RUN: this process may not mount a file system here");
+        let _ = std::fs::remove_dir_all(&scratch);
+        std::fs::remove_dir_all(home).unwrap();
+        return;
+    };
+    std::fs::write(point.join("kept.txt"), "a Workspace file").unwrap();
+    let report = doctor(&home).unwrap();
+    let named = naming(&report, &left);
+    assert_eq!(named.len(), 1, "{report:?}");
+    let fix = named[0].get_text("fix").unwrap();
+    assert!(fix.starts_with("umount ") && !fix.contains("rm "), "{fix}");
+    assert!(fix.ends_with("workspaces/1"), "{fix}");
+    assert!(named[0]
+        .get_text("message")
+        .unwrap()
+        .contains("still mounted"));
+    assert!(point.join("kept.txt").is_file(), "doctor removed nothing");
+    drop(mounted);
+    let report = doctor(&home).unwrap();
+    let named = naming(&report, &left);
+    assert_eq!(named.len(), 1, "{report:?}");
+    assert_eq!(
+        named[0].get_text("fix"),
+        Some(format!("rm -rf {}", left.display()).as_str())
+    );
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::remove_dir_all(home).unwrap();
+}

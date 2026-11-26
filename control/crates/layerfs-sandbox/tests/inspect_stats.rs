@@ -615,6 +615,7 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     let request = home::with_field(request, "kind", t("machine_stats"));
     let served = inspect::admit(move |budget| {
         let root = scratch("served");
+        home::guest::serve_root(&root);
         inspect::serve(&Side::Worker(&root), &request, budget)
     })
     .unwrap();
@@ -796,7 +797,10 @@ fn a_worker_s_rows_read_each_sandbox_s_record_on_its_side() {
     // a worker's root: a namespaces Sandbox, one whose record names no
     // daemon, one whose record is not readable, one not recorded there
     let root = scratch("rows");
+    // a worker's root: its run root is the guest's (#819 R)
+    home::guest::serve_root(&root);
     let run = paths::run_root(&root);
+    assert_eq!(run, root.join("machine/linux-guest/run"));
     sandbox(&root, "ns", "box", Some(&daemon(me(), "namespaces", &run)));
     sandbox(&root, "fresh", "box", None);
     let bad = paths::sandbox_record(&root, "bad");

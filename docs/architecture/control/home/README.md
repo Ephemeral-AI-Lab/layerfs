@@ -28,8 +28,8 @@ says how the first call creates one and why a folder that is not a LayerFS
    layerfs.lock               home lock (flock; host processes only)
    machine/<m>/  record.json  worker.json (0600)  start.lock
                  forward.log  forward.1.log   (lima: its ssh forwards)
-   machine/native/run/        0755: Sandbox run folders, <name>.root,
-                              images/ cache
+   machine/<host>/run/        0755: Sandbox run folders, <name>.root,
+                              images/ cache (<host>: macos-host or linux-host)
    store/<s>/    record.json  lock  store.sqlite (sqlite on native)
                  store.sqlite.incoming        a move's partial copy
                  backup.lock  backup.staging  store.sqlite.backup
@@ -48,7 +48,7 @@ says how the first call creates one and why a folder that is not a LayerFS
    store/<s>/    record.json (name and kind)  store.sqlite
                  store.sqlite.incoming  store.sqlite.backup
    sandbox/<n>/  as in a home, for the Sandboxes its worker serves
-   machine/native/run/        as in a home
+   machine/linux-guest/run/   as in a home
    incoming/init-<16 hex>/    a project.init's folder copy, while it runs
    log/          worker.log  worker.1.log (0600)
                  exec.jsonl  exec.1.jsonl  rotate.lock
@@ -195,6 +195,19 @@ is the home or a worker's root.
 | `/layerfs/state/secret`, `worker.pid` | each worker launch | `/layerfs/state` is a tmpfs on `docker` and goes with each container; on a VM its files are replaced by the next launch | [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs), [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 
 The run root's entries are in [Backends](../sandboxes/backends.md#the-run-folder).
+The run root is named for its side's kernel and role (#819 R,
+`paths::run_root`): `machine/macos-host/run/` in a home on a Mac,
+`machine/linux-host/run/` in a home on Linux and
+`machine/linux-guest/run/` in a worker's root. A root is a worker's when
+this process's worker marked it (`guest::serve_root`, by the path it was
+given and by its canonical path), which the worker does before its start's
+sweep and before it serves a request. The `machine/native/run/` of earlier
+development builds is not read, swept or converted; the home doctor's
+records check warns about a leftover `machine/native/` with the fix
+`rm -rf <path>`, or `umount <mounts>` while something is still mounted
+under it ([`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs)).
+Inspection still keeps the private parts of any `machine/<folder>/run/<name>/`
+restricted, whichever run root this build reads.
 What an interrupted operation leaves of these LayerFS removes itself, at
 fixed points in later calls and only where it can prove nothing owns it;
 each removal is a line of `log/sweep.jsonl`
@@ -204,7 +217,7 @@ each removal is a line of `log/sweep.jsonl`
 
 | Sandbox on | `sandbox/<n>/record.json` | `control.json` | Workspace and command records | Run folder | Source |
 | --- | --- | --- | --- | --- | --- |
-| `native` | the home, with `daemon` | the home | the home | the home's `machine/native/run/` | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_args`, [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) `save_sandbox` |
+| `native` | the home, with `daemon` | the home | the home | the home's `machine/<host>/run/` | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_args`, [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs) `save_sandbox` |
 | a machine whose daemon port is forwarded here (`lima`) | the home, with `daemon.forward`; the worker's root, with `daemon` | both | the home | the worker's root | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs), [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs) |
 | any other machine | the home, without `daemon`; the worker's root, with `daemon` | the worker's root | the worker's root | the worker's root | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker` |
 
@@ -384,7 +397,7 @@ independent of `LAYERFS_TRACE`.
 | Rule | Enforced by |
 | --- | --- |
 | A reader sees the old record or the new one, never a part: write to a private temp file, then rename | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `write_record` |
-| Records are private: files 0600, folders 0700. The run root `machine/native/run/` is 0755, as the backends require. Under the namespaces backend (`native` on Linux, and every worker's root) `traversable` adds only o+x to each folder from the run root up to the home or worker's root that lacks it, so a Linux home and its `machine/` and `machine/native/` are 0701: commands run as another identity and must pass, never list. A worker's root and its `store/` and `sandbox/` are made 0755 by its launcher. `home.doctor`'s records check (`home.records`), which scans the home only, accepts both modes: a home folder is an error only with a group bit or with read or write for others (mask `076`); a Store's own folder must be 0700 and a record file 0600 (mask `077`) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `private_dir`, `traversable`; [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_args`; [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs); [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder`, `store_folder`, `file_mode` |
+| Records are private: files 0600, folders 0700. The run root `machine/<host>/run/` (`machine/linux-guest/run/` in a worker's root) is 0755, as the backends require. Under the namespaces backend (`native` on Linux, and every worker's root) `traversable` adds only o+x to each folder from the run root up to the home or worker's root that lacks it, so a Linux home and its `machine/` and `machine/linux-host/` are 0701: commands run as another identity and must pass, never list. A worker's root and its `store/` and `sandbox/` are made 0755 by its launcher. `home.doctor`'s records check (`home.records`), which scans the home only, accepts both modes: a home folder is an error only with a group bit or with read or write for others (mask `076`); a Store's own folder must be 0700 and a record file 0600 (mask `077`) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `private_dir`, `traversable`; [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `host_args`; [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs); [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder`, `store_folder`, `file_mode` |
 | A record holds facts and at most one `op`; states such as `running` are derived when read; reading never clears an intent | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
 | Liveness compares pid, kernel start time and boot id, so a reused pid is not the owner; a compaction's recorded owner also compares its PID namespace, so a probe in another namespace never reads it as live | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`process.rs`](../../../../control/crates/layerfs-home/src/process.rs) |
 | Lock order is home, start, Store, Sandbox; none is held across a worker call, a VM boot or a byte transfer, except `start.lock` across its start | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |

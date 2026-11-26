@@ -264,7 +264,7 @@ impl Call {
 pub struct Deploy {
     /// `native` (macOS) or `namespaces` (Linux).
     pub sandbox: Option<String>,
-    /// The local runtime's root (`machine/native/run`).
+    /// The local runtime's root (the side's run root, `paths::run_root`).
     pub local_dir: Option<String>,
     /// The Sandbox directory prefix, `layerfs-<home id prefix>-`: a new
     /// Sandbox's run folder is `<prefix><name>`.
