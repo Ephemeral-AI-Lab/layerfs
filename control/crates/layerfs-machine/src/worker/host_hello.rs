@@ -8,10 +8,19 @@ use layerfs_home::{helpers::random, outcome::refused};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 /// Version of the host worker exchange.
 pub const HOST_PROTOCOL: i64 = 1;
 pub(super) const CORRELATION_LEN: usize = 32;
+
+static RUNNING_BUILD: OnceLock<&'static str> = OnceLock::new();
+
+/// Records the host CLI's compiled source identity before it serves or dials.
+/// The install path can refer to a newer executable while this process runs.
+pub fn set_host_build(build: &'static str) {
+    let _ = RUNNING_BUILD.set(build);
+}
 
 /// The greeting of the authenticated endpoint.
 pub struct HostHello {
@@ -42,8 +51,9 @@ pub(super) fn build_identity() -> Result<String, SdkRefusal> {
         )
     })?;
     Ok(format!(
-        "{}@{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
+        "{}/{}@{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
         env!("CARGO_PKG_VERSION"),
+        RUNNING_BUILD.get().copied().unwrap_or("unmarked"),
         executable.dev(),
         executable.ino(),
         executable.len(),

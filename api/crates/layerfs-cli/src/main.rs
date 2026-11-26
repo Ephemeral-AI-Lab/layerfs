@@ -12,6 +12,12 @@
 use layerfs_cli::run;
 
 fn main() -> std::process::ExitCode {
+    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+    layerfs_api::worker::set_host_build(concat!(
+        env!("LAYERFS_BUILD_COMMIT"),
+        "/",
+        env!("LAYERFS_BUILD_DIRTY")
+    ));
     let mut words = Vec::new();
     for (at, word) in std::env::args_os().enumerate().skip(1) {
         match word.into_string() {

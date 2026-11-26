@@ -16,6 +16,15 @@ fn aliased_homes_have_one_owner_and_keep_their_mode() {
     assert_eq!(ready.get_int("pid"), Some(worker.pid()));
     assert!(ready.get_text("pid_start").is_some());
     assert!(ready.get_text("pid_boot").is_some());
+    let compiled = concat!(
+        env!("CARGO_PKG_VERSION"),
+        "/",
+        env!("LAYERFS_BUILD_COMMIT"),
+        "/",
+        env!("LAYERFS_BUILD_DIRTY"),
+        "@"
+    );
+    assert!(ready.get_text("build").unwrap().starts_with(compiled));
     let generation = ready.get_text("generation");
 
     let mut second = Fixture::spawn(&alias);

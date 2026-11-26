@@ -395,8 +395,10 @@ Both peers check the other's effective UID before sending or reading frames.
 The server sends the first frame only after admission to the connection
 queue. It is a plain bounded JSON frame with `ready: true`, `kind: "host"`,
 `protocol: 1`, `home_id` (the current home's record ID), `generation`
-(a fresh worker incarnation token), and `build` (an executable identity).
-The client validates the home, protocol and build before sending a request.
+(a fresh worker incarnation token), and `build`. The build combines the
+running CLI's embedded source identity and the executable's filesystem
+identity. The client validates the home, protocol and build before sending
+a request, including when its install path has since been replaced.
 Each request uses the guest envelope's `op` and `args` keys and adds a
 `generation` echo and a `request_id` correlation token. A final answer
 echoes the request ID and has exactly one of `ok` and `error`.

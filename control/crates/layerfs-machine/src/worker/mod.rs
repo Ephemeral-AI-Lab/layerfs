@@ -44,4 +44,4 @@ pub use host::{host_check_peer, HostGuard, HostPaths};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host_frame::{read_host_frame, write_host_frame, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub use host_hello::{HostHello, HOST_PROTOCOL};
+pub use host_hello::{set_host_build, HostHello, HOST_PROTOCOL};

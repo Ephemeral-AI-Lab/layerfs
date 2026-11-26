@@ -32,6 +32,8 @@ A native CLI worker on macOS or Linux can create `worker.sock` and
 accept the UID that owns the home. The worker keeps `worker.lock` through
 shutdown, releases both sockets after draining its connections, and becomes
 eligible to exit after one idle minute. The home itself keeps its permissions.
+The CLI checks the worker's build before it sends a request. If they differ,
+wait for the current worker's idle exit before making another call.
 The internal `worker --host` entry serves that home when a launcher starts it.
 Host Store routing and maintenance coordination are separate implementation
 steps.
