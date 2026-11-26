@@ -509,17 +509,30 @@ impl BoundWorkspace {
         stack: LayerStackId,
         node: NodeId,
     ) -> Result<NodeRemovals, RemovalError> {
-        if self.gc_op.is_some() {
-            if let Ok(kept) = self.removals.lock() {
-                if let Some(known) = kept.as_ref().filter(|known| known.node == node) {
-                    return Ok(known.found.clone());
-                }
-            }
+        if let Some(found) = self.kept_removals(node) {
+            return Ok(found);
         }
         removals(
             self.store
                 .published(|history| history.node_path_removals(stack, node)),
         )
+    }
+    /// `node`'s kept markers with its `history_serial`, for a file call's
+    /// hidden-path check (#818 W1): kept only under a registered mount
+    /// admission, for that exact node and within [`KEPT_REMOVAL_BYTES`]. A
+    /// node kept as absent, or one this Workspace published, hides nothing:
+    /// serial 0 and no markers. `None` when nothing is kept (no admission,
+    /// another node, an over-bound set, a poisoned slot): the caller reads.
+    pub(crate) fn kept_markers(&self, node: NodeId) -> Option<(u64, Vec<PathRemovalRecord>)> {
+        self.kept_removals(node).map(Option::unwrap_or_default)
+    }
+    /// The [`KnownRemovals`] answer this Workspace keeps for `node`, if any.
+    fn kept_removals(&self, node: NodeId) -> Option<NodeRemovals> {
+        self.gc_op?;
+        let kept = self.removals.lock().ok()?;
+        kept.as_ref()
+            .filter(|known| known.node == node)
+            .map(|known| known.found.clone())
     }
     /// Records that this Workspace published `node`, a Commit: it hides
     /// nothing ([`KnownRemovals`]).

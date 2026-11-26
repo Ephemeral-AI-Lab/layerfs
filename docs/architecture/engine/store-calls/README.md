@@ -116,6 +116,7 @@ meets: `fs.list { path: "/absent", pageSize: 0 }` is `NoSuchPath`, not
 files::commit(service, project, branch, changes, message)
   resolve  branch "main" -> ReadOnly; unknown -> NoSuchBranch
   bind     fresh WorkspaceId; private Workspace (never listed or mounted)
+  hidden   bound node's serial + markers kept by the bind; else read them
   change   Mutation per change, in order; first refusal stops, {index}
   commit   commit_captured_via(message, CommitVia::Files)
            head moved -> merged in the same Save; conflict -> Conflict
@@ -140,6 +141,19 @@ map lives in the private overlay's indexed operation records (kind
 private overlay; serials come from the Store's pooled reservation
 ([`store/ports.rs`](../../../../engine/crates/layerfs-store-service/src/store/ports.rs)).
 The Commit itself is the Workspace Commit; see [Commit](../commit/README.md).
+
+**Hidden paths.** The private overlay already whiteouts a path a
+`project.remove_file` marker hides, so `edit` and a `cp` source that come
+back `NoSuchPath` ask the base tree whether the path exists there and is
+hidden (`Removed`, with its frontier) or never existed (`NoSuchPath`). The
+check uses the bound node's `history_serial` and markers that the bind kept
+under its mount admission (`BoundWorkspace::kept_markers`, the
+`KnownRemovals` of [PostgreSQL](../store/postgresql.md) (h), on both
+backends), with no read; the base tree is opened on the control reader only
+when such a refusal asks (#818 W1). When the bind kept none (no admission,
+or markers charging over `KEPT_REMOVAL_BYTES`), the call reads the markers
+and the node's serial and opens the tree first, as before, so a failed
+marker read still refuses every change (SPEC D16).
 
 ### Branch history
 

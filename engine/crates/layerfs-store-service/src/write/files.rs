@@ -240,16 +240,33 @@ fn change(
         .snapshot()
         .map_err(crate::write::mutation::failure)?;
     let node = crate::removal::node_of(&base);
-    let visibility = Visibility::for_stack(
-        &workspace.store,
-        base.branch.stack,
-        Visibility::node_serial(&workspace.store, node)?,
-    )?;
+    // #818 W1: the bound node's markers the bind kept answer without a read,
+    // and the base tree opens only when a refusal asks. Without kept markers
+    // the call reads both first, as before, so a failed read still refuses
+    // every change (SPEC D16).
     let reader: Arc<crate::store::StorePorts> = workspace.store.ports(base.scope);
-    let tree =
-        TreeTable::open(&*reader, FilesystemRootId(base.effective_root)).map_err(args::content)?;
+    let tree = std::cell::OnceCell::new();
+    let visibility = match workspace.kept_markers(node) {
+        Some((serial, markers)) => Visibility::from_markers(serial, markers),
+        None => {
+            let visibility = Visibility::for_stack(
+                &workspace.store,
+                base.branch.stack,
+                Visibility::node_serial(&workspace.store, node)?,
+            )?;
+            let _ = tree.set(open_tree(&reader, &base)?);
+            visibility
+        }
+    };
     let removed = |path: &str| -> Result<Option<SdkRefusal>, SdkRefusal> {
-        let exists = snapshot::entry(&reader, &tree, path)?.is_some();
+        let tree = match tree.get() {
+            Some(tree) => tree,
+            None => {
+                let opened = open_tree(&reader, &base)?;
+                tree.get_or_init(|| opened)
+            }
+        };
+        let exists = snapshot::entry(&reader, tree, path)?.is_some();
         Ok(exists
             .then(|| visibility.hidden(path))
             .flatten()
@@ -309,6 +326,14 @@ fn change(
     }
     mutation.finish()?;
     Ok(result.map(|()| replaced))
+}
+
+/// The bound node's raw tree on the control reader, for the hidden-path check.
+fn open_tree(
+    reader: &crate::store::StorePorts,
+    base: &layerfs_history::BranchSnapshot,
+) -> Result<TreeTable, SdkRefusal> {
+    TreeTable::open(reader, FilesystemRootId(base.effective_root)).map_err(args::content)
 }
 
 /// Closes the call's private Workspace and discards its overlay.
