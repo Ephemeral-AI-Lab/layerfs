@@ -237,7 +237,7 @@ pub(crate) fn routed(
 pub(crate) fn routed(
     _home: &Path,
     _target: &Target,
-    _method: &str,
+    method: &str,
     args: &mut Vec<(String, SdkValue)>,
 ) -> Option<Outcome> {
     let input = take(method);

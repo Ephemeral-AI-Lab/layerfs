@@ -660,3 +660,61 @@ fn a_killed_worker_leaves_unsent_writes_refused_and_sent_ones_unknown() {
     }
     drain(&home);
 }
+
+/// Only host SQLite Stores route writes to the worker: on a PostgreSQL
+/// Store each write, streamed input or not, commits on the direct route
+/// and no worker is dialed or started. Needs `LAYERFS_TEST_POSTGRES_URL`.
+#[test]
+fn writes_on_a_postgresql_store_stay_direct() {
+    let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");
+        return;
+    };
+    let home = Fixture::new();
+    let path = &home.paths.home;
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let (user, address) = rest.split_once('@').unwrap();
+    let address = format!("{scheme}://{address}");
+    let words = [
+        "store",
+        "connect",
+        "q",
+        &address,
+        "--user",
+        user,
+        "--password-stdin",
+    ];
+    ok(path, &words, b"unused\n");
+    // the project lives in the shared database: a name of its own per run
+    let project = format!(
+        "q/w{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let project = project.as_str();
+    let source = path.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("hello"), "hello\n").unwrap();
+    ok(
+        path,
+        &["project", "init", project, source.to_str().unwrap()],
+        b"",
+    );
+    ok(path, &["branch", "fork", project, "work"], b"");
+    let before = commits(path, project, "work");
+    ok(
+        path,
+        &["file", "write", project, "work", "/big"],
+        &patterned(1 << 20),
+    );
+    let changes = br#"[{"op":"mkdir","path":"/d"},{"op":"write","path":"/d/f","content":"x\n"}]"#;
+    ok(path, &["file", "apply", project, "work"], changes);
+    ok(path, &["file", "mkdir", project, "work", "/e"], b"");
+    assert_eq!(commits(path, project, "work"), before + 3);
+    let stat = ok(path, &["file", "stat", project, "work", "/big"], b"");
+    assert_eq!(stat.get_int("size"), Some(1 << 20));
+    assert_eq!(routed(path), 0);
+    assert!(!home.paths.socket.exists(), "a worker endpoint was made");
+}
