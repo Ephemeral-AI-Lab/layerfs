@@ -1,0 +1,12 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/path_removal.rs (target/debug/deps/path_removal-6537342b2f36fbe8)
+
+running 4 tests
+test an_unknown_project_is_missing ... ok
+test a_raw_marker_frontier_also_yields_up_to_date ... ok
+test the_marker_key_is_the_store_salted_trace_hash ... ok
+test marker_frontier_and_up_to_date_follow_the_store_position ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+run_bounded: exit 0 after 0.7 s

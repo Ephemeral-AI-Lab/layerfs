@@ -97,48 +97,52 @@ const SQLITE: &[Pin] = &[
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
-/// role. Baseline, 3a904ac225.
+/// role. Baseline, 3a904ac225; the `probe` comments keep the baseline row.
+///
+/// - #818 R1: the Branch-by-name and marker reads are one fenced statement
+///   each, no read transaction: every case −4 round trips and −2
+///   transactions (3 trips each before, 1 after); statements unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe stat.root: 18 trips
-    pin("stat.root.cold", NONE, [1, 35, 21, 2], NONE),
-    pin("stat.root.warm", NONE, [0, 18, 14, 2], NONE),
+    pin("stat.root.cold", NONE, [1, 31, 21, 0], NONE),
+    pin("stat.root.warm", NONE, [0, 14, 14, 0], NONE),
     // probe stat.depth3: 50
-    pin("stat.depth3.cold", NONE, [1, 59, 45, 2], NONE),
-    pin("stat.depth3.warm", NONE, [0, 37, 33, 2], NONE),
+    pin("stat.depth3.cold", NONE, [1, 55, 45, 0], NONE),
+    pin("stat.depth3.warm", NONE, [0, 33, 33, 0], NONE),
     // probe stat.depth7: 73
-    pin("stat.depth7.cold", NONE, [1, 91, 77, 2], NONE),
-    pin("stat.depth7.warm", NONE, [0, 65, 61, 2], NONE),
+    pin("stat.depth7.cold", NONE, [1, 87, 77, 0], NONE),
+    pin("stat.depth7.warm", NONE, [0, 61, 61, 0], NONE),
     // probe read.small_depth3: 38
-    pin("read.small_depth3.cold", NONE, [1, 60, 46, 2], NONE),
-    pin("read.small_depth3.warm", NONE, [0, 38, 34, 2], NONE),
+    pin("read.small_depth3.cold", NONE, [1, 56, 46, 0], NONE),
+    pin("read.small_depth3.warm", NONE, [0, 34, 34, 0], NONE),
     // probe read.2000_lines: 32
-    pin("read.2000_lines.cold", NONE, [1, 50, 36, 2], NONE),
-    pin("read.2000_lines.warm", NONE, [0, 30, 26, 2], NONE),
+    pin("read.2000_lines.cold", NONE, [1, 46, 36, 0], NONE),
+    pin("read.2000_lines.warm", NONE, [0, 26, 26, 0], NONE),
     // probe read.lines_100_200: 30
-    pin("read.lines_100_200.cold", NONE, [1, 50, 36, 2], NONE),
-    pin("read.lines_100_200.warm", NONE, [0, 30, 26, 2], NONE),
+    pin("read.lines_100_200.cold", NONE, [1, 46, 36, 0], NONE),
+    pin("read.lines_100_200.warm", NONE, [0, 26, 26, 0], NONE),
     // probe list.root: 18
-    pin("list.root.cold", NONE, [1, 36, 22, 2], NONE),
-    pin("list.root.warm", NONE, [0, 18, 14, 2], NONE),
+    pin("list.root.cold", NONE, [1, 32, 22, 0], NONE),
+    pin("list.root.warm", NONE, [0, 14, 14, 0], NONE),
     // probe list.dir_100: 33
-    pin("list.dir_100.cold", NONE, [1, 53, 39, 2], NONE),
-    pin("list.dir_100.warm", NONE, [0, 31, 27, 2], NONE),
+    pin("list.dir_100.cold", NONE, [1, 49, 39, 0], NONE),
+    pin("list.dir_100.warm", NONE, [0, 27, 27, 0], NONE),
     // probe glob.dir_100: 30
-    pin("glob.dir_100.cold", NONE, [1, 51, 37, 2], NONE),
-    pin("glob.dir_100.warm", NONE, [0, 30, 26, 2], NONE),
+    pin("glob.dir_100.cold", NONE, [1, 47, 37, 0], NONE),
+    pin("glob.dir_100.warm", NONE, [0, 26, 26, 0], NONE),
     // probe glob.tree: 23
-    pin("glob.tree.cold", NONE, [1, 49, 35, 2], NONE),
-    pin("glob.tree.warm", NONE, [0, 20, 16, 2], NONE),
+    pin("glob.tree.cold", NONE, [1, 45, 35, 0], NONE),
+    pin("glob.tree.warm", NONE, [0, 16, 16, 0], NONE),
     // probe grep.one_file_dir: 23
-    pin("grep.one_file_dir.cold", NONE, [1, 43, 29, 2], NONE),
-    pin("grep.one_file_dir.warm", NONE, [0, 23, 19, 2], NONE),
+    pin("grep.one_file_dir.cold", NONE, [1, 39, 29, 0], NONE),
+    pin("grep.one_file_dir.warm", NONE, [0, 19, 19, 0], NONE),
     // probe grep.tree_1k: 78
-    pin("grep.tree_1k.cold", NONE, [1, 111, 97, 2], NONE),
-    pin("grep.tree_1k.warm", NONE, [0, 38, 34, 2], NONE),
+    pin("grep.tree_1k.cold", NONE, [1, 107, 97, 0], NONE),
+    pin("grep.tree_1k.warm", NONE, [0, 34, 34, 0], NONE),
     // Markers present.
-    pin("hidden.stat.depth3.cold", NONE, [1, 59, 45, 2], NONE),
-    pin("hidden.list.dir_100.cold", NONE, [1, 67, 53, 2], NONE),
-    pin("hidden.stat.removed.cold", NONE, [1, 52, 39, 2], NONE),
+    pin("hidden.stat.depth3.cold", NONE, [1, 55, 45, 0], NONE),
+    pin("hidden.list.dir_100.cold", NONE, [1, 63, 53, 0], NONE),
+    pin("hidden.stat.removed.cold", NONE, [1, 48, 39, 0], NONE),
 ];
 
 const fn pin(case: &'static str, writer: Counts, control: Counts, workspace: Counts) -> Pin {

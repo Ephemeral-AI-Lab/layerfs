@@ -53,6 +53,9 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "branch_branch_by_id_any" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_branch_by_id_any.sql"
         )),
+        "branch_branch_by_name" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/branch_branch_by_name.sql"
+        )),
         "branch_snapshot" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_snapshot.sql"
         )),
@@ -70,6 +73,9 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         )),
         "layerstack_stack_by_name" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/layerstack_stack_by_name.sql"
+        )),
+        "paths_markers" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/paths_markers.sql"
         )),
         "paths_node_markers" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/paths_node_markers.sql"

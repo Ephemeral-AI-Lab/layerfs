@@ -71,42 +71,48 @@ const SQLITE: &[Pin] = &[
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
-/// role. Baseline, 3a904ac225.
+/// role. Baseline, 3a904ac225; the `probe` comments keep the baseline row.
+///
+/// - #818 R1: each Branch-by-name and marker read is one fenced statement,
+///   no read transaction (3 trips before, 1 after): `blame.h10` −2 (one
+///   marker read), `blame.h100` and `revision.h100` −4 (Branch and markers),
+///   `revision.h10` −6 (its Branch, its markers and one more Branch lookup),
+///   `diff_files` −4 (one marker read per side); statements unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", [0, 20, 19, 0], [1, 267, 255, 1], NONE),
-    pin("blame.h10.warm", [0, 19, 19, 0], [0, 227, 225, 1], NONE),
+    pin("blame.h10.cold", [0, 20, 19, 0], [1, 265, 255, 0], NONE),
+    pin("blame.h10.warm", [0, 19, 19, 0], [0, 225, 225, 0], NONE),
     // probe blame.h100: 2,325
     pin(
         "blame.h100.cold",
         [0, 200, 199, 0],
-        [1, 2270, 2255, 2],
+        [1, 2266, 2255, 0],
         NONE,
     ),
     pin(
         "blame.h100.warm",
         [0, 199, 199, 0],
-        [0, 2030, 2026, 2],
+        [0, 2026, 2026, 0],
         NONE,
     ),
     // probe revision.h10 (appended at P0)
-    pin("revision.h10.cold", [0, 11, 10, 0], [1, 499, 482, 3], NONE),
+    pin("revision.h10.cold", [0, 11, 10, 0], [1, 493, 482, 0], NONE),
     // probe revision.h100: 3,890
     pin(
         "revision.h100.cold",
         [0, 93, 92, 0],
-        [1, 4026, 4011, 2],
+        [1, 4022, 4011, 0],
         NONE,
     ),
     pin(
         "revision.h100.warm",
         [0, 92, 92, 0],
-        [0, 3798, 3794, 2],
+        [0, 3794, 3794, 0],
         NONE,
     ),
     // probe diff_files.h10_vs_h99: 88
-    pin("diff_files.h10_vs_h99.cold", NONE, [1, 109, 96, 2], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 83, 79, 2], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [1, 105, 96, 0], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 79, 79, 0], NONE),
 ];
 
 /// `(method, F, W, K)`: cold PostgreSQL round trips at V versions are at
