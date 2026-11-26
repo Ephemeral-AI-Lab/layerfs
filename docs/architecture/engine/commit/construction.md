@@ -145,6 +145,30 @@ Init retain their existing count paths. The Commit retains the operation
 owner through accounting and its existing outcome and release boundaries.
 A record or length refusal ends that attempt before history publication.
 
+### Captured directory binding hints
+
+The wide PostgreSQL capture route records each new or changed name binding
+as the canonical directory merge consumes it. The final inode merge checks
+each contributing parent's rebuilt root against its surviving directory
+value. A parent with a final tombstone contributes no binding hints. A mismatched proof fails the capture. If a final inode replaces a
+directory listing without an observed directory merge, Commit uses the
+canonical binding comparison for that root pair. The operation owner keeps the provisional and certified records in
+its existing Overlay database until reclamation.
+
+One record holds at most 64 events and 17,408 bytes of encoded payload.
+A binding uses 17 bytes plus the full name in each stream. A provisional
+end-of-parent marker uses 41 bytes. The reader checks order across records
+and carries one write batch of at most 4,096 hints. An indexed keyset
+read holds up to 64 record blocks and 64 KiB of encoded bytes. Writes group
+up to three record blocks under the existing operation envelope. An exact root-pair match
+allows Commit to use the certified rows after Save completion. For a larger
+batch, Commit acknowledges the held Save before opening the ordered record
+reader. A different root pair selects the canonical directory comparison.
+A failed record job returns the original error with any acknowledged writes
+in their existing custody.
+
+[Record format and proof](../../../../core/crates/layerfs-content/src/filesystem/binding_changes.rs)
+
 ### Base directory reads (#810 F3)
 
 Step 6 rewrites every changed base directory from its stored root page, and

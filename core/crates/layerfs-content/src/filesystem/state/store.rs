@@ -39,11 +39,7 @@ impl<'a> SerialState<'a> {
         Ok(())
     }
     pub(crate) fn read(&self, kind: u32, serial: u64) -> ContentResult<Option<Vec<u8>>> {
-        let backing = self
-            .backing
-            .as_ref()
-            .ok_or(ContentError::InvalidRecord("filesystem backing mode"))?;
-        let value = backing.borrow_mut().get(codec::key(kind, serial))?;
+        let value = self.raw_record(kind, serial)?;
         if value
             .as_ref()
             .is_some_and(|value| value.capacity() > codec::WINDOW)
@@ -53,6 +49,13 @@ impl<'a> SerialState<'a> {
             ));
         }
         Ok(value)
+    }
+    pub(crate) fn raw_record(&self, kind: u32, serial: u64) -> ContentResult<Option<Vec<u8>>> {
+        let backing = self
+            .backing
+            .as_ref()
+            .ok_or(ContentError::InvalidRecord("filesystem backing mode"))?;
+        backing.borrow_mut().get(codec::key(kind, serial))
     }
     /// The raw values of several kinds of one serial, as one backing job.
     pub(crate) fn read_kinds<const N: usize>(
@@ -90,6 +93,17 @@ impl<'a> SerialState<'a> {
             ));
         }
         Ok(values)
+    }
+    pub(crate) fn entries_after(
+        &self,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> ContentResult<Option<crate::IndexedRecordPage>> {
+        let backing = self
+            .backing
+            .as_ref()
+            .ok_or(ContentError::InvalidRecord("filesystem backing mode"))?;
+        backing.borrow_mut().entries_after(kind, after)
     }
     pub(crate) fn apply(&self, changes: Vec<ConstructionRecordChange>) -> ContentResult<()> {
         let mut bytes = changes
