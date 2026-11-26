@@ -1,0 +1,10 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_text_scan.rs (target/debug/deps/sdk_text_scan-dd9cd731fffadfd2)
+
+running 2 tests
+test pinned_public_windows_reconstruct_utf8_without_line_gaps ... ok
+test grep_and_read_give_the_window_scan_results ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.10s
+
+run_bounded: exit 0 after 6.2 s

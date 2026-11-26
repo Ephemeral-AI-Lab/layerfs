@@ -1,0 +1,16 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_round_trip_equivalence_seeded.rs (target/debug/deps/sdk_round_trip_equivalence_seeded-c63cd6d11dd1586d)
+
+running 2 tests
+EQUIV sqlite: init 271 ms, 17 steps (1 Commits) 68 ms
+EQUIV sqlite: init 123 ms, 186 steps (44 Commits) 1147 ms
+EQUIV postgresql: init 5091 ms, 17 steps (1 Commits) 474 ms
+EQUIV window: 17 steps equal on sqlite and postgresql
+test init_past_the_write_window_answers_alike_on_both_backends ... ok
+EQUIV postgresql: init 1262 ms, 186 steps (44 Commits) 6842 ms
+EQUIV fs: 186 steps equal on sqlite and postgresql
+test fs_calls_answer_alike_on_both_backends ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.62s
+
+run_bounded: exit 0 after 10.6 s

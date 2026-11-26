@@ -9,10 +9,12 @@
 
 use super::{snapshot, walk};
 use crate::history::lookup;
-use crate::store::{PortError, Store, StorePorts};
+use crate::store::{PortError, Store};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::compare::EntryFacts;
 use layerfs_content::merge::Rule;
 use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_content::AuthenticatedObjects;
 use layerfs_history::error::{RemovedPath, RemovedState};
 use layerfs_history::{HistoryError, LayerStackId, LayerStackRecord, NodeId, PathRemovalRecord};
 use std::collections::BTreeSet;
@@ -182,7 +184,7 @@ impl Visibility {
     /// and counts nothing and the listing or glob pages normally.
     pub fn hidden_children(
         &self,
-        reader: &StorePorts,
+        pages: &dyn AuthenticatedObjects,
         snap: &snapshot::Snap,
         dir: &str,
     ) -> Result<i64, SdkRefusal> {
@@ -205,8 +207,7 @@ impl Visibility {
                 continue;
             }
             let full = format!("/{relative}");
-            if snapshot::find(reader, &snap.tree, &full)?.is_some() && self.hidden(&full).is_some()
-            {
+            if snapshot::find(pages, &snap.tree, &full)?.is_some() && self.hidden(&full).is_some() {
                 count += 1;
             }
         }
@@ -222,7 +223,7 @@ impl Visibility {
     /// so a snapshot with no marker counts nothing.
     pub fn hidden_matches(
         &self,
-        reader: &StorePorts,
+        pages: &dyn AuthenticatedObjects,
         snap: &snapshot::Snap,
         path: &str,
         pattern: &str,
@@ -251,7 +252,7 @@ impl Visibility {
                 continue;
             }
             let full = format!("/{relative}");
-            let Some(entry) = snapshot::find(reader, &snap.tree, &full)? else {
+            let Some(entry) = snapshot::find(pages, &snap.tree, &full)? else {
                 continue;
             };
             if self.hidden(&full).is_none() {
@@ -266,7 +267,7 @@ impl Visibility {
                 // reaches them, so walk the hidden subtree and count each
                 // match; `found` deduplicates a marker on a descendant.
                 walked.push(relative.to_owned());
-                walk::walk_within(reader, snap, &full, None, |child, _| {
+                walk::walk_within(pages, snap, &full, None, |child, _| {
                     if rule.matches_path(child) {
                         found.insert(child.to_owned());
                     }
@@ -288,6 +289,26 @@ impl Visibility {
                 .and_then(|rest| rest.strip_prefix('/'))
         }
     }
+}
+
+/// The entry at `path`, the call's one path walk (#818 R3): strict, through
+/// the call's `pages` (its memo), at the place the hidden-path check walked
+/// before, so a symlink component or a read failure refuses there; refused
+/// `Removed` when the entry exists and is hidden. An absent path is `None`:
+/// the read refuses it `NoSuchPath` where it did ([`snapshot::found`]).
+pub fn checked(
+    pages: &dyn AuthenticatedObjects,
+    snap: &snapshot::Snap,
+    path: &str,
+    visibility: &Visibility,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
+    let entry = snapshot::lookup(pages, &snap.tree, path)?;
+    if entry.is_some() {
+        if let Some(refusal) = refuse(path, visibility) {
+            return Err(refusal);
+        }
+    }
+    Ok(entry)
 }
 
 /// The `Removed` refusal a hidden read or stat reports.

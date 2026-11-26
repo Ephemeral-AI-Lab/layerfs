@@ -369,7 +369,7 @@ pub fn root(store: &Arc<Store>, node: NodeId) -> Result<ObjectId, SdkRefusal> {
 /// A saved node's record, read once and kept for the call's later steps
 /// (#818 R2): its project, its root and, for a Commit, its recorded Branch.
 pub enum NodeRecord {
-    Commit(CommitRecord),
+    Commit(Box<CommitRecord>),
     Layer(LayerRecord),
 }
 
@@ -394,7 +394,7 @@ impl NodeRecord {
 /// One Commit or Layer, refused as [`commit`] and [`layer`] refuse.
 pub fn node_record(store: &Arc<Store>, node: NodeId) -> Result<NodeRecord, SdkRefusal> {
     Ok(match node {
-        NodeId::Commit(id) => NodeRecord::Commit(commit(store, id)?),
+        NodeId::Commit(id) => NodeRecord::Commit(Box::new(commit(store, id)?)),
         NodeId::Layer(id) => NodeRecord::Layer(layer(store, id)?),
     })
 }

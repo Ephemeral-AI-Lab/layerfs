@@ -1,0 +1,14 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_path_merge_removal.rs (target/debug/deps/sdk_path_merge_removal-6ed64cc9598f9230)
+
+running 6 tests
+test a_merge_that_cannot_materialize_a_whiteout_is_refused_removed ... ok
+test an_unmerged_branch_created_before_the_frontier_hides_but_does_not_inherit ... ok
+test a_recreated_removed_path_still_conflicts_as_an_ordinary_edit ... ok
+test a_fast_forward_merge_creates_no_tree_and_the_path_stays_hidden ... ok
+test publishing_an_at_or_below_commit_yields_a_hidden_layer_and_a_layer_headed_mount ... ok
+test a_merge_and_a_removal_started_together_never_leave_the_path_visible ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+run_bounded: exit 0 after 1.3 s

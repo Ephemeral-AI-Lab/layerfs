@@ -1,0 +1,10 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/fs_mode.rs (target/debug/deps/fs_mode-a10d5d9a03db94e0)
+
+running 2 tests
+test a_mode_the_store_cannot_hold_is_refused_and_commits_nothing ... ok
+test write_mkdir_and_chmod_set_modes_that_stat_reports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+run_bounded: exit 0 after 1.0 s

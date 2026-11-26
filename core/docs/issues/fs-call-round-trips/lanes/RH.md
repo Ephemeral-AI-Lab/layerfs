@@ -168,3 +168,121 @@ open per case, `.warm` the repeat on that open (pins' own definitions).
   (`layerfs-daemon`, `layerfs-store`, `layerfs-api`, `layerfs-control`,
   `layerfs-bucket`) build.
 - Deleted tests: none.
+
+### R3 — one path walk per call (both backends, dedupe)
+
+**Prediction (written before the code).**
+
+- Mechanism: the five methods build the call's `Cached` and one `Memo` over
+  it first, walk the path once, strictly, through that memo (at the old
+  hidden-path check's place, so a symlink component or a content failure
+  refuses where it did), check visibility on the entry found, and pass the
+  entry (and the memo) to `reads::{stat,read,list,glob,grep}`, which walked
+  again. An absent path is refused `NoSuchPath` where `existing` refused it
+  (inside the read, after the arguments read in between: `binary`, the
+  glob/grep filters, the page). `hidden_children`/`hidden_matches` look
+  their markers up through the same memo. The paged forms (`page`) keep
+  their own walk (not in the pins). Applied whether or not markers exist:
+  skipping the walk only when the marker set is empty would move the
+  symlink-component refusal behind `binary` (read) and the filters
+  (glob/grep), an order change; one walk at the early place keeps it.
+- Removed: the hidden-path walk on the raw reader (no memo, no call cache).
+  Model from the R2 warm counts (both walks together ≈ 6.3–7 trips per
+  component): the raw walk ≈ 3 + 5·d trips, the memoized walk that stays
+  ≈ 1.5·d. SPEC's −7 per component (−3 at the root) is its upper bound;
+  where the two differ the model below is my prediction and SPEC's M1 row
+  the expectation.
+
+| Case (PG control) | d | R2 warm | predicted warm | SPEC M1 (probe-like) | R2 cold | predicted cold |
+|---|---:|---:|---:|---:|---:|---:|
+| `stat.root` | 0 | 11 | 8 | 8 | 27 | 24 |
+| `stat.depth3` | 3 | 30 | 12 | 22 | 51 | 33 |
+| `stat.depth7` | 7 | 58 | 20 | ~34 | 83 | 45 |
+| `read.small_depth3` | 3 | 31 | 13 | 10 | 52 | 34 |
+| `read.2000_lines`, `read.lines_100_200` | 2 | 23 | 10 | — | 42 | 29 |
+| `list.root` | 0 | 11 | 8 | — | 28 | 25 |
+| `list.dir_100` | 2 | 24 | 11 | 12 | 45 | 32 |
+| `glob.dir_100` | 2 | 23 | 10 | — | 43 | 30 |
+| `glob.tree` | 0 | 13 | 10 | — | 41 | 38 |
+| `grep.one_file_dir` | 1 | 16 | 8 | — | 35 | 27 |
+| `grep.tree_1k` | 0 | 31 | 28 | 68 (probe 78 → −10) | 103 | 100 |
+| `hidden.stat.depth3` (cold) | 3 | — | — | — | 51 | 33 |
+| `hidden.list.dir_100` (cold; its marker looked up through the memo) | 2 | — | — | — | 59 | 41 |
+| `hidden.stat.removed` (cold; one walk before too, now memoized) | 3 | — | — | — | 45 | 40 |
+
+- SQLite: the raw walk's object reads leave; predicted the same share of the
+  object-read statements as PG (about −50% of the walk-bound statements on
+  the deep cases); exact counts recorded, new pins listed (D1).
+- History pins: unchanged (blame, revision and diff do not use these
+  methods' walk).
+- Memory: none beyond the call's existing `Cached` (3 MiB bound) and one
+  `Memo` (256 objects), both already built per call by every read.
+
+**Measured (one run per binary; receipts `receipts/R3/`).**
+
+| Case (PG control) | R2 warm → R3 | pred. warm | R2 cold → R3 | pred. cold | within 15% of prediction |
+|---|---|---:|---|---:|---|
+| `stat.root` | 11 → **8** | 8 | 27 → 24 | 24 | yes |
+| `stat.depth3` | 30 → **9** | 12 | 51 → 30 | 33 | no (−25%; better) |
+| `stat.depth7` | 58 → **9** | 20 | 83 → 34 | 45 | no (−55% / −24%; better) |
+| `read.small_depth3` | 31 → **10** | 13 | 52 → 31 | 34 | no (−23%) / yes |
+| `read.2000_lines`, `read.lines_100_200` | 23 → 9 | 10 | 42 → 28 | 29 | yes |
+| `list.root` | 11 → 8 | 8 | 28 → 25 | 25 | yes |
+| `list.dir_100` | 24 → **10** | 11 | 45 → 31 | 32 | yes |
+| `glob.dir_100` | 23 → 9 | 10 | 43 → 29 | 30 | yes |
+| `glob.tree` | 13 → 10 | 10 | 41 → 38 | 38 | yes |
+| `grep.one_file_dir` | 16 → 9 | 8 | 35 → 28 | 27 | yes |
+| `grep.tree_1k` | 31 → **28** | 28 | 103 → 100 | 100 | yes |
+| `hidden.stat.depth3` | — | — | 51 → 30 | 33 | yes |
+| `hidden.list.dir_100` | — | — | 59 → 31 | 41 | no (−24%; better) |
+| `hidden.stat.removed` | — | — | 45 → 27 | 40 | no (−33%; better) |
+
+- Diagnosis of the misses (once, from the per-case counts): the savings are
+  exactly SPEC's model, −3 at the root and −7 per component, on warm and
+  cold alike (depth 3 −21, depth 7 −49, depth 2 −14, depth 1 −7, root −3).
+  My split was wrong: the walk that stays costs about nothing per component
+  on this tree (`stat` 9 warm at depth 3 and at depth 7), because after its
+  first demand the call's `Cached` holds the packs of the upper directory
+  and inode pages, while the removed walk on the bare reader paid every
+  page. A tree whose pages spread over more packs will still pay per
+  component; the held-out depth-12 / 10k-entry shapes at the milestone
+  will show it. `hidden.list.dir_100` also saves its marker's lookup (now
+  through the memo, −14), `hidden.stat.removed` its strict walk's raw reads.
+  No fix: the removed reads are the duplicate ones.
+- Against SPEC §6.3 M1 (probe-like rows; the pins' `.warm` equals the probe
+  for `stat /` and `read` small): `stat /` 8 (expected 8); `read` small 10
+  (10); `list` 100 10 warm (12); `stat` depth 3 9 warm / 30 cold (22);
+  depth 7 9 / 34 (~34); `grep` 1k 28 warm / 100 cold (68 probe-like; the
+  probe's row sits between, the milestone benchmark measures it).
+- SQLite (new pins, D1): warm `stat` 30 → 22 (root), 73 → 23 (depth 3),
+  135 → 23 (depth 7); `read.small_depth3` 74 → 24; `list.dir_100` 58 → 24;
+  `glob.dir_100` 57 → 23; `glob.tree` 32 → 24; `grep.one_file_dir` 40 → 23;
+  `grep.tree_1k` 68 → 60; cold alike (−8 to −112); `hidden.stat.depth3`
+  86 → 36, `hidden.list.dir_100` 104 → 37, `hidden.stat.removed` 75 → 32.
+  Transactions unchanged (object reads are not transactions).
+- History pins unchanged (run once: all equal; formula check passed).
+- Refusal order: kept by walking once at the old check's place (decision
+  above); `method_refusal_order`, `sdk_path_reads`, `stat_symlink`,
+  `sdk_path_hidden_semantics`, `sdk_path_whiteouts`, `sdk_method_golden`,
+  `sdk_round_trip_equivalence_seeded` green. One non-observable move: the
+  call's `Cached` is built before the walk, not after (its construction
+  fails only on allocation).
+- Sweeps rerun (flight changed): K 142 → 102; drop 97 `Unknown`, 5
+  `Failed`; kill 64 exact answers, 38 `Unknown`; invariants held.
+- Other tests the diff reaches, run once, green: `sdk_fs_reads_replay`,
+  `sdk_grep_reads`, `sdk_list_entries`, `sdk_text_scan`,
+  `sdk_large_file_budget`, `sdk_reads_during_publish`,
+  `sdk_reads_under_publish`, `sdk_path_merge_removal`, `fs_mode`,
+  `saved_namespace_pages`, `write_refusals`, `sdk_path_removal`.
+- Test adapted (not deleted): `sdk_text_scan.rs` calls `reads::read`
+  directly; it now builds the call's `Cached` and its one lookup first, as
+  `fs.read` does.
+- Deleted tests: none.
+- Milestone checks at the R3 identity: Clippy `-D warnings` on
+  `layerfs-store-service` and `layerfs-persistence` (all targets) clean after
+  boxing `NodeRecord::Commit` (R2's enum; `large_enum_variant`), folded
+  into this commit; read pins rerun once after it (`reads-final.log`,
+  green). `cargo fmt --check` differs only in files this lane did not touch
+  (`persistence/src/history/admission.rs`, store-service
+  `tests/refresh_lookups.rs`, `tests/support/view.rs`, `tests/verify768y_*`),
+  left as they are.

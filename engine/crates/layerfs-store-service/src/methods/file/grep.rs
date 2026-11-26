@@ -1,10 +1,12 @@
 //! `fs.grep`.
 use crate::methods::args::{invalid, optional_path, paging, snapshot_full, text, Answer};
+use crate::read::cached::Cached;
 use crate::{
-    read::{paged_reads, query, reads, search, snapshot, visibility},
+    read::{paged_reads, query, reads, search, visibility},
     StoreService,
 };
 use layerfs_bridge::control::SdkValue;
+use layerfs_content::compare::memo::Memo;
 
 /// `grep(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: literal matches per line in text files.
 pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {
@@ -15,11 +17,10 @@ pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {
     }
     let path = optional_path(args)?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
-    if snapshot::entry(&reader, &snap.tree, &path)?.is_some() {
-        if let Some(refusal) = visibility::refuse(&path, &seen) {
-            return Err(refusal);
-        }
-    }
+    // One path walk for the call (#818 R3), through its caches and memo.
+    let cached = Cached::new(&reader)?;
+    let memo = Memo::new(&cached);
+    let entry = visibility::checked(&memo, &snap, &path, &seen)?;
     let filters = search::Filters::of(args)?;
     if args.get("page").is_some() {
         if filters.any() {
@@ -47,6 +48,8 @@ pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {
         &service.store,
         &snap,
         &saved.record,
-        reads::grep(&reader, &snap, pattern, &path, &seen, &filters, limit, pos),
+        reads::grep(
+            &cached, memo, &snap, pattern, &path, entry, &seen, &filters, limit, pos,
+        ),
     )
 }

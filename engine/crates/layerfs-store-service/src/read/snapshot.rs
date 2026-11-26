@@ -169,7 +169,16 @@ pub fn entry(
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find_with(reader, tree, path, true)
+    lookup(reader, tree, path)
+}
+
+/// [`entry`] through any object reader, such as a call's memo (#818 R3).
+pub fn lookup(
+    pages: &dyn AuthenticatedObjects,
+    tree: &TreeTable,
+    path: &str,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
+    find_with(pages, tree, path, true)
 }
 
 /// [`entry`] through any object reader, such as a call's memo. A component
@@ -230,7 +239,13 @@ pub fn existing(
     snap: &Snap,
     path: &str,
 ) -> Result<EntryFacts, SdkRefusal> {
-    find_with(reader, &snap.tree, path, true)?.ok_or_else(|| {
+    found(snap, path, lookup(reader, &snap.tree, path)?)
+}
+
+/// The entry a strict lookup found at `path`, refused as [`existing`]
+/// refuses an absent one.
+pub fn found(snap: &Snap, path: &str, entry: Option<EntryFacts>) -> Result<EntryFacts, SdkRefusal> {
+    entry.ok_or_else(|| {
         refuse(
             "NoSuchPath",
             format!("{path} does not exist at {}", snap.label),

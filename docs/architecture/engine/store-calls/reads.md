@@ -74,6 +74,7 @@ grep: files gathered in windows of ROOTS = 64
 | `fs.glob` | Paths matching a `/.lww`-syntax glob; only folders on the pattern's literal lead are entered. | [`walk.rs`](../../../../engine/crates/layerfs-store-service/src/read/walk.rs) |
 | `fs.grep` | Lines holding a nonempty literal; a pattern with LF anywhere but last matches nothing; binary files skipped and counted. | [`search.rs`](../../../../engine/crates/layerfs-store-service/src/read/search.rs) |
 | Per-call cache | `Cached` keeps pack bodies, decoded groups and the decode arena for the call's later demands; dropped with the call. | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
+| One path walk | `fs.stat`, `fs.read`, `fs.list`, `fs.glob` and `fs.grep` build the call's `Cached` and one `Memo` first and walk the path once, strictly, through them (#818 R3): a symlink component or a read failure refuses there, a hidden entry refuses `Removed`, and the entry found is what the read, listing or walk starts from. An absent path is refused `NoSuchPath` by the read itself, after the arguments it reads first. The marker lookups of `removed_count` go through the same memo; the paged forms keep their own walk. | [`visibility.rs`](../../../../engine/crates/layerfs-store-service/src/read/visibility.rs), [`reads.rs`](../../../../engine/crates/layerfs-store-service/src/read/reads.rs) |
 
 ## Numbered pages and continuations
 
