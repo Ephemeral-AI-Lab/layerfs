@@ -8,6 +8,7 @@ use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::{
     compare::{
         sorted::{difference, DifferenceWork},
+        tree::ChangedDirectories,
         TreeTable,
     },
     AuthenticatedObjects, ContentError, ContentResult, FileView, ObjectId,
@@ -63,6 +64,24 @@ pub fn logical_size_after_with(
     known: u64,
     lengths: &mut dyn FnMut(&[ObjectId]) -> ContentResult<Vec<u64>>,
 ) -> ContentResult<u64> {
+    logical_size_and_directories(reader, before, after, known, lengths, None)
+}
+
+/// [`logical_size_after_with`], noting in `directories` every directory
+/// whose listing the change rewrote, from the same difference walk (#810
+/// F4): a Commit's binding hints then need no second walk over the two
+/// inode tables ([`crate::compare::tree::directory_bindings`]).
+pub fn logical_size_and_directories(
+    reader: &dyn AuthenticatedObjects,
+    before: FilesystemRootId,
+    after: FilesystemRootId,
+    known: u64,
+    lengths: &mut dyn FnMut(&[ObjectId]) -> ContentResult<Vec<u64>>,
+    mut directories: Option<&mut ChangedDirectories>,
+) -> ContentResult<u64> {
+    if let Some(directories) = directories.as_deref_mut() {
+        *directories = ChangedDirectories::between(before, after);
+    }
     if before == after {
         return Ok(known);
     }
@@ -75,7 +94,10 @@ pub fn logical_size_after_with(
         Some(left.table.root),
         Some(right.table.root),
         &mut DifferenceWork::default(),
-        |_, before, after| {
+        |serial, before, after| {
+            if let Some(directories) = directories.as_mut() {
+                directories.note(*serial, before, after);
+            }
             for (value, sign) in [(after, 1), (before, -1)] {
                 if let Some(value) = value.filter(|value| value.kind == InodeKind::RegularFile) {
                     window.push(value, sign);

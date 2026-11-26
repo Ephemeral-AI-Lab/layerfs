@@ -12,6 +12,7 @@ use std::cell::{Cell, RefCell};
 pub struct Save<'a> {
     pub(super) state: RefCell<State<'a>>,
     pub(super) terminal: Cell<bool>,
+    pub(super) join_metadata_reads: bool,
     failure: RefCell<Option<StorageError>>,
     finished: Cell<bool>,
     work_start: super::SaveWork,
@@ -26,9 +27,16 @@ impl<'a> Save<'a> {
             work_start,
             state: RefCell::new(State::new(storage)?),
             terminal: Cell::new(false),
+            join_metadata_reads: false,
             failure: RefCell::new(None),
             finished: Cell::new(false),
         })
+    }
+    /// Combines authoritative metadata locates and body reads where the
+    /// provider supports it. Used by the captured Commit producer.
+    pub fn joining_metadata_reads(mut self) -> Self {
+        self.join_metadata_reads = true;
+        self
     }
     /// Accepts a finalized object, preparing the preceding bounded wave as needed.
     pub fn accept(&self, object: FinalizedObject) -> StorageResult<()> {
@@ -91,8 +99,16 @@ impl<'a> Save<'a> {
         let storage = state.storage;
         let _published = storage.source.serving_published();
         let objects = state.pending.drain();
-        // The last wave is published below, with the sealed tail.
+        // The last wave is published below, with the sealed tail. Objects
+        // held for a base of this Save (#810) are selected before it, after
+        // one publication of those bases.
         state.prepare(objects)?;
+        if !state.deferred.is_empty() {
+            state.seal_deferred_bases()?;
+            state.flush_signatures()?;
+            state.register_ready(false)?;
+            state.readmit_deferred()?;
+        }
         let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;
         if state.packer.unfinished() {
@@ -156,9 +172,11 @@ impl<'a> Save<'a> {
     pub fn pooled_index_bytes(&self) -> usize {
         self.state.borrow().value_memo.len() * 12
     }
-    /// Canonical bytes waiting in the bounded producer batch.
+    /// Canonical bytes waiting in the bounded producer batch, and in the
+    /// objects held for a base this Save has not published yet.
     pub fn pending_canonical_bytes(&self) -> u64 {
-        self.state.borrow().pending.canonical_bytes()
+        let state = self.state.borrow();
+        state.pending.canonical_bytes() + state.deferred.canonical_bytes()
     }
 }
 impl Drop for Save<'_> {

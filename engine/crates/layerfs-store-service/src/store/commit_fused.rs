@@ -216,11 +216,12 @@ impl BoundWorkspace {
             add_saved(total, &saved);
         }
         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
+        let mut directories = layerfs_content::compare::ChangedDirectories::default();
         let logical = phase(timing, "logical.count", || {
-            self.logical_after(&reader, root.0, merged, logical)
+            self.logical_after(&reader, root.0, merged, logical, Some(&mut directories))
         })?;
         phase(timing, "bindings", || {
-            super::hints::record_new_bindings(&reader, &*self.store.history, Some(root), merged)
+            super::hints::record_directory_bindings(&reader, &*self.store.history, &directories)
         })?;
         Ok(Reread {
             current,

@@ -273,6 +273,11 @@ impl TestStore {
     /// Forks Branch `name` from the project's initial Layer on a session
     /// of its own, which is closed again.
     pub fn fork(&self, name: &str) -> BranchId {
+        self.fork_from(name, ForkSource::Layer(self.layer))
+    }
+
+    /// Forks from a selected Layer or Commit on a session of its own.
+    pub fn fork_from(&self, name: &str, source: ForkSource) -> BranchId {
         let branch = self.branch(name);
         let handles = self.handles();
         history(&handles)
@@ -280,7 +285,7 @@ impl TestStore {
                 stack: self.stack,
                 branch,
                 name: HistoryName::new(name).unwrap(),
-                source: ForkSource::Layer(self.layer),
+                source,
             })
             .unwrap();
         handles.close();

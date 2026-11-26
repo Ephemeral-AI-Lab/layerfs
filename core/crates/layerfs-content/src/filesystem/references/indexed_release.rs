@@ -13,6 +13,9 @@ use crate::{ConstructionRecordChange, ContentError, ContentResult};
 /// Zero rows of a seed wave one job queues: a work item and a node each,
 /// inside the 64 changes of one guarded job.
 const QUEUE_ROWS: usize = 32;
+/// Most seed rows sharing one base-inode lookup. Each level needs at most one
+/// page per serial, so at most 256 canonical pages are read at a time.
+const SEED_READ_ROWS: usize = 256;
 
 struct Frontier {
     tail: u64,
@@ -74,12 +77,13 @@ fn seed(
 ) -> ContentResult<u64> {
     let mut cursor = RowCursor::new();
     let mut reads = 0u64;
+    let batch = batch.clamp(1, 64);
     loop {
-        let wave = cursor.wave(reducer, batch.clamp(1, 64))?;
-        if wave.is_empty() {
+        let rows = cursor.window(reducer, batch, SEED_READ_ROWS)?;
+        if rows.is_empty() {
             break;
         }
-        let serials = wave
+        let serials = rows
             .iter()
             .filter(|row| matches!(row, Row::Effect { .. }))
             .map(|row| row.serial())
@@ -92,37 +96,38 @@ fn seed(
         )?;
         reads = reads.saturating_add(serials.len() as u64);
         let mut bases = bases.into_iter();
-        // The zero rows of a wave are queued together: work item and node of
-        // at most QUEUE_ROWS rows are one guarded job.
-        let mut queued = Vec::new();
-        let mut tail = frontier.tail;
-        for row in wave {
-            let base = if matches!(row, Row::Effect { .. }) {
-                bases.next().flatten()
-            } else {
-                None
-            };
-            let count = meaning::count(row, base)?;
-            if count == 0 && row.serial() != root {
-                if queued.len() == 2 * QUEUE_ROWS {
-                    frontier.queue(reducer, &mut queued, tail)?;
-                }
-                tail = tail.checked_add(1).ok_or(ContentError::LengthOverflow)?;
-                let item = wire::Item {
-                    serial: row.serial(),
-                    base,
+        for wave in rows.chunks(batch) {
+            // Keep the guarded jobs and FIFO order of each backing wave.
+            let mut queued = Vec::new();
+            let mut tail = frontier.tail;
+            for &row in wave {
+                let base = if matches!(row, Row::Effect { .. }) {
+                    bases.next().flatten()
+                } else {
+                    None
                 };
-                queued.push(wire::change(wire::WORK, tail, None, Some(item.encode())));
-                queued.push(wire::change(
-                    wire::NODE,
-                    row.serial(),
-                    None,
-                    Some(vec![1, 0]),
-                ));
+                let count = meaning::count(row, base)?;
+                if count == 0 && row.serial() != root {
+                    if queued.len() == 2 * QUEUE_ROWS {
+                        frontier.queue(reducer, &mut queued, tail)?;
+                    }
+                    tail = tail.checked_add(1).ok_or(ContentError::LengthOverflow)?;
+                    let item = wire::Item {
+                        serial: row.serial(),
+                        base,
+                    };
+                    queued.push(wire::change(wire::WORK, tail, None, Some(item.encode())));
+                    queued.push(wire::change(
+                        wire::NODE,
+                        row.serial(),
+                        None,
+                        Some(vec![1, 0]),
+                    ));
+                }
+                reducer.work.serials_scanned = reducer.work.serials_scanned.saturating_add(1);
             }
-            reducer.work.serials_scanned = reducer.work.serials_scanned.saturating_add(1);
+            frontier.queue(reducer, &mut queued, tail)?;
         }
-        frontier.queue(reducer, &mut queued, tail)?;
     }
     Ok(reads)
 }

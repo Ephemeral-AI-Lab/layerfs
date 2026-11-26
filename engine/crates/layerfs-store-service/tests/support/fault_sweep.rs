@@ -7,7 +7,11 @@
 //! the Commit: a warm or first one (fused since #768 stage 2), a forced one
 //! (the separate path with its held-lane connection), or one whose head
 //! another Workspace moved first (the fused attempt's race refusal and the
-//! fallback on the separate path, in one call).
+//! fallback on the separate path, in one call), or a warm one that also adds
+//! families of similar files (#810: the Save's publication of the families'
+//! first members before the fused message), or one whose change touches
+//! two base directories nothing read before (their root pages one grouped
+//! read, #810 F3).
 //!
 //! After each run, from fresh sessions that do not go through the proxy:
 //!
@@ -37,10 +41,24 @@ use super::adversary::{
     self, commit, verdict, wait_until, write, Node, Service, TestStore, Tree, Verdict,
 };
 use super::fault_proxy::{Fault, FaultProxy, Window};
-use layerfs_history::CommitId;
+use layerfs_content::filesystem::{
+    path::LogicalPath, read::FilesystemRead, root::FilesystemRootId,
+};
+use layerfs_history::{CommitId, ForkSource};
+use layerfs_persistence::Handles;
+use layerfs_storage::Storage;
 use std::time::{Duration, Instant};
 
 const SEED: &[(&str, &[u8])] = &[("/seed", b"seed\n"), ("/dir/inner", b"inner\n")];
+/// A spread flight's seed: two more directories, which its armed Commit
+/// touches and nothing before it reads.
+const SPREAD_DIRECTORIES: [&str; 2] = ["/one", "/two"];
+const SPREAD_SEED: &[(&str, &[u8])] = &[
+    ("/seed", b"seed\n"),
+    ("/dir/inner", b"inner\n"),
+    ("/one/inner", b"one\n"),
+    ("/two/inner", b"two\n"),
+];
 /// The lane wait of the faulted sessions: a lane row left held shows up as
 /// a bounded `Busy`, never a hang.
 const LOCK_TIMEOUT_MS: u32 = 5_000;
@@ -60,6 +78,73 @@ pub enum Flight {
     /// A second Commit after another Workspace moved the head: the fused
     /// attempt is refused as a race and the separate path merges.
     Raced,
+    /// A warm Commit that also adds families of similar files: its Save
+    /// holds each family's later members until one publication of the
+    /// families' first members, before the fused message (#810).
+    Similar,
+    /// A warm Commit whose change touches two base directories nothing
+    /// read before (`/one`, `/two`): their delta-encoded root pages are
+    /// read together by Save construction (#810 F3).
+    Spread,
+    /// A warm Commit over a wide seed ([`WIDE_DIRECTORIES`] directories of
+    /// [`WIDE_FILES`] files) that also rewrites one file and adds one in
+    /// every directory: its reads before the lane go in batched windows
+    /// (#810: the Save's leaf reads, the difference walk's read-ahead, the
+    /// directory windows of the binding hints).
+    Wide,
+}
+
+/// Directories of the [`Flight::Wide`] seed.
+const WIDE_DIRECTORIES: usize = 12;
+/// Files in each of them.
+const WIDE_FILES: usize = 10;
+
+/// The seed of `flight`'s Store.
+fn seed(flight: Flight) -> Vec<(String, Vec<u8>)> {
+    let files = if flight == Flight::Spread {
+        SPREAD_SEED
+    } else {
+        SEED
+    };
+    let mut out: Vec<(String, Vec<u8>)> = files
+        .iter()
+        .map(|(path, bytes)| ((*path).to_owned(), bytes.to_vec()))
+        .collect();
+    if flight == Flight::Spread {
+        // Keep two single-page directories with enough varied key bytes
+        // to favor a delta when the marker binding is added.
+        for (d, directory) in SPREAD_DIRECTORIES.into_iter().enumerate() {
+            for file in 0..24 {
+                let name =
+                    String::from_utf8(adversary::text_bytes((24 * d + file) as u64, 48)).unwrap();
+                out.push((format!("{directory}/{name}"), b"entry\n".to_vec()));
+            }
+        }
+    }
+    if flight == Flight::Wide {
+        for d in 0..WIDE_DIRECTORIES {
+            for f in 0..WIDE_FILES {
+                let path = format!("/w/d{d:02}/f{f:02}");
+                out.push((path.clone(), format!("{path} seed\n").into_bytes()));
+            }
+        }
+    }
+    out
+}
+
+/// The armed Commit's change besides `/fault`: in a [`Flight::Wide`] one,
+/// a rewrite of `f05` and a new file in every directory.
+fn wide_change(flight: Flight) -> Vec<(String, Vec<u8>)> {
+    if flight != Flight::Wide {
+        return Vec::new();
+    }
+    (0..WIDE_DIRECTORIES)
+        .flat_map(|d| [format!("/w/d{d:02}/f05"), format!("/w/d{d:02}/new")])
+        .map(|path| {
+            let bytes = format!("{path} changed\n").into_bytes();
+            (path, bytes)
+        })
+        .collect()
 }
 
 impl Flight {
@@ -88,22 +173,133 @@ struct Run {
 }
 
 fn expected(flight: Flight, fault: &[u8]) -> Tree {
-    let mut tree = Tree::new();
-    tree.insert("/seed".into(), Node::File(b"seed\n".to_vec()));
-    tree.insert("/dir".into(), Node::Dir);
-    tree.insert("/dir/inner".into(), Node::File(b"inner\n".to_vec()));
+    let seeded = seed(flight);
+    let seeded: Vec<(&str, &[u8])> = seeded
+        .iter()
+        .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+        .collect();
+    let mut tree = adversary::seed_tree(&seeded);
     if flight.warm() {
         tree.insert("/warm".into(), Node::File(b"warm\n".to_vec()));
+    }
+    if flight == Flight::Similar {
+        tree.insert("/warm_ring".into(), Node::File(ring_warming(fault)));
     }
     if flight == Flight::Raced {
         tree.insert("/other".into(), Node::File(b"other\n".to_vec()));
     }
+    for (path, bytes) in wide_change(flight) {
+        tree.insert(path, Node::File(bytes));
+    }
     tree.insert("/fault".into(), Node::File(fault.to_vec()));
+    if flight == Flight::Similar {
+        for (path, bytes) in similar_files(fault) {
+            tree.insert(path, Node::File(bytes));
+        }
+    }
+    if flight == Flight::Spread {
+        for directory in SPREAD_DIRECTORIES {
+            tree.insert(
+                format!("{directory}/marker"),
+                Node::File(b"marker\n".to_vec()),
+            );
+            tree.insert(format!("{directory}/fault"), Node::File(fault.to_vec()));
+        }
+    }
     tree
+}
+
+/// The `Similar` flight's warm-up file: 400 bytes unique to the run, whose
+/// selection loads the Store's similarity ring before the armed Commit, so
+/// the armed flight never reads the ring table (which grows run by run).
+fn ring_warming(fault: &[u8]) -> Vec<u8> {
+    let mut warm = fault.to_vec();
+    warm.extend_from_slice(b"warm");
+    similar_files(&warm).swap_remove(0).1
+}
+
+/// Families of similar files of the `Similar` flight, unique to the run
+/// whose `/fault` holds `fault`: three families of three 400-byte members
+/// sharing all but their last line.
+fn similar_files(fault: &[u8]) -> Vec<(String, Vec<u8>)> {
+    let seed = fault.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
+    });
+    let mut files = Vec::new();
+    for family in 0..3_u64 {
+        let mut state = (seed ^ family).wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1;
+        let shared: Vec<u8> = (0..400)
+            .map(|n| {
+                if n % 64 == 63 {
+                    return b'\n';
+                }
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                b'a' + (state % 26) as u8
+            })
+            .collect();
+        for member in 0..3 {
+            let mut bytes = shared.clone();
+            bytes.extend_from_slice(format!("member {member}\n").as_bytes());
+            files.push((format!("/similar_{family}_{member}"), bytes));
+        }
+    }
+    files
 }
 
 fn content(name: &str) -> Vec<u8> {
     format!("fault {name}\n").into_bytes()
+}
+
+/// Publishes the two directory roots that every spread flight will rewrite
+/// and verifies the private Store actually selected deltas for both of them.
+fn spread_base(store: &TestStore) -> ForkSource {
+    let branch = store.fork("spread-base");
+    let service = store.open();
+    let workspace = service.bind(branch);
+    for directory in SPREAD_DIRECTORIES {
+        write(&workspace, &format!("{directory}/marker"), b"marker\n");
+    }
+    let Verdict::Committed(commit_id) = verdict(&commit(&workspace)) else {
+        panic!("could not publish the spread delta base");
+    };
+    service.unmount(workspace);
+    service.stop();
+
+    let record = &store.chain(branch)[0];
+    assert_eq!(record.id, commit_id);
+    let Handles::Postgres(handles) =
+        Handles::open_read_only(&store.selection, &store.binding, adversary::CURSOR).unwrap()
+    else {
+        unreachable!("spread flight requires PostgreSQL");
+    };
+    {
+        let storage = Storage::new(handles.storage.clone()).unwrap();
+        let reader = storage.reader().unwrap();
+        let mut filesystem = FilesystemRead::new(&reader, FilesystemRootId(record.root)).unwrap();
+        let mut admin = store.admin();
+        for directory in SPREAD_DIRECTORIES {
+            let page = filesystem
+                .stat(&LogicalPath::new(directory.trim_start_matches('/')).unwrap())
+                .unwrap()
+                .content_root;
+            let bytes: Option<i32> = admin
+                .query_one(
+                    "SELECT octet_length(ancestors) FROM object_location WHERE object_id = $1",
+                    &[&page.as_bytes().as_slice()],
+                )
+                .unwrap()
+                .get(0);
+            let bytes = bytes.filter(|bytes| *bytes > 0).expect("a delta page");
+            println!("FAULT_SPREAD_PAGE {directory} {page} {bytes} ancestor bytes");
+        }
+    }
+    handles.close();
+    ForkSource::Commit {
+        branch,
+        commit: commit_id,
+    }
 }
 
 /// One run on a new Branch `name`: (except `First`) a warm-up Commit,
@@ -115,6 +311,7 @@ fn run(
     proxy: &FaultProxy,
     name: &str,
     flight: Flight,
+    base: ForkSource,
     target: Option<(u64, Fault)>,
 ) -> Run {
     let commit = |workspace: &_| {
@@ -124,7 +321,7 @@ fn run(
             commit(workspace)
         }
     };
-    let branch = store.fork(name);
+    let branch = store.fork_from(name, base);
     let selection = store.with_lock_timeout(
         &store.selection_via(&proxied(store, proxy)),
         LOCK_TIMEOUT_MS,
@@ -133,6 +330,9 @@ fn run(
     let workspace = service.bind(branch);
     let mut old = if flight.warm() {
         write(&workspace, "/warm", b"warm\n");
+        if flight == Flight::Similar {
+            write(&workspace, "/warm_ring", &ring_warming(&content(name)));
+        }
         match verdict(&commit(&workspace)) {
             Verdict::Committed(id) => Some(id),
             other => panic!("{name}: warm-up Commit: {other:?}"),
@@ -151,7 +351,20 @@ fn run(
         mover.unmount(other);
         mover.stop();
     }
+    for (path, bytes) in wide_change(flight) {
+        write(&workspace, &path, &bytes);
+    }
     write(&workspace, "/fault", &content(name));
+    if flight == Flight::Similar {
+        for (path, bytes) in similar_files(&content(name)) {
+            write(&workspace, &path, &bytes);
+        }
+    }
+    if flight == Flight::Spread {
+        for directory in SPREAD_DIRECTORIES {
+            write(&workspace, &format!("{directory}/fault"), &content(name));
+        }
+    }
     let before = service.service.store.fused_counts();
     proxy.arm(target);
     let first = verdict(&commit(&workspace));
@@ -229,7 +442,9 @@ fn check(
         "{label}: one fused Commit or one fallback"
     );
     match flight {
-        Flight::Warm | Flight::First => assert_eq!(fallbacks, 0, "{label}: nothing raced"),
+        Flight::Warm | Flight::First | Flight::Similar | Flight::Spread | Flight::Wide => {
+            assert_eq!(fallbacks, 0, "{label}: nothing raced")
+        }
         Flight::Forced => assert_eq!(run.counts, (0, 0), "{label}: a forced Commit is not fused"),
         Flight::Raced => {
             assert_eq!(fused, 0, "{label}: a moved head never commits fused");
@@ -317,18 +532,28 @@ pub enum Positions {
 /// The sweep: `fault` at every server message of the `flight` Commit that
 /// `positions` selects.
 pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
-    let Some(store) = TestStore::postgres(tag, SEED) else {
+    let seeded = seed(flight);
+    let seeded: Vec<(&str, &[u8])> = seeded
+        .iter()
+        .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+        .collect();
+    let Some(store) = TestStore::postgres(tag, &seeded) else {
         return;
     };
     let started = Instant::now();
+    let base = if flight == Flight::Spread {
+        spread_base(&store)
+    } else {
+        ForkSource::Layer(store.layer)
+    };
     let (url, _) = store.postgres.clone().unwrap();
     let (proxy, _) = FaultProxy::start(&url);
     // The first service on a newly initialized Store sends a shorter flight
     // (it reserves nothing the Init left it); every later one sends the
     // same. Prime once, then count.
-    let prime = run(&store, &proxy, "prime", flight, None);
+    let prime = run(&store, &proxy, "prime", flight, base, None);
     check(&store, "prime", flight, None, &prime);
-    let clean = run(&store, &proxy, "clean", flight, None);
+    let clean = run(&store, &proxy, "clean", flight, base, None);
     assert!(
         matches!(clean.first, Verdict::Committed(_)),
         "{:?}",
@@ -360,7 +585,10 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     });
     let race_refusal = raced.map(|raced| raced.refusal);
     if flight != Flight::Raced {
-        let fused = u64::from(matches!(flight, Flight::Warm | Flight::First));
+        let fused = u64::from(matches!(
+            flight,
+            Flight::Warm | Flight::First | Flight::Similar | Flight::Spread | Flight::Wide
+        ));
         assert_eq!(clean.counts, (fused, 0), "the clean Commit's path");
     }
     check(&store, "clean", flight, raced, &clean);
@@ -439,7 +667,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     for n in selected {
         let name = format!("n{n}");
         names.push(name.clone());
-        let outcome = run(&store, &proxy, &name, flight, Some((n, fault)));
+        let outcome = run(&store, &proxy, &name, flight, base, Some((n, fault)));
         if outcome.window.fired.is_none() {
             unfired.push(n);
         }
@@ -496,7 +724,7 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     );
     // The flight is the same at the end: every position above was the
     // message it names.
-    let again = run(&store, &proxy, "again", flight, None);
+    let again = run(&store, &proxy, "again", flight, base, None);
     check(&store, "again", flight, raced, &again);
     assert_eq!(
         again
@@ -531,15 +759,20 @@ pub fn sweep(tag: &str, fault: Fault, flight: Flight, positions: Positions) {
     let failures = store.integrity_failures();
     assert!(failures.is_empty(), "audit: {failures:#?}");
     assert_eq!(store.duplicate_locators(), 0, "no object located twice");
-    // Every Commit row is on its Branch's chain: none was published twice
-    // or left behind by a failed attempt.
-    let reached: usize = names
+    // Every Commit row is reachable from the swept Branches. A source
+    // Commit shared by their chains counts once.
+    let reached: std::collections::BTreeSet<_> = names
         .iter()
-        .map(|name| store.chain(store.branch(name)).len())
-        .sum();
+        .flat_map(|name| {
+            store
+                .chain(store.branch(name))
+                .into_iter()
+                .map(|row| row.id)
+        })
+        .collect();
     assert_eq!(
         store.commit_rows(),
-        reached as i64,
+        reached.len() as i64,
         "Commit rows off every chain"
     );
     // The Store still publishes.

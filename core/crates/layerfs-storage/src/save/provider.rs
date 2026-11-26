@@ -38,10 +38,40 @@ impl Save<'_> {
             .filter(|id| {
                 !state.packer.pending(*id)
                     && state.pending.pending_canonical(*id).is_none()
+                    && !state.deferred.holds(*id)
                     && state.packer.location(*id).is_none()
+                    && !state.resolved.holds(*id)
             })
             .collect();
-        state.storage.source.locate(&stored)?;
+        if self.join_metadata_reads {
+            storage.source.locate_for_save(&stored, &mut state.packs)?;
+        } else {
+            storage.source.locate(&stored)?;
+        }
+        if stored.len() > 1 {
+            // Locate the stored chains once for this demand, including the
+            // inode leaves prepared below. begin_demand(false) disables
+            // hinted locators, so failures from this authoritative walk
+            // propagate. Group fetching handles advisory pack hints itself.
+            let roots = stored
+                .iter()
+                .map(|id| {
+                    state
+                        .storage
+                        .source
+                        .location(*id, i64::MAX)?
+                        .ok_or(StorageError::ObjectMissing(*id))
+                })
+                .collect::<StorageResult<Vec<_>>>()?;
+            let State {
+                storage,
+                packs,
+                decode,
+                groups,
+                ..
+            } = &mut *state;
+            crate::read::prefetch_chains(&storage.source, &roots, packs, decode, groups)?;
+        }
         if ids.iter().any(|id| state.packer.pending(*id)) {
             let required = state.packer.finish_pack_bound();
             state.reserve_packs(required)?;
@@ -56,8 +86,14 @@ impl Save<'_> {
         }
         use crate::source::Source;
         let declared = ids.iter().try_fold(0usize, |bytes, id| {
-            let length = if let Some(value) = state.pending.pending_canonical(*id) {
+            let length = if let Some(value) = state
+                .pending
+                .pending_canonical(*id)
+                .or_else(|| state.deferred.canonical(*id))
+            {
                 value.len()
+            } else if let Some(length) = state.resolved.canonical_len(*id) {
+                length
             } else {
                 match state.packer.location(*id) {
                     Some(location) => location,
@@ -82,11 +118,15 @@ impl Save<'_> {
         }
         let mut out = Vec::with_capacity(ids.len());
         let mut bytes = 0usize;
-        for id in ids {
-            let value = if let Some(canonical) = state.pending.pending_canonical(*id) {
+        for (at, id) in ids.iter().enumerate() {
+            let value = if let Some(canonical) = state
+                .pending
+                .pending_canonical(*id)
+                .or_else(|| state.deferred.canonical(*id))
+            {
                 canonical.to_vec()
             } else {
-                state.resolve(*id)?
+                state.resolve_demand(*id, &ids[at..])?
             };
             bytes = bytes
                 .checked_add(value.len())

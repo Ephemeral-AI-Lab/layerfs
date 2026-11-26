@@ -1,13 +1,13 @@
 //! Unchanged representation selection and lane group limits.
-use super::{seal::Member, source::WaveSource, state::State};
+use super::{seal::Member, source::WaveSource, state::State, SaveProfile};
 use crate::{
     encoding::{
         delta::{
             candidates::signature,
-            record::prefix_cannot_win,
-            select::{prepare_full, select, SelectInput},
+            record::{prefix_cannot_win, HEADER_BYTES},
+            select::{acquires, prepare_full, select, SelectInput},
         },
-        raw_payload,
+        encode_prefix, raw_payload, EncodedRecord,
     },
     error::{StorageError, StorageResult},
     pack::{assemble, layout::PackLane},
@@ -16,9 +16,18 @@ use crate::{
 };
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 impl State<'_> {
-    pub(super) fn offer(&mut self, object: &FinalizedObject) -> StorageResult<()> {
+    /// Selects and places one new object. With `base`, the object was held
+    /// until this Save published `base`, its ring proposal
+    /// (`save/deferred.rs`), which is then tried after the declared
+    /// candidates as the ring's proposal would be.
+    pub(super) fn offer(
+        &mut self,
+        object: &FinalizedObject,
+        base: Option<ObjectId>,
+    ) -> StorageResult<()> {
         for reference in object.references() {
             if !self.packer.pending(*reference)
+                && !self.deferred.holds(*reference)
                 && self.packer.location(*reference).is_none()
                 && self
                     .storage
@@ -32,17 +41,20 @@ impl State<'_> {
                 });
             }
         }
-        let advisory: Vec<ObjectId> = object.predecessors().ids().collect();
+        let mut advisory: Vec<ObjectId> = object.predecessors().ids().collect();
+        let declared = advisory.len();
+        advisory.extend(base);
         self.packer
             .flush_if_contains(&advisory, &mut self.next_pack, self.pack_end)?;
         let mut physical_candidates = advisory.clone();
         let mut full = None;
+        let mut ring_lost = false;
         let sig = if PackLane::for_role(object.role()) == PackLane::WholeFile {
             let sig = signature(raw_payload(object.canonical(), object.role())?);
             // An unloaded ring means this Save has inserted nothing, so what it
             // would propose is no object pending here; selection loads it if
             // its fallback needs it (#352 record 034, S1-b).
-            let mut proposed = match self.candidates.needs_load() {
+            let mut proposed = match self.candidates.needs_load() || base.is_some() {
                 true => None,
                 false => self.candidates.propose(object.id(), &sig),
             };
@@ -62,8 +74,26 @@ impl State<'_> {
                     &mut self.compression,
                     &mut self.profile,
                 )?;
-                if prefix_cannot_win(record.lane, record.record.len()) {
+                if prefix_cannot_win(record.lane, record.record.len())
+                    || self.declared_acquired(object.role(), &advisory[..declared])?
+                {
+                    // A declared candidate selection acquires is tried before
+                    // the ring, which it then never asks (#810).
                     proposed = None;
+                } else if let Some(id) = proposed {
+                    // A base this Save stored FULL and still keeps is tried
+                    // here, before anything is published (#810). A losing
+                    // trial needs no base: FULL is stored now. A winning one
+                    // holds the object until the wave's own publication has
+                    // published the base.
+                    match self.pending_trial(object, id, &record)? {
+                        Some(false) => {
+                            proposed = None;
+                            ring_lost = true;
+                        }
+                        Some(true) if self.deferred.hold(object, id) => return Ok(()),
+                        _ => {}
+                    }
                 }
                 full = Some(record);
             }
@@ -113,6 +143,7 @@ impl State<'_> {
             chain_total: &mut self.chain_total,
             signature: sig,
             full,
+            ring_lost,
             counters: &mut self.delta,
             profile: &mut self.profile,
         };
@@ -129,6 +160,12 @@ impl State<'_> {
             )?
         };
         let lane = record.lane;
+        // A whole-file object stored FULL may be the next similar file's ring
+        // proposal while it is still unpublished; its bytes are kept for that
+        // trial (`pending_trial`).
+        if lane == PackLane::WholeFile && record.base.is_none() {
+            self.stored_full.keep(object.id(), object.canonical());
+        }
         let body = assemble::framed_length(std::slice::from_ref(&record.record))?;
         let body_limit = crate::encoding::lane_body_limit(lane, &capacities);
         if body > body_limit && lane != PackLane::Singleton {
@@ -180,5 +217,98 @@ impl State<'_> {
             )?;
         }
         Ok(())
+    }
+
+    /// Whether this Save's one trial of `object` against `base`, an object
+    /// it stored FULL and has not published, would keep the PREFIX record
+    /// rather than `full`; `None` when that is not decided here.
+    ///
+    /// The trial is the one selection would run once `base` was published: a
+    /// FULL base is its own chain root at depth zero, so no re-basing applies,
+    /// and the PREFIX record is kept only when it is shorter than `full`. A
+    /// base whose bytes are no longer kept, a role without payload deltas, or
+    /// a pair near a chain budget is not decided here: it is published first,
+    /// as before. A losing trial stores FULL with no publication. A concurrent
+    /// Save that publishes the same base first with a deeper chain could only
+    /// have re-based that trial onto another root; FULL is then stored without
+    /// it. A winning trial runs again once the base is published, against
+    /// whatever representation won, under the same depth and work budgets.
+    fn pending_trial(
+        &mut self,
+        object: &FinalizedObject,
+        base: ObjectId,
+        full: &EncodedRecord,
+    ) -> StorageResult<Option<bool>> {
+        let capacities = self.storage.capacities();
+        if capacities.delta_depth_for_role(object.role()) == 0 {
+            return Ok(None);
+        }
+        let Some(canonical) = self.stored_full.get(base) else {
+            return Ok(None);
+        };
+        let chained = (canonical.len() + object.canonical_len() + HEADER_BYTES) as u64;
+        if chained > capacities.chain_canonical_limit || chained > capacities.chain_encoded_limit {
+            return Ok(None);
+        }
+        let started = std::time::Instant::now();
+        let prefix = encode_prefix(
+            object.canonical(),
+            object.role(),
+            base,
+            raw_payload(&canonical, object.role())?,
+            &capacities,
+            &mut self.compression,
+            &mut self.profile,
+        );
+        SaveProfile::charge(&mut self.profile.delta_ns, started);
+        Ok(Some(prefix?.record.len() < full.record.len()))
+    }
+
+    /// True when selection of a `role` object will acquire one of its
+    /// declared candidates `advisory`, all of them published before this
+    /// Save, so it never asks the similarity ring.
+    ///
+    /// The probe is selection's own (`encoding::delta::select::acquires`) on
+    /// the same view, with its outcome counts discarded: selection counts
+    /// them when it probes again. A declared candidate this Save still holds
+    /// is not decided here.
+    fn declared_acquired(
+        &mut self,
+        role: ObjectRole,
+        advisory: &[ObjectId],
+    ) -> StorageResult<bool> {
+        if advisory.is_empty()
+            || advisory
+                .iter()
+                .any(|id| self.packer.pending(*id) || self.packer.location(*id).is_some())
+        {
+            return Ok(false);
+        }
+        let view = WaveSource {
+            fetch: &self.storage.source,
+            packer: &self.packer,
+            signatures: &self.signatures,
+            values: &self.values,
+        };
+        let capacities = self.storage.capacities();
+        let mut counters = crate::encoding::delta::select::DeltaCounters::default();
+        let mut input = SelectInput {
+            connection: &view,
+            capacities: &capacities,
+            candidates: &mut self.candidates,
+            depths: &mut self.depths,
+            losing: &mut self.losing,
+            packs: &mut self.packs,
+            pool: &mut self.pool,
+            decode: &mut self.decode,
+            chain: &mut self.chain,
+            chain_total: &mut self.chain_total,
+            signature: None,
+            full: None,
+            ring_lost: false,
+            counters: &mut counters,
+            profile: &mut self.profile,
+        };
+        acquires(&mut input, role, advisory)
     }
 }

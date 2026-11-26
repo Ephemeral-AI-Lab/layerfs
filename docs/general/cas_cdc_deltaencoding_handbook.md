@@ -332,7 +332,11 @@ it with the earlier-Save entry it was stored against, so no unpublished object
 is proposed and sealed early (`Candidates::propose`; at most 1,024 admissions
 per Save). An object stored against its declared base never enters the index.
 This allows proposals based on content similarity, not only on a caller's
-explicit predecessor identity.
+explicit predecessor identity. A proposal this Save stored FULL and has not
+published yet is tried against its kept bytes before anything is published:
+a losing trial stores FULL at once, and a winning one holds the object to the
+end of its preparation wave, whose publication publishes the base (#810;
+[encoding](../architecture/core/physical-storage/encoding.md)).
 
 Chunk selection considers the first supplied advisory candidate under its
 eligibility checks (same role, located); a candidate whose chain is at the role's

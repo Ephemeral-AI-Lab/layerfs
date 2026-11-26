@@ -102,6 +102,18 @@ SLOW = {
     # The raced flight's fused replies after its refusal and the fallback's
     # writer messages, dropped and killed (#768 verification fixes).
     ("layerfs-store-service", "commit_fault_race_custody"): 22.2,
+    # #810 read batching pins and fault sweeps, macOS with PostgreSQL.
+    ("layerfs-store-service", "commit_batched_base_files"): 8.48,
+    ("layerfs-store-service", "commit_batched_reads"): 21.07,
+    ("layerfs-store-service", "commit_fault_directories"): 50.84,
+    ("layerfs-store-service", "commit_fault_wide_drop_0"): 39.81,
+    ("layerfs-store-service", "commit_fault_wide_drop_1"): 35.75,
+    ("layerfs-store-service", "commit_fault_wide_drop_2"): 44.07,
+    ("layerfs-store-service", "commit_fault_wide_drop_3"): 32.32,
+    ("layerfs-store-service", "commit_fault_wide_kill_0"): 33.89,
+    ("layerfs-store-service", "commit_fault_wide_kill_1"): 34.34,
+    ("layerfs-store-service", "commit_fault_wide_kill_2"): 42.82,
+    ("layerfs-store-service", "commit_fault_wide_kill_3"): 46.57,
     ("layerfs-store-service", "commit_lane_kill"): 15.4,
     ("layerfs-store-service", "commit_random_model"): 8.4,
     ("layerfs-store-service", "commit_stress"): 6.7,

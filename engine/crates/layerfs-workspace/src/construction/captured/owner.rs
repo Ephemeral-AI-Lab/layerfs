@@ -122,6 +122,20 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
         serial: u64,
         records_scope: IndexedOperationRecordScope,
     ) -> Result<Self, CapturedFileCustody> {
+        Self::prepare_in(workspace, provider, reader, serial, records_scope, None)
+    }
+    /// [`Self::prepare`] with the window of base files its caller asked the
+    /// provider for in one demand (#810 F5): the base file's length comes
+    /// from there, and its content root was fetched with the window's.
+    #[allow(clippy::result_large_err)]
+    pub(crate) fn prepare_in(
+        workspace: &Workspace,
+        provider: &'a P,
+        reader: CapturedReader,
+        serial: u64,
+        records_scope: IndexedOperationRecordScope,
+        window: Option<&crate::base::BaseFiles>,
+    ) -> Result<Self, CapturedFileCustody> {
         let mut owner = Self {
             provider,
             shared: Shared::new(State {
@@ -138,17 +152,19 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
             count: 0,
             context: Vec::new(),
         };
-        let result = owner.bind(workspace, records_scope).and_then(|facts| {
-            owner.facts = Some(facts);
-            normalize::prepare(
-                provider,
-                &owner.shared,
-                facts,
-                owner.base.as_ref(),
-                owner.file.as_ref(),
-            )
-            .map_err(WorkspaceError::Content)
-        });
+        let result = owner
+            .bind(workspace, records_scope, window)
+            .and_then(|facts| {
+                owner.facts = Some(facts);
+                normalize::prepare(
+                    provider,
+                    &owner.shared,
+                    facts,
+                    owner.base.as_ref(),
+                    owner.file.as_ref(),
+                )
+                .map_err(WorkspaceError::Content)
+            });
         match result {
             Ok((count, context)) => {
                 owner.count = count;
@@ -204,12 +220,14 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
             count: 0,
             context: Vec::new(),
         };
-        let bound = owner.bind(workspace, records_scope).and_then(|facts| {
-            if facts.file_root.is_some() {
-                return Err(ContentError::InvalidRecord("captured new file has a base").into());
-            }
-            Ok(facts)
-        });
+        let bound = owner
+            .bind(workspace, records_scope, None)
+            .and_then(|facts| {
+                if facts.file_root.is_some() {
+                    return Err(ContentError::InvalidRecord("captured new file has a base").into());
+                }
+                Ok(facts)
+            });
         let result = match bound {
             Ok(facts) => {
                 owner.facts = Some(facts);
@@ -276,9 +294,10 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
         &mut self,
         workspace: &Workspace,
         records_scope: IndexedOperationRecordScope,
+        window: Option<&crate::base::BaseFiles>,
     ) -> Result<Facts, WorkspaceError> {
         let started = Instant::now();
-        let facts = self.bound(workspace, records_scope);
+        let facts = self.bound(workspace, records_scope, window);
         self.shared.borrow_mut().work.bind_ns = nanos(started);
         facts
     }
@@ -286,6 +305,7 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
         &mut self,
         workspace: &Workspace,
         records_scope: IndexedOperationRecordScope,
+        window: Option<&crate::base::BaseFiles>,
     ) -> Result<Facts, WorkspaceError> {
         if workspace.route().engine() != self.reader.capture().engine()
             || records_scope.owner.engine() != workspace.route().engine()
@@ -307,7 +327,7 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
         }) {
             return Err(OverlayError::Missing.into());
         }
-        let file = base.captured_file(self.serial)?;
+        let file = base.captured_file_in(self.serial, window)?;
         if file.is_none() && local.is_none() {
             return Err(ContentError::PathNotFound.into());
         }

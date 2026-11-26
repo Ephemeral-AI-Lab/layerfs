@@ -524,6 +524,24 @@ only. The group-row layouts and PostgreSQL ask for exact ranges
 (`Mechanics::pack_range_fill` is 0): there every byte read is a byte
 transferred.
 
+A similar whole file's ring proposal that its own Save has not published is
+tried before anything is published, and published only with its preparation
+wave (#810, [encoding](../../core/physical-storage/encoding.md)): a
+Save of 1,000 tiny near-identical files used to run one write transaction and
+write one pack per file. Measured at e11d8c8d0f (one sample per cell): B6e's
+statements 4,724 → 1,052 and packs 605 → 3, B6n's 3,971 → 65 and 552 → 4,
+B1's 7,077 → 2,588 and 662 → 134, with the same records, roots and depths
+([PostgreSQL](postgresql.md#similar-files-publish-once-per-wave)).
+
+## Commit reads
+
+A Commit's construction reads the base root pages of the directories it
+rewrites 256 to a demand and the remembered directories' new roots in one
+demand (#810 F3, [Construction](../commit/construction.md#base-directory-reads-810-f3)),
+so each such demand is one locator statement for all its objects instead of
+one per directory: the "delete `node_modules`" shape (B2) runs 332
+statements instead of 1,732, with the same roots and stored bytes.
+
 ## Fused Commit
 
 A Workspace Commit over its bound head is one `BEGIN IMMEDIATE` transaction
@@ -555,6 +573,27 @@ before) and the first at 35 in 5 (46 in 9); `fused_commit.rs` checks one
 transaction per Commit and that each race and the epoch refusal wrote
 nothing. Not tested on SQLite: `Busy` from another process's writer lock
 and an epoch change during the transaction (the writer lock excludes it).
+
+A Commit's Workspace reader opens the changed base files of one captured
+inode page together and reads nothing for a file whose bytes the capture
+left (#810 F5, [Construction](../commit/construction.md#base-files-of-one-inode-page-810-f5)):
+on the kit's C4 shape (1,000 edits) its statements went from 726 to 1, on
+C3 (1,000 `chmod`/`touch`) from 318 to 0, with the same roots and stored bytes
+(`commit_batched_base_files.rs` pins the demands and roots on both backends).
+
+### Commit reads before the publication (#810)
+
+The reads a Commit makes before its transaction are batched the same way on
+both backends ([PostgreSQL: Commit reads before the lane](postgresql.md#commit-reads-before-the-lane-810)):
+the binding hints read the changed directories a window at a time, one
+difference walk serves the logical count and the hints, the walk's
+read-ahead sees past the other side's unopened pages, and the Save rebuilds
+the inode leaves of a demand (and selection's base leaves) a window at a
+time with one value lookup each. On SQLite a lookup is a statement, not a
+round trip; what it saves is statements and decoding the same pages twice:
+C4 6,138 -> 1,725 statements, C4s4 31,822 -> 9,585, C1 652 -> 253 (shape
+kit, 2026-11-26), every root and Save outcome identical. The same bounded changed-directory
+retention and streamed traversal apply on SQLite.
 
 ## Acquisition
 

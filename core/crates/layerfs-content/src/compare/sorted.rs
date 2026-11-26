@@ -11,8 +11,18 @@
 //! A page to expand is read together with the pages that follow it on its
 //! side at the same level and that the walk will certainly expand too, in one
 //! batched demand (#95): a Store then locates them and their pooled values in
-//! one round trip instead of one per page. Every page read ahead is expanded
-//! exactly once, so nothing is read that the walk would have skipped.
+//! one round trip instead of one per page. When both fronts expand at once,
+//! both sides' pages go in that one demand (#810). Every page read ahead is
+//! expanded exactly once, so nothing is read that the walk would have skipped.
+//!
+//! Which pages are certain (#810 F4): each frontier page carries the largest
+//! key its parent records for it. A page is skipped only against a page of
+//! the same identity, so the same rows and the same largest key, on the other
+//! side. The other side's unconsumed frontier is in key order: its visible
+//! pages at the level are excluded by identity, and its hidden ones lie in
+//! the visible pages above the level, which hold only keys above the key of
+//! the item before the first of them. A following page whose largest key is
+//! at most that key can therefore meet no identical page and is expanded.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -48,8 +58,17 @@ pub const READ_AHEAD_PAGES: usize = 128;
 const _: () = assert!(READ_AHEAD_PAGES * MAXIMUM_PAGE_BYTES <= 1024 * 1024);
 
 enum Item<K, V> {
-    Page { id: ObjectId, level: u8 },
-    Row { key: K, value: V },
+    /// A page and the largest key its parent records for it (none for a
+    /// root).
+    Page {
+        id: ObjectId,
+        level: u8,
+        max: Option<K>,
+    },
+    Row {
+        key: K,
+        value: V,
+    },
 }
 
 /// Calls `visit(key, left, right)` once for every key whose value differs,
@@ -68,6 +87,7 @@ where
         root.map(|id| Item::Page {
             id,
             level: MAXIMUM_TREE_LEVEL,
+            max: None,
         })
         .into_iter()
         .collect::<VecDeque<Item<F::Key, F::Value>>>()
@@ -120,6 +140,9 @@ where
                 continue;
             }
         };
+        if expand.0 && expand.1 {
+            fill(reader, &l, &r, &mut ahead)?;
+        }
         if expand.0 {
             open::<F>(reader, &mut l, &r, &mut ahead, work)?;
         }
@@ -138,27 +161,21 @@ fn open<F: Format>(
     ahead: &mut HashMap<ObjectId, Vec<u8>>,
     work: &mut DifferenceWork,
 ) -> ContentResult<()> {
-    let Some(Item::Page { id, level }) = side.pop_front() else {
+    let Some(Item::Page { id, level, .. }) = side.pop_front() else {
         return Err(ContentError::InvalidRecord("difference frontier"));
     };
     let body = match ahead.remove(&id) {
         Some(body) => body,
         None => {
             let room = READ_AHEAD_PAGES.saturating_sub(ahead.len());
-            let ids = ahead_of(id, level, side, other, ahead, room);
+            let ids = ahead_of(id, level, side, other, ahead, room, &[]);
             if ids.len() == 1 {
                 reader.read_canonical(id)?
             } else {
-                let bodies = reader.read_canonical_batch(&ids)?;
-                if bodies.len() != ids.len() {
-                    return Err(ContentError::InvalidRecord("read-ahead cardinality"));
-                }
-                let mut bodies = ids.into_iter().zip(bodies);
-                let (_, first) = bodies
-                    .next()
-                    .ok_or(ContentError::InvalidRecord("read-ahead cardinality"))?;
-                ahead.extend(bodies);
-                first
+                read_ahead(reader, &ids, ahead)?;
+                ahead
+                    .remove(&id)
+                    .ok_or(ContentError::InvalidRecord("read-ahead cardinality"))?
             }
         }
     };
@@ -169,6 +186,7 @@ fn open<F: Format>(
             (Some(child), None) if wire.level > 0 => Item::Page {
                 id: child,
                 level: wire.level - 1,
+                max: Some(entry.key),
             },
             (None, Some(value)) if wire.level == 0 => Item::Row {
                 key: entry.key,
@@ -181,44 +199,113 @@ fn open<F: Format>(
     Ok(())
 }
 
+/// Reads `ids` in one demand and keeps their bodies ahead.
+fn read_ahead(
+    reader: &dyn AuthenticatedObjects,
+    ids: &[ObjectId],
+    ahead: &mut HashMap<ObjectId, Vec<u8>>,
+) -> ContentResult<()> {
+    let bodies = reader.read_canonical_batch(ids)?;
+    if bodies.len() != ids.len() {
+        return Err(ContentError::InvalidRecord("read-ahead cardinality"));
+    }
+    ahead.extend(ids.iter().copied().zip(bodies));
+    Ok(())
+}
+
+/// Before both fronts expand at one level: reads both front pages and the
+/// pages [`ahead_of`] adds on each side in one demand. Fewer than two pages
+/// are left to [`open`], which reads them as before.
+fn fill<K: Ord, V>(
+    reader: &dyn AuthenticatedObjects,
+    l: &VecDeque<Item<K, V>>,
+    r: &VecDeque<Item<K, V>>,
+    ahead: &mut HashMap<ObjectId, Vec<u8>>,
+) -> ContentResult<()> {
+    let mut ids = Vec::new();
+    for (side, other) in [(l, r), (r, l)] {
+        let Some(Item::Page { id, level, .. }) = side.front() else {
+            continue;
+        };
+        let room = READ_AHEAD_PAGES.saturating_sub(ahead.len() + ids.len());
+        if room == 0 || ahead.contains_key(id) || ids.contains(id) {
+            continue;
+        }
+        let more = ahead_of(*id, *level, side, other, ahead, room, &ids);
+        ids.extend(more);
+    }
+    if ids.len() < 2 {
+        return Ok(());
+    }
+    read_ahead(reader, &ids, ahead)
+}
+
 /// `id`, then the pages after it on `side` at the same `level` that the walk
-/// will certainly expand, at most `room` in all. Only when no page of `other`
-/// is above `level` can no hidden page of `other` share an identity with one
-/// of them (equal identities are equal pages, so equal levels); a page whose
-/// identity `other` shows now may be skipped as shared, so it is left out.
-/// Every page taken then meets rows, lower pages or a different page and is
+/// will certainly expand, at most `room` in all, none of `taken`. A page
+/// whose identity `other` shows now may be skipped as shared, so it is left
+/// out. When `other` holds a page above `level`, a page of `other` hidden
+/// below it could share an identity too; those hold only keys above the key
+/// of the item before `other`'s first such page, so only the pages whose
+/// largest key is at most that key are taken (the module's rule). Every
+/// page taken then meets rows, lower pages or a different page and is
 /// expanded. Stops at the first row or page of another level.
-fn ahead_of<K, V>(
+fn ahead_of<K: Ord, V>(
     id: ObjectId,
     level: u8,
     side: &VecDeque<Item<K, V>>,
     other: &VecDeque<Item<K, V>>,
     ahead: &HashMap<ObjectId, Vec<u8>>,
     room: usize,
+    taken: &[ObjectId],
 ) -> Vec<ObjectId> {
     let mut ids = vec![id];
     if room <= 1 {
         return ids;
     }
     let mut facing = HashSet::new();
+    // `Some(bound)` once a page above `level` is found: the largest key a
+    // taken page may have (`None`: no page may be taken).
+    let mut bound: Option<Option<&K>> = None;
+    let mut before: Option<&K> = None;
     for item in other {
-        if let Item::Page { id, level: above } = item {
-            if *above > level {
-                return ids;
+        match item {
+            Item::Page { level: above, .. } if *above > level => {
+                bound = Some(before);
+                break;
             }
-            facing.insert(*id);
+            Item::Page { id, max, .. } => {
+                facing.insert(*id);
+                before = max.as_ref();
+            }
+            Item::Row { key, .. } => before = Some(key),
         }
+    }
+    if bound == Some(None) {
+        return ids;
     }
     for item in side {
         match item {
             Item::Page {
                 id: next,
                 level: same,
+                max,
             } if *same == level => {
+                if *next == id {
+                    continue;
+                }
                 if ids.len() == room {
                     break;
                 }
-                if !facing.contains(next) && !ahead.contains_key(next) && !ids.contains(next) {
+                if let Some(Some(bound)) = bound {
+                    if max.as_ref().is_none_or(|max| max > bound) {
+                        break;
+                    }
+                }
+                if !facing.contains(next)
+                    && !ahead.contains_key(next)
+                    && !ids.contains(next)
+                    && !taken.contains(next)
+                {
                     ids.push(*next);
                 }
             }

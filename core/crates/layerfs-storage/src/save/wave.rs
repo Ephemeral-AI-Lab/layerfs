@@ -49,10 +49,50 @@ impl State<'_> {
         self.prepare(objects)?;
         let flush = self.storage.work.span(super::Stage::Flush);
         // Keep the existing bounded partial queues until pressure, dependency
-        // closure or finish requires them. Ready packs still publish this wave.
+        // closure or finish requires them. Ready packs still publish this wave,
+        // with the bases the held objects wait for (#810).
+        self.seal_deferred_bases()?;
         self.flush_signatures()?;
         drop(flush);
-        self.register_ready(false).map(|_| ())
+        self.register_ready(false)?;
+        self.readmit_deferred()
+    }
+    /// Seals the lanes that hold the bases of the held objects, so the next
+    /// publication publishes them (`save/deferred.rs`).
+    pub(super) fn seal_deferred_bases(&mut self) -> StorageResult<()> {
+        if self.deferred.is_empty() {
+            return Ok(());
+        }
+        let bases = self.deferred.bases();
+        let required = self.packer.finish_pack_bound();
+        self.reserve_packs(required)?;
+        self.packer.seal_pending(
+            &bases,
+            &mut self.compression,
+            &mut self.next_pack,
+            self.pack_end,
+        )?;
+        Ok(())
+    }
+    /// Selects every held object, once a publication published its base:
+    /// located together first, then each admitted as `admit` would.
+    pub(super) fn readmit_deferred(&mut self) -> StorageResult<()> {
+        if self.deferred.is_empty() {
+            return Ok(());
+        }
+        let held = self.deferred.take();
+        let ids: BTreeSet<ObjectId> = held
+            .iter()
+            .flat_map(|(object, base)| [object.id(), *base])
+            .collect();
+        let ids: Vec<ObjectId> = ids.into_iter().collect();
+        for slice in ids.chunks(READ_OBJECT_LIMIT / 2) {
+            self.storage.source.locate(slice)?;
+        }
+        for (object, base) in &held {
+            self.place(object, Some(*base))?;
+        }
+        Ok(())
     }
     /// One wave's membership, exact reuse and selection, without publishing
     /// it: `Save::finish` publishes its last wave with the sealed tail, in
@@ -104,8 +144,10 @@ impl State<'_> {
                     0 => end,
                     covered => index + covered,
                 };
-                self.verify_bases(&objects[index..next], &bases[index - start..next - start])?;
+                let page = &bases[index - start..next - start];
+                self.verify_bases(&objects[index..next], page)?;
                 for at in index..next {
+                    self.prepare_bases(&objects[at..next], &page[at - index..])?;
                     self.admit(&objects, at, &mut prepared)?;
                 }
                 drop(admission);
@@ -134,8 +176,21 @@ impl State<'_> {
             return Ok(());
         }
         prepared.insert(object.id(), index);
+        // A held object is this Save's, as a pending one is (#810).
+        if let Some(held) = self.deferred.canonical(object.id()) {
+            if held != object.canonical() {
+                return Err(StorageError::Collision(object.id()));
+            }
+            self.outcome.reused += 1;
+            return Ok(());
+        }
         // Keep the allocation block, but check the operation that can consume
         // IDs rather than replacing a tail for an entire hypothetical wave.
+        self.place(object, None)
+    }
+    /// Places `object`, not seen before in its wave: an exact reuse, or a new
+    /// object offered for selection (with `base`, a held one: `offer`).
+    fn place(&mut self, object: &FinalizedObject, base: Option<ObjectId>) -> StorageResult<()> {
         if self.packer.pending(object.id()) {
             let required = self.packer.finish_pack_bound();
             self.reserve_packs(required)?;
@@ -168,7 +223,7 @@ impl State<'_> {
             // One new object group plus every currently unfinished group/queue.
             let required = self.packer.finish_pack_bound() + 1;
             self.reserve_packs(required)?;
-            self.offer(object)?;
+            self.offer(object, base)?;
         }
         Ok(())
     }
@@ -295,6 +350,127 @@ impl State<'_> {
         self.candidates.flush(&view)?;
         Ok(())
     }
+    /// Before `objects[0]` is admitted: when it is an inode leaf whose stored
+    /// base (`bases[0]`, its located predecessors) is not rebuilt ahead yet,
+    /// rebuilds ahead the stored bases of it and of the inode leaves after it
+    /// in `objects`, with their values in one lookup a window at a time
+    /// ([`Self::prepare_leaves`]): selection (`pooled_bases`) then reads each
+    /// base without a lookup of its own (#810 F4). Reads only; selection reads
+    /// and checks the same bytes either way.
+    fn prepare_bases(
+        &mut self,
+        objects: &[FinalizedObject],
+        bases: &[Vec<ObjectLocation>],
+    ) -> StorageResult<()> {
+        let leaf = |object: &FinalizedObject| object.role() == ObjectRole::InodeLeaf;
+        match (
+            objects.first(),
+            bases.first().and_then(|bases| bases.first()),
+        ) {
+            (Some(object), Some(base))
+                if leaf(object) && !self.pool.is_prepared(&base.object_id) =>
+            {
+                let ahead: Vec<ObjectId> = objects
+                    .iter()
+                    .zip(bases)
+                    .filter(|(object, _)| leaf(object))
+                    .flat_map(|(_, bases)| bases.iter().map(|base| base.object_id))
+                    .collect();
+                self.prepare_leaves(&ahead, false)
+            }
+            _ => Ok(()),
+        }
+    }
+    /// Before `ids` are read: rebuilds ahead the pooled inode leaves among
+    /// them (when `resolving` their canonical bytes, those this Save has not
+    /// resolved yet; selection reads the pooled bodies, which that cache does
+    /// not keep) and looks up their stored values together, a bounded window at a time
+    /// (`PoolReader::prepare_leaves`, as a Store reader's demand does, #95):
+    /// one value lookup per window instead of one per leaf (#810 F4). Each
+    /// leaf's own resolution still authenticates it.
+    pub(super) fn prepare_leaves(
+        &mut self,
+        ids: &[ObjectId],
+        resolving: bool,
+    ) -> StorageResult<()> {
+        let view = WaveSource {
+            fetch: &self.storage.source,
+            packer: &self.packer,
+            signatures: &self.signatures,
+            values: &self.values,
+        };
+        let mut leaves = Vec::new();
+        for id in ids {
+            if resolving && self.resolved.holds(*id) {
+                continue;
+            }
+            // Only where it is known already: sealed here, or located in the
+            // Store. A pending object is not looked up, so preparing asks
+            // the Store nothing the demand itself would not.
+            if let Some(location) = self.leaf_location(*id) {
+                if !leaves.contains(&location) {
+                    leaves.push(location);
+                }
+            }
+        }
+        if leaves.len() < 2 {
+            return Ok(());
+        }
+        // A Save read has already located its stored chains in read_inner.
+        // For selection, group the stored leaf bases here. The wave starts
+        // with binding disabled, and its guarded base verification has
+        // finished before selection, so a walk failure is authoritative.
+        if !resolving {
+            let stored: Vec<ObjectLocation> = leaves
+                .iter()
+                .filter(|leaf| self.packer.location(leaf.object_id).is_none())
+                .copied()
+                .collect();
+            if stored.len() > 1 {
+                crate::read::prefetch_chains(
+                    &self.storage.source,
+                    &stored,
+                    &mut self.packs,
+                    &mut self.decode,
+                    &mut self.groups,
+                )?;
+            }
+        }
+        let capacities = self.storage.capacities();
+        self.pool.prepare_leaves(
+            &view,
+            &capacities,
+            i64::MAX,
+            &mut self.decode,
+            &leaves,
+            Some(crate::encoding::pool::read::PooledCaches {
+                encoded: &mut self.packs,
+                decoded: &mut self.groups,
+            }),
+        )
+    }
+    fn leaf_location(&self, id: ObjectId) -> Option<ObjectLocation> {
+        self.packer
+            .location(id)
+            .or_else(|| self.storage.source.located(std::iter::once(id)).pop())
+            .filter(|location| location.role == ObjectRole::InodeLeaf)
+    }
+
+    /// Prepares the next value window as its first unresolved leaf is read.
+    pub(super) fn resolve_demand(
+        &mut self,
+        id: ObjectId,
+        remaining: &[ObjectId],
+    ) -> StorageResult<Vec<u8>> {
+        if !self.resolved.holds(id)
+            && !self.pool.is_prepared(&id)
+            && self.leaf_location(id).is_some()
+        {
+            self.prepare_leaves(remaining, true)?;
+        }
+        self.resolve(id)
+    }
+
     pub(super) fn resolve(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
         if let Some(value) = self.resolved.get(id) {
             return Ok(value);

@@ -252,6 +252,16 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         self.decode_page(root, &canonical)
     }
 
+    /// Decodes one root page the caller already read in a grouped demand:
+    /// the page is charged as read, its wave to the caller's group.
+    pub(crate) fn fetched_root(
+        &mut self,
+        canonical: &[u8],
+    ) -> ContentResult<ReadPage<F::Key, F::Value>> {
+        self.work.pages_read = self.work.pages_read.saturating_add(1);
+        self.decode_page(true, canonical)
+    }
+
     /// Decodes one already fetched canonical page, charging the same scratch.
     pub(crate) fn decode_page(
         &mut self,

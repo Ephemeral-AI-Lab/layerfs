@@ -49,7 +49,8 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Builder<'_,
     /// `stored` is the immutable base record of a live base inode and None for
     /// a fresh one; `reuse` is a saved root holding a fresh file's exact
     /// bytes; `predecessor` is the file a rename put a fresh file in place
-    /// of, or the base file at its path (#88). Base roots are kept except a
+    /// of, or the base file at its path (#88); `window` is its page's base
+    /// files, kept or opened together (#810 F5). Base roots are kept except a
     /// file's constructed content and the patched metadata; the supplied
     /// count is derived again by Content.
     #[allow(clippy::too_many_arguments)]
@@ -60,6 +61,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Builder<'_,
         fresh: bool,
         reuse: Option<ObjectId>,
         predecessor: Option<u64>,
+        window: &super::files::Window,
         consumer: &mut dyn FinalizedConsumer,
         timing: &TimingScope<'_, Active>,
     ) -> ContentResult<InodeValue> {
@@ -85,10 +87,14 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Builder<'_,
                 add(&mut self.shared.borrow_mut().work.files_reused, 1);
                 root
             }
+            // A base file whose bytes the capture left as they are keeps
+            // its base content root: nothing is read or built (#810 F5).
+            (InodeKind::File, Some(stored), _) if window.kept(inode.serial) => stored.content_root,
             (InodeKind::File, _, _) => self.file(
                 inode.serial,
                 stored.is_none(),
                 predecessor,
+                &window.files,
                 consumer,
                 timing,
             )?,
@@ -185,6 +191,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Builder<'_,
         serial: u64,
         fresh: bool,
         predecessor: Option<u64>,
+        files: &crate::base::BaseFiles,
         consumer: &mut dyn FinalizedConsumer,
         timing: &TimingScope<'_, Active>,
     ) -> ContentResult<ObjectId> {
@@ -208,12 +215,13 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Builder<'_,
                 timing.child("file"),
             )
         } else {
-            let prepared = match CapturedFileEdits::prepare(
+            let prepared = match CapturedFileEdits::prepare_in(
                 self.workspace,
                 self.provider,
                 self.facts.reader,
                 serial,
                 scope,
+                Some(files),
             ) {
                 Ok(prepared) => prepared,
                 Err(custody) => return Err(self.shared.borrow_mut().file(custody)),

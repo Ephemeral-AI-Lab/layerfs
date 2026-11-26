@@ -44,6 +44,11 @@ impl PackCache {
     pub fn contains_key(&self, id: &i64) -> bool {
         self.entries.contains_key(&(*id, None))
     }
+    /// Pack IDs with any retained body or group.
+    pub(crate) fn resident_ids(&self) -> impl Iterator<Item = i64> + '_ {
+        self.entries.keys().map(|(pack, _)| *pack)
+    }
+
     /// Borrows an immutable retained body and records its recency.
     pub fn get(&self, id: &i64) -> Option<&Vec<u8>> {
         let entry = self.entries.get(&(*id, None))?;

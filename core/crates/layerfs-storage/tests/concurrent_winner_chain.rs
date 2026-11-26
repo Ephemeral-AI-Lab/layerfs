@@ -101,7 +101,12 @@ fn a_concurrent_winner_chain_resolves_a_base_this_wave_located_absent() {
     let second: Vec<u8> = support::noise(2048)[1024..].to_vec();
     let third = support::patterned(1024);
     let p = whole(&first);
-    let q = hinted(whole(&edited(&first, 100, b"F036-q01")), &p);
+    // Q names P but shares none of its content, so the similarity ring
+    // proposes nothing for it: its declared base alone forces the
+    // registration (a ring proposal whose trial wins is held to the wave's
+    // end instead, #810).
+    let unrelated: Vec<u8> = support::noise(3072)[2048..].to_vec();
+    let q = hinted(whole(&unrelated), &p);
     let z = whole(&second);
     let r = hinted(whole(&third), &z);
     let s = hinted(whole(&edited(&first, 600, b"F036-s01")), &q);

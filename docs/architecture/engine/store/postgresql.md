@@ -1272,13 +1272,122 @@ Checked and not done:
   PostgreSQL-only statement form or a server-side assert with its own error
   mapping; about 1 round trip each, not done.
 
+Construction's base directory reads are grouped (#810 F3,
+[Construction](../commit/construction.md#base-directory-reads-810-f3)): the
+base root pages a Commit rewrites are read 256 to a demand, the Save locates
+a demand's delta chains one level at a time for all its objects, and the
+remembered directories' new roots are one demand. A change that touches
+many directories therefore costs a few round trips per 256 directories
+rather than one or two per directory: on the campaign's shape kit the
+"add 10,000 files into 3,942 directories" cell (C4s4) fell from 8,514 to
+2,021 construct round trips and "delete `node_modules`" (B2) from 1,681 to
+281, with the same roots and stored bytes; what remains there is mostly
+inode value-block reads and the base-read batches (32) of the inode lookups.
+
 | Test | Command | Checks |
 | --- | --- | --- |
 | [`postgresql_commit_round_trips.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_commit_round_trips.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_commit_round_trips` | The lane with a head read and `commit_branch` is 12 round trips (15 before), with the head check in the lane's `BEGIN` 11; a moved head and an absent Branch are never answered unmoved |
 | [`mount_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/mount_round_trips.rs) | see [Mount reads](#mount-reads) | A real Commit's writer: first 23 round trips (54 before stage 2), second 3 (25), UpToDate 2 (1); SQLite 35/5 and 16/1 statements/transactions (46/9, 28/5). A merge Commit is exactly one race refusal and one fallback (`Store::fused_counts`); the Commits around it are fused |
+| [`commit_batched_base_files.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_batched_base_files.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-store-service --test commit_batched_base_files` | #810 F5: a Commit's Workspace reader asks the lengths of one captured inode page's changed base files in one demand and fetches their roots in one bounded batch, and reads nothing for a file whose bytes the capture left ([Construction](../commit/construction.md#base-files-of-one-inode-page-810-f5)). 1,100 `chmod`+`touch` files: 0 reader round trips and 0 object or length demands (72–76 round trips and 1,100 + 1,100 demands before); 1,100 in-place edits over two pages: 3 reader round trips, 2 + 2 demands (72–73, 1,100 + 1,100 before); writer unchanged; roots equal to the base's on both backends. `hidden_changes_are_committed`: same size with other bytes, truncate-and-extend and a shrink, each with the mtime set back, are committed; mode- and mtime-only files kept |
+| [`commit_fault_base_files_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_fault_base_files_drop.rs), [`commit_fault_base_files_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_fault_base_files_kill.rs) | `… --test commit_fault_base_files_drop`, `… --test commit_fault_base_files_kill` | A dropped connection and a terminated backend at every server message (88) of a Commit that edits six base files and changes four files' mode only (`support/base_file_sweep.rs`): its Workspace reader's one message is the batched prefetch. A second sweep (98 messages) has another Workspace state the files first, so the lengths are remembered in the shared cache and the changes' stats demand nothing on this reader: its Commit sends the batched length demand (one locate) and the prefetch, both swept. The Branch is at its old head or one Commit past it with the intended tree; a reader lost mid-window refuses the Commit and its follow-up; audit, locators and transactions clean |
 | [`fused_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/fused_commit.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test fused_commit` | The message is 1 round trip and 1 transaction warm (2 with its prepares); a moved head, an object stored meanwhile and an existing Commit identity are `Fused::Race`; a generation change `StaleStore`; a lane wait past `lock_timeout` `Busy`; a missing epoch row and a removal committed while the message waits `Conflict`; a lost reply `UnknownOutcome` with the session quarantined; a barrier cancelled between its lock and unlock a definite refusal whose failure path releases the leftover (one more round trip; no advisory lock left on the backend, another writer commits). Each refusal wrote nothing (head, locators, packs and hints checked with admin SQL). SQLite: one transaction per Commit, the race and epoch cases |
 | [`postgresql_aborted_commit.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_aborted_commit.rs) | `… --test postgresql_aborted_commit` | A body that ignores a refused statement is answered with that refusal, writes nothing and leaves the session usable. Before the `SELECT 1; COMMIT` guard it answered `Ok(())` |
 | [`postgresql_lane_liveness.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_lane_liveness.rs) | `… --test postgresql_lane_liveness` | A nested write after its lane connection was terminated fails `Closed` and writes nothing: now through `pg_xact_status` |
+
+### Similar files publish once per wave
+
+A Save used to publish a similar whole file's ring proposal before trying
+it, when the proposal was an object the same Save had not published yet: one
+write transaction, a reservation and a pack per similar file, about 6 round
+trips each, plus a pack body read for every later trial against those packs
+(#810). The Save now decides first and publishes such a base only with its
+preparation wave
+([encoding](../../core/physical-storage/encoding.md)). Measured at
+e11d8c8d0f with the #810 shape kit, one sample per cell on this Mac's
+Docker loopback (`log_statement` off; host load 10 to 43, so times are
+indicative): the Commit's PostgreSQL round trips and packs, with records,
+roots and depth histograms unchanged:
+
+| Cell | Change | Round trips before → after | Packs before → after | Stored bytes before → after | Time before → after |
+| --- | --- | --- | --- | --- | --- |
+| B1 | npm install, 10,002 files | 5,309 → 1,405 | 663 → 141 | 18,651,828 → 18,635,820 | 16.7 s → 3.4 s |
+| B6e | overwrite 1,000 ~60 B near-identical files | 4,508 → 891 | 605 → 3 | 106,581 → 87,317 | 13.6 s → 1.8 s |
+| B6n | add 1,000 ~60 B similar files | 3,863 → 21 | 552 → 4 | 80,512 → 62,976 | 4.2 s → 0.36 s |
+| B4 | add 1,843 build-output files | 222 → 157 | 243 → 241 | 29,264,275 → 29,264,219 | 13.7 s → 1.7 s |
+| B6 | add 1,000 similar 0.1–4 KB files | 28 → 28 | 6 → 6 | 239,281 → 239,281 | 0.45 s → 0.43 s |
+| A2 | add ten 50 MB files | 395 → 395 | 2,200 → 2,200 | 525,798,458 → 525,798,458 | 7.7 s → 13.3 s (load) |
+
+The round trips left in B1 and B6e are other per-file reads (#810 F1, F3–F5).
+[`commit_similar_tiny_files.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_similar_tiny_files.rs)
+pins three small shapes' round trips, publications, records and payload
+bytes on both backends;
+[`commit_fault_similar_drop.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_fault_similar_drop.rs)
+and [`commit_fault_similar_kill.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_fault_similar_kill.rs)
+drop the connection or kill the backend at each of the 100 server messages of
+a warm Commit whose Save holds similar files for that publication.
+
+### Commit reads before the lane (#810)
+
+A wide change used to pay one round trip per changed directory, file or
+inode page it read before the lane. The reads are now collected first and
+sent a window at a time (campaign #810; Lane A fixes). A failed window read
+fails the Commit with the provider's own error before the lane; nothing is
+retried. The drop and kill sweeps of a wide Commit
+(`commit_fault_wide_{drop,kill}_{0..3}.rs`, `Flight::Wide`) fault every
+server message of its flight:
+
+- **Binding hints (F1).** The inode difference walk notes the directories
+  whose listing changed (`ChangedDirectories`); their difference then runs
+  128 directories at a time, both root pages of each window read in one
+  demand (`directory_bindings`, at most 256 pages or 2 MiB), so a window is one
+  locate, its delta chains' levels and one pack read instead of one locate
+  per page and chain level. A directory the left root lacks is diffed
+  against the empty listing, with the same bindings in the same order.
+  Logical counting retains up to 4,096 changed directories. Larger changes
+  stream another inode difference in bounded directory windows. If hints
+  exceed one transaction, the retained prefix is recorded after the Save
+  publishes, and the next read starts at the first remaining directory.
+  C4s4 (10,000 new files over 3,942 directories): `bindings` 11,403 -> 2,056
+  round trips, the same root and stored bytes.
+
+- **One walk, read ahead past the other side (F4).** The logical count and
+  the binding hints walked the same two inode tables apart, and the walk's
+  read-ahead gave up whenever the other side still held a page above the
+  level it opened: every changed leaf was then a point read and a value
+  lookup, twice (C4: 1,190 and 1,326 round trips). Now `logical.count`
+  walks once (`logical_size_and_directories`) and notes the changed
+  directories for `bindings`; and each frontier page carries the largest
+  key its parent records, so the walk reads ahead every following page at
+  the level whose largest key is at most the key before the other side's
+  first unopened higher page (no page of the other side can share its
+  identity), both sides in one demand when both expand. It still reads no
+  page it would skip, and holds at most 128 pages (1 MiB).
+- **The Save's leaf reads (F4).** A Save read of several pooled inode
+  leaves (construction's base pages) rebuilt and looked up their values one
+  leaf at a time; selection then read each new leaf's stored base again,
+  one value lookup each (`pooled_bases`). The Save now rebuilds the leaves
+  of a demand ahead, their chains located a level at a time for all of them
+  (`read/prefetch.rs`), and looks up their values in one lookup per window
+  (`PoolReader::prepare_leaves`: at most 128 leaves, 1 MiB of bodies and the
+  unchanged 512 KiB `POOLED_VALUE_CACHE_BYTES` of values); and before a
+  wave page's inode leaves are admitted, their stored bases the same way.
+  Only leaves already sealed or located are prepared, so preparing asks the
+  Store nothing the demand would not.
+
+Measured with the shape kit (PostgreSQL round trips, base `e11d8c8d0f` ->
+F1+F4; every root, `stored`, `inserted`, `reused` and `packs` identical on
+both backends): C4 4,848 -> 950 (writer 4,122 -> 224; its 726 Workspace
+reader round trips are #810 F5's), C4s4 26,734 -> 7,585 (`construct`'s
+7,246 are mostly the directory rewrites, #810 F3), B1 5,309 -> 4,621
+(publication waves, #810 F2), C1 454 -> 56, C3 823 -> 417 and B5e 897 ->
+467 (their remaining are mostly Workspace reader reads, F5); B3 37 -> 13;
+A3 18, A5 15, C2 8 and D2 3 unchanged.
+
+The pins are in
+[`commit_batched_reads.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_batched_reads.rs):
+each scenario's writer round trips and statements for `construct`,
+`finish`, `logical.count` and `bindings`, and its Save's `inserted`,
+`reused` and `packs`.
 
 ### Fused Commit
 
@@ -1506,6 +1615,7 @@ authoritative row ([physical storage](../../core/physical-storage/README.md)).
 | `ancestor_varint`, `ancestor_entry`, `ancestor_entries` | SQL functions: the first two build an entry (inlinable SQL, not `STRICT`, operands passed as columns of `OFFSET 0` subqueries so they stay inlined); `ancestor_entries` decodes a list, answering one row with a NULL pack for a malformed list. They serve publication, compaction verification and the doctor; the read path decodes lists in Rust | same |
 | Publication | The rows statement ([`publish_rows.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/publish_rows.sql)) derives each new row's list from `ObjectLocation.base`: a base stored earlier gives its stored list (one more prefix probe); a base in the same batch is resolved by a recursive CTE over the batch, children after their base, at most 64 levels. A row whose base is stored nowhere, or whose list would pass 850 bytes, is left `NULL`. A lost row keeps the winner's list. The pack COPY writes `directory` with the body; rows and packs are only inserted, never updated | [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs) |
 | `locate_chains` | Two autocommit statements. Statement 1 ([`chain_roots.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_roots.sql), `$1` ids `bytea[]`, `$2` prefix keys `bigint[]`) probes each root through `object_location_prefix` as `locate` does and returns the rows with their raw lists, plus the roots' own pack rows with directories by `pack_pkey`. The lists are decoded in Rust ([`metadata/chains.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/chains.rs)): `NULL`, `''`, malformed lists and lists deeper than the role's depth cap are dropped (the root still locates). Statement 2 ([`chain_packs.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_packs.sql), `$1` member pack ids `bigint[]`) reads, by `pack_pkey`, only the member packs statement 1 did not return; it is skipped when there are none. The session keeps the pack rows both statements returned (`ChainPacks`: rows of immutable packs, per catalog incarnation, within 2 MiB of directories, cleared whole at the bound), so statement 2 reads only member packs the session has not seen; every pack a retained row's list names stays stored. A chain whose member pack is absent is dropped | [`storage/provider.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/storage/provider.rs) |
+| Captured Commit joined metadata read (#815 Stage 1 experiment) | The Save canonical-object read can append [a whole-pack selection](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_whole_packs.sql) to a root locate for two or more uncached object IDs. A candidate pack has only requested FULL inode/directory metadata rows, uses ordinary sized or pages framing, and has no resident groups or body. PostgreSQL returns at most 256 KiB of deduplicated whole bodies per root statement. The client verifies each descriptor and whole-pack digest, validates the requested group framing, and checks decoded canonical identities as in the original body path. Pack formats outside the selection, remaining bodies and pooled inode values use their ordinary reads. A failed joined statement ends the attempt. The same Save read barrier and existing connection are used. | [Storage admission](../../../../core/crates/layerfs-storage/src/read/joined.rs) |
 | Group reads | `read_groups` answers every read in one statement per 2 MiB of returned bytes through the multi-range `substring` reader (`objects::read::ranges`; ranges under 8 KiB apart are fetched as one span and cut in the statement): a ranged read's ranges, and a whole read's body as one range, authenticated against the descriptor it named; answers in request order, an absent pack `Missing`. `batched_chain_reads` is true, so core pages every demand (reads and Save slices) into such calls, with a handle's own published chains in the same pages | same |
 | Locate | the plain locate statement is [`locate.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/locate.sql); the bench's `b8_locate.sql` is the same text | [`metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
 | Compaction | The rebuild copies `ancestors` and `directory` with their rows, keeping pack ids and positions, so every list stays valid. Before the swap, `verify_ancestors` counts scratch rows whose list is malformed or names a pack or group the scratch Store lacks, and a non-zero count fails the round with `Integrity("compaction ancestor lists")`. A future repack that moves records must rewrite the lists. The table fingerprint includes TOAST reloptions | [`compact/build.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/build.rs), [`compact/op.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/compact/op.rs) |

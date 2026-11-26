@@ -3,22 +3,24 @@
 //! Rows arrive in windows of at most [`CLASSIFICATION_WINDOW_ROWS`]: one row per
 //! header and one per bound name. A window's base records come from one grouped
 //! demand, its restated names from one grouped point lookup per stored parent,
-//! and its placements leave in one guarded batch, so what is resident here is
-//! one window of names whatever the base or the whole change holds.
+//! and its placements leave in one guarded batch. Streamed directory headers
+//! share a parent demand independently of the name windows; the names still
+//! fit in one window.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::backed::{Placement, TopologyRecords};
 use super::{
-    charge_directory, FilesystemTopology, ValidationState, ValidationWork,
+    charge_directory, FilesystemTopology, ValidationState, ValidationWork, BACKED_MEMO_RECORDS,
     CLASSIFICATION_WINDOW_ROWS,
 };
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::{lookup_many, DirectoryReadWork};
-use crate::filesystem::rows::view::OperationInput;
+use crate::filesystem::inode::read::{lookup_many as lookup_inodes, InodeReadWork};
+use crate::filesystem::rows::view::{DirectoryRow, OperationInput};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::PathName;
-use crate::object::inode_leaf::InodeKind;
+use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 /// One header, or one bound name of the header before it.
@@ -53,6 +55,7 @@ pub(super) struct Classifier<'c, 's, 'b> {
     records: &'c mut TopologyRecords<'s, 'b>,
     work: &'c mut ValidationWork,
     window: Vec<WindowRow>,
+    parent_bases: BTreeMap<u64, Option<InodeValue>>,
     parent: Option<(u64, Listing)>,
     /// Inode pages the grouped window demands read, for the site split.
     pub prefetched_pages: u64,
@@ -77,14 +80,78 @@ impl<'c, 's, 'b> Classifier<'c, 's, 'b> {
             records,
             work,
             window: Vec::new(),
+            parent_bases: BTreeMap::new(),
             parent: None,
             prefetched_pages: 0,
             rows: 0,
         }
     }
 
-    /// Adds one row and classifies the window when it is full.
-    pub fn row(&mut self, row: WindowRow) -> ContentResult<()> {
+    /// Room for streamed headers while retaining any old-window headers
+    /// that have not yet been classified.
+    pub fn directory_room(&self) -> usize {
+        BACKED_MEMO_RECORDS - self.window.iter().filter(|row| row.bound.is_none()).count()
+    }
+
+    /// Reads existing parent records together, then processes the headers
+    /// and their streamed names in their original classification windows.
+    pub fn streamed(&mut self, directories: &mut Vec<DirectoryRow<'_>>) -> ContentResult<()> {
+        if directories.is_empty() {
+            return Ok(());
+        }
+        let Some(table) = self.topology.table else {
+            unreachable!("parent look-ahead requires a base");
+        };
+        let pending: BTreeSet<_> = self
+            .window
+            .iter()
+            .filter(|row| row.bound.is_none())
+            .map(|row| row.parent)
+            .collect();
+        self.parent_bases
+            .retain(|serial, _| pending.contains(serial));
+        let root = self.input.root_serial();
+        let mut serials = Vec::with_capacity(directories.len());
+        for directory in directories.iter() {
+            let parent = directory.header.parent;
+            if parent != root
+                && !self.parent_bases.contains_key(&parent)
+                && !self.input.is_new(parent)?
+            {
+                serials.push(parent);
+            }
+        }
+        let mut work = InodeReadWork::default();
+        let bases = lookup_inodes(self.reader, table, &serials, &mut work)?;
+        self.work.read_waves = self.work.read_waves.saturating_add(work.read_waves);
+        self.work.inode_pages_read = self.work.inode_pages_read.saturating_add(work.pages_read);
+        self.prefetched_pages = self.prefetched_pages.saturating_add(work.pages_read);
+        self.parent_bases.extend(serials.into_iter().zip(bases));
+        for directory in directories.drain(..) {
+            self.directory(directory)?;
+        }
+        Ok(())
+    }
+
+    pub fn directory(&mut self, directory: DirectoryRow<'_>) -> ContentResult<()> {
+        let parent = directory.header.parent;
+        self.row(WindowRow {
+            parent,
+            bound: None,
+        })?;
+        for change in directory.changes()? {
+            let (name, binding) = change?;
+            if let Some(child) = binding {
+                self.row(WindowRow {
+                    parent,
+                    bound: Some((name, child)),
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    fn row(&mut self, row: WindowRow) -> ContentResult<()> {
         self.window.push(row);
         if self.window.len() == CLASSIFICATION_WINDOW_ROWS {
             self.classify()?;
@@ -150,7 +217,7 @@ impl<'c, 's, 'b> Classifier<'c, 's, 'b> {
         self.records.place(placed, self.input.root_serial())
     }
 
-    /// One grouped demand for every base record this window will ask for.
+    /// One grouped demand for the base records the current window still needs.
     fn demand(&mut self, window: &[WindowRow]) -> ContentResult<()> {
         let Some(table) = self.topology.table else {
             return Ok(());
@@ -161,13 +228,16 @@ impl<'c, 's, 'b> Classifier<'c, 's, 'b> {
         for row in window {
             match &row.bound {
                 None => {
-                    if row.parent != root && !self.input.is_new(row.parent)? {
+                    if row.parent != root
+                        && !self.parent_bases.contains_key(&row.parent)
+                        && !self.input.is_new(row.parent)?
+                    {
                         serials.push(row.parent);
                     }
                 }
                 Some((_, child)) => {
                     root_binds |= row.parent == root;
-                    if *child != root {
+                    if *child != root && !self.state.verified_fresh(*child) {
                         serials.push(*child);
                     }
                 }
@@ -204,9 +274,14 @@ impl<'c, 's, 'b> Classifier<'c, 's, 'b> {
             Listing::Fresh
         } else {
             let table = self.topology.table.expect("base inode table");
-            let record = self
-                .state
-                .lookup_one(self.reader, table, parent, self.work)?;
+            let record = if let Some(base) = self.parent_bases.remove(&parent) {
+                self.work.objects_read = self.work.objects_read.saturating_add(1);
+                self.work.inode_demands = self.work.inode_demands.saturating_add(1);
+                base.ok_or(ContentError::InvalidRecord("missing base inode"))?
+            } else {
+                self.state
+                    .lookup_one(self.reader, table, parent, self.work)?
+            };
             if record.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }

@@ -9,6 +9,10 @@ use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::{AuthenticatedObjects, ContentError, ContentResult};
 use std::collections::VecDeque;
 
+/// Most final rows held before the first of them is emitted. Each level of
+/// their base lookup reads at most 128 canonical pages in one demand.
+const FINAL_READ_ROWS: usize = 128;
+
 pub(super) struct RowCursor {
     after: Option<[u8; 32]>,
     keys: std::vec::IntoIter<[u8; 32]>,
@@ -27,14 +31,31 @@ impl RowCursor {
             finished: false,
         }
     }
+    /// Reads whole backing waves into one window for a shared base lookup.
+    /// Both passes have sealed touched membership. The seed writes only work
+    /// items and nodes, so those writes do not change the rows read here.
+    pub fn window(
+        &mut self,
+        reducer: &IndexedReducer<'_, '_>,
+        batch: usize,
+        limit: usize,
+    ) -> ContentResult<Vec<Row>> {
+        let capacity = limit / batch * batch;
+        let mut rows = Vec::with_capacity(capacity);
+        while rows.len() < capacity {
+            let wave = self.wave(reducer, batch)?;
+            let short = wave.len() < batch;
+            rows.extend(wave);
+            if short {
+                break;
+            }
+        }
+        Ok(rows)
+    }
     /// The next rows of the pass, at most `limit` of them and none once it
     /// has ended. The rows of one job are read together; no row beyond the
     /// wave is read, so a caller that writes between waves is never behind.
-    pub fn wave(
-        &mut self,
-        reducer: &IndexedReducer<'_, '_>,
-        limit: usize,
-    ) -> ContentResult<Vec<Row>> {
+    fn wave(&mut self, reducer: &IndexedReducer<'_, '_>, limit: usize) -> ContentResult<Vec<Row>> {
         let mut rows = Vec::with_capacity(limit.min(64));
         while rows.len() < limit && !self.finished {
             if self.keys.len() == 0 {
@@ -131,11 +152,13 @@ impl<'s, 'b, 'r> IndexedRows<'s, 'b, 'r> {
     }
     fn next_inner(&mut self) -> ContentResult<Option<FinalChange>> {
         if self.rows.is_empty() {
-            let wave = self.cursor.wave(self.reducer, self.batch)?;
-            if wave.is_empty() {
+            let window = self
+                .cursor
+                .window(self.reducer, self.batch, FINAL_READ_ROWS)?;
+            if window.is_empty() {
                 return Ok(None);
             }
-            let serials = wave
+            let serials = window
                 .iter()
                 .filter(|row| matches!(row, Row::Effect { .. }))
                 .map(|row| row.serial())
@@ -154,7 +177,7 @@ impl<'s, 'b, 'r> IndexedRows<'s, 'b, 'r> {
                 self.work.base_waves = self.work.base_waves.saturating_add(1);
             }
             let mut bases = bases.into_iter();
-            for row in wave {
+            for row in window {
                 let base = if matches!(row, Row::Effect { .. }) {
                     bases.next().flatten()
                 } else {

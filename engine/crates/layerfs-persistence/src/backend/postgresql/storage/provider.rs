@@ -18,6 +18,29 @@ pub struct PostgresStorage {
 }
 
 impl PostgresStorage {
+    fn locate_root_packs(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        joined: Option<(&[i64], &mut Vec<PersistedPack>)>,
+    ) -> Result<(), PersistenceError> {
+        rows.clear();
+        chains.chains.clear();
+        chains.directories.clear();
+        let policy = self.policy()?;
+        let incarnation = self
+            .session
+            .incarnation
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let kept = (&self.session.chain_packs, incarnation);
+        self.session.read_immutable(|tx| {
+            super::super::metadata::chains::locate_chains(
+                tx, &policy, kept, roots, rows, chains, joined,
+            )
+        })
+    }
+
     /// Counters of this session's attempted work, read without a query.
     pub fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
         self.session.diagnostics().map_err(Into::into)
@@ -120,18 +143,18 @@ impl PackPersistence for PostgresStorage {
         rows: &mut Vec<LocatedObject>,
         chains: &mut LocatedChains,
     ) -> Result<(), PersistenceError> {
-        rows.clear();
-        chains.chains.clear();
-        chains.directories.clear();
-        let policy = self.policy()?;
-        let incarnation = self
-            .session
-            .incarnation
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let kept = (&self.session.chain_packs, incarnation);
-        self.session.read_immutable(|tx| {
-            super::super::metadata::chains::locate_chains(tx, &policy, kept, roots, rows, chains)
-        })
+        self.locate_root_packs(roots, rows, chains, None)
+    }
+    fn locate_chains_with_packs(
+        &self,
+        roots: &[ObjectId],
+        resident: &[i64],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        bodies: &mut Vec<PersistedPack>,
+    ) -> Result<(), PersistenceError> {
+        bodies.clear();
+        self.locate_root_packs(roots, rows, chains, Some((resident, bodies)))
     }
     /// Group reads (#758): every read's bytes in one statement per 2 MiB of
     /// returned bytes, through the multi-range `substring` reader

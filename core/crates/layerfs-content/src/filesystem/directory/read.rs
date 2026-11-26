@@ -335,6 +335,28 @@ fn load(
     Ok(decoded)
 }
 
+/// [`root_shape`] of each of `roots`, in order, read as one grouped demand
+/// (#810 F3). At most [`crate::filesystem::MAXIMUM_READ_DEMANDS`] roots.
+pub fn root_shapes(
+    reader: &dyn AuthenticatedObjects,
+    roots: &[DirectoryRoot],
+) -> ContentResult<Vec<(u8, u64)>> {
+    if roots.len() > crate::filesystem::objects::MAXIMUM_READ_DEMANDS {
+        return Err(ContentError::ObjectLimitExceeded {
+            limit: crate::filesystem::objects::MAXIMUM_READ_DEMANDS,
+            actual: roots.len(),
+        });
+    }
+    let ids: Vec<ObjectId> = roots.iter().map(|root| root.0).collect();
+    decoded::pages(reader, &ids, Role::Directory)?
+        .iter()
+        .map(|decoded| {
+            let wire = decoded.directory_wire()?;
+            Ok((wire.level, wire.count))
+        })
+        .collect()
+}
+
 /// The recorded level and subtree row count of a directory's root page.
 pub fn root_shape(
     reader: &dyn AuthenticatedObjects,

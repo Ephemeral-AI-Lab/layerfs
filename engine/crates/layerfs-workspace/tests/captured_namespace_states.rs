@@ -345,7 +345,15 @@ fn a_base_file_with_only_metadata_changes_keeps_its_content_root() {
         "serial 8: the base row is kept exactly"
     );
     let work = built.work;
-    assert_eq!((work.files_constructed, work.files_unchanged), (2, 2));
+    // Both files keep their base content with no read (#810 F5).
+    assert_eq!(
+        (
+            work.files_constructed,
+            work.files_unchanged,
+            work.files_kept
+        ),
+        (0, 0, 2)
+    );
     assert_eq!((work.metadata_patched, work.metadata_built), (1, 0));
     // No name changed anywhere: no header, no name cursor, no name point.
     assert_eq!(work.headers_written, 0);
@@ -451,9 +459,15 @@ fn link_count_changes_alone_keep_content_and_metadata_roots() {
             .unwrap()
         );
     }
+    // The two files whose bytes the capture left are kept with no read
+    // (#810 F5); the third is constructed.
     assert_eq!(
-        (built.work.files_constructed, built.work.files_unchanged),
-        (3, 2)
+        (
+            built.work.files_constructed,
+            built.work.files_unchanged,
+            built.work.files_kept
+        ),
+        (1, 0, 2)
     );
     built.release(&b);
 }
