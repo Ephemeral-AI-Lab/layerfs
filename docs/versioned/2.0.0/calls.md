@@ -632,14 +632,21 @@ The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
 with one Commit (or none when nothing changed). `file write`'s content and
 an unscoped `file apply`'s changes stream from stdin or `--from` in bounded
 frames, so neither the CLI nor the worker holds the whole input; there is
-no new size limit. One `file apply` change is still built whole, once,
-by the CLI and the worker (the engine needs its edit text whole); the
-input's text is not copied. A scoped `file apply --scope` runs in the
-caller. The worker runs writes on 4 write threads of their own, at most
-16 held at once (past that, `Unavailable` before any effect), so writes
-never take the threads of reads. Input that delivers less than 256 KiB in
-30 s of the worker waiting for it is refused `Unavailable`, nothing
-committed; the CLI's keepalives do not count as input.
+no new size limit. One `file apply` change is still built whole by the
+CLI (the engine needs an edit's text whole); the input's text is not
+copied, and a write's content still streams. Any other change must fit the
+worker's budget for one change (4 MiB decoded): a list from a file
+(`--from`, or stdin redirected from a file) with a larger change runs in
+the caller instead, and a piped one is refused at that change
+(`InvalidInput` with detail `code: TooLarge`), nothing committed. A scoped
+`file apply --scope` runs in the caller. The worker runs writes on 4 write
+threads of their own, at most 16 held at once, so writes never take the
+threads of reads; past 16, or while the worker drains, a write is refused
+`Unavailable` before any effect. A write that waits 60 s for a write
+thread is refused `Unavailable`, naming the load, nothing committed. Input
+that delivers less than 262,076 bytes (four engine records) in 30 s of
+the worker waiting for it is refused `Unavailable`, nothing committed; the
+CLI's keepalives do not count as input.
 A call whose Store or socket path does not qualify reads its input whole
 and runs in the caller, as before; so does a single-change write whose
 arguments pass 64 KiB. Input that stops before its end (a killed CLI, a
@@ -649,9 +656,13 @@ the whole input was sent, a lost answer is `Unknown` with a request ID;
 check the Branch before writing again, since nothing is resent. The worker
 keeps the outcome of a call it could not answer, and an outcome its Store
 could not settle, in `machine/<host>/retained/<request id>.json`;
-`machine doctor` reports them as a `machine.worker.retained` notice until
-`layerfs machine prune <host> --retained` removes them (at most 256 are
-kept). A definite refusal is never recorded. CLI PostgreSQL writes run in
+`machine doctor` reports them as a `machine.worker.retained` notice, whose
+fix is `rm` of the records once their Branches were checked. At most 256
+are kept: the oldest `undelivered` records make room, `uncertain` ones are
+never removed by the worker. A record the worker cannot write is not
+retried: the `Unknown` answer says `recorded: false`, and the `machine
+stop` that ends the worker lists it (`unrecorded_writes`). A definite
+refusal is never recorded. CLI PostgreSQL writes run in
 the caller.
 
 The host worker's SQLite cache keeps up to 16 Stores open per home.
@@ -1153,7 +1164,7 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 | `get` | `machine` | `--with live` | a machine's record and state |
 | `images` | `machine` | `--with docker` | the Sandbox images a machine holds |
 | `load_image` | `machine`, `image` | `on_progress` | copies an image from the host's Docker to a machine without creating a Sandbox |
-| `prune` | `machine`, `[image]` | `unused`, `retained` | removes a Sandbox image from a machine, or every unused one; `--retained` (host machine only, alone) removes the host worker's kept write outcomes and answers their `removed` request IDs |
+| `prune` | `machine`, `[image]` | `unused` | removes a Sandbox image from a machine, or every unused one |
 | `stats` | `machine` | `--with space` | a machine's processors, memory and data disk, its Stores' sizes and live Sandboxes |
 | `files` | `machine`, `[path]` | `depth` (1), `limit` (100), `cursor`, `byte_offset` (0), `byte_length` (262144) | a machine's LayerFS folders by role, or a folder or file of the machine |
 | `log` | `machine` | `limit` (200), `cursor` | a machine's worker log: its last lines, then the lines before a cursor |

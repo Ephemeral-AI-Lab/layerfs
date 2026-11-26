@@ -192,3 +192,27 @@ impl Faults {
         }
     }
 }
+
+/// Host worker write switch (S2.2): while the home's
+/// `machine/<host>/fault-write-unknown` exists, a write's outcome becomes
+/// an engine-style `Unknown` that carries the real outcome as evidence.
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub(super) fn write_outcome(
+    home: &std::path::Path,
+    outcome: layerfs_home::outcome::Outcome,
+) -> layerfs_home::outcome::Outcome {
+    let switch = layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
+        .join("fault-write-unknown");
+    if !switch.exists() {
+        return outcome;
+    }
+    let real = match &outcome {
+        Ok(answer) => answer.clone(),
+        Err(refusal) => SdkValue::text(&refusal.code),
+    };
+    Err(SdkRefusal {
+        code: "Unknown".to_owned(),
+        message: "fault: the write's outcome is uncertain".to_owned(),
+        detail: SdkValue::map([("fault", SdkValue::Bool(true)), ("answer", real)]),
+    })
+}

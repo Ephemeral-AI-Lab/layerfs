@@ -248,7 +248,7 @@ not in `methods::call`, and in this repository only tests call it.
 | Reads never take the publication lane. | [`store/open.rs`](../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
 | Merge work runs before the lane; only `merge_branch` publishes. | [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `main` changes only through `branch.publish`. | `ReadOnly` in [`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| An uncertain file-call Commit keeps its Workspace and answers `Unknown` with Workspace id and namespace, plus the evidence a caller needs to settle it: `phase`, whether it `published`, its `attempt` (hex), `expected_head` and `candidate_root`. | `StoreService::retain` in [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
+| An uncertain file-call Commit keeps its Workspace and answers `Unknown` with Workspace id and namespace, plus the evidence a caller needs to settle it: `phase` (a stable name from `CommitPhase::as_str`, not its `Debug` text), whether it `published`, its `attempt` (hex), `expected_head` and `candidate_root`. | `StoreService::retain` in [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
 | Saved lookups never cross projects: an id from another LayerStack is `InvalidInput`. | [`history/saved.rs`](../../../../engine/crates/layerfs-store-service/src/history/saved.rs) |
 
 ## Limits and failures

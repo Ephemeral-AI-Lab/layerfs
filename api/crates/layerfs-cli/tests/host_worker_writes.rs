@@ -268,24 +268,17 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
         report.contains("c0ffee") && report.contains("undelivered"),
         "{report}"
     );
-    // the finding's fix, an existing call, removes the checked records
+    // the finding names the folder; its fix removes the checked records
+    let dir = path.join("machine").join(host()).join("retained");
     assert!(
-        report.contains(&format!("layerfs machine prune {} --retained", host())),
+        report.contains(&format!("rm {}/*.json", dir.display())),
         "{report}"
     );
-    let pruned = ok(path, &["machine", "prune", host(), "--retained"], b"");
-    assert_eq!(
-        json::print(pruned.get("removed").unwrap()),
-        r#"["00000000000000000000000000c0ffee"]"#
-    );
+    for record in std::fs::read_dir(&dir).unwrap() {
+        std::fs::remove_file(record.unwrap().path()).unwrap();
+    }
     assert!(retained(path).is_empty());
     assert_eq!(retained_check(path).get_text("outcome"), Some("pass"));
-    refused(
-        path,
-        &["machine", "prune", "docker", "--retained"],
-        b"",
-        "InvalidInput",
-    );
     drain(&home);
 }
 
@@ -490,6 +483,7 @@ fn writes_on_a_postgresql_store_stay_direct() {
     assert_eq!(commits(path, project, "work"), before + 3);
     let stat = ok(path, &["file", "stat", project, "work", "/big"], b"");
     assert_eq!(stat.get_int("size"), Some(1 << 20));
+    // no write was routed; its reads may be (Step 11 PostgreSQL reads)
     assert_eq!(routed(path), 0);
-    assert!(!home.paths.socket.exists(), "a worker endpoint was made");
+    drain(&home);
 }

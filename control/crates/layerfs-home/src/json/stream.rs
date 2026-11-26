@@ -2,16 +2,42 @@
 //! its text is held, only the value (a streamed `file apply` element, on
 //! the CLI and on the host worker). It reads exactly what [`super::parse`]
 //! reads, with the same refusals, and leaves what follows the value unread.
+//! With [`Limits`] it also refuses a value past a decoded-size estimate, an
+//! object width or a depth, as the host frame budget does, before it holds
+//! more than that estimate.
 use super::{base64_object, JsonError, MAX_DEPTH};
 use layerfs_bridge::control::SdkValue;
 use std::io::BufRead;
 
+/// Bounds on one value read from an untrusted stream. `decoded` bounds the
+/// estimate three bytes per input byte plus 256 per container, field and
+/// element, the host frame budget's own measure.
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    /// The largest decoded-size estimate.
+    pub decoded: usize,
+    /// The most fields in one object.
+    pub fields: usize,
+    /// The deepest nesting.
+    pub depth: usize,
+}
+
 /// Reads one JSON value from `input`; the bytes after it stay unread.
 pub fn read_value(input: &mut dyn BufRead) -> Result<SdkValue, JsonError> {
+    read_value_within(input, None)
+}
+
+/// [`read_value`] under `limits`, when given.
+pub fn read_value_within(
+    input: &mut dyn BufRead,
+    limits: Option<Limits>,
+) -> Result<SdkValue, JsonError> {
     Stream {
         input,
         at: 0,
         depth: 0,
+        limits,
+        cost: 0,
     }
     .value()
 }
@@ -20,6 +46,9 @@ struct Stream<'a> {
     input: &'a mut dyn BufRead,
     at: u64,
     depth: usize,
+    limits: Option<Limits>,
+    /// The decoded-size estimate so far.
+    cost: usize,
 }
 
 impl Stream<'_> {
@@ -27,7 +56,23 @@ impl Stream<'_> {
         JsonError(format!("{what} at byte {}", self.at))
     }
 
+    /// Adds `units` of structure (256 each) to the estimate.
+    fn structure(&mut self, units: usize) -> Result<(), JsonError> {
+        self.cost += 256 * units;
+        self.within()
+    }
+
+    fn within(&self) -> Result<(), JsonError> {
+        match self.limits {
+            Some(limits) if self.cost > limits.decoded => {
+                Err(self.error("JSON exceeds the decoded size budget"))
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn peek(&mut self) -> Result<Option<u8>, JsonError> {
+        self.within()?;
         loop {
             match self.input.fill_buf() {
                 Ok(buffer) => return Ok(buffer.first().copied()),
@@ -40,6 +85,7 @@ impl Stream<'_> {
     fn bump(&mut self) {
         self.input.consume(1);
         self.at += 1;
+        self.cost += 3;
     }
 
     fn next(&mut self) -> Result<Option<u8>, JsonError> {
@@ -86,9 +132,13 @@ impl Stream<'_> {
         read: fn(&mut Self) -> Result<SdkValue, JsonError>,
     ) -> Result<SdkValue, JsonError> {
         self.depth += 1;
-        if self.depth > MAX_DEPTH {
+        let deepest = self
+            .limits
+            .map_or(MAX_DEPTH, |limits| limits.depth.min(MAX_DEPTH));
+        if self.depth > deepest {
             return Err(self.error("JSON nested too deeply"));
         }
+        self.structure(1)?;
         let value = read(self);
         self.depth -= 1;
         value
@@ -106,7 +156,7 @@ impl Stream<'_> {
             items.push(self.value()?);
             self.space()?;
             match self.next()? {
-                Some(b',') => {}
+                Some(b',') => self.structure(1)?,
                 Some(b']') => return Ok(SdkValue::List(items)),
                 _ => return Err(self.error("expected , or ]")),
             }
@@ -131,18 +181,29 @@ impl Stream<'_> {
             if self.next()? != Some(b':') {
                 return Err(self.error("expected :"));
             }
-            let value = self.value()?;
-            if fields.iter().any(|(n, _)| *n == name) {
-                return Err(self.error("duplicate field name"));
+            self.structure(1)?;
+            if self
+                .limits
+                .is_some_and(|limits| fields.len() >= limits.fields)
+            {
+                return Err(self.error("too many fields in one JSON object"));
             }
+            let value = self.value()?;
             fields.push((name, value));
             self.space()?;
             match self.next()? {
-                Some(b',') => {}
-                Some(b'}') => return Ok(base64_object(fields)),
+                Some(b',') => self.structure(1)?,
+                Some(b'}') => break,
                 _ => return Err(self.error("expected , or }")),
             }
         }
+        // duplicate names, found by sorting: O(n log n) in the width
+        let mut names: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
+        names.sort_unstable();
+        if names.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(self.error("duplicate field name"));
+        }
+        Ok(base64_object(fields))
     }
 
     fn number(&mut self) -> Result<SdkValue, JsonError> {
@@ -204,6 +265,8 @@ impl Stream<'_> {
             };
             self.input.consume(run);
             self.at += run as u64;
+            self.cost += 3 * run;
+            self.within()?;
             match special {
                 None => {}
                 // the input ended inside the string

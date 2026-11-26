@@ -14,6 +14,22 @@ const DECODED_BUDGET: usize = 4 << 20;
 const DEPTH: usize = 32;
 const OBJECT_FIELDS: u16 = 128;
 
+/// The decoded budget of one frame's JSON, for a value read as a stream:
+/// a spilled `file apply` change is held to the same bounds as a frame
+/// (§11: 4 MiB decoded per exchange).
+pub const FRAME_LIMITS: json::Limits = json::Limits {
+    decoded: DECODED_BUDGET,
+    fields: OBJECT_FIELDS as usize,
+    depth: DEPTH,
+};
+
+/// Whether JSON text `body` is within the frame budget: what the worker
+/// accepts as one change, however it is framed. The CLI checks a change
+/// before it sends it.
+pub fn within_budget(body: &[u8]) -> bool {
+    budget(body).is_ok()
+}
+
 fn invalid(message: &str) -> SdkRefusal {
     refused("InvalidInput", format!("host worker frame: {message}"))
 }

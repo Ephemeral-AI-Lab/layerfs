@@ -11,8 +11,9 @@ use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
-/// Its answer: `ok`, `unchanged` when it was stopped already, and what a
-/// forced stop stopped beside it.
+/// Its answer: `ok`, `unchanged` when it was stopped already, what a
+/// forced stop stopped beside it, and the host worker's uncertain write
+/// outcomes it could not record, when there are any (§8.5).
 const FORM: Form = Form::of(
     &[],
     &[
@@ -22,6 +23,8 @@ const FORM: Form = Form::of(
         "stopped_sandboxes_count",
         "unknown_workspaces",
         "unknown_workspaces_count",
+        "unrecorded_writes",
+        "unrecorded_writes_count",
     ],
     &[
         "ok",
@@ -30,6 +33,8 @@ const FORM: Form = Form::of(
         "stopped_sandboxes_count",
         "unknown_workspaces",
         "unknown_workspaces_count",
+        "unrecorded_writes",
+        "unrecorded_writes_count",
         "outcome",
         "machine",
         "forced",

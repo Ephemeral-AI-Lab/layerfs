@@ -2,21 +2,26 @@
 //! pieces on a reader thread and sends them as frames; the worker hands
 //! them to the Store call one change and one piece at a time.
 //!
-//! Memory on each side is independent of the input's size: the CLI holds
-//! at most [`QUEUED`] read items plus the one it sends, the worker one
-//! frame. The exception is one `file apply` change other than a write's
-//! content (an edit's text): the engine needs it whole on every route. The
-//! CLI's reader thread builds it from the input with no copy of its text,
-//! converts it, and the sender prints it once; the worker builds it from
-//! its frames the same way. Per connection that is the change's value and,
-//! on the CLI, its printed text: about twice the element's size at most.
+//! Memory on each side is independent of the input's size, except for
+//! `file apply` changes. The CLI holds at most [`QUEUED`] read items plus
+//! the one it sends; the worker one frame. A `file apply` element is built
+//! whole on the CLI (its reader thread parses it with no copy of its
+//! text), so the CLI's worst case per call is about three change values,
+//! a write's content included, plus one printed change text. A write's
+//! content then travels as data frames; any other change is printed once
+//! and must fit the worker's budget for one change (4 MiB decoded, 128
+//! fields per object, 32 levels), which the worker enforces as it builds a
+//! spilled change from its frames, holding one frame and that value. A
+//! file input with a larger change is routed direct before sending
+//! ([`fits_worker`]); a piped one is refused at that change, nothing
+//! committed.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::host_write::{header, InputKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::json;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
-    StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE,
+    StreamFrame, StreamReader, StreamSender, FRAME_LIMITS, STREAM_KEEPALIVE, STREAM_PIECE,
 };
 use layerfs_store_service::methods::Source;
 use std::io::{BufRead, BufReader, Read};
@@ -91,28 +96,35 @@ pub(crate) fn send(
     }
 }
 
-/// One converted change, with a write's content streamed after it.
-fn send_change(mut change: SdkValue, sender: &mut StreamSender<'_>) -> Result<(), SdkRefusal> {
+/// A converted change and, for a write, its content taken out of it: the
+/// content travels as data frames after the change, never in its JSON.
+fn split_content(mut change: SdkValue) -> Result<(SdkValue, Option<SdkValue>), SdkRefusal> {
     let SdkValue::Map(fields) = &mut change else {
         return Err(refused("Failed", "a change was not converted to a record"));
     };
+    let write = fields
+        .iter()
+        .any(|(n, v)| n == "op" && v == &SdkValue::text("write"));
     let content = match fields
         .iter()
         .position(|(name, _)| matches!(name.as_str(), "content" | "bytes"))
     {
-        Some(at)
-            if fields
-                .iter()
-                .any(|(n, v)| n == "op" && v == &SdkValue::text("write")) =>
-        {
-            Some(fields.remove(at).1)
+        Some(at) if write => {
+            let content = fields.remove(at).1;
+            fields.push(("streamed".to_owned(), SdkValue::Bool(true)));
+            Some(content)
         }
         _ => None,
     };
+    Ok((change, content))
+}
+
+/// One converted change, with a write's content streamed after it.
+fn send_change(change: SdkValue, sender: &mut StreamSender<'_>) -> Result<(), SdkRefusal> {
+    let (change, content) = split_content(change)?;
     let Some(content) = content else {
         return sender.change(change);
     };
-    fields.push(("streamed".to_owned(), SdkValue::Bool(true)));
     sender.change(change)?;
     match &content {
         SdkValue::Text(text) => sender.content(text.as_bytes())?,
@@ -125,6 +137,28 @@ fn send_change(mut change: SdkValue, sender: &mut StreamSender<'_>) -> Result<()
         }
     }
     sender.end_content()
+}
+
+/// Whether every change of the `file apply` list in `file`, from its
+/// current offset, fits the worker's budget for one change (a write's
+/// content excepted: it streams). Read before anything is sent, so a list
+/// with a larger change is routed direct; the offset is restored. A list
+/// that does not parse is left to the streamed call, which refuses it.
+pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> {
+    use std::io::{Seek, SeekFrom};
+    let start = file.stream_position().map_err(unreadable)?;
+    let fits = {
+        let mut input = BufReader::with_capacity(64 << 10, &mut *file);
+        let mut fits = true;
+        let _ = each_element(&mut input, &mut |change| {
+            let (change, _) = split_content(change)?;
+            fits = layerfs_machine::worker::within_budget(json::print(&change).as_bytes());
+            Ok(fits)
+        });
+        fits
+    };
+    file.seek(SeekFrom::Start(start)).map_err(unreadable)?;
+    Ok(fits)
 }
 
 /// Content in pieces of [`STREAM_PIECE`] bytes, the last one shorter.
@@ -166,7 +200,22 @@ fn elements(
     items: &SyncSender<Result<Item, SdkRefusal>>,
 ) -> Result<(), SdkRefusal> {
     let mut input = BufReader::with_capacity(64 << 10, source);
-    let next = |input: &mut BufReader<_>| -> Result<Option<u8>, SdkRefusal> {
+    let ended = each_element(&mut input, &mut |change| {
+        Ok(items.send(Ok(Item::Change(change))).is_ok())
+    })?;
+    if ended {
+        let _ = items.send(Ok(Item::End));
+    }
+    Ok(())
+}
+
+/// Calls `each` with every element of the JSON list in `input`, converted
+/// to the Store's form, while it answers true; whether the list ended.
+fn each_element(
+    input: &mut dyn BufRead,
+    each: &mut dyn FnMut(SdkValue) -> Result<bool, SdkRefusal>,
+) -> Result<bool, SdkRefusal> {
+    let next = |input: &mut dyn BufRead| -> Result<Option<u8>, SdkRefusal> {
         loop {
             let byte = input.fill_buf().map_err(unreadable)?.first().copied();
             match byte {
@@ -175,24 +224,24 @@ fn elements(
             }
         }
     };
-    if next(&mut input)? != Some(b'[') {
+    if next(input)? != Some(b'[') {
         return Err(refused(
             "InvalidInput",
             "`changes` must be a list of changes",
         ));
     }
     input.consume(1);
-    if next(&mut input)? == Some(b']') {
+    if next(input)? == Some(b']') {
         input.consume(1);
     } else {
         loop {
-            let element = json::read_value(&mut input).map_err(|error| not_json(&error.0))?;
+            let element = json::read_value(input).map_err(|error| not_json(&error.0))?;
             let change = crate::host_write::store_change(&element)?;
             drop(element);
-            if items.send(Ok(Item::Change(change))).is_err() {
-                return Ok(());
+            if !each(change)? {
+                return Ok(false);
             }
-            match next(&mut input)? {
+            match next(input)? {
                 Some(b',') => input.consume(1),
                 Some(b']') => {
                     input.consume(1);
@@ -203,11 +252,10 @@ fn elements(
             }
         }
     }
-    if next(&mut input)?.is_some() {
+    if next(input)?.is_some() {
         return Err(not_json("text after the list"));
     }
-    let _ = items.send(Ok(Item::End));
-    Ok(())
+    Ok(true)
 }
 
 /// One spilled change's data frames as a byte stream: the change is built
@@ -230,7 +278,8 @@ impl<'r, 'a> Spilled<'r, 'a> {
             ended: false,
             failed: None,
         };
-        let change = json::read_value(&mut input);
+        // held to a frame's decoded budget (§11), refused before effect
+        let change = json::read_value_within(&mut input, Some(FRAME_LIMITS));
         // only blanks may follow the change, then its content's end
         let rest = loop {
             match input.fill_buf() {
@@ -248,6 +297,13 @@ impl<'r, 'a> Spilled<'r, 'a> {
         }
         match (change, rest) {
             (Ok(change), Ok(())) => Ok(change),
+            (Err(error), _) => Err(refused(
+                "InvalidInput",
+                format!(
+                    "streamed input: a spilled change is not valid within the host worker's budget for one change: {}; nothing was committed",
+                    error.0
+                ),
+            )),
             _ => Err(out_of_order()),
         }
     }

@@ -373,12 +373,14 @@ fn parse_with(
             && matches!(project, Some((_, SdkValue::Text(project)))
                 if layerfs_api::cli_defers(&call.name(), project));
         if defer {
-            let source: Box<dyn Read + Send> = match &from {
-                Some(path) => Box::new(
-                    std::fs::File::open(path)
-                        .map_err(|why| usage(format!("cannot read {path}: {why}")))?,
-                ),
-                None => Box::new(std::io::stdin()),
+            let (source, file): (Box<dyn Read + Send>, _) = match &from {
+                Some(path) => {
+                    let file = std::fs::File::open(path)
+                        .map_err(|why| usage(format!("cannot read {path}: {why}")))?;
+                    let shared = file.try_clone().ok();
+                    (Box::new(file), shared)
+                }
+                None => (Box::new(std::io::stdin()), stdin_file()),
             };
             let (kind, placeholder) = match arg.kind {
                 Kind::Json => (
@@ -390,7 +392,7 @@ fn parse_with(
                     SdkValue::Bytes(Vec::new()),
                 ),
             };
-            input = Some(layerfs_api::CliInput { kind, source });
+            input = Some(layerfs_api::CliInput { kind, source, file });
             fields.push((arg.name.to_owned(), placeholder));
             continue;
         }
@@ -489,4 +491,22 @@ fn option(
         .ok_or_else(|| usage(format!("{} takes no {name}", call.name())))?;
     fields.push((name.to_owned(), value(call, arg, text)?));
     Ok(())
+}
+
+/// Stdin as a file sharing its offset when it is a regular file (a
+/// redirected `file apply` list), so the list can be checked before it is
+/// sent; None for a pipe or terminal.
+#[cfg(unix)]
+fn stdin_file() -> Option<std::fs::File> {
+    use std::os::fd::AsFd;
+    let file = std::fs::File::from(std::io::stdin().as_fd().try_clone_to_owned().ok()?);
+    file.metadata()
+        .is_ok_and(|meta| meta.is_file())
+        .then_some(file)
+}
+
+/// No shared stdin file off Unix: the list is checked as it streams.
+#[cfg(not(unix))]
+fn stdin_file() -> Option<std::fs::File> {
+    None
 }

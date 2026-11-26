@@ -66,6 +66,8 @@ pub(crate) fn stop(
     }
     let changed = set(home, name, true)?;
     let paths = HostPaths::new(home)?;
+    // uncertain write outcomes the drained worker could not record (§8.5)
+    let mut unrecorded: Option<(SdkValue, SdkValue)> = None;
     let drained = if paths.fits()
         && paths
             .control
@@ -76,13 +78,24 @@ pub(crate) fn stop(
             .for_management()?
             .call_existing(true, "drain", SdkValue::map([]))
         {
-            Ok(reply) => reply.is_some(),
+            Ok(reply) => {
+                unrecorded = reply.as_ref().and_then(|reply| {
+                    let count = reply
+                        .get_int("unrecorded_count")
+                        .filter(|count| *count > 0)?;
+                    let listed = reply.get("unrecorded").cloned().unwrap_or_default();
+                    Some((listed, SdkValue::Int(count)))
+                });
+                reply.is_some()
+            }
             Err(error)
                 if error.code == "Unavailable"
                     && error.detail.get_text("state") == Some("draining") =>
             {
                 true
             }
+            // a forced stop goes on without its worker's answer
+            Err(_) if force => false,
             Err(error) => return Err(error),
         }
     } else {
@@ -141,16 +154,20 @@ pub(crate) fn stop(
         if let Some(outcome) = forced {
             error.detail = with_field(error.detail, "forced_outcome", outcome);
         }
+        error.detail = with_unrecorded(error.detail, unrecorded);
         return Err(error);
     }
     if let Some(outcome) = forced {
-        return Ok(outcome);
+        return Ok(with_unrecorded(outcome, unrecorded));
     }
-    Ok(layerfs_machine::with_stopped(
-        layerfs_machine::done(name, (changed || drained).then_some("stopped")),
-        false,
-        &[],
-        &[],
+    Ok(with_unrecorded(
+        layerfs_machine::with_stopped(
+            layerfs_machine::done(name, (changed || drained).then_some("stopped")),
+            false,
+            &[],
+            &[],
+        ),
+        unrecorded,
     ))
 }
 /// The holders of host Store `store` on machine `name`: this process's
@@ -176,6 +193,18 @@ fn store_holders(
     Ok(())
 }
 
+/// `value` with the uncertain write outcomes the drained worker could not
+/// record, when there are any.
+fn with_unrecorded(value: SdkValue, unrecorded: Option<(SdkValue, SdkValue)>) -> SdkValue {
+    match unrecorded {
+        Some((listed, count)) => with_field(
+            with_field(value, "unrecorded_writes", listed),
+            "unrecorded_writes_count",
+            count,
+        ),
+        None => value,
+    }
+}
 fn texts(items: Vec<String>) -> SdkValue {
     SdkValue::List(items.into_iter().map(SdkValue::Text).collect())
 }

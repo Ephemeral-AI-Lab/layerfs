@@ -445,12 +445,12 @@
     {
       "call": "machine.prune",
       "badge": "reshaped",
-      "note": "as today (C4): one image by its id, or with <code>--unused</code> every image no Sandbox uses but the default; one of the two is required. <code>--unused</code> also removes what copies left: parts no copy holds (even beside an image a Sandbox uses), unpacks that stopped before they were recorded, sidecars with no image and <code>.tmp-*</code> unpack folders; each image they belong to is in <code>removed</code>. On the host machine <code>--retained</code>, given alone, removes the host worker's kept write outcomes (<code>machine/&lt;host&gt;/retained</code>, reported by <code>machine.worker.retained</code>) once their Branches were checked; <code>removed</code> then lists their request ids. A named image a live copy holds is <code>Busy</code> with that copy's <code>op</code>; one a Sandbox uses is <code>InUse</code> with detail <code>{sandbox_count}</code>; a copy lock that cannot be checked is <code>Failed</code>. What <code>--unused</code> could not remove is in <code>skipped</code> (<code>[{image, message}]</code>, first 20, <code>skipped_count</code> beside a cut list). <code>removed</code> shows its first 20 ids",
+      "note": "as today (C4): one image by its id, or with <code>--unused</code> every image no Sandbox uses but the default; one of the two is required. <code>--unused</code> also removes what copies left: parts no copy holds (even beside an image a Sandbox uses), unpacks that stopped before they were recorded, sidecars with no image and <code>.tmp-*</code> unpack folders; each image they belong to is in <code>removed</code>. A named image a live copy holds is <code>Busy</code> with that copy's <code>op</code>; one a Sandbox uses is <code>InUse</code> with detail <code>{sandbox_count}</code>; a copy lock that cannot be checked is <code>Failed</code>. What <code>--unused</code> could not remove is in <code>skipped</code> (<code>[{image, message}]</code>, first 20, <code>skipped_count</code> beside a cut list). <code>removed</code> shows its first 20 ids",
       "today": [
         "machine.prune"
       ],
       "help": "remove a Sandbox image from a machine, or every unused one",
-      "cli": "layerfs machine prune <machine> [image] [--unused] [--retained]",
+      "cli": "layerfs machine prune <machine> [image] [--unused]",
       "positionals": [
         {
           "name": "machine",
@@ -467,11 +467,6 @@
           "name": "unused",
           "kind": "Bool",
           "help": "remove every image no Sandbox uses, except the machine's default"
-        },
-        {
-          "name": "retained",
-          "kind": "Bool",
-          "help": "on the host machine: remove the host worker's kept write outcomes, once their Branches were checked"
         }
       ],
       "stdin": null,
@@ -925,7 +920,9 @@
           "stopped_sandboxes",
           "stopped_sandboxes_count",
           "unknown_workspaces",
-          "unknown_workspaces_count"
+          "unknown_workspaces_count",
+          "unrecorded_writes",
+          "unrecorded_writes_count"
         ]
       },
       "long": [
@@ -935,6 +932,8 @@
         "stopped_sandboxes_count",
         "unknown_workspaces",
         "unknown_workspaces_count",
+        "unrecorded_writes",
+        "unrecorded_writes_count",
         "outcome",
         "machine",
         "forced"

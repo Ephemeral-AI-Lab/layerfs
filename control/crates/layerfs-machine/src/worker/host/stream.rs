@@ -85,8 +85,8 @@ fn lost(error: io::Error) -> SdkRefusal {
         return refused(
             "Unavailable",
             format!(
-                "the streamed input delivered less than {} KiB in {} s of waiting; nothing was committed",
-                STREAM_PROGRESS >> 10,
+                "the streamed input delivered less than {} bytes (four engine records) in {} s of waiting; nothing was committed",
+                STREAM_PROGRESS,
                 STREAM_WAIT.as_secs()
             ),
         );
@@ -209,6 +209,9 @@ pub struct StreamSender<'a> {
     started: bool,
     /// A write failed: the exchange is lost.
     lost: Option<String>,
+    /// That write failed at its send bound: the worker read nothing for
+    /// [`SEND_WAIT`].
+    stalled: bool,
 }
 
 impl<'a> StreamSender<'a> {
@@ -219,6 +222,7 @@ impl<'a> StreamSender<'a> {
             bytes: 0,
             started: false,
             lost: None,
+            stalled: false,
         }
     }
 
@@ -245,6 +249,10 @@ impl<'a> StreamSender<'a> {
     }
 
     fn fail(&mut self, error: io::Error) -> SdkRefusal {
+        self.stalled = matches!(
+            error.kind(),
+            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+        );
         let message = format!("host worker connection: {error}");
         self.lost = Some(message.clone());
         refused("Unavailable", message)
@@ -272,6 +280,17 @@ impl<'a> StreamSender<'a> {
         self.changes += 1;
         let text = json::print(&change);
         drop(change);
+        if !host_frame::within_budget(text.as_bytes()) {
+            // a file input is routed direct before sending (`fits_worker`);
+            // a piped one cannot be, once it started
+            return Err(refused(
+                "TooLarge",
+                format!(
+                    "change {} exceeds the host worker's budget for one change (4 MiB decoded, 128 fields per object, 32 levels); nothing was committed. A change this large runs directly when the changes come from a file (--from)",
+                    self.changes
+                ),
+            ));
+        }
         if WRAP.len() + text.len() < HOST_MAX_REQUEST {
             let frame = format!("{WRAP}{text}}}");
             self.raw(&(frame.len() as u32).to_be_bytes())?;
@@ -323,6 +342,24 @@ fn not_committed(op: &str, id: &str, why: &str) -> SdkRefusal {
     refusal
 }
 
+/// A write whose input the worker did not read for [`SEND_WAIT`]: queued
+/// behind busy write threads, or a worker that stopped reading. Named for
+/// the load, as the hello refusal is.
+fn stalled(op: &str, id: &str) -> SdkRefusal {
+    let mut refusal = refused(
+        "Unavailable",
+        format!(
+            "{op}: request {id}: the host worker read none of this write's input for {} s: earlier writes hold its write threads, or it is not responding; nothing was committed",
+            SEND_WAIT.as_secs()
+        ),
+    );
+    refusal.detail = SdkValue::map([
+        ("request_id", SdkValue::text(id)),
+        ("state", SdkValue::text("writes-busy")),
+    ]);
+    refusal
+}
+
 impl HostPaths {
     /// Makes one ordinary call whose input `body` streams after its request,
     /// launching a worker if the home has none. A failure before the end
@@ -352,9 +389,10 @@ impl HostPaths {
             return Err(match sender.lost {
                 // the caller's own input stopped it: its refusal, as sent
                 None => refusal,
-                Some(why) => {
-                    early(&stream, op, &id).unwrap_or_else(|| not_committed(op, &id, &why))
-                }
+                Some(why) => early(&stream, op, &id).unwrap_or_else(|| match sender.stalled {
+                    true => stalled(op, &id),
+                    false => not_committed(op, &id, &why),
+                }),
             });
         }
         trace::step("request");

@@ -49,6 +49,9 @@ pub use host::{
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host_diagnostic::{HostObservation, HostProbe};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub use host_frame::{read_host_frame, write_host_frame, HOST_MAX_REPLY, HOST_MAX_REQUEST};
+pub use host_frame::{
+    read_host_frame, within_budget, write_host_frame, FRAME_LIMITS, HOST_MAX_REPLY,
+    HOST_MAX_REQUEST,
+};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host_hello::{set_host_build, HostHello, HOST_PROTOCOL};

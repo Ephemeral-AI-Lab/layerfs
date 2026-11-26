@@ -305,7 +305,7 @@ impl StoreService {
                     SdkValue::text(hex(&workspace.identity().to_bytes())),
                 ),
                 ("namespace", SdkValue::Int(workspace.route().namespace())),
-                ("phase", SdkValue::text(format!("{:?}", failure.phase))),
+                ("phase", SdkValue::text(failure.phase.as_str())),
                 ("published", SdkValue::Bool(failure.published.is_some())),
                 (
                     "attempt",

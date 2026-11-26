@@ -201,27 +201,33 @@ pub fn retained_report(home: &Path) -> (SdkValue, SdkValue) {
     (check, report)
 }
 
-/// One raw streamed write on the worker's socket, its answer never read.
-pub fn unread_write(home: &Fixture, id: &str, content: &[u8]) {
-    let exchange = home.dial(false);
-    let socket: &UnixStream = exchange.socket();
+/// One frame: a 4-byte big-endian length, the top bit for data.
+pub fn frame(bytes: &[u8], attached: bool) -> Vec<u8> {
+    let mut out = ((bytes.len() as u32) | if attached { 1 << 31 } else { 0 })
+        .to_be_bytes()
+        .to_vec();
+    out.extend_from_slice(bytes);
+    out
+}
+
+/// A framed `store.write` request on `exchange`'s connection.
+pub fn write_request(
+    exchange: &super::fixture::Exchange,
+    id: &str,
+    method: &str,
+    body: &str,
+    fields: SdkValue,
+) -> Vec<u8> {
     let request = SdkValue::map([
         ("op", SdkValue::text("store.write")),
         (
             "args",
             SdkValue::map([
-                ("method", SdkValue::text("fs.write")),
+                ("method", SdkValue::text(method)),
                 ("store", SdkValue::text("shop")),
                 ("project", SdkValue::text("api")),
-                ("body", SdkValue::text("content")),
-                (
-                    "fields",
-                    SdkValue::map([
-                        ("branch", SdkValue::text("work")),
-                        ("path", SdkValue::text("/unread")),
-                        ("streamed", SdkValue::Bool(true)),
-                    ]),
-                ),
+                ("body", SdkValue::text(body)),
+                ("fields", fields),
             ]),
         ),
         (
@@ -230,22 +236,44 @@ pub fn unread_write(home: &Fixture, id: &str, content: &[u8]) {
         ),
         ("request_id", SdkValue::text(id)),
     ]);
-    let frame = |bytes: &[u8], attached: bool| {
-        let mut out = ((bytes.len() as u32) | if attached { 1 << 31 } else { 0 })
-            .to_be_bytes()
-            .to_vec();
-        out.extend_from_slice(bytes);
-        out
-    };
-    let mut stream = socket;
-    stream
-        .write_all(&frame(json::print(&request).as_bytes(), false))
-        .unwrap();
+    frame(json::print(&request).as_bytes(), false)
+}
+
+/// A streamed `file write` to `/unread` on Branch `work`: its request,
+/// content and end frames.
+pub fn content_frames(exchange: &super::fixture::Exchange, id: &str, content: &[u8]) -> Vec<u8> {
+    let fields = SdkValue::map([
+        ("branch", SdkValue::text("work")),
+        ("path", SdkValue::text("/unread")),
+        ("streamed", SdkValue::Bool(true)),
+    ]);
+    let mut out = write_request(exchange, id, "fs.write", "content", fields);
     for piece in content.chunks(64 << 10) {
-        stream.write_all(&frame(piece, true)).unwrap();
+        out.extend(frame(piece, true));
     }
-    stream.write_all(&frame(&[], true)).unwrap();
+    out.extend(frame(&[], true));
     let end = format!(r#"{{"end":{{"changes":0,"bytes":{}}}}}"#, content.len());
-    stream.write_all(&frame(end.as_bytes(), false)).unwrap();
+    out.extend(frame(end.as_bytes(), false));
+    out
+}
+
+/// The answer to a raw request on `socket`.
+pub fn raw_answer(socket: &UnixStream) -> SdkValue {
+    layerfs_api::worker::read_host_frame(
+        socket,
+        layerfs_api::worker::HOST_MAX_REPLY,
+        Some(Instant::now() + WAIT),
+    )
+    .unwrap()
+    .expect("an answer")
+}
+
+/// One raw streamed write on the worker's socket, its answer never read.
+pub fn unread_write(home: &Fixture, id: &str, content: &[u8]) {
+    let exchange = home.dial(false);
+    let mut socket: &UnixStream = exchange.socket();
+    socket
+        .write_all(&content_frames(&exchange, id, content))
+        .unwrap();
     drop(exchange);
 }

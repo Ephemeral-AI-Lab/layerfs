@@ -14,6 +14,13 @@ use std::time::{Duration, Instant};
 mod write;
 pub(super) use write::Held;
 
+/// Whether this worker was built with its test fault switches.
+#[cfg(feature = "worker-fault")]
+const FAULTS: bool = true;
+/// Whether this worker was built with its test fault switches.
+#[cfg(not(feature = "worker-fault"))]
+const FAULTS: bool = false;
+
 const IDLE: Duration = Duration::from_secs(60);
 const IDLE_CHECK: Duration = Duration::from_secs(5);
 /// How long an idle worker keeps listening after it removed its socket
@@ -77,8 +84,6 @@ struct Activity {
     answered: u64,
     last_close: Option<SdkValue>,
     writes: write::Writes,
-    /// Uncertain write outcomes whose record could not be written yet.
-    unkept: Vec<write::Unkept>,
 }
 
 impl Activity {
@@ -91,7 +96,6 @@ impl Activity {
             answered: 0,
             last_close: None,
             writes: write::Writes::default(),
-            unkept: Vec::new(),
         }
     }
 
@@ -407,12 +411,6 @@ impl HostServer {
                 match unpublished {
                     None if activity.last_call.elapsed() >= IDLE => {
                         drop(activity);
-                        // an uncertain outcome only this worker holds keeps
-                        // it up until its record is written (§8.5)
-                        if self.keep_unkept() > 0 {
-                            self.lock().last_call = Instant::now();
-                            continue;
-                        }
                         unpublish();
                         unpublished = Some(Instant::now());
                         continue;
@@ -549,8 +547,11 @@ impl HostServer {
                         "writes_waiting",
                         SdkValue::Int(activity.writes.counts().1 as i64),
                     ),
-                    ("unkept", SdkValue::Int(activity.unkept.len() as i64)),
-                    ("faults", SdkValue::Bool(write::FAULTS)),
+                    (
+                        "unrecorded",
+                        SdkValue::Int(activity.writes.unrecorded_count() as i64),
+                    ),
+                    ("faults", SdkValue::Bool(FAULTS)),
                     ("stores", SdkValue::Int(stores.unwrap_or_default() as i64)),
                     ("postgresql", postgresql(&activity)),
                     (
@@ -581,23 +582,20 @@ impl HostServer {
             }
             Operation::Drain => {
                 drop(activity);
-                let unkept = self.keep_unkept();
-                if unkept > 0 {
-                    return Err(write::unkept_refusal(unkept));
-                }
                 let mut activity = self.lock();
                 self.drain(&mut activity);
+                // uncertain write outcomes no record holds (§8.5)
+                let [listed, count] = activity.writes.unrecorded();
                 drop(activity);
                 self.close_drained_stores();
-                Ok(SdkValue::map([("state", SdkValue::text("draining"))]))
+                Ok(SdkValue::map([
+                    ("state", SdkValue::text("draining")),
+                    listed,
+                    count,
+                ]))
             }
             Operation::CloseStore => {
-                let store = args.get_text("store").unwrap_or_default();
-                let held = activity.unkept.iter().any(|unkept| unkept.on(store));
                 drop(activity);
-                if held && self.keep_unkept() > 0 {
-                    return Err(write::unkept_refusal(self.lock().unkept.len()));
-                }
                 self.close_store(args)
             }
             Operation::StoreCall => {

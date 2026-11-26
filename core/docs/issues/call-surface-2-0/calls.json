@@ -6436,7 +6436,7 @@
       "machine.prune"
      ],
      "help": "remove a Sandbox image from a machine, or every unused one",
-     "cli": "layerfs machine prune <machine> [image] [--unused] [--retained]",
+     "cli": "layerfs machine prune <machine> [image] [--unused]",
      "positionals": [
       {
        "name": "machine",
@@ -6453,11 +6453,6 @@
        "name": "unused",
        "kind": "Bool",
        "help": "remove every image no Sandbox uses, except the machine's default"
-      },
-      {
-       "name": "retained",
-       "kind": "Bool",
-       "help": "on the host machine: remove the host worker's kept write outcomes, once their Branches were checked"
       }
      ],
      "stdin": null,
@@ -6908,7 +6903,9 @@
        "stopped_sandboxes",
        "stopped_sandboxes_count",
        "unknown_workspaces",
-       "unknown_workspaces_count"
+       "unknown_workspaces_count",
+       "unrecorded_writes",
+       "unrecorded_writes_count"
       ]
      },
      "long": [
@@ -6918,6 +6915,8 @@
       "stopped_sandboxes_count",
       "unknown_workspaces",
       "unknown_workspaces_count",
+      "unrecorded_writes",
+      "unrecorded_writes_count",
       "outcome",
       "machine",
       "forced"

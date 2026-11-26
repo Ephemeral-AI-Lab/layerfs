@@ -173,17 +173,12 @@ pub(super) fn retained(home: &Path, checks: &mut Checks) {
             checks.notice(
                 RETAINED,
                 format!(
-                    "{count} write outcome(s) a caller may not know are kept in {}; check each record's Branch (`layerfs commit list`), then remove them",
+                    "{count} write outcome(s) a caller may not know are kept in {}; check each record's Branch (`layerfs commit list`), then remove the records",
                     dir.display()
                 ),
             );
-            checks.fix(
-                RETAINED,
-                format!(
-                    "layerfs machine prune {} --retained",
-                    layerfs_home::names::HOST_MACHINE
-                ),
-            );
+            let dir = layerfs_home::outcome::shell_word(&dir.to_string_lossy());
+            checks.fix(RETAINED, format!("rm {dir}/*.json"));
             checks.evidence(
                 RETAINED,
                 SdkValue::map([

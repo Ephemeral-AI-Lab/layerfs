@@ -54,6 +54,10 @@ pub struct Input {
     pub kind: InputKind,
     /// Where it is read from, once.
     pub source: Box<dyn Read + Send>,
+    /// The same open file when the input is a regular file, sharing its
+    /// offset: a `file apply` list is checked against the worker's budget
+    /// through it before anything is sent, and the offset restored.
+    pub file: Option<std::fs::File>,
 }
 
 thread_local! {
@@ -191,9 +195,25 @@ pub(crate) fn routed(
             "fs.apply",
             Some(Input {
                 kind: InputKind::Changes,
+                file,
                 ..
             }),
-        ) => "changes",
+        ) => {
+            // a change past the worker's budget runs direct (a route, not
+            // a refusal); a piped list is checked as it streams
+            let fits = match file {
+                Some(file) => match file.try_clone() {
+                    Ok(mut file) => crate::host_stream::fits_worker(&mut file),
+                    Err(_) => Ok(true),
+                },
+                None => Ok(true),
+            };
+            match fits {
+                Ok(true) => "changes",
+                Ok(false) => return direct(args, input),
+                Err(error) => return Some(Err(error)),
+            }
+        }
         // content already read (a scoped apply): the direct route takes it
         ("fs.write" | "fs.apply", _) => return direct(args, input),
         (_, None) => "none",
@@ -223,7 +243,7 @@ pub(crate) fn routed(
     }
     Some(match input {
         None => paths.call_validated(OP, header, valid_answer),
-        Some(Input { kind, source }) => {
+        Some(Input { kind, source, .. }) => {
             let mut source = Some(source);
             let mut send = |sender: &mut layerfs_machine::worker::StreamSender<'_>| {
                 crate::host_stream::send(kind, &mut source, sender)
@@ -300,14 +320,17 @@ pub fn header(request: &SdkValue) -> Result<(&str, &str, &str, &str, &SdkValue),
 
 /// Where the host worker keeps write outcomes its caller may not know:
 /// `machine/<host>/retained/<request id>.json`, one file each, never
-/// removed by the worker's idle exit, stop, replacement or crash; only
-/// `layerfs machine prune <host> --retained` removes them.
+/// removed by the worker's idle exit, stop, replacement or crash. The user
+/// removes a checked record with `rm`; at [`RETAINED_CAP`] the worker
+/// removes the oldest `undelivered` ones, never an `uncertain` one.
 pub fn retained_dir(home: &Path) -> std::path::PathBuf {
     layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE).join("retained")
 }
 
-/// The most kept outcomes: past it a new one is not written (the worker
-/// then holds an uncertain one in memory and does not drain).
+/// The most kept outcomes. A new one at the cap first removes the oldest
+/// `undelivered` records, which only inform; `uncertain` ones are never
+/// removed, so when they alone fill the cap a new record is refused
+/// `Capacity` (the worker logs that outcome and reports it instead).
 pub const RETAINED_CAP: usize = 256;
 
 /// Keeps one write's outcome before its answer is sent (`uncertain`: the
@@ -337,13 +360,9 @@ pub fn keep(
     if path.exists() {
         return Ok(());
     }
-    if retained(home, 0)?.0 >= RETAINED_CAP {
-        return Err(refused(
-            "Capacity",
-            format!(
-                "{RETAINED_CAP} write outcomes are kept already; check them with `layerfs machine doctor`, then `layerfs machine prune <host> --retained`"
-            ),
-        ));
+    let kept = records(&dir)?;
+    if kept.len() >= RETAINED_CAP {
+        make_room(&dir, &kept)?;
     }
     let fields = request.get("fields");
     let field = |name: &str| SdkValue::opt_text(fields.and_then(|f| f.get_text(name)));
@@ -389,19 +408,34 @@ pub fn keep(
     })
 }
 
-/// Removes every kept write outcome (`machine prune <host> --retained`,
-/// after their Branches were checked); the removed request ids.
-pub fn prune_retained(home: &Path) -> Result<Vec<String>, SdkRefusal> {
-    let dir = retained_dir(home);
-    let mut removed = Vec::new();
-    for path in records(&dir)? {
-        std::fs::remove_file(&path)
-            .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))?;
-        if let Some(id) = path.file_stem().and_then(|stem| stem.to_str()) {
-            removed.push(id.to_owned());
-        }
+/// Removes the oldest `undelivered` records so one more fits the cap.
+fn make_room(dir: &Path, kept: &[std::path::PathBuf]) -> Result<(), SdkRefusal> {
+    let mut undelivered: Vec<(i64, &std::path::PathBuf)> = kept
+        .iter()
+        .filter_map(|path| {
+            let record = layerfs_home::json::parse(&std::fs::read_to_string(path).ok()?).ok()?;
+            (record.get_text("kind") == Some("undelivered"))
+                .then(|| (record.get_int("at").unwrap_or(0), path))
+        })
+        .collect();
+    let excess = kept.len() + 1 - RETAINED_CAP;
+    if undelivered.len() < excess {
+        return Err(refused(
+            "Capacity",
+            format!(
+                "{} write outcomes are kept in {}, {} of them uncertain; check their Branches, then remove those records with rm",
+                kept.len(),
+                dir.display(),
+                kept.len() - undelivered.len()
+            ),
+        ));
     }
-    Ok(removed)
+    undelivered.sort();
+    for (_, path) in undelivered.into_iter().take(excess) {
+        std::fs::remove_file(path)
+            .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))?;
+    }
+    Ok(())
 }
 
 fn records(dir: &Path) -> Result<Vec<std::path::PathBuf>, SdkRefusal> {

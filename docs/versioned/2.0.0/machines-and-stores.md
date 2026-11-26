@@ -736,8 +736,8 @@ reported as `Unknown` with a request ID. The CLI makes one attempt.
 A streamed file write is sent once: input that stops before its end frame
 commits nothing and is refused; a lost answer after it is `Unknown`. The
 worker keeps outcomes its caller may not know in
-`machine/<host>/retained/` (see [`file`](calls.md#file-14)); `layerfs machine
-prune <host> --retained` removes them once checked. `machine stop` and an
+`machine/<host>/retained/` (see [`file`](calls.md#file-14)); `rm` removes
+them once their Branches were checked. `machine stop` and an
 idle exit end a stuck write's input: it is refused, nothing committed,
 and the worker does not wait for its caller.
 Two installations sharing a home may need to wait for an existing worker's

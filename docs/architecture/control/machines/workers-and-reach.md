@@ -497,46 +497,64 @@ A streamed write in an apply is its change with `streamed: true`, then its
 data frames. The worker reads a frame only when the Store call asks for its
 next change or piece, so a faster caller blocks in the kernel socket buffer.
 Memory does not grow with a content's size: the caller holds one read piece
-of 256 KiB being sent plus at most two queued by its input thread, the
-worker one frame. A data frame is four engine records (4 × 65,519 bytes),
-so whole pieces are written as whole records. An apply change is the one
-exception. Its edit text is what the engine needs whole, so the caller's
-input thread builds each element straight from the input as it reads
-(no copy of the input's text), converts it to the Store's form, and the
-sender prints it once and drops the value before sending that text. The
-caller's worst case per call is one change value plus its printed text,
-the worker's one change value. A change larger than a 64 KiB frame is sent
-spilled; the worker builds the value as its data frames arrive, holding
-one frame of the text. The CLI keeps sending `wait` while it parses a
-large element, since parsing runs on its input thread.
+being sent plus at most two queued by its input thread, the worker one
+frame. A data frame is at most four engine records (4 × 65,519 = 262,076
+bytes, about 256 KiB), so whole pieces are written as whole records.
+
+`file apply` changes are the exception. The caller's input thread builds
+each list element whole, straight from the input (no copy of its text),
+and converts it to the Store's form; with two queued, the caller holds
+about three change values (a write's content included) plus one printed
+change text. A write's content then leaves its change and travels as data
+frames. Any other change is printed once and must fit the worker's budget
+for one change, the frame budget: a decoded-size estimate of 4 MiB (three
+bytes per text byte plus 256 per container, field and element), 128 fields
+per object and 32 levels. A change larger than a 64 KiB frame is sent
+spilled; the worker builds it from its data frames under that budget,
+holding one frame and the value, and refuses one past it `InvalidInput`
+before any effect. The caller checks before sending: when the list is a
+regular file (`--from`, or stdin redirected from a file) it reads the list
+once through a shared descriptor and, if any change is past the budget,
+routes the whole call direct (a route, not a refusal), then rewinds. A
+piped list cannot be read twice; a change past the budget is refused there
+(`TooLarge`, nothing committed). Object fields are checked for duplicate
+names by sorting, O(n log n) in the width. The caller keeps sending `wait`
+while it parses a large element, since parsing runs on its input thread.
 
 A write needs a Commit per call, not a held connection. The worker reads a
-`store.write` request on an ordinary thread and then hands it, with its
-connection, to a separate write lane: 4 write threads (`WRITE_THREADS`)
-and at most 16 held writes (`WRITES_HELD`), running or waiting, apart from
-the 16 ordinary slots. A write never runs on an ordinary thread, so however
-many writes stream, small reads keep all 8 ordinary threads. A write past
-16 held ones is refused `Unavailable` before any of its input is read. A
-held write waits for a write thread while its input fits the socket
-buffer; the caller's 60 s send bound ends a wait that never gets one.
+`store.write` request on an ordinary thread, checks its request ID,
+generation and arguments there, and then hands it, with its connection, to
+a separate write lane: 4 write threads (`WRITE_THREADS`) and at most 16
+held writes (`WRITES_HELD`), running or waiting, apart from the 16 ordinary
+slots. A write never runs on an ordinary thread, so however many writes
+stream, small reads keep all 8 ordinary threads. A write past 16 held
+ones, or one read once the worker drains (its write threads may have
+ended), is refused `Unavailable` at once, before any effect; the caller
+may already have sent some input, but nothing ran. A held write waits for
+a write thread while its input fits the socket buffer; a caller whose send
+makes no progress for 60 s is refused `Unavailable` naming the load
+("read none of this write's input for 60 s: earlier writes hold its write
+threads, or it is not responding"), before its end frame, so nothing was
+committed.
 
 Minimum progress (§11): while the worker waits for a write's caller, the
-input must deliver 256 KiB (`STREAM_PROGRESS`, frame headers included)
-within 30 s of waiting (`STREAM_WAIT`), or end. Only time the worker spends
-blocked on the input counts, never its own Store work. A `wait` frame is
-not progress, so a caller that sends keepalives but no input, or input
-slower than 256 KiB per 30 s, is refused `Unavailable` ("delivered less
-than 256 KiB in 30 s of waiting; nothing was committed"). No write thread
-is held longer than that by a stalled caller. A caller whose input produced
-nothing for 10 seconds sends `wait`, which only shows the worker is still
-there. A caller write may go 60 seconds without progress. The end frame's
+input must deliver 262,076 bytes (`STREAM_PROGRESS`, four engine records,
+frame headers included) within 30 s of waiting (`STREAM_WAIT`), or end.
+Only time the worker spends blocked on the input counts, never its own
+Store work. A `wait` frame is not progress, so a caller that sends
+keepalives but no input, or slower input, is refused `Unavailable`
+("delivered less than 262076 bytes (four engine records) in 30 s of
+waiting; nothing was committed"). No write thread is held longer than that
+by a stalled caller. A caller whose input produced nothing for 10 seconds
+sends `wait`, which only shows the worker is still there. The end frame's
 counts must match what was received. The worker commits only after reading
 it, so input that stops earlier commits nothing. A change refused
 mid-stream answers at once and closes; the caller, whose next send fails,
 reads that early refusal. The request's frame and the end frame bound the
 custody boundary. Before the end frame is completely written the caller
 reports a definite refusal; after it, a missing or invalid answer is
-`Unknown` with the request ID.
+`Unknown` with the request ID. Held writes are not PostgreSQL reads: the
+PostgreSQL lane's check for a caller that went away never looks at them.
 
 Drain (`machine stop`, idle exit) ends the input of every running write
 (`shutdown(Read)` on its connection) and refuses held writes not yet
@@ -546,25 +564,40 @@ therefore cannot hold a drain: the worker exits once its running Store
 calls finish, and the stuck caller learns the refusal at its next send (10 s
 at most).
 
-Custody (§8.5). Only an outcome the caller may not know is recorded: an
+Records (§8.5). Only an outcome the caller may not know is recorded: an
 engine `Unknown`, and a `Committed` answer the worker could not deliver.
 A definite refusal changed nothing and is never recorded. An engine
 `Unknown` is written to `machine/<host>/retained/<request id>.json` before
 its answer is sent, and its answer carries the request ID; the record's
-detail carries the engine's phase, whether it published, its attempt,
-expected head and candidate root. A record is written to a `.part` file and
-linked into place, so a reader never sees half a record and an existing
-record (an `uncertain` one) is never overwritten by a later `undelivered`.
-Records are not synced (the home's Normal profile; a power loss may lose
-one). If an uncertain outcome's record cannot be written, the worker logs
-the outcome without content, holds it in memory, and refuses a drain or a
-close of its Store, and does not exit idle, until a retry of that record
-write succeeds. A record names the call, Store, project, Branch, path and
-outcome, never content. Drain, stop, crash and replacement leave the
-records; `machine.worker.retained` reports them, with the fix
-`layerfs machine prune <host> --retained`, which removes them. At most 256
-records are kept; past that a new one is refused `Capacity`, and so the
-uncertain outcome stays held as above until they are pruned.
+detail carries the engine's phase (a stable name: `admission`, `capture`,
+`begin`, `construct`, `finish`, `validate`, `publish`, `install`), whether
+it published, its attempt, expected head and candidate root. A record is
+written to a `.part` file and linked into place, so a reader never sees
+half a record and an existing record (an `uncertain` one) is never
+overwritten by a later `undelivered`. Records are not synced (the home's
+Normal profile; a power loss may lose one). A record names the call,
+Store, project, Branch, path and outcome, never content.
+
+Each record write is one attempt; nothing waits on it or retries it. One
+that fails is logged to `worker.log` without content. An uncertain outcome
+without a record still reaches its caller: its answer is the `Unknown`
+with the request ID, the engine's detail and `recorded: false`. The worker
+counts such outcomes (`unrecorded` in its ping) and lists the first 32 in
+the answer of the drain that ends it (`unrecorded`, `unrecorded_count`),
+which `machine stop` passes on as `unrecorded_writes` and
+`unrecorded_writes_count`. An idle exit has no caller and only the log.
+Drain, idle exit and a Store's close never wait for a record, so `machine
+stop` cannot be refused by one; a `machine stop --force` goes on without
+its worker's answer.
+
+At most 256 records are kept (`RETAINED_CAP`). A new one at the cap first
+removes the oldest `undelivered` records, which only inform: a killed CLI
+whose Commit landed adds one. An `uncertain` record is never removed by the
+worker; when they alone fill the cap, a new record fails as above (logged
+and reported). Drain, stop, crash and replacement leave the records;
+`machine.worker.retained` reports them, names the folder and gives `rm
+<home>/machine/<host>/retained/*.json` as its fix, once their Branches
+were checked. There is no call that removes them.
 
 A scoped apply (`file apply --scope`) runs in the caller's process, not
 through the worker: its Workspace route is not a host Store write.

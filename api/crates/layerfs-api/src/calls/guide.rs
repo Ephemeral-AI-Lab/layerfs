@@ -423,11 +423,6 @@ const ARGS: &[(&str, &str, &str)] = &[
         "remove every image no Sandbox uses, except the machine's default",
     ),
     (
-        "machine.prune",
-        "retained",
-        "on the host machine: remove the host worker's kept write outcomes, once their Branches were checked",
-    ),
-    (
         "machine.files",
         "path",
         "a folder or file of the machine; its LayerFS folders when left out",
