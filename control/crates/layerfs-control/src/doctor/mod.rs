@@ -24,6 +24,8 @@ pub use kinds::kinds;
 pub use report::{Kind, Node, Report, Thing};
 
 mod host_target;
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub(crate) mod host_worker;
 mod machine_target;
 mod network;
 pub(crate) use network::{inspect_in_worker as inspect_network_in_worker, OP as NETWORK_OP};

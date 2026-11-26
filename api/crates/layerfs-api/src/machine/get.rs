@@ -59,7 +59,7 @@ pub(crate) const CALL: Call = call(
 .form(&FORM)
 .with(&[Section::own(
     "live",
-    &["disk_free_bytes", "tool_version", "worker"],
+    &["disk_free_bytes", "tool_version", "machine_state", "worker"],
 )]);
 
 /// Runs `machine.get`: the probe runs only with `--with live`.

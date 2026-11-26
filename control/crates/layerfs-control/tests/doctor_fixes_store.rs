@@ -269,7 +269,7 @@ fn a_project_record_that_cannot_be_read_says_why_without_a_fix() {
 }
 
 #[test]
-fn stale_leases_get_their_own_removal_command_not_a_read() {
+fn stale_leases_are_reported_without_removing_them() {
     let f = Fixture::new();
     write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
     let lease_dir = paths::lease_dir(&f.root, "one");
@@ -278,19 +278,12 @@ fn stale_leases_get_their_own_removal_command_not_a_read() {
     std::fs::write(&lease, "1\n").unwrap();
     let out = report(&f.root, Kind::Store, "one");
     let found = finding(&out, "store.operation");
-    assert_eq!(
-        fix_of(&found),
-        format!("rm {}", lease.display()),
-        "{found:?}"
-    );
+    assert_eq!(fix_of(&found), "", "{found:?}");
     assert_eq!(
         evidence(&found, "stale_pids"),
         Some(&SdkValue::List(vec![SdkValue::Int(99999999)]))
     );
-    assert!(
-        !fix_of(&found).contains("store get"),
-        "a read does not remove stale leases: {found:?}"
-    );
+    assert_eq!(std::fs::read_to_string(lease).unwrap(), "1\n");
 }
 
 #[test]

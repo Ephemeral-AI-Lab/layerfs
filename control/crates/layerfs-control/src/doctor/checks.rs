@@ -110,9 +110,9 @@ pub(super) fn check_local(
             findings.warning(
                 entity,
                 format!(
-                    "Store {name} holds a stale lease of process {pid}, which ended; nothing reads it, and the next call on {name} removes it"
+                    "Store {name} holds a stale lease of process {pid}; the next Store operation that claims or checks leases removes it under the Store lock"
                 ),
-                format!("rm {}", shell(&lease)),
+                String::new(),
             );
             findings.evidence(SdkValue::map([
                 ("store", SdkValue::text(name)),

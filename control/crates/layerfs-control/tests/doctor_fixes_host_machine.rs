@@ -259,7 +259,7 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     keys(&orphan, &["store", "machine", "machine_record"]);
 
     let stale = found(&report, "home.records", "stale lease");
-    assert_eq!(fix(&stale), format!("rm {}", lease.display()));
+    assert_eq!(fix(&stale), "");
     keys(&stale, &["store", "pid", "path"]);
     assert_eq!(ev_int(&stale, "pid"), Some(99999999));
 
@@ -281,11 +281,11 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     assert_eq!(fix(&daemon), "", "no daemon of this build is known");
     keys(&daemon, &["machine", "daemon", "present"]);
 
-    // apply the safe fixes: the lease and the partial copy go, the rest stays
-    apply(&fix(&stale));
+    // The partial-copy fix leaves the observed stale lease untouched.
     apply(&fix(&partial));
     let after = host(&home, Some(OURS));
-    assert!(gone(&after, "home.records", "stale lease"), "{after:?}");
+    found(&after, "home.records", "stale lease");
+    assert!(lease.is_file());
     assert!(gone(&after, "home.records", "partial copy"), "{after:?}");
     found(&after, "home.records", "store dead has an unresolved");
 }

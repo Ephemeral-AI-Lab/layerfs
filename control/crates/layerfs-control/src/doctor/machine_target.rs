@@ -16,7 +16,7 @@
 //! `outdated` (each fixed by a stop and a start, the stop forced while
 //! Sandboxes are recorded on it: a start does not replace a running
 //! machine's worker). A check that does not apply is left out: `native` has
-//! no provider, worker or data disk, and a stopped machine's worker checks
+//! no provider or separate data disk, and a stopped machine's guest worker checks
 //! are not made (stopped on purpose is not a finding). After a failed
 //! check the ones that need it are not made.
 //!
@@ -87,6 +87,10 @@ pub(super) fn diagnose(
             "machine.state",
             "it runs whenever this computer does, as its record says",
         );
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        if name == "native" {
+            super::host_worker::diagnose(home, budget, checks);
+        }
         // `native` on Linux runs namespaces Sandboxes on this host's
         // network, and only for root: for anyone else it does not apply
         #[cfg(target_os = "linux")]

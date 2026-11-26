@@ -176,16 +176,26 @@ const SECOND: Duration = Duration::from_secs(5);
 fn machine_checks_report_in_order_and_preserve_the_home() {
     let f = Fixture::new();
     is(&f.report("missing", SECOND), "machine.record", Some("fail"));
-    // native: no provider, worker or data disk
+    // Native uses the host and its optional worker.
     MachineRecord::built_in("native", &f.id)
         .write(&f.home)
         .unwrap();
     let native = f.report("native", SECOND);
-    assert_eq!(
-        ids(&native),
-        ["machine.record", "machine.operation", "machine.state"]
-    );
-    assert_eq!(json(&native), r#"{"ok":true}"#);
+    let mut native_checks = vec![
+        "machine.record",
+        "machine.operation",
+        "machine.state",
+        "machine.worker.endpoint",
+    ];
+    let host_network = cfg!(target_os = "linux") && nix::unistd::Uid::effective().is_root();
+    if host_network {
+        native_checks.push("machine.network");
+    }
+    assert_eq!(ids(&native), native_checks);
+    is(&native, "machine.worker.endpoint", Some("pass"));
+    if !host_network || outcome(&native, "machine.network").as_deref() == Some("pass") {
+        assert_eq!(json(&native), r#"{"ok":true}"#);
+    }
     // Docker is not running: engine_down, with the fix that starts it
     MachineRecord::built_in("docker", &f.id)
         .write(&f.home)

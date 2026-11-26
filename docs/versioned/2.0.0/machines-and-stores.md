@@ -689,3 +689,17 @@ its route before sending. A lost answer after an operation send starts is
 reported as `Unknown` with a request ID. The CLI makes one attempt.
 Two installations sharing a home may need to wait for an existing worker's
 idle exit before the other installation can use that home worker.
+
+`layerfs machine get native --with live` reports `live.machine_state`
+and `live.worker.health` separately. The host machine is enabled at this
+stage. The probe reports an absent, stale, unreachable, ready or draining
+endpoint, with worker identity and activity when available. Before a
+worker publishes its socket, the probe can observe only an absent endpoint.
+
+`layerfs machine doctor native --detail` uses one authenticated probe and
+includes its evidence. An idle home passes the endpoint check. A worker
+of another build yields a compatibility notice before the ping. The
+diagnostic never starts or replaces a worker. `home doctor` checks the
+host-worker directory's ownership and permissions. `store doctor` shows
+an exact live worker lease beside other lease holders. Store operations
+perform stale lease cleanup under the Store lock.

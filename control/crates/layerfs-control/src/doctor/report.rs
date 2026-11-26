@@ -323,7 +323,7 @@ fn reason(reason: Option<NoVerdict>) -> SdkValue {
     SdkValue::opt_text(reason.map(NoVerdict::word))
 }
 
-/// One check of a thing: `{ check, outcome, from }`.
+/// One check of a thing: `{ check, outcome, from }` with optional evidence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     /// The check's id.
@@ -332,6 +332,8 @@ pub struct Row {
     pub outcome: Verdict,
     /// The machine it was made from, when it was not this computer.
     pub from: Option<String>,
+    /// Structured evidence from an observation that passed.
+    pub evidence: Option<SdkValue>,
 }
 
 /// One thing in the tree, with what its checks said.
@@ -405,11 +407,17 @@ impl Node {
     /// `children` one list per kind of thing on it.
     pub fn to_sdk(&self, children: bool) -> SdkValue {
         let row = |row: &Row| {
-            SdkValue::map([
+            let value = SdkValue::map([
                 ("check", SdkValue::text(&row.check)),
                 ("outcome", SdkValue::text(row.outcome.outcome())),
                 ("from", SdkValue::opt_text(row.from.as_deref())),
-            ])
+            ]);
+            match &row.evidence {
+                Some(evidence) => {
+                    layerfs_home::home::with_field(value, "evidence", evidence.clone())
+                }
+                None => value,
+            }
         };
         let mut fields = vec![
             self.thing.field(),

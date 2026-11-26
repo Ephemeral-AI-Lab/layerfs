@@ -92,7 +92,10 @@ fn layout(
         }
         Layout::Current(_) => {
             checks.pass(LAYOUT, "a current-layout home this build reads");
-            observed(home, build, budget, checks)
+            let scanned = observed(home, build, budget, checks);
+            #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+            super::host_worker::directory(home, checks);
+            scanned
         }
     }
 }

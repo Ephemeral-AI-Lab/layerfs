@@ -116,6 +116,22 @@ it with the reason found.
 | `machine.worker.ping`, `machine.capacity` | `worker.ping` with `capacity: true`: kind `worker`, positive pid, this version, and the data disk's free bytes; `machine.capacity` is a warning under 2 GiB free (`capacity::room`), its evidence adding `reclaimable_image_bytes` from the machine's image listing (what `machine prune --unused` frees), and that prune is its fix only when it is above 0 | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs), [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 | `machine.network` | The worker's `network.inspect` (on `native`, the caller, on Linux and as root only, since only root starts its Sandboxes there): IPv4 forwarding, `table inet layerfs`, and each `lfs*` link with the recorded Sandbox it is named for. Forwarding off or a missing table while Sandboxes are recorded fail; links no Sandbox recorded in the home owns, on any machine (the caller matches the report against all of the home's records: on a Linux host `native` and a Linux Engine `docker` share one namespace, and a worker reads only its own machine's), are a warning listing them, with `ip link delete <link>` as the fix; when a Sandbox record of the home (or, in the worker, of the machine) cannot be read, no link can be told a leftover, so the check is `not_checked` (`unknown`), naming the read, with no delete fix; nothing is removed, because a Linux host's namespace is shared with other homes, and there is no `--fix` action (owner to confirm) | [`network.rs`](../../../../control/crates/layerfs-control/src/doctor/network.rs), [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 
+On macOS and Linux, `machine doctor native` uses the same host-worker probe
+as `machine get native --with live`. One two-second budget covers the
+management socket, peer UID, hello and one read-only ping. An absent socket
+passes the endpoint check. A private socket with no listener is stale. A
+greeting for the same home from another build or protocol produces a
+compatibility notice before the ping. Ready and draining observations carry
+evidence on `machine.worker.ping`. Before a starting worker publishes its
+socket, the probe can observe only an absent endpoint. The probe takes no
+locks and never launches or replaces a worker.
+
+`home doctor` verifies the existing host-worker directory's ownership and
+privacy under `home.records`. `store doctor` reports live lease holders and
+labels a host worker only when the authenticated reply's PID, kernel start
+time and boot ID match an exact live Store lease. A later Store operation
+that claims or checks leases performs stale-lease cleanup under the Store lock.
+
 ### Sandbox
 
 `sandbox doctor` follows the saved route without `sandbox.get`, deployment,

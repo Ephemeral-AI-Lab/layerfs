@@ -77,7 +77,7 @@ fn private_directory(path: &Path) -> Result<(), SdkRefusal> {
     Ok(())
 }
 
-fn existing_socket(path: &Path) -> Result<Option<fs::Metadata>, SdkRefusal> {
+pub(super) fn existing_socket(path: &Path) -> Result<Option<fs::Metadata>, SdkRefusal> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -126,7 +126,7 @@ impl HostPaths {
         host_socket::path_fits(&self.socket) && host_socket::path_fits(&self.control)
     }
 
-    fn verify_directories(&self) -> Result<(), SdkRefusal> {
+    pub(super) fn verify_directories(&self) -> Result<(), SdkRefusal> {
         private_directory(&self.home)?;
         private_directory(&self.home.join("machine"))?;
         private_directory(&paths::machine_dir(&self.home, "native"))
@@ -300,8 +300,7 @@ impl HostPaths {
         trace::step("connect");
         let generation = (|| {
             host_check_peer(&stream)?;
-            let hello = host_frame::read_host_frame(&stream, MAX_HELLO, Some(end))?
-                .ok_or_else(|| unavailable("hello", "endpoint closed before readiness"))?;
+            let hello = Self::read_hello(&stream, end)?;
             let generation = HostHello::generation_of(&hello, self, &build)?;
             if expected_generation.is_some_and(|expected| expected != generation) {
                 return Err(unavailable("hello", "worker generation changed"));
@@ -318,27 +317,34 @@ impl HostPaths {
         // Generation tokens are fixed-size hex, so exchanging the placeholder
         // leaves the already checked envelope size unchanged.
         let request = home::with_field(request, "generation", SdkValue::Text(generation));
-        let request = host_frame::encode(&request, max)?;
-        let send = host_frame::send(&stream, &request, Instant::now() + TRANSFER_WAIT);
-        match send {
-            Err((started, refusal)) => {
-                trace::connection(&path.to_string_lossy(), op, started, began);
-                return Err(if started {
-                    unknown(op, &id, &refusal.message)
-                } else {
-                    refusal
-                });
-            }
-            Ok(()) => trace::step("request"),
-        }
-        let end = control.then(|| Instant::now() + TRANSFER_WAIT);
-        let answer = host_frame::read_host_frame(&stream, HOST_MAX_REPLY, end)
-            .map_err(|refusal| unknown(op, &id, &refusal.message))
-            .and_then(|frame| frame.ok_or_else(|| unknown(op, &id, "endpoint closed")));
-        trace::connection(&path.to_string_lossy(), op, true, began);
-        let answer = answer?;
-        trace::step("answer");
-        decode_answer(op, &id, answer).map(Some)
+        let body = host_frame::encode(&request, max)?;
+        send_request(&stream, path, (op, &id), &body, began, control, None).map(Some)
+    }
+
+    pub(super) fn read_hello(stream: &UnixStream, end: Instant) -> Outcome {
+        host_frame::read_host_frame(stream, MAX_HELLO, Some(end))?
+            .ok_or_else(|| unavailable("hello", "endpoint closed before readiness"))
+    }
+
+    pub(super) fn diagnostic_ping(
+        &self,
+        stream: &UnixStream,
+        generation: &str,
+        began: Instant,
+        end: Instant,
+    ) -> Outcome {
+        let id = token()?;
+        let request = request("ping", SdkValue::map([]), &id, generation);
+        let body = host_frame::encode(&request, MAX_HELLO)?;
+        send_request(
+            stream,
+            &self.control,
+            ("ping", &id),
+            &body,
+            began,
+            true,
+            Some(end),
+        )
     }
 
     fn acquire(
@@ -469,6 +475,37 @@ fn request(op: &str, args: SdkValue, id: &str, generation: &str) -> SdkValue {
         ("request_id", SdkValue::text(id)),
         ("trace_step", SdkValue::Bool(trace::stepping())),
     ])
+}
+
+fn send_request(
+    stream: &UnixStream,
+    path: &Path,
+    (op, id): (&str, &str),
+    body: &[u8],
+    began: Instant,
+    control: bool,
+    deadline: Option<Instant>,
+) -> Outcome {
+    let send_by = deadline.unwrap_or_else(|| Instant::now() + TRANSFER_WAIT);
+    match host_frame::send(stream, body, send_by) {
+        Err((started, refusal)) => {
+            trace::connection(&path.to_string_lossy(), op, started, began);
+            return Err(if started {
+                unknown(op, id, &refusal.message)
+            } else {
+                refusal
+            });
+        }
+        Ok(()) => trace::step("request"),
+    }
+    let receive_by = deadline.or_else(|| control.then(|| Instant::now() + TRANSFER_WAIT));
+    let answer = host_frame::read_host_frame(stream, HOST_MAX_REPLY, receive_by)
+        .map_err(|refusal| unknown(op, id, &refusal.message))
+        .and_then(|frame| frame.ok_or_else(|| unknown(op, id, "endpoint closed")));
+    trace::connection(&path.to_string_lossy(), op, true, began);
+    let answer = answer?;
+    trace::step("answer");
+    decode_answer(op, id, answer)
 }
 
 fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {

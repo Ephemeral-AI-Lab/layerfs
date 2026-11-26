@@ -95,16 +95,10 @@ impl HostHello {
         paths: &HostPaths,
         build: &str,
     ) -> Result<String, SdkRefusal> {
-        if frame.get_bool("ready")
-            && frame.get_text("kind") == Some("host")
-            && frame.get_int("protocol") == Some(HOST_PROTOCOL)
-            && frame.get_text("home_id") == Some(&paths.home_id)
+        if frame.get_int("protocol") == Some(HOST_PROTOCOL)
             && frame.get_text("build") == Some(build)
         {
-            if let Some(generation) = frame.get_text("generation").filter(|generation| {
-                generation.len() == CORRELATION_LEN
-                    && generation.bytes().all(|b| b.is_ascii_hexdigit())
-            }) {
+            if let Some(generation) = Self::home_generation(frame, paths) {
                 return Ok(generation.to_owned());
             }
         }
@@ -124,5 +118,19 @@ impl HostHello {
             ),
         ]);
         Err(refusal)
+    }
+
+    pub(super) fn home_generation<'a>(frame: &'a SdkValue, paths: &HostPaths) -> Option<&'a str> {
+        let belongs = frame.get_bool("ready")
+            && frame.get_text("kind") == Some("host")
+            && frame.get_text("home_id") == Some(&paths.home_id)
+            && frame.get_int("protocol").is_some()
+            && frame
+                .get_text("build")
+                .is_some_and(|build| !build.is_empty());
+        belongs.then_some(())?;
+        frame.get_text("generation").filter(|generation| {
+            generation.len() == CORRELATION_LEN && generation.bytes().all(|b| b.is_ascii_hexdigit())
+        })
     }
 }

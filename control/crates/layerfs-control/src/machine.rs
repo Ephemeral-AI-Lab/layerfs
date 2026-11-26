@@ -49,7 +49,12 @@ pub fn list(home: &Path, live: bool) -> Outcome {
 /// `machine.get`: from its record; with `live`, one probe and the `live`
 /// section.
 pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
-    layerfs_machine::get(home, name, live, RELATED)
+    let answer = layerfs_machine::get(home, name, live, RELATED)?;
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if live && name.as_str() == "native" && answer.get_text("platform") == Some("native") {
+        return Ok(crate::doctor::host_worker::live(home, answer));
+    }
+    Ok(answer)
 }
 
 /// `machine.start`, with its phases on `events`. The start stops a previous

@@ -17,6 +17,7 @@ struct Check {
     message: String,
     fix: String,
     evidence: SdkValue,
+    evidence_on_pass: bool,
     /// The thing it is about, when not the thing checked: `(kind, name)`.
     about: Option<(String, String)>,
     /// The machine it was made from, when not this computer.
@@ -67,6 +68,7 @@ impl Checks {
             message,
             fix: String::new(),
             evidence: SdkValue::Null,
+            evidence_on_pass: false,
             about: None,
             from: None,
             reason: None,
@@ -76,6 +78,15 @@ impl Checks {
     /// The expected behavior was observed.
     pub fn pass(&mut self, id: &str, message: impl Into<String>) {
         self.add(id, "pass", None, message.into());
+    }
+    /// A passing observation whose evidence is visible in the tree.
+    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+    pub fn pass_evidence(&mut self, id: &str, message: &str, evidence: SdkValue) {
+        self.pass(id, message);
+        self.evidence(id, evidence);
+        if let Some(check) = self.retained(id) {
+            check.evidence_on_pass = true;
+        }
     }
     /// A concrete error was observed; a failure is not automatically corruption.
     pub fn fail(&mut self, id: &str, message: impl Into<String>) {
@@ -220,12 +231,20 @@ impl Checks {
             }
             let at =
                 (node.rows.iter()).position(|row| row.check == check.id && row.from == check.from);
+            let evidence = || check.evidence_on_pass.then(|| check.evidence.clone());
             match at {
-                Some(at) => node.rows[at].outcome = node.rows[at].outcome.worse(verdict),
+                Some(at) => {
+                    let row = &mut node.rows[at];
+                    row.outcome = row.outcome.worse(verdict);
+                    if let Some(evidence) = evidence() {
+                        row.evidence = Some(evidence);
+                    }
+                }
                 None => node.rows.push(Row {
                     check: check.id.clone(),
                     outcome: verdict,
                     from: check.from.clone(),
+                    evidence: evidence(),
                 }),
             }
             let severity = match verdict {
