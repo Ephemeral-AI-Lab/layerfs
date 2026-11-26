@@ -155,10 +155,12 @@ install of 10,002 files). Now:
 - a PREFIX that wins holds the object (`SAVE_DEFERRED_BYTES`, 1 MiB) until
   the end of its preparation wave. The wave seals the held objects' bases
   with its own publication, then selects each held object as before, its
-  proposal now tried after its declared candidates. A file root is named by
-  inode values only, so holding one delays no other object; same-Save reads
-  and exact reuse see it in the hold. The last wave publishes once more
-  before the sealed tail when it holds any.
+  proposal now tried after its declared candidates. If an incoming object
+  directly references a held root or declares it as a predecessor, the Save
+  publishes the cohort's bases and places its held objects before admitting
+  the incoming object. Same-Save reads and exact reuse see objects in the
+  hold. The last wave publishes once more before the sealed tail when it
+  holds any.
 
 Every selection, depth and budget is the one the old order made: the trial
 of a held object runs after the publication, against whatever

@@ -48,30 +48,6 @@ impl Save<'_> {
         } else {
             storage.source.locate(&stored)?;
         }
-        if stored.len() > 1 {
-            // Locate the stored chains once for this demand, including the
-            // inode leaves prepared below. begin_demand(false) disables
-            // hinted locators, so failures from this authoritative walk
-            // propagate. Group fetching handles advisory pack hints itself.
-            let roots = stored
-                .iter()
-                .map(|id| {
-                    state
-                        .storage
-                        .source
-                        .location(*id, i64::MAX)?
-                        .ok_or(StorageError::ObjectMissing(*id))
-                })
-                .collect::<StorageResult<Vec<_>>>()?;
-            let State {
-                storage,
-                packs,
-                decode,
-                groups,
-                ..
-            } = &mut *state;
-            crate::read::prefetch_chains(&storage.source, &roots, packs, decode, groups)?;
-        }
         if ids.iter().any(|id| state.packer.pending(*id)) {
             let required = state.packer.finish_pack_bound();
             state.reserve_packs(required)?;
@@ -115,6 +91,31 @@ impl Save<'_> {
                 limit: READ_CANONICAL_BYTES_LIMIT as u64,
                 actual: declared as u64,
             });
+        }
+        if stored.len() > 1 {
+            // Walk stored chains only after the demand passes its byte limit.
+            // Locate them once for this demand, including the
+            // inode leaves prepared below. begin_demand(false) disables
+            // hinted locators, so failures from this authoritative walk
+            // propagate. Group fetching handles advisory pack hints itself.
+            let roots = stored
+                .iter()
+                .map(|id| {
+                    state
+                        .storage
+                        .source
+                        .location(*id, i64::MAX)?
+                        .ok_or(StorageError::ObjectMissing(*id))
+                })
+                .collect::<StorageResult<Vec<_>>>()?;
+            let State {
+                storage,
+                packs,
+                decode,
+                groups,
+                ..
+            } = &mut *state;
+            crate::read::prefetch_chains(&storage.source, &roots, packs, decode, groups)?;
         }
         let mut out = Vec::with_capacity(ids.len());
         let mut bytes = 0usize;

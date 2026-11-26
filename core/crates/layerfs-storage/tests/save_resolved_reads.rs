@@ -5,7 +5,7 @@
 #[path = "support/memory_metadata.rs"]
 mod metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
-use layerfs_storage::Storage;
+use layerfs_storage::{policy::READ_CANONICAL_BYTES_LIMIT, Storage, StorageError};
 use std::sync::Arc;
 
 /// `count` incompressible objects of 32 KiB each.
@@ -80,4 +80,29 @@ fn past_its_bound_the_resolved_cache_releases_the_least_recently_read() {
     );
     let (first, again) = read_twice(&objects);
     assert!(first > 0 && again > 0, "first {first}, again {again}");
+}
+
+#[test]
+fn an_over_budget_save_read_refuses_before_acquiring_stored_packs() {
+    let metadata = Arc::new(metadata::MemoryMetadata::default());
+    let object = objects(1).pop().unwrap();
+    let storage = Storage::new(metadata.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    save.accept(object.clone()).unwrap();
+    save.finish().unwrap();
+
+    let reading = Storage::new(metadata.clone()).unwrap();
+    let save = reading.begin_save().unwrap();
+    let count = READ_CANONICAL_BYTES_LIMIT / object.canonical_len() + 1;
+    metadata.calls.lock().unwrap().clear();
+    assert!(matches!(
+        save.read_objects(&vec![object.id(); count]),
+        Err(StorageError::CapacityExceeded {
+            what: "storage.read_canonical_bytes",
+            limit,
+            actual,
+        }) if limit == READ_CANONICAL_BYTES_LIMIT as u64
+            && actual == (count * object.canonical_len()) as u64
+    ));
+    assert_eq!(*metadata.calls.lock().unwrap(), [("locate", 1)]);
 }

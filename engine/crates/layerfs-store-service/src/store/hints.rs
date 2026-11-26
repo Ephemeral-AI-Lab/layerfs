@@ -155,6 +155,43 @@ pub(super) fn collect_directory_bindings(
     Ok(CollectedBindings::Fits(rows))
 }
 
+/// [`record_new_bindings`] for a fused Commit (#768), recording nothing:
+/// the rows, when they fit one write transaction ([`BATCH`]), for the
+/// Commit's own transaction. `None` when they do not: the walk stops at the
+/// first row past [`BATCH`] and nothing is recorded, so the caller can
+/// publish its Save first and record them then (`record_new_bindings`), as
+/// the separate path does, and attempt the Commit alone.
+/// A hint row is never written before the objects of the tree it describes.
+pub fn collect_new_bindings(
+    reader: &dyn AuthenticatedObjects,
+    left: Option<FilesystemRootId>,
+    right: FilesystemRootId,
+) -> Result<Option<Vec<BindingHint>>, CommitError> {
+    let left = left
+        .map(|root| TreeTable::open(reader, root))
+        .transpose()
+        .map_err(CommitError::from)?;
+    let right = TreeTable::open(reader, right).map_err(CommitError::from)?;
+    let (mut rows, mut spilled) = (Vec::new(), false);
+    let walked = new_bindings(reader, left.as_ref(), &right, |child, parent, name| {
+        if rows.len() == BATCH {
+            spilled = true;
+            return Err(ContentError::OutputRejected);
+        }
+        rows.push(BindingHint {
+            child,
+            parent,
+            name: name.as_bytes().to_vec(),
+        });
+        Ok(())
+    });
+    if spilled {
+        return Ok(None);
+    }
+    walked.map_err(CommitError::from)?;
+    Ok(Some(rows))
+}
+
 /// Records `rows` in bounded write transactions.
 pub(super) fn record_rows(
     catalog: &dyn HistoryCatalog,

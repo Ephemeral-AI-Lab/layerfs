@@ -458,12 +458,6 @@ pub struct SelectInput<'a> {
     /// The payload's FULL record when the caller already prepared it with
     /// [`prepare_full`]; `None` means the selection prepares it.
     pub full: Option<EncodedRecord>,
-    /// True when the caller already ran this selection's one trial against
-    /// the base the similarity ring proposes, and the PREFIX record did not
-    /// beat `full` (#810). A whole-file object whose declared list acquires
-    /// nothing then stores `full` without asking the ring again, counted as
-    /// the trial and loss it was.
-    pub ring_lost: bool,
     /// Selection outcomes.
     pub counters: &'a mut DeltaCounters,
     /// Nanosecond cost split of the operation this selection belongs to.
@@ -512,6 +506,19 @@ pub fn select(
     role: ObjectRole,
     advisory: &[ObjectId],
     encode: &mut CompressionWorkspace,
+) -> StorageResult<EncodedRecord> {
+    select_after_trial(input, id, canonical, role, advisory, encode, false)
+}
+
+/// Uses a known losing ring trial when no declared predecessor is acquired.
+pub(crate) fn select_after_trial(
+    input: &mut SelectInput<'_>,
+    id: ObjectId,
+    canonical: &[u8],
+    role: ObjectRole,
+    advisory: &[ObjectId],
+    encode: &mut CompressionWorkspace,
+    ring_lost: bool,
 ) -> StorageResult<EncodedRecord> {
     if matches!(
         role,
@@ -601,7 +608,7 @@ pub fn select(
             None if super::record::prefix_cannot_win(lane, full.record.len()) => None,
             // The caller's trial against the ring's proposal lost: the answer
             // is FULL, as the same trial here would find.
-            None if input.ring_lost => {
+            None if ring_lost => {
                 input.counters.trials = input.counters.trials.saturating_add(1);
                 input.counters.full_losses = input.counters.full_losses.saturating_add(1);
                 let sig = prehashed.unwrap_or_else(|| signature(raw));
