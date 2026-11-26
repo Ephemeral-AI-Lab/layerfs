@@ -3,7 +3,7 @@
 //! the call's next demands, instead of each demand starting cold. The caches
 //! keep the storage reader's byte bounds and are dropped with the call.
 use crate::history::lookup as args;
-use crate::store::StorePorts;
+use crate::store::{PortError, StorePorts};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_content::{
     file::{mapping::FILE_STATE_CANONICAL_BYTES, FileView},
@@ -11,19 +11,40 @@ use layerfs_content::{
     AuthenticatedObjects, ContentResult, ObjectId,
 };
 use layerfs_storage::ReadCache;
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
+/// The caches are made at the call's first demand, not with the call: a
+/// failure to make them is that demand's failure, so it refuses where a
+/// demand's failure always did, never ahead of a lookup refusal (#818 R3
+/// review).
 pub struct Cached<'a> {
     ports: &'a StorePorts,
-    cache: RefCell<ReadCache>,
+    cache: RefCell<Option<ReadCache>>,
 }
 
 impl<'a> Cached<'a> {
+    /// The call's caches over `ports`. Nothing is made yet, so this does
+    /// not fail; the `Result` keeps the callers' shape.
     pub fn new(ports: &'a StorePorts) -> Result<Self, SdkRefusal> {
         Ok(Self {
             ports,
-            cache: RefCell::new(ReadCache::new().map_err(args::failed)?),
+            cache: RefCell::new(None),
         })
+    }
+
+    /// Runs `demand` through the call's caches, made on first use.
+    fn with<T>(
+        &self,
+        demand: impl FnOnce(&mut ReadCache) -> Result<T, Arc<PortError>>,
+    ) -> Result<T, Arc<PortError>> {
+        let mut slot = self.cache.borrow_mut();
+        let cache = match &mut *slot {
+            Some(cache) => cache,
+            empty => {
+                empty.insert(ReadCache::new().map_err(|error| Arc::new(PortError::Storage(error)))?)
+            }
+        };
+        demand(cache)
     }
 
     /// The regular files `ids` opened as views, their roots read [`ROOTS`] at
@@ -49,8 +70,7 @@ impl<'a> Cached<'a> {
 
     /// Regular files' lengths through the call's caches (#818 R4).
     pub fn lengths(&self, ids: &[ObjectId]) -> Result<Vec<u64>, SdkRefusal> {
-        self.ports
-            .lengths_with(&mut self.cache.borrow_mut(), ids)
+        self.with(|cache| self.ports.lengths_with(cache, ids))
             .map_err(args::failed)
     }
 
@@ -112,8 +132,7 @@ pub fn batches(lengths: &[u64]) -> Vec<std::ops::Range<usize>> {
 
 impl AuthenticatedObjects for Cached<'_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        self.ports
-            .objects_with(&mut self.cache.borrow_mut(), ids)
+        self.with(|cache| self.ports.objects_with(cache, ids))
             .map_err(|error| error.object_demand())
     }
 }
