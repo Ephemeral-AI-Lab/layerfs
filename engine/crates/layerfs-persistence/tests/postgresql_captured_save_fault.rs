@@ -5,11 +5,7 @@ mod support;
 
 #[path = "support/pg_chains.rs"]
 mod chains;
-#[path = "support/fault_proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
 
-use fault_proxy::{Fault, FaultProxy, Window};
 use layerfs_history::HistoryCatalog;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::{
@@ -18,6 +14,7 @@ use layerfs_storage::{
     Storage,
 };
 use std::time::{Duration, Instant};
+use support::fault_proxy::{Fault, FaultProxy, Window};
 use support::pg::{project, url, Schema};
 
 const BINDING: &[u8] = b"captured-save-fault";

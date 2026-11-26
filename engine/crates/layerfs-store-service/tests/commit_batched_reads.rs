@@ -111,22 +111,25 @@ const SQLITE: &[Pin] = &[
 ];
 // Captured Save registration sends one bounded flight. It reduces trips
 // in the two wave-producing shapes; the single-file shape stays pinned.
+// Retained inode locators, paired ordinal reads and fenced overflow binding
+// flights (db54e9d75f) take each shape's writer total down (edits 31 to 28,
+// adds 34 to 29, one 18 to 17 trips); saved objects and roots are unchanged.
 const POSTGRESQL: &[Pin] = &[
     Pin {
         scenario: "edits",
-        work: [[27, 29], [3, 3], [0, 0], [0, 0], [31, 42], [1, 1]],
+        work: [[24, 28], [3, 3], [0, 0], [0, 0], [28, 41], [1, 1]],
         saved: [519, 0, 2, 38382],
         root: "9bc9a227567d0c246b1338f7e47ce57828917068926b918e1eae31253e07f533",
     },
     Pin {
         scenario: "adds",
-        work: [[19, 24], [11, 9], [0, 0], [2, 2], [34, 46], [0, 0]],
+        work: [[18, 23], [9, 9], [0, 0], [0, 0], [29, 43], [0, 0]],
         saved: [782, 0, 4, 51408],
         root: "35a3e3818cb191f289b83e80492d02d6b3d602688db0e0c106d2b7dfe439eeb4",
     },
     Pin {
         scenario: "one",
-        work: [[10, 10], [4, 4], [3, 3], [0, 0], [18, 27], [0, 0]],
+        work: [[9, 9], [4, 4], [3, 3], [0, 0], [17, 26], [0, 0]],
         saved: [5, 0, 2, 573],
         root: "70ed856c5cc7ac85d11a4710a8abe1f6e2b81f9ad25c7c2158e2fa79c11204a8",
     },
