@@ -275,6 +275,21 @@ impl Fetch {
             || self.serve_published.get() && self.published.borrow().get(id).is_some()
     }
     pub(crate) fn locate(&self, ids: &[ObjectId]) -> StorageResult<()> {
+        self.locate_inner(ids, None)
+    }
+    pub(crate) fn locate_for_save(
+        &self,
+        ids: &[ObjectId],
+        packs: &mut crate::encoding::PackCache,
+    ) -> StorageResult<()> {
+        let packs = (ids.len() > 1 && self.metadata.batched_chain_reads()).then_some(packs);
+        self.locate_inner(ids, packs)
+    }
+    fn locate_inner(
+        &self,
+        ids: &[ObjectId],
+        mut packs: Option<&mut crate::encoding::PackCache>,
+    ) -> StorageResult<()> {
         let mut missing = BTreeSet::new();
         for id in ids {
             if self.locators.borrow().contains_key(id) || self.absent.borrow().contains(id) {
@@ -315,7 +330,34 @@ impl Fetch {
             let mut rows = Vec::new();
             let mut chains = crate::location::LocatedChains::default();
             self.note(|c| c.locate += 1);
-            self.metadata.locate_chains(page, &mut rows, &mut chains)?;
+            let mut bodies = Vec::new();
+            if let Some(packs) = packs.as_deref().filter(|_| page.len() > 1) {
+                let published = self.published.borrow();
+                let resident: Vec<_> = packs
+                    .resident_ids()
+                    .chain(published.bodies.iter().map(|(info, _)| info.pack_id))
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+                self.metadata.locate_chains_with_packs(
+                    page,
+                    &resident,
+                    &mut rows,
+                    &mut chains,
+                    &mut bodies,
+                )?;
+                if bodies
+                    .iter()
+                    .any(|body| resident.binary_search(&body.info().pack_id).is_ok())
+                {
+                    return Err(StorageError::Integrity(
+                        "joined read returned resident pack",
+                    ));
+                }
+                self.note(|c| c.joined_pack_locates += 1);
+            } else {
+                self.metadata.locate_chains(page, &mut rows, &mut chains)?;
+            }
             if rows.len() > page.len() {
                 return Err(StorageError::Integrity("locator cardinality"));
             }
@@ -348,6 +390,12 @@ impl Fetch {
                     return Err(StorageError::Integrity("port locator"));
                 }
                 check_info(row.pack)?;
+            }
+            if !bodies.is_empty() {
+                let packs = packs
+                    .as_deref_mut()
+                    .ok_or(StorageError::Integrity("unsolicited packs"))?;
+                self.admit_joined_packs(packs, &rows, bodies)?;
             }
             self.install_chains(&seen, chains)?;
             for row in rows {

@@ -43,7 +43,11 @@ impl Save<'_> {
                     && !state.resolved.holds(*id)
             })
             .collect();
-        state.storage.source.locate(&stored)?;
+        if self.join_metadata_reads {
+            storage.source.locate_for_save(&stored, &mut state.packs)?;
+        } else {
+            storage.source.locate(&stored)?;
+        }
         if stored.len() > 1 {
             // Locate the stored chains once for this demand, including the
             // inode leaves prepared below. begin_demand(false) disables

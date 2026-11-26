@@ -12,6 +12,7 @@ use std::cell::{Cell, RefCell};
 pub struct Save<'a> {
     pub(super) state: RefCell<State<'a>>,
     pub(super) terminal: Cell<bool>,
+    pub(super) join_metadata_reads: bool,
     failure: RefCell<Option<StorageError>>,
     finished: Cell<bool>,
     work_start: super::SaveWork,
@@ -26,9 +27,16 @@ impl<'a> Save<'a> {
             work_start,
             state: RefCell::new(State::new(storage)?),
             terminal: Cell::new(false),
+            join_metadata_reads: false,
             failure: RefCell::new(None),
             finished: Cell::new(false),
         })
+    }
+    /// Combines authoritative metadata locates and body reads where the
+    /// provider supports it. Used by the captured Commit producer.
+    pub fn joining_metadata_reads(mut self) -> Self {
+        self.join_metadata_reads = true;
+        self
     }
     /// Accepts a finalized object, preparing the preceding bounded wave as needed.
     pub fn accept(&self, object: FinalizedObject) -> StorageResult<()> {

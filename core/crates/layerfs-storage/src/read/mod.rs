@@ -4,6 +4,7 @@ mod counters;
 mod fetch;
 mod held;
 mod hints;
+mod joined;
 mod length;
 mod locator_cache;
 mod objects;

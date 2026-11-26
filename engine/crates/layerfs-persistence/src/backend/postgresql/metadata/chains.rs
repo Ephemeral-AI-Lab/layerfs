@@ -25,7 +25,7 @@ use layerfs_storage::{
         PackInfo,
     },
     policy::{CANONICAL_LIMIT, DEPENDENCY_PACK_CACHE_BYTES, GROUP_COUNT_LIMIT, RECORD_COUNT_LIMIT},
-    port::PersistenceError,
+    port::{PersistedPack, PersistenceError},
     StoragePolicy,
 };
 use postgres::Row;
@@ -39,6 +39,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(crate) const ROOTS: &str = include_str!("../../../../sql/postgresql/chain_roots.sql");
 /// Statement 2, `{schema}` substituted; `$1` member pack ids.
 pub(crate) const PACKS: &str = include_str!("../../../../sql/postgresql/chain_packs.sql");
+/// Bounded whole-pack candidates in the same root flight as the locators.
+const WHOLE_PACKS: &str = include_str!("../../../../sql/postgresql/chain_whole_packs.sql");
 
 /// Pack rows (descriptor and directory copy) chain locates returned, kept by
 /// one session so statement 2 reads only member packs it has not seen: rows
@@ -170,6 +172,7 @@ pub(crate) fn locate_chains(
     roots: &[ObjectId],
     rows: &mut Vec<LocatedObject>,
     chains: &mut LocatedChains,
+    joined: Option<(&[i64], &mut Vec<PersistedPack>)>,
 ) -> Result<(), PersistenceError> {
     let ids: Vec<Vec<u8>> = roots
         .iter()
@@ -183,15 +186,39 @@ pub(crate) fn locate_chains(
         .map(|id| ObjectId::from_bytes(id).map(|id| super::super::objects::publish::prefix(&id)))
         .collect::<Result<_, _>>()
         .map_err(|_| BackendError::Integrity)?;
-    let sql = ROOTS.replace("{schema}", tx.schema);
+    let bound = ids.len() as u64 * 40;
+    let budget = layerfs_storage::policy::PACK_LIMIT as i64;
+    let result = if let Some((resident, _)) = &joined {
+        let sql = format!("{ROOTS}\n{WHOLE_PACKS}").replace("{schema}", tx.schema);
+        tx.typed(
+            &sql,
+            &[&ids, &keys, resident, &budget],
+            bound + resident.len() as u64 * 8 + 8,
+        )?
+    } else {
+        tx.typed(&ROOTS.replace("{schema}", tx.schema), &[&ids, &keys], bound)?
+    };
+    let mut physical = Vec::new();
     let mut located = Vec::new();
     let mut packs: BTreeMap<i64, (PackInfo, Vec<u8>)> = BTreeMap::new();
-    for row in tx.typed(&sql, &[&ids, &keys], ids.len() as u64 * 40)? {
+    for row in result {
         let kind: i32 = row.try_get(0).map_err(|_| BackendError::Integrity)?;
         if kind == 1 {
             let (info, directory) = pack_row(&row, 6)?;
             packs.insert(info.pack_id, (info, directory));
             continue;
+        }
+        if kind == 2 && joined.is_some() {
+            physical.push((
+                row.try_get::<_, i64>(6)
+                    .map_err(|_| BackendError::Integrity)?,
+                row.try_get::<_, Vec<u8>>(7)
+                    .map_err(|_| BackendError::Integrity)?,
+            ));
+            continue;
+        }
+        if kind != 0 {
+            return Err(BackendError::Integrity.into());
         }
         let id: Vec<u8> = row.try_get(1).map_err(|_| BackendError::Integrity)?;
         let object_id = ObjectId::from_bytes(&id).map_err(|_| BackendError::Integrity)?;
@@ -211,6 +238,12 @@ pub(crate) fn locate_chains(
             },
             list,
         ));
+    }
+    if let Some((_, bodies)) = joined {
+        for (id, body) in physical {
+            let (info, _) = packs.get(&id).ok_or(BackendError::Integrity)?;
+            bodies.push(PersistedPack::authenticate(*info, body)?);
+        }
     }
     // Every located row's pack came back with it, as `locate` joins it.
     let mut kept = Vec::with_capacity(located.len());

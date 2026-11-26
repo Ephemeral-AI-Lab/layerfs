@@ -151,6 +151,21 @@ pub trait PackPersistence: Send + Sync {
         chains.directories.clear();
         self.locate(roots, rows)
     }
+    /// A chain locate for a Save's canonical body demand. Providers may also
+    /// return whole eligible metadata packs, omitting the supplied resident
+    /// pack IDs and returning at most PACK_LIMIT total body bytes. Providers
+    /// without the combined query return just the usual location results.
+    fn locate_chains_with_packs(
+        &self,
+        roots: &[ObjectId],
+        _resident: &[i64],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        bodies: &mut Vec<PersistedPack>,
+    ) -> Result<(), PersistenceError> {
+        bodies.clear();
+        self.locate_chains(roots, rows, chains)
+    }
     /// Whole encoded groups of several packs, one answer per read in request
     /// order, at most DEPENDENCY_PACK_CACHE_BYTES requested in all. `Ranges`
     /// answers are unauthenticated physical units, as `read_scoped_pack`

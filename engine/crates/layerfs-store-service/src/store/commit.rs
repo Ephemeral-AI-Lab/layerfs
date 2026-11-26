@@ -253,7 +253,10 @@ impl BoundWorkspace {
             })?;
             let built = (|| {
                 let save = phase(timing, "begin", || {
-                    storage.begin_save().map_err(CommitError::Storage)
+                    storage
+                        .begin_save()
+                        .map(layerfs_storage::Save::joining_metadata_reads)
+                        .map_err(CommitError::Storage)
                 })?;
                 retained.phase = CommitPhase::Construct;
                 let candidate =

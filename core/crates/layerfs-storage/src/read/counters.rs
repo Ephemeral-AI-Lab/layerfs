@@ -7,6 +7,12 @@ pub struct Diagnostics {
     pub policy: u64,
     /// Batched locator calls.
     pub locate: u64,
+    /// Chain locator calls that could return whole metadata packs.
+    pub joined_pack_locates: u64,
+    /// Whole metadata packs returned with a chain locator call.
+    pub joined_packs: u64,
+    /// Bytes of whole metadata packs returned with a chain locator call.
+    pub joined_pack_bytes: u64,
     /// Batched physical-body calls.
     pub read_packs: u64,
     /// Whole/selected acquisition calls through the backend-neutral read port.
