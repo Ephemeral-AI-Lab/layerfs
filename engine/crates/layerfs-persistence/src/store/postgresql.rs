@@ -222,6 +222,7 @@ impl PostgresHandles {
                 }),
                 acquisition: PostgresAcquisition::new(session.clone(), tables),
                 history: HistoryProvider {
+                    sqlite_writer: None,
                     engine: Engine::Postgres(session),
                     catalog_id,
                     incarnation,

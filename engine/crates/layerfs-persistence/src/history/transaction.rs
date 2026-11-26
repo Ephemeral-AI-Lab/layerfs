@@ -38,7 +38,9 @@ impl HistoryProvider {
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
     ) -> HistoryResult<T> {
         match &self.engine {
-            Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
+            Engine::Sqlite(session) => self
+                .sqlite_read_session(session)
+                .run(false, |b| f(&Transaction { backend: b })),
             Engine::Postgres(session) => session.run(false, |b| f(&Transaction { backend: b })),
         }
     }
@@ -51,7 +53,9 @@ impl HistoryProvider {
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
     ) -> HistoryResult<T> {
         match &self.engine {
-            Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
+            Engine::Sqlite(session) => self
+                .sqlite_read_session(session)
+                .run(false, |b| f(&Transaction { backend: b })),
             Engine::Postgres(session) => session.read_statement(|b| f(&Transaction { backend: b })),
         }
     }
@@ -60,7 +64,9 @@ impl HistoryProvider {
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
     ) -> HistoryResult<T> {
         match &self.engine {
-            Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
+            Engine::Sqlite(session) => self
+                .sqlite_write_session(session)?
+                .run(true, |b| f(&Transaction { backend: b })),
             Engine::Postgres(session) => session.run(true, |b| f(&Transaction { backend: b })),
         }
     }
@@ -74,7 +80,9 @@ impl HistoryProvider {
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
     ) -> HistoryResult<T> {
         match &self.engine {
-            Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
+            Engine::Sqlite(session) => self
+                .sqlite_write_session(session)?
+                .run(true, |b| f(&Transaction { backend: b })),
             Engine::Postgres(session) => session.run_snapshot(|b| f(&Transaction { backend: b })),
         }
     }

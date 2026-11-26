@@ -58,6 +58,7 @@ pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
 pub use store::handles::SqliteHandles;
+pub use store::open::{DeferredSqliteWriter, SqliteWriter};
 pub use store::postgresql::{
     PostgresAcquisition, PostgresHandles, PostgresLaneHold, PostgresStorage,
 };

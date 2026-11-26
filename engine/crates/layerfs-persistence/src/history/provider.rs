@@ -4,6 +4,7 @@ use layerfs_history::CatalogId;
 /// History operations retain separate bounded transaction acknowledgement units.
 pub struct HistoryProvider {
     pub(crate) engine: crate::backend::Engine,
+    pub(crate) sqlite_writer: Option<std::sync::Arc<crate::DeferredSqliteWriter>>,
     pub(crate) catalog_id: CatalogId,
     pub(crate) incarnation: u64,
     pub(crate) cursor_key: [u8; 32],
@@ -20,6 +21,45 @@ pub struct HistoryProvider {
 }
 
 impl HistoryProvider {
+    pub(crate) fn with_sqlite_writer(
+        &self,
+        writer: std::sync::Arc<crate::DeferredSqliteWriter>,
+    ) -> Self {
+        Self {
+            engine: self.engine.clone(),
+            sqlite_writer: Some(writer),
+            catalog_id: self.catalog_id,
+            incarnation: self.incarnation,
+            cursor_key: self.cursor_key,
+            digest_floor: self.digest_floor,
+            trace_salt: self.trace_salt,
+            mark_budget: std::sync::atomic::AtomicU64::new(self.mark_budget()),
+        }
+    }
+
+    // A published lookup uses the separate read-only catalog. This catalog
+    // also reads inside an owned publication lane, on that lane's session.
+    pub(crate) fn sqlite_read_session<'a>(
+        &'a self,
+        reader: &'a crate::backend::Session,
+    ) -> &'a crate::backend::Session {
+        self.sqlite_writer
+            .as_ref()
+            .and_then(|writer| writer.get())
+            .map_or(reader, |writer| &writer.storage.session)
+    }
+
+    pub(crate) fn sqlite_write_session<'a>(
+        &'a self,
+        session: &'a std::sync::Arc<crate::backend::Session>,
+    ) -> Result<&'a std::sync::Arc<crate::backend::Session>, crate::backend::records::BackendError>
+    {
+        match &self.sqlite_writer {
+            Some(writer) => Ok(&writer.start_writer()?.storage.session),
+            None => Ok(session),
+        }
+    }
+
     /// Changes the budget the buffers and caches of this Store's marks and
     /// compactions are sized from. It only sizes them: the same steps run
     /// with every value, and what they find does not depend on it. No

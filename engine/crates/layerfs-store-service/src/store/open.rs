@@ -72,7 +72,8 @@ pub struct MergeCounters {
 /// Opened providers must belong to the same validated authority. Application
 /// composition owns that selection; this adapter knows only the public ports.
 pub struct Store {
-    pub(super) writer: Arc<dyn PackPersistence>,
+    writer: Option<Arc<dyn PackPersistence>>,
+    sqlite_writer: Option<Arc<layerfs_persistence::DeferredSqliteWriter>>,
     pub(super) history: Arc<dyn HistoryCatalog>,
     pub(super) readers: Arc<ReadSet>,
     policy: StoragePolicy,
@@ -117,10 +118,35 @@ impl Store {
         reservations: ReservationBlocks,
         workspace_capacity: usize,
     ) -> StorageResult<Self> {
-        let reservations = reservations.validate()?;
         let policy = writer.policy()?.validated()?;
-        if workspace_capacity == 0 || control.storage.policy() != policy {
-            return Err(StorageError::Integrity("Store reader capacity or policy"));
+        if control.storage.policy() != policy {
+            return Err(StorageError::Integrity("Store reader policy"));
+        }
+        let mut store = Self::with_control_reader(
+            history,
+            control,
+            factory,
+            cache_bytes,
+            reservations,
+            workspace_capacity,
+        )?;
+        store.writer = Some(writer);
+        Ok(store)
+    }
+
+    /// Builds over an already validated control reader without a writer.
+    pub(crate) fn with_control_reader(
+        history: Arc<dyn HistoryCatalog>,
+        control: StoreReader,
+        factory: ReaderFactory,
+        cache_bytes: usize,
+        reservations: ReservationBlocks,
+        workspace_capacity: usize,
+    ) -> StorageResult<Self> {
+        let reservations = reservations.validate()?;
+        let policy = control.storage.policy();
+        if workspace_capacity == 0 {
+            return Err(StorageError::Integrity("empty Workspace reader capacity"));
         }
         let counts = Arc::new(Counts::default());
         let readers = ReadSet::new(
@@ -130,7 +156,7 @@ impl Store {
             (workspace_capacity, policy, false),
         );
         Self::with_readers(
-            writer,
+            None,
             history,
             (readers, counts, policy),
             cache_bytes,
@@ -163,7 +189,7 @@ impl Store {
             (workspace_capacity, policy, true),
         );
         Self::with_readers(
-            writer,
+            Some(writer),
             history,
             (readers, counts, policy),
             cache_bytes,
@@ -171,7 +197,7 @@ impl Store {
         )
     }
     fn with_readers(
-        writer: Arc<dyn PackPersistence>,
+        writer: Option<Arc<dyn PackPersistence>>,
         history: Arc<dyn HistoryCatalog>,
         (readers, counts, policy): (Arc<ReadSet>, Arc<Counts>, StoragePolicy),
         cache_bytes: usize,
@@ -180,6 +206,7 @@ impl Store {
         let cache = Arc::new(CanonicalCache::new(cache_bytes));
         Ok(Self {
             writer,
+            sqlite_writer: None,
             history,
             readers,
             policy,
@@ -199,6 +226,28 @@ impl Store {
             mount_on_writer: false,
         })
     }
+    pub(crate) fn with_deferred_sqlite_writer(
+        mut self,
+        writer: Arc<layerfs_persistence::DeferredSqliteWriter>,
+    ) -> Self {
+        self.sqlite_writer = Some(writer);
+        self
+    }
+
+    pub(crate) fn prepare_history_write(&self) -> layerfs_history::HistoryResult<()> {
+        if let Some(writer) = &self.sqlite_writer {
+            writer.prepare_history_write()?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn committer(&self) -> Option<&layerfs_persistence::Committer> {
+        match &self.sqlite_writer {
+            Some(writer) => writer.get().map(|writer| &writer.committer),
+            None => self.committer.as_ref(),
+        }
+    }
+
     /// Makes each Workspace Commit over an unmoved head in one write
     /// transaction of the writer session (#768 stage 2).
     #[must_use]
@@ -229,8 +278,15 @@ impl Store {
     /// Independent mutable producer state over the same opened write provider.
     /// No shared Save or whole-Commit ownership is acquired here.
     pub fn producer(&self) -> StorageResult<Storage> {
+        let writer: Arc<dyn PackPersistence> = match &self.sqlite_writer {
+            Some(writer) => writer.start()?.storage.clone(),
+            None => self
+                .writer
+                .clone()
+                .ok_or(layerfs_storage::port::PersistenceError::BackendUnavailable)?,
+        };
         self.counts.producers.fetch_add(1, Ordering::Relaxed);
-        Storage::with_reservations(self.writer.clone(), self.reservations)
+        Storage::with_reservations(writer, self.reservations)
     }
     /// Runs one merge over fresh build records in the Store file and removes
     /// them when `body` returns. Returns the records' first failure with the
@@ -242,10 +298,13 @@ impl Store {
         (T, Option<layerfs_storage::port::PersistenceError>),
         layerfs_storage::port::PersistenceError,
     > {
-        let scratch = self
-            .merge_scratch
-            .as_ref()
-            .ok_or(layerfs_storage::port::PersistenceError::BackendUnavailable)?;
+        let scratch = match &self.sqlite_writer {
+            Some(writer) => &writer.start()?.merge_scratch,
+            None => self
+                .merge_scratch
+                .as_ref()
+                .ok_or(layerfs_storage::port::PersistenceError::BackendUnavailable)?,
+        };
         let mut records = scratch.begin()?;
         let value = body(&mut records);
         let failure = records.failure().cloned();

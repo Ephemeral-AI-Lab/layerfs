@@ -95,6 +95,7 @@ pub fn commit(
             .public,
     )
     .map_err(args::history)?;
+    store.prepare_history_write().map_err(args::history)?;
     let workspace =
         crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
             .map_err(args::failed)?;

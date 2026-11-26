@@ -35,11 +35,11 @@ Commits use; those are described under [Commit](../commit/README.md) and
         |                 |                     |
         v                 v                     v
  StoreService { store: Arc<Store>, overlay: Later | Started, bound <= 64 }
-   kernel_guard::check -> open (Normal)     -> overlay template (first write)
+   kernel_guard::check -> SQLite read open  -> overlay template (first file change)
         |                                     |
         v                                     v
    Store (SQLite file or PostgreSQL)     overlay owner: one private
-   one writer + read-only sessions       overlay per file call
+   SQLite writer at first mutation      overlay per file call
 ```
 
 ## What it does
@@ -60,12 +60,10 @@ Commits use; those are described under [Commit](../commit/README.md) and
 StoreService::open_direct(store, binding, cursor_key, template)
   1 kernel_guard::check(store)              -> Unsupported (nothing opened)
   2 store.is_file()                         -> Missing
-  3 open_store_observed(sqlite, Normal, CALLS=64, cache 64 KiB)
-       writer session + read-only control reader
-                                            -> Busy("Store open: ..") /
-                                               Failed("Store open: ..")
-     the overlay owner is not started: the service keeps `template`
-
+  3 open_sqlite_for_calls(Normal, CALLS=64, cache 64 KiB)
+       validated read-only control reader
+       writer opens on the first mutation or explicit writer maintenance
+       overlay owner starts at the first file-changing call
 StoreService::bind (the first file-changing call only)
   Owner::start(template, pager 4096 KiB, namespaces 64)
                                             -> that call fails "overlay template: .."
@@ -79,11 +77,16 @@ start that fails fails that call alone; the next file-changing call makes its
 own attempt. `StoreService::new(opened, &owner)` serves through an owner its
 caller started.
 
-A writable `Session::connect` takes the Store directory's writer lane, so two
-openers queue instead of meeting SQLite's `Busy`; a `Busy` open therefore
-means a writer that bypasses the lane (an uncoordinated raw SQLite process)
-held the lock, and it is a definite refusal that changed nothing: the caller
-may repeat the call. Any other open failure stays `Failed`.
+SQLite validates the Store and opens its control reader first. The first
+mutation opens the writer for the same file identity. One initializer per
+Store publishes the session, committer and merge scratch together. If
+initialization fails, the call receives that failure and the next mutation
+can make its own attempt. The directory lane coordinates writable opens. A
+raw SQLite writer can still cause a definite pre-effect `Busy`. Ordinary
+close and idle checkpoints use the writer only if it started. An explicit
+Sandbox release can start it for its checkpoint.
+See [SQLite open](../store/sqlite.md) and
+[`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs).
 
 | Field or constant | Meaning | Source |
 | --- | --- | --- |

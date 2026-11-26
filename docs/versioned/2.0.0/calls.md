@@ -63,6 +63,10 @@ and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `qu
 `home.get`, `home.log`, `home.clear_log`, `sandbox.files`, `sandbox.log`,
 `machine.stats`, `machine.files` and `machine.log`.
 
+A process that only reads a directly opened SQLite Store uses a read-only
+session. The first mutation opens the writer. If that open fails, the call
+returns the refusal and a later mutation can make its own attempt.
+
 ### Names
 
 | Thing | Form | Unique in |

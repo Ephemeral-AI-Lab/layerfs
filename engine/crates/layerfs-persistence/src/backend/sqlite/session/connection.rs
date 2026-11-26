@@ -250,6 +250,13 @@ pub(crate) fn open_admitted_read_only(
     Ok((connection, writer, before))
 }
 
+#[derive(Clone, Copy)]
+enum OpenMode {
+    Ordinary,
+    Diagnostic,
+    Pinned(FileIdentity),
+}
+
 impl Session {
     pub(crate) fn connect(
         path: &Path,
@@ -266,7 +273,24 @@ impl Session {
             selected,
             creation_layout,
             creation_acquisition,
+            OpenMode::Ordinary,
+        )
+    }
+    pub(crate) fn connect_pinned_writer(
+        path: &Path,
+        selected: SqlitePersistenceProfile,
+        layout: crate::SqlitePackLayout,
+        acquisition: crate::SqliteAcquisitionSchema,
+        identity: FileIdentity,
+    ) -> Result<Self, BackendError> {
+        Self::connect_mode(
+            path,
+            true,
             false,
+            selected,
+            layout,
+            acquisition,
+            OpenMode::Pinned(identity),
         )
     }
     pub(crate) fn connect_diagnostic(path: &Path) -> Result<Self, BackendError> {
@@ -277,7 +301,7 @@ impl Session {
             SqlitePersistenceProfile::Normal,
             crate::SqlitePackLayout::Monolithic,
             crate::SqliteAcquisitionSchema::Absent,
-            true,
+            OpenMode::Diagnostic,
         )
     }
     fn connect_mode(
@@ -287,7 +311,7 @@ impl Session {
         selected: SqlitePersistenceProfile,
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
-        diagnostic: bool,
+        mode: OpenMode,
     ) -> Result<Self, BackendError> {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
@@ -296,6 +320,12 @@ impl Session {
         // the last step that can fail, before this session serves its first
         // call.
         let (writer, before) = admit_open(path, writable)?;
+        if let OpenMode::Pinned(expected) = mode {
+            if before != Some(expected) {
+                return Err(BackendError::Stale);
+            }
+        }
+        let diagnostic = matches!(mode, OpenMode::Diagnostic);
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {

@@ -115,33 +115,12 @@ fn direct_access_is_allowed_on_a_local_macos_filesystem() {
 #[path = "support/installed_store.rs"]
 mod installed;
 
-/// An open that finds the Store held by another writer's unwritten transaction
-/// is a definite pre-effect `Busy` the caller may repeat; any other open
-/// failure stays `Failed`.
+/// Refuse corrupt Store contents at the read-only open, before any call.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn open_direct_reports_busy_when_locked_and_failed_when_corrupt() {
+fn open_direct_reports_failed_when_corrupt() {
     let fixture = installed::Fixture::new(1, "open-refusal");
-    let sql = rusqlite::Connection::open(&fixture.config.path).unwrap();
-    sql.busy_timeout(std::time::Duration::ZERO).unwrap();
-    sql.execute_batch("BEGIN IMMEDIATE").unwrap();
     let template = fixture.directory.join("overlay.sqlite");
-    let busy = StoreService::open_direct(
-        &fixture.config.path,
-        installed::BINDING,
-        installed::CURSOR,
-        &template,
-    );
-    match busy {
-        Err(OpenRefusal::Busy(reason)) => {
-            assert_eq!(reason, "Store open: Store busy before effect");
-        }
-        Err(other) => panic!("expected OpenRefusal::Busy, got {other:?}"),
-        Ok(_) => panic!("expected OpenRefusal::Busy, Store opened"),
-    }
-    sql.execute_batch("ROLLBACK").unwrap();
-    drop(sql);
-
     let corrupt = fixture.store_directory().join("corrupt.sqlite");
     std::fs::write(&corrupt, b"not a valid sqlite store").unwrap();
     let failed =

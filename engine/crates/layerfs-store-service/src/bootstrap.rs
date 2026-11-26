@@ -1,6 +1,8 @@
 //! Concrete Store composition and mount-time reader opening.
 use crate::store::{Store, StoreReader};
-use layerfs_persistence::{SqlWork, SqliteHandles, StorageProvider};
+use layerfs_persistence::{
+    DeferredSqliteWriter, PersistenceConfig, SqlWork, SqliteHandles, StorageProvider,
+};
 use layerfs_storage::{
     port::PersistenceError, ReservationBlocks, Storage, StorageError, StorageResult,
 };
@@ -13,13 +15,21 @@ use std::{
 #[derive(Clone)]
 enum Writer {
     Sqlite(Arc<StorageProvider>),
+    DeferredSqlite {
+        writer: Arc<DeferredSqliteWriter>,
+        reader: Arc<StorageProvider>,
+    },
     Postgres(Arc<layerfs_persistence::PostgresStorage>),
 }
 impl Writer {
-    fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
+    fn diagnostics(&self) -> Result<Option<SqlWork>, PersistenceError> {
         match self {
-            Self::Sqlite(provider) => provider.diagnostics(),
-            Self::Postgres(provider) => provider.diagnostics(),
+            Self::Sqlite(provider) => provider.diagnostics().map(Some),
+            Self::DeferredSqlite { writer, .. } => writer
+                .get()
+                .map(|writer| writer.storage.diagnostics())
+                .transpose(),
+            Self::Postgres(provider) => provider.diagnostics().map(Some),
         }
     }
 }
@@ -96,7 +106,7 @@ impl SqlSessions {
     /// Either is None when a session's counters are unavailable. Last, the
     /// work the calling thread ran on any session (#367).
     pub fn totals(&self) -> crate::telemetry::SqlTotals {
-        let writer = self.writer.diagnostics().ok();
+        let writer = self.writer.diagnostics().ok().flatten();
         let readers = self.readers.lock().ok().and_then(|readers| {
             let mut total = readers.retired?;
             for provider in readers.live.values().filter_map(Weak::upgrade) {
@@ -121,7 +131,7 @@ impl OpenedStore {
     /// SQLite.
     pub fn prepare_mounts(&self) -> StorageResult<()> {
         match &self.writer {
-            Writer::Sqlite(_) => Ok(()),
+            Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
             Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
         }
     }
@@ -132,8 +142,26 @@ impl OpenedStore {
             Writer::Sqlite(provider) => {
                 Some(provider.as_ref() as &dyn layerfs_persistence::StoreFile)
             }
+            Writer::DeferredSqlite { writer, reader } => Some(
+                writer
+                    .get()
+                    .map_or(reader, |writer| &writer.storage)
+                    .as_ref(),
+            ),
             Writer::Postgres(_) => None,
         }
+    }
+    /// Checkpoints an owned SQLite writer. Explicit maintenance can start
+    /// one. An idle checkpoint following a Store call only uses an open one.
+    pub fn checkpoint(&self, explicit: bool) -> Result<Option<bool>, PersistenceError> {
+        use layerfs_persistence::StoreFile;
+        let provider = match &self.writer {
+            Writer::Sqlite(provider) => Some(provider),
+            Writer::DeferredSqlite { writer, .. } if explicit => Some(&writer.start()?.storage),
+            Writer::DeferredSqlite { writer, .. } => writer.get().map(|writer| &writer.storage),
+            Writer::Postgres(_) => None,
+        };
+        provider.map(|provider| provider.checkpoint()).transpose()
     }
     pub fn reader_indices(&self) -> Vec<usize> {
         let readers = self
@@ -144,11 +172,7 @@ impl OpenedStore {
     }
     pub fn session_diagnostics(&self, reader: Option<usize>) -> StorageResult<Option<SqlWork>> {
         let Some(index) = reader else {
-            return self
-                .writer
-                .diagnostics()
-                .map(Some)
-                .map_err(StorageError::from);
+            return self.writer.diagnostics().map_err(StorageError::from);
         };
         let readers = self
             .readers
@@ -172,7 +196,7 @@ impl OpenedStore {
     }
     pub fn diagnostics(&self) -> StorageResult<StoreDiagnostics> {
         Ok(StoreDiagnostics {
-            writer: self.writer.diagnostics()?,
+            writer: self.writer.diagnostics()?.unwrap_or_default(),
             readers: self
                 .reader_indices()
                 .into_iter()
@@ -235,13 +259,7 @@ pub fn open_store_observed(
     let sqlite_version = writer.profile().sqlite_version.clone();
     let observations = registry();
     let binding = binding.to_vec();
-    let registry = observations.clone();
-    let factory: crate::store::ReaderFactory = Arc::new(move |index| {
-        let opened = SqliteHandles::open_read_only(config.clone(), &binding, cursor_key)?;
-        let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
-        let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history));
-        observe(&registry, index, provider, reader)
-    });
+    let factory = sqlite_readers(config, binding, cursor_key, observations.clone());
     let control = factory(0)?;
     let committer = writer.history.committer();
     let store = Arc::new(
@@ -261,6 +279,64 @@ pub fn open_store_observed(
         store,
         sqlite_version,
         writer: Writer::Sqlite(writer.storage),
+        readers: observations,
+    })
+}
+
+fn sqlite_reader(
+    opened: SqliteHandles,
+    observations: &Registry,
+    index: usize,
+) -> StorageResult<StoreReader> {
+    let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
+    let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history));
+    observe(observations, index, provider, reader)
+}
+
+fn sqlite_readers(
+    config: PersistenceConfig,
+    binding: Vec<u8>,
+    cursor_key: [u8; 32],
+    observations: Registry,
+) -> crate::store::ReaderFactory {
+    Arc::new(move |index| {
+        let opened = SqliteHandles::open_read_only(config.clone(), &binding, cursor_key)?;
+        sqlite_reader(opened, &observations, index)
+    })
+}
+
+/// In-process SQLite Store calls have one validated control reader and an
+/// unopened writer. The daemon and standalone install use eager assembly.
+pub(crate) fn open_sqlite_for_calls(
+    config: PersistenceConfig,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+) -> StorageResult<OpenedStore> {
+    let (opened, history, writer) =
+        DeferredSqliteWriter::open(config.clone(), binding, cursor_key)?;
+    let sqlite_version = opened.profile().sqlite_version.clone();
+    let reader = opened.storage.clone();
+    let observations = registry();
+    let control = sqlite_reader(opened, &observations, 0)?;
+    let factory = sqlite_readers(config, binding.to_vec(), cursor_key, observations.clone());
+    let store = Arc::new(
+        Store::with_control_reader(
+            Arc::new(history),
+            control,
+            factory,
+            cache_bytes,
+            reservations,
+            workspace_capacity,
+        )?
+        .with_deferred_sqlite_writer(writer.clone()),
+    );
+    Ok(OpenedStore {
+        store,
+        sqlite_version,
+        writer: Writer::DeferredSqlite { writer, reader },
         readers: observations,
     })
 }

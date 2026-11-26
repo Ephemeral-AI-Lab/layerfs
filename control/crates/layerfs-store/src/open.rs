@@ -88,7 +88,7 @@ impl Drop for Running {
         let spawned = std::thread::Builder::new()
             .name("layerfs-store-checkpoint".to_owned())
             .spawn(move || {
-                let _ = checkpoint(&args);
+                let _ = checkpoint(&args, false);
                 settled(&path);
             });
         if spawned.is_err() {
@@ -131,14 +131,13 @@ fn has_log(path: &Path) -> bool {
 
 /// One `wal_checkpoint(TRUNCATE)` on the open Store `args` name, through
 /// its open service. `Some(true)`: its log is empty; `Some(false)`: left for
-/// the idle close; `None`: no Store file (PostgreSQL) or it failed.
-fn checkpoint(args: &OpenArgs) -> Option<bool> {
-    direct::with_service(args, |service| {
-        Ok(service.opened.file().map(|file| file.checkpoint()))
-    })
-    .ok()
-    .flatten()
-    .and_then(Result::ok)
+/// the idle close; `None`: no writer available or the checkpoint failed.
+/// An explicit Sandbox release can start a writer to complete its checkpoint.
+fn checkpoint(args: &OpenArgs, explicit: bool) -> Option<bool> {
+    direct::with_service(args, |service| Ok(service.opened.checkpoint(explicit)))
+        .ok()
+        .and_then(Result::ok)
+        .flatten()
 }
 
 /// A Sandbox on the Store at `path` has closed: with no call running on it
@@ -153,7 +152,7 @@ pub fn released(path: &Path) -> Option<bool> {
         let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
         settle(open.get_mut(path)?)?
     };
-    let done = checkpoint(&args);
+    let done = checkpoint(&args, true);
     settled(path);
     done
 }

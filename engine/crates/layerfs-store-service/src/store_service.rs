@@ -9,7 +9,7 @@
 //! outcome is uncertain keeps its Workspace here, with the original failure,
 //! instead of closing it: the call is answered `Unknown` and nothing is
 //! resent or discarded.
-use crate::bootstrap::{open_store_observed, OpenedStore};
+use crate::bootstrap::{open_sqlite_for_calls, open_store_observed, OpenedStore};
 use crate::kernel_guard::{self, Unsupported};
 use crate::store::{BindRequest, BoundWorkspace, CommitFailure, Store};
 use crate::{Owner, OwnerClient, OwnerConfig};
@@ -137,10 +137,9 @@ impl StoreService {
 
     /// Opens the installed Store at `store` for this process's Store calls.
     /// The kernel guard runs first, before any file is opened; then the
-    /// Store, selected Normal explicitly. The overlay template at `template`
-    /// (a local file) for the calls' private Workspaces is created by the
-    /// first file-changing call, not here. No busy handler, retry or fsync:
-    /// one more opener, as a daemon is.
+    /// control reader, with Normal selected explicitly. The writer starts
+    /// on the first mutation. The overlay template at `template` is created
+    /// by the first file-changing call.
     pub fn open_direct(
         store: &Path,
         binding: &[u8],
@@ -154,7 +153,7 @@ impl StoreService {
                 store.display()
             )));
         }
-        let opened = open_store_observed(
+        let opened = open_sqlite_for_calls(
             PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             binding,
             cursor_key,

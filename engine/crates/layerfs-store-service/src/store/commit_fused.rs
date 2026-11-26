@@ -155,7 +155,7 @@ impl BoundWorkspace {
             .branch
             .head_commit
             .map_or(NodeId::Layer(snapshot.branch.base_layer), NodeId::Commit);
-        self.store.committer.is_some()
+        self.store.committer().is_some()
             && !options.force
             && options.expected.is_none_or(|node| node == bound)
     }
@@ -257,8 +257,7 @@ impl BoundWorkspace {
     ) -> Result<Option<CommitOutcome>, CommitError> {
         let committer = self
             .store
-            .committer
-            .as_ref()
+            .committer()
             .ok_or(CommitError::Context("fused Commit without a committer"))?;
         // Nothing changed against the bound root: not a fused Commit (the
         // separate path answers UpToDate).

@@ -265,16 +265,18 @@ impl HistoryProvider {
     pub fn mark_with_scratch(&self, scratch: &Path) -> HistoryResult<MarkResult> {
         let budget = self.mark_budget();
         match &self.engine {
-            crate::backend::Engine::Sqlite(session) => session.run(true, |backend| {
-                let tx = Transaction::new(backend);
-                let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mut mark, mut reach) = mark_recorded(&tx, false, budget)?;
-                mark.objects.list()?;
-                sink.finish(&mark.objects.retained, |row| {
-                    reach.each(tx.mechanics(), row)
-                })?;
-                Ok(mark)
-            }),
+            crate::backend::Engine::Sqlite(session) => {
+                self.sqlite_write_session(session)?.run(true, |backend| {
+                    let tx = Transaction::new(backend);
+                    let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
+                    let (mut mark, mut reach) = mark_recorded(&tx, false, budget)?;
+                    mark.objects.list()?;
+                    sink.finish(&mark.objects.retained, |row| {
+                        reach.each(tx.mechanics(), row)
+                    })?;
+                    Ok(mark)
+                })
+            }
             crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| mark(tx, budget)),
         }
     }
@@ -306,24 +308,26 @@ impl HistoryProvider {
     ) -> HistoryResult<(MarkResult, bool)> {
         let budget = self.mark_budget();
         match &self.engine {
-            crate::backend::Engine::Sqlite(session) => session.run_decided(true, |backend| {
-                let tx = Transaction::new(backend);
-                super::admission::register_in(&tx, intent, false)?;
-                let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
-                let (mark, mut reach) = mark_recorded(&tx, false, budget)?;
-                let keep = decide(&tx, &mark)?;
-                let completion = if keep {
-                    // Only a rebuild reads the scratch, so only a rebuild
-                    // writes it; a `none` drops the sink and no file exists.
-                    sink.finish(&mark.objects.retained, |row| {
-                        reach.each(tx.mechanics(), row)
-                    })?;
-                    Completion::Commit
-                } else {
-                    Completion::Rollback
-                };
-                Ok(((mark, keep), completion))
-            }),
+            crate::backend::Engine::Sqlite(session) => self
+                .sqlite_write_session(session)?
+                .run_decided(true, |backend| {
+                    let tx = Transaction::new(backend);
+                    super::admission::register_in(&tx, intent, false)?;
+                    let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
+                    let (mark, mut reach) = mark_recorded(&tx, false, budget)?;
+                    let keep = decide(&tx, &mark)?;
+                    let completion = if keep {
+                        // Only a rebuild reads the scratch, so only a rebuild
+                        // writes it; a `none` drops the sink and no file exists.
+                        sink.finish(&mark.objects.retained, |row| {
+                            reach.each(tx.mechanics(), row)
+                        })?;
+                        Completion::Commit
+                    } else {
+                        Completion::Rollback
+                    };
+                    Ok(((mark, keep), completion))
+                }),
             crate::backend::Engine::Postgres(_) => self.write_snapshot(|tx| {
                 let mark = mark(tx, budget)?;
                 let keep = decide(tx, &mark)?;
