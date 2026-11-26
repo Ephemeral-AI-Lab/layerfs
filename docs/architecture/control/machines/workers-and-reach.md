@@ -382,3 +382,37 @@ process reaches it, so Workspace calls skip the worker
 - [Stores and projects](../stores-and-projects/README.md): `store.call`, `store.file` and `project.*` routes.
 - [Stores and projects: SQLite and PostgreSQL](../stores-and-projects/sqlite-and-postgresql.md): the password inside the URL.
 - [Bridge](../../engine/bridge/README.md): the daemon wire contract.
+
+## Host worker exchange (2.0 implementation plan)
+
+The host exchange is versioned independently of the guest exchange. The
+ordinary socket is `worker.sock` and the management socket is `worker.ctl`
+in the native machine directory. Each listener has its own admission
+capacity. A saturated ordinary listener leaves its backlog in the kernel,
+while management retains two slots.
+
+Both peers check the other's effective UID before sending or reading frames.
+The server sends the first frame only after admission to the connection
+queue. It is a plain bounded JSON frame with `ready: true`, `kind: "host"`,
+`protocol: 1`, `home_id` (the current home's record ID), `generation`
+(a fresh worker incarnation token), and `build` (an executable identity).
+The client validates the home, protocol and build before sending a request.
+Each request uses the guest envelope's `op` and `args` keys and adds a
+`generation` echo and a `request_id` correlation token. A final answer
+echoes the request ID and has exactly one of `ok` and `error`.
+`ping`, `store.close`, and `drain` are management operations.
+`store.call` is an ordinary operation. The host resolves Store authority
+from its own home records.
+
+The v1 host request and answer bodies are plain JSON with byte ceilings of
+64 KiB and 1 MiB respectively. The hello ceiling is 4 KiB. Check ceilings
+before reading a frame body and reject attachments on this read-only route.
+The guest exchange continues using its existing framing and hello.
+
+A separate startup lock serializes launch attempts until the child is
+ready. Only the worker holding the lifetime `worker.lock` may recover stale
+sockets, bind or remove endpoints. A started worker holds that lock
+through listener shutdown, Store close, and socket removal. Incompatible
+builds receive a definite refusal before operation bytes, with idle exit as
+the replacement path. Transport loss after an operation send begins has
+outcome `Unknown` with the request ID and no automatic replay.
