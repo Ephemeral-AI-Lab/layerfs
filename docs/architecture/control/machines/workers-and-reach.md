@@ -438,7 +438,16 @@ either lane and none waits in a listen queue, so a caller accepted at the
 
 A separate startup lock serializes launch attempts until the child is
 ready. Only the worker holding the lifetime `worker.lock` may recover stale
-sockets, bind or remove endpoints. A started worker holds that lock
+sockets, bind or remove endpoints. A worker binds each socket and then sets
+it to 0600; callers never dial a socket with another mode. Such a socket
+whose lifetime lock is free has no owner (its worker died between bind and
+chmod), so a starting caller treats it as absent and launches a worker that
+replaces it, and a caller that does not start one reports no endpoint.
+The CLI starts the worker with an empty environment except `LAYERFS_HOME`
+and `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SSL_CERT_FILE`
+and `SSL_CERT_DIR`, in `/`: the worker serves later callers too, so it
+takes no caller's secrets (such as `PGPASSWORD`), per-call settings or
+directory (spec P-B). A started worker holds that lock
 through listener shutdown, Store close, and socket removal. Incompatible
 builds receive a definite refusal before operation bytes, with idle exit as
 the replacement path. Transport loss after an operation send begins has

@@ -22,6 +22,20 @@ use std::time::{Duration, Instant};
 const READY_WAIT: Duration = Duration::from_secs(10);
 const TRANSFER_WAIT: Duration = Duration::from_secs(10);
 const READY_POLL: Duration = Duration::from_millis(15);
+/// The caller's environment a spawned host worker keeps: `PATH` and `HOME`
+/// for the platform's ordinary process lookups, `TMPDIR` for SQLite's
+/// temporary files, the locale, and OpenSSL's trust-store overrides for a
+/// PostgreSQL TLS check. `LAYERFS_HOME` is set explicitly.
+const INHERITED: [&str; 8] = [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+];
 
 /// Canonical home authority and its two endpoints.
 pub struct HostPaths {
@@ -422,7 +436,7 @@ impl HostPaths {
                     "listen queue or worker startup deadline expired",
                 ));
             }
-            if start && startup.is_none() {
+            if startup.is_none() && (start || matches!(observed, Probe::Unready)) {
                 startup = hold(&startup_path)?;
                 if startup.is_some() {
                     // Another caller may have completed startup while this
@@ -432,6 +446,19 @@ impl HostPaths {
                         return Ok(Some((stream, startup)));
                     }
                 }
+            }
+            // A socket without its private mode whose lifetime lock is free
+            // has no owner: its worker died between bind and chmod. Only the
+            // lock holder binds, so the next owner replaces it (§8.2).
+            if matches!(observed, Probe::Unready)
+                && startup.is_some()
+                && child.is_none()
+                && self.try_hold()?.is_some()
+            {
+                if !start {
+                    return Ok(None);
+                }
+                observed = Probe::Absent;
             }
             if let Some(child) = &mut child {
                 if let Some(status) = child
@@ -483,11 +510,20 @@ impl HostPaths {
             Some((path, _)) => path.clone(),
             None => executable().map_err(|error| unavailable("startup", error))?,
         };
-        Command::new(executable)
+        let mut command = Command::new(executable);
+        // The worker outlives this caller and serves others, so it takes
+        // nothing from this caller's environment or directory but the names
+        // below (spec P-B: no secrets from its own environment). Per-call
+        // settings such as tracing travel in each request instead.
+        command.env_clear().current_dir("/");
+        for name in INHERITED {
+            if let Some(value) = std::env::var_os(name) {
+                command.env(name, value);
+            }
+        }
+        command
             .args(["worker", "--host"])
             .env("LAYERFS_HOME", &self.home)
-            .env_remove("LAYERFS_TRACE")
-            .env_remove("LAYERFS_TRACE_STEP")
             .stdin(Stdio::null())
             .stdout(log)
             .stderr(stderr)
@@ -500,6 +536,8 @@ impl HostPaths {
 enum Probe {
     Connected(UnixStream),
     Absent,
+    /// A socket that does not have the private mode yet.
+    Unready,
     Waiting,
 }
 
@@ -510,7 +548,7 @@ fn probe(path: &Path, end: Instant) -> Result<Probe, SdkRefusal> {
     if metadata.mode() & 0o777 != 0o600 {
         // The worker sets permissions after binding, in an owner-only directory.
         // A caller never dials until the endpoint has the required mode.
-        return Ok(Probe::Waiting);
+        return Ok(Probe::Unready);
     }
     match host_socket::connect(path, end) {
         Ok(stream) => Ok(Probe::Connected(stream)),
