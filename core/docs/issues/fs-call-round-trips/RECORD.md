@@ -36,6 +36,12 @@
   the cause and continue. No retuned caps, windows or timeouts.
   (This replaces SPEC §6.4's "10% or 3 trips" explain-before-next-item rule
   for this run.)
+- **Cold vs warm targets (parent session, 2026-11-27):** SPEC targets come from
+  the probe, which runs each case on the setup's open Store and roughly equals a
+  pin's `warm` row. Record rule: **warm target = SPEC target; cold target = SPEC
+  target + (cold − probe) from the Phase 0 table**; compare cold pins with the
+  cold baseline by delta. The milestone benchmark on the probe harness is the
+  absolute check; no extra check is added for this.
 - The per-item latency arm, memory soak and held-out sweeps of verification.md
   run at milestone level only, not per item (no repeated verification).
 
