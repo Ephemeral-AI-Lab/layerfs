@@ -113,7 +113,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
             checks.evidence(ENDPOINT, evidence());
         }
         Owned => {
-            checks.notice(
+            checks.warning(
                 ENDPOINT,
                 "the worker socket has no listener or lacks its private mode while a host worker holds its lifetime lock (starting, closing or wedged) or a start holds the startup lock; nothing replaces it until they are released",
             );

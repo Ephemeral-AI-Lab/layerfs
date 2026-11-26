@@ -121,7 +121,8 @@ as `machine get macos-host --with live`. One two-second budget covers the
 management socket, peer UID, hello and one read-only ping. An absent socket
 passes the endpoint check. A socket with no listener, or without its
 private mode, is stale only while its locks are free; while a worker holds
-`worker.lock` or a start holds the startup lock it is `owned`. A
+`worker.lock` or a start holds the startup lock it is `owned`, a warning
+(nothing replaces it until they are released). A
 greeting for the same home from another build or protocol produces a
 compatibility notice before the ping. Ready and draining observations carry
 evidence on `machine.worker.ping`. Before a starting worker publishes its

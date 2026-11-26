@@ -344,7 +344,7 @@ only when its locks are free (the startup lock, then `worker.lock`, each
 tried once without waiting, never created): the next start replaces it.
 While a worker holds `worker.lock` (between bind and its private mode,
 closing, or wedged) or a start holds the startup lock, the same socket is
-health `owned`, a notice saying nothing replaces it until they are released.
+health `owned`, a warning saying nothing replaces it until they are released.
 Callers never dial a socket without mode 0600.
 The client resolves aliases to the same home before
 checking the kernel pathname limit. A too-long path can be routed directly

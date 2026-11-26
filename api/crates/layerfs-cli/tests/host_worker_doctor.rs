@@ -155,11 +155,12 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
         &home,
         &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
     );
-    let notice = list(&report, "findings")
+    let warning = list(&report, "findings")
         .iter()
         .find(|finding| finding.get_text("check") == Some("machine.worker.endpoint"))
         .unwrap();
-    let message = notice.get_text("message").unwrap();
+    assert_eq!(warning.get_text("severity"), Some("warning"), "{warning:?}");
+    let message = warning.get_text("message").unwrap();
     assert!(message.contains("holds its lifetime lock"), "{message}");
     assert!(!message.contains("the next start replaces it"), "{message}");
     drop(guard);

@@ -247,8 +247,8 @@ the host worker. Idle worker exit leaves the host enabled. Stopping records
 on this host then receive `Unavailable` with a start command. A previously admitted
 call finishes. The stopping process's own idle Store copies close first; an
 SDK app's call still running holds the host. If holders remain, stop reports
-`InUse` with the Sandbox names and Store process IDs, and the host stays
-stopped. A later stop checks again.
+`InUse` with the Sandbox names and Store process IDs (or the Store and why
+it could not be closed or read), and the host stays stopped. A later stop checks again.
 A forced stop performs the host Sandbox teardown and records its outcomes.
 A later explicit forced stop can reconcile an uncertain previous stop after
 its owner exits. Direct PostgreSQL calls continue while the host is stopped.

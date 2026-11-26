@@ -93,35 +93,40 @@ pub(crate) fn stop(
     } else {
         None
     };
+    // from here the stop is recorded and a forced one has torn down: a
+    // failure keeps the forced report, and a Store that cannot be closed or
+    // read is a holder naming why, not a bare error
+    let with_forced = |mut error: SdkRefusal| {
+        if let Some(outcome) = &forced {
+            error.detail = with_field(error.detail, "forced_outcome", outcome.clone());
+        }
+        error
+    };
     let mut blocking = Vec::new();
-    for sandbox in crate::inventory::sandboxes(home)? {
+    for sandbox in crate::inventory::sandboxes(home).map_err(with_forced)? {
         if sandbox.machine() == name.as_str() && !sandbox.machine_stopped() {
             blocking.push(format!("Sandbox {}", sandbox.name()));
         }
     }
-    let stores = crate::inventory::stores_on(home, name.as_str())?;
+    let stores = crate::inventory::stores_on(home, name.as_str()).map_err(with_forced)?;
     // this process's own idle copies close first, as a move's settle does
     // (Store I/O, so before any record lock): only other processes and a
     // call running here hold the machine; a copy in use stays a holder
     for store in &stores {
         let file = layerfs_home::home::paths::store_file(home, store);
         match layerfs_store::open::close(&file) {
-            Err(error) if error.code != "InUse" => return Err(error),
+            Err(error) if error.code != "InUse" => {
+                blocking.push(format!("Store {store} (close failed: {})", error.message));
+            }
             _ => {}
         }
     }
     for store in stores {
-        let _guard = layerfs_store::record::lock(home, &store)?;
-        let record = layerfs_store::record::StoreRecord::of(home, &store)?;
-        if !matches!(record.store_ref()?,layerfs_store::record::StoreRef::Sqlite{machine,..} if machine==name.as_str())
-        {
-            continue;
-        }
-        if layerfs_store::lease::held_here(home, &store) {
-            blocking.push(format!("Store {store} (pid {})", std::process::id()));
-        }
-        for pid in layerfs_store::lease::holders(home, &store)? {
-            blocking.push(format!("Store {store} (pid {pid})"));
+        if let Err(error) = store_holders(home, name, &store, &mut blocking) {
+            blocking.push(format!(
+                "Store {store} (holders not read: {})",
+                error.message
+            ));
         }
     }
     if !blocking.is_empty() {
@@ -148,6 +153,29 @@ pub(crate) fn stop(
         &[],
     ))
 }
+/// The holders of host Store `store` on machine `name`: this process's
+/// lease and every other live one.
+fn store_holders(
+    home: &Path,
+    name: &MachineName,
+    store: &str,
+    blocking: &mut Vec<String>,
+) -> Result<(), SdkRefusal> {
+    let _guard = layerfs_store::record::lock(home, store)?;
+    let record = layerfs_store::record::StoreRecord::of(home, store)?;
+    if !matches!(record.store_ref()?,layerfs_store::record::StoreRef::Sqlite{machine,..} if machine==name.as_str())
+    {
+        return Ok(());
+    }
+    if layerfs_store::lease::held_here(home, store) {
+        blocking.push(format!("Store {store} (pid {})", std::process::id()));
+    }
+    for pid in layerfs_store::lease::holders(home, store)? {
+        blocking.push(format!("Store {store} (pid {pid})"));
+    }
+    Ok(())
+}
+
 fn texts(items: Vec<String>) -> SdkValue {
     SdkValue::List(items.into_iter().map(SdkValue::Text).collect())
 }

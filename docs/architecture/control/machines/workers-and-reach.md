@@ -507,7 +507,9 @@ recovering an old intent or recording their new one. After fencing admission, st
 closes the calling process's own idle copies of the machine's Stores (as a
 move's settle does, before any record lock) and inspects holders under each
 Store lock: other processes' leases and a copy a call in the calling
-process is using still block it. This ordering lets earlier leases
+process is using still block it. A copy that fails to close, or a Store
+whose holders cannot be read, is a holder naming the failure, so the
+answer stays `InUse` with `forced_outcome` attached after `--force`. This ordering lets earlier leases
 finish and exposes the process identities still holding the Store.
 Force uses the existing per-Sandbox stop with its recorded runtime identity.
 The machine remains stopped when a holder or teardown refusal is reported.
