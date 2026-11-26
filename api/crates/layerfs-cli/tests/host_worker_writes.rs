@@ -576,3 +576,87 @@ fn ten_concurrent_writes_each_commit_once() {
     assert_eq!(routed(path), 20);
     drain(&home);
 }
+
+/// C9 for writes (§8.5): the worker SIGKILLed while a write waits for its
+/// Store. A caller still sending gets a definite refusal; a caller whose
+/// whole input was sent gets `Unknown` with its request ID. Nothing is
+/// committed and nothing is resent when a new worker serves the next call.
+#[test]
+fn a_killed_worker_leaves_unsent_writes_refused_and_sent_ones_unknown() {
+    let home = prepare(&["work"]);
+    let path = &home.paths.home;
+    let before = commits(path, "shop/api", "work");
+    ok(
+        path,
+        &["file", "write", "shop/api", "work", "/warm"],
+        b"warm\n",
+    );
+    let pid = home.ping().get_int("pid").unwrap();
+    let gate = layerfs_api::home::entity_lock::take(
+        &layerfs_api::home::paths::store_dir(path, "shop").join("lock"),
+        WAIT,
+        "proof Store lock",
+    )
+    .unwrap();
+    let spawn = |target: &str, content: Vec<u8>| {
+        let mut child = cli(path, &["file", "write", "shop/api", "work", target])
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut input = child.stdin.take().unwrap();
+        std::thread::spawn(move || {
+            let _ = input.write_all(&content);
+        });
+        child
+    };
+    let sent = spawn("/sent", b"small\n".to_vec());
+    let unsent = spawn("/unsent", patterned(16 << 20));
+    wait_for("both writes to be admitted", || {
+        (home.ping().get_int("admitted") >= Some(3)).then_some(())
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    let killed = Command::new("kill")
+        .args(["-9", &pid.to_string()])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    drop(gate);
+    let parse = |output: Output| {
+        assert!(!output.status.success(), "{output:?}");
+        let text = if output.stdout.is_empty() {
+            output.stderr
+        } else {
+            output.stdout
+        };
+        json::parse(String::from_utf8_lossy(&text).trim()).unwrap()
+    };
+    let unknown = parse(finish(sent));
+    assert_eq!(unknown.get_text("error"), Some("Unknown"), "{unknown:?}");
+    assert!(json::print(&unknown).contains("request_id"), "{unknown:?}");
+    let refused = parse(finish(unsent));
+    assert_eq!(
+        refused.get_text("error"),
+        Some("Unavailable"),
+        "{refused:?}"
+    );
+    assert!(
+        refused
+            .get_text("message")
+            .unwrap()
+            .contains("nothing was committed"),
+        "{refused:?}"
+    );
+    // the next call starts a new worker; neither write was applied
+    ok(
+        path,
+        &["file", "write", "shop/api", "work", "/next"],
+        b"next\n",
+    );
+    assert_ne!(home.ping().get_int("pid"), Some(pid));
+    assert_eq!(commits(path, "shop/api", "work"), before + 2);
+    for gone in ["/sent", "/unsent"] {
+        let (found, _) = run(path, &["file", "stat", "shop/api", "work", gone], b"");
+        assert!(!found, "{gone} was applied");
+    }
+    drain(&home);
+}

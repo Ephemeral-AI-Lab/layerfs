@@ -74,6 +74,11 @@ pub fn with_input<T>(input: Option<Input>, call: impl FnOnce() -> T) -> T {
     call()
 }
 
+/// Whether this thread's call has a deferred input not yet taken.
+pub fn deferred() -> bool {
+    INPUT.with(|held| held.borrow().is_some())
+}
+
 /// Reads a deferred input whole, as the direct route takes it: content as
 /// text when UTF-8 else bytes; changes as the Store's list.
 fn materialize(input: Input, args: &mut Vec<(String, SdkValue)>) -> Result<(), SdkRefusal> {
