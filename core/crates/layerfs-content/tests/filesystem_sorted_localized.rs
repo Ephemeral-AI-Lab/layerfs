@@ -936,6 +936,57 @@ fn a_resident_base_leaf_is_removed_from_the_planned_provider_demand() {
     );
 }
 
+struct RefuseFirstBatch<'a> {
+    store: &'a TreeStore,
+    demands: RefCell<Vec<Vec<ObjectId>>>,
+}
+impl AuthenticatedObjects for RefuseFirstBatch<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let mut demands = self.demands.borrow_mut();
+        demands.push(ids.to_vec());
+        if demands.len() == 2 {
+            return Err(ContentError::ProviderFailure {
+                what: "planned inode leaves",
+            });
+        }
+        self.store.read_canonical_batch(ids)
+    }
+}
+
+#[test]
+fn a_failed_planned_leaf_batch_keeps_its_error_without_a_second_attempt() {
+    let (tree, children, firsts) = page_of_eighty();
+    let reader = RefuseFirstBatch {
+        store: &tree.store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let mut emitted = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&reader, &mut emitted).with_inode_read_ahead(true);
+    let result = Inodes::apply(
+        &mut objects,
+        Some(tree.root),
+        [10, 40, 70]
+            .into_iter()
+            .map(|child| (firsts[child], Some(7)))
+            .collect(),
+        &mut Vec::new(),
+    );
+    assert_eq!(
+        result.unwrap_err(),
+        ContentError::ProviderFailure {
+            what: "planned inode leaves",
+        }
+    );
+    assert_eq!(
+        reader.demands.into_inner(),
+        [
+            vec![tree.root],
+            vec![children[10], children[40], children[70]]
+        ]
+    );
+    assert!(emitted.order().is_empty());
+}
+
 #[test]
 fn a_leaf_that_underflows_demands_one_neighbour_and_no_other() {
     // Every leaf of the built page holds the minimum, so one removal underflows.

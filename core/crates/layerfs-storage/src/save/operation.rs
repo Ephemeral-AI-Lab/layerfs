@@ -52,6 +52,9 @@ impl<'a> Save<'a> {
             let _published = storage.source.serving_published();
             if let Some(objects) = state.pending.push(object)? {
                 state.captured_output = captured;
+                if captured && storage.source.metadata.batched_chain_reads() {
+                    state.packs.retain_requested_whole_file_groups();
+                }
                 let written = state.wave(objects);
                 state.captured_output = false;
                 written?;

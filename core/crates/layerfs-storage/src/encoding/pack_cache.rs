@@ -34,12 +34,19 @@ pub struct PackCache {
     retained: usize,
     clock: Cell<u64>,
     work: PackCacheWork,
+    sparse_whole_files: bool,
 }
 impl PackCache {
     /// Empty operation-owned cache.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Captured remote Saves often ask for one group from a whole-file pack.
+    /// Keep that authenticated group in this allowance once the pack is read.
+    pub(crate) fn retain_requested_whole_file_groups(&mut self) {
+        self.sparse_whole_files = true;
+    }
+
     /// Presence only; a body consult through `get` updates recency.
     pub fn contains_key(&self, id: &i64) -> bool {
         self.entries.contains_key(&(*id, None))
@@ -349,6 +356,24 @@ impl PackCache {
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
                 crate::pack::layout::validate_group_demand(&body, header, wanted)?;
                 let bytes = body.len();
+                if self.sparse_whole_files
+                    && header.lane == crate::pack::layout::PackLane::WholeFile
+                    && header.group_count > 1
+                    && wanted.len() == 1
+                {
+                    if let (Some(info), Some(&number)) = (info, wanted.first()) {
+                        let view = crate::pack::layout::group_view(&body, header, number)?;
+                        let group = body
+                            .get(view.start..view.end)
+                            .ok_or(StorageError::Integrity("retained whole-file group"))?;
+                        self.admit_unit(info, number, header, view, group.to_vec())?;
+                        source.note_pack_evictions(
+                            self.work.evictions - before.evictions,
+                            self.work.evicted_bytes - before.evicted_bytes,
+                        );
+                        return Ok((true, bytes));
+                    }
+                }
                 let keys: Vec<_> = self
                     .entries
                     .keys()
@@ -388,30 +413,7 @@ impl PackCache {
                     return Err(StorageError::Integrity("selected group reply"));
                 }
                 for unit in units {
-                    let length = unit.body.len();
-                    if length > policy::DEPENDENCY_PACK_CACHE_BYTES {
-                        return Err(StorageError::Integrity("selected cache bound"));
-                    }
-                    while !self.entries.is_empty()
-                        && (self.retained.saturating_add(length)
-                            > policy::DEPENDENCY_PACK_CACHE_BYTES
-                            || self.entries.len() >= policy::READ_OBJECT_LIMIT)
-                    {
-                        self.evict(&BTreeSet::new())?;
-                    }
-                    let next = self.clock.get().saturating_add(1);
-                    self.clock.set(next);
-                    self.retained += length;
-                    self.work.peak_bytes = self.work.peak_bytes.max(self.retained);
-                    self.entries.insert(
-                        (id, Some(unit.number)),
-                        Entry {
-                            body: unit.body,
-                            info: Some(info),
-                            unit: Some((unit.header, unit.view)),
-                            touched: Cell::new(next),
-                        },
-                    );
+                    self.admit_unit(info, unit.number, unit.header, unit.view, unit.body)?;
                 }
                 info.length
             }
@@ -429,6 +431,39 @@ impl PackCache {
             }
         }
         Ok((true, bytes))
+    }
+    fn admit_unit(
+        &mut self,
+        info: crate::location::PackInfo,
+        number: usize,
+        header: crate::pack::layout::PackHeader,
+        view: crate::pack::layout::GroupView,
+        body: Vec<u8>,
+    ) -> StorageResult<()> {
+        let length = body.len();
+        if length > policy::DEPENDENCY_PACK_CACHE_BYTES {
+            return Err(StorageError::Integrity("selected cache bound"));
+        }
+        while !self.entries.is_empty()
+            && (self.retained.saturating_add(length) > policy::DEPENDENCY_PACK_CACHE_BYTES
+                || self.entries.len() >= policy::READ_OBJECT_LIMIT)
+        {
+            self.evict(&BTreeSet::new())?;
+        }
+        let next = self.clock.get().saturating_add(1);
+        self.clock.set(next);
+        self.retained += length;
+        self.work.peak_bytes = self.work.peak_bytes.max(self.retained);
+        self.entries.insert(
+            (info.pack_id, Some(number)),
+            Entry {
+                body,
+                info: Some(info),
+                unit: Some((header, view)),
+                touched: Cell::new(next),
+            },
+        );
+        Ok(())
     }
     fn check_descriptor(&self, info: crate::location::PackInfo) -> StorageResult<()> {
         if self

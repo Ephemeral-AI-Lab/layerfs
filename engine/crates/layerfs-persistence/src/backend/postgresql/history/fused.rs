@@ -98,23 +98,23 @@ enum Step {
 }
 
 /// One value bound in binary.
-type Value = Box<dyn ToSql + Sync>;
+type Value<'a> = Box<dyn ToSql + Sync + 'a>;
 
 /// The requests of one message: each one's step, and for a statement its
 /// text, values and bound bytes.
 #[derive(Default)]
-struct Message {
+struct Message<'a> {
     steps: Vec<Step>,
     order: Vec<Option<usize>>,
-    statements: Vec<(String, Vec<Value>, u64)>,
+    statements: Vec<(String, Vec<Value<'a>>, u64)>,
 }
 
-impl Message {
+impl<'a> Message<'a> {
     fn simple(&mut self, step: Step) {
         self.steps.push(step);
         self.order.push(None);
     }
-    fn statement(&mut self, step: Step, sql: String, values: Vec<Value>, bound: u64) {
+    fn statement(&mut self, step: Step, sql: String, values: Vec<Value<'a>>, bound: u64) {
         self.steps.push(step);
         self.order.push(Some(self.statements.len()));
         self.statements.push((sql, values, bound));
@@ -137,11 +137,11 @@ pub(crate) fn nonce() -> String {
     hasher.finalize().to_hex()[..32].to_owned()
 }
 
-fn bytes(value: &[u8]) -> Value {
+fn bytes(value: &[u8]) -> Value<'static> {
     Box::new(value.to_vec())
 }
 
-fn optional(value: Option<&[u8]>) -> Value {
+fn optional(value: Option<&[u8]>) -> Value<'static> {
     Box::new(value.map(<[u8]>::to_vec))
 }
 
@@ -170,7 +170,7 @@ pub(crate) fn commit(
         "SELECT 1/(current_setting('layerfs.attempt',true) IS NOT DISTINCT FROM '{nonce}')::int; {}",
         crate::backend::postgresql::session::profile::Settings::lane_row(schema)
     );
-    let attempt: Value = Box::new(nonce.clone());
+    let attempt: Value<'static> = Box::new(nonce.clone());
     let mut message = Message::default();
     message.simple(Step::Begin);
     let tail = tail.filter(|batch| {
@@ -228,7 +228,7 @@ pub(crate) fn commit(
         .pop()
         .ok_or(HistoryError::Integrity("Commit row values"))?;
     row.truncate(17);
-    let mut values: Vec<Value> = row.into_iter().map(boxed).collect();
+    let mut values: Vec<Value<'static>> = row.into_iter().map(boxed).collect();
     values.push(boxed(commit_attempt));
     values.push(Box::new(nonce.clone()));
     message.statement(Step::Commit, qualified(COMMIT), values, 512);
@@ -322,12 +322,12 @@ fn decided(outcome: Result<(), Decision>, trusted: bool) -> Result<(), Decision>
 }
 
 /// The values of one statement followed by the attempt token.
-fn with(mut values: Vec<Value>, nonce: &str) -> Vec<Value> {
+fn with<'a>(mut values: Vec<Value<'a>>, nonce: &str) -> Vec<Value<'a>> {
     values.push(Box::new(nonce.to_owned()));
     values
 }
 
-fn boxed(param: crate::backend::records::Param) -> Value {
+fn boxed(param: crate::backend::records::Param) -> Value<'static> {
     use crate::backend::records::Param;
     match param {
         Param::I64(value) => Box::new(value),
@@ -339,7 +339,7 @@ fn boxed(param: crate::backend::records::Param) -> Value {
 }
 
 /// The pack rows of `batch`, as `objects::publish::packs` writes them.
-pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
+pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value<'_>>, u64), Fused> {
     let mut columns = (
         Vec::new(),
         Vec::new(),
@@ -363,8 +363,8 @@ pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fuse
             .push(i64::from(info.domain == PackDomain::Payload));
         columns.2.push(info.key.as_bytes().to_vec());
         columns.3.push(info.length as i64);
-        columns.4.push(body.as_slice().to_vec());
-        columns.5.push(directory.to_vec());
+        columns.4.push(body.as_slice());
+        columns.5.push(directory);
         bound += 56 + body.len() as u64 + directory.len() as u64;
     }
     Ok((
@@ -381,7 +381,7 @@ pub(crate) fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fuse
 }
 
 /// The 22 columns of `publish_rows`, as `objects::publish::rows` binds them.
-pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
+pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value<'static>>, u64), Fused> {
     use crate::backend::postgresql::objects::publish::prefix;
     let objects = &batch.objects;
     let column = |f: fn(&layerfs_storage::location::ObjectLocation) -> i64| -> Vec<i64> {
@@ -409,7 +409,7 @@ pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused
         + values.iter().map(|b| b.body.len() as u64 + 16).sum::<u64>()
         + signatures.len() as u64 * 80
         + 48;
-    let out: Vec<Value> = vec![
+    let out: Vec<Value<'static>> = vec![
         Box::new(ids),
         Box::new(column(|o| i64::from(o.role.code()))),
         Box::new(column(|o| o.canonical_length as i64)),

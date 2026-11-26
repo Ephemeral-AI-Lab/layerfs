@@ -96,7 +96,10 @@ While a PostgreSQL captured Commit accepts output, payload packs with
 acknowledged winning locators may occupy the unused portion of the existing
 2 MiB published-body cache. Metadata keeps its existing priority. Save
 reads authenticate a retained body through the same complete-pack checks as
-a fetched body. A missing or evicted body is fetched by its winning locator.
+a fetched body. A missing or evicted body is fetched by its winning locator. For
+single-group reads of a multi-group whole-file pack, the Save retains the
+authenticated requested group in its existing dependency pack allowance.
+Other pack formats and multi-group demands keep their ordinary admission.
 
 [Published body admission and eviction](../../../../core/crates/layerfs-storage/src/read/fetch.rs)
 
