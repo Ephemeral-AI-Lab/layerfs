@@ -186,6 +186,11 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
 
 ## Read the current contract for the task
 
+**Lessons (2.0).** Before Store-path, performance or measurement work, or a
+local PostgreSQL test pass, read the lesson index on the 2.0 branch:
+`git show origin/layerfs_v2_0_0:docs/lesson/README.md`. Start from its symptom
+table, then read every lesson in the matching category.
+
 Before cluster-two implementation/integration, read both root handbooks and the
 [current design index](core/docs/issues/303/README.md), then the relevant primary
 operation, [engine](core/docs/issues/303/daemon-sqlite.md),
