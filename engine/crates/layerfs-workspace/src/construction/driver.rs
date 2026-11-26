@@ -12,6 +12,7 @@ use crate::{
 };
 use layerfs_content::{
     filesystem::{
+        statistics::LogicalChanges, update::update_filesystem_streamed_backed_counted,
         update_filesystem_streamed_backed, FilesystemObjects, FilesystemResources,
         FilesystemRootId, StreamedFilesystemInput,
     },
@@ -60,6 +61,7 @@ pub struct CapturedNamespace<'a, P: OverlayCapturedNamespace + OverlayOperationR
     operation: OperationOwner,
     digests: Option<&'a dyn FileDigests>,
     inode_read_ahead: bool,
+    logical_transitions: bool,
 }
 /// The borrowed inputs of the single running attempt.
 struct Attempt<'s, 'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> {
@@ -73,6 +75,7 @@ struct Attempt<'s, 'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?
     objects: &'s dyn AuthenticatedObjects,
     digests: Option<&'a dyn FileDigests>,
     inode_read_ahead: bool,
+    logical_transitions: bool,
 }
 impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> CapturedNamespace<'a, P> {
     /// Binds exact inputs. Performs no I/O: the Workspace's selected binding
@@ -107,6 +110,7 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
             operation,
             digests: None,
             inode_read_ahead: false,
+            logical_transitions: false,
         }
     }
     /// Records each fresh file's whole-content digest, when the overlay
@@ -118,6 +122,13 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
     /// Enables bounded inode-leaf demands for a remote Store's Commit.
     pub fn with_inode_read_ahead(mut self, enabled: bool) -> Self {
         self.inode_read_ahead = enabled;
+        self
+    }
+
+    /// Retains the canonical inode transitions for the caller's later logical
+    /// count. The operation owner must stay held through that count.
+    pub fn with_logical_transitions(mut self, enabled: bool) -> Self {
+        self.logical_transitions = enabled;
         self
     }
 
@@ -142,6 +153,7 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
             operation,
             digests,
             inode_read_ahead,
+            logical_transitions,
         } = self;
         let attempt = Attempt {
             provider,
@@ -154,14 +166,20 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
             objects,
             digests,
             inode_read_ahead,
+            logical_transitions,
         };
-        let result = scope.run(|timing| attempt.run(base, consumer, timing));
-        if let Err(original) = &result {
-            shared.borrow_mut().content(original.clone());
-        }
+        let (result, logical_changes) =
+            match scope.run(|timing| attempt.run(base, consumer, timing)) {
+                Ok((built, logical)) => (Ok(built), logical),
+                Err(original) => {
+                    shared.borrow_mut().content(original.clone());
+                    (Err(original), None)
+                }
+            };
         let state = shared.into_inner();
         CapturedNamespaceAttempt {
             result,
+            logical_changes,
             custody: CapturedNamespaceCustody {
                 reader,
                 operation,
@@ -220,7 +238,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
         base: WorkspaceResult<BaseView>,
         consumer: &mut dyn FinalizedConsumer,
         timing: &TimingScope<'_, Active>,
-    ) -> ContentResult<FilesystemResult> {
+    ) -> ContentResult<(FilesystemResult, Option<LogicalChanges>)> {
         let shared = self.shared;
         self.policy.validated()?;
         if *self.capacities != self.policy.capacities() {
@@ -297,7 +315,14 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
         let recorded = shared.borrow().record_ns;
         let started = Instant::now();
         let result = timing.child("update").run(|_| {
-            update_filesystem_streamed_backed(&mut output, &input, &mut Backing(shared), None)
+            let mut backing = Backing(shared);
+            if self.logical_transitions && many_rows {
+                update_filesystem_streamed_backed_counted(&mut output, &input, &mut backing)
+                    .map(|(built, logical)| (built, Some(logical)))
+            } else {
+                update_filesystem_streamed_backed(&mut output, &input, &mut backing, None)
+                    .map(|built| (built, None))
+            }
         });
         elapsed(shared, started, |work| &mut work.update_ns);
         let mut owner = shared.borrow_mut();
@@ -308,7 +333,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
         // Each changed directory's new root gets the count its row holds, so
         // the next change there need not list it again (#367). A cache fill:
         // it never changes this attempt's result.
-        if let Ok(built) = &result {
+        if let Ok((built, _)) = &result {
             let _ = base.remember_constructed_counts(self.objects, built.root, &directories);
         }
         result

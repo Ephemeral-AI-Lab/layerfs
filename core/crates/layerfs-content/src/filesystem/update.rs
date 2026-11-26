@@ -23,9 +23,11 @@ use crate::filesystem::references::OperationReducer;
 use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::view::{OperationInput, ResidentInput, StreamedInput};
 use crate::filesystem::rows::{check_operation_input, PreparedDirectoryStreams, PreparedRows};
+use crate::filesystem::sorted::finish::apply_inode_changes_observed;
 use crate::filesystem::sorted::finish::{apply_directory_root, DirectoryRoot};
 use crate::filesystem::sorted::SortedWork;
 use crate::filesystem::state::{DroppedParents, InitialRows, RebuiltRoots, SerialState};
+use crate::filesystem::statistics::{LogicalChanges, LogicalTransitions};
 use crate::filesystem::validate::{self, ValidationWork};
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectRole};
@@ -207,6 +209,7 @@ pub fn build_filesystem_streamed_backed_timed(
         ordering,
         Some(records),
         phases,
+        None,
     )
 }
 
@@ -245,7 +248,30 @@ pub fn update_filesystem_streamed_backed_timed(
         ordering,
         Some(records),
         phases,
+        None,
     )
+}
+
+/// Applies a backed update and retains its canonical inode transitions for
+/// logical accounting. The same records scope must remain held through count.
+pub fn update_filesystem_streamed_backed_counted(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedDirectoryStreams,
+    records: &mut dyn IndexedConstructionBacking,
+) -> ContentResult<(FilesystemResult, LogicalChanges)> {
+    let before = input
+        .base()
+        .ok_or(ContentError::InvalidRecord("update base root"))?;
+    let mut logical = LogicalTransitions::default();
+    let built = run_state(
+        objects,
+        &StreamedInput::new(input),
+        None,
+        Some(records),
+        &FilesystemPhases::disabled(),
+        Some(&mut logical),
+    )?;
+    Ok((built, logical.finish(before, built.root)))
 }
 
 fn run(
@@ -254,7 +280,7 @@ fn run(
     backing: Option<&mut dyn OrderingBacking>,
     phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
-    run_state(objects, input, backing, None, phases)
+    run_state(objects, input, backing, None, phases, None)
 }
 
 fn run_state<'b>(
@@ -263,6 +289,7 @@ fn run_state<'b>(
     backing: Option<&'b mut dyn OrderingBacking>,
     state_backing: Option<&mut dyn IndexedConstructionBacking>,
     phases: &FilesystemPhases<'_>,
+    logical: Option<&mut LogicalTransitions>,
 ) -> ContentResult<FilesystemResult> {
     let state = SerialState::new(state_backing);
     let mut backing = backing;
@@ -279,6 +306,7 @@ fn run_state<'b>(
             &state,
             phases,
             &mut cleanup_attempted,
+            logical,
         )
     };
     match outcome {
@@ -305,6 +333,7 @@ fn run_body<'b>(
     state: &SerialState<'_>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
+    logical: Option<&mut LogicalTransitions>,
 ) -> ContentResult<FilesystemResult> {
     // A directory this batch leaves with no binding is dead on arrival: its
     // parent already accounted the binding it lost, so there is no final count to
@@ -655,8 +684,15 @@ fn run_body<'b>(
             Ok(None) => None,
             Err(error) => Some(Err(error)),
         });
-        let built = phases.phase("inodes", || {
-            apply_inode_values(objects, base_table, changes, resources.scratch_bytes)
+        let built = phases.phase("inodes", || match logical {
+            Some(logical) => apply_inode_changes_observed(
+                objects,
+                base_table,
+                changes,
+                resources.scratch_bytes,
+                &mut |serial, before, after| logical.note(state, *serial, before, after),
+            ),
+            None => apply_inode_values(objects, base_table, changes, resources.scratch_bytes),
         })?;
         counters.references = rows.work();
         drop(rows);

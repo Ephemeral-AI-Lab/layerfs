@@ -2,6 +2,7 @@
 use super::{
     inode::read::{rows_after, InodeReadWork},
     sorted::format::CompactInodes,
+    state::{self, SerialState},
     FilesystemRootId,
 };
 use crate::object::inode_leaf::{InodeKind, InodeValue};
@@ -11,7 +12,8 @@ use crate::{
         tree::ChangedDirectories,
         TreeTable,
     },
-    AuthenticatedObjects, ContentError, ContentResult, FileView, ObjectId,
+    AuthenticatedObjects, ContentError, ContentResult, FileView, IndexedConstructionBacking,
+    ObjectId,
 };
 use layerfs_telemetry::timer::Timing;
 
@@ -102,19 +104,133 @@ pub fn logical_size_and_directories(
                 if let Some(value) = value.filter(|value| value.kind == InodeKind::RegularFile) {
                     window.push(value, sign);
                     if window.roots.len() == LENGTH_WINDOW {
-                        sum += window.drain(lengths)?;
+                        sum = add_bytes(sum, window.drain(lengths)?)?;
                     }
                 }
             }
             Ok(())
         },
     )?;
-    sum += window.drain(lengths)?;
+    sum = add_bytes(sum, window.drain(lengths)?)?;
     u64::try_from(sum).map_err(|_| ContentError::InvalidRecord("logical byte overflow"))
 }
 
-/// Pending file roots and each one's signed link count.
+/// A successful construction's logical-count input, bound to its exact roots.
+/// Complete length windows live in the still-held construction scope. The
+/// final partial window and the existing bounded directory hints stay local.
+#[derive(Debug)]
+pub struct LogicalChanges {
+    before: FilesystemRootId,
+    after: FilesystemRootId,
+    directories: ChangedDirectories,
+    full_windows: u64,
+    partial: Window,
+}
+
+impl LogicalChanges {
+    /// Whether this result measures exactly the roots chosen for publication.
+    pub fn matches(&self, before: FilesystemRootId, after: FilesystemRootId) -> bool {
+        (self.before, self.after) == (before, after)
+    }
+
+    /// Resolves lengths through the authoritative reader after Save completion.
+    /// The caller still owns the same construction scope that wrote the windows.
+    pub fn count(
+        mut self,
+        records: &mut dyn IndexedConstructionBacking,
+        known: u64,
+        lengths: &mut dyn FnMut(&[ObjectId]) -> ContentResult<Vec<u64>>,
+    ) -> ContentResult<(u64, ChangedDirectories)> {
+        if self.before == self.after {
+            return Ok((known, self.directories));
+        }
+        let mut sum = i128::from(known);
+        let mut window = Window::default();
+        for serial in 1..=self.full_windows {
+            let bytes = records
+                .get(state::key(state::LOGICAL_LENGTHS, serial))?
+                .ok_or(ContentError::InvalidRecord("logical length window missing"))?;
+            window.fill(&bytes)?;
+            drop(bytes);
+            sum = add_bytes(sum, window.drain(lengths)?)?;
+        }
+        sum = add_bytes(sum, self.partial.drain(lengths)?)?;
+        let counted = u64::try_from(sum).map_err(|_| logical_overflow())?;
+        Ok((counted, self.directories))
+    }
+}
+
+/// Provisional counts and hints observed by the very leaf merge that writes the
+/// inode table. They become usable only when that update returns its root.
 #[derive(Default)]
+pub(super) struct LogicalTransitions {
+    directories: ChangedDirectories,
+    full_windows: u64,
+    partial: Window,
+}
+
+impl LogicalTransitions {
+    pub fn note(
+        &mut self,
+        state: &SerialState<'_>,
+        serial: u64,
+        before: Option<InodeValue>,
+        after: Option<InodeValue>,
+    ) -> ContentResult<()> {
+        if before == after {
+            return Ok(());
+        }
+        self.directories
+            .note(serial, before.as_ref(), after.as_ref());
+        for (value, sign) in [(after, 1), (before, -1)] {
+            if let Some(value) = value.filter(|value| value.kind == InodeKind::RegularFile) {
+                self.partial.push(&value, sign);
+                if self.partial.roots.len() == LENGTH_WINDOW {
+                    let serial = self
+                        .full_windows
+                        .checked_add(1)
+                        .ok_or(ContentError::LengthOverflow)?;
+                    state.apply(vec![state::change(
+                        state::LOGICAL_LENGTHS,
+                        serial,
+                        None,
+                        self.partial.encode(),
+                    )])?;
+                    self.full_windows = serial;
+                    self.partial.clear();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn finish(mut self, before: FilesystemRootId, after: FilesystemRootId) -> LogicalChanges {
+        self.directories.bind_roots(before, after);
+        LogicalChanges {
+            before,
+            after,
+            directories: self.directories,
+            full_windows: self.full_windows,
+            partial: self.partial,
+        }
+    }
+}
+
+fn logical_overflow() -> ContentError {
+    ContentError::InvalidRecord("logical byte overflow")
+}
+
+fn add_bytes(left: i128, right: i128) -> ContentResult<i128> {
+    left.checked_add(right).ok_or_else(logical_overflow)
+}
+
+const WEIGHTED_ROOT_BYTES: usize = crate::object::DIGEST_BYTES + std::mem::size_of::<i128>();
+const WINDOW_BYTES: usize = LENGTH_WINDOW * WEIGHTED_ROOT_BYTES;
+const _: () =
+    assert!(WINDOW_BYTES + std::mem::size_of::<crate::ConstructionRecordChange>() <= 65_536);
+
+/// Pending file roots and each one's signed link count.
+#[derive(Debug, Default)]
 struct Window {
     roots: Vec<ObjectId>,
     weights: Vec<i128>,
@@ -124,6 +240,34 @@ impl Window {
         self.roots.push(value.content_root);
         self.weights
             .push(sign * i128::from(value.namespace_ref_count));
+    }
+    fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(WINDOW_BYTES);
+        for (root, weight) in self.roots.iter().zip(&self.weights) {
+            bytes.extend_from_slice(root.as_bytes());
+            bytes.extend_from_slice(&weight.to_be_bytes());
+        }
+        bytes
+    }
+    fn fill(&mut self, bytes: &[u8]) -> ContentResult<()> {
+        if bytes.len() != WINDOW_BYTES {
+            return Err(ContentError::InvalidRecord("logical length window size"));
+        }
+        for item in bytes.chunks_exact(WEIGHTED_ROOT_BYTES) {
+            let (root, weight) = item.split_at(crate::object::DIGEST_BYTES);
+            let weight =
+                i128::from_be_bytes(weight.try_into().map_err(|_| ContentError::UnexpectedEof)?);
+            if weight.unsigned_abs() > u128::from(u64::MAX) {
+                return Err(ContentError::InvalidRecord("logical length weight"));
+            }
+            self.roots.push(ObjectId::from_bytes(root)?);
+            self.weights.push(weight);
+        }
+        Ok(())
+    }
+    fn clear(&mut self) {
+        self.roots.clear();
+        self.weights.clear();
     }
     fn drain(
         &mut self,
@@ -139,10 +283,13 @@ impl Window {
         let sum = answered
             .iter()
             .zip(&self.weights)
-            .map(|(length, weight)| i128::from(*length) * weight)
-            .sum();
-        self.roots.clear();
-        self.weights.clear();
+            .try_fold(0, |sum, (length, weight)| {
+                let weighted = i128::from(*length)
+                    .checked_mul(*weight)
+                    .ok_or_else(logical_overflow)?;
+                add_bytes(sum, weighted)
+            })?;
+        self.clear();
         Ok(sum)
     }
 }

@@ -173,12 +173,19 @@ impl<K, V> Node<K, V> {
     }
 }
 
+pub(crate) type LeafObserver<'a, F> = dyn FnMut(
+        &<F as Format>::Key,
+        Option<<F as Format>::Value>,
+        Option<<F as Format>::Value>,
+    ) -> ContentResult<()>
+    + 'a;
+
 /// The bounded sorted B+tree engine over one page format.
 pub(crate) struct Engine<'o, 'e, F: Format> {
     /// The operation's object boundary.
     pub objects: &'o mut FilesystemObjects<'e>,
-    /// Observer of each original/final leaf value, for reference effects.
-    pub observe: &'o mut dyn FnMut(Option<F::Value>, Option<F::Value>) -> ContentResult<()>,
+    /// Observer of each changed key and its original/final leaf values.
+    pub observe: &'o mut LeafObserver<'o, F>,
     /// The operation's scratch budget.
     pub budget: Rc<Budget>,
     /// Work performed so far.
@@ -196,7 +203,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     /// Builds an engine over the supplied boundary and observer.
     pub(crate) fn new(
         objects: &'o mut FilesystemObjects<'e>,
-        observe: &'o mut dyn FnMut(Option<F::Value>, Option<F::Value>) -> ContentResult<()>,
+        observe: &'o mut LeafObserver<'o, F>,
         scratch_limit: usize,
     ) -> Self {
         Self {

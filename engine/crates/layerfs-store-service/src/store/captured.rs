@@ -8,16 +8,52 @@ use super::{
 };
 use crate::OwnerError;
 use layerfs_content::{
+    compare::ChangedDirectories, filesystem::statistics::LogicalChanges,
     filesystem::FilesystemRootId, AuthenticatedObjects, ContentError, ContentResult,
     FilesystemResult, FinalizedConsumer, FinalizedObject, ObjectId,
 };
-use layerfs_overlay::Capture;
+use layerfs_overlay::{Capture, IndexedOperationRecordScope};
 use layerfs_storage::{Save, SaveSink};
 use layerfs_telemetry::timer::{Timing, TimingNode, TimingReport};
 use layerfs_workspace::{
-    CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, WorkspaceError,
+    CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, IndexedEditRecords,
+    WorkspaceError,
 };
 use std::{cell::RefCell, convert::Infallible, sync::Arc};
+
+pub(super) struct Candidate {
+    pub(super) root: FilesystemRootId,
+    pub(super) logical: Option<CapturedLogical>,
+}
+
+pub(super) struct CapturedLogical {
+    changes: LogicalChanges,
+    scope: IndexedOperationRecordScope,
+}
+
+impl CapturedLogical {
+    pub(super) fn matches(&self, before: FilesystemRootId, after: FilesystemRootId) -> bool {
+        self.changes.matches(before, after)
+    }
+
+    pub(super) fn count(
+        self,
+        owner: &crate::OwnerClient,
+        reader: &layerfs_storage::Reader<'_>,
+        known: u64,
+    ) -> Result<(u64, ChangedDirectories), CommitError> {
+        let mut records = IndexedEditRecords::new(owner, self.scope);
+        let counted = super::commit::with_file_lengths(reader, |lengths| {
+            self.changes.count(&mut records, known, lengths)
+        });
+        match (counted, records.into_custody().failure) {
+            (Err(CommitError::Content { error, .. }), Some(original)) => {
+                Err(original_cause(error, Some(original), || None))
+            }
+            (counted, _) => counted,
+        }
+    }
+}
 
 /// The Save's sink, and beside it the namespace objects this attempt
 /// constructed. They stay with the attempt: nothing is placed in the shared
@@ -132,7 +168,7 @@ impl BoundWorkspace {
         capture: Capture,
         held: &mut CapturedConstruction,
         constructed: Option<&mut ConstructedObjects>,
-    ) -> Result<FilesystemRootId, CommitError> {
+    ) -> Result<Candidate, CommitError> {
         let operation = self.operation().map_err(CommitError::Workspace)?;
         // Only Commit acquires these owners, one capture at a time, so the
         // capture's own generation is unique among their live requests.
@@ -169,7 +205,8 @@ impl BoundWorkspace {
                            consumer: &mut dyn FinalizedConsumer| {
                 let namespace = CapturedNamespace::new(workspace, overlay, reader, owner)
                     .with_digests(&digests)
-                    .with_inode_read_ahead(planned_reads);
+                    .with_inode_read_ahead(planned_reads)
+                    .with_logical_transitions(planned_reads);
                 if !recording {
                     let attempt =
                         namespace.construct_untimed(policy, &capacities, objects, consumer);
@@ -219,6 +256,7 @@ impl BoundWorkspace {
         } = piped;
         let CapturedNamespaceAttempt {
             mut result,
+            logical_changes,
             mut custody,
         } = attempt;
         // The Save refused an object the producer had already handed over:
@@ -243,7 +281,17 @@ impl BoundWorkspace {
         match classify(result, original, &operation) {
             Ok(built) => {
                 held.counters = Some(built.counters);
-                Ok(built.root)
+                let logical = logical_changes.map(|changes| CapturedLogical {
+                    changes,
+                    scope: IndexedOperationRecordScope {
+                        owner,
+                        file_scope: 0,
+                    },
+                });
+                Ok(Candidate {
+                    root: built.root,
+                    logical,
+                })
             }
             Err(error) => {
                 held.custody = Some(Box::new(custody));
@@ -373,7 +421,15 @@ fn classify(
         (Ok(_), Some(_)) => ContentError::InvalidRecord("captured namespace result with a cause"),
         (Err(label), _) => label,
     };
-    Err(match original {
+    Err(original_cause(label, original, provider))
+}
+
+fn original_cause(
+    label: ContentError,
+    original: Option<WorkspaceError>,
+    provider: impl FnOnce() -> Option<Arc<super::PortError>>,
+) -> CommitError {
+    match original {
         // The port's own typed cause: an owner job, the Store provider's
         // failure, or a History failure that keeps its exact class (a
         // definite pre-effect `Busy` is not an unknown outcome, #647).
@@ -390,5 +446,5 @@ fn classify(
             error: label,
             provider: provider(),
         },
-    })
+    }
 }

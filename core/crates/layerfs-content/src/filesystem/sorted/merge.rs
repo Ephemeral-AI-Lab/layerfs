@@ -265,7 +265,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
                     } else {
                         None
                     };
-                    (self.observe)(previous.flatten(), value.clone())?;
+                    (self.observe)(&key, previous.flatten(), value.clone())?;
                     (key, value)
                 } else {
                     let (key, value) = old.next().ok_or(ContentError::UnexpectedEof)?;

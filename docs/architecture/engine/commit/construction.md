@@ -124,6 +124,27 @@ under the normal Save custody rules.
 
 [Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
 
+### Logical accounting after construction
+
+For a captured PostgreSQL Commit whose sealed headers and values exceed
+one record job, the sorted inode merge observes each changed serial's
+original and final canonical values. That includes link-count changes,
+fresh values and removals released with a dropped directory. It records
+the same file roots and signed weights as the inode-table difference.
+Full windows of 1,024 weighted roots occupy 48 KiB each in the existing
+operation record scope. Its partial window is resident, together with
+the existing bounded changed-directory hints. The count reads one
+window at a time.
+
+After Save finish, the Commit uses these observations only when the
+selected before and after roots match the construction roots. It resolves
+lengths through the authoritative Storage reader, including for a held
+Save. Merge and whiteout rewrites with different roots use the immutable
+inode-table difference. Small captured Commits, SQLite, and Namespace
+Init retain their existing count paths. The Commit retains the operation
+owner through accounting and its existing outcome and release boundaries.
+A record or length refusal ends that attempt before history publication.
+
 ### Base directory reads (#810 F3)
 
 Step 6 rewrites every changed base directory from its stored root page, and

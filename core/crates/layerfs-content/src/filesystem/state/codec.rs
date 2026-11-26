@@ -20,6 +20,8 @@ pub(crate) const TOPOLOGY_TERRITORY: u32 = CONTEXT + 0x21;
 pub(crate) const TOPOLOGY_ROOTED: u32 = CONTEXT + 0x22;
 pub(crate) const TOPOLOGY_QUEUE: u32 = CONTEXT + 0x23;
 pub(crate) const TOPOLOGY_SCANNED: u32 = CONTEXT + 0x24;
+/// Full file-length windows captured from the canonical inode merge.
+pub(crate) const LOGICAL_LENGTHS: u32 = CONTEXT + 0x30;
 pub(super) const WINDOW: usize = 65_536;
 
 pub(crate) fn key(kind: u32, serial: u64) -> ConstructionRecordKey {
