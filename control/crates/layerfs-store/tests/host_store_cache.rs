@@ -164,7 +164,7 @@ fn a_host_read_leaves_an_independent_writers_wal_to_its_owner() {
     let identity = identity::identity_in(&record).unwrap();
     // Keep the separate writable connection live across the host close.
     let writer = SqliteHandles::open_writable(
-        PersistenceConfig::sqlite(&home.entry("shop"))
+        PersistenceConfig::sqlite(home.entry("shop"))
             .with_sqlite_profile(SqlitePersistenceProfile::Normal),
         &identity.binding,
         identity.cursor_key,
