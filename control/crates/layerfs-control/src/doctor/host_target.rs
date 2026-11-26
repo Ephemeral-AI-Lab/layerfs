@@ -60,6 +60,13 @@ fn layout(
         Ok(layout) => layout,
         Err(refusal) => {
             checks.fail(LAYOUT, refusal.message);
+            if let Some(records) = refusal.detail.get("legacy_host_records") {
+                if let Some(fix) = refusal.detail.get_text("fix") {
+                    checks.fix(LAYOUT, fix);
+                }
+                checks.evidence(LAYOUT, SdkValue::map([("records", records.clone())]));
+                return None;
+            }
             // no fix: the OS error is the finding, and the cause is the
             // home folder's permissions or mount
             checks.evidence(

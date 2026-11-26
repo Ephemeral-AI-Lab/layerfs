@@ -11,6 +11,7 @@ pub mod guest;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub mod host_socket;
 pub mod layout;
+mod legacy_host;
 pub mod lock;
 pub mod observed;
 pub mod paths;

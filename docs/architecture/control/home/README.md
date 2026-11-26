@@ -24,7 +24,7 @@ says how the first call creates one and why a folder that is not a LayerFS
 
 ```text
  <home>/                      LAYERFS_HOME, else ~/.layerfs (absolute)
-   layerfs.json               {layout: 3, id: <32 hex>}
+   layerfs.json               {layout: 4, id: <32 hex>}
    layerfs.lock               home lock (flock; host processes only)
    machine/<m>/  record.json  worker.json (0600)  start.lock
                  forward.log  forward.1.log   (lima: its ssh forwards)
@@ -83,7 +83,7 @@ it").
                                         nothing written
      Empty
        take layerfs.lock, detect again
-         Empty   -> create layerfs.json (layout 3, new id)
+         Empty   -> create layerfs.json (layout 4, new id)
          Foreign -> Unsupported, the same fix
      layerfs.json or the folder listing refused by the system -> Failed
                                         (`unreadable`, the OS error, no fix)
@@ -92,7 +92,8 @@ it").
 | Layout | Recognised by | Source |
 | --- | --- | --- |
 | Empty | no folder; or no `layerfs.json` and nothing but what 2.0's own layout allows before it: `layerfs.lock` (the home lock `open` takes first); the temporary `.layerfs.json.<pid>.<n>.tmp` it is renamed from (seen mid-write, or left by a killed process); the folders reserved for integrations, `runtime/`, `job/`, `stat/` and `preset/` ([Top-level names](#top-level-names); `@layerfs/runtime` makes `runtime/` before the first call), each a folder; and macOS's `.DS_Store`. `log/` is not in the set: every `log/*.jsonl` writer runs after the home is open | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) `detect`, `own_only`, `INTEGRATION` |
-| Current (3) | `layerfs.json` with `layout: 3` and a 32-hex `id` | same, `LAYOUT_VERSION` |
+| Current (4) | `layerfs.json` with `layout: 4` and a 32-hex `id` | same, `LAYOUT_VERSION` |
+| Development (3) | A valid layout 3 home is checked for legacy machine folders, placements, Sandbox runtimes and PostgreSQL attachments. An old host name or a custom machine occupying a reserved host name refuses the open before writing. Home doctor lists the paths together. A compatible home retains its id and layout. | `legacy_host.rs` |
 | Foreign | `layerfs.json` with any other layout number, or one that cannot be parsed: not JSON, no layout number, or layout 3 with no 32-hex `id` (MIG, RC-8); or no `layerfs.json` and anything else in the folder (a reserved name that is a file included) | same, `parse` |
 | refused `Failed` | a `layerfs.json` (or a home folder listing) the system refused to read (EACCES, EIO, EISDIR): `unreadable` in the detail, the OS error, no fix; it may be a real 2.0 home | same, `records.rs` `unreadable` |
 

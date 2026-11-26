@@ -12,7 +12,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The layout this build writes.
-pub const LAYOUT_VERSION: i64 = 3;
+pub const LAYOUT_VERSION: i64 = 4;
 
 /// What `layerfs.json` holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,7 +53,15 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
     };
     match read {
         Some(value) => Ok(match value.get_int("layout") {
-            Some(LAYOUT_VERSION) => parse(&value).map_or(Layout::Foreign, Layout::Current),
+            Some(version @ (3 | LAYOUT_VERSION)) => match parse(&value, version) {
+                Some(file) => {
+                    if version == 3 {
+                        super::legacy_host::check(home)?;
+                    }
+                    Layout::Current(file)
+                }
+                None => Layout::Foreign,
+            },
             _ => Layout::Foreign,
         }),
         None => match own_only(home) {
@@ -117,10 +125,10 @@ pub fn foreign(home: &Path) -> SdkRefusal {
 }
 
 /// A `layerfs.json` of this layout: its id must be 32 hex digits.
-fn parse(value: &SdkValue) -> Option<HomeFile> {
+fn parse(value: &SdkValue, layout: i64) -> Option<HomeFile> {
     let id = value.get_text("id")?;
     (id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit())).then(|| HomeFile {
-        layout: LAYOUT_VERSION,
+        layout,
         id: id.to_owned(),
     })
 }

@@ -114,7 +114,7 @@ worker's root:
   and 0600 for a record. Bytes are stored as `{"hex": "…"}`.
   Every machine, Store, project, bucket, Sandbox and Workspace record
   carries `"v": 1` as its first field; call results never show it.
-- **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
+- **`layerfs.json`** holds `{"layout": 4, "id": "<32 hex digits>"}`. The id
   is written once. The `docker` machine names its worker container with it (O33),
   VM, container and volume names and Sandbox run folders carry its first 8
   digits (`layerfs-<id8>-<name>`), and backups record it as where they
@@ -328,3 +328,5 @@ $ mv <home> <home>.old && layerfs home init
 
 which keeps the old folder and makes a new, empty home. Nothing in the old
 folder is carried over.
+
+A layout 3 development home with old host names or a custom machine named `macos-host` or `linux-host` is refused before the first record write. Run `layerfs home doctor` to see the affected paths together. Use the old build to stop its workers and Sandboxes and export the data you need, then park the home and initialize a new one. A compatible layout 3 home keeps its original metadata.
