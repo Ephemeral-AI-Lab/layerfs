@@ -354,41 +354,56 @@ impl PackCache {
                     return Err(StorageError::Integrity("cached whole domain"));
                 }
                 source.note_pack_directory_validation(wanted.len(), header.group_count);
-                crate::pack::layout::validate_group_demand(&body, header, wanted)?;
                 let bytes = body.len();
+                let sparse = match (info, wanted.first()) {
+                    (Some(info), Some(&number))
+                        if self.sparse_whole_files
+                            && header.lane == crate::pack::layout::PackLane::WholeFile
+                            && header.group_count > 1
+                            && wanted.len() == 1 =>
+                    {
+                        let views = crate::pack::layout::directory_group_views(&body, header)?;
+                        Some((info, number, views))
+                    }
+                    _ => {
+                        crate::pack::layout::validate_group_demand(&body, header, wanted)?;
+                        None
+                    }
+                };
                 let retained = self.entries.range((id, Some(0))..=(id, Some(usize::MAX)));
                 let mut keys = Vec::new();
                 for (key, entry) in retained {
-                    let (_, view) = entry
+                    let (cached_header, view) = entry
                         .unit
                         .ok_or(StorageError::Integrity("cached group view"))?;
                     if body.get(view.start..view.end) != Some(entry.body.as_slice()) {
                         return Err(StorageError::Integrity("immutable cached group changed"));
                     }
-                    keys.push(*key);
-                }
-                if self.sparse_whole_files
-                    && header.lane == crate::pack::layout::PackLane::WholeFile
-                    && header.group_count > 1
-                    && wanted.len() == 1
-                {
-                    if let (Some(info), Some(&number)) = (info, wanted.first()) {
-                        if !self.entries.contains_key(&(id, Some(number))) {
-                            let view = crate::pack::layout::group_view(&body, header, number)?;
-                            let group = body
-                                .get(view.start..view.end)
-                                .ok_or(StorageError::Integrity("retained whole-file group"))?;
-                            self.admit_unit(info, number, header, view, group.to_vec())?;
-                        }
-                        source.note_pack_evictions(
-                            self.work.evictions - before.evictions,
-                            self.work.evicted_bytes - before.evicted_bytes,
-                        );
-                        return Ok((true, bytes));
+                    let retained_view = sparse
+                        .as_ref()
+                        .and_then(|(_, _, views)| key.1.and_then(|number| views.get(number)));
+                    if cached_header != header || retained_view != Some(&view) {
+                        keys.push(*key);
                     }
                 }
                 for key in keys {
                     self.remove_entry(key);
+                }
+                if let Some((info, number, views)) = sparse {
+                    if !self.entries.contains_key(&(id, Some(number))) {
+                        let view = *views
+                            .get(number)
+                            .ok_or(StorageError::Integrity("group ordinal"))?;
+                        let group = body
+                            .get(view.start..view.end)
+                            .ok_or(StorageError::Integrity("retained whole-file group"))?;
+                        self.admit_unit(info, number, header, view, group.to_vec())?;
+                    }
+                    source.note_pack_evictions(
+                        self.work.evictions - before.evictions,
+                        self.work.evicted_bytes - before.evicted_bytes,
+                    );
+                    return Ok((true, bytes));
                 }
                 self.reserve(&[(id, bytes)])?;
                 self.insert(id, body)?;

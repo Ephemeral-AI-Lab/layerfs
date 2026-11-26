@@ -14,6 +14,7 @@ const CHANGES: usize = 1_024;
 /// 1,024 inline change records fit below 1 MiB. This uses the existing
 /// sorted scratch budget and holds no sibling prefetch across branches.
 const LEAVES: usize = 64;
+const PLAN_BYTES: usize = 1024 * 1024;
 
 #[derive(Default)]
 pub(super) struct Leaves {
@@ -34,7 +35,11 @@ impl Leaves {
         F: Format,
         I: Iterator<Item = ContentResult<(F::Key, Option<F::Value>)>>,
     {
-        if self.retained.1.is_empty() && former.len() > 1 {
+        // Leave space for ordinary decode and merge work before reading more
+        // rows from the forward-only source. Small caller-supplied scratch
+        // budgets keep the ordinary one-page-at-a-time route.
+        if self.retained.1.is_empty() && former.len() > 1 && engine.budget.remaining() >= PLAN_BYTES
+        {
             let Ok(_ids_lease) = engine
                 .budget
                 .reserve(LEAVES * std::mem::size_of::<ObjectId>())

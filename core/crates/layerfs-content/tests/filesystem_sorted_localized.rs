@@ -981,6 +981,36 @@ fn a_refused_change_window_stops_before_a_further_fetch_or_emission() {
 }
 
 #[test]
+fn tight_scratch_leaves_the_inode_read_ahead_unused() {
+    let (tree, _, firsts) = page_of_eighty();
+    let changes = || {
+        [10, 40]
+            .into_iter()
+            .map(|at| Ok((Inodes::key(firsts[at]), Some(Inodes::value(7)))))
+    };
+    let mut ordinary = TreeStore::new();
+    let (expected, work) = apply_inode_values(
+        &mut FilesystemObjects::new(&tree.store, &mut ordinary),
+        Some(tree.root),
+        changes(),
+        MAXIMUM_SCRATCH_BYTES,
+    )
+    .unwrap();
+    assert!(work.peak_scratch_bytes < 1024 * 1024);
+
+    let mut emitted = TreeStore::new();
+    let (root, planned_work) = apply_inode_values(
+        &mut FilesystemObjects::new(&tree.store, &mut emitted).with_inode_read_ahead(true),
+        Some(tree.root),
+        changes(),
+        work.peak_scratch_bytes,
+    )
+    .unwrap();
+    assert_eq!(root, expected);
+    assert_eq!(planned_work, work);
+}
+
+#[test]
 fn a_failed_planned_leaf_batch_keeps_its_error_without_a_second_attempt() {
     let (tree, children, firsts) = page_of_eighty();
     let reader = RefuseFirstBatch {
