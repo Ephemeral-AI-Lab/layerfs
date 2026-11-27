@@ -7,6 +7,10 @@
 //! A conflict creates nothing. Publishing is a compare-and-swap on main's
 //! head by default, and reports the main Layers a forced publication skipped.
 use super::resolve::{self, Named};
+use crate::lookup::{
+    self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
+    root, short, Answer,
+};
 use crate::store::{CommitError, Store};
 use layerfs_content::{
     filesystem::FilesystemRootId,
@@ -20,10 +24,6 @@ use layerfs_history::{
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_vfs::InodeSerials;
 use std::sync::Arc;
-use {
-    super::super::lookup::{self as args, branch_node, history, invalid, refuse, root, Answer},
-    layerfs_protocol::sdk::{commit_value, hex, layer_value, node_text, short},
-};
 
 /// The name of the project's line of Layers.
 pub const MAIN: &str = "main";

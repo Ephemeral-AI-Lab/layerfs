@@ -1,10 +1,5 @@
 //! Saved file queries over a real Normal Store, without a daemon or UI model.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

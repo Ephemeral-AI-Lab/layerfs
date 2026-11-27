@@ -12,9 +12,7 @@
 //! logical size (`branch.list_commits`), and each Store's audit is clean.
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL` and reports
 //! NOT_RUN without it (the SQLite half still runs against the model).
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     apply, assert_linear, commit, random_bytes, seed_tree, tree_of, verdict, Node, Op, Service,

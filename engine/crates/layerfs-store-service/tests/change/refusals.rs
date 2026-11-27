@@ -2,12 +2,7 @@
 //! the read calls do: a directory is `IsDirectory`, any other non-file
 //! `NotFile`, and a name the name grammar refuses is `InvalidInput`, not an
 //! engine failure. Nothing is committed.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;

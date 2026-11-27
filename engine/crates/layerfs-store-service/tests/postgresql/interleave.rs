@@ -24,12 +24,8 @@
 //! row and keys are seen right after (PostgreSQL).
 //!
 //! The PostgreSQL tests need `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "mount_tester.rs"]
-#[allow(dead_code)]
-mod tester768;
+use crate::adversary;
+use crate::tester768;
 
 use adversary::{commit, tree_of, verdict, write, Kind, Service, TestStore, Verdict};
 use layerfs_history::{BranchId, HistoryError};

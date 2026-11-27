@@ -1,11 +1,6 @@
 //! A Branch is found by its name without reading the project's other Branches
 //! (#352 range 002: fork's rows grew with the Branches the replay had made).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

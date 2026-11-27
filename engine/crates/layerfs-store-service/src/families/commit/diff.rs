@@ -15,16 +15,13 @@ use crate::filesystem::tree::visibility::Visibility;
 use crate::filesystem::tree::walk::Walker;
 use crate::history::resolve::{self, Named};
 use crate::history::{listing, saved::reply_cost};
+use crate::lookup::{self as args, node_text, Answer};
 use crate::store::{Store, StorePorts};
 use crate::StoreService;
 use layerfs_content::compare::{ChangeKind, PathChange};
 use layerfs_history::{LayerStackRecord, NodeId};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
-use {
-    crate::lookup::{self as args, Answer},
-    layerfs_protocol::sdk::node_text,
-};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -49,7 +46,7 @@ pub fn diff(service: &StoreService, args: &SdkValue) -> Answer {
     let (items, next, from) = match from {
         Some(from) => {
             let from = root::resolve(store, &stack, &reader, &node_text(from))?;
-            let (items, next) = compare::changes(store, &reader, &from, &to, Ok(request))?;
+            let (items, next) = diff::changes(store, &reader, &from, &to, Ok(request))?;
             (items, next.cursor, Some(from))
         }
         None => {
@@ -133,7 +130,7 @@ fn added(
             left: None,
             right: Some(entry),
         };
-        let Some(item) = compare::change(reader, &change, &mut budget, false)? else {
+        let Some(item) = diff::change(reader, &change, &mut budget, false)? else {
             continue;
         };
         let cost = reply_cost(&item);

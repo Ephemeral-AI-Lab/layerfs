@@ -1,3 +1,5 @@
+//! A Workspace's Commit: capture, construction, merge, publication and
+//! settlement.
 pub mod captured;
 pub mod digests;
 pub(crate) mod fused;

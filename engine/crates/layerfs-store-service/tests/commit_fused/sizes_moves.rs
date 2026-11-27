@@ -19,12 +19,8 @@
 //!
 //! The PostgreSQL tests need `LAYERFS_TEST_POSTGRES_URL` and report
 //! NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/sizes.rs"]
-#[allow(dead_code)]
-mod sizes;
+use crate::adversary;
+use crate::verify_sizes as sizes;
 
 use adversary::{seed_tree, text_bytes, Kind, Node, Op, Tree};
 use sizes::{model, noise, run, seed_files, seed_path, spread, tiny, Cell, Rng, Stores};

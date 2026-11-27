@@ -3,12 +3,7 @@
 //! `project.list_branches`, so a one-shot mount's VM steps grew with every
 //! Branch the replay made (about 7 per range). `project.list_branches` with
 //! `name` answers from the name index: the same work at 10 and 1,000 Branches.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

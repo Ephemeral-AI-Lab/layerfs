@@ -38,8 +38,7 @@
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL` and reports
 //! NOT_RUN without it; it prints the server's top-level calls (printed, not
 //! pinned).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use rt::{Backend, InitMeasured, InitPin, Store};
 use std::os::unix::fs::symlink;

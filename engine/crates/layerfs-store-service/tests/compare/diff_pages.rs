@@ -1,12 +1,7 @@
 //! Paging a Commit difference resumes where the last page stopped (#352
 //! F-010): a later page does not walk the pairs earlier pages listed, and a
 //! listing without line hunks fits its page by paths, not by file contents.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

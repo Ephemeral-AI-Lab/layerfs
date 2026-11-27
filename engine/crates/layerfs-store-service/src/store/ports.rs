@@ -105,7 +105,7 @@ impl Store {
     pub fn ports_for(self: &Arc<Self>, scope: ObjectId, workspace: WorkspaceId) -> Arc<StorePorts> {
         self.ports_in(scope, Some(workspace), None)
     }
-    pub(super) fn captured_ports_for(
+    pub(crate) fn captured_ports_for(
         self: &Arc<Self>,
         scope: ObjectId,
         workspace: WorkspaceId,

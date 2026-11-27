@@ -3,12 +3,7 @@
 //! where the older text starts a line at the same place: a line split in two, or one that lost its
 //! first characters, is new text and keeps the Commit that wrote it. Within the bound it matches
 //! lines, also when the changed middle is past one difference table (#517).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

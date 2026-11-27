@@ -5,12 +5,7 @@
 //! whiteouts, an unmerged Branch that existed before the frontier hides but
 //! does not inherit, and a merge started together with the removal never
 //! leaves the path visible.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::lookup;

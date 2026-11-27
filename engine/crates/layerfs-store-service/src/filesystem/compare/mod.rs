@@ -1,3 +1,4 @@
+//! Differences between two snapshots: tree pages, file rows and plans.
 pub mod boundaries;
 pub mod diff;
 pub mod file_rows;

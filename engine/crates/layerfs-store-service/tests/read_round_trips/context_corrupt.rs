@@ -6,9 +6,7 @@
 //! tree's open. Each call is compared with the same call naming the
 //! Commit by a prefix, which reads its context one by one. Needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{Service, TestStore};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};

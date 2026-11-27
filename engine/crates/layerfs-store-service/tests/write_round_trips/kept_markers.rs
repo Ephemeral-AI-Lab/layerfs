@@ -9,8 +9,7 @@
 //! SPEC D16 keeps); its control reader then does strictly more work than in
 //! the kept regime. Runs on SQLite, and on PostgreSQL with
 //! `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Backend, Opened, Store};

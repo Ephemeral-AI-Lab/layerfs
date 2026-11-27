@@ -3,12 +3,7 @@
 //! decoded groups an earlier demand read, with no statement and identical
 //! bytes. The Store's control reader, which serves SDK calls, keeps none, and
 //! a reader closed and mounted again starts empty.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::{object::inode_leaf::InodeKind, AuthenticatedObjects};
 use layerfs_history::WorkspaceId;

@@ -4,8 +4,7 @@
 //! Layer, then the path) and every answer's `at` must be the same on both
 //! backends, in the same order. The PostgreSQL half needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::SdkValue;
 use rt::{t, Store};

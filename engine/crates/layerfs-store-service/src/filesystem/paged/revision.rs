@@ -9,8 +9,14 @@ use super::{
     revision_boundaries::{self, Boundary, Key},
 };
 use crate::store::{Store, StorePorts};
-use crate::{history::rows::Rows, lookup as args};
-use layerfs_content::compare::EntryFacts;
+use crate::{
+    history::rows::{Revision, Rows},
+    lookup as args,
+};
+use layerfs_content::{
+    compare::{EntryFacts, TreeTable},
+    filesystem::FilesystemRootId,
+};
 use layerfs_history::{LayerStackId, NodeId};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
@@ -331,4 +337,20 @@ pub fn list(
         revision_boundaries::keep(store, &key, page.skip + count as u64, boundary);
     }
     Ok(answer)
+}
+
+/// The node's root, parent and record value, read on their own; a walk
+/// reads them through one [`Rows`] (#818 H1).
+pub fn revision(store: &Arc<Store>, node: NodeId) -> Result<Revision, SdkRefusal> {
+    Rows::new(store).revision(node)
+}
+
+/// The entry at `path` in the tree rooted at `root`, if any.
+pub fn entry(
+    reader: &StorePorts,
+    root: layerfs_content::ObjectId,
+    path: &str,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
+    let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
+    root::entry(reader, &tree, path)
 }

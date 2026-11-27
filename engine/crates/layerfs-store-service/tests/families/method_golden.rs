@@ -6,12 +6,7 @@
 //! faults pin which refusal comes first.
 //!
 //! `LAYERFS_GOLDEN_PRINT=1` prints the transcript instead of comparing it.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

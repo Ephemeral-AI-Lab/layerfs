@@ -1,10 +1,5 @@
 //! Saved Layer/Commit comparisons retain the existing changed-entry plan.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use layerfs_protocol::sdk::SdkValue;
 use support::{items, write, Fixture};
 fn t(s: &str) -> SdkValue {

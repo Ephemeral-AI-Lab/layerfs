@@ -6,12 +6,7 @@
 //! now a timing root (resolve, bind, change, commit, close), and time spent
 //! queued for the Store writer's admission, a reader's admission or the shared
 //! read session is a `wait.*` node below the phase that waited.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_store_service::telemetry::Recording;
 use layerfs_telemetry::timer::TimingNode;

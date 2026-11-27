@@ -24,12 +24,8 @@
 //!   amcheck pass.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
+use crate::adversary;
+use crate::verify768;
 
 use adversary::{
     apply, commit, random_bytes, tree_of, verdict, wait_until, write, Op, Service, TestStore, Tree,

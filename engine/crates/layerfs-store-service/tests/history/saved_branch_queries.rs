@@ -1,10 +1,5 @@
 //! Saved branch reads exercise actual Normal Store history and provenance.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use support::{items, paths, write, Fixture};

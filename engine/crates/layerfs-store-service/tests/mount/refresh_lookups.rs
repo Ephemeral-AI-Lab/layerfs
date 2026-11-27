@@ -11,9 +11,7 @@
 //! `REFRESH_LOOKUPS` line and one `REFRESH_CACHE` line: the shared cache's
 //! counters before and after the lookups. `LAYERFS_364_LOOKUPS` bounds the
 //! lookups (6,000).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
+use crate::installed;
 
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;

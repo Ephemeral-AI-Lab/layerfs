@@ -6,12 +6,7 @@
 //! against that scan, kept here as the reference, on files built to put a NUL,
 //! invalid UTF-8, a character, a match or a long line on every window and
 //! block boundary.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use support::Fixture;

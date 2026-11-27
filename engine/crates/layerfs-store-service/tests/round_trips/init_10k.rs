@@ -30,8 +30,7 @@
 //! Each PostgreSQL case took 9–17 s in the test profile at baseline (6–13 s
 //! after I1); the two run one after the other under the binary's PostgreSQL
 //! turn.
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use rt::{Backend, InitPin, Store};
 

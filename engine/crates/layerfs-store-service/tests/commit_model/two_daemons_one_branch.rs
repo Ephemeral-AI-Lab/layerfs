@@ -18,12 +18,8 @@
 //! once and nothing else (no Commit published without being answered; the
 //! Store's Commit rows are exactly the chain), and the tree is the union of
 //! everything written. The audit, amcheck and the allocation checks pass.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
+use crate::adversary;
+use crate::verify768;
 
 use adversary::{
     assert_linear, commit, random_bytes, seed_tree, verdict, write, Gate, Kind, Node, Service,

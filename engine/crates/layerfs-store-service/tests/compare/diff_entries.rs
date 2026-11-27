@@ -2,12 +2,7 @@
 //! the same changes cost the same in a 300-file and a 30,000-file tree, and
 //! a paged difference plans its changes once, so a later page costs what its
 //! own entries cost and not the whole difference again.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

@@ -12,9 +12,7 @@
 //! stops after that many pages; `LAYERFS_364_DIFF_CURSOR` and `_POS` start
 //! from an earlier run's next page, to split a difference too long for one
 //! process.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
+use crate::installed;
 
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_protocol::sdk::{SdkCall, SdkValue};

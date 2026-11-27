@@ -31,7 +31,7 @@ use std::sync::Mutex;
 
 /// The idle handle, if the last Commit of this Workspace completed.
 #[derive(Default)]
-pub(super) struct Producer {
+pub(crate) struct Producer {
     idle: Mutex<Option<Storage>>,
 }
 impl Producer {
@@ -68,7 +68,7 @@ impl Producer {
     /// runs meanwhile, so `keep` finds the slot empty: the daemon admits a
     /// close and a Commit only from an idle entry, returns it to idle after
     /// `close` returns, and closes at shutdown only once every worker ended.
-    pub(super) fn release_ordinals(&self) {
+    pub(crate) fn release_ordinals(&self) {
         if let Some(storage) = self.idle() {
             let _ = storage.release_kept_ordinals();
             self.keep(storage);
@@ -79,7 +79,7 @@ impl Producer {
     /// the one whose kept ordinals end later (or that keeps none), the only
     /// one whose release can still rewind the Store's counter; the other
     /// stays in `to` with its block, for a later Commit.
-    pub(super) fn hand_to(&self, to: &Self) {
+    pub(crate) fn hand_to(&self, to: &Self) {
         let Some(storage) = self.idle() else { return };
         let left = match to.idle.lock() {
             Ok(mut idle) => match idle.take() {

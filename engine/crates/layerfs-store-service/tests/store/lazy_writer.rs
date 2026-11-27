@@ -9,9 +9,7 @@ use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::StoreService;
 use std::{sync::mpsc, time::Duration};
 
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
+use crate::installed;
 
 fn open(fixture: &installed::Fixture) -> StoreService {
     StoreService::open_direct(

@@ -1,11 +1,7 @@
 //! #41 T6: the Store service's `branch.remove`, `project.delete` and
 //! `project.remove_file` admit the Store's intents and report the holders.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::installed;
+use crate::support;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryError, PlaceAuthority, PlaceView, WorkspaceId};

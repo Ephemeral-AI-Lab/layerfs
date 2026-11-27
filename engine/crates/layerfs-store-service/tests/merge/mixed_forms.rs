@@ -21,15 +21,9 @@
 //! Commits, so each side's inode-table branches are stored as deltas against
 //! the wide table's. Merges over delta-form branches equal the decoded
 //! expectation the same way.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
-#[path = "../support/view.rs"]
-#[allow(dead_code)]
-mod view;
+use crate::installed;
+use crate::support;
+use crate::view;
 
 use layerfs_content::compare::tree::{join, list_directory, TreeTable};
 use layerfs_content::filesystem::FilesystemRootId;

@@ -33,8 +33,7 @@
 //! reader's first use (connect, prepares) and an empty object cache.
 //! `revision.h10` is new at P0 (the probe now appends it to its history
 //! group).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Backend, Counts, Measured, Pin, Store};

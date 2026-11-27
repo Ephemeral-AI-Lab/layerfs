@@ -11,12 +11,8 @@
 //!
 //! PostgreSQL only. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #![allow(dead_code)]
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::adversary;
+use crate::fault_proxy;
 #[path = "../support/verify/core.rs"]
 #[allow(dead_code)]
 mod verify768;

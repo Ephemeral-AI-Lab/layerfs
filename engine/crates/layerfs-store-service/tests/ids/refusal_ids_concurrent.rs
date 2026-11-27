@@ -33,15 +33,8 @@
 //! here: its triggers cannot hold a transaction open while another
 //! connection commits (the author's `fused_refusal_ids.rs` covers its
 //! serial case).
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
-#[path = "../support/verify/allocation_reads.rs"]
-#[allow(dead_code)]
-mod verify768x;
+use crate::adversary;
+use crate::verify768x;
 
 use adversary::{apply, commit, verdict, wait_until, write, Op, Service, TestStore, Verdict};
 use layerfs_store_service::store::{BoundWorkspace, CommitOptions};

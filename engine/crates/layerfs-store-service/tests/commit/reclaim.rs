@@ -3,12 +3,7 @@
 //! rows stay queued after `commit_captured`, `BoundWorkspace::reclaim` (the
 //! daemon calls it after the answer) or the next job of the Workspace drains
 //! them, and close deletes what is still queued with the file.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::PathName;
 use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};

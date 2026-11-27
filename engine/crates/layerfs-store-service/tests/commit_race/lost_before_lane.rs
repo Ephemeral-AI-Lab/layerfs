@@ -16,12 +16,8 @@
 //! PostgreSQL only: a SQLite publication runs in this process, so once its
 //! call has answered nothing of it applies later and there is no such
 //! window. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::adversary;
+use crate::fault_proxy;
 
 use adversary::{commit, verdict, wait_until, write, Service, TestStore, Verdict};
 use fault_proxy::FaultProxy;

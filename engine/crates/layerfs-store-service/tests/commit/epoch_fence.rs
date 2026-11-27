@@ -3,12 +3,7 @@
 //! `files::commit` -> `BoundWorkspace::commit` -> `HistoryCatalog::commit_branch`,
 //! so a fence refusal must arrive as the spec's `Conflict`, not as a generic
 //! failure, and an ordinary write must be unaffected.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::lookup;

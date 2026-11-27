@@ -2,12 +2,7 @@
 //! a read and a stat with a `Removed` detail, a listing and a glob omit the
 //! entry and count it, the subtree matches only at `/`, and a post-frontier
 //! re-creation is visible again. The path grammar is refused as `InvalidInput`.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

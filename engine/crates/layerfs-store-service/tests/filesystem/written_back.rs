@@ -2,12 +2,7 @@
 //! though its root may differ: a root depends on how the file was built
 //! (#352 F-073, range 058: `diff_commits` listed a reconciled file whose bytes
 //! were the same at both Commits).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_history::CommitOutcome;
 use layerfs_protocol::sdk::SdkValue;

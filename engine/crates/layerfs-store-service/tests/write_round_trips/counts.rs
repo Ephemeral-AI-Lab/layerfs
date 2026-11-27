@@ -80,8 +80,7 @@
 //!   the message's simple texts), -11 for `mv.file`, -10 for `rm.*`, -1
 //!   for the fused `write.overwrite` and `edit` (the Save's block
 //!   allocation). `.warm` and SQLite unchanged.
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Backend, Counts, Measured, Pin, Store};

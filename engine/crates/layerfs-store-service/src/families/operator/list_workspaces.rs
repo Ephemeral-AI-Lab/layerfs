@@ -14,6 +14,7 @@
 //! ([`workspaces`]): `{ kind, version, workspaces }`, for a caller that polls
 //! it and shows no history (`sandbox.get`, layerfs-project#181).
 use crate::history::MAIN;
+use crate::lookup::{self as args, commit_value, hex, layer_value, Answer};
 use crate::store::Store;
 use layerfs_history::{
     BranchId, BranchSnapshot, CommitHistoryRequest, CommitId, LayerId, MAXIMUM_PAGE_RECORDS,
@@ -23,10 +24,6 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
-use {
-    crate::lookup::{self as args, Answer},
-    layerfs_protocol::sdk::{commit_value, hex, layer_value},
-};
 
 /// Encoded bytes the answer may use, below one control record.
 const BUDGET: usize = 56 * 1024;
@@ -120,7 +117,7 @@ fn workspace_value(
 
 /// The snapshot answer, or `unchanged` when `since` names its version.
 pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) -> Answer {
-    let stack = super::super::args::project(store, args)?;
+    let stack = super::super::args::stack(store, args)?;
     let page = store
         .history()
         .branches(
@@ -284,7 +281,7 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
 /// no Branch page, Layer chain, Commit or Store statistic. `version` is a
 /// digest of the Workspaces alone.
 pub fn workspaces(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) -> Answer {
-    let stack = super::super::args::project(store, args)?;
+    let stack = super::super::args::stack(store, args)?;
     let mut names = BTreeMap::new();
     let mut items = Vec::new();
     for view in views {

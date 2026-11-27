@@ -37,7 +37,7 @@ pub struct ReuseWork {
     pub prefill_failures: u64,
 }
 #[derive(Default)]
-pub(super) struct Counts {
+pub(crate) struct Counts {
     pub objects: AtomicU64,
     pub object_ids: AtomicU64,
     pub lengths: AtomicU64,
@@ -76,11 +76,11 @@ pub struct MergeCounters {
 /// composition owns that selection; this adapter knows only the public ports.
 pub struct Store {
     writer: Option<Arc<dyn PackPersistence>>,
-    pub(super) history: Arc<dyn HistoryCatalog>,
-    pub(super) readers: Arc<ReadSet>,
+    pub(crate) history: Arc<dyn HistoryCatalog>,
+    pub(crate) readers: Arc<ReadSet>,
     policy: StoragePolicy,
     reservations: ReservationBlocks,
-    pub(super) cache: Arc<CanonicalCache>,
+    pub(crate) cache: Arc<CanonicalCache>,
     /// Reads objects already in `cache` and nothing else: no reader, no I/O.
     pub(super) resident: Arc<CanonicalClient>,
     pub(super) counts: Arc<Counts>,
@@ -90,7 +90,7 @@ pub struct Store {
     pub(super) recognizer: super::Recognizer,
     saves: Mutex<SaveCounters>,
     /// One idle producer handle any Workspace may take (#352 F-025 fix 4).
-    pub(super) idle_producer: super::super::workspace::commit::producer::Producer,
+    pub(crate) idle_producer: super::super::workspace::commit::producer::Producer,
     /// Reserved, unhanded serials per scope, `(next, end)` (#352 F-025 fix 4).
     serial_pool: Mutex<std::collections::HashMap<ObjectId, (u64, u64)>>,
     /// Merge build records in the Store file (#355); a Store without them
@@ -103,17 +103,17 @@ pub struct Store {
     pub(super) committer: Option<layerfs_persistence::Committer>,
     /// Fused Commits made, and fused attempts refused by a race that went on
     /// the separate path.
-    pub(super) fused: super::super::workspace::commit::fused::FusedCounts,
+    pub(crate) fused: super::super::workspace::commit::fused::FusedCounts,
     /// A mount reads its snapshot on the writer, not its Workspace reader
     /// (#768 step B, PostgreSQL): with its admission and markers it is then
     /// two writer messages and no reader round trip.
-    pub(super) mount_on_writer: bool,
+    pub(crate) mount_on_writer: bool,
     /// The recorded logical size of the node any of this Store's
     /// Workspaces last read or published (#818 W3), so a Workspace bound
     /// to the Commit another one just published reads none. A node's
     /// recorded size never changes. Bound: one `(NodeId, u64)`; a poisoned
     /// slot keeps nothing.
-    pub(super) last_logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
+    pub(crate) last_logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
     /// A Store with no writer whose read session pays a round trip per
     /// demand (#819's PostgreSQL read-only open): its reads plan as a
     /// PostgreSQL writer's Store plans them (#818).
@@ -265,7 +265,7 @@ impl Store {
         Ok(())
     }
 
-    pub(super) fn committer(&self) -> Option<&layerfs_persistence::Committer> {
+    pub(crate) fn committer(&self) -> Option<&layerfs_persistence::Committer> {
         match &self.sqlite_writer {
             Some(writer) => writer.get().map(|writer| &writer.committer),
             None => self.committer.as_ref(),
@@ -303,7 +303,7 @@ impl Store {
     /// PostgreSQL writer). A Store with no opened writer provider plans no
     /// batched reads: SQLite's deferred writer (whose provider keeps the
     /// default `false`) and a one-shot read, which binds no Workspace.
-    pub(super) fn batched_chain_reads(&self) -> bool {
+    pub(crate) fn batched_chain_reads(&self) -> bool {
         self.writer
             .as_ref()
             .is_some_and(|writer| writer.batched_chain_reads())
@@ -469,7 +469,7 @@ impl Store {
     pub fn close_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
         self.readers.close(workspace)
     }
-    pub(super) fn reader(
+    pub(crate) fn reader(
         &self,
         workspace: Option<WorkspaceId>,
     ) -> Result<Arc<super::super::workspace::bind::reader::ReadSession>, super::ReadAdmissionError>

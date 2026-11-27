@@ -6,12 +6,7 @@
 //! only, a file written again with the same bytes (a new inode), equal content
 //! with another mode or time, symlinks, and directories removed, added,
 //! recreated or changed in metadata only.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::compare::{ChangeWalk, Pair};
 use layerfs_content::filesystem::PathName;

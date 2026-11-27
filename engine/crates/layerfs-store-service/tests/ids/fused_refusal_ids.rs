@@ -19,12 +19,8 @@
 //! unknown outcome: the session is quarantined, the tail is dropped and the
 //! block is lost, never reused. Needs `LAYERFS_TEST_POSTGRES_URL` for the
 //! PostgreSQL half; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
+use crate::adversary;
+use crate::verify768;
 
 use adversary::{apply, commit, verdict, Kind, Op, Service, TestStore, Verdict};
 use layerfs_persistence::StoreSelection;

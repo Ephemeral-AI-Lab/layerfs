@@ -16,15 +16,9 @@
 //! Each check reads `store_policy.next_ordinal` and the stored value blocks
 //! straight from the private test database. The PostgreSQL half needs
 //! `LAYERFS_TEST_POSTGRES_URL` and reports NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::verify768;
 
 use adversary::{commit, verdict, write, Kind, Service, TestStore, Verdict};
 use fault_proxy::{Fault, FaultProxy};

@@ -4,8 +4,7 @@
 //! `ReadOnly` for `main`, before `NoSuchBranch`, before any change's own
 //! refusal. Runs on SQLite, and on PostgreSQL with
 //! `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use rt::{t, Opened, Store};

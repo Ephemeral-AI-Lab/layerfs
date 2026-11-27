@@ -23,12 +23,8 @@
 //!
 //! The PostgreSQL halves need `LAYERFS_TEST_POSTGRES_URL` and report
 //! NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/sizes.rs"]
-#[allow(dead_code)]
-mod sizes;
+use crate::adversary;
+use crate::verify_sizes as sizes;
 
 use adversary::{Kind, Op};
 use sizes::{one_file_seed, run, tiny, Cell, Stores};

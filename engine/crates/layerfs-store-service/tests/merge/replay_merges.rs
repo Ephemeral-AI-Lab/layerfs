@@ -14,12 +14,8 @@
 //! `node_modules` and `build` (`packages/*/*/lib`, `**/tsconfig.tsbuildinfo`)
 //! and prints one `REPLAY_UNITS` line: the units step's time (classify and
 //! revert), each decided unit, and the merge Commit's stored bytes.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/view.rs"]
-#[allow(dead_code)]
-mod view;
+use crate::installed;
+use crate::view;
 
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_protocol::sdk::{SdkCall, SdkValue};

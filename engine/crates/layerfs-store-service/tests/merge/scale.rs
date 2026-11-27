@@ -10,15 +10,9 @@
 //! it writes each missing `a3-<files>.sqlite`, closed, with the move and the small change
 //! on two Branches. Each merge test copies one and merges the copy, so only
 //! the merge runs in its process.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
-#[path = "../support/view.rs"]
-#[allow(dead_code)]
-mod view;
+use crate::installed;
+use crate::support;
+use crate::view;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

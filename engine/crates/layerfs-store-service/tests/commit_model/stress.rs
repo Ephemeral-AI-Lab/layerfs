@@ -13,9 +13,7 @@
 //! Commits answered `Committed` on it, each once, no object is located
 //! twice and the Store's audit is clean. The PostgreSQL half needs
 //! `LAYERFS_TEST_POSTGRES_URL` and reports NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     apply, assert_linear, commit, random_bytes, seed_tree, verdict, Gate, Kind, Node, Op, Service,

@@ -21,9 +21,7 @@
 //! `LAYERFS_364_RELINK_RESUME=1` starts from such a Store on its existing
 //! `relink` Branch, whose head is the first side of the diff. Together they
 //! split a two-round run too long for one process.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
+use crate::installed;
 
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::PathName;

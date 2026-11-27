@@ -4,15 +4,8 @@
 //! head that moves after the check, even inside the lane, is refused
 //! `HeadMoved` with nothing published. A forced Commit is decided by the
 //! head its publication reads in the lane, not by a read before it.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/live.rs"]
-#[allow(dead_code)]
-mod live;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::live;
+use crate::support;
 
 use layerfs_history::{CommitId, CommitOutcome, HistoryError, NodeId};
 use layerfs_store_service::store::{BoundWorkspace, CommitError, CommitOptions, CommitPhase};

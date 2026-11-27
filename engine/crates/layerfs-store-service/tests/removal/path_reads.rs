@@ -3,12 +3,7 @@
 //! cp-from/edit, absent for rm/mv-from, and a visible re-creation for a write,
 //! mkdir, cp-to or mv-to; a listing or glob omits it before paging and counts
 //! it in one page-independent `removed_count`.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;

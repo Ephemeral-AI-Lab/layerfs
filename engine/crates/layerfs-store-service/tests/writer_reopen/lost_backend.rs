@@ -24,18 +24,10 @@
 //! PostgreSQL only. Needs `LAYERFS_TEST_POSTGRES_URL` and
 //! `LAYERFS_TEST_POSTGRES_CONTAINER` (the server's Docker container, for the
 //! stop); NOT_RUN without either.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/reopen_rig.rs"]
-#[allow(dead_code)]
-mod testerwr;
-#[path = "../support/verify/reopen_second_round.rs"]
-#[allow(dead_code)]
-mod testerwr2;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::testerwr;
+use crate::testerwr2;
 
 use adversary::wait_until;
 use std::time::Duration;

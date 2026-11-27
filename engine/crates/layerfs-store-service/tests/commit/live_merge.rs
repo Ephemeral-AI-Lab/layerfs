@@ -6,15 +6,8 @@
 //! for an mtime-only change holds no data: the merged install drops it when
 //! its serial changed. Mutations that arrive between the check and the
 //! install wait for the install.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/live.rs"]
-#[allow(dead_code)]
-mod live;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::live;
+use crate::support;
 
 use layerfs_history::CommitOutcome;
 use layerfs_store_service::store::{

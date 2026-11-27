@@ -1,11 +1,6 @@
 //! #41 T3: `branch.remove` through the Store service and the typed
 //! `NameTaken`/`NoSuchBranch` fork syntax on an installed Store.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};

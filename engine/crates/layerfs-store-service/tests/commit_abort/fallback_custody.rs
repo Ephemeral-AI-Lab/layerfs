@@ -27,18 +27,10 @@
 //! (never `InFlight`, nothing published twice); nothing is resent.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
-#[path = "../support/fault/wire_tap.rs"]
-#[allow(dead_code)]
-mod verify768_tap;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::verify768;
+use crate::verify768_tap;
 
 use adversary::{commit, verdict, write, Node, Service, TestStore, Tree, Verdict};
 use fault_proxy::{Fault, FaultProxy, Window};

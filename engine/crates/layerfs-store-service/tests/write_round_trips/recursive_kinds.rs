@@ -8,8 +8,7 @@
 //! types, modes, sizes, contents, symlink targets and hard links; the
 //! hidden path is not copied. Runs on SQLite, and on PostgreSQL with
 //! `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Opened, Store};

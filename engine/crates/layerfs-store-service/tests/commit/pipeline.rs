@@ -7,12 +7,8 @@
 //! The failures are real Store refusals: from the start of the `construct`
 //! phase a second connection holds the Store's write lock, so the next
 //! write fails `Busy` with no busy handler.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::installed;
+use crate::support;
 
 use layerfs_content::{filesystem::PathName, ContentError, FinalizedConsumer};
 use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};

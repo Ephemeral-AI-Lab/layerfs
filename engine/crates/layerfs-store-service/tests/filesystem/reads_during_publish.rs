@@ -3,12 +3,7 @@
 //! publish, including any merge with a moved head. Reads only need published
 //! history, so they must not queue behind that lane. Range 8 of p2-main showed
 //! reads that overlapped a held lane taking 90-100 ms instead of 6 ms.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::sync::mpsc;

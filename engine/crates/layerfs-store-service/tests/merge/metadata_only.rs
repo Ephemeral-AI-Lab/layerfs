@@ -15,15 +15,9 @@
 //! An mtime-only change is not a change at Commit (#360 item 2, §4.8): the
 //! Workspace keeps its live row and the Commit answers UpToDate, so such a
 //! change never reaches a merge. The last test pins that rule.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
-#[path = "../support/view.rs"]
-#[allow(dead_code)]
-mod view;
+use crate::installed;
+use crate::support;
+use crate::view;
 
 use layerfs_content::compare::tree::{join, list_directory, TreeTable};
 use layerfs_content::filesystem::FilesystemRootId;

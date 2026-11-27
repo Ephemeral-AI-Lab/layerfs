@@ -19,9 +19,7 @@
 //!
 //! The PostgreSQL halves need `LAYERFS_TEST_POSTGRES_URL` and report
 //! NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     assert_linear, commit, seed_tree, text_bytes, verdict, write, Gate, Kind, Node, Service,

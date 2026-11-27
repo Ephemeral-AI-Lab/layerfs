@@ -4,15 +4,9 @@
 //! lines are compared across builds to show a change to how the merge keeps
 //! its state leaves every result unchanged; the test itself asserts only that
 //! each case ends as its rules say (merged or conflicted).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
-#[path = "../support/view.rs"]
-#[allow(dead_code)]
-mod view;
+use crate::installed;
+use crate::support;
+use crate::view;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

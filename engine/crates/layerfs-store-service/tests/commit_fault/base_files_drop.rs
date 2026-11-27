@@ -2,14 +2,8 @@
 //! message of a Commit whose Workspace reader opens its changed base files
 //! in one batched window (`support/base_file_sweep.rs` states the
 //! invariants). Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/base_file_sweep.rs"]
-mod base_file_sweep;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::base_file_sweep;
+use crate::fault_proxy;
 
 #[test]
 fn a_connection_dropped_at_any_message_of_a_batched_base_file_commit() {

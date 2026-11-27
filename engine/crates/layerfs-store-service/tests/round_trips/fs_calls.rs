@@ -30,8 +30,7 @@
 //! control reader and the Workspace readers; `server` is the database's
 //! top-level `pg_stat_statements` calls (support `round_trips.rs`). One
 //! sample per case. Run with `--test-threads=1 --nocapture`.
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_persistence::SqlWork;
 use layerfs_protocol::sdk::SdkValue;

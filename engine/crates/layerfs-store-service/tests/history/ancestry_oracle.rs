@@ -2,12 +2,7 @@
 //! whole history answers: reachability and merge base on random histories
 //! with forks, Commits, merges (main among the sides) and publishes. Among
 //! several maximal common ancestors both apply the #353 rank.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_history::{BranchId, HistoryCatalog, HistoryName, LayerId, LayerStackId, NodeId};
 use layerfs_protocol::sdk::SdkValue;

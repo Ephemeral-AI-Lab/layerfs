@@ -9,9 +9,7 @@
 //! refusal with nothing written (raw counts, totals and Branch heads), the
 //! follow-up must land with the same tree, a second round reusing the
 //! attempt's bytes must land, and the Store must pass its audit.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     apply, assert_linear, commit, random_bytes, text_bytes, tree_of, verdict, Op, TestStore,

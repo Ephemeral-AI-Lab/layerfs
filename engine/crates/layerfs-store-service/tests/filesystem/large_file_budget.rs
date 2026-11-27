@@ -6,12 +6,8 @@
 //! large files succeeds. Under the fixed 512 KiB / 256 KiB budgets these Saves
 //! failed with a dependency-work `Integrity` error, and after #473 stored every
 //! second version whole.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::installed;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;

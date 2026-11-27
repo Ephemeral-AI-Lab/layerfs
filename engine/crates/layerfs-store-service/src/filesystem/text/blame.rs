@@ -17,7 +17,7 @@ use crate::{
     lookup::{self as args, Answer, Arg},
 };
 use layerfs_content::{
-    compare::{match_lines, EntryFacts},
+    compare::{diff_exact, match_lines, EntryFacts},
     object::inode_leaf::InodeKind,
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -305,7 +305,7 @@ pub fn blame(
             if new.complete && old.complete {
                 let a = old.prefix.iter().map(String::as_str).collect::<Vec<_>>();
                 let b = new.prefix.iter().map(String::as_str).collect::<Vec<_>>();
-                coarse |= !super::super::compare::file_rows::exact(&a, &b);
+                coarse |= !diff_exact(&a, &b);
                 let mapping = match_lines(&a, &b);
                 for t in tracks.iter_mut().filter(|t| t.owner.is_none()) {
                     if let Some(n) = mapping

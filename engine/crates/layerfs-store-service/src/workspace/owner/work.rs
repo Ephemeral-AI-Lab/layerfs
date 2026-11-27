@@ -1,4 +1,6 @@
-//! Actual short jobs and storage work; no scheduling or memory-budget gauges.
+//! Actual short jobs and storage work; no scheduling or memory-budget gauges:
+//! a Workspace lock holder's totals ([`OwnerWork`]) and one short
+//! operation's receipt ([`JobWork`]).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OwnerWork {
     pub sql_foreground: layerfs_overlay::DatabaseWork,
@@ -55,7 +57,7 @@ impl OwnerWork {
     }
 }
 
-// Exact storage deltas and elapsed lock work of one short operation.
+/// Exact storage deltas and elapsed lock work of one short operation.
 #[derive(Debug, Default)]
 pub struct JobWork {
     /// Actual connection jobs represented by this receipt (compositions sum them).

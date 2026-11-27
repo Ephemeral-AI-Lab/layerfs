@@ -11,9 +11,7 @@
 //! PostgreSQL a one-shot trigger (`support/verify768.rs`) aborts it inside
 //! a fused transaction only (`40001`, a definite `Busy`). The PostgreSQL
 //! case needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 #[path = "../support/verify/core.rs"]
 #[allow(dead_code)]
 mod verify768;

@@ -1,34 +1,16 @@
 //! File revisions from persisted first-parent facts. No reconstructed UI history.
 use super::super::args::{paging, text};
 use crate::filesystem::cache::Cached;
-use crate::history::rows::{Revision, Rows};
+use crate::history::rows::Rows;
 use crate::{
     filesystem::{change::run::path as checked, root},
     lookup::{self as args, Answer},
-    store::{Store, StorePorts},
+    store::Store,
 };
-use layerfs_content::{
-    compare::{EntryFacts, TreeTable},
-    filesystem::FilesystemRootId,
-};
+use layerfs_content::compare::EntryFacts;
 use layerfs_history::NodeId;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
-
-/// The node's root, parent and record value, read on their own; a walk
-/// reads them through one [`Rows`] (#818 H1).
-pub fn revision(store: &Arc<Store>, node: NodeId) -> Result<Revision, SdkRefusal> {
-    Rows::new(store).revision(node)
-}
-
-pub fn entry(
-    reader: &StorePorts,
-    root: layerfs_content::ObjectId,
-    path: &str,
-) -> Result<Option<EntryFacts>, SdkRefusal> {
-    let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
-    root::entry(reader, &tree, path)
-}
 
 /// A walk's parent side: the node and the path's entry there.
 type Carried = Option<(NodeId, Option<EntryFacts>)>;

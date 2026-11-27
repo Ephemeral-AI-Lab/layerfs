@@ -12,9 +12,7 @@
 //! the counter and every cycle lost them.
 //!
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{commit, verdict, write, Kind, Service, TestStore, Verdict};
 use layerfs_history::BranchId;

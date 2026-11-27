@@ -12,12 +12,7 @@
 //! pair, every inode changed on both sides gets the same name from the hints as
 //! from `locate`, in both trees, so a merge's candidate paths, and with them its
 //! picks, conflicts and merged root, are unchanged.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::compare::tree::{same_inode, same_metadata};
 use layerfs_content::compare::{

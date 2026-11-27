@@ -11,7 +11,7 @@ use super::{
 };
 use crate::lookup as args;
 use crate::store::{Store, StorePorts};
-use layerfs_content::compare::{text::diff_lines, DiffLine, EntryFacts, LineOp};
+use layerfs_content::compare::{diff_exact, text::diff_lines, DiffLine, EntryFacts, LineOp};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::{collections::BTreeMap, sync::Arc};
@@ -168,7 +168,7 @@ fn align_bounded(
     };
     let old = texts.0.split_inclusive('\n').collect::<Vec<_>>();
     let new = texts.1.split_inclusive('\n').collect::<Vec<_>>();
-    let alignment_exact = super::super::compare::file_rows::exact(&old, &new);
+    let alignment_exact = diff_exact(&old, &new);
     let mut exact = before.exact && after.exact && alignment_exact;
     let (mut l, mut r, mut count) = (1u64, 1u64, 0u64);
     let mut rows = Vec::new();

@@ -16,12 +16,8 @@
 //!   the check's 5 s bound (`READER_CHECK_TIMEOUT`).
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::adversary;
+use crate::fault_proxy;
 
 use adversary::TestStore;
 use fault_proxy::{Fault, FaultProxy};

@@ -28,15 +28,9 @@
 //! TIME_WAIT about 30 s) and later dials fail `Refused { status: "Closed" }`.
 // Each binary runs part of the shared body.
 #![allow(dead_code)]
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::verify768;
 include!("../support/verify/unknown_body.rs");
 
 #[test]

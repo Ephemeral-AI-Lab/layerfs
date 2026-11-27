@@ -22,18 +22,9 @@
 //!   later service's values land past it.
 //!
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
-#[path = "../support/verify/allocation_reads.rs"]
-#[allow(dead_code)]
-mod verify768x;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::verify768x;
 
 use adversary::{apply, commit, verdict, wait_until, write, Op, Service, TestStore, Verdict};
 use fault_proxy::FaultProxy;

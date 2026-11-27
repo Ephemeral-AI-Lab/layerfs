@@ -5,12 +5,7 @@
 //! writer transaction. Now a closed private Workspace's reader goes back to
 //! the Store's idle readers, its producer to the Store's idle slot, and
 //! serials come from the Store's pool, refilled 4,096 at a time.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use std::fs;
 use support::{write, Fixture};

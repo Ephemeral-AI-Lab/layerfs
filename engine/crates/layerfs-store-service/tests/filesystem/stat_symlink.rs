@@ -1,11 +1,6 @@
 //! `fs.stat` gives a symlink the size a mounted Workspace gives it: the
 //! length of its target, not of the object that stores the target.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

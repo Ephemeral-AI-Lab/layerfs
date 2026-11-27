@@ -2,12 +2,7 @@
 //! chunk as their delta base. An incompressible append stops trying that base
 //! after a few lost trials, and a log append that resembles it keeps its
 //! deltas: the Save's losing-base memo.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::encoding::delta::select::{DeltaCounters, LOSING_BASE_TRIALS};

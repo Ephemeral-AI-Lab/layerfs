@@ -23,12 +23,8 @@
 //! the service prefilled its idle reader and bound and closed once by name,
 //! so the armed bind is a repeated one, as an SDK call's. Needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::adversary;
+use crate::fault_proxy;
 
 use adversary::{wait_until, Service, TestStore, PROJECT};
 use fault_proxy::{Fault, FaultProxy, Window};

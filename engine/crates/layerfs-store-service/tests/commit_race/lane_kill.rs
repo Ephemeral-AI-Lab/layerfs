@@ -31,12 +31,8 @@
 //! left idle in a transaction, and that a new Commit still publishes within
 //! a bound (nothing leaked the lane). Needs `LAYERFS_TEST_POSTGRES_URL`;
 //! NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::adversary;
+use crate::fault_proxy;
 #[path = "../support/fault/sweep.rs"]
 #[allow(dead_code)]
 mod fault_sweep;

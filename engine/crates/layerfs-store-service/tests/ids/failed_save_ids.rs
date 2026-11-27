@@ -17,11 +17,8 @@
 //!   which reads no policy and reserves nothing (before: a new handle).
 //!
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../../../layerfs-daemon/tests/support/held_writer.rs"]
-mod held_writer;
+use crate::adversary;
+use crate::held_writer;
 
 use adversary::{commit, commit_forced, verdict, write, Kind, Service, TestStore, Verdict};
 use layerfs_persistence::StoreSelection;

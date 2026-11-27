@@ -16,9 +16,7 @@
 //! read from a fresh service equals the Workspace's live view. The two
 //! backends give the same answer kinds and the same roots at every step
 //! (content addressing), and each Store passes its audit.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     apply, assert_linear, commit, random_bytes, text_bytes, tree_of, verdict, write, Op, TestStore,

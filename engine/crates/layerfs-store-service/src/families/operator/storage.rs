@@ -1,5 +1,5 @@
 //! Publication counters and Init's recorded totals; diagnostics never scan the object catalog.
-use super::super::args::{paging, project, text};
+use super::super::args::{paging, stack, text};
 use crate::{
     history::branch,
     lookup::{self as args, Answer},
@@ -45,7 +45,7 @@ pub fn stats(store: &Arc<Store>) -> Answer {
 }
 
 pub fn commits(store: &Arc<Store>, args: &SdkValue) -> Answer {
-    let stack = project(store, args)?;
+    let stack = stack(store, args)?;
     let named = args::branch(store, &stack, text(args, "branch")?)?;
     let (limit, pos) = paging(args)?;
     let value = branch::list_commits(store, &named, limit, pos)?;
@@ -89,7 +89,7 @@ pub fn commits(store: &Arc<Store>, args: &SdkValue) -> Answer {
 /// `backend.store.project.list_overwritten({ layer, pageSize?, pagePos? })`: the Layers a
 /// publication overwrote, newest first, one page.
 pub fn overwritten(store: &Arc<Store>, args: &SdkValue) -> Answer {
-    project(store, args)?;
+    stack(store, args)?;
     let layer = match args::node(text(args, "layer")?)? {
         NodeId::Layer(layer) => layer,
         NodeId::Commit(_) => return Err(args::invalid("overwritten takes a Layer")),

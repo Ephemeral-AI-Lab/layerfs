@@ -12,7 +12,7 @@ use std::{
 };
 
 pub struct StoreReader {
-    pub(super) storage: Storage,
+    pub(crate) storage: Storage,
     pub(super) history: Arc<dyn HistoryCatalog>,
     closed: Option<Box<dyn FnOnce() + Send>>,
     usable: Option<Box<dyn Fn() -> bool + Send + Sync>>,
@@ -64,7 +64,7 @@ struct State {
     /// long as it is mounted (see [`ReadSession::cached`]).
     cache: Option<KeptReads>,
 }
-pub(super) struct ReadSession {
+pub(crate) struct ReadSession {
     pub index: usize,
     state: Mutex<State>,
     counts: Arc<Counts>,

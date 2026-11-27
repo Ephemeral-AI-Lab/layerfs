@@ -56,7 +56,7 @@ type Failed = (Box<Unresolved>, bool);
 
 /// What a retained Commit needs for its one resolution.
 #[derive(Debug)]
-pub(super) struct RetainedCommit {
+pub(crate) struct RetainedCommit {
     capture: Capture,
     intent: CommitRequest,
     /// The binding the Commit started from: Branch identity, scope, profile.

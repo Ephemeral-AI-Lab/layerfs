@@ -4,21 +4,26 @@
 //! it, so a call with several faults is refused by the first, as it always
 //! was. An argument the engine uses only after a lookup travels as an
 //! [`Arg`], read but not yet refused.
+//!
+//! The operator tables here and in the daemon read the same name-keyed maps
+//! with the plain readers below ([`text`], [`stack`], [`paging`],
+//! [`snapshot`]). The Store engine takes typed values.
 use crate::filesystem::change::run::{self, Change};
 use crate::filesystem::compare::diff::{Request, Selector};
 use crate::filesystem::root::{Named, Saved, Snap};
-use crate::store::StorePorts;
+use crate::lookup;
+use crate::store::{Store, StorePorts};
 use crate::StoreService;
 use layerfs_content::AuthenticatedObjects;
 use layerfs_history::{ContextTarget, HistoryName, LayerStackRecord, NodeId};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
-pub use crate::lookup::{invalid, Answer, Arg};
+pub use crate::lookup::{invalid, next_page, Answer, Arg};
 
 /// The project's stack, by its `project` argument.
 pub fn project(service: &StoreService, args: &SdkValue) -> Result<LayerStackRecord, SdkRefusal> {
-    crate::families::args::project(&service.store, args)
+    stack(&service.store, args)
 }
 
 /// The project, its reader and the snapshot a read names, in that order:
@@ -329,23 +334,14 @@ fn commit_from(service: &StoreService, args: &SdkValue, changes: run::Changes<'_
     )
 }
 
-// Argument readers for calls that arrive as name-keyed value maps: the
-// operator tables here and in the daemon, and the public method files of
-// layerfs-api, which re-export them. The Store engine takes typed values.
-use crate::lookup;
-use crate::store::Store;
-use std::sync::Arc;
-
-pub use crate::lookup::next_page;
-
 /// A required text argument.
 pub fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRefusal> {
     args.get_text(name)
         .ok_or_else(|| invalid(format!("missing text argument `{name}`")))
 }
 
-/// The project's stack, by its `project` argument.
-pub fn project(store: &Arc<Store>, args: &SdkValue) -> Result<LayerStackRecord, SdkRefusal> {
+/// The project's stack in `store`, by its `project` argument.
+pub fn stack(store: &Arc<Store>, args: &SdkValue) -> Result<LayerStackRecord, SdkRefusal> {
     lookup::project(store, text(args, "project")?)
 }
 
@@ -384,7 +380,7 @@ pub fn snapshot(
     store: &Arc<Store>,
     args: &SdkValue,
 ) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap), SdkRefusal> {
-    let stack = project(store, args)?;
+    let stack = stack(store, args)?;
     let (reader, snap) = crate::filesystem::root::open(store, &stack, snapshot_name(args)?)?;
     Ok((stack, reader, snap))
 }

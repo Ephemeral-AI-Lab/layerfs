@@ -15,8 +15,7 @@
 //! that looks each version up alone ([`Batching::Alone`]). PostgreSQL only
 //! (the row windows that name a window's versions are PostgreSQL's);
 //! NOT_RUN without `LAYERFS_TEST_POSTGRES_URL`.
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_history::HistoryName;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};

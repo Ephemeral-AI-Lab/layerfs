@@ -113,9 +113,7 @@ fn direct_access_is_allowed_on_a_local_macos_filesystem() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
+use crate::installed;
 
 /// Refuse corrupt Store contents at the read-only open, before any call.
 #[cfg(any(target_os = "linux", target_os = "macos"))]

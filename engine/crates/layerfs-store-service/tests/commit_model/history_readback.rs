@@ -12,9 +12,7 @@
 //! order (warm caches and chain prefetches crossing versions), and every
 //! third through a fresh service. Each equals the recorded view; the
 //! Stores pass their audit, and both backends give equal roots.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     apply, commit, history, text_bytes, tree_of, verdict, Op, TestStore, Tree, Verdict,

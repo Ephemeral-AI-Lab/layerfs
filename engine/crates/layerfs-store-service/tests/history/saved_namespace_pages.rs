@@ -1,10 +1,5 @@
 //! Immutable numbered namespace pages exercise real indexed/resumed reads.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use support::{items, Fixture};

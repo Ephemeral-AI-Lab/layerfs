@@ -21,12 +21,8 @@
 //! * two Commits queued when the writer dies both land, after one reopen.
 //!
 //! PostgreSQL only. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
+use crate::adversary;
+use crate::fault_proxy;
 
 use adversary::{
     commit, verdict, wait_until, write, Gate, Node, Service, TestStore, Verdict, CURSOR,

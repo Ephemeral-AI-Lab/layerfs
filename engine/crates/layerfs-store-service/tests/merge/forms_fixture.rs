@@ -8,12 +8,7 @@
 //! binding hint blocks) with `tools/store_blocks.py migrate`, and moved to
 //! schema version 3 (#776 R1: the Commit attempt column and index, empty for
 //! its two Commits; versions 42 to 62) by a one-off offline rewrite.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

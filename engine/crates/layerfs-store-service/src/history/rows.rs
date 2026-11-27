@@ -209,7 +209,7 @@ impl<'a> Rows<'a> {
         }
     }
 
-    /// The node's root, parent and record value (`operator::files::revision`).
+    /// The node's root, parent and record value (`filesystem::paged::revision::revision`).
     pub fn revision(&mut self, node: NodeId) -> Result<Revision> {
         Ok(match self.record(node)?.clone() {
             NodeRecord::Commit(r) => {

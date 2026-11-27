@@ -10,14 +10,9 @@
 //! `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it). On PostgreSQL a drop
 //! sweep checks that a plan read never refuses ahead of a change refused
 //! before any read.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::rt;
 
 use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use rt::{branch_arg as branch, path_arg as path, t, Opened, Store};

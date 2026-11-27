@@ -31,15 +31,9 @@
 //! (`LFS768_RESTART_CONTAINER` names it, `lfs-768c-pg` for the tester's
 //! server); NOT_RUN without that variable, by default; it only records.
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "mount_tester.rs"]
-#[allow(dead_code)]
-mod tester768;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::tester768;
 
 use adversary::{wait_until, Service, TestStore};
 use fault_proxy::FaultProxy;

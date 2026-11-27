@@ -3,12 +3,7 @@
 //! ids by prefix in one Store call, `commit.diff`'s default sides, its path
 //! scope and pinned pages, a merge into an existing Branch and a publish of
 //! a named Commit.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;

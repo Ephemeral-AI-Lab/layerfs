@@ -6,12 +6,7 @@
 //! (c) fork from a Commit deep on its Branch's first-parent chain.
 //! Long histories are built through the catalog with real roots alternating,
 //! so the SDK merge and publish at the end read real trees. Normal profile.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::ObjectId;
 use layerfs_history::records::{

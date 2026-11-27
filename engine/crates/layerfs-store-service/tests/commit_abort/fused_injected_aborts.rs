@@ -23,12 +23,8 @@
 //! and Commits again. A fresh service reads every byte back, and the Store
 //! passes its own audit, amcheck and the allocation checks. Needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
+use crate::adversary;
+use crate::verify768;
 
 use adversary::{
     apply, assert_linear, commit, random_bytes, text_bytes, tree_of, verdict, Op, TestStore,

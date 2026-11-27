@@ -4,20 +4,21 @@
 //! The SDK's fs, branch and project methods and the operator Store calls run
 //! on this engine in the SDK's own process, against the Store it opened
 //! (`StoreService`); this is their only route (#352 F-020). The engine is
-//! organised by mechanism: `read`, `write` and `history` know no SDK method
-//! names; `methods/` is the SDK facade, one file per public Store method and
-//! their method table, [`methods::call`]. The daemon uses the same `store`
-//! and `overlay` for its Workspace Commits. This crate has no FUSE, socket or
-//! Sandbox. Each Workspace owns one overlay connection behind one lock; a
-//! caller runs its own short typed call under it and keeps exact failure
-//! custody.
+//! organised by mechanism: `filesystem`, `history` and `lookup` know no SDK
+//! method names; `families/` is the SDK facade, one folder per call family,
+//! one file per public Store method and their method table,
+//! [`families::call`]. `store` opens and installs the Store; the daemon uses
+//! `store` and `workspace` for its Workspace Commits. This crate has no FUSE,
+//! socket or Sandbox. Each Workspace owns one overlay connection behind one
+//! lock (`workspace::owner`); a caller runs its own short typed call under it
+//! and keeps exact failure custody.
 #![forbid(unsafe_code)]
 
 pub mod families;
 pub mod filesystem;
 pub mod history;
 pub mod lookup;
-pub(crate) mod service;
+mod service;
 pub mod store;
 pub mod telemetry;
 pub mod workspace;
@@ -28,8 +29,7 @@ pub use workspace::owner::class::ServiceClass;
 pub use workspace::owner::jobs as owner;
 pub use workspace::owner::operations::hold::{MaintenanceHold, MutationHold};
 pub use workspace::owner::roster::startup::OwnerStart;
-pub use workspace::owner::work::JobWork;
-pub use workspace::owner::work::OwnerWork;
+pub use workspace::owner::work::{JobWork, OwnerWork};
 
 // #828 compat: old public module paths, removed in wave 3.
 #[doc(hidden)]
@@ -130,8 +130,6 @@ pub mod read {
 }
 #[doc(hidden)]
 pub use crate::history::whiteout as removal; // #828 compat
-#[doc(hidden)]
-pub use crate::workspace::owner as service; // #828 compat
 #[doc(hidden)]
 pub mod write {
     // #828 compat

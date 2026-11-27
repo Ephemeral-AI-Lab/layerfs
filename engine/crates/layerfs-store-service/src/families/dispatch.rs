@@ -1,10 +1,7 @@
 //! The public method table: each JavaScript method name runs its method file
 //! once. Operator names are absent from this table.
 use crate::families::args::{self, Answer};
-use crate::families::{
-    branch::{self, list},
-    file as fs, store,
-};
+use crate::families::{branch, commit, file as fs, project, store};
 use crate::filesystem::change::run::Source;
 use crate::StoreService;
 use layerfs_protocol::sdk::{SdkCall, SdkValue};
@@ -74,18 +71,18 @@ fn call_once(service: &StoreService, call: &SdkCall) -> Answer {
     message(args)?;
     match call.method.as_str() {
         "store.stats" => store::stats(service),
-        "project.stats" => list::stats(service, args),
-        "project.list_branches" => list::list_branches(service, args),
-        "project.remove_file" => list::remove_file(service, args),
+        "project.stats" => project::stats(service, args),
+        "project.list_branches" => branch::list_branches(service, args),
+        "project.remove_file" => project::remove_file(service, args),
         "branch.fork" => branch::fork(service, args),
-        "branch.list_commits" => branch::list_commits(service, args),
-        "branch.get_commit" => branch::get_commit(service, args),
+        "branch.list_commits" => commit::list_commits(service, args),
+        "branch.get_commit" => commit::get_commit(service, args),
         "branch.merge" => branch::merge(service, args),
         "branch.publish" => branch::publish(service, args),
         "branch.remove" => branch::remove(service, args),
-        "branch.diff_commits" => branch::diff_commits(service, args),
-        "branch.diff_branches" => branch::diff_branches(service, args),
-        "commit.diff" => branch::diff(service, args),
+        "branch.diff_commits" => commit::diff_commits(service, args),
+        "branch.diff_branches" => commit::diff_branches(service, args),
+        "commit.diff" => commit::diff(service, args),
         "fs.read" => fs::read(service, args),
         "fs.revision" => fs::revision(service, args),
         "fs.list" => fs::list(service, args),

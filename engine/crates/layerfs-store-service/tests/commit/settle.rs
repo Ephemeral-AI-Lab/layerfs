@@ -4,15 +4,8 @@
 //! the next Commit. Only local uncertainty (the overlay, an owner job, the
 //! binding) keeps custody. A conflicted merge publishes nothing and takes no
 //! publication lane.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/live.rs"]
-#[allow(dead_code)]
-mod live;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::live;
+use crate::support;
 
 use layerfs_content::ContentError;
 use layerfs_history::CommitOutcome;

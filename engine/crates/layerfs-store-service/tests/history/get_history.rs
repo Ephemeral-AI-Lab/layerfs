@@ -4,12 +4,7 @@
 //! lists the Branches, their Commits and the Layers, names the Branches the
 //! Workspaces are mounted on, and `since` its version answers `unchanged`
 //! until what it shows moves. Normal profile.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_history::HistoryName;
 use layerfs_protocol::sdk::{SdkCall, SdkValue};

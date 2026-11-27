@@ -5,15 +5,8 @@
 //! terminates its backend, then delivers what the server sent before it
 //! ended. Needs `LAYERFS_TEST_POSTGRES_URL`;
 //! NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/fault/mount_sweep.rs"]
-#[allow(dead_code)]
-mod mount_sweep;
+use crate::fault_proxy;
+use crate::mount_sweep;
 
 use fault_proxy::Fault;
 use mount_sweep::Flight;

@@ -2,12 +2,7 @@
 //! it, so a call with two faults is refused by the one met first, as before
 //! the method files moved to layerfs-api (#352 api shape recovery). Each case
 //! pairs an argument fault with a fault the engine finds earlier or later.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;

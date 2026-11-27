@@ -1,15 +1,9 @@
 //! The merge by serial (#355 M1): the cases a name-only merge cannot see.
 //! Each test forks two Branches from one seeded tree, changes each through
 //! the SDK, merges them and checks the merged tree's decoded view.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
-#[path = "../support/view.rs"]
-#[allow(dead_code)]
-mod view;
+use crate::installed;
+use crate::support;
+use crate::view;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;

@@ -1,3 +1,4 @@
+//! Bounded pages of read results, with their boundaries and continuations.
 pub(crate) mod boundaries;
 pub(crate) mod continuation;
 pub mod query;

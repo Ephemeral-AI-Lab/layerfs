@@ -3,12 +3,7 @@
 //! post-frontier re-creation stays visible. Covers a one-shot Commit, a
 //! Workspace Commit bound before the marker, every one-shot tree creator, and
 //! a merge whose sides are hidden, re-created, or both.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};

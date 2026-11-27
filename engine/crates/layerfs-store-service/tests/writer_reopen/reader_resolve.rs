@@ -22,15 +22,9 @@
 //! printed as a finding; it is now asserted.
 //!
 //! PostgreSQL only. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/verify/reopen_rig.rs"]
-#[allow(dead_code)]
-mod testerwr;
+use crate::adversary;
+use crate::fault_proxy;
+use crate::testerwr;
 
 use adversary::{commit, verdict, write, Verdict};
 use fault_proxy::Fault;

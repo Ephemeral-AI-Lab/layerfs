@@ -1,12 +1,7 @@
 //! A text scan reads a file's root once, whatever its size, and a size needs
 //! no payload (#352 range 002: grep re-read each file's root, and its delta
 //! chain, for its size and again for every 16 KiB window).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fmt::Write;

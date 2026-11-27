@@ -1,4 +1,5 @@
-//! In-process Store ports shared by one daemon's Workspaces.
+//! The Store: opening it (`open`), its in-process handle and ports shared
+//! by one daemon's Workspaces, its install and the kernel guard.
 pub mod handle;
 pub mod install;
 pub mod kernel_guard;
@@ -31,8 +32,6 @@ pub use super::workspace::commit::outcome::owner_uncertain;
 pub use super::workspace::commit::outcome::service_cause;
 
 // #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::store::handle as open; // #828 compat
 #[doc(hidden)]
 pub use crate::workspace::bind::operation; // #828 compat
 #[doc(hidden)]

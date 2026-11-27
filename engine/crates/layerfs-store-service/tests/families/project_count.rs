@@ -1,12 +1,7 @@
 //! A project is found by its name without reading the Store's other projects
 //! (#352 range 002: the SDK resolved every call's project by paging through
 //! every stack, so each call would grow with the projects in a Store).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_history::{HistoryName, LayerStackId, StackInitialization};
 use layerfs_protocol::sdk::SdkValue;

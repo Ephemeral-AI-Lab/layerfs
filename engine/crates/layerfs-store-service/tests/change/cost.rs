@@ -8,9 +8,7 @@
 //! (one 64 MiB write), each followed by a `_WORK` line: per call, the Store's
 //! and the overlay's statements, VM steps and time inside SQLite, the overlay
 //! hold time, and the time BLAKE3 takes over the same bytes in this process.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
+use crate::installed;
 
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_protocol::sdk::{SdkCall, SdkValue};

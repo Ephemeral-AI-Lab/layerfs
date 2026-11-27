@@ -5,7 +5,7 @@
 //! the base, in the merge's Save and its own merge records. The ordinary
 //! merge then runs on the reverted roots, so a decided unit comes whole from
 //! the side with the later write and nothing inside it conflicts.
-use super::super::lookup::{self as args, history};
+use crate::lookup::{self as args, history};
 use crate::store::{CatalogHints, Store};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::merge::{

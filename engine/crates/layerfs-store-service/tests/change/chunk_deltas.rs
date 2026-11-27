@@ -1,12 +1,7 @@
 //! Changed chunks of a rewritten chunked file are stored as deltas against
 //! the old chunks they correspond to by byte range (#352 F-005): an append,
 //! an insert near the start and an edit in the middle of a 1 MiB file.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

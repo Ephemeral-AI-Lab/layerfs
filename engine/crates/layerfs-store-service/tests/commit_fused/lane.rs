@@ -27,9 +27,7 @@
 //! backend left in a transaction, a later Commit publishing well inside the
 //! lane wait, and the audit. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN
 //! without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
+use crate::adversary;
 
 use adversary::{
     check_attempt, commit, verdict, wait_until, write, Node, Service, TestStore, Tree, Verdict,

@@ -1,9 +1,5 @@
 //! SDK diff correctness and Store-demand regressions for wide immutable namespaces.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

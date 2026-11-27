@@ -412,13 +412,3 @@ impl StoreService {
             .len()
     }
 }
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::workspace::owner::class as results; // #828 compat
-#[doc(hidden)]
-pub use crate::workspace::owner::roster::startup;
-#[doc(hidden)]
-pub use crate::workspace::owner::work as observations; // #828 compat
-#[doc(hidden)]
-pub use crate::workspace::owner::work as owner_work; // #828 compat // #828 compat

@@ -1,7 +1,9 @@
-//! Fresh operation custody over shared Workspace identity, base and serial ranges.
+//! Fresh operation custody over shared Workspace identity, base and serial
+//! ranges, and the logical history sizes reused by incremental canonical
+//! accounting.
 use crate::store::{Store, StorePorts};
 use crate::OwnerClient;
-use layerfs_history::{BranchSnapshot, WorkspaceId};
+use layerfs_history::{BranchSnapshot, HistoryError, HistoryResult, NodeId, WorkspaceId};
 use layerfs_storage::read::CapturedLocators;
 use layerfs_vfs::{CanonicalClient, Workspace, WorkspaceResult};
 use std::sync::{
@@ -11,20 +13,20 @@ use std::sync::{
 
 pub struct BoundWorkspace {
     pub(crate) store: Arc<Store>,
-    pub(super) owner: OwnerClient,
-    pub(super) snapshot: Mutex<BranchSnapshot>,
-    pub(super) identity: WorkspaceId,
-    pub(super) workspace: Arc<Workspace>,
+    pub(crate) owner: OwnerClient,
+    pub(crate) snapshot: Mutex<BranchSnapshot>,
+    pub(crate) identity: WorkspaceId,
+    pub(crate) workspace: Arc<Workspace>,
     /// The mount admission intent this Workspace must delete on unmount.
     pub(crate) gc_op: Option<[u8; 16]>,
     /// Remains true until terminal close starts to release admission.
-    pub(super) admitted: Option<Arc<AtomicBool>>,
-    pub(super) committing: AtomicBool,
-    pub(super) producer: super::super::commit::producer::Producer,
+    pub(crate) admitted: Option<Arc<AtomicBool>>,
+    pub(crate) committing: AtomicBool,
+    pub(crate) producer: super::super::commit::producer::Producer,
     /// A conflicted merge installed locally and not yet committed.
-    pub(super) pending: Mutex<Option<super::super::commit::merge::PendingMerge>>,
+    pub(crate) pending: Mutex<Option<super::super::commit::merge::PendingMerge>>,
     /// A Commit's retained custody awaiting its one resolution (`resolve.rs`).
-    pub(super) retained: Mutex<Option<super::super::commit::resolve::RetainedCommit>>,
+    pub(crate) retained: Mutex<Option<super::super::commit::resolve::RetainedCommit>>,
     /// The logical size of one history node, the last one this Workspace
     /// read or published (`statistics.rs`): a Commit's `logical.known`.
     pub(super) logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
@@ -79,7 +81,7 @@ impl BoundWorkspace {
         let ports = self.store.ports_for(self.snapshot()?.scope, self.identity);
         self.operation_with_ports(ports)
     }
-    pub(super) fn captured_operation(
+    pub(crate) fn captured_operation(
         &self,
         reads: Option<Arc<CapturedLocators>>,
     ) -> WorkspaceResult<StoreOperation> {
@@ -157,9 +159,6 @@ impl StoreOperation {
 }
 
 // Logical history facts reused by incremental canonical accounting.
-use crate::store::BoundWorkspace;
-use layerfs_history::{HistoryError, HistoryResult, NodeId};
-use std::sync::Mutex;
 impl Store {
     pub fn logical_size(&self, node: NodeId) -> HistoryResult<u64> {
         match node {
@@ -180,7 +179,7 @@ impl BoundWorkspace {
     /// and kept in its place. The bind snapshot carries no size, so the
     /// first Commit after a mount over a node no Workspace of this Store
     /// read or published reads it.
-    pub(super) fn known_logical(&self, node: NodeId) -> HistoryResult<u64> {
+    pub(crate) fn known_logical(&self, node: NodeId) -> HistoryResult<u64> {
         let known = |slot: &Mutex<Option<(NodeId, u64)>>| {
             let kept = slot.lock().ok()?;
             kept.filter(|(known, _)| *known == node)
@@ -196,7 +195,7 @@ impl BoundWorkspace {
     /// Keeps `node`'s recorded size, in this Workspace and in its Store:
     /// one this Workspace read, or the statistics of a Commit it published.
     /// A poisoned slot keeps nothing, and the next Commit reads.
-    pub(super) fn remember_logical(&self, node: NodeId, logical: u64) {
+    pub(crate) fn remember_logical(&self, node: NodeId, logical: u64) {
         for slot in [&self.logical, &self.store.last_logical] {
             if let Ok(mut kept) = slot.lock() {
                 *kept = Some((node, logical));

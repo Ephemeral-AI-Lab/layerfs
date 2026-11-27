@@ -9,8 +9,7 @@
 //!
 //! `LAYERFS_RH_LARGE_SETUP_ONLY=1` builds and opens the Store without the
 //! measured calls, for the peak of the setup alone (a memory receipt).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_protocol::sdk::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Backend, Counts, Measured, Pin, Store};

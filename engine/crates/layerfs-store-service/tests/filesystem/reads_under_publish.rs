@@ -3,12 +3,7 @@
 //! the rows they read never change once visible. While another Branch keeps
 //! publishing (new packs, new object locations, a moving head), paged and
 //! multi-object reads of `main` answer exactly as they did before.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

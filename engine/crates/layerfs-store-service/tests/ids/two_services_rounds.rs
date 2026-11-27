@@ -17,15 +17,8 @@
 //! names its round and operation.
 //!
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
-#[path = "../support/verify/allocation_reads.rs"]
-#[allow(dead_code)]
-mod verify768x;
+use crate::adversary;
+use crate::verify768x;
 
 use adversary::{
     apply, commit, seed_tree, verdict, write, Gate, Node, Op, Service, TestStore, Tree, Verdict,

@@ -22,18 +22,9 @@
 //! (the documented bound for three Workspaces is not zero).
 //!
 //! The PostgreSQL tests need `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/verify/core.rs"]
-#[allow(dead_code)]
-mod verify768;
-#[path = "../support/verify/allocation_reads.rs"]
-#[allow(dead_code)]
-mod verify768x;
-#[path = "../support/verify/id_bookkeeping.rs"]
-#[allow(dead_code)]
-mod verify768y;
+use crate::adversary;
+use crate::verify768x;
+use crate::verify768y;
 
 use adversary::{
     apply, commit, seed_tree, verdict, write, Gate, Node, Op, Service, TestStore, Tree, Verdict,

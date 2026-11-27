@@ -1,11 +1,6 @@
 //! project.delete on a Store: the marker hides the project from name
 //! resolution, and the retry classifies retired/live/absent by stack id.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use layerfs_history::{HistoryName, LayerStackId, LayerStackRecord};
 use layerfs_store_service::history::project_delete::{delete_stack, Deletion};
 use support::Fixture;

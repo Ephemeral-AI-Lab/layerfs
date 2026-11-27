@@ -4,12 +4,7 @@
 //! arm is not inducible on a SQLite Store: the storage schema guard rejects a
 //! trigger on `gc_intent`, and an outside lock held across the bind would
 //! refuse the register too, so the row names that clause as uncovered.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_history::{BranchId, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_protocol::sdk::SdkValue;

@@ -7,15 +7,8 @@
 //! invariants, the call falls back at most once, and never when the fault
 //! came at or before the race refusal reached the client. Needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/verify/adversary.rs"]
-#[allow(dead_code)]
-mod adversary;
-#[path = "../support/fault/proxy.rs"]
-#[allow(dead_code)]
-mod fault_proxy;
-#[path = "../support/fault/sweep.rs"]
-#[allow(dead_code)]
-mod fault_sweep;
+use crate::fault_proxy;
+use crate::fault_sweep;
 
 use fault_proxy::Fault;
 use fault_sweep::{Flight, Positions};

@@ -1,10 +1,5 @@
 //! Different-root equality is exact or refused before payload work, never guessed.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_content::compare::EntryFacts;
 use layerfs_protocol::sdk::SdkValue;

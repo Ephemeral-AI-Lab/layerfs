@@ -1,10 +1,5 @@
 //! Namespace resume follows component ordering through directories and gaps.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use layerfs_store_service::{
     filesystem::{root, tree::walk::Walker},
     lookup,

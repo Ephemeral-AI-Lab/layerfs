@@ -1,12 +1,7 @@
 //! A Commit difference reads the entries that changed, not the tree or the
 //! history (#352 range 002: diff_commits of one changed file walked both whole
 //! trees, its work growing with the tree's size).
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

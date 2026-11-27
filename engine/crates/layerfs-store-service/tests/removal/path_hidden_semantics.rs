@@ -7,12 +7,7 @@
 //! A listing counts the hidden entries among its direct results; a glob counts
 //! every hidden entry the pattern would return anywhere under its query root.
 //! Both totals are page-independent and `removed_count` is on every page.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;

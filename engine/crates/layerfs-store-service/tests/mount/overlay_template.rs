@@ -6,9 +6,7 @@
 use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::StoreService;
 
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
+use crate::installed;
 
 fn call(service: &StoreService, method: &str, fields: Vec<(&str, SdkValue)>) -> SdkValue {
     let mut args: Vec<(String, SdkValue)> =

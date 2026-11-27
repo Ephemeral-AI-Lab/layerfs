@@ -3,8 +3,7 @@
 //! names it, give each object its own result, and keep their failure record
 //! bounded: a demand that could overfill it is not made. SQLite (the
 //! per-object demand is the storage reader's on both backends).
-#[path = "../support/verify/round_trips.rs"]
-mod rt;
+use crate::rt;
 
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
 use layerfs_history::HistoryName;

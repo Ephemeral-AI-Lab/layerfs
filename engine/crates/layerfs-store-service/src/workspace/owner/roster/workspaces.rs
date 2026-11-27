@@ -51,7 +51,7 @@ pub struct Workspaces {
     state: Mutex<State>,
 }
 
-pub(super) fn start(path: &Path, profile: ProfileConfig, config: OwnerConfig) -> crate::OwnerStart {
+pub(crate) fn start(path: &Path, profile: ProfileConfig, config: OwnerConfig) -> crate::OwnerStart {
     let started = Instant::now();
     let mut startup = Arc::new(layerfs_overlay::CreationWork::default());
     let mut reported = false;

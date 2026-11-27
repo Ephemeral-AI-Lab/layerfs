@@ -11,12 +11,7 @@
 //! serial and a name up in B-trees that gain a level as the tree grows by
 //! about 10x, so the statements may grow by a fixed step per 10x
 //! (logarithmically), never with the directory count.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use layerfs_protocol::sdk::SdkValue;
 use std::fs;

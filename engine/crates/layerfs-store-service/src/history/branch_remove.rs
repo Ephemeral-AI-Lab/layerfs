@@ -9,8 +9,8 @@
 //! commits atomically with the marker and could never be seen by a concurrent
 //! remove. It is released after the marker, so a concurrent remove meets it as
 //! `Busy` with `phase: "retire"` (spec §4.4, §5.1).
-use super::super::lookup::{self as args, refuse, Answer};
 use super::MAIN;
+use crate::lookup::{self as args, refuse, Answer};
 use crate::store::Store;
 use layerfs_history::{GcScopeKind, LayerStackRecord};
 use layerfs_protocol::sdk::SdkValue;

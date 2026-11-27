@@ -61,7 +61,7 @@ struct State {
     /// Workspaces whose reader goes back to `idle` at close.
     pooled: std::collections::BTreeSet<WorkspaceId>,
 }
-pub(super) struct ReadSet {
+pub(crate) struct ReadSet {
     state: Mutex<State>,
     factory: ReaderFactory,
     counts: Arc<Counts>,

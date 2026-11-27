@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{history::saved, lookup as args, store::Store};
 use layerfs_content::{
-    compare::{line_diff, EntryFacts, MAXIMUM_TEXT_BYTES},
+    compare::{diff_exact, line_diff, EntryFacts, MAXIMUM_TEXT_BYTES},
     object::inode_leaf::InodeKind,
 };
 use layerfs_history::LayerStackRecord;
@@ -218,7 +218,7 @@ pub fn diff(
     let mut legacy_budget = super::super::text::window::BYTES;
     let (legacy_kind, mut legacy_hunks) = match (&left.text, &right.text) {
         (Some(a), Some(b)) if a == b => ("Equal", Some(SdkValue::List(Vec::new()))),
-        (Some(a), Some(b)) => ("Text", compare::hunks(&line_diff(a, b), &mut legacy_budget)),
+        (Some(a), Some(b)) => ("Text", diff::hunks(&line_diff(a, b), &mut legacy_budget)),
         _ => (
             if equal { "Equal" } else { "Binary" },
             Some(SdkValue::List(Vec::new())),
@@ -287,10 +287,10 @@ pub fn diff(
     {
         legacy_hunks = None;
     }
-    let exact_content_alignment = self::exact(
+    let exact_content_alignment = diff_exact(
         &left_text.split_inclusive('\n').collect::<Vec<_>>(),
         &right_text.split_inclusive('\n').collect::<Vec<_>>(),
-    ) && self::exact(
+    ) && diff_exact(
         &left_text.split('\n').collect::<Vec<_>>(),
         &right_text.split('\n').collect::<Vec<_>>(),
     );
@@ -370,11 +370,4 @@ pub fn diff(
         ));
     }
     Ok(answer)
-}
-
-// Disclose Content's bounded LCS fallback without duplicating its diff algorithm.
-use layerfs_content::compare::diff_exact;
-
-pub fn exact(a: &[&str], b: &[&str]) -> bool {
-    diff_exact(a, b)
 }
