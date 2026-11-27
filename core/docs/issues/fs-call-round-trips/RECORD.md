@@ -784,3 +784,17 @@ Recorded, no change: a whole-pack cohort read refuses every object of a pack on
 a frame failure where a lone point read might take a ranged read; `chains_each`
 base dedupe can let an over-depth chain escape the depth refusal (as batched
 `read` did before).
+
+### M3 latency diagnosis (receipts/M3/latency-diag/)
+
+Diagnosed once, as the 15% rule asks. The 7 rows over the +10 ms latency band
+are **not extra round trips**: wire exchanges equal counted trips in every
+case; no slow start, no flight waiting twice. The excess is Docker Desktop
+netem releasing replies 3–4.6 ms late per trip, plus longer client gaps under
+host load (7 → 16), against a `SELECT 1` median calibration that understates
+the mean. Same binary, same trips, ratios moved run to run (overwrite 1.36× →
+1.07×, apply.10_writes 0.95× → 1.97×). Recorded as an environment cause; no
+code change. Open: the M2 → M3 per-trip wall difference on revision.h100
+(12.05 vs 16–17 ms) is unexplained (no M2 capture). Suggested harness change
+(not done): calibrate by the mean of a pause-matched loop or the in-container
+delay, and treat local netem as indicative.

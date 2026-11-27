@@ -1,0 +1,284 @@
+## write.new_file: exchanges 43 syncs 50 wire-wall 674.98 ms server-sum(excl netem) 128.33 ms gaps-sum 115.9 ms reply-xfer-sum 0.75 ms reply bytes 55905
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    1.35    2.37    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    13.45    1.08    1.26    0.74  1060     339    4   1/5     0.00    0.74   0.73 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    27.87    2.42    4.08    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    42.95    1.00    1.70    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56134    55.95    1.30    4.88    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 5 56134    71.90    1.07    2.01    0.00   229     605    4   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 6 56134    85.33    1.42    1.01    0.00   135   12091    3   1/2     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+ 7 56106    98.00    1.65    1.62    0.00   940     497    6   1/4     0.00    0.00   0.00 QQBESQ         Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; Q:SELECT CASE WHEN g IS NULL THEN (32768 + (g IS NULL)::int)::small
+ 8 56106   112.03    2.41    1.50    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 9 56106   125.57    2.03    5.57    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+10 56106   151.50   10.37    1.79    0.00   135    5477    2   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+11 56106   185.51   22.22    1.30    0.00  1092     945    0   1/1     0.00    0.00   0.00 PDS            
+12 56106   198.55    1.74    2.18    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+13 56106   216.98    6.25    1.01    0.00   373      25    0   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+14 56106   235.23    7.25    3.93    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+15 56106   252.27    3.11    8.68    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+16 56106   276.80    5.86    2.45    0.00   919      18    0   1/1     0.00    0.00   0.00 dcS            
+17 56106   290.56    1.31    1.09    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+18 56106   302.49    0.83   10.37    0.00  1521     283    6   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+19 56106   323.81    0.96    1.79    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+20 56106   336.98    1.38    3.66    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+21 56106   352.71    2.07    5.72    0.00   411     245    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+22 56106   369.29    0.85    1.35    0.00   118      27    0   1/1     0.00    0.00   0.00 BES            INSERT INTO binding_hint_block(grp, seq, body) SELECT n.g, coalesce((SELECT max(b.seq) FRO
+23 56106   381.54    0.89    1.23    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+24 56134   393.87    1.10    1.47    0.00   133     337    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+25 56134   406.17    0.84    1.38    0.00   347     196    0   1/1     0.00    0.00   0.00 PDS            
+26 56134   419.88    2.33    1.02    0.00    84     295    2   1/1     0.00    0.00   0.00 BES            SELECT p.pack_id,p.directory,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest EN
+27 56134   431.84    0.93    1.94    0.00   395    1664    3   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+28 56134   445.14    1.36    2.13    0.00   181     634    4   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+29 56134   459.31    2.03    1.01    0.00   183    4503    5   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+30 60598   483.11   12.80    8.20    0.00    62     438    0   1/1     0.00    0.00   0.00 startup        
+31 60598   502.19    0.87    3.55    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+32 56106   516.80    1.07    0.87    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+33 56106   528.54    0.87    1.82    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+34 56106   541.43    1.07    1.46    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+35 56106   553.81    0.93    2.53    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+36 56106   568.11    1.77    1.26    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+37 56106   580.26    0.89    4.78    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+38 56106   595.88    0.84    5.74    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+39 56106   612.59    0.97    5.76    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+40 56106   629.60    1.25    6.69    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10818'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+41 60598   647.73    1.44    2.20    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+42 56106   663.03    3.10    1.94    0.01   283     189    4   1/2     0.00    0.01   0.01 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## write.overwrite: exchanges 13 syncs 27 wire-wall 197.59 ms server-sum(excl netem) 41.61 ms gaps-sum 22.05 ms reply-xfer-sum 3.93 ms reply bytes 70733
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    1.05    3.07    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    14.05    0.99    3.90    0.01  1060     339    4   1/5     0.00    0.01   0.01 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    30.65    2.69    1.32    0.00   133     333    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    43.02    1.05    2.85    0.00   335    8163    2   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56134    57.69    1.82    5.61    0.00  2533    7417   53   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 5 56134    75.92    2.62    0.62    0.00   275   16724    1   1/3     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 6 56106    88.56    2.01    5.71    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 7 56106   105.50    1.23    1.34    0.00   135    4047    1   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+ 8 56106   118.94    2.10    5.65    0.00   325     315    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 9 56106   136.66    2.08    1.17    0.00   275   16724    1   1/3     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+10 56106   150.49    2.66    1.32    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+11 56106   163.34    1.53    3.46    3.91  3806     652   10   1/10    0.00    3.91   3.05 QBESQBESBESBES Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; INSERT INTO lfs818_fs_10052.pack (pack_id,domain,digest,length,body
+12 56106   181.98    1.27    5.60    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## edit.2000_lines: exchanges 12 syncs 26 wire-wall 188.43 ms server-sum(excl netem) 38.31 ms gaps-sum 25.38 ms reply-xfer-sum 4.74 ms reply bytes 58945
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    1.29    2.14    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    13.46    1.32    4.34    0.00  1060     339    4   1/5     0.00    0.00   0.00 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    30.00    2.19    3.55    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    44.92    1.38    4.09    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56134    65.23    6.22    2.12    0.00   133     315    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 5 56134    78.47    1.13    5.93    0.01   275   16724    1   1/3     0.00    0.01   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 6 56106    97.79    3.37    1.95    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 7 56106   112.29    2.55    2.84    0.00   325     315    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 8 56106   125.95    0.82    5.20    0.01   275   16724    1   1/3     0.00    0.01   0.01 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 9 56106   143.18    2.03    1.69    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+10 56106   157.17    2.30    3.42    4.72  3903     652   10   1/10    0.00    4.72   2.90 QBESQBESBESBES Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; INSERT INTO lfs818_fs_10052.pack (pack_id,domain,digest,length,body
+11 56106   177.40    2.08    1.03    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## mkdir: exchanges 34 syncs 39 wire-wall 498.85 ms server-sum(excl netem) 103.98 ms gaps-sum 53.54 ms reply-xfer-sum 1.33 ms reply bytes 28627
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    0.90    3.77    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    15.44    1.67    1.37    1.32  1060     339    4   1/5     0.00    1.32   1.32 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56106    31.41    3.28    1.45    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 3 56106    46.01    3.16    3.66    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 4 56106    68.39    8.72    5.43    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 5 56106    84.66    0.84    6.47    0.00   373      25    0   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 6 56106   104.10    2.97    5.84    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+ 7 56106   121.02    1.08    2.73    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+ 8 56106   134.45    0.70    5.35    0.00   753      18    0   1/1     0.00    0.00   0.00 dcS            
+ 9 56106   150.56    0.77    1.56    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+10 56106   163.17    1.04    6.07    0.00  1477     283    6   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+11 56106   180.20    0.96    1.78    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+12 56106   193.26    1.28    0.81    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+13 56106   205.95    1.88    2.22    0.00   411     245    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+14 56106   221.17    3.00    2.05    0.00   117      27    0   1/1     0.00    0.00   0.00 BES            INSERT INTO binding_hint_block(grp, seq, body) SELECT n.g, coalesce((SELECT max(b.seq) FRO
+15 56106   234.49    1.27    1.29    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+16 56134   247.41    1.63    4.32    0.00   133     347    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+17 56134   262.96    1.23    5.65    0.00    72     160    1   1/1     0.00    0.00   0.00 BES            SELECT p.pack_id,p.directory,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest EN
+18 56134   281.01    2.40    5.48    0.00   515    2665    5   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+19 56134   297.47    0.98    2.24    0.00   133     342    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+20 56134   310.75    1.04    4.35    0.00   207    4747    7   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+21 56134   326.97    1.87    1.53    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+22 60598   339.43    0.93    0.65    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+23 56106   350.81    0.73    1.96    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+24 56106   363.82    1.06    2.07    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+25 56106   376.76    0.86    4.90    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+26 56106   392.52    0.86    0.56    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+27 56106   404.23    1.15    1.36    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+28 56106   416.55    0.96    1.86    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+29 56106   429.65    1.24    6.52    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+30 56106   446.98    0.82    1.13    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+31 56106   459.00    0.89    2.11    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10830'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+32 60598   472.13    1.02    2.54    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+33 56106   485.95    1.27    2.89    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## cp.file: exchanges 32 syncs 37 wire-wall 451.14 ms server-sum(excl netem) 75.30 ms gaps-sum 55.83 ms reply-xfer-sum 0.01 ms reply bytes 53842
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    0.96    1.84    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    12.70    0.86    5.64    0.00  1060     339    4   1/5     0.00    0.00   0.00 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    30.57    2.23    2.54    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    44.03    0.92    2.43    0.00   335    8148    2   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56134    58.12    1.65    0.66    0.00   275     658    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 5 56134    70.19    1.42    0.66    0.00   135    8069    2   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+ 6 56134    85.02    4.17    1.78    0.01   275   16724    1   1/3     0.00    0.01   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 7 56106   104.19    7.39    1.98    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 8 56106   118.31    2.14    3.82    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 9 56106   133.51    1.38    1.27    0.00   325     315    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+10 56106   146.60    1.82    1.50    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+11 56106   159.33    1.23    0.45    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+12 56106   170.59    0.80    1.17    0.00   707      18    0   1/1     0.00    0.00   0.00 dcS            
+13 56106   185.80    4.05    1.03    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+14 56106   200.33    3.50    6.24    0.00  1209     197    4   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+15 56106   218.39    1.82    4.96    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+16 56106   234.75    1.40    3.35    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+17 56106   250.37    2.27    2.36    0.00   411     245    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+18 56106   263.54    0.81    1.28    0.00   120      27    0   1/1     0.00    0.00   0.00 BES            INSERT INTO binding_hint_block(grp, seq, body) SELECT n.g, coalesce((SELECT max(b.seq) FRO
+19 56106   275.60    0.78    3.10    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+20 60598   289.72    1.02    2.49    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+21 56106   303.06    0.84    0.99    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+22 56106   314.84    0.79    4.86    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+23 56106   333.45    3.74    0.76    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+24 56106   344.99    0.78    1.01    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+25 56106   356.86    0.85    3.14    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+26 56106   371.57    1.56    1.64    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+27 56106   384.67    1.47    1.38    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+28 56106   396.81    0.76    3.96    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+29 56106   411.69    0.91    2.14    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10836'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+30 60598   425.08    1.24    2.64    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+31 56106   438.92    1.21    2.22    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## mv.file: exchanges 29 syncs 34 wire-wall 434.69 ms server-sum(excl netem) 64.79 ms gaps-sum 79.89 ms reply-xfer-sum 0.01 ms reply bytes 20594
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    1.03    0.79    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    11.88    1.10    2.62    0.00  1060     339    4   1/5     0.00    0.00   0.00 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    26.37    1.86    1.31    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    38.56    0.89    1.57    0.00   275     597    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56106    53.01    2.89    1.02    0.00    57    7642    1   1/1     0.00    0.00   0.00 BES            SELECT p.pack_id,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest END,p.length,C
+ 5 56106    71.44    7.41    2.44    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 6 56106    85.03    1.14    1.00    0.00   277      25    0   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 7 56106    97.68    1.65    1.36    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+ 8 56106   109.81    0.77    0.87    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+ 9 56106   121.56    0.89    2.78    0.00   551      18    0   1/1     0.00    0.00   0.00 dcS            
+10 56106   135.79    1.45    1.30    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+11 56106   148.72    1.63    3.42    0.00  1165     197    4   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+12 56106   162.94    0.80    3.11    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+13 56106   177.67    1.62    3.62    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+14 56106   229.77   38.49    1.04    0.00   411     245    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+15 56106   242.79    1.97    6.20    0.00   121      27    0   1/1     0.00    0.00   0.00 BES            INSERT INTO binding_hint_block(grp, seq, body) SELECT n.g, coalesce((SELECT max(b.seq) FRO
+16 56106   259.72    0.73    2.81    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+17 60598   273.54    1.01    2.64    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+18 56106   287.27    1.09    3.14    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+19 56106   301.42    1.02    1.34    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+20 56106   313.60    0.83    1.26    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+21 56106   326.21    1.35    1.94    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+22 56106   339.16    1.01    3.48    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+23 56106   353.46    0.81    6.66    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+24 56106   371.35    1.24    1.93    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+25 56106   385.00    1.72    0.82    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+26 56106   396.73    0.91    2.53    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10842'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+27 60598   411.03    1.77    0.74    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+28 56106   423.63    1.85    1.06    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## rm.file: exchanges 26 syncs 31 wire-wall 440.93 ms server-sum(excl netem) 119.08 ms gaps-sum 59.33 ms reply-xfer-sum 2.53 ms reply bytes 20001
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    1.12    0.89    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    11.87    0.98    0.72    2.53  1060     339    4   1/5     0.00    2.53   2.52 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    28.92    3.81    4.13    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    45.96    2.91    0.93    0.00   275     441    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56106    61.15    4.25    1.81    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 5 56106    77.08    4.12    6.45    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 6 56106    97.22    3.68    4.95    0.00   229      25    0   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 7 56106   114.19    2.03    0.60    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+ 8 56106   125.80    1.02    1.11    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+ 9 56106   139.11    2.20    0.89    0.00   568      18    0   1/1     0.00    0.00   0.00 dcS            
+10 56106   154.17    4.17    7.00    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+11 56106   172.36    1.19    9.95    0.00  1049     154    3   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+12 56106   194.83    2.52   10.91    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+13 56106   220.24    4.50    2.00    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+14 60598   237.23    4.99    6.37    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+15 56106   255.07    1.47    3.86    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+16 56106   270.14    1.21    3.98    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+17 56106   285.88    1.75    7.82    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+18 56106   305.21    1.51    1.78    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+19 56106   318.48    1.49    2.74    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+20 56106   332.76    1.54   14.15    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+21 56106   357.93    1.02    5.79    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+22 56106   374.79    1.06    1.16    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+23 56106   387.38    1.43    7.69    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10847'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+24 60598   407.93    2.86    6.38    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+25 56106   425.92    1.61    5.01    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## apply.10_writes: exchanges 35 syncs 40 wire-wall 951.68 ms server-sum(excl netem) 336.02 ms gaps-sum 265.65 ms reply-xfer-sum 0.01 ms reply bytes 45806
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    1.68    1.79    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    14.74    2.96    5.92    0.01  1060     339    4   1/5     0.00    0.01   0.00 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    33.73    3.06    4.60    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    49.66    1.34    6.17    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56134    67.40    1.57    6.60    0.00   181     466    3   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 5 56134    85.36    1.36    2.38    0.00   135    8069    2   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+ 6 56106   103.03    5.29    1.98    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 7 56106   125.86   10.86    5.09    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 8 56106   145.48    4.52    4.99    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 9 56106   161.34    0.88    1.77    0.00   805      25    0   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+10 56106   178.91    5.79    2.04    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+11 56106   205.12   14.17    1.91    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+12 56106   222.73    5.71    4.65    0.00  1074      18    0   1/1     0.00    0.00   0.00 dcS            
+13 56106   242.19    4.81    3.74    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+14 56106   266.18   10.25   12.53    0.00  2925     671   15   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+15 56106   290.73    2.02  184.74    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+16 56106   510.05   24.58    6.54    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+17 56106   533.89    7.30    2.61    0.00   411     245    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+18 56106   550.75    4.25    1.51    0.00   198      27    0   1/1     0.00    0.00   0.00 BES            INSERT INTO binding_hint_block(grp, seq, body) SELECT n.g, coalesce((SELECT max(b.seq) FRO
+19 56106   568.35    6.09    3.74    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+20 56134   597.55   15.46    3.18    0.00   133     352    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+21 56134   615.92    5.19    3.92    0.00   575    3382    6   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+22 56134   633.02    3.19    2.28    0.00   231    5253    8   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+23 60598   648.93    3.62    3.14    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+24 56106   666.79    4.72    0.87    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+25 56106   686.42    8.76    2.88    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+26 56106   714.29   14.99    2.70    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+27 56106   739.15   12.16   16.23    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+28 56106   782.28   16.90    4.79    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+29 56106   807.76   10.69    4.72    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+30 56106   835.97   13.49    6.66    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+31 56106   857.70    5.07    2.43    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+32 56106   872.25    2.12    8.03    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10853'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+33 60598   893.85    3.57    2.97    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+34 56106   935.73   28.92    5.94    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+## rm.dir_100_recursive: exchanges 41 syncs 46 wire-wall 814.47 ms server-sum(excl netem) 133.91 ms gaps-sum 268.82 ms reply-xfer-sum 1.74 ms reply bytes 99523
+ #  conn  start_ms  gap_ms  srv_ms  xfer_ms  reqB  replyB rows  pkts(c/s) reqspan replyspan maxgap msgs  sql
+ 0 56106     0.00    8.11    1.61    0.00    51     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+ 1 56106    13.15    1.54    0.80    1.72  1060     339    4   1/5     0.00    1.72   1.72 QBESBESQBES    Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA ; -- A mount's session keys, all or none, inside its admission transa
+ 2 56134    31.25    5.57    2.44    0.00   133     327    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 3 56134    48.26    4.57    5.01    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+ 4 56134    69.46    6.19    4.03    0.00   181     466    3   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 5 56134    89.48    5.99    3.58    0.00   135    8069    2   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+ 6 56134   108.48    5.42    1.73    0.00  4885   14078  101   1/2     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+ 7 56106   146.98   26.76    4.21    0.00   276    7598    1   1/1     0.00    0.00   0.00 BES            SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::int4[])[k] FOR ($7::int
+ 8 56106   163.80    2.61    5.36    0.00  1949     378    0   1/1     0.00    0.00   0.00 PDS            
+ 9 56106   185.40    6.24    2.32    0.00  1530     466    3   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+10 56106   221.62   23.90    7.81    0.00   135   12091    3   1/2     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+11 56106   249.27    9.84    1.61    0.00   135    4047    1   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+12 56106   267.27    6.39    4.88    0.00   135    4047    1   1/1     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+13 56106   289.58    7.43    1.93    0.00    57     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+14 56106   304.75    3.24    3.07    0.00   325      25    0   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+15 56106   322.60    4.77    1.72    0.00   411     245    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+16 56106   339.11    4.79    3.98    0.00    75      56    1   1/1     0.00    0.00   0.00 BES            UPDATE store_policy SET next_pack_id=next_pack_id+$1,next_ordinal=next_ordinal+$2 WHERE id
+17 56106   359.59    6.50    2.53    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+18 56106   377.74    5.62    3.00    0.00   235     115    1   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+19 56106   394.43    3.69    4.95    0.00    33      25    0   1/1     0.00    0.00   0.00 BES            COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)
+20 56106   414.39    5.02    1.60    0.00  1222      18    0   1/1     0.00    0.00   0.00 dcS            
+21 56106   432.22    6.23    0.96    0.00   180     136    2   1/1     0.00    0.00   0.00 Q              Q:SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE; SELECT pg_advisory_unlock(1279675470, 
+22 56106   447.40    4.22   11.80    0.00  5368     240    5   1/1     0.00    0.00   0.00 BES            WITH RECURSIVE src AS MATERIALIZED ( SELECT n.*,EXISTS (SELECT 1 FROM object_location x WH
+23 56106   472.64    3.44    3.81    0.00    22      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1; COMMIT
+24 56106   492.30    5.85    2.03    0.00   275    7530    1   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+25 56106   513.88    9.56    4.12    0.00  4885   14078  101   1/2     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+26 56134   537.47    9.46    1.69    0.00   133     357    2   1/1     0.00    0.00   0.00 BES            WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,x.group_number,x.reco
+27 56134   552.71    3.55    2.72    0.00   635    4469    7   1/1     0.00    0.00   0.00 BES            SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FROM unnest($1::bigint[]
+28 56134   571.97    6.54    2.18    0.00   255    9422   10   1/2     0.00    0.00   0.00 BES            SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 TH
+29 60598   597.49   13.34    3.09    0.00   818     269    3   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+30 56106   619.35    8.76    1.52    0.00   263     185    2   1/1     0.00    0.00   0.00 Q              Q:BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL search_path TO lfs818_fs_10052; SET LOCA
+31 56106   634.29    3.43    3.56    0.00    56     702    1   1/1     0.00    0.00   0.00 BES            SELECT b.branch_id, b.layer_stack_id, b.name, b.base_layer_id, b.head_commit_id, b.forked_
+32 56106   650.76    2.90    2.94    0.00    33      44    1   1/1     0.00    0.00   0.00 BES            UPDATE history_meta SET next_history_serial=next_history_serial+1 WHERE id=1 RETURNING nex
+33 56106   669.33    5.64    3.90    0.00   408      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO "commit" (commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id,
+34 56106   688.55    5.32    2.92    0.00    72     156    1   1/1     0.00    0.00   0.00 BES            SELECT l.run, l.depth, l.newest, c.layer_stack_id, c.parent_commit_id, EXISTS (SELECT 1 FR
+35 56106   707.84    6.37    2.84    0.00   145      42    1   1/1     0.00    0.00   0.00 BES            INSERT INTO commit_lineage (commit_id, run, depth, newest, merged) VALUES ($1, $2, $3, $4,
+36 56106   723.94    3.26    2.45    0.00   173      40    1   1/1     0.00    0.00   0.00 BES            UPDATE branch SET head_commit_id = $1 WHERE branch_id = $2 AND base_layer_id = $3 AND (hea
+37 56106   739.74    3.35    2.60    0.00    56      44    1   1/1     0.00    0.00   0.00 BES            SELECT epoch FROM project_epoch WHERE layer_stack_id = $1 FOR SHARE; 
+38 56106   760.29    7.95    5.85    0.00    94      78    1   1/1     0.00    0.00   0.00 Q              Q:SELECT 1/(pg_xact_status('10859'::xid8) IS NOT DISTINCT FROM 'in progress')::int; COMMIT
+39 60598   784.30    8.16    3.59    0.00    14      20    0   1/1     0.00    0.00   0.00 Q              Q:ROLLBACK
+40 56106   803.28    5.39    1.19    0.00   283     189    4   1/2     0.00    0.00   0.00 BESBES         -- The owner's release (#768): one autocommit statement deletes its live row -- only when  ; -- The owner release's unlock (#768 step C), sent in one message af
+{"write.new_file": {"exchanges": 43, "syncs": 50, "wall_ms": 674.98, "server_ms": 128.33, "req_bytes": 12558, "reply_bytes": 55905, "gaps_ms": 115.9, "xfer_ms": 0.75}, "write.overwrite": {"exchanges": 13, "syncs": 27, "wall_ms": 197.59, "server_ms": 41.61, "req_bytes": 9762, "reply_bytes": 70733, "gaps_ms": 22.05, "xfer_ms": 3.93}, "edit.2000_lines": {"exchanges": 12, "syncs": 26, "wall_ms": 188.43, "server_ms": 38.31, "req_bytes": 7264, "reply_bytes": 58945, "gaps_ms": 25.38, "xfer_ms": 4.74}, "mkdir": {"exchanges": 34, "syncs": 39, "wall_ms": 498.85, "server_ms": 103.98, "req_bytes": 9083, "reply_bytes": 28627, "gaps_ms": 53.54, "xfer_ms": 1.33}, "cp.file": {"exchanges": 32, "syncs": 37, "wall_ms": 451.14, "server_ms": 75.3, "req_bytes": 8551, "reply_bytes": 53842, "gaps_ms": 55.83, "xfer_ms": 0.01}, "mv.file": {"exchanges": 29, "syncs": 34, "wall_ms": 434.69, "server_ms": 64.79, "req_bytes": 7340, "reply_bytes": 20594, "gaps_ms": 79.89, "xfer_ms": 0.01}, "rm.file": {"exchanges": 26, "syncs": 31, "wall_ms": 440.93, "server_ms": 119.08, "req_bytes": 6858, "reply_bytes": 20001, "gaps_ms": 59.33, "xfer_ms": 2.53}, "apply.10_writes": {"exchanges": 35, "syncs": 40, "wall_ms": 951.68, "server_ms": 336.02, "req_bytes": 11835, "reply_bytes": 45806, "gaps_ms": 265.65, "xfer_ms": 0.01}, "rm.dir_100_recursive": {"exchanges": 41, "syncs": 46, "wall_ms": 814.47, "server_ms": 133.91, "req_bytes": 27428, "reply_bytes": 99523, "gaps_ms": 268.82, "xfer_ms": 1.74}}
