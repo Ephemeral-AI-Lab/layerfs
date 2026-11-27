@@ -1,0 +1,11 @@
+ 9:12  up 3 days,  7:45, 1 user, load averages: 5.89 6.00 7.19
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running tests/first_parent_window.rs (target/debug/deps/first_parent_window-a21d41d469e671fa)
+
+running 2 tests
+test postgresql_window_equals_the_default ... ok
+test sqlite_window_equals_the_default ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.24s
+
+run_bounded: exit 0 after 7.6 s

@@ -31,7 +31,7 @@ pub use contract::query;
 pub use contract::records;
 
 pub use catalog::{
-    ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot, NodeRecord,
+    ChainRow, ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot, NodeRecord,
     PublishLane, ReadContext,
 };
 pub use error::{

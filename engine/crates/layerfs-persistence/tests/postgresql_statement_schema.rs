@@ -120,6 +120,13 @@ const READS: &[Read] = &[
         keys: &["read_context_named", "read_context_node"],
         pg_only: false,
     },
+    // First-parent windows (#818 H4); `first_parent_window` runs it on a
+    // real server.
+    Read {
+        called: "chain_window",
+        keys: &["lineage_chain_window"],
+        pg_only: false,
+    },
     // The shared facade forwards its caller's closure; the call sites above
     // are the bodies it runs.
     Read {

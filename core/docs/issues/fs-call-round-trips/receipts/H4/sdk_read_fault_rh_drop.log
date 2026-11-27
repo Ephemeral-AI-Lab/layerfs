@@ -1,0 +1,14 @@
+ 9:23  up 3 days,  7:56, 1 user, load averages: 7.15 5.96 6.61
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_read_fault_rh_drop.rs (target/debug/deps/sdk_read_fault_rh_drop-6a6883b668af3b74)
+
+running 1 test
+test a_connection_dropped_at_any_message_of_a_read ... READ_FAULT_FLIGHT {"tag":"read_rh_drop_named","fault":"Drop","K":75,"kinds":"RSSSSSSSSSSSSSSKZTDCZ1tTZ2DDCZ1tTZ2DDCZ1tTZ2DCZ2DDCZ1tTZ2DCZ2DDCZ2DDCZ2DDCZ"}
+READ_FAULT_STATES {"tag":"read_rh_drop_named","K":75,"states":{"refused Failed": 5, "refused Unknown": 70}}
+READ_FAULT_FLIGHT {"tag":"read_rh_drop_node","fault":"Drop","K":75,"kinds":"RSSSSSSSSSSSSSSKZTDCZ1tTZ2DDCZ1tTZ2DDCZ1tTZ2DCZ2DDCZ1tTZ2DCZ2DDCZ2DDCZ2DDCZ"}
+READ_FAULT_STATES {"tag":"read_rh_drop_node","K":75,"states":{"refused Failed": 5, "refused Unknown": 70}}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.70s
+
+run_bounded: exit 0 after 5.7 s

@@ -12,7 +12,6 @@ use super::{
 use crate::{
     history::lookup::{self as args, Answer, Arg},
     history::rows::Rows,
-    store::Store,
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
@@ -20,7 +19,6 @@ use layerfs_content::{
     object::inode_leaf::InodeKind,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 fn range(reader: &Cached<'_>, file: EntryFacts, offset: u64, count: u64) -> Result<Vec<u8>> {
@@ -169,7 +167,6 @@ fn owners(
 /// objects go through, with its directory memo (#818 H3).
 #[allow(clippy::too_many_arguments)]
 pub fn blame(
-    store: &Arc<Store>,
     rows: &mut Rows<'_>,
     reader: &Cached<'_>,
     snap: &Snap,
@@ -243,6 +240,9 @@ pub fn blame(
     let mut carried: Option<(layerfs_content::ObjectId, Text)> = None;
 
     let mut history_limited = scan.exhausted;
+    // One parent row a version, in windows where the Store batches reads
+    // (#818 H4).
+    rows.walk(usize::try_from(limits.versions).unwrap_or(usize::MAX));
     loop {
         if tracks.iter().all(|t| t.owner.is_some()) {
             break;
@@ -259,16 +259,10 @@ pub fn blame(
         let older = match parent {
             Some(p) => {
                 let found = reader
-                    .entry(rows.record(p)?.root(), path)?
+                    .entry(rows.walked(p)?.root(), path)?
                     .filter(|e| e.value.kind == InodeKind::RegularFile);
                 match found {
-                    Some(_)
-                        if visibility
-                            .hidden_at(path, Visibility::node_serial(store, p)?)
-                            .is_some() =>
-                    {
-                        None
-                    }
+                    Some(_) if visibility.hidden_at(path, rows.serial(p)?).is_some() => None,
                     other => other,
                 }
             }

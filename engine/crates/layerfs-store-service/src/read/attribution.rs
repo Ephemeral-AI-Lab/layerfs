@@ -65,7 +65,6 @@ fn owners(
             bytes: budget.bytes,
         };
         let page = blame::blame(
-            store,
             &mut rows,
             &cached,
             snap,

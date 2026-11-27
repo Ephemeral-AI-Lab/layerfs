@@ -77,6 +77,8 @@ pub fn list(
     // (#818 H3).
     let reader = &super::cached::Cached::new(reader)?;
     let anchor = rows.record(start)?.clone();
+    // The walk's Commits in windows where the Store batches reads (#818 H4).
+    rows.walk(query::MAXIMUM_QUERY_WORK as usize + 1);
     if reader.entry(anchor.root(), path)?.is_some() {
         if let Some(frontier) = visibility.hidden_at(path, visibility.serial()) {
             return Err(Visibility::refusal(path, frontier));
@@ -158,7 +160,7 @@ pub fn list(
         if now.is_some() {
             let serial = match serial {
                 Some(serial) => serial,
-                None => Visibility::node_serial(store, node)?,
+                None => rows.serial(node)?,
             };
             if visibility.hidden_at(path, serial).is_some() {
                 break;
@@ -167,10 +169,8 @@ pub fn list(
         let mut hidden_before = false;
         let before = previous
             .map(|p| {
-                let found = reader.entry(rows.record(p)?.root(), path)?;
-                let serial = found
-                    .map(|_| Visibility::node_serial(store, p))
-                    .transpose()?;
+                let found = reader.entry(rows.walked(p)?.root(), path)?;
+                let serial = found.map(|_| rows.serial(p)).transpose()?;
                 carried = Some((p, found, serial));
                 if serial.is_some_and(|serial| visibility.hidden_at(path, serial).is_some()) {
                     hidden_before = true;

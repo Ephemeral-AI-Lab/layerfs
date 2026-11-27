@@ -21,7 +21,6 @@ pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
     let mut rows = Rows::new(&service.store);
     rows.hold(snap.node, saved.record, saved.recorded);
     blame::blame(
-        &service.store,
         &mut rows,
         &cached,
         &snap,

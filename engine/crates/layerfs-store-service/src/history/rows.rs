@@ -8,11 +8,20 @@
 //! never change, so a held row is the row a read would return. Branch names
 //! are kept for the call (one entry per Branch id met, at most one per
 //! walked node).
+//!
+//! A walk along first parents ([`Rows::walk`], [`Rows::walked`]) reads its
+//! Commits in windows where the Store batches reads (PostgreSQL): 16, 32,
+//! 64, then 128 Commits a statement, each with its `history_serial`, never
+//! more than the walk's remaining budget (#818 H4). A window's row is the
+//! row a read would return; a row that failed to read is that Commit's
+//! refusal, met only when the walk reaches it. On SQLite no window is read
+//! and the walk reads each row as before.
 use super::{lookup as args, MAIN};
+use crate::read::visibility::Visibility;
 use crate::store::Store;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::ObjectId;
-use layerfs_history::{BranchId, NodeId, NodeRecord};
+use layerfs_history::{BranchId, ChainRow, CommitId, HistoryResult, NodeId, NodeRecord};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -22,6 +31,10 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// few more for a Layer's source Commit.
 const RECENT: usize = 8;
 
+/// The window sizes, one after another, then the last for every window
+/// after (#818 H4, D5).
+const WINDOWS: [usize; 4] = [16, 32, 64, 128];
+
 /// One revision step: the node's root, its parent along persisted first
 /// parents (a Layer's source Commit before its parent Layer), and its
 /// record as the history calls show it.
@@ -30,8 +43,16 @@ pub type Revision = (ObjectId, Option<NodeId>, SdkValue);
 /// The rows and Branch names one call has read.
 pub struct Rows<'a> {
     store: &'a Arc<Store>,
-    recent: VecDeque<(NodeId, NodeRecord)>,
+    /// Each held row with its `history_serial` when a window read it.
+    recent: VecDeque<(NodeId, NodeRecord, Option<u64>)>,
     names: HashMap<BranchId, Option<String>>,
+    /// The rest of the open window, in walk order, each by the Commit the
+    /// walk reads there.
+    ahead: VecDeque<(CommitId, HistoryResult<ChainRow>)>,
+    /// Windows read so far, and the Commits the walk may still read; no
+    /// window is read while `budget` is 0.
+    windows: usize,
+    budget: usize,
 }
 
 impl<'a> Rows<'a> {
@@ -40,6 +61,18 @@ impl<'a> Rows<'a> {
             store,
             recent: VecDeque::with_capacity(RECENT),
             names: HashMap::new(),
+            ahead: VecDeque::new(),
+            windows: 0,
+            budget: 0,
+        }
+    }
+
+    /// Starts a first-parent walk that reads at most `budget` more rows:
+    /// [`Self::walked`] then reads Commits in windows, where the Store
+    /// batches reads.
+    pub fn walk(&mut self, budget: usize) {
+        if self.store.batched_reads() {
+            self.budget = budget;
         }
     }
 
@@ -51,27 +84,83 @@ impl<'a> Rows<'a> {
                 self.names.insert(branch, name);
             }
         }
-        self.keep(node, record);
+        self.keep(node, record, None);
     }
 
-    fn keep(&mut self, node: NodeId, record: NodeRecord) {
+    fn keep(&mut self, node: NodeId, record: NodeRecord, serial: Option<u64>) {
         if self.recent.len() == RECENT {
             self.recent.pop_front();
         }
-        self.recent.push_back((node, record));
+        self.recent.push_back((node, record, serial));
+    }
+
+    fn held(&self, node: NodeId) -> Option<usize> {
+        self.recent.iter().position(|(held, _, _)| *held == node)
     }
 
     /// The node's row, refused as [`args::node_record`] refuses.
     pub fn record(&mut self, node: NodeId) -> Result<&NodeRecord> {
-        let at = match self.recent.iter().position(|(held, _)| *held == node) {
+        let at = match self.held(node) {
             Some(at) => at,
             None => {
                 let record = args::node_record(self.store, node)?;
-                self.keep(node, record);
+                self.keep(node, record, None);
                 self.recent.len() - 1
             }
         };
         Ok(&self.recent[at].1)
+    }
+
+    /// The row of the node a walk reaches next, from the open window when
+    /// it holds it, else from a new window ([`Self::walk`]), else read
+    /// alone as [`Self::record`] reads it.
+    pub fn walked(&mut self, node: NodeId) -> Result<&NodeRecord> {
+        if let (None, NodeId::Commit(id)) = (self.held(node), node) {
+            if self.ahead.front().is_none_or(|(next, _)| *next != id) {
+                self.ahead.clear();
+                self.open(id)?;
+            }
+            if let Some((_, row)) = self.ahead.pop_front() {
+                let row = row.map_err(args::history)?;
+                self.keep(
+                    node,
+                    NodeRecord::Commit(Box::new(row.record)),
+                    Some(row.serial),
+                );
+            }
+        }
+        self.record(node)
+    }
+
+    /// Reads the window from `head`, sized by the windows read before and
+    /// clipped to the walk's budget; none when the budget is spent.
+    fn open(&mut self, head: CommitId) -> Result<()> {
+        let size = WINDOWS[self.windows.min(WINDOWS.len() - 1)].min(self.budget);
+        if size == 0 {
+            return Ok(());
+        }
+        let rows = self
+            .store
+            .published(|history| history.first_parent_window(head, size))
+            .map_err(args::published)?;
+        self.windows += 1;
+        self.budget -= rows.len().min(self.budget);
+        let mut next = Some(head);
+        for row in rows {
+            let Some(id) = next else { break };
+            next = row.as_ref().ok().and_then(|row| row.record.parent);
+            self.ahead.push_back((id, row));
+        }
+        Ok(())
+    }
+
+    /// The node's `history_serial` as [`Visibility::node_serial`] reads it,
+    /// from the window that read the row when one did.
+    pub fn serial(&self, node: NodeId) -> Result<u64> {
+        match self.held(node).and_then(|at| self.recent[at].2) {
+            Some(serial) => Ok(serial),
+            None => Visibility::node_serial(self.store, node),
+        }
     }
 
     /// A Branch's name, without the visibility filter, once per call.

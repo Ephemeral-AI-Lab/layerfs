@@ -11,6 +11,11 @@
 //! (`read_context_named`) and then the Branch's head Commit by its full
 //! identity (`read_context_node`).
 //!
+//! [`sweep_blame`] runs the same sweep over a cold `fs.blame` of a file
+//! that 18 Commits changed (#818 H4): its walk reads the Commits' rows and
+//! serials in two `lineage_chain_window` statements (16, then the rest),
+//! each one fenced statement, with its prepare.
+//!
 //! After each run:
 //!
 //! * the armed call answered exactly the clean answer, or a refusal whose
@@ -86,8 +91,54 @@ pub fn sweep(tag: &str, fault: Fault) {
         ("node", ("commit", head.as_str()), by_id),
     ] {
         let tag = format!("{tag}_{shape}");
-        sweep_one(&tag, fault, &store, &proxy, &selection, named, expected);
+        let call = |service: &Service| stat(service, named);
+        sweep_one(&tag, fault, &store, &proxy, &selection, &call, expected);
     }
+    let _ = adversary::tmp;
+}
+
+/// Commits that change the blamed file: more than one window's worth.
+const VERSIONS: usize = 18;
+
+fn blame(service: &Service) -> Result<SdkValue, SdkRefusal> {
+    service.call(
+        "fs.blame",
+        vec![
+            ("branch", SdkValue::text(BRANCH)),
+            ("path", SdkValue::text("/dir/blamed.txt")),
+        ],
+    )
+}
+
+/// The sweep over a cold `fs.blame` whose walk reads windows (#818 H4).
+pub fn sweep_blame(tag: &str, fault: Fault) {
+    let Some(store) = TestStore::postgres(tag, SEED) else {
+        return;
+    };
+    store.fork(BRANCH);
+    // The history (not swept): on a direct service, one line a Commit.
+    let direct = store.open();
+    let mut text = String::new();
+    for n in 0..VERSIONS {
+        text.push_str(&format!("v{n}\n"));
+        direct
+            .call(
+                "fs.write",
+                vec![
+                    ("branch", SdkValue::text(BRANCH)),
+                    ("path", SdkValue::text("/dir/blamed.txt")),
+                    ("bytes", SdkValue::Bytes(text.clone().into_bytes())),
+                ],
+            )
+            .expect("a Commit");
+    }
+    let expected = blame(&direct).expect("the direct answer");
+    direct.stop();
+
+    let (url, _) = store.postgres.clone().unwrap();
+    let (proxy, proxied) = FaultProxy::start(&url);
+    let selection = store.selection_via(&proxied);
+    sweep_one(tag, fault, &store, &proxy, &selection, &blame, expected);
     let _ = adversary::tmp;
 }
 
@@ -98,13 +149,13 @@ fn sweep_one(
     store: &TestStore,
     proxy: &FaultProxy,
     selection: &StoreSelection,
-    named: Named<'_>,
+    call: &dyn Fn(&Service) -> Result<SdkValue, SdkRefusal>,
     expected: SdkValue,
 ) {
     // The clean run: the flight's message count.
     let service = Service::open(store, selection.clone());
     proxy.arm(None);
-    let clean = stat(&service, named);
+    let clean = call(&service);
     let window = proxy.disarm();
     assert_eq!(clean.as_ref().ok(), Some(&expected), "the clean answer");
     service.stop();
@@ -120,7 +171,7 @@ fn sweep_one(
         let name = format!("n{n}");
         let service = Service::open(store, selection.clone());
         proxy.arm(Some((n, fault)));
-        let armed = stat(&service, named);
+        let armed = call(&service);
         let window = proxy.disarm();
         assert!(window.fired.is_some(), "{name}: the fault fired");
         match &armed {
@@ -132,7 +183,7 @@ fn sweep_one(
                 refusal.message
             ),
         }
-        let again = stat(&service, named);
+        let again = call(&service);
         assert_eq!(
             again.as_ref().ok(),
             Some(&expected),
@@ -143,11 +194,7 @@ fn sweep_one(
         *states.entry(outcome(&armed)).or_default() += 1;
     }
     let fresh = store.open();
-    assert_eq!(
-        stat(&fresh, named).ok(),
-        Some(expected),
-        "a fresh service answers"
-    );
+    assert_eq!(call(&fresh).ok(), Some(expected), "a fresh service answers");
     fresh.stop();
     println!("READ_FAULT_STATES {{\"tag\":\"{tag}\",\"K\":{k},\"states\":{states:?}}}");
     assert!(

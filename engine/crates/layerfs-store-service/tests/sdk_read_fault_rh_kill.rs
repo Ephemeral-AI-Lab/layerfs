@@ -9,6 +9,7 @@ mod adversary;
 #[allow(dead_code)]
 mod fault_proxy;
 #[path = "support/read_sweep_rh.rs"]
+#[allow(dead_code)]
 mod read_sweep_rh;
 
 #[test]

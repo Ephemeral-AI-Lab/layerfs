@@ -1,0 +1,11 @@
+ 9:23  up 3 days,  7:56, 1 user, load averages: 6.59 5.88 6.57
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/postgresql_statement_schema.rs (target/debug/deps/postgresql_statement_schema-d9016de5eb48e515)
+
+running 2 tests
+test every_one_statement_read_names_the_schema ... ok
+test postgresql_one_statement_reads_answer ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+run_bounded: exit 0 after 0.9 s
