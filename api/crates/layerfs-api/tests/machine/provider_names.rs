@@ -125,6 +125,7 @@ fn docker_run(home: &Path, tools: &Path) -> String {
 // One test owns PATH and the bundle setting for every case.
 #[test]
 fn provider_names_and_their_refusals() {
+    let _env = crate::env_lock();
     let tools = tempdir("tools");
     for (name, script) in [("limactl", LIMACTL), ("docker", DOCKER)] {
         let file = tools.join(name);
@@ -414,6 +415,7 @@ fn provider_names_and_their_refusals() {
 
 #[test]
 fn a_sandbox_name_ending_in_root_is_refused() {
+    let _env = crate::env_lock();
     let home = tempdir("root");
     home::open(&home).unwrap();
     for name in ["x.root", "a.b.root"] {

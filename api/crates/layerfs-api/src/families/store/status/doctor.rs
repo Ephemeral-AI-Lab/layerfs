@@ -5,7 +5,7 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, opt, Call, PROGRESS};
 use crate::dispatch::Context;
-use crate::doctor::answer::{self, FORM};
+use crate::doctor::{self, FORM};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
@@ -50,5 +50,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         machine,
         ..Options::default()
     };
-    answer::run(context, Kind::Store, store, options)
+    doctor::run(context, Kind::Store, store, options)
 }

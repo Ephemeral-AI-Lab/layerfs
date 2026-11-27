@@ -128,6 +128,7 @@ fn log(tools: &Path) -> String {
 
 #[test]
 fn start_and_stop_a_machine() {
+    let _env = crate::env_lock();
     let tools = tempdir("tools");
     let limactl = tools.join("limactl");
     std::fs::write(&limactl, STAND_IN).unwrap();

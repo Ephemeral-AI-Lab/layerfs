@@ -1,4 +1,5 @@
-pub(crate) mod create;
-pub(crate) mod remove;
-pub(crate) mod start;
-pub(crate) mod stop;
+//! The machine calls that make, start, stop and remove a machine.
+pub(super) mod create;
+pub(super) mod remove;
+pub(super) mod start;
+pub(super) mod stop;

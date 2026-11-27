@@ -55,6 +55,7 @@ fn shows_removed(machine: &SdkValue, platform: &str, reason: &str) {
 
 #[test]
 fn a_removed_platform_is_shown_refused_and_its_record_removed() {
+    let _env = crate::env_lock();
     // the built-in docker machine is probed by `machine.list`: no tool is found
     let empty = tempdir("path");
     std::env::set_var("PATH", &empty);

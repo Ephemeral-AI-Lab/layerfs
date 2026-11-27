@@ -4,6 +4,7 @@
 //! `workspace.activity`), and one whose daemon is lost (its Workspaces are
 //! `not_checked`, blocked by the Sandbox, and not tried). The records-only
 //! Sandbox on a stopped machine is in `doctor_targets.rs`.
+use layerfs_api::home::{paths, process, write_entity, write_record};
 use layerfs_home::json;
 use layerfs_protocol::daemon::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request};
 use layerfs_protocol::duplex;
@@ -12,10 +13,6 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use {
-    layerfs_api::home::{paths, write_entity, write_record},
-    layerfs_home::process,
-};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 

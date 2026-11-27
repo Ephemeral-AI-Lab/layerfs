@@ -29,7 +29,7 @@ fn upgrade_cancelled_at(
     Result<layerfs_protocol::sdk::SdkValue, layerfs_protocol::sdk::SdkRefusal>,
     Vec<String>,
 ) {
-    layerfs_home::cancel::flag().store(false, Ordering::SeqCst);
+    layerfs_api::cancel::flag().store(false, Ordering::SeqCst);
     let args = layerfs_protocol::sdk::SdkValue::map([("store", t("fx")), DETAIL]);
     let mut seen = Vec::new();
     let outcome = layerfs_api::call(Some(home), "store.upgrade", args, &mut |event| {
@@ -39,12 +39,12 @@ fn upgrade_cancelled_at(
             .map(str::to_owned);
         if let Some(started) = started {
             if started == phase {
-                layerfs_home::cancel::request();
+                layerfs_api::cancel::request();
             }
             seen.push(started);
         }
     });
-    layerfs_home::cancel::flag().store(false, Ordering::SeqCst);
+    layerfs_api::cancel::flag().store(false, Ordering::SeqCst);
     (outcome, seen)
 }
 
@@ -68,7 +68,7 @@ fn a_cancel_before_commit_changes_nothing_and_at_commit_the_upgrade_completes() 
         );
         assert_eq!(refused.message, "cancelled before COMMIT; nothing changed");
         assert!(!seen.iter().any(|p| p == "commit"), "{phase}: {seen:?}");
-        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+        layerfs_api::close_idle(std::time::Duration::ZERO);
         assert!(file(&home) == before, "{phase}: the file changed");
         for sidecar in ["store.sqlite-wal", "store.sqlite-journal"] {
             let path = home.join("store/fx").join(sidecar);
@@ -84,7 +84,7 @@ fn a_cancel_before_commit_changes_nothing_and_at_commit_the_upgrade_completes() 
         );
         let (outcome, _) = upgrade_cancelled_at(&home, "no such phase");
         assert_eq!(outcome.unwrap().get_text("outcome"), Some("upgraded"));
-        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+        layerfs_api::close_idle(std::time::Duration::ZERO);
         let _ = std::fs::remove_dir_all(home.parent().unwrap());
     }
     // at commit the request is no longer read
@@ -101,6 +101,6 @@ fn a_cancel_before_commit_changes_nothing_and_at_commit_the_upgrade_completes() 
         Some("current")
     );
     matches_manifest(&home, &manifest("sqlite/v2"), false);
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     let _ = std::fs::remove_dir_all(home.parent().unwrap());
 }

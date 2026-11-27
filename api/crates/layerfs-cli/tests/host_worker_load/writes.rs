@@ -9,18 +9,17 @@
 //! so slow and stalled inputs here are raw callers on the socket.
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 #[path = "../support/host_writes.rs"]
-mod writes;
+mod host_writes;
 
+use host_writes::*;
 use layerfs_home::json;
 use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
-use writes::*;
 
 /// A raw streamed write of `target` held at its `go`: it sends its
 /// request, says on `went` when the worker asks for its input, then sends

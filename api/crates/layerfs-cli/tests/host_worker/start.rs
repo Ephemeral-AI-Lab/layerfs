@@ -1,9 +1,7 @@
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
-#[path = "../support/host_worker_proof.rs"]
-mod proof;
+use crate::fixture;
+use crate::proof;
 
 use fixture::Fixture;
 use std::os::unix::fs::PermissionsExt;

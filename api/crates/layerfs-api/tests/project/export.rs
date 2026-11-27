@@ -941,7 +941,7 @@ fn worker_sqlite_export_and_midstream_disconnect_cleanup() {
         ],
     );
     // Ensure local Store handle is closed before moving file to worker root
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     move_store_file(&home, &root, "shop");
     place_store(&home, "shop", "box");
 

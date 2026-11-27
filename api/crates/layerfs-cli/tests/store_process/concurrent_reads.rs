@@ -3,8 +3,7 @@
 //! `Failed` (`Os { NotFound }`) for removing that lease as stale. (A sqlite
 //! Store open that meets another process's open may still be refused `Busy`
 //! by the engine's cooperative admission; that is not this race.)
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, tempdir, text};
 
 #[test]

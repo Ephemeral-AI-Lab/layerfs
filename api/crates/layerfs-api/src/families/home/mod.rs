@@ -4,17 +4,22 @@
 //! the caller's process, and its doctor. `init` opens the home itself to
 //! say what it did; `get` and `doctor` never open it. What earlier runs
 //! left behind has no call: LayerFS removes it itself (spec v20).
+mod clear_log;
+mod doctor;
+mod get;
+mod init;
+mod log;
 
-pub(crate) use super::families::home::get::build;
 use crate::dispatch::Calls;
+pub(crate) use get::build;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {
     &[
-        super::families::home::init::CALL,
-        super::families::home::get::CALL,
-        super::families::home::log::CALL,
-        super::families::home::clear_log::CALL,
-        super::families::home::doctor::CALL,
+        init::CALL,
+        get::CALL,
+        log::CALL,
+        clear_log::CALL,
+        doctor::CALL,
     ]
 }

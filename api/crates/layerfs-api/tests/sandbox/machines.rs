@@ -390,10 +390,7 @@ fn a_forced_remove_says_why_its_store_s_url_cannot_be_made() {
 /// platform, a sqlite Store on each and one PostgreSQL Store, all records.
 #[test]
 fn every_platform_refusal_is_the_support_table_s() {
-    use {
-        layerfs_machine::platform::{sandbox_allowed, HostOs, Platform},
-        layerfs_protocol::StoreKind,
-    };
+    use layerfs_machine::platform::{sandbox_allowed, HostOs, Platform, StoreKind};
     let home = tempdir("support");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);

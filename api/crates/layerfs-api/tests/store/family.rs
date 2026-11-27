@@ -480,7 +480,7 @@ fn kill_an_opener(home: &Path, file: &Path) {
     let child = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "a_killed_opener_leaves_its_log_frames",
+            "family::a_killed_opener_leaves_its_log_frames",
             "--ignored",
             "--nocapture",
         ])
@@ -541,7 +541,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
         ],
     )
     .unwrap();
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     let store_path = paths::store_file(&home, "shop");
     assert_eq!(wal_bytes(&store_path), 0, "a closed Store keeps no log");
 
@@ -586,7 +586,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
     .unwrap();
     assert_eq!(read.get_text("text"), Some("from-wal\n"));
 
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);

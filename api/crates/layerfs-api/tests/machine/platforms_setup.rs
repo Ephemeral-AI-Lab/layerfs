@@ -70,6 +70,7 @@ fn executable(path: &Path, body: &str) {
 
 #[test]
 fn platforms_describe_the_host_without_a_home_and_create_takes_the_stock_image() {
+    let _env = crate::env_lock();
     let root = PathBuf::from(format!("/tmp/lfs-mps-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     for dir in ["bin", "user", "bundle", "cache"] {

@@ -1,3 +1,4 @@
-pub(crate) mod doctor;
-pub(crate) mod get;
-pub(crate) mod list;
+//! The Store calls that only read: list, get and its doctor.
+pub(super) mod doctor;
+pub(super) mod get;
+pub(super) mod list;

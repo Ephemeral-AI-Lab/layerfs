@@ -4,8 +4,7 @@
 //! stdout is not an error (the runtime reopens it on /dev/null, exit 0); a
 //! stdout that fails while printing exits 125, though the call was made;
 //! a stderr that fails loses its line and the exit code stays the outcome's.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{failing_sinks, finish, layerfs, run, tempdir, text, LAYERFS};
 use std::process::{Command, Stdio};
 

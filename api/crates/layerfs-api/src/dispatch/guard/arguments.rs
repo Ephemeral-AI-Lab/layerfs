@@ -2,7 +2,7 @@
 //! every name known, every required positional and option present, every value of its
 //! kind. Sizes become whole bytes. Front ends strip their functions
 //! (`on_progress`, exec sinks) before the call reaches the library.
-use super::super::table::{Call, Kind};
+use crate::dispatch::table::{Call, Kind};
 use layerfs_home::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 

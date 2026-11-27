@@ -6,7 +6,7 @@ use layerfs_api::Call;
 use layerfs_protocol::sdk::SdkValue;
 
 fn publish() -> &'static Call {
-    layerfs_api::dispatch()
+    layerfs_api::calls()
         .into_iter()
         .find(|call| call.family == "branch" && call.call == "publish")
         .expect("branch.publish is in the table")

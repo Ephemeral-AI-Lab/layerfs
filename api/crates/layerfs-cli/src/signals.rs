@@ -93,7 +93,7 @@ fn wait(signals: SigSet, store: &str, detail: bool, text: bool) {
         }
         seen += 1;
         if seen == 1 {
-            layerfs_home::cancel::request();
+            layerfs_api::cancel::request();
             continue;
         }
         let refusal = SdkRefusal {

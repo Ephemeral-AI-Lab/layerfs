@@ -65,7 +65,7 @@ pub(crate) const FORM: Form = Form::of(
 pub(crate) fn run(context: &mut Context<'_>, kind: Kind, name: &str, options: Options) -> Outcome {
     let (home, events) = context.parts();
     let options = Options {
-        build: crate::home_family::build(),
+        build: crate::families::home::build(),
         ..options
     };
     // `backup doctor` declares no progress (its row's `progress` is false)

@@ -110,7 +110,7 @@ fn live_case(home: &Path, name: &str, machine: bool) {
     let process = LocalProcess::observe(daemon.get_int("pid").unwrap() as u32).unwrap();
     let mut helper = Helper(
         Command::new(std::env::current_exe().unwrap())
-            .args(["exec_helper", "--exact", "--nocapture"])
+            .args(["force_native::exec_helper", "--exact", "--nocapture"])
             .env("LAYERFS_FORCE_NATIVE_HELPER", home)
             .env("LAYERFS_FORCE_NATIVE_NAME", name)
             .spawn()
@@ -250,6 +250,7 @@ fn identity_case(home: &Path) {
 }
 #[test]
 fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening_store() {
+    let _env = crate::env_lock();
     let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
         eprintln!("NOT_RUN: explicit LAYERFS_DAEMON required for live native force proof");
         return;

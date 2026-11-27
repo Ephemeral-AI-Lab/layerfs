@@ -2,9 +2,9 @@
 //! platforms removed in 2.0.
 #[path = "../support/mod.rs"]
 mod common;
+use layerfs_api::{json, Kind};
 use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
-use {layerfs_api::Kind, layerfs_home::json};
 
 #[test]
 fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
@@ -32,7 +32,7 @@ fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
         for row in cases {
             let name = row.get_text("call").unwrap();
             let (family, call) = name.split_once('.').unwrap();
-            let spec = layerfs_api::dispatch()
+            let spec = layerfs_api::calls()
                 .into_iter()
                 .find(|s| s.family == family && s.call == call)
                 .unwrap();

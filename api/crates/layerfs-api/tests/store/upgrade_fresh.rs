@@ -10,14 +10,13 @@
 //!
 //! ```text
 //! LAYERFS_TEST_BUNDLE=<cache>/layerfs/bundle/<version>/linux-<arch> \
-//!   cargo test -p layerfs-api --test store_upgrade_fresh -- --ignored
+//!   cargo test -p layerfs-api --test store upgrade_fresh -- --ignored
 //! ```
 //!
 //! (`capture` refreshes `fixtures/store-formats/SHA256SUMS` from the
 //! fixtures it finds, which leaves it as it is: the capture goes to a
 //! folder outside them.)
-#[path = "../support/upgrade.rs"]
-mod upgrade_support;
+use crate::upgrade_support;
 use layerfs_home::json;
 use std::path::Path;
 use upgrade_support::*;

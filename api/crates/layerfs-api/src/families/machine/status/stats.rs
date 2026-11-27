@@ -194,14 +194,14 @@ fn space(walked: &SdkValue) -> SdkValue {
 // function returned under the row's names.
 
 /// `value`'s field `name`, null when it has none.
-pub(super) fn field(value: &SdkValue, name: &str) -> SdkValue {
+pub(in crate::families::machine) fn field(value: &SdkValue, name: &str) -> SdkValue {
     value.get(name).cloned().unwrap_or_default()
 }
 
 /// The list `value` as an answer shows it: its first 20 items, and their
 /// count only when it was cut.
 #[cfg(feature = "machine")]
-pub(super) fn cut(value: SdkValue) -> (SdkValue, SdkValue) {
+pub(in crate::families::machine) fn cut(value: SdkValue) -> (SdkValue, SdkValue) {
     let items = match value {
         SdkValue::List(items) => items,
         _ => Vec::new(),

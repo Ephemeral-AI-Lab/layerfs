@@ -4,8 +4,7 @@
 //! None of these needs a Store: a call on a Store that does not exist is
 //! refused `NoSuchStore` only after its arguments were read, which tells
 //! it from a usage error.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, run_with_stdin, tempdir, text};
 use std::path::Path;
 

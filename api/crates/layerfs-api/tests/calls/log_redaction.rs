@@ -12,14 +12,13 @@ use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::MutexGuard;
 
-static ENV: Mutex<()> = Mutex::new(());
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 /// The tests share the process environment, so each one holds this lock.
 fn serial() -> MutexGuard<'static, ()> {
-    let guard = ENV.lock().unwrap_or_else(|poison| poison.into_inner());
+    let guard = crate::env_lock();
     std::env::remove_var("LAYERFS_LOGS");
     std::env::remove_var("LAYERFS_LOGS_TAG");
     guard
@@ -236,7 +235,7 @@ fn the_redacted_set_covers_every_path_bearing_call() {
     // every argument of these names is logged only as a byte count: its
     // table entry says so (the flag replaced the dispatcher's name list)
     for name in ["path", "pattern"] {
-        let named = (layerfs_api::dispatch().into_iter())
+        let named = (layerfs_api::calls().into_iter())
             .flat_map(|call| call.args.iter().chain(call.options))
             .filter(|arg| arg.name == name);
         let mut seen = 0;
@@ -270,7 +269,7 @@ fn the_redacted_set_covers_every_path_bearing_call() {
     }
     // text that is not a path stays visible
     for name in ["project", "branch", "name", "commit"] {
-        let named = (layerfs_api::dispatch().into_iter())
+        let named = (layerfs_api::calls().into_iter())
             .flat_map(|call| call.args.iter().chain(call.options))
             .filter(|arg| arg.name == name);
         for arg in named {

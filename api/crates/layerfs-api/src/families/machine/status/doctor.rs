@@ -4,7 +4,7 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call, PROGRESS};
 use crate::dispatch::Context;
-use crate::doctor::answer::{self, FORM};
+use crate::doctor::{self, FORM};
 use layerfs_home::outcome::Outcome;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
@@ -23,5 +23,5 @@ pub(crate) const CALL: Call = call(
 
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = args.get_text("machine").unwrap_or("");
-    answer::run(context, Kind::Machine, machine, Options::default())
+    doctor::run(context, Kind::Machine, machine, Options::default())
 }

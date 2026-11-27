@@ -121,7 +121,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
             None => unknown(topic),
         },
         [family, name] => {
-            match layerfs_api::dispatch()
+            match layerfs_api::calls()
                 .into_iter()
                 .find(|c| c.family == *family && shell(c.call) == shell(name))
             {

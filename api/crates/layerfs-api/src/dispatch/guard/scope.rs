@@ -10,7 +10,7 @@
 //! `<branch>.<name>`. A scope guards calls; it is not filesystem isolation
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
-use super::super::table::Call;
+use crate::dispatch::table::Call;
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -157,7 +157,7 @@ impl Scope {
 
     /// A Commit id stays as it is; a Branch name is composed.
     fn reference(&self, name: &str) -> Result<String, SdkRefusal> {
-        if super::super::run::call_log::is_id(name) {
+        if crate::dispatch::run::call_log::is_id(name) {
             Ok(name.to_owned())
         } else {
             self.compose(name)

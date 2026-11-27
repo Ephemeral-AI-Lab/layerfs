@@ -1,6 +1,5 @@
 //! Discovery works without initializing a home and reflects the API table.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_home::json;
 use layerfs_protocol::sdk::SdkValue;

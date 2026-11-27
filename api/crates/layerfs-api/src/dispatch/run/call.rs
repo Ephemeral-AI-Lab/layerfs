@@ -16,20 +16,15 @@
 //! Three arguments belong to no table entry and are taken out before the
 //! check: `log_tag`, and the global options of the call surface (2.0),
 //! `detail` (the long form) and `with` (the sections to add). A migrated
-//! call's result is shaped by [`shape`](super::shape) into the form asked;
+//! call's result is shaped by [`shape`](crate::dispatch::answer::shape) into the form asked;
 //! a refusal leaves with one of the thirteen public codes
-//! ([`refusal`](super::refusal)).
-use super::super::answer::form::Asked;
-use super::super::table::Call;
-use super::{
-    super::{
-        answer::{refusal, shape},
-        guard::arguments,
-        table::{self, Family},
-        Context,
-    },
-    call_log,
-};
+//! ([`refusal`](crate::dispatch::answer::refusal)).
+use super::call_log;
+use crate::dispatch::answer::form::Asked;
+use crate::dispatch::answer::{refusal, shape};
+use crate::dispatch::guard::arguments;
+use crate::dispatch::table::Call;
+use crate::dispatch::{table, table::Family, Context, Scope};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -111,7 +106,7 @@ pub fn call(
 pub fn call_scoped(
     families: &'static [Family],
     home_path: Option<&Path>,
-    scope: Option<&super::super::Scope>,
+    scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
@@ -132,7 +127,7 @@ pub fn call_scoped(
 /// with the input of a write the CLI deferred.
 pub fn call_cli(
     families: &'static [Family],
-    scope: Option<&super::super::Scope>,
+    scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
     input: Option<layerfs_store::host_write::Input>,
@@ -178,7 +173,7 @@ const HOST_ROUTE: [&str; 10] = [
 fn call_from(
     families: &'static [Family],
     home_path: Option<&Path>,
-    scope: Option<&super::super::Scope>,
+    scope: Option<&Scope>,
     name: &str,
     mut args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
@@ -367,7 +362,7 @@ impl<'n> Log<'n> {
 fn scoped(
     families: &'static [Family],
     home_path: Option<&Path>,
-    scope: Option<&super::super::Scope>,
+    scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
@@ -384,7 +379,7 @@ fn scoped(
         args = scope.apply(spec, args)?;
     }
     let home = home(home_path)?;
-    super::super::guard::platform_policy::check(&home, spec.policy, &args)?;
+    crate::dispatch::guard::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
         let id = layerfs_home::home::open(&home)?.id;
         // the host machine's folder and `machine/docker/` exist from the
@@ -406,7 +401,7 @@ fn scoped(
         Some(scope) => scope.answer(spec, value),
         None => value,
     };
-    let value = super::super::answer::keys::snake(value);
+    let value = crate::dispatch::answer::keys::snake(value);
     // the line names what the full result said, before a form leaves it out
     log.saved = call_log::saved(spec, &value);
     Ok(match spec.form {

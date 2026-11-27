@@ -2,10 +2,7 @@
 //! Idle exit with callers waiting at the 60 s mark. Expected runtime about
 //! 75-85 s.
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
-#[path = "../support/host_worker_proof.rs"]
-mod proof;
+use crate::proof;
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};

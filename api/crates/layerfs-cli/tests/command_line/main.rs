@@ -1,6 +1,8 @@
 mod argv;
 mod backup_connect;
 mod closed_streams;
+#[path = "../support/mod.rs"]
+mod common;
 mod exit_codes;
 mod gc_calls;
 mod global_options;

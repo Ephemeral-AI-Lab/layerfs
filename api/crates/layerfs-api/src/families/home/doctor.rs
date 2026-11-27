@@ -4,7 +4,7 @@
 //! bucket. It changes nothing, not even a home that does not exist yet.
 use crate::dispatch::table::{call, Call, PROGRESS};
 use crate::dispatch::Context;
-use crate::doctor::answer::{self, FORM};
+use crate::doctor::{self, FORM};
 use layerfs_home::outcome::Outcome;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
@@ -23,5 +23,5 @@ pub(crate) const CALL: Call = call(
 
 fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     let home = context.home.display().to_string();
-    answer::run(context, Kind::Home, &home, Options::default())
+    doctor::run(context, Kind::Home, &home, Options::default())
 }

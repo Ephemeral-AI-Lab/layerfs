@@ -4,8 +4,7 @@
 //! (`host_worker_idle_ping.rs`, `host_worker_idle_queue.rs`) so each test
 //! invocation stays under 100 s without running tests in parallel.
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 
 use fixture::Fixture;
 use std::time::{Duration, Instant};

@@ -12,6 +12,7 @@
 //! test here takes one lock. The walker's and the views' own tests are
 //! layerfs-sandbox `inspect_machine_files`.
 #![cfg(unix)]
+use layerfs_api::home::{self, lease, paths, read_record, write_record};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
@@ -21,10 +22,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use {
-    layerfs_api::home::{self, paths, read_record, write_record},
-    layerfs_store::lease,
-};
 
 static PROCESS: Mutex<()> = Mutex::new(());
 static HOMES: AtomicUsize = AtomicUsize::new(0);

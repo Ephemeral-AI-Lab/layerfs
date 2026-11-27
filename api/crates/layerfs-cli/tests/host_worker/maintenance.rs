@@ -1,9 +1,9 @@
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 
 use fixture::Fixture;
+use layerfs_api::home::{self, lease, paths};
 use layerfs_api::worker::{self, HostHello, HostPaths, HOST_MAX_REPLY, MAX_HELLO};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;
@@ -12,10 +12,6 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
-use {
-    layerfs_api::home::{self, paths},
-    layerfs_store::lease,
-};
 
 const CHILD_HOME: &str = "LAYERFS_TEST_MAINTENANCE_HOME";
 const CHILD_ROLE: &str = "LAYERFS_TEST_MAINTENANCE_ROLE";
@@ -48,7 +44,7 @@ impl ProofChild {
     fn start(home: &Path, role: &str) -> Self {
         let child = Self(
             Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", "peer_fixture", "--nocapture"])
+                .args(["--exact", "maintenance::peer_fixture", "--nocapture"])
                 .env(CHILD_HOME, home)
                 .env(CHILD_ROLE, role)
                 .stdin(Stdio::null())

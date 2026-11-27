@@ -10,13 +10,11 @@
 //! refusal; the stderr line (usage) or the absence of one tells them apart.
 //! That is the policy as built, pinned here until the owner decides.
 #![cfg(feature = "machine")]
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
+use crate::stream_worker;
 use common::{broken_pipe, finish, layerfs, run, text};
 use std::path::Path;
 use std::process::Stdio;
-#[path = "../support/stream_worker.rs"]
-mod stream_worker;
 use stream_worker::{home_with_workspace, BIG};
 
 /// `workspace exec <ws> <command> <rest>` in `home`: code, stdout, stderr.

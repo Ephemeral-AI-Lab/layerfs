@@ -24,8 +24,7 @@
 //! `ExitStatusExt::signal`. A macOS build has no gate in the engine, so the
 //! hook is inert there by construction.
 #![cfg(target_os = "linux")]
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 
 use common::{layerfs, run, run_with_stdin, tempdir, text, LAYERFS};
 use layerfs_home::json;

@@ -163,6 +163,7 @@ fn closed() -> SocketAddr {
 
 #[test]
 fn a_worker_call_dials_once_and_never_starts_its_machine() {
+    let _env = crate::env_lock();
     let cache = tempdir("cache");
     std::env::set_var("XDG_CACHE_HOME", &cache);
     std::env::remove_var("LAYERFS_BUNDLE");

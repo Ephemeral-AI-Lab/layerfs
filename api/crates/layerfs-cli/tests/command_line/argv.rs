@@ -1,7 +1,6 @@
 //! A command-line word that is not UTF-8 is a wrong command line (exit 2,
 //! nothing called), not a panic: Linux accepts any bytes in `argv`.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, tempdir, text};
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;

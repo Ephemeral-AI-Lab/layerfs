@@ -7,8 +7,7 @@
 //! answers what the worker answers; a worker that cannot be reached
 //! answers `unknown` and nothing in the home changes.
 #![cfg(feature = "machine")]
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::{read_frame, write_frame};

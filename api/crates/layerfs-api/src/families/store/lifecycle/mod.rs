@@ -1,7 +1,9 @@
-pub(crate) mod attach;
-pub(crate) mod connect;
-pub(crate) mod create;
-pub(crate) mod detach;
-pub(crate) mod disconnect;
-pub(crate) mod r#move;
-pub(crate) mod remove;
+//! The Store calls that change where a Store exists or runs: create,
+//! connect, disconnect, attach, detach, move and remove.
+pub(super) mod attach;
+pub(super) mod connect;
+pub(super) mod create;
+pub(super) mod detach;
+pub(super) mod disconnect;
+pub(super) mod r#move;
+pub(super) mod remove;

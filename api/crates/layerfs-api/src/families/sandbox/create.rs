@@ -73,7 +73,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let (home, events) = context.parts();
     // a native start that failed with a daemon of another build says so
     let created = create(home, events, &request).map_err(|refusal| {
-        layerfs_inspect::home::get::native_start(home, crate::home_family::build(), refusal)
+        layerfs_inspect::home::get::native_start(home, crate::families::home::build(), refusal)
     })?;
     let mut fields = vec![
         ("workspace", SdkValue::Null),

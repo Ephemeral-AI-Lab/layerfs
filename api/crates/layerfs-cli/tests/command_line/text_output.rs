@@ -80,7 +80,7 @@ fn a_ready_row_prints_ready_in_a_list_s_text() {
     use layerfs_api::{Form, Part};
     use layerfs_cli::output::readable;
     let mut checked = Vec::new();
-    for call in layerfs_api::dispatch() {
+    for call in layerfs_api::calls() {
         let Some(form) = call.form else { continue };
         let Some(Part::Rows(rows)) = form.part("items") else {
             continue;

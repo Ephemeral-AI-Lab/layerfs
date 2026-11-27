@@ -2,7 +2,7 @@
 //! replay: the Sandbox's 17 checks, then one node per Workspace from its
 //! daemon's list and its folder's records (`workspace.mounted`,
 //! `workspace.activity`).
-#[path = "../../../../../control/crates/layerfs-inspect/tests/support/doctor_own.rs"]
+#[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::complete;
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
@@ -629,7 +629,11 @@ fn worker_route_uses_fixed_root_without_lease_or_record_changes() {
     )
     .unwrap();
     let child = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "worker_fixture_server", "--ignored"])
+        .args([
+            "--exact",
+            "doctor_sandbox::worker_fixture_server",
+            "--ignored",
+        ])
         .env("LFS_DOCTOR_TEST_ROOT", &guest)
         .env("LFS_DOCTOR_TEST_ADDRESS", address)
         .stdout(std::process::Stdio::null())

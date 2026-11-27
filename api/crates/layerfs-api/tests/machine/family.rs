@@ -39,6 +39,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 
 #[test]
 fn machines_over_records() {
+    let _env = crate::env_lock();
     // no provider tool and no bundle: every create is refused before a VM.
     // Tools are found on PATH, so it and HOME point at an empty folder.
     let empty = tempdir("path");

@@ -1,12 +1,9 @@
 //! The call table and its dispatcher (#533 step 2): 83 calls in ten
 //! families (the call surface 2.0), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
+use layerfs_api::{families, json, keys, size, Call, Kind};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
-use {
-    layerfs_api::{families, keys, size, Call, Kind},
-    layerfs_home::json,
-};
 
 fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
     SdkValue::Map(
@@ -58,7 +55,7 @@ fn each_family_holds_its_own_calls_and_names_are_unique() {
     // which calls exist is the contract test's to say (`tests/contract.rs`
     // compares the table with the frozen spec); no count is pinned here
     // while the families move to the 2.0 call surface one package at a time
-    let all: Vec<&Call> = layerfs_api::dispatch();
+    let all: Vec<&Call> = layerfs_api::calls();
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -167,7 +164,7 @@ fn branch_family() {
 fn branch_publish_declares_its_at_expected_and_force_options() {
     // The shell, Node and Python front ends build their arguments from this
     // table, so these options (and their shapes) are the CLI's and SDK's.
-    let call = layerfs_api::dispatch()
+    let call = layerfs_api::calls()
         .into_iter()
         .find(|call| call.family == "branch" && call.call == "publish")
         .expect("branch.publish is in the table");
@@ -543,11 +540,11 @@ fn sizes_and_keys() {
     assert_eq!(keys::snake_name("nextPagePos"), "next_page_pos");
     assert_eq!(keys::snake_name("/src/README.md"), "/src/README.md");
     assert_eq!(keys::snake_name("Makefile"), "Makefile");
-    assert!(layerfs_api::dispatch()
+    assert!(layerfs_api::calls()
         .into_iter()
         .flat_map(|c| c.args.iter().chain(c.options))
         .all(|a| a.name == a.name.to_lowercase()));
-    assert!(layerfs_api::dispatch()
+    assert!(layerfs_api::calls()
         .into_iter()
         .flat_map(|c| c.options)
         .any(|a| a.kind == Kind::Function));
@@ -717,7 +714,7 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
 #[test]
 fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
     use layerfs_api::{Paging, Profile};
-    let migrated: Vec<String> = layerfs_api::dispatch()
+    let migrated: Vec<String> = layerfs_api::calls()
         .into_iter()
         .filter(|call| call.form.is_some())
         .map(|call| call.name())
@@ -837,7 +834,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         ]
         .concat()
     );
-    for call in layerfs_api::dispatch() {
+    for call in layerfs_api::calls() {
         if let Some(form) = call.form {
             // every short key is a long key, and no key is listed twice
             for key in form.always.iter().chain(form.sometimes) {
@@ -915,7 +912,7 @@ fn every_argument_the_old_name_list_redacted_is_flagged_on_its_entry() {
         "to_path",
         "path_prefix",
     ];
-    for call in layerfs_api::dispatch() {
+    for call in layerfs_api::calls() {
         for arg in call.args.iter().chain(call.options) {
             if arg.kind != Kind::Text {
                 continue;

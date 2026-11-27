@@ -1,11 +1,10 @@
 //! Real native exec output, exit codes and cancellation from another
 //! process (call surface 2.0); no stand-in command output.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{broken_pipe, finish, layerfs, run, tempdir, text};
+use layerfs_api::{home, json};
 use layerfs_protocol::sdk::SdkValue;
 use std::{path::Path, process::Stdio};
-use {layerfs_api::home, layerfs_home::json};
 fn t(s: &str) -> SdkValue {
     SdkValue::text(s)
 }
@@ -36,7 +35,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -66,7 +65,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         &[
             ("project", t("live/p")),
             ("name", t("s1")),
-            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("machine", t(layerfs_api::names::HOST_MACHINE)),
         ],
     );
     let mounted = call(
@@ -160,14 +159,13 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         ],
     );
     call(&home, "sandbox.remove", &[("sandbox", t("s1"))]);
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
 }
 
 #[cfg(feature = "machine")]
-#[path = "../support/stream_worker.rs"]
-mod stream_worker;
+use crate::stream_worker;
 
 #[test]
 #[cfg(feature = "machine")]

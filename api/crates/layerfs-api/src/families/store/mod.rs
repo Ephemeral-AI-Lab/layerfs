@@ -5,9 +5,9 @@
 //! its Sandboxes (`attach`, `detach`). `store.get` answers from the
 //! home's records (it absorbs `store.status` and `store.stats`), and
 //! `store.move` replaces `store.push` and `store.pull`.
-pub(crate) mod lifecycle;
-pub(crate) mod maintenance;
-pub(crate) mod status;
+mod lifecycle;
+mod maintenance;
+mod status;
 
 use crate::dispatch::Calls;
 

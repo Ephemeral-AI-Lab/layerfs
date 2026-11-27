@@ -6,14 +6,13 @@
 //! backend that stays, and each new login as a new one.
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 #[path = "../support/postgresql.rs"]
 mod pg;
 
 use fixture::Fixture;
+use layerfs_api::names::HOST_MACHINE;
 use layerfs_api::worker::{read_host_frame, write_host_frame, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_home::names::HOST_MACHINE;
 use layerfs_protocol::sdk::SdkValue;
 use pg::*;
 use postgres::{Client as Postgres, NoTls};

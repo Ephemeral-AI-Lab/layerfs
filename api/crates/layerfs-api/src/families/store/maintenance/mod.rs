@@ -1,3 +1,5 @@
-pub(crate) mod compact;
-pub(crate) mod repair_mount_holders;
-pub(crate) mod upgrade;
+//! The Store calls that keep a Store in order: compact, upgrade and the
+//! repair of its mount holders.
+pub(super) mod compact;
+pub(super) mod repair_mount_holders;
+pub(super) mod upgrade;

@@ -3,10 +3,8 @@
 //! outcomes a caller may not know kept on disk (§8.5).
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
-#[path = "../support/host_writes.rs"]
-mod writes;
+use crate::fixture;
+use crate::writes;
 
 use fixture::Fixture;
 use layerfs_home::json;

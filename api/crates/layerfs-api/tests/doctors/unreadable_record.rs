@@ -54,6 +54,7 @@ fn garbage(path: PathBuf) {
 
 #[test]
 fn an_unreadable_record_is_a_broken_node_and_its_siblings_are_listed() {
+    let _env = crate::env_lock();
     // a stand-in `docker` that is not running: the built-in docker machine
     // answers at once
     let tools = tempdir("tools");

@@ -3,8 +3,7 @@
 //! through `--key-stdin` and taken no other way; today's `--key` reference,
 //! `--region` and `--part-size` are gone with no alias; a bucket that does
 //! not answer is `Unavailable` and nothing is recorded.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, run_with_stdin, tempdir, text};
 use layerfs_cli::parse::parse;
 

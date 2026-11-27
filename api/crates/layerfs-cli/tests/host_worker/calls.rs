@@ -2,21 +2,17 @@
 
 #[path = "../support/mod.rs"]
 mod common;
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 
 use common::{broken_pipe, failing_sinks, finish, layerfs, run, text};
 use fixture::Fixture;
+use layerfs_api::{home::paths, json, worker};
 use layerfs_protocol::sdk::SdkValue;
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
-use {
-    layerfs_api::{home::paths, worker},
-    layerfs_home::json,
-};
 
 fn t(value: &str) -> SdkValue {
     SdkValue::text(value)

@@ -155,6 +155,7 @@ fn old_worker(home: &Path) -> std::thread::JoinHandle<bool> {
 // One test owns PATH: every case asks the stand-in `docker`.
 #[test]
 fn home_and_machine_doctors_answer_from_their_frozen_checks() {
+    let _env = crate::env_lock();
     let tools = tempdir("tools");
     std::fs::create_dir_all(&tools).unwrap();
     let docker = tools.join("docker");

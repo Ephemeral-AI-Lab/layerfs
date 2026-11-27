@@ -127,7 +127,7 @@ fn check(home: &Path, kind: &str, test: &str) {
     .unwrap_err();
     assert_eq!(gone.code, "NotFound");
     assert!(!paths::project_record(home, "stats", test).exists());
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(source).unwrap();
 }
 
@@ -163,7 +163,7 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     );
     check(&home, "sqlite", "w");
     // A stopped worker refuses rather than starting anything.
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_file(paths::worker_record(&home, "box")).unwrap();
     let refused = layerfs_api::call(
         Some(&home),

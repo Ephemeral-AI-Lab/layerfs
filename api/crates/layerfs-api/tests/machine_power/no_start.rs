@@ -158,6 +158,7 @@ fn nothing_started(home: &Path, tools: &Path) {
 
 #[test]
 fn no_list_get_or_status_call_starts_a_machine() {
+    let _env = crate::env_lock();
     let tools = tempdir("tools");
     let limactl = tools.join("limactl");
     std::fs::write(&limactl, STAND_IN).unwrap();

@@ -4,16 +4,12 @@
 //! a refusal is one JSON line on stderr in the form asked. Against the real
 //! binary for the three migrated calls, and against the parser with a
 //! made-up entry for the secret, which no call of the table declares yet.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, run_with_stdin, tempdir, text};
-use layerfs_api::dispatch::table::{a, call, opt};
+use layerfs_api::calls::table::{a, call, opt};
+use layerfs_api::{json, Call, Context, Kind, Section};
 use layerfs_cli::parse::parse;
 use layerfs_protocol::sdk::SdkValue;
-use {
-    layerfs_api::{Call, Context, Kind, Section},
-    layerfs_home::json,
-};
 
 fn never(_: &mut Context<'_>, _: &SdkValue) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     unreachable!("the parser calls nothing")

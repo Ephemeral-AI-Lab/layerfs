@@ -61,6 +61,7 @@ fn log(tools: &Path) -> String {
 
 #[test]
 fn a_docker_sandbox_with_no_image_named_uses_the_bundle_s_image() {
+    let _env = crate::env_lock();
     // a stand-in docker: `load` answers an id, no container exists or runs
     let tools = tempdir("tools");
     let docker = tools.join("docker");

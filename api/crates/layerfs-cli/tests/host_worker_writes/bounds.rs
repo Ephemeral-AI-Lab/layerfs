@@ -7,10 +7,7 @@
 //! worker itself refuses such a change before effect when sent anyway.
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
-#[path = "../support/host_writes.rs"]
-mod writes;
+use crate::writes;
 
 use layerfs_home::json;
 use layerfs_protocol::sdk::SdkValue;

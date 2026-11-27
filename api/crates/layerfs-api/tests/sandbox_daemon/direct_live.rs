@@ -44,7 +44,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
 /// Runs `helper` in a new process of this test binary, on `home`.
 fn in_helper(home: &Path, action: &str) {
     let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["helper", "--exact", "--nocapture"])
+        .args(["direct_live::helper", "--exact", "--nocapture"])
         .env(HELPER, format!("{action}:{}", home.display()))
         .status()
         .unwrap();

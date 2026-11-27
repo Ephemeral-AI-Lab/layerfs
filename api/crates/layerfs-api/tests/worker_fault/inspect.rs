@@ -13,13 +13,13 @@
 #![cfg(feature = "worker-fault")]
 use layerfs_api::worker::fault::{Faults, OpFault, INSPECT_HELPER};
 use layerfs_home::names::MachineName;
+use layerfs_inspect::{Window, HARD};
 use layerfs_machine::worker;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::place;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use {layerfs_inspect::Window, layerfs_sandbox::inspect::owner::HARD};
 
 use crate::worker_store;
 use worker_store::{placed, until, Placed, SECRET};
@@ -30,7 +30,7 @@ static PROCESS: Mutex<()> = Mutex::new(());
 fn serial() -> MutexGuard<'static, ()> {
     let guard = PROCESS.lock().unwrap_or_else(|poison| poison.into_inner());
     until(Duration::from_secs(15), "earlier helpers", || {
-        layerfs_sandbox::inspect::owner::running() == 0
+        layerfs_inspect::running() == 0
     });
     guard
 }
@@ -91,7 +91,7 @@ fn two_stuck_reads_hold_two_helpers_and_nothing_else() {
         });
     }
     until(Duration::from_secs(2), "both admitted", || {
-        layerfs_sandbox::inspect::owner::running() == 2
+        layerfs_inspect::running() == 2
     });
 
     // the third is refused at once
@@ -129,7 +129,7 @@ fn two_stuck_reads_hold_two_helpers_and_nothing_else() {
     until(Duration::from_secs(1), "the connections' end", || {
         faults.serving_now() == 0
     });
-    assert_eq!(layerfs_sandbox::inspect::owner::running(), 2);
+    assert_eq!(layerfs_inspect::running(), 2);
     // (a thread that has answered is listed until it has ended: the two
     // callers above and the connections' own threads get a second for that)
     if let Some(then) = running {
@@ -143,7 +143,7 @@ fn two_stuck_reads_hold_two_helpers_and_nothing_else() {
 
     // once the stuck reads end, the next is admitted and nothing is left open
     until(Duration::from_secs(4), "the helpers' end", || {
-        layerfs_sandbox::inspect::owner::running() == 0
+        layerfs_inspect::running() == 0
     });
     assert!(started.elapsed() >= stuck);
     assert!(machine_log(&home).unwrap().get("lines").is_some());
@@ -162,7 +162,7 @@ fn a_panic_in_an_inspect_request_is_failed_and_the_next_is_served() {
     let (placed, faults) = with("inspect-panic");
     let home = placed.home.clone();
     // on the connection's thread, before any byte: read-only, so `Failed`
-    faults.on(layerfs_sandbox::inspect::route::OP, OpFault::Panic);
+    faults.on(layerfs_inspect::OP, OpFault::Panic);
     let refusal = machine_log(&home).unwrap_err();
     assert_eq!(refusal.code, "Failed", "{refusal:?}");
     assert!(
@@ -184,13 +184,10 @@ fn a_panic_in_an_inspect_request_is_failed_and_the_next_is_served() {
             .contains("an inspect request panicked and changed nothing"),
         "{refusal:?}"
     );
-    assert_eq!(layerfs_sandbox::inspect::owner::running(), 0);
+    assert_eq!(layerfs_inspect::running(), 0);
     // after an event the connection closes instead, and a read reports that
     // as `Unavailable`: it changed nothing, so it is never `Unknown`
-    faults.on(
-        layerfs_sandbox::inspect::route::OP,
-        OpFault::PanicAfterEvent,
-    );
+    faults.on(layerfs_inspect::OP, OpFault::PanicAfterEvent);
     let refusal = machine_log(&home).unwrap_err();
     assert_eq!(refusal.code, "Unavailable", "{refusal:?}");
     // the next request, and a Store call, answer
@@ -208,7 +205,7 @@ fn a_worker_that_never_answers_is_unavailable_at_the_caller_s_budget() {
     assert_eq!(budget, Duration::from_secs(8));
     // held on the connection's thread, before admission: no answer comes
     faults.on(
-        layerfs_sandbox::inspect::route::OP,
+        layerfs_inspect::OP,
         OpFault::Hang(budget + Duration::from_secs(3)),
     );
     let started = Instant::now();

@@ -1,8 +1,8 @@
 //! Machine-readable CLI discovery; these commands never open a home.
 use crate::output;
+use layerfs_api::{json, Kind};
 use layerfs_protocol::sdk::SdkValue;
 use std::process::ExitCode;
-use {layerfs_api::Kind, layerfs_home::json};
 
 fn strings(values: impl IntoIterator<Item = impl AsRef<str>>) -> SdkValue {
     SdkValue::List(
@@ -44,7 +44,7 @@ pub fn version() -> ExitCode {
             (
                 "formats",
                 SdkValue::Map(
-                    (layerfs_store::upgrade::FORMATS.iter())
+                    (layerfs_api::FORMATS.iter())
                         .map(|(engine, format)| ((*engine).to_owned(), SdkValue::Int(*format)))
                         .collect(),
                 ),
@@ -56,7 +56,7 @@ pub fn version() -> ExitCode {
 }
 
 pub fn help() -> ExitCode {
-    let calls = layerfs_api::dispatch();
+    let calls = layerfs_api::calls();
     let all = || calls.iter().map(|c| c.name()).collect::<Vec<_>>();
     let selected = |predicate: fn(&layerfs_api::Call) -> bool| {
         calls

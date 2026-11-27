@@ -72,7 +72,7 @@ fn a_worker_out_of_descriptors_keeps_serving() {
     let child = Command::new("sh")
         .arg("-c")
         .arg(format!(
-            "ulimit -n {DESCRIPTORS} && exec \"$0\" --exact the_worker_process --nocapture --test-threads 1"
+            "ulimit -n {DESCRIPTORS} && exec \"$0\" --exact fd_limit::the_worker_process --nocapture --test-threads 1"
         ))
         .arg(std::env::current_exe().unwrap())
         .env(SERVES, &dir)

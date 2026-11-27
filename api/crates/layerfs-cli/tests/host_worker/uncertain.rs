@@ -9,8 +9,7 @@
 //! the feature the test reports NOT_RUN.
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 #[path = "../support/host_writes.rs"]
 mod writes;
 

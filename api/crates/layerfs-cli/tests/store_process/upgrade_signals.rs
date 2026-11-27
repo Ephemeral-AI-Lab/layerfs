@@ -16,8 +16,7 @@
 //! halves (#804 W1, W2) and the frozen fixture
 //! `fixtures/store-formats/sqlite/v2`; on a build without them they say
 //! NOT_RUN and pass.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, tempdir, text, LAYERFS};
 use layerfs_home::json;
 use layerfs_protocol::sdk::SdkValue;

@@ -252,7 +252,7 @@ fn a_worker_makes_the_shallow_cut_and_refuses_a_request_without_one() {
     let f = Fixture::new();
     let writer = store_file(&paths::store_file(&f.root, "one"));
     let mut child = Command::new(std::env::current_exe().unwrap())
-        .args(["--ignored", "--exact", "worker_child"])
+        .args(["--ignored", "--exact", "store_doctor::worker_child"])
         .env("LAYERFS_DOCTOR_WORKER_FIXTURE_ROOT", &f.root)
         .stdout(Stdio::null())
         .spawn()

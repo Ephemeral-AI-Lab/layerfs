@@ -168,7 +168,7 @@ pub fn sqlite_fixture_home(tag: &str) -> Option<PathBuf> {
     let home = tempdir(tag).join("home");
     ok(&home, "home.init", &[]);
     ok(&home, "store.create", &[("name", t("fx"))]);
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     rebind(&home, "fx", &binding_of(&fixture));
     let file = home.join("store/fx/store.sqlite");
     std::fs::copy(&fixture, &file).unwrap();
@@ -268,7 +268,7 @@ pub fn postgresql_fixture_home(server: &Postgres, tag: &str, db: &str) -> PathBu
             ("password", t("unused")),
         ],
     );
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     server
         .client(db)
         .batch_execute("DROP SCHEMA layerfs CASCADE")

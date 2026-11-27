@@ -1,7 +1,6 @@
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 
 use fixture::Fixture;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -61,7 +60,7 @@ fn a_foreign_uid_receives_no_worker_hello() {
     // Widen only this test fixture's modes to reach the peer check even
     // though the filesystem would ordinarily reject the other uid first.
     let mut probe = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "foreign_peer_probe"])
+        .args(["--exact", "peer::foreign_peer_probe"])
         .uid(65534)
         .gid(65534)
         .env(PROBE_SOCKET, &home.paths.control)

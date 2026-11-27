@@ -3,8 +3,7 @@
 //! `layerfs <family> --help` lists the family's calls; a call's help shows
 //! its arguments, options, answer and example; a wrong command line names
 //! what is wrong and shows the call's usage line.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_api::{guide, Kind};
 
@@ -16,7 +15,7 @@ fn every_family_argument_and_option_has_its_words_and_every_call_an_example() {
             missing.push(format!("family {}", family.name));
         }
     }
-    for call in layerfs_api::dispatch() {
+    for call in layerfs_api::calls() {
         let name = call.name();
         let shown = (call.args.iter().chain(call.options))
             .filter(|arg| arg.kind != Kind::Function || arg.name == "on_progress");

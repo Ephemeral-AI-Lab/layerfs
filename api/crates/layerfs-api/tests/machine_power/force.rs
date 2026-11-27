@@ -25,6 +25,7 @@ fn call(
 }
 #[test]
 fn force_stop_bypasses_in_use_and_dead_worker_preserving_disk_store_and_records() {
+    let _env = crate::env_lock();
     let root = std::env::temp_dir().join(format!("lfs-force-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let home = root.join("home");
@@ -217,6 +218,7 @@ esac
 
 #[test]
 fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
+    let _env = crate::env_lock();
     let root = std::env::temp_dir().join(format!("lfs-force-pre-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let home = root.join("home");

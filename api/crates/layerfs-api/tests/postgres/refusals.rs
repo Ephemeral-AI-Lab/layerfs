@@ -76,6 +76,7 @@ fn connected(home: &Path, name: &str, url: &str, extra: &[(&str, SdkValue)], pas
 }
 
 /// A machine record of `platform` (nothing runs).
+#[cfg(feature = "machine")]
 fn machine(home: &Path, name: &str, platform: &str) {
     write_record(
         &paths::machine_record(home, name),
@@ -90,6 +91,7 @@ fn machine(home: &Path, name: &str, platform: &str) {
 
 /// Sandbox `sandbox` of project `project`, on machine `machine`, as its
 /// record keeps it (nothing runs).
+#[cfg(feature = "machine")]
 fn sandbox_on(home: &Path, sandbox: &str, project: &str, machine: &str) {
     write_record(
         &paths::sandbox_record(home, sandbox),

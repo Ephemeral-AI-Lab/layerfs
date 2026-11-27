@@ -2,8 +2,7 @@
 //! that it names and the arguments the table gives it: a wrong arity or an
 //! option the call does not take is exit 2 before any call, a well-formed
 //! command line reaches the library, and the help is the table's.
-#[path = "../support/mod.rs"]
-mod common;
+use crate::common;
 use common::{layerfs, run, tempdir, text};
 use std::path::Path;
 

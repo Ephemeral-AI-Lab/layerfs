@@ -3,10 +3,10 @@
 //! --with space`, `machine.platforms` is `home get --with platforms`,
 //! `logs.machine` is `machine log`). `stats` also holds the small helpers
 //! that rename what a library function answered to the row's keys.
-pub(crate) mod lifecycle;
+mod lifecycle;
 mod load_image;
 mod prune;
-pub(crate) mod status;
+mod status;
 mod update;
 
 use crate::dispatch::Calls;

@@ -1,8 +1,7 @@
 #![cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 //! Idle exit under management polling. Expected runtime about 65-75 s.
 
-#[path = "../support/host_worker.rs"]
-mod fixture;
+use crate::fixture;
 
 use fixture::Fixture;
 use std::panic::{catch_unwind, AssertUnwindSafe};

@@ -357,7 +357,7 @@ fn an_old_format_store_answers_outdated_with_upgrade_as_its_fix() {
         "project.init",
         &[("project", t("old/api")), ("folder", folder_text)],
     );
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     sql(
         &own,
         "ALTER TABLE layerfs.history_meta DROP CONSTRAINT history_meta_schema_version_check; \
@@ -386,7 +386,7 @@ fn an_old_format_store_answers_outdated_with_upgrade_as_its_fix() {
     let got = ok(&home, "project.get", &[("project", t("old/api"))]);
     let by = SdkValue::map([("store", t("old")), ("reason", t("outdated"))]);
     assert_eq!(got.get("blocked_by"), Some(&by), "{got:?}");
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     sql(
         &url,
         &format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)"),

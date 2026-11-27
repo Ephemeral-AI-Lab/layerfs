@@ -13,6 +13,7 @@
 //! test here takes one lock. The walker's own tests are layerfs-sandbox
 //! `inspect_files`.
 #![cfg(unix)]
+use layerfs_api::home::{self, lease, paths, read_record, write_record};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
@@ -22,10 +23,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use {
-    layerfs_api::home::{self, paths, read_record, write_record},
-    layerfs_store::lease,
-};
 
 static PROCESS: Mutex<()> = Mutex::new(());
 static HOMES: AtomicUsize = AtomicUsize::new(0);
@@ -428,7 +425,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
     // `sandbox.log`, `machine.stats` (layerfs-project#164, with `--with
     // space`), `machine.files` and `machine.log` carry the flag: no family is
     // skipped by its name
-    let quiet: Vec<_> = layerfs_api::dispatch()
+    let quiet: Vec<_> = layerfs_api::calls()
         .into_iter()
         .filter(|call| call.quiet)
         .map(|call| call.name())

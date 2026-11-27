@@ -4,9 +4,9 @@
 //! version its result names. Free text and credentials are logged only as
 //! byte counts (each argument's entry says so: `redact`), and no other
 //! result value is kept.
-use super::super::answer::form::Asked;
-use super::super::table::{Arg, Call, Kind, Redact};
-use super::super::Scope;
+use crate::dispatch::answer::form::Asked;
+use crate::dispatch::table::{Arg, Call, Kind, Redact};
+use crate::dispatch::Scope;
 use layerfs_home::outcome::Outcome;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
@@ -128,7 +128,7 @@ pub fn argv(spec: &Call, args: &SdkValue, asked: &Asked, scope: Option<&Scope>) 
 }
 
 /// Whether `text` is a Commit or Layer id: 66 lowercase hex digits.
-pub(super) fn is_id(text: &str) -> bool {
+pub(in crate::dispatch) fn is_id(text: &str) -> bool {
     text.len() == 66
         && text
             .bytes()

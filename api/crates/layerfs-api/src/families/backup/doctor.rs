@@ -4,7 +4,7 @@
 use crate::dispatch::table::Kind::{Bool, Name};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::Context;
-use crate::doctor::answer::{self, FORM};
+use crate::doctor::{self, FORM};
 use layerfs_home::outcome::Outcome;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
@@ -27,5 +27,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         full: args.get("full") == Some(&SdkValue::Bool(true)),
         ..Options::default()
     };
-    answer::run(context, Kind::Bucket, bucket, options)
+    doctor::run(context, Kind::Bucket, bucket, options)
 }

@@ -7,8 +7,8 @@ use layerfs_home::outcome::refused;
 use layerfs_machine::record::MachineRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::SandboxRecord;
+use layerfs_store::record::{StoreKind, StoreRecord};
 use std::path::Path;
-use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
 
 type Result = std::result::Result<(), SdkRefusal>;
 
@@ -96,7 +96,7 @@ fn transfer(home: &Path, name: &str) -> Result {
 }
 
 /// Checks the fully validated public call, independent of front end or features.
-pub(super) fn check(home: &Path, policy: Policy, args: &SdkValue) -> Result {
+pub(in crate::dispatch) fn check(home: &Path, policy: Policy, args: &SdkValue) -> Result {
     let text = |field| args.get_text(field).unwrap_or("");
     match policy {
         Policy::None => Ok(()),

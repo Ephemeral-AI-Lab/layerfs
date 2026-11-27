@@ -155,6 +155,7 @@ fn step(home: &Path, line: &str) -> SdkValue {
 
 #[test]
 fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
+    let _env = crate::env_lock();
     // no provider tool and no bundle: anything that reached the machine
     // would fail
     let empty = tempdir("path");
@@ -332,6 +333,7 @@ fn a_nameless_machines_holders_and_the_machine_go_by_their_records() {
 /// `blocked_by` of `store get` and the machine's chain, nothing dialled.
 #[test]
 fn a_store_move_off_a_nameless_machine_is_unavailable_with_its_blocked_by() {
+    let _env = crate::env_lock();
     let empty = tempdir("move-path");
     std::env::set_var("PATH", &empty);
     std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
@@ -394,6 +396,7 @@ fn a_store_move_off_a_nameless_machine_is_unavailable_with_its_blocked_by() {
 /// the chain's holder steps go by their records alone, reaching nothing.
 #[test]
 fn a_machine_whose_vm_is_gone_lets_its_holders_go_by_their_records() {
+    let _env = crate::env_lock();
     let empty = tempdir("gone-path");
     std::env::set_var("PATH", &empty);
     std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");

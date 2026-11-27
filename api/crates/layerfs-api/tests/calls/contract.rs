@@ -15,14 +15,11 @@
 //!
 //! Every package has landed: [`PENDING_MUST_BE_EMPTY`] holds the pending
 //! file empty.
+use layerfs_api::{json, Asked, Call, Form, Kind, Paging, Part, Place, Section};
 use layerfs_home::outcome::{public_code, CODES, FOLDS};
 use layerfs_home::state::{Reason, State, WORDS};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
-use {
-    layerfs_api::{Asked, Call, Form, Kind, Paging, Part, Place, Section},
-    layerfs_home::json,
-};
 
 /// The one switch, `true` since every package landed: nothing may be
 /// pending: no unmigrated call, no old name, nothing not built, no
@@ -203,7 +200,7 @@ fn every_call_is_migrated_or_pending_and_the_table_names_no_other() {
     }
     // the table: a call of the specification, or an old name on its way out
     let old = at(&pending, "old_names");
-    for entry in layerfs_api::dispatch() {
+    for entry in layerfs_api::calls() {
         let call = entry.name();
         assert!(
             named.contains(&call.as_str()) || old.get(&call).is_some(),
@@ -571,7 +568,7 @@ fn a_migrated_entry_declares_what_its_row_says() {
             .any(|option| option.get_text("name") == Some(name)));
     }
     let sections = texts(at(&spec, "with_values"));
-    for entry in layerfs_api::dispatch() {
+    for entry in layerfs_api::calls() {
         for section in entry.with {
             assert!(
                 sections.iter().any(|word| word == section.name),
@@ -778,7 +775,7 @@ fn the_shaping_rules_hold_on_a_made_up_answer() {
 #[test]
 fn observed_at_is_news_only_when_unknown_or_live() {
     const SEEN: Form = Form::of(&["state"], &["observed_at"], &["state", "observed_at"])
-        .short_when(&[layerfs_api::dispatch::answer::form::OBSERVED]);
+        .short_when(&[layerfs_api::calls::form::OBSERVED]);
     let live = [Section::own("live", &["holders"])];
     let at = || SdkValue::text("2026-11-19T00:00:00Z");
     let answer = |state: &str, with: &[&str], detail| {
@@ -1268,7 +1265,7 @@ fn store_upgrade_and_the_format_section_are_the_specification_s() {
     let names: Vec<&str> = entry.args.iter().map(|arg| arg.name).collect();
     assert_eq!(names, ["store"]);
     // in help order, right after compact
-    let store: Vec<String> = layerfs_api::dispatch()
+    let store: Vec<String> = layerfs_api::calls()
         .iter()
         .filter(|call| call.family == "store")
         .map(|call| call.call.to_owned())

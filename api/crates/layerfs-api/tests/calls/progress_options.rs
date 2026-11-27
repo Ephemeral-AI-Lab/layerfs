@@ -3,7 +3,7 @@ use layerfs_api::Kind;
 use layerfs_protocol::sdk::SdkValue;
 
 fn declaring(option: &str) -> Vec<String> {
-    layerfs_api::dispatch()
+    layerfs_api::calls()
         .into_iter()
         .filter(|call| {
             call.options
@@ -45,7 +45,7 @@ fn twenty_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
     assert_eq!(declaring("stdout"), ["workspace.exec"]);
     assert_eq!(declaring("stderr"), ["workspace.exec"]);
     // no other option is a function
-    let functions: usize = layerfs_api::dispatch()
+    let functions: usize = layerfs_api::calls()
         .iter()
         .map(|call| {
             call.options
