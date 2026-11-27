@@ -87,8 +87,9 @@ SQL work to the calling thread's counters
                             Writer::try_acquire once (flock LOCK_EX|LOCK_NB
                             on the Store's parent directory, Linux and macOS)
                             held by another Session or process: drop the
-                            turn; Writer::acquire (blocking flock); enter
-                            the turn again; quarantined? Unknown
+                            turn; Writer::wait (blocking flock, counted as
+                            wait.writer); enter the turn again;
+                            quarantined? Unknown
                                                        (skipped if nested)
    3 state mutex            the connection; quarantined? release, Unknown;
                             identity checked under the lane
@@ -126,7 +127,11 @@ kernel's order, not the session's FIFO order, and each checks quarantine
 again under its re-entered turn. It is the same lane on Linux and macOS: a holder process that
 exits releases it and a signal during the wait is `Cancelled`. A fresh
 ordinary Session takes this lane before opening and can wait behind existing
-work in that directory. Its connection settings can initiate WAL recovery,
+work in that directory. `Writer::acquire` makes one non-blocking attempt
+first; only a lane found held is waited for, and that kernel wait, like a
+writer's in `admit_writer`, is the calling thread's `wait.writer` time, so a
+traced call that opens a Workspace reader while a Commit holds the lane shows
+the wait below its phase. Its connection settings can initiate WAL recovery,
 so concurrent ordinary openers serialize setup. A Store creation's later
 schema statements take it once per transaction. A writer that bypasses the
 lane is left with the exact `Busy`. The lane is one held

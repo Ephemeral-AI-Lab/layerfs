@@ -16,7 +16,30 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
+    /// The lane, waited for when another holder has it. One non-blocking
+    /// probe ([`Writer::try_acquire`]) is a readiness check, not a retry;
+    /// only a lane found held is waited for, and that wait is the calling
+    /// thread's `wait.writer` time ([`Writer::wait`]).
     pub(crate) fn acquire(path: &Path) -> Result<Self, BackendError> {
+        match Self::try_acquire(path)? {
+            Some(writer) => Ok(writer),
+            None => Self::wait(path),
+        }
+    }
+
+    /// Waits in the kernel for the lane and adds the wait, on every exit, to
+    /// the calling thread's `wait.writer` total, like a queued admission.
+    pub(crate) fn wait(path: &Path) -> Result<Self, BackendError> {
+        let began = std::time::Instant::now();
+        let waited = Self::lock(path);
+        layerfs_telemetry::timer::waits::add(
+            layerfs_telemetry::timer::waits::Wait::Writer,
+            began.elapsed(),
+        );
+        waited
+    }
+
+    fn lock(path: &Path) -> Result<Self, BackendError> {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             // Never open another FD to SQLite's main/WAL/SHM files here:
@@ -89,7 +112,7 @@ impl Writer {
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             // As `acquire`: no advisory lane on these platforms.
-            Self::acquire(path).map(Some)
+            Self::lock(path).map(Some)
         }
     }
 
@@ -164,7 +187,7 @@ impl crate::backend::sqlite::session::connection::Session {
             return Ok((turn, writer));
         }
         drop(turn);
-        let writer = Writer::acquire(&self.path)?;
+        let writer = Writer::wait(&self.path)?;
         let turn = self
             .admission
             .enter(layerfs_telemetry::timer::waits::Wait::Writer)?;

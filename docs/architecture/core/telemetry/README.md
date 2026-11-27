@@ -102,7 +102,7 @@ work and changes no result.
 
 | `Wait` | Node | Added by |
 | --- | --- | --- |
-| `Writer` | `wait.writer` | Store writer admission, [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs) |
+| `Writer` | `wait.writer` | Store writer admission, [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs); a SQLite Store's directory writer lane found held (a writer waiting for another Session's or process's lane, and a new Session's open), [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | `Reader` | `wait.reader` | read-only Store connection admission, same file |
 | `ReadSession` | `wait.read_session` | daemon read-session lock, [`read_handle.rs`](../../../../engine/crates/layerfs-store-service/src/store/read_handle.rs) |
 
