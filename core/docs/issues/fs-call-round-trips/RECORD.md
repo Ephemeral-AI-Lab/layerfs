@@ -829,3 +829,22 @@ Production LOC: 227,592 -> 232,612 (delta +5,020)
   reference absent (retired R9c; last counted 65,417 at tree 498dd1917812)
   Method: tools/production_loc.py --detail on base 1317ebf7ca and the tip 3a15eba8f4
 ```
+
+### Owner decision 2026-11-27: misses accepted (relayed by the parent session)
+
+The owner accepts every miss beyond 15% as final for #818; each keeps its
+recorded cause:
+
+| Miss | Measured vs target | Recorded cause | Status |
+|---|---|---|---|
+| `revision` h100 | 52 trips (warm 48) vs ~30; h10 23 | Layer-chain rows not windowed | accepted by the owner |
+| `diff_files.h10_vs_h99` | 35 vs ≤ 15 | per-side Commit row ×4 and markers | accepted by the owner |
+| `mkdir` / `cp` / `mv` | 34 / 32 / 29 vs ≤ 26 | non-fused Commit path; the 8 KiB staging limit is an owner deferral | accepted by the owner |
+| PostgreSQL Init 10k local | ~5.9 / 6.0 s vs ~0.7 s projected | server foreign-key work (30,418 nested calls), not trips | accepted by the owner |
+| +10 ms latency band | 7 rows over 1.10× at M3 | netem late release and client gaps under load vs a median calibration; wire exchanges equal counted trips (`receipts/M3/latency-diag/`) | accepted by the owner |
+
+**Still awaiting the owner's decision (not approved):** the four fault-only
+refusal-order changes R5 (context statement failure refuses before an invalid
+`path`), W6 (failed plan read refuses at the window's first reading change),
+H6 (batched `diff_files` locates the right side before the left text) and R2
+(failed serial read refuses instead of falling back to serial 0).
