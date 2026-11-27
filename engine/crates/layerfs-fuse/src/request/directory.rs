@@ -112,7 +112,7 @@ impl KernelFilesystem {
                     // It only gives back, so a stopped mount never refuses it.
                     let started = std::time::Instant::now();
                     let closed = services.close_directory(mount, serial, handle.0).await;
-                    layerfs_vfs::requests::phase::charge(layerfs_vfs::requests::phase::Phase::CloseDirectory, started);
+                    crate::request::charge(crate::request::Phase::CloseDirectory, started);
                     drop(closed?);
                     Ok::<_, ServiceError>(())
                 }

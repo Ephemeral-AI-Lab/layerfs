@@ -64,11 +64,7 @@ impl Overlay {
                 .borrow_mut()
                 .operations
                 .remove(owner.owner, |held| *held == owner)?;
-            self.enqueue(
-                crate::reclaim::OPERATION_RECORD,
-                integer(owner.owner)?,
-                2,
-            )?;
+            self.enqueue(crate::reclaim::OPERATION_RECORD, integer(owner.owner)?, 2)?;
             Ok(())
         })
     }

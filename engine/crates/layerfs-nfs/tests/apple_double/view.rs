@@ -2,12 +2,8 @@
 //! the export keeps macOS AppleDouble companions out: READDIR lists it and
 //! LOOKUP, READ, WRITE, CREATE, RENAME onto it and REMOVE reach it; only a
 //! `._` name the view does not hold is a companion in export memory.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
+use crate::client;
+use crate::rig;
 use client::{Client, How, Set, ACCES, EXIST, NOENT};
 use std::{fs, net::TcpListener, path::PathBuf, time::Duration};
 

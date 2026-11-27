@@ -1,7 +1,7 @@
 //! The cookies of published READDIR replies: one memory page per reply, holding
 //! exactly the names its buffer accepted.
+use super::directory::INLINE_PAGES;
 use super::directory_read::decode_names;
-use super::super::generation::INLINE_PAGES;
 use crate::{
     contract::kernel_directory::Published, KernelCookieOffer, KernelDirectoryCursor,
     KernelDirectoryPage, Overlay, OverlayError, OverlayResult, PAGE_ROWS,

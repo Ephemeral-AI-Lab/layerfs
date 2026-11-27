@@ -1,5 +1,9 @@
 //! Exact per-connection custody: mount, receive loops, their owner and receipts.
-use crate::{AbortWrite, MountEntry, Negotiation, request::{Accounting, OpcodeWork}, DispatchError, MountRequests, MountWork};
+use crate::{
+    mount::{AbortWrite, MountEntry, Negotiation},
+    request::{Accounting, OpcodeWork},
+    DispatchError, MountRequests, MountWork,
+};
 use fuser::{SessionMonitor, SessionOutcome, SessionPhase, SessionSnapshot};
 use layerfs_overlay::KernelMount;
 use layerfs_vfs::ports::mount::{FailedDemands, Fence};

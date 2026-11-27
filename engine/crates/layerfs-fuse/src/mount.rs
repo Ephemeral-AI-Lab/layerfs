@@ -1,10 +1,13 @@
+//! Linux mount profile, first-party mount controls and negotiation facts.
+//!
 //! First-party device, direct mount, one plain detach and one abort write; no
 //! helper or lazy path. Also the one control-filesystem mount a daemon makes
 //! when its container has none.
+use fuser::{InitFlags, KernelConfig, Version};
 use nix::{
     errno::Errno,
     mount::{mount, umount2, MntFlags, MsFlags},
-    unistd::write,
+    unistd::{sysconf, write, SysconfVar},
 };
 use std::{
     ffi::OsStr,
@@ -15,6 +18,7 @@ use std::{
         unix::{ffi::OsStrExt, fs::DirBuilderExt},
     },
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 const DEVICE: &str = "/dev/fuse";
@@ -192,11 +196,7 @@ fn unescape(field: &[u8]) -> Vec<u8> {
     out
 }
 
-// Exact selected S8 profile over the pinned library's immutable defaults.
-use fuser::{InitFlags, KernelConfig, Version};
-use nix::unistd::{sysconf, SysconfVar};
-use std::{io, time::Duration};
-
+/// Exact selected S8 profile over the pinned library's immutable defaults.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Negotiation {
     pub abi: Version,

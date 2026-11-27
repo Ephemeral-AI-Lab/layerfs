@@ -5,19 +5,19 @@
 //! they do not limit total files, changes, payload or Workspace lifetime.
 #![forbid(unsafe_code)]
 
-mod contract;
 pub(crate) mod backing;
+mod contract;
+pub(crate) mod custody;
 pub(crate) mod generation;
-pub(crate) mod reclaim;
+pub(crate) mod kernel;
 mod namespace;
 mod open;
 mod payload;
-pub(crate) mod custody;
-pub(crate) mod kernel;
+pub(crate) mod reclaim;
+pub(crate) use backing::close;
+pub(crate) use backing::connection as db;
 pub(crate) use contract::error;
 pub(crate) use contract::types::ReferenceKind;
-pub(crate) use backing::connection as db;
-pub(crate) use backing::close;
 pub(crate) use namespace::compound;
 pub(crate) use namespace::inode;
 pub(crate) use payload::cells::codec as cells;
@@ -25,15 +25,16 @@ pub(crate) use payload::layers;
 
 pub(crate) use backing::metrics;
 
-pub(crate) use contract::types;
 pub(crate) use backing::profile;
 pub(crate) use backing::statements as sql;
-pub(crate) use reclaim::turn as reclaim;
+pub(crate) use contract::types;
 
+pub use backing::accounting::{Resources, StoredCounts};
+pub use backing::physical::{AllocationState, AllocationWork, ClosedFile};
+pub use backing::startup::{Creation, CreationWork};
 pub use close::CleanupState;
 pub use compound::SourceRows;
 pub use contract::custody::{CapturedReader, FileRead, LookupOwner, OpenFile, OperationOwner};
-pub use contract::operation_record::{indexed_operation_record_changes_bytes, IndexedOperationRecordApply, IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope, OperationRecordExpectedValue};
 pub use contract::kernel::{
     KernelApplied, KernelDecision, KernelEffect, KernelLink, KernelMount, KernelMountState,
     KernelObservation,
@@ -41,20 +42,24 @@ pub use contract::kernel::{
 pub use contract::kernel_directory::{
     KernelCookieOffer, KernelDirectory, KernelDirectoryCursor, KernelDirectoryPage,
 };
-pub use backing::accounting::{Resources, StoredCounts};
-pub use backing::physical::{AllocationState, AllocationWork, ClosedFile};
-pub use backing::startup::{Creation, CreationWork};
+pub use contract::operation_record::{
+    indexed_operation_record_changes_bytes, IndexedOperationRecordApply,
+    IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
+    OperationRecordExpectedValue,
+};
 pub use db::Overlay;
-pub use payload::work::PayloadWork;
 pub use error::{CloseFailure, OverlayError, OverlayResult};
+pub use generation::captured::cursor::{
+    CapturedGap, CapturedRunCursor, CapturedRunReply, CapturedRunStep, CapturedRunWork,
+};
+pub use generation::captured::digest::CapturedDigest;
 pub use generation::tickets::{ReplyTickets, Settled};
-pub use reclaim::{MaintenanceCursor, MaintenanceStep};
 pub use metrics::{DatabaseWork, StatementKind, StatementWork};
 pub use open::{OpenDisposals, OpenStateCounts};
-pub use generation::captured::cursor::{CapturedGap, CapturedRunCursor, CapturedRunReply, CapturedRunStep, CapturedRunWork};
-pub use generation::captured::digest::CapturedDigest;
+pub use payload::work::PayloadWork;
 pub use profile::{DatabaseProfile, ProfileConfig};
-pub use reclaim::ReclaimStep;
+pub use reclaim::turn::ReclaimStep;
+pub use reclaim::{MaintenanceCursor, MaintenanceStep};
 pub use types::{
     BaseSource, Binding, Capture, Cell, Changes, ClaimedRange, DirectoryEntry,
     DirectoryEntryChange, DirectoryEntryWindow, Generation, Inode, InodeKind, LocalRead,

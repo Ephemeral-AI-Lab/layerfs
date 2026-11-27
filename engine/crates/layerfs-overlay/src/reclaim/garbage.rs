@@ -1,5 +1,9 @@
 //! Bounded live garbage and generation-selective retirement, metadata first.
-use crate::{db::unsigned, reclaim::{Item, OPERATION_RECORD, PAGE, STALE, STALE_PIECES, STEPS}, sql, Overlay, OverlayResult, StatementKind};
+use crate::{
+    db::unsigned,
+    reclaim::{Item, OPERATION_RECORD, PAGE, STALE, STALE_PIECES, STEPS},
+    sql, Overlay, OverlayResult, StatementKind,
+};
 
 impl Overlay {
     pub(crate) fn retire_generation(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {

@@ -37,7 +37,7 @@ proof_test=${2:-$proof_default}
 if [ "${3:-}" = ioerr ]; then
     [ "$proof_binary" != device_capacity ] || [ "$proof_package" = layerfs-overlay ]
     proof_shim=$proof_root/enospc-as-eio.so
-    cc -shared -fPIC -Wall -Wextra -Werror engine/crates/layerfs-overlay/tests/enospc_as_eio.c -ldl -o "$proof_shim"
+    cc -shared -fPIC -Wall -Wextra -Werror engine/crates/layerfs-overlay/tests/support/enospc_as_eio.c -ldl -o "$proof_shim"
     export LAYERFS_PROOF_TRANSLATE_ENOSPC=1
     export LD_PRELOAD=$proof_shim
 fi

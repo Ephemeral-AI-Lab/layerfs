@@ -1,5 +1,12 @@
 //! Independent mutable orphan domain and its exact immutable inheritance root.
-use crate::{db::integer, inode, layers::Layer, reclaim::{ORPHAN, SERIAL_RETIRE}, sql, FileRead, Inode, LocalRead, Overlay, OverlayError, OverlayResult, StatementKind, WorkspaceState};
+use crate::{
+    db::integer,
+    inode,
+    layers::Layer,
+    reclaim::{ORPHAN, SERIAL_RETIRE},
+    sql, FileRead, Inode, LocalRead, Overlay, OverlayError, OverlayResult, StatementKind,
+    WorkspaceState,
+};
 pub(crate) const DOMAIN: i64 = -1;
 #[derive(Clone, Copy)]
 pub(crate) struct Orphan {

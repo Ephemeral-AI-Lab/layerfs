@@ -1,8 +1,6 @@
-//! Responsibility-scoped implementation modules and reexports.
-pub(crate) mod failed;
+//! The generation cycle: live rows sealed for Commit, then installed.
 pub(crate) mod capture;
-pub(crate) mod tickets;
 pub(crate) mod captured;
-
-
-pub(crate) use super::kernel::directory::INLINE_PAGES;
+pub(crate) mod failed;
+pub(crate) mod install;
+pub(crate) mod tickets;

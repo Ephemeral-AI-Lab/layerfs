@@ -1,4 +1,3 @@
-#![cfg(target_os = "linux")]
 use fuser::{Errno, FileType, INodeNo};
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
 use layerfs_fuse::attributes::Identity;

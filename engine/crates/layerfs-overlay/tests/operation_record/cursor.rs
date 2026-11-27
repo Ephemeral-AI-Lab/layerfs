@@ -1,6 +1,5 @@
 //! Complete-key non-destructive traversal and actual scoped SQL work.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::Temp;
 

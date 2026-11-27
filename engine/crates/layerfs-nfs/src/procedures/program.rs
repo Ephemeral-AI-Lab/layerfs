@@ -1,9 +1,20 @@
 //! NFS program 100003 version 3: dispatch of every procedure.
 //!
 //! The reading procedures are answered here; the changing ones in
-//! [`crate::changing`]. A read-only export answers every changing procedure
+//! [`crate::procedures::mutation`]. A read-only export answers every changing procedure
 //! `NFS3ERR_ROFS` with its empty weak cache consistency data.
-use crate::{protocol::{attributes::{access, post_op_maybe, Status}, rpc::{Accept, Credentials}, xdr::{Garbage, Reader, Writer}}, kernel::{mutation::Tickets, references::Kernel}, procedures::{mutation, directory::{list, Listing}}};
+use crate::{
+    kernel::{mutation::Tickets, Kernel},
+    procedures::{
+        directory::{list, Listing},
+        mutation,
+    },
+    protocol::{
+        attributes::{access, post_op_maybe, Status},
+        rpc::{Accept, Credentials},
+        xdr::{Garbage, Reader, Writer},
+    },
+};
 use layerfs_overlay::READ_WINDOW;
 
 pub const PROGRAM: u32 = 100_003;

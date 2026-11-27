@@ -3,12 +3,8 @@
 //! `sync_volume_np` on macOS) runs when that flush succeeds and is refused,
 //! with nothing committed, when it fails.
 #![cfg(target_os = "macos")]
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
+use crate::client;
+use crate::rig;
 use client::Client;
 use layerfs_daemon::control::{ExportServing, ExportServingConfig, Failure, Helper, Mounter};
 use layerfs_history::WorkspaceId;

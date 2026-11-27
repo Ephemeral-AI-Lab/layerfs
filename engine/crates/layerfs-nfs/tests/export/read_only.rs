@@ -2,15 +2,9 @@
 //! byte, link target, mode and identity of the source tree through the
 //! protocol alone, the synthetic kernel's reference discipline, cookies,
 //! refusals and stale handles across engine mounts.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
-#[allow(dead_code)]
-#[path = "../support/spy.rs"]
-mod spy;
+use crate::client;
+use crate::rig;
+use crate::spy;
 #[allow(dead_code)]
 #[path = "../support/tree.rs"]
 mod tree;

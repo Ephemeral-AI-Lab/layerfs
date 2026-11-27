@@ -129,11 +129,7 @@ fn initialize(path: &Path, config: ProfileConfig, template: Option<&Path>) -> Cr
             &mut work.connection_configuration_calls,
         )?;
         if template.is_none() {
-            crate::backing::batch::batch(
-                &connection,
-                &sql,
-                include_str!("../../sql/schema.sql"),
-            )?;
+            crate::backing::batch::batch(&connection, &sql, include_str!("../../sql/schema.sql"))?;
         }
         profile.schema_version =
             super::profile::readback(&connection, &sql, "PRAGMA user_version", |row| row.get(0))?;

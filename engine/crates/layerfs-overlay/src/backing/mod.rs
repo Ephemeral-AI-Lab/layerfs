@@ -12,7 +12,3 @@ pub(crate) mod close;
 pub(crate) mod explain;
 pub(crate) mod metrics;
 pub(crate) mod workspace;
-
-// Responsibility-scoped implementation modules and reexports.
-
-

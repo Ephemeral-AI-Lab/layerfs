@@ -3,7 +3,7 @@
 //! itself; only a later terminal call may ask again for a detach the kernel
 //! refused, never for the abort.
 use super::state::{DetachAttempt, DrainStage, Drained, ForceRefusal, KernelSession, Undrained};
-use crate::{mount, AbortWrite};
+use crate::mount::{self, AbortWrite};
 use std::{sync::atomic::Ordering, time::Instant};
 
 impl KernelSession {

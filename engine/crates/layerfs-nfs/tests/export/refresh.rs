@@ -5,12 +5,8 @@
 //! SETATTR asking another mode is applied even while the inode is marked,
 //! and the refresh chmod that follows does not undo it; every other SETATTR
 //! still changes the inode; the Commit holds only real changes.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
+use crate::client;
+use crate::rig;
 use client::{Client, Set};
 use std::{
     fs,

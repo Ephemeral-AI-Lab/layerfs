@@ -1,17 +1,18 @@
 //! XDR, RPC record marking, call headers and file handles through the public
 //! API, and the export's transfer window: 256 KiB per call, one engine write
 //! window and two bounded read windows.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
-#[allow(dead_code)]
-#[path = "../support/spy.rs"]
-mod spy;
+use crate::client;
+use crate::rig;
+use crate::spy;
 use client::{Client, OK};
-use layerfs_nfs::{protocol::{handle::{HandleError, SqliteHandles, HANDLE_BYTES}, rpc::{parse_call, write_record, Records, Refused, RECORD_LIMIT}, xdr::{opaque_size, Reader, Writer}}, TRANSFER_WINDOW};
+use layerfs_nfs::{
+    protocol::{
+        handle::{HandleError, SqliteHandles, HANDLE_BYTES},
+        rpc::{parse_call, write_record, Records, Refused, RECORD_LIMIT},
+        xdr::{opaque_size, Reader, Writer},
+    },
+    TRANSFER_WINDOW,
+};
 use std::{
     fs,
     io::{self, Read, Write},

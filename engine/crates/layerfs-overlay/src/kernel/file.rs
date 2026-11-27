@@ -45,12 +45,8 @@ impl Overlay {
         self.atomic_cleanup(|| {
             // The fence read this descriptor's row and the Workspace row;
             // a closed Workspace still releases its descriptors.
-            let (_, writable) = self.kernel_fence(
-                mount,
-                serial,
-                super::visit::Held::File(handle),
-                false,
-            )?;
+            let (_, writable) =
+                self.kernel_fence(mount, serial, super::visit::Held::File(handle), false)?;
             let file = OpenFile {
                 engine: self.identity,
                 owner: handle,

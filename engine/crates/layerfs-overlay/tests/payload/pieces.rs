@@ -4,8 +4,7 @@
 //! crossing piece; bytes of an earlier request join a piece only while the
 //! content sequence holds; the captured run steps report a piece as one
 //! `Reference`; and every piece statement is an indexed seek.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::*;
 use std::sync::Arc;

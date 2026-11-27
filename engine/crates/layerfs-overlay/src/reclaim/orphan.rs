@@ -1,5 +1,10 @@
 //! Bounded orphan migration and last-owner deletion, independent of Commit count.
-use crate::{db::integer, custody::orphan::{Orphan, DOMAIN}, reclaim::{Item, Page, ORPHAN, PAGE, SERIAL_RETIRE}, sql, Overlay, OverlayResult, StatementKind};
+use crate::{
+    custody::orphan::{Orphan, DOMAIN},
+    db::integer,
+    reclaim::{Item, Page, ORPHAN, PAGE, SERIAL_RETIRE},
+    sql, Overlay, OverlayResult, StatementKind,
+};
 /// One page of a layer's payload rows: `PAGE.cells` rows at most, so fewer
 /// rows are all the layer holds.
 const LAYER_PAYLOAD_PAGE: &str =

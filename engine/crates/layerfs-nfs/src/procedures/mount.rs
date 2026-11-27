@@ -1,5 +1,11 @@
 //! MOUNT program 100005 version 3 (RFC 1813 appendix I): one export.
-use crate::{kernel::references::Kernel, protocol::{rpc::Accept, xdr::{Reader, Writer}}};
+use crate::{
+    kernel::Kernel,
+    protocol::{
+        rpc::Accept,
+        xdr::{Reader, Writer},
+    },
+};
 
 pub const PROGRAM: u32 = 100_005;
 pub const VERSION: u32 = 3;

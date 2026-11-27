@@ -1,6 +1,5 @@
 //! Key-ordered windows of keys and values: pages by rows and by bytes, never refuses.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::Temp;
 

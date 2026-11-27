@@ -1,7 +1,7 @@
 //! AppleDouble companions held by the export alone.
 //!
 //! On NFSv3 the macOS client keeps a file's extended attributes and resource
-//! fork in a `._<name>` companion file (see [`crate::names`]). When the export
+//! fork in a `._<name>` companion file (see [`crate::kernel::names`]). When the export
 //! keeps such names out of the Workspace, a CREATE of one makes a file that
 //! lives only here, under its own serial range: LOOKUP, GETATTR, ACCESS, READ,
 //! WRITE, SETATTR, COMMIT, REMOVE, a LINK to another AppleDouble name and a
@@ -38,7 +38,7 @@
 //! companion to the inode's other names: only its last name, on an inode with
 //! no other name the export knows, is the client clearing the attributes. Whenever a write leaves such a companion holding a whole
 //! AppleDouble image the client laid out itself (see
-//! [`crate::apple_double_codec`]), it is decoded: one whose attributes cost
+//! [`crate::apple_double::codec`]), it is decoded: one whose attributes cost
 //! less than its bytes keeps only its FinderInfo and attributes in memory
 //! (each at most [`DECODED_ENTRY_BYTES`] counted), and every read synthesizes
 //! the same bytes again. Such a whole
@@ -56,7 +56,7 @@
 //! records it rather than asking for room first, so the pool may stand one
 //! decoded body over until the next write or resize needs room; that one then
 //! spills the least recently touched bodies, decoded ones included, to the
-//! export's own scratch directory (see [`crate::apple_double_spill`]). Removing
+//! export's own scratch directory (see [`crate::apple_double::spill`]). Removing
 //! or replacing a main file drops its paired `._<name>` companion when no main
 //! inode owns it; a companion that belongs to an inode goes with the inode, so
 //! `._<name>` still answers for that inode after the name went, and only the
@@ -64,7 +64,18 @@
 //! [`HELD`] is reached, orphan companions whose main inode or main
 //! file the export no longer knows are reclaimed first, and only if [`HELD`]
 //! live companions still remain does `CREATE` answer `NFS3ERR_NOSPC`.
-use crate::{apple_double::{codec::Image, spill::{now, unlink_paths, Edit}, trace::{self, Route as Trace}}, protocol::attributes::Status, kernel::{mutation::{How, Sattr, Tickets, Wcc}, references::Kernel}};
+use crate::{
+    apple_double::{
+        codec::Image,
+        spill::{now, unlink_paths, Edit},
+        trace::{self, Route as Trace},
+    },
+    kernel::{
+        mutation::{How, Sattr, Tickets, Wcc},
+        Kernel,
+    },
+    protocol::attributes::Status,
+};
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_vfs::ViewStat;
 use std::{
@@ -74,7 +85,6 @@ use std::{
     sync::{atomic::Ordering, Arc, Mutex},
     time::{Duration, Instant},
 };
-
 
 /// The first serial of the export's own companions, far above any serial the
 /// engine allocates.
@@ -94,9 +104,9 @@ pub const RESIDENT_BYTES: usize = 32 << 20;
 pub const DECODED_ENTRY_BYTES: usize = 128 << 10;
 
 /// A name in one directory: (directory serial, name bytes).
-type Named = (u64, Vec<u8>);
+pub(crate) type Named = (u64, Vec<u8>);
 
-enum Body {
+pub(crate) enum Body {
     Resident(Vec<u8>),
     /// On disk in the spill directory, under the companion's own serial; each
     /// operation opens it by path instead of holding it open.
@@ -106,32 +116,32 @@ enum Body {
     Decoded(Image),
 }
 
-struct Companion {
+pub(crate) struct Companion {
     /// The `._` name it was created or last renamed to.
-    named: Named,
+    pub(crate) named: Named,
     /// The other `._` names of the same companion, which a LINK made: a client
     /// that links a file keeps its attributes aside under each of the file's
     /// names, and every one of them is a name of this one companion.
-    also: Vec<Named>,
+    pub(crate) also: Vec<Named>,
     /// The main inode it belongs to, when the export knew it at creation.
-    inode: Option<u64>,
+    pub(crate) inode: Option<u64>,
     /// Its body is a whole image: any name of the inode reads it, and it takes
     /// no slot of the index bound.
-    whole: bool,
-    len: usize,
-    body: Body,
-    metadata: PortableMetadata,
-    used: u64,
+    pub(crate) whole: bool,
+    pub(crate) len: usize,
+    pub(crate) body: Body,
+    pub(crate) metadata: PortableMetadata,
+    pub(crate) used: u64,
     /// One edit of this companion at a time: its body's bytes, its length and
     /// its spilled file change together, so a truncate and a write can never
     /// leave a length its file does not have, and no round has to decide
     /// again on a body another call changed under it.
-    editing: Arc<Mutex<()>>,
+    pub(crate) editing: Arc<Mutex<()>>,
 }
 impl Companion {
     /// The bytes it takes of [`RESIDENT_BYTES`]: its body as written, or what
     /// its decoded form is counted as.
-    fn resident_cost(&self) -> usize {
+    pub(crate) fn resident_cost(&self) -> usize {
         match &self.body {
             Body::Resident(bytes) => bytes.len(),
             Body::Spilled => 0,
@@ -139,7 +149,7 @@ impl Companion {
         }
     }
     /// Whether it takes a slot of the index bound.
-    fn slotted(&self) -> bool {
+    pub(crate) fn slotted(&self) -> bool {
         !self.whole
     }
 }
@@ -147,16 +157,16 @@ impl Companion {
 /// A slot of the index the export's own name index cannot reach, and what the
 /// reclaim needs to decide about it.
 #[derive(Clone)]
-struct Orphan {
-    serial: u64,
+pub(crate) struct Orphan {
+    pub(crate) serial: u64,
     /// The main inode the export knows for it; an inode holding no name in the
     /// kernel table is gone.
-    inode: Option<u64>,
+    pub(crate) inode: Option<u64>,
     /// Its main file's directory and name when it has no inode: the name index
     /// is lossy, so only the engine can say whether that file is there.
-    main: Option<Named>,
+    pub(crate) main: Option<Named>,
     /// Its last use when it was found: a companion used since keeps itself.
-    used: u64,
+    pub(crate) used: u64,
 }
 
 /// What [`Companions::reserve`] made of a call's claim on a slot of the index
@@ -199,30 +209,30 @@ pub(crate) struct Holding {
 /// The companions of one export.
 pub(crate) struct Companions {
     next: u64,
-    tick: u64,
-    files: HashMap<u64, Companion>,
-    names: HashMap<Named, u64>,
+    pub(crate) tick: u64,
+    pub(crate) files: HashMap<u64, Companion>,
+    pub(crate) names: HashMap<Named, u64>,
     /// Main inode serial -> the companion holding its FinderInfo and
     /// attributes.
-    inodes: HashMap<u64, u64>,
+    pub(crate) inodes: HashMap<u64, u64>,
     /// The serials taking a slot of the index bound, so reclamation walks only
     /// the [`HELD`]-bounded slots rather than every companion: a whole image
     /// takes no slot, whether it is decoded or kept as written bytes, so whole
     /// images add nothing to the walk.
-    slots: HashSet<u64>,
+    pub(crate) slots: HashSet<u64>,
     /// The serials holding a slot for a commit that is still on its way, whose
     /// I/O runs outside this lock. A reserved slot counts against the bound, so
     /// two calls cannot both be told the bound has room for one.
-    reserved: HashSet<u64>,
+    pub(crate) reserved: HashSet<u64>,
     /// Every companion holding memory, oldest use first: (used tick, serial).
     /// One tick is one touch and no serial takes two ticks, so the keys are
     /// unique and the oldest entry is the first one.
-    by_use: BTreeSet<(u64, u64)>,
-    resident_bytes: usize,
-    decoded: usize,
-    spill_dir: Option<PathBuf>,
-    resident_budget: usize,
-    held_limit: usize,
+    pub(crate) by_use: BTreeSet<(u64, u64)>,
+    pub(crate) resident_bytes: usize,
+    pub(crate) decoded: usize,
+    pub(crate) spill_dir: Option<PathBuf>,
+    pub(crate) resident_budget: usize,
+    pub(crate) held_limit: usize,
     last_refusal_log: Option<Instant>,
 }
 impl Default for Companions {
@@ -256,14 +266,14 @@ fn opening(how: &How) -> &'static str {
     }
 }
 /// The body length `edit` leaves on a body that had `len` bytes.
-fn edited_len(edit: &Edit<'_>, len: usize) -> usize {
+pub(crate) fn edited_len(edit: &Edit<'_>, len: usize) -> usize {
     match edit {
         Edit::Write { .. } => len.max(edit.target_len()),
         Edit::Size(size) => *size,
     }
 }
 /// Records the length `edit` leaves on `file`.
-fn record(edit: &Edit<'_>, file: &mut Companion) {
+pub(crate) fn record(edit: &Edit<'_>, file: &mut Companion) {
     file.len = edited_len(edit, file.len);
 }
 /// A serial of the export's own companions.
@@ -272,7 +282,7 @@ pub fn companion(serial: u64) -> bool {
 }
 
 impl Kernel {
-    fn companions(&self) -> std::sync::MutexGuard<'_, Companions> {
+    pub(crate) fn companions(&self) -> std::sync::MutexGuard<'_, Companions> {
         self.companions
             .lock()
             .unwrap_or_else(|poison| poison.into_inner())
@@ -819,7 +829,7 @@ impl Kernel {
     }
     /// Traces a request about a main file (`op`, its directory and name) when
     /// the export holds a companion for that inode: these are the requests
-    /// that make a `._` name resolvable (see [`crate::trace`]).
+    /// that make a `._` name resolvable (see [`crate::apple_double::trace`]).
     pub(crate) fn trace_main_file(
         &self,
         op: &str,

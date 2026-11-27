@@ -1,5 +1,10 @@
 //! Definite failure resolution and bounded cell/name transfer into active state.
-use crate::{db::integer, inode, reclaim::{Item, FOLD, PAGE, RETIRE}, sql, Capture, Generation, Overlay, OverlayError, OverlayResult, StatementKind};
+use crate::{
+    db::integer,
+    inode,
+    reclaim::{Item, FOLD, PAGE, RETIRE},
+    sql, Capture, Generation, Overlay, OverlayError, OverlayResult, StatementKind,
+};
 
 impl Overlay {
     /// Releases an exact capture only after definite nonpublication and caller

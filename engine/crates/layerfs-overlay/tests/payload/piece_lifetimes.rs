@@ -2,8 +2,7 @@
 //! retirement after install, a failed capture folded into the active layer,
 //! an unlinked file its owners still hold, and a closed Workspace. Every step
 //! is one bounded page and every view reads the plain-write model.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::*;
 use std::sync::Arc;

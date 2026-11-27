@@ -21,7 +21,14 @@
 //! publishes, and the publishing visit takes one kernel lookup reference per
 //! handed-out handle in that same job, so nothing is looked up twice and no
 //! entry is left without the reference its handle presents.
-use crate::{protocol::{attributes::{post_op_maybe, Identity, Status}, handle::HANDLE_BYTES, xdr::{opaque_size, Writer}}, kernel::{wait::wait, references::Kernel, read::failure}};
+use crate::{
+    kernel::{read::failure, wait::wait, Kernel},
+    protocol::{
+        attributes::{post_op_maybe, Identity, Status},
+        handle::HANDLE_BYTES,
+        xdr::{opaque_size, Writer},
+    },
+};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_vfs::requests::{DirectoryFailure, DirectoryStep, DirectoryStream};
 use layerfs_vfs::{KernelDirectoryEntry, ViewStat};

@@ -3,10 +3,17 @@
 //! Each accepted connection is served by its own thread, one call at a time,
 //! in arrival order. A call's reply is written first; only after that single
 //! send attempt returned are the publication tickets of the mutations it
-//! decided released (see [`crate::change::Tickets`]). Stop closes the listener and every connection, joins
+//! decided released (see [`crate::kernel::mutation::Tickets`]). Stop closes the listener and every connection, joins
 //! their threads and only then gives back the synthetic kernel's holdings,
 //! so no call is running when references are released.
-use crate::{kernel::{mutation::Tickets, references::{Kernel, Released}}, procedures::{mount, program::{self, Policy}}, protocol::rpc::{self, Accept, Refused}};
+use crate::{
+    kernel::{mutation::Tickets, Kernel, Released},
+    procedures::{
+        mount,
+        program::{self, Policy},
+    },
+    protocol::rpc::{self, Accept, Refused},
+};
 use layerfs_overlay::KernelMount;
 use layerfs_vfs::ports::mount::MountServices;
 use std::{
@@ -59,7 +66,7 @@ impl ExportConfig {
             gid,
             read_only: false,
             refuse_apple_double: true,
-            lookups_held: crate::kernel::references::LOOKUPS_HELD,
+            lookups_held: crate::kernel::LOOKUPS_HELD,
             companion_spill_dir: None,
             companion_resident_bytes: crate::apple_double::companions::RESIDENT_BYTES,
             companions_held: crate::apple_double::companions::HELD,
@@ -121,7 +128,7 @@ impl Counters {
     }
 }
 
-/// Marks a refresh chmod on the export it came from (see [`crate::refresh`]);
+/// Marks a refresh chmod on the export it came from (see [`crate::kernel::refresh`]);
 /// holds no reference that keeps a stopped export alive.
 #[derive(Clone)]
 pub struct Refresher(std::sync::Weak<Shared>);
@@ -223,7 +230,7 @@ impl Server {
     /// After an install: the paths below the mount point of the stale
     /// `serials` the client may cache, each with its serial, for the
     /// mode-preserving SETATTR that makes the client drop its cache (see
-    /// [`crate::refresh`]). Marks nothing: [`Refresher::arm`] does, per path.
+    /// [`crate::kernel::refresh`]). Marks nothing: [`Refresher::arm`] does, per path.
     pub fn refresh(
         &self,
         serials: impl IntoIterator<Item = u64>,

@@ -1,8 +1,7 @@
 //! An orphan parked behind a captured generation is woken when nothing awaits
 //! that generation any more: not by a capture that settles while a captured
 //! reader still holds it, and then by the reader's last release.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 
 use layerfs_overlay::*;
 use payload_support::{File, Temp};

@@ -16,8 +16,19 @@
 //! lock and renamed to the companion's own name outside it, before the body is
 //! committed as spilled under the lock again. No descriptor is kept for a
 //! spilled body: each operation opens its file by path and closes it again.
-use super::companions::{edited_len, record, Body, Companions, Decoded, Slot, DECODED_ENTRY_BYTES, FILE_BYTES};
-use crate::{apple_double::spill::{create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Edited, Room}, protocol::attributes::Status, kernel::{mutation::{Sattr, Tickets, Wcc}, references::Kernel}};
+use super::companions::{
+    edited_len, record, Body, Companions, Decoded, Slot, DECODED_ENTRY_BYTES, FILE_BYTES,
+};
+use crate::{
+    apple_double::spill::{
+        create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Edited, Room,
+    },
+    kernel::{
+        mutation::{Sattr, Tickets, Wcc},
+        Kernel,
+    },
+    protocol::attributes::Status,
+};
 use layerfs_vfs::requests::write::Stamp;
 use layerfs_vfs::ViewStat;
 use std::{

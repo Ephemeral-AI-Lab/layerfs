@@ -2,8 +2,7 @@
 //! survive: windows larger than one row, overwrites inside and across rows,
 //! shrinks inside a row, sparse cell puts, capture, failed-capture
 //! composition, install and orphan moves. Every byte is incompressible.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::*;
 use std::sync::Arc;

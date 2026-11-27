@@ -21,7 +21,7 @@
 //! the very mode just marked, sent between the mark and the refresh's own
 //! chmod (microseconds apart, one inode at a time): that one is answered
 //! unchanged and the refresh's chmod that follows applies the same mode.
-use crate::kernel::{mutation::Sattr, references::Kernel};
+use crate::kernel::{mutation::Sattr, Kernel};
 use std::time::{Duration, Instant};
 
 /// How long one refresh mark waits for its SETATTR.

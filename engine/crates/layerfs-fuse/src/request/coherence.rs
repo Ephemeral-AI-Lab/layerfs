@@ -1,6 +1,12 @@
-//! One attribute set per kernel inode, always taken from published state.
-use layerfs_vfs::requests::Published;
-use layerfs_vfs::ViewStat;
+//! Kernel-cache coherence rules. No rule here sends a kernel notification or
+//! waits for an entry or attribute lifetime to expire.
+//!
+//! One attribute set per kernel inode, always taken from published state;
+//! cached pages of an open file; publication before reply, and ticket release
+//! only after the reply attempt.
+use crate::RequestDisposition;
+use layerfs_vfs::requests::{KernelMutation, MutationFailure, Published};
+use layerfs_vfs::{Refusal, ViewStat};
 use std::{error::Error, fmt};
 
 /// A successful mutation whose published value cannot describe the inode the
@@ -37,8 +43,6 @@ pub fn published(value: &Published, expected: Option<u64>) -> Result<&ViewStat, 
 
 // Cached pages of an open file. A known base install changes no name, byte,
 // link, attribute or serial of the mounted view, so nothing here acts on it.
-use layerfs_vfs::Refusal;
-
 /// How the kernel treats cached pages of one opened file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OpenCache {
@@ -73,9 +77,6 @@ pub fn written(requested: usize) -> Result<u32, Refusal> {
 // computed by an owner job that runs after its request was received. The
 // kernel discards an attribute reply sampled before a newer inode version;
 // that discard, not reply order on the wire, is what the daemon relies on.
-use crate::RequestDisposition;
-use layerfs_vfs::requests::{KernelMutation, MutationFailure};
-
 /// Called once the reply method returned. The pinned library reports no send
 /// result, so this is a reply *attempt*: the ticket is released whether or not
 /// the kernel received it, and a published mutation is never undone.

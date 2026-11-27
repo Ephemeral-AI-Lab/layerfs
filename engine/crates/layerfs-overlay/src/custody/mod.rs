@@ -1,3 +1,4 @@
+//! Owner custody: open files, lookups, operations, orphans and base sources.
 pub(crate) mod file;
 pub(crate) mod lookup;
 pub(crate) mod operation;

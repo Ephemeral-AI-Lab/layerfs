@@ -1,5 +1,12 @@
 //! Bounded byte writes and the local layered read plan of one window.
-use crate::{cells::{Stored, Window}, db::integer, layers::Layer, payload::cells::runs::{slot, Shape}, sql, BaseSource, Capture, InodeKind, LocalRead, Overlay, OverlayError, OverlayResult, StatementKind, CELL_BYTES, READ_WINDOW, RUN_BYTES};
+use crate::{
+    cells::{Stored, Window},
+    db::integer,
+    layers::Layer,
+    payload::cells::runs::{slot, Shape},
+    sql, BaseSource, Capture, InodeKind, LocalRead, Overlay, OverlayError, OverlayResult,
+    StatementKind, CELL_BYTES, READ_WINDOW, RUN_BYTES,
+};
 use rusqlite::blob::Blob;
 
 const CELL: u64 = CELL_BYTES as u64;

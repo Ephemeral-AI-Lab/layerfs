@@ -13,7 +13,10 @@
 //! reply reached the client. A failure that keeps custody is retained, never
 //! released or undone on a guess; a fenced step or a failed base demand of
 //! this request alone is relinquished, as the FUSE connection does.
-use crate::{protocol::attributes::{refusal, Status}, kernel::{wait::wait, references::{Kernel, Table}, names}};
+use crate::{
+    kernel::{names, wait::wait, Kernel, Table},
+    protocol::attributes::{refusal, Status},
+};
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
 use layerfs_vfs::requests::{
     create, link, remove, rename,
@@ -365,7 +368,7 @@ impl Kernel {
         if let How::Exclusive(verifier) = how {
             let mut table = self.table();
             let tick = table.tick();
-            if table.verifiers.len() >= crate::kernel::references::VERIFIERS_HELD {
+            if table.verifiers.len() >= crate::kernel::VERIFIERS_HELD {
                 let oldest = table
                     .verifiers
                     .iter()

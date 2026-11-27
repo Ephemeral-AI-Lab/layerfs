@@ -1,6 +1,9 @@
 //! Paged deletion of reference pieces: stale rows after a shrink and the
 //! rows of a retired or folded layer.
-use crate::{reclaim::{Item, STALE_PIECES}, sql, Overlay, OverlayResult, StatementKind};
+use crate::{
+    reclaim::{Item, STALE_PIECES},
+    sql, Overlay, OverlayResult, StatementKind,
+};
 
 impl Overlay {
     /// Drops the lowest pieces of one layer, at most `rows`, in one

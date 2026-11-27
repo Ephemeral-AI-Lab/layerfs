@@ -12,7 +12,16 @@
 //! before the reply, as every FUSE write is. That is publication, not
 //! durability; the write verifier changes with every export, so a client
 //! that ever sent UNSTABLE data resends it to a restarted export.
-use crate::{protocol::{attributes::{post_op_maybe, pre_op, Status}, xdr::{Garbage, Reader, Writer}}, kernel::{mutation::{How, Sattr, Tickets, Wcc}, references::Kernel}};
+use crate::{
+    kernel::{
+        mutation::{How, Sattr, Tickets, Wcc},
+        Kernel,
+    },
+    protocol::{
+        attributes::{post_op_maybe, pre_op, Status},
+        xdr::{Garbage, Reader, Writer},
+    },
+};
 use layerfs_vfs::requests::write::Stamp;
 use layerfs_vfs::{Time, ViewStat};
 

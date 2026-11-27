@@ -4,12 +4,8 @@
 //! SqliteHandles of collected serials keep working (resolved again by their name);
 //! a handle whose name now reaches another inode is stale; the product
 //! Commit afterwards holds exactly what the client made.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
+use crate::client;
+use crate::rig;
 use client::{Client, OK, STALE};
 use std::{fs, net::TcpListener, path::PathBuf, time::Duration};
 
@@ -59,7 +55,7 @@ fn references_stay_bounded_and_collected_handles_resolve() {
     // The bound is soft: the most recently used serials, the directories a
     // held serial was reached through and serials holding a descriptor are
     // never collected.
-    let ceiling = BOUND + layerfs_nfs::kernel::references::RECENT_KEPT as usize + DIRECTORIES * 2 + 8;
+    let ceiling = BOUND + layerfs_nfs::kernel::RECENT_KEPT as usize + DIRECTORIES * 2 + 8;
     let mut first: Vec<(Vec<u8>, u64, usize, usize)> = Vec::new();
     let mut peak_held = 0;
     let mut peak_engine = 0;

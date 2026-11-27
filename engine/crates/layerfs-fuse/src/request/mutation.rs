@@ -6,7 +6,12 @@ use super::{
     state::KernelFilesystem,
     terminal,
 };
-use crate::{attributes::{declined, Identity}, request::coherence::{self, self, published}, session::Deferred, RequestDisposition, RequestOwner};
+use crate::{
+    attributes::{declined, Identity},
+    request::coherence::{self, published},
+    session::Deferred,
+    RequestDisposition, RequestOwner,
+};
 use fuser::{
     Errno, FileAttr, FileHandle, Generation, INodeNo, ReplyAttr, ReplyCreate, ReplyEmpty,
     ReplyEntry, ReplyWrite,
@@ -70,7 +75,8 @@ impl MutationReply {
         Ok(match self {
             Self::Done(_) => Composed::Nothing,
             Self::Written(_, requested, _) => Composed::Count(
-                coherence::written(*requested).map_err(|_| io::Error::other("kernel write count"))?,
+                coherence::written(*requested)
+                    .map_err(|_| io::Error::other("kernel write count"))?,
             ),
             Self::Attr(_, serial) => Composed::Attributes(attributes(Some(*serial))?),
             Self::Entry(_, expected) => Composed::Attributes(attributes(*expected)?),

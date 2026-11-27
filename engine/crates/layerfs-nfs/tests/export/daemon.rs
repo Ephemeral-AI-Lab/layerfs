@@ -6,12 +6,8 @@
 //! terminal) and ForceUnmount. The client mount itself is a recording helper
 //! here (this host's kernel has no NFSv3 client); the protocol client of the
 //! tests plays the kernel. The kernel-client run is in the A3 VM scripts.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
+use crate::client;
+use crate::rig;
 use client::{Client, NOENT};
 use layerfs_daemon::control::{
     ExportServing, ExportServingConfig, Failure, Helper, Mounter, Service,

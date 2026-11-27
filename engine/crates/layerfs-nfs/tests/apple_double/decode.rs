@@ -4,12 +4,8 @@
 //! through RENAME and goes with its last name. A body that is not a whole
 //! image (a resource fork, another layout, a half-written one) is stored as
 //! the client wrote it, which is the #636 fallback.
-#[allow(dead_code)]
-#[path = "../support/client.rs"]
-mod client;
-#[allow(dead_code)]
-#[path = "../support/rig.rs"]
-mod rig;
+use crate::client;
+use crate::rig;
 #[allow(dead_code)]
 #[path = "../support/spy.rs"]
 mod spy;
@@ -17,8 +13,8 @@ mod spy;
 #[path = "../support/tree.rs"]
 mod tree;
 use client::{Client, Set, NOENT, STALE};
-use layerfs_nfs::apple_double::companions::SERIALS;
 use layerfs_nfs::apple_double::codec::{Attribute, Image};
+use layerfs_nfs::apple_double::companions::SERIALS;
 use std::{
     fs,
     net::TcpListener,
@@ -1787,7 +1783,7 @@ fn a_companion_in_a_collected_directory_is_kept_while_its_main_file_is_there() {
     assert_eq!(server.held().companions_slotted, 1);
 
     // Enough other names that the export collects its reference to `kept`.
-    let names = layerfs_nfs::kernel::references::RECENT_KEPT as usize + 32;
+    let names = layerfs_nfs::kernel::RECENT_KEPT as usize + 32;
     for index in 0..names {
         let name = format!("f{index}");
         c.touch(&root, name.as_bytes(), 0o644)

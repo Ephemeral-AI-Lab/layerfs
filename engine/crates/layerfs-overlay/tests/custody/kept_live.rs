@@ -2,8 +2,7 @@
 //! counted dirty, and every writer of that serial's active row counts it.
 //! Public engine API only: compound jobs, the first-path publish, a failed
 //! capture's fold and a job that fails after its kept write.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::Temp;
 use std::sync::Arc;

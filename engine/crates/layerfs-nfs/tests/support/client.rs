@@ -1,6 +1,9 @@
 //! A minimal NFSv3/MOUNT client over the export's public XDR and record
 //! framing: what a kernel client sends, one call at a time.
-use layerfs_nfs::protocol::{rpc::{write_record, Records}, xdr::{Reader, Writer}};
+use layerfs_nfs::protocol::{
+    rpc::{write_record, Records},
+    xdr::{Reader, Writer},
+};
 use std::{
     net::TcpStream,
     sync::{Arc, Condvar, Mutex},

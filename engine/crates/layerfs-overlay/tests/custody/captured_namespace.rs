@@ -1,8 +1,7 @@
 //! Reader-bound parent cursors, name points and symlink targets through the
 //! public engine API: sealed rows only, with paired plan and runtime evidence.
 //! No private source, fault hook, timing sample or cold-cache claim.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::Temp;
 use std::{collections::BTreeMap, ops::Bound};

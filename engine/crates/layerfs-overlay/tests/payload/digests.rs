@@ -1,8 +1,7 @@
 //! #364 item 2 (b): a captured file's whole-content digest exists only when
 //! every byte it holds was appended by the Workspace and no later change
 //! touched its row. Public engine API only: compound jobs, opens and capture.
-#[path = "../support/fixture.rs"]
-mod payload_support;
+use crate::support::fixture as payload_support;
 use layerfs_overlay::*;
 use payload_support::Temp;
 use std::sync::Arc;
