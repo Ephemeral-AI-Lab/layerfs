@@ -688,3 +688,32 @@ cache, launcher records) were left alone.
   after the walk (only when the pack cache evicted a group the walk read within
   one cohort) is acquired again by that reconstruction; the root still gets its
   point-read error. Corrupt Store + eviction only.
+- Lane S merged → `eb0d8c6b69` (with RH's port `2a9a328930`): Production LOC
+  231,247 -> 231,947 (+700, core: layerfs-content +6, layerfs-storage +694).
+- Lane RH `ef2159594c`: `visibility_guard` — `read_context_node.sql` registered
+  on the guard's allow-list like the `branch_branch_by_id_any.sql` read it
+  replaced (a removed Branch's own row still shows in a ref; adding the filter
+  would change answers); the entry requires `layer_stack_retired`, so the rest
+  stays filtered. Guard not weakened; test-only.
+- Lane RH `029bd57d68` switch-on (after merging `eb0d8c6b69` as `5f8a7145ee`):
+  `StorePorts::objects_each_with` / `lengths_each_with` → `Storage::read_each_with`
+  / `lengths_each_with` via new `ReadSession` entry points; `reads_each_at_once`
+  true; `Batching::Forced` replaced by test-only `Batching::Alone`. LOC +20.
+  PG control, warm (cold): blame.h100 59 → **22** (296 → 65; SPEC ~29 met);
+  blame.h10 16 → **12** (54 → 38; SPEC ~17 met); revision.h100 72 → **48**
+  (301 → 92; predicted ~22–32, SPEC ~30: **miss**); revision.h10 cold 66 → 52;
+  diff_files 23 → **22** (49 → 48; SPEC ~12: **miss**). SQLite unchanged.
+  Diagnosed once (PG statement log, own database):
+  - revision.h100: the walk passes the 100 Commits into the Branch's base
+    Layers: Commit part ≈ 26 trips (in prediction); Layer part ≈ 22 (12 Layer
+    rows one at a time + ~10 object reads of Layer versions walked alone). H4's
+    row windows follow Commits only. Fix = a row window along the Layer chain:
+    **new item, not built, recorded.**
+  - diff_files: H6 already plans both sides' lengths and texts in one demand;
+    the rest is per side (Commit row read 4×: resolve, `belongs`, `for_snap`,
+    reference; tree root; path; serial; markers; a Branch row per reference).
+    Reaching ~12 needs one row read per side and markers once per call (−6 to
+    −9): the R5 read-context route applied to diff_files' sides. **Follow-up,
+    not built, recorded.**
+  Sweeps `sdk_history_fault_rh_{drop,kill}` now cover the live per-object path
+  (green). Equivalence, refusal order, both guards green.
