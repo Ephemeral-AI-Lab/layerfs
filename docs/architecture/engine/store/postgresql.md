@@ -1761,7 +1761,7 @@ operation reads no row and is `Stale`, and an empty window answers one row
 with a NULL marker; a path window (jobs, directories) sums its rows' sizes
 over the rows it read and keeps the leading rows that fit in the same
 statement, where a sizing read and a second read did before. One round trip
-per read instead of four or five. A schema without the acquisition tables
+per read instead of four or five. Each read's text (and the owner row's) is a `qualified` statement key naming the schema (`sql/postgresql/queries/history/acquisition_*.sql`), pinned by the one-statement schema guard (`postgresql_statement_schema`). A schema without the acquisition tables
 refuses every unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
 same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 `begin` waiting for the lane blocks no live owner's unit.

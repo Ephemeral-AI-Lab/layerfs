@@ -1,0 +1,1 @@
+SELECT w.* FROM {s}.init_operation o LEFT JOIN LATERAL (SELECT 1 AS present,host_path FROM {s}.init_entry WHERE operation_id=$1::bigint AND kind=2 AND position=$3::bigint) w ON true WHERE o.operation_id=$1::bigint AND o.owner_epoch=$2::bigint
