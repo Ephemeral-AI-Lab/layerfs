@@ -10,7 +10,8 @@ use super::{
 };
 use crate::{
     history::lookup::{self as args, Answer, Arg},
-    operator::files::{entry, revision},
+    history::rows::Rows,
+    operator::files::entry,
     store::{Store, StorePorts},
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -18,6 +19,7 @@ use layerfs_content::{
     compare::{match_lines, EntryFacts},
     object::inode_leaf::InodeKind,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -135,10 +137,39 @@ pub struct Window {
     pub count: Arg<u64>,
 }
 
+/// Keeps `node`'s reference for its owner id when a line was just
+/// attributed to `value`, from the row `rows` holds (#818 H1).
+fn owners(
+    refs: &mut HashMap<String, SdkValue>,
+    rows: &mut Rows<'_>,
+    node: layerfs_history::NodeId,
+    value: &SdkValue,
+    tracks: &[Track],
+) -> Result<()> {
+    let Some(id) = value.get_text("id") else {
+        return Ok(());
+    };
+    let owned = tracks
+        .iter()
+        .any(|t| t.owner.as_ref().and_then(|o| o.get_text("id")) == Some(id));
+    if owned && !refs.contains_key(id) {
+        refs.insert(id.to_owned(), rows.reference(node)?);
+    }
+    Ok(())
+}
+
 /// The origin Commit of each line of the regular file at `path`, from line
 /// `from` on, along persisted first parents.
+///
+/// `rows` holds the call's rows (#818 H1): each version's row is read once,
+/// as the parent, and carried to the next step; each owner's `ref` comes
+/// from the row held when the owner was assigned; and each version's text
+/// is read once, carried from the older side of one comparison to the newer
+/// side of the next.
+#[allow(clippy::too_many_arguments)]
 pub fn blame(
     store: &Arc<Store>,
+    rows: &mut Rows<'_>,
     reader: &StorePorts,
     snap: &Snap,
     path: &str,
@@ -203,7 +234,12 @@ pub fn blame(
             "blame scan budget reached before requested line",
         ));
     }
+    let at = rows.reference(snap.node)?;
     let (mut node, mut current, mut versions, mut coarse) = (snap.node, tip, 0i64, false);
+    // Owners' references by id, from the rows held when assigned (#818 H1).
+    let mut refs: HashMap<String, SdkValue> = HashMap::new();
+    // The older side's text of the last comparison, by its content root.
+    let mut carried: Option<(layerfs_content::ObjectId, Text)> = None;
 
     let mut history_limited = scan.exhausted;
     loop {
@@ -215,13 +251,13 @@ pub fn blame(
             break;
         }
         limits.versions -= 1;
-        let (_, parent, value) = revision(store, node)?;
+        let (_, parent, value) = rows.revision(node)?;
         versions += 1;
         // §4.3: a hidden older version is absent; blame stops there and
         // attributes the remaining lines to the newest visible version.
         let older = match parent {
             Some(p) => {
-                let found = entry(reader, revision(store, p)?.0, path)?
+                let found = entry(reader, rows.record(p)?.root(), path)?
                     .filter(|e| e.value.kind == InodeKind::RegularFile);
                 match found {
                     Some(_)
@@ -253,7 +289,11 @@ pub fn blame(
                 break;
             }
             limits.bytes -= bytes;
-            let (new, old) = (text(reader, current)?, text(reader, older)?);
+            let new = match carried.take() {
+                Some((root, text)) if root == current.value.content_root => text,
+                _ => text(reader, current)?,
+            };
+            let old = text(reader, older)?;
             if new.complete && old.complete {
                 let a = old.prefix.iter().map(String::as_str).collect::<Vec<_>>();
                 let b = new.prefix.iter().map(String::as_str).collect::<Vec<_>>();
@@ -300,6 +340,8 @@ pub fn blame(
                     }
                 }
             }
+            owners(&mut refs, rows, node, &value, &tracks)?;
+            carried = Some((older.value.content_root, old));
 
             node = parent.expect("parent");
             current = older;
@@ -307,6 +349,7 @@ pub fn blame(
             for t in tracks.iter_mut().filter(|t| t.owner.is_none()) {
                 t.owner = Some(value.clone());
             }
+            owners(&mut refs, rows, node, &value, &tracks)?;
             break;
         }
     }
@@ -320,7 +363,10 @@ pub fn blame(
             Some(id) => SdkValue::map([
                 (
                     "ref",
-                    crate::history::saved::reference(store, args::node(id)?)?,
+                    match refs.get(id) {
+                        Some(reference) => reference.clone(),
+                        None => rows.reference(args::node(id)?)?,
+                    },
                 ),
                 ("message", owner.get("message").cloned().unwrap_or_default()),
                 ("time", owner.get("time").cloned().unwrap_or_default()),
@@ -356,7 +402,7 @@ pub fn blame(
     }
     let mut fields = snapshot::header(snap, path);
     fields.extend([
-        ("at", crate::history::saved::reference(store, snap.node)?),
+        ("at", at),
         (
             "coverage",
             super::file_facts::coverage(

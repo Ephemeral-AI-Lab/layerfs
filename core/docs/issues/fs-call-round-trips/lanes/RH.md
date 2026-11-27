@@ -401,3 +401,72 @@ its `Result` shape (control's `project/export/walk.rs` calls it).
 - `method_refusal_order`, `sdk_round_trip_equivalence_seeded` and the tests
   the diff reaches green, one run each.
 - Deleted tests: none.
+
+### H1 — carry rows forward; read each reference once (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: one per-call `Rows` (store-service `history/rows.rs`) holds the
+  last few Commit/Layer records read (a small recent window, 8 rows) and a
+  Branch-name memo `HashMap<BranchId, Option<String>>` (bounded by distinct
+  Branches met, ≤ `MAXIMUM_QUERY_WORK`). `operator::files::revision`,
+  `saved::reference` and `saved::record` become `Rows` methods (the free
+  functions keep their reads, with a fresh `Rows`). Blame and revision use one
+  `Rows` per call, seeded with the record (and, from R5's context, the
+  recorded Branch) the resolve already read; blame builds each owner's `ref`
+  from the row it held when it assigned the owner, and carries the older
+  version's `Text` to the next comparison (keyed by content root).
+- Per walked version today: `revision(node)` and `revision(parent)` each read
+  a Commit row and its Branch name (4 reads), + the parent's serial. After:
+  the parent's row only (+ its serial): −3 per version. Owners: −2 per
+  distinct owner line (Commit row + Branch name). `at`: −2 (seeded). Text
+  carry: −1 text read per changed pair (≈ 1–3 object trips each).
+- PostgreSQL control, warm (cold alike, ±prepares):
+  - `blame.h100`: ~100 versions × −3, 51 owners × −2, at −2, ~50 texts ×
+    −1..−3: ≈ −450..−550 → 2,021 → ~1,520 (cold 2,259 → ~1,760).
+  - `blame.h10`: 10 × −3, 6 owners × −2, at −2, 5 texts: ≈ −50..−60 →
+    221 → ~165 (cold 260 → ~205).
+  - `revision.h100`: per node −2 (parent row and root read once; the node's
+    row carried), per item (50) −7 (record's parentRef, baseLayer, ref and
+    comparedTo from held rows and the name memo), at −2: ≈ −550 → 3,794 →
+    ~3,240 (cold 4,022 → ~3,470).
+  - `revision.h10` (cold only): 10 × −2, 5 items × −7, −2: ≈ −57 → 493 → ~436.
+  - `diff_files`: unchanged (H3).
+- SQLite: each saved read is 3 statements (its transaction): ≈ 3× the read
+  savings, plus the text statements: `blame.h100` −~1,400, `blame.h10`
+  −~160, `revision.h100` −~1,650, `revision.h10` −~170 (new pins, D1/O2).
+- Writer role: unchanged.
+- Formula check (bounds only) must still hold; it can only get easier.
+- No new server message: no sweep. Answers identical (`owner`, `origins`,
+  `commit`/`message`, `coverage`, `comparisonCoarse`, revision items).
+
+**Measured (receipts `receipts/H1/`).** PostgreSQL trips, writer + control:
+
+| Case | before warm (cold) | predicted Δ | after warm (cold) | Δ |
+|---|---|---|---|---|
+| `blame.h100` | 199 + 2,021 (200 + 2,259) | −450..−550 | 0 + 1,768 (0 + 2,005) | −452 (−454) |
+| `blame.h10` | 19 + 221 (20 + 260) | −50..−60 | 0 + 193 (0 + 231) | −47 (−49) |
+| `revision.h100` | 92 + 3,794 (93 + 4,022) | −550 | 0 + 3,161 (0 + 3,389) | −725 (−726) |
+| `revision.h10` (cold) | 11 + 493 | −57 | 0 + 420 | −84 |
+| `diff_files` | 0 + 77 (0 + 103) | 0 | unchanged | 0 |
+
+- The Branch-name reads were on the writer's session (`store.history()` in
+  `operator::files::revision`), not the control reader, which the
+  prediction assumed: the name memo now reads them once on the control
+  reader (`published`, as `saved::reference` did), so writer → 0 and the
+  control column falls less than the total. Totals: blame within the
+  predicted range (h10 −47 vs −50..−60, within 15%); revision −725 / −84
+  vs −550 / −57, beyond 15% and better. Diagnosed once: each item's record
+  re-read 5 rows (Commit, parent, base Layer, `ref`, `comparedTo`), not the
+  4 counted, plus the writer's per-node Branch name. Recorded, no change.
+- SQLite (writer + control): `blame.h100` 597 + 6,746 → 0 + 5,829 warm
+  (−1,514; cold 597 + 7,102 → 0 + 6,185), `blame.h10` 57 + 621 → 0 + 548,
+  `revision.h100` 276 + 12,382 → 0 + 10,483 (−2,175), `revision.h10` cold
+  30 + 1,325 → 0 + 1,106; `diff_files` unchanged. New pins (D1, O2).
+- Formula check holds. Answers: `sdk_blame_coarse`, `sdk_file_history`,
+  `history_surface`, `operator_history`, `sdk_history_depth`,
+  `history_wire_codes`, `sdk_method_golden` (blame golden lines),
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order`,
+  `verify_history_readback`, `sdk_compare` (attribution),
+  `history_ancestry_oracle`, `sdk_file_compare_budget` green.
+- No new server message: no sweep. Deleted tests: none.

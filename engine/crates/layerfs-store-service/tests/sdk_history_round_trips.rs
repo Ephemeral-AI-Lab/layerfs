@@ -48,28 +48,26 @@ const NONE: Counts = [0, 0, 0, 0];
 /// - #818 R2 (dedupe): `blame` reads its Commit row once and the serial
 ///   with the markers; each `diff_files` side reads its Commit row once:
 ///   2 reads fewer (−6 statements, −2 transactions); `revision` unchanged.
+/// - #818 H1 (dedupe): one per-call `Rows`: each walked row is read once
+///   (as the parent, then carried), Branch names once per call and on the
+///   control reader (they were read on the writer's session: writer 597 →
+///   0 on `blame.h100`), owners' and items' references from held rows, and
+///   blame's text carried between comparisons. `blame.h100` warm control
+///   6,746 → 5,829, `blame.h10` 621 → 548, `revision.h100` 12,382 → 10,483,
+///   `revision.h10` cold 1,325 → 1,106; writer reads 0 on all four;
+///   `diff_files` unchanged.
 const SQLITE: &[Pin] = &[
     // probe blame.h10: 714 statements
-    pin("blame.h10.cold", [0, 0, 57, 19], [0, 0, 662, 47], NONE),
-    pin("blame.h10.warm", [0, 0, 57, 19], [0, 0, 621, 47], NONE),
+    pin("blame.h10.cold", NONE, [0, 0, 589, 24], NONE),
+    pin("blame.h10.warm", NONE, [0, 0, 548, 24], NONE),
     // probe blame.h100: 7,575
-    pin("blame.h100.cold", [0, 0, 597, 199], [0, 0, 7102, 408], NONE),
-    pin("blame.h100.warm", [0, 0, 597, 199], [0, 0, 6746, 408], NONE),
+    pin("blame.h100.cold", NONE, [0, 0, 6185, 205], NONE),
+    pin("blame.h100.warm", NONE, [0, 0, 5829, 205], NONE),
     // probe revision.h10 (appended at P0): 1,314
-    pin("revision.h10.cold", [0, 0, 30, 10], [0, 0, 1325, 112], NONE),
+    pin("revision.h10.cold", NONE, [0, 0, 1106, 39], NONE),
     // probe revision.h100: 12,658
-    pin(
-        "revision.h100.cold",
-        [0, 0, 276, 92],
-        [0, 0, 12726, 927],
-        NONE,
-    ),
-    pin(
-        "revision.h100.warm",
-        [0, 0, 276, 92],
-        [0, 0, 12382, 927],
-        NONE,
-    ),
+    pin("revision.h100.cold", NONE, [0, 0, 10827, 294], NONE),
+    pin("revision.h100.warm", NONE, [0, 0, 10483, 294], NONE),
     // probe diff_files.h10_vs_h99: 198
     pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 218, 15], NONE),
     pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 187, 15], NONE),
@@ -90,38 +88,22 @@ const SQLITE: &[Pin] = &[
 ///   cold; `blame.h100` (a Branch: project, Branch, Commit, markers) −3
 ///   warm, −5 cold (prepares of the statements it no longer sends);
 ///   `revision` and `diff_files` unchanged.
+/// - #818 H1 (dedupe, see SQLITE): writer 0 (Branch names now read once per
+///   call on the control reader); control warm `blame.h100` 2,021 → 1,768,
+///   `blame.h10` 221 → 193, `revision.h100` 3,794 → 3,161; cold alike
+///   (`revision.h10` 493 → 420); `diff_files` unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", [0, 20, 19, 0], [1, 260, 251, 0], NONE),
-    pin("blame.h10.warm", [0, 19, 19, 0], [0, 221, 221, 0], NONE),
+    pin("blame.h10.cold", NONE, [1, 231, 223, 0], NONE),
+    pin("blame.h10.warm", NONE, [0, 193, 193, 0], NONE),
     // probe blame.h100: 2,325
-    pin(
-        "blame.h100.cold",
-        [0, 200, 199, 0],
-        [1, 2259, 2250, 0],
-        NONE,
-    ),
-    pin(
-        "blame.h100.warm",
-        [0, 199, 199, 0],
-        [0, 2021, 2021, 0],
-        NONE,
-    ),
+    pin("blame.h100.cold", NONE, [1, 2005, 1997, 0], NONE),
+    pin("blame.h100.warm", NONE, [0, 1768, 1768, 0], NONE),
     // probe revision.h10 (appended at P0)
-    pin("revision.h10.cold", [0, 11, 10, 0], [1, 493, 482, 0], NONE),
+    pin("revision.h10.cold", NONE, [1, 420, 409, 0], NONE),
     // probe revision.h100: 3,890
-    pin(
-        "revision.h100.cold",
-        [0, 93, 92, 0],
-        [1, 4022, 4011, 0],
-        NONE,
-    ),
-    pin(
-        "revision.h100.warm",
-        [0, 92, 92, 0],
-        [0, 3794, 3794, 0],
-        NONE,
-    ),
+    pin("revision.h100.cold", NONE, [1, 3389, 3378, 0], NONE),
+    pin("revision.h100.warm", NONE, [0, 3161, 3161, 0], NONE),
     // probe diff_files.h10_vs_h99: 88
     pin("diff_files.h10_vs_h99.cold", NONE, [1, 103, 94, 0], NONE),
     pin("diff_files.h10_vs_h99.warm", NONE, [0, 77, 77, 0], NONE),

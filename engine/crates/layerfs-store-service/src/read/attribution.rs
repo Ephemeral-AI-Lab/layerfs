@@ -52,6 +52,7 @@ fn owners(
     budget: &mut AttributionBudget,
 ) -> Result<Owners, SdkRefusal> {
     let (mut lines, mut from, mut exact) = (BTreeMap::new(), 1u64, true);
+    let mut rows = crate::history::rows::Rows::new(store);
     loop {
         if budget.work == 0 {
             exact = false;
@@ -63,6 +64,7 @@ fn owners(
         };
         let page = blame::blame(
             store,
+            &mut rows,
             reader,
             snap,
             path,

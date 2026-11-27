@@ -2,6 +2,7 @@
 use super::{lookup as args, MAIN};
 use crate::store::Store;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::ObjectId;
 use layerfs_history::{LayerStackRecord, NodeId};
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ pub const LOOKUP_WORK: usize = 10_000;
 
 /// A full immutable reference, with its recorded originating branch when known.
 pub fn reference(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
-    reference_of(store, node, &args::node_record(store, node)?, None)
+    super::rows::Rows::new(store).reference(node)
 }
 
 /// [`reference`] from the node's record the caller already read (#818 R2):
@@ -23,24 +24,14 @@ pub fn reference_of(
     record: &args::NodeRecord,
     recorded: Option<&Option<String>>,
 ) -> Result<SdkValue> {
-    let (root, branch) = match record {
-        args::NodeRecord::Layer(record) => (record.root, Some(MAIN.to_owned())),
-        args::NodeRecord::Commit(record) => {
-            let branch = match recorded {
-                Some(name) => name.clone(),
-                None => record
-                    .meta
-                    .branch
-                    .map(|id| store.published(|history| history.branch_any(id)))
-                    .transpose()
-                    .map_err(args::published)?
-                    .flatten()
-                    .map(|b| b.name.as_str().to_owned()),
-            };
-            (record.root, branch)
-        }
-    };
-    Ok(SdkValue::map([
+    let mut rows = super::rows::Rows::new(store);
+    rows.hold(node, record.clone(), recorded.cloned());
+    rows.reference(node)
+}
+
+/// The reference value of `node`, its `root` and recorded `branch`.
+pub fn reference_value(node: NodeId, root: ObjectId, branch: Option<String>) -> SdkValue {
+    SdkValue::map([
         ("id", SdkValue::text(args::node_text(node))),
         (
             "kind",
@@ -51,94 +42,12 @@ pub fn reference_of(
         ),
         ("branch", SdkValue::opt_text(branch)),
         ("root", SdkValue::text(args::hex(root.as_bytes()))),
-    ]))
-}
-
-fn optional(store: &Arc<Store>, node: Option<NodeId>) -> Result<SdkValue> {
-    node.map(|node| reference(store, node))
-        .transpose()
-        .map(|v| v.unwrap_or_default())
+    ])
 }
 
 /// Saved details: publication parent/source and their times remain distinct.
 pub fn record(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
-    let mut fields = match node {
-        NodeId::Commit(id) => {
-            let r = args::commit(store, id)?;
-            let mut value = args::commit_value(&r, None);
-            let SdkValue::Map(ref mut fields) = value else {
-                unreachable!()
-            };
-            fields.extend([
-                (
-                    "parentRef".into(),
-                    optional(store, r.parent.map(NodeId::Commit))?,
-                ),
-                ("secondParentRef".into(), optional(store, r.second_parent)?),
-                (
-                    "baseLayer".into(),
-                    reference(store, NodeId::Layer(r.base_layer))?,
-                ),
-                ("sourceCommitRef".into(), SdkValue::Null),
-                ("sourceTime".into(), SdkValue::Null),
-                ("timeStatus".into(), SdkValue::text("recorded")),
-            ]);
-            if let SdkValue::Map(fields) = value {
-                fields
-            } else {
-                unreachable!()
-            }
-        }
-        NodeId::Layer(id) => {
-            let r = args::layer(store, id)?;
-            let source = r
-                .source_commit
-                .map(|id| args::commit(store, id))
-                .transpose()?;
-            let source_branch = r
-                .source_branch
-                .map(|id| store.published(|history| history.branch_any(id)))
-                .transpose()
-                .map_err(args::published)?
-                .flatten();
-            let value = args::layer_value(&r, source_branch.as_ref().map(|b| b.name.as_str()));
-            let SdkValue::Map(mut fields) = value else {
-                unreachable!()
-            };
-            fields.extend([
-                (
-                    "parentRef".into(),
-                    optional(store, r.parent.map(NodeId::Layer))?,
-                ),
-                ("secondParentRef".into(), SdkValue::Null),
-                ("baseLayer".into(), SdkValue::Null),
-                (
-                    "sourceCommitRef".into(),
-                    optional(store, r.source_commit.map(NodeId::Commit))?,
-                ),
-                (
-                    "sourceTime".into(),
-                    source
-                        .as_ref()
-                        .map_or(SdkValue::Null, |s| SdkValue::Int(s.meta.time_ms)),
-                ),
-                ("time".into(), SdkValue::Null),
-                ("timeStatus".into(), SdkValue::text("unavailable")),
-                (
-                    "via".into(),
-                    SdkValue::text(if r.source_commit.is_some() {
-                        "Publish"
-                    } else {
-                        "Init"
-                    }),
-                ),
-                ("message".into(), SdkValue::Null),
-            ]);
-            fields
-        }
-    };
-    fields.push(("ref".into(), reference(store, node)?));
-    Ok(SdkValue::Map(fields))
+    super::rows::Rows::new(store).details(node)
 }
 
 /// Resolve a saved start through its branch context. First-parent branch history

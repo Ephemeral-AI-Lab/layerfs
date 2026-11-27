@@ -1,4 +1,5 @@
 //! `fs.blame`.
+use crate::history::rows::Rows;
 use crate::methods::args::{line, path, snapshot_in, snapshot_target, Answer};
 use crate::read::cached::Cached;
 use crate::{
@@ -18,8 +19,12 @@ pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
     };
     let path = path(args, "path")?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
+    // The call's rows, from the resolve's on (#818 H1).
+    let mut rows = Rows::new(&service.store);
+    rows.hold(snap.node, saved.record, saved.recorded);
     blame::blame(
         &service.store,
+        &mut rows,
         &reader,
         &snap,
         &path,

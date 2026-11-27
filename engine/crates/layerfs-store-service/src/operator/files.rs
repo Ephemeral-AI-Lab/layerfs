@@ -1,5 +1,6 @@
 //! File revisions from persisted first-parent facts. No reconstructed UI history.
 use super::args::{paging, text};
+use crate::history::rows::{Revision, Rows};
 use crate::{
     history::lookup::{self as args, Answer},
     read::snapshot,
@@ -14,37 +15,10 @@ use layerfs_content::{
 use layerfs_history::NodeId;
 use std::sync::Arc;
 
-pub fn revision(
-    store: &Arc<Store>,
-    node: NodeId,
-) -> Result<(layerfs_content::ObjectId, Option<NodeId>, SdkValue), SdkRefusal> {
-    Ok(match node {
-        NodeId::Commit(id) => {
-            let r = args::commit(store, id)?;
-            let branch = r
-                .meta
-                .branch
-                .map(|id| store.history().branch_any(id))
-                .transpose()
-                .map_err(args::history)?
-                .flatten();
-            (
-                r.root,
-                Some(r.parent.map_or(NodeId::Layer(r.base_layer), NodeId::Commit)),
-                args::commit_value(&r, branch.as_ref().map(|branch| branch.name.as_str())),
-            )
-        }
-        NodeId::Layer(id) => {
-            let r = args::layer(store, id)?;
-            (
-                r.root,
-                r.source_commit
-                    .map(NodeId::Commit)
-                    .or(r.parent.map(NodeId::Layer)),
-                args::layer_value(&r, None),
-            )
-        }
-    })
+/// The node's root, parent and record value, read on their own; a walk
+/// reads them through one [`Rows`] (#818 H1).
+pub fn revision(store: &Arc<Store>, node: NodeId) -> Result<Revision, SdkRefusal> {
+    Rows::new(store).revision(node)
 }
 
 pub fn entry(
@@ -62,11 +36,12 @@ pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (limit, pos) = paging(args)?;
     let (mut next, mut seen, mut items, mut spent, mut more) =
         (Some(snap.node), 0u64, Vec::new(), 0, false);
+    let mut rows = Rows::new(store);
     while let Some(node) = next {
-        let (root, parent, record) = revision(store, node)?;
+        let (root, parent, record) = rows.revision(node)?;
         let now = entry(&reader, root, &path)?;
         let before = match parent {
-            Some(parent) => entry(&reader, revision(store, parent)?.0, &path)?,
+            Some(parent) => entry(&reader, rows.record(parent)?.root(), &path)?,
             None => None,
         };
         next = parent;
@@ -139,11 +114,12 @@ pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let mut count = 0i64;
     let mut logical = 0u64;
     let mut next = Some(snap.node);
+    let mut rows = Rows::new(store);
     while let Some(node) = next {
-        let (root, parent, _) = revision(store, node)?;
+        let (root, parent, _) = rows.revision(node)?;
         let now = entry(&reader, root, &path)?;
         let before = match parent {
-            Some(p) => entry(&reader, revision(store, p)?.0, &path)?,
+            Some(p) => entry(&reader, rows.record(p)?.root(), &path)?,
             None => None,
         };
         next = parent;
