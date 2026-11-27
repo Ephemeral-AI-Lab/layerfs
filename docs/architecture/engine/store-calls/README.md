@@ -150,13 +150,16 @@ private overlay; serials come from the Store's pooled reservation
 ([`store/ports.rs`](../../../../engine/crates/layerfs-store-service/src/store/ports.rs)).
 The Commit itself is the Workspace Commit; see [Commit](../commit/README.md).
 
-**Path walks.** A change resolves its paths from the root, overlay first.
-The directories it passes are bound by kind only (`SourceView::lookup_kind`:
-serial and kind, no metadata, length or child-directory count); only the
-last component of a path the change reads gets a full stat, and a parent
-only its serial (#818 W6). The checks keep their order: the name's grammar,
-then `NotDirectory` at the entry before it, then `NoSuchPath`. On a Store
-whose provider pays a round trip per demand (PostgreSQL,
+**Path walks.** A change resolves its paths from the root, overlay first,
+with a full stat of each component on a Store that plans no reads (SQLite:
+a directory's stat reads its children's values, which the lookup below it
+reuses). On a Store whose provider pays a round trip per demand
+(PostgreSQL), the directories a walk passes are bound by kind only
+(`SourceView::lookup_kind`: serial and kind, no metadata, length or
+child-directory count); only the last component of a path the change reads
+gets a full stat, and a parent only its serial (#818 W6). The checks keep
+their order either way: the name's grammar, then `NotDirectory` at the
+entry before it, then `NoSuchPath`. On that Store (PostgreSQL,
 `batched_chain_reads`), the call first plans its paths' base reads
 ([`write/plan.rs`](../../../../engine/crates/layerfs-store-service/src/write/plan.rs)):
 the change list's paths, `PLAN_PATHS` (1,024) changes at a time, are

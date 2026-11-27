@@ -67,12 +67,11 @@
 //!   on seven levels), pinned at the M1 tip as Workspace reader PostgreSQL
 //!   [1, 58, 56, 1] cold, [0, 16, 16, 0] warm; SQLite 113 and 27. The
 //!   call plans its paths' base reads level by level on PostgreSQL
-//!   (-> [1, 34, 32, 1] and [0, 8, 8, 0]; `cp.file.cold` 29 -> 28), and
-//!   walks the directories it passes by kind only on both backends
-//!   (SQLite `apply.10_dirs` 113 -> 109 cold, `apply.10_writes` 77 -> 74,
-//!   `rm.dir_100_recursive` 70 -> 65; `write.overwrite` 73 -> 75 and
-//!   `cp.file` 86 -> 88 cold, whose parent's stat had read the siblings'
-//!   values the file lookup then reused).
+//!   (-> [1, 34, 32, 1] and [0, 8, 8, 0]; `cp.file.cold` 29 -> 28) and
+//!   walks the directories it passes by kind only there. SQLite plans
+//!   nothing and keeps the full-stat walk: every SQLite pin is unchanged
+//!   (SPEC §3 guardrail; a kind-only walk there cost `write.overwrite` and
+//!   `cp.file` cold 2 statements each).
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -101,7 +100,7 @@ const SQLITE: &[Pin] = &[
         "write.overwrite.cold",
         [0, 0, 61, 7],
         [0, 0, 0, 0],
-        [0, 0, 75, 4],
+        [0, 0, 73, 4],
     ),
     pin(
         "write.overwrite.warm",
@@ -126,7 +125,7 @@ const SQLITE: &[Pin] = &[
     pin("mkdir.cold", [0, 0, 79, 11], [0, 0, 0, 0], [0, 0, 65, 4]),
     pin("mkdir.warm", [0, 0, 48, 7], [0, 0, 0, 0], [0, 0, 17, 2]),
     // probe cp.file: 64
-    pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 0, 0], [0, 0, 88, 4]),
+    pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 0, 0], [0, 0, 86, 4]),
     pin("cp.file.warm", [0, 0, 47, 7], [0, 0, 0, 0], [0, 0, 9, 2]),
     // probe mv.file: 60
     pin("mv.file.cold", [0, 0, 79, 10], [0, 0, 0, 0], [0, 0, 81, 4]),
@@ -139,7 +138,7 @@ const SQLITE: &[Pin] = &[
         "apply.10_writes.cold",
         [0, 0, 93, 12],
         [0, 0, 0, 0],
-        [0, 0, 74, 4],
+        [0, 0, 77, 4],
     ),
     pin(
         "apply.10_writes.warm",
@@ -152,7 +151,7 @@ const SQLITE: &[Pin] = &[
         "rm.dir_100_recursive.cold",
         [0, 0, 68, 9],
         [0, 0, 0, 0],
-        [0, 0, 65, 4],
+        [0, 0, 70, 4],
     ),
     pin(
         "rm.dir_100_recursive.warm",
@@ -164,7 +163,7 @@ const SQLITE: &[Pin] = &[
         "apply.10_dirs.cold",
         [0, 0, 88, 12],
         [0, 0, 0, 0],
-        [0, 0, 109, 4],
+        [0, 0, 113, 4],
     ),
     pin(
         "apply.10_dirs.warm",

@@ -76,6 +76,15 @@ pub fn failure(e: WorkspaceError) -> SdkRefusal {
     };
     args::refuse(code, message, SdkValue::Null)
 }
+/// A walk's read refusal at `at`: an absent entry names it.
+fn missing(at: &str, e: WorkspaceError) -> SdkRefusal {
+    match read_failure(e) {
+        r if r.code == "NoSuchPath" => {
+            args::refuse("NoSuchPath", format!("{at} does not exist"), SdkValue::Null)
+        }
+        r => r,
+    }
+}
 /// `NotDirectory` at `at`, an entry that is not a folder.
 pub fn not_folder(at: &str) -> SdkRefusal {
     args::refuse(
@@ -178,6 +187,9 @@ impl<'a> Mutation<'a> {
     /// file or a symlink, which is not followed) is `NotDirectory` at that
     /// entry, as `mkdir` answers, not an engine failure.
     pub fn resolve(&self, path: &str) -> Result<ViewStat> {
+        if !self.workspace.store.batched_reads() {
+            return self.stat_walk(path);
+        }
         match self.walk(path, true)? {
             (_, Some(stat)) => Ok(stat),
             (serial, None) => (self.view)
@@ -185,11 +197,35 @@ impl<'a> Mutation<'a> {
                 .map_err(read_failure),
         }
     }
-    /// The serial at `path`, each component bound by kind only (#818 W6):
-    /// with `stat_last`, the last one's full stat too. A walk needs only
-    /// the kinds of the directories it passes; the checks keep their order
-    /// (the name, then `NotDirectory` at the entry before it, then
-    /// `NoSuchPath`), so the answers are the full-stat walk's.
+    /// [`Self::resolve`] with a full stat of every component, on a Store
+    /// that plans no reads (SQLite): a directory's stat reads its children's
+    /// values, which a lookup below it then reuses, so the kind-only walk
+    /// would cost statements there (SPEC §3 SQLite guardrail).
+    fn stat_walk(&self, path: &str) -> Result<ViewStat> {
+        let mut stat = self
+            .view
+            .stat(self.op.overlay(), self.view.root_serial())
+            .map_err(read_failure)?;
+        let mut at = String::new();
+        for name in path.split('/').filter(|s| !s.is_empty()) {
+            let name = checked(path, name)?;
+            if stat.kind != InodeKind::Directory {
+                return Err(not_folder(&at));
+            }
+            at.push('/');
+            at.push_str(name.as_str());
+            stat = (self.view)
+                .lookup(self.op.overlay(), stat.serial, &name)
+                .map_err(|e| missing(&at, e))?;
+        }
+        Ok(stat)
+    }
+    /// The serial at `path`, each component bound by kind only (#818 W6),
+    /// on a Store that plans its reads (PostgreSQL, [`super::plan`]): with
+    /// `stat_last`, the last one's full stat too. A walk needs only the
+    /// kinds of the directories it passes; the checks keep their order (the
+    /// name, then `NotDirectory` at the entry before it, then `NoSuchPath`),
+    /// so the answers are the full-stat walk's.
     fn walk(&self, path: &str, stat_last: bool) -> Result<(u64, Option<ViewStat>)> {
         let overlay = self.op.overlay();
         let (mut serial, mut kind) = (self.view.root_serial(), InodeKind::Directory);
@@ -202,17 +238,13 @@ impl<'a> Mutation<'a> {
             }
             at.push('/');
             at.push_str(name.as_str());
-            let missing = |e| match read_failure(e) {
-                r if r.code == "NoSuchPath" => {
-                    args::refuse("NoSuchPath", format!("{at} does not exist"), SdkValue::Null)
-                }
-                r => r,
-            };
             if stat_last && index + 1 == names.len() {
-                let stat = (self.view.lookup(overlay, serial, &name)).map_err(missing)?;
+                let stat =
+                    (self.view.lookup(overlay, serial, &name)).map_err(|e| missing(&at, e))?;
                 return Ok((stat.serial, Some(stat)));
             }
-            (serial, kind) = (self.view.lookup_kind(overlay, serial, &name)).map_err(missing)?;
+            (serial, kind) =
+                (self.view.lookup_kind(overlay, serial, &name)).map_err(|e| missing(&at, e))?;
         }
         Ok((serial, None))
     }
@@ -230,7 +262,11 @@ impl<'a> Mutation<'a> {
         let (parent, name) = path
             .rsplit_once('/')
             .ok_or_else(|| args::invalid("absolute path"))?;
-        let (parent, _) = self.walk(if parent.is_empty() { "/" } else { parent }, false)?;
+        let parent = if parent.is_empty() { "/" } else { parent };
+        let parent = match self.workspace.store.batched_reads() {
+            true => self.walk(parent, false)?.0,
+            false => self.stat_walk(parent)?.serial,
+        };
         Ok((parent, checked(path, name)?))
     }
     pub fn read(&self, serial: u64, offset: u64, length: u32) -> Result<Vec<u8>> {

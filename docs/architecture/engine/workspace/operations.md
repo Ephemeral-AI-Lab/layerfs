@@ -28,13 +28,14 @@ What each filesystem operation on a [Workspace](README.md) reads and publishes, 
 
 `SourceView::lookup_kind` binds the same way and answers the serial with
 the kind `stat` reports (overlay inode row, else one base inode value), with
-no metadata, length or child-directory read: the SDK path walk uses it for
-the directories it passes (#818 W6). `BaseView::plan_level` reads one level
-of a planned walk ahead of it: the level's directory root pages as one
-grouped demand, and the children found, with every child of a directory
-whose root page holds its entries and whose count is not remembered, as one
-inode wave of at most `BaseView::PLAN_SERIALS` (1,024) serials; it
-remembers those counts and only fills the client's caches.
+no metadata, length or child-directory read: the SDK path walk on a
+PostgreSQL Store uses it for the directories it passes (#818 W6).
+`BaseView::plan_level` reads one level of a planned walk ahead of it: the
+level's directory root pages as one grouped demand, and the children
+found, with every child of a directory whose root page holds its entries
+and whose count is not remembered, as one inode wave of at most
+`BaseView::PLAN_SERIALS` (1,024) serials; it remembers those counts and
+only fills the client's caches.
 
 | `Operation` | POSIX call | Published in one transaction | Source |
 | --- | --- | --- | --- |

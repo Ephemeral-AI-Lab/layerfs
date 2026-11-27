@@ -415,3 +415,41 @@ cases: −8 statements.
   `store/pipeline.rs` are untouched.
 - Production LOC: 228,436 -> 228,641 (delta +205), engine
   layerfs-store-service +128 (new `write/plan.rs` 107), layerfs-workspace +77.
+
+### W6 follow-up: the SQLite guardrail (coordinator review)
+
+SPEC §3 SQLite guardrail and verification Principle 9 say SQLite statement
+counts change only through dedupe fixes, and no call gets slower. W6's
+kind-only walk raised `write.overwrite` cold from 73 to 75 and `cp.file`
+cold from 86 to 88. The cause was the one already seen on PG: the parent's
+full stat had read the siblings' values, and the file lookup reused them.
+
+Fix: the kind-only walk runs only on a Store that plans its reads
+(`batched_reads`, PostgreSQL), where the plan's level wave reads those
+values. A Store that plans nothing (SQLite) keeps the M1 walk unchanged
+(`Mutation::stat_walk`: full stat of the root and of every component,
+including a parent's). No PG count moves.
+
+SQLite Workspace reader statements (`receipts/W6-sqlite/`):
+
+| Case | M1 tip | W6 | after this fix |
+|---|---|---|---|
+| `write.overwrite.cold` | 73 | 75 | 73 |
+| `cp.file.cold` | 86 | 88 | 86 |
+| `apply.10_writes.cold` | 77 | 74 | 77 |
+| `rm.dir_100_recursive.cold` | 70 | 65 | 70 |
+| `apply.10_dirs.cold` (new) | 113 | 109 | 113 |
+| `apply.10_dirs.warm` (new) | 27 | 27 | 27 |
+| every other case | as pinned | unchanged | unchanged |
+
+Every SQLite pin now equals the M1 tip, and writer and control reader are
+unchanged. PG is as in W6 (`apply.10_dirs` [1,34,32,1] / [0,8,8,0],
+`cp.file.cold` 28).
+
+- Ran once: `sdk_write_round_trips` (its PG half passed unchanged; SQLite
+  repinned from this run), `sdk_write_planned_paths` and
+  `method_refusal_order`, all green. Clippy `-D warnings` on
+  `layerfs-store-service` is clean, and so is rustfmt. Deleted tests: none.
+- Production LOC: 228,641 -> 228,671 (delta +30), engine layerfs-store-service
+  +30 (`stat_walk` and the shared `missing` refusal). W6 with this fix:
+  228,436 -> 228,671 (+235).
