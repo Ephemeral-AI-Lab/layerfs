@@ -548,3 +548,32 @@ fn sqlite_placement_equals_the_per_row_loop() {
 fn postgresql_placement_equals_the_per_row_loop() {
     shapes(Backend::Postgresql);
 }
+
+/// SQLite's window update probes the primary key once per child: a plan
+/// that searches the parent's children by `(operation_id, parent_position)`
+/// alone visits every child of a wide directory per window (the I2b
+/// regression found at M1: release `flat_10k` 510 -> 564 ms).
+#[test]
+fn sqlite_window_update_probes_each_child_by_key() {
+    let rig = Rig::new(Backend::Sqlite, "plan").unwrap();
+    let (_, temp) = rig.sqlite.as_ref().unwrap();
+    let connection = rusqlite::Connection::open(temp.join("store.sqlite")).unwrap();
+    let sql = include_str!("../sql/sqlite/acquisition/queries/place_children.sql");
+    let mut statement = connection
+        .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+        .unwrap();
+    let nulls = vec![rusqlite::types::Null; statement.parameter_count()];
+    let plan: Vec<String> = statement
+        .query_map(rusqlite::params_from_iter(nulls), |row| {
+            row.get::<_, String>(3)
+        })
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    let target: Vec<&String> = plan.iter().filter(|line| line.contains("target")).collect();
+    assert_eq!(
+        target,
+        ["SEARCH target USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)"],
+        "{plan:#?}"
+    );
+}

@@ -357,3 +357,39 @@ order), so a stop in I3b does not hold back I3c.
   `sqlite_reference_acquisition`; every `layerfs-project` test binary: pass.
   `fs_call_round_trips` NOT_RUN (needs `FS818_ARM`; the probe is the
   orchestrator's).
+
+## I2b fix — SQLite `flat_10k` release time (coordinator's M1 note)
+
+M1's release benchmark: SQLite `init.flat_10k` 510.0 → 563.8 ms (+10.5%)
+while statements fell 31,882 → 2,502. Diagnosed once, from the plans:
+
+- `EXPLAIN QUERY PLAN` of the three I2b texts on an empty acquisition
+  schema (sqlite3 3.51): `placement_dependencies.sql` probes
+  `init_host_file`'s key and `init_entry_directory` per input row (fine);
+  `bind_host_files.sql` scans its 32 input rows (fine);
+  `place_children.sql`'s `UPDATE … FROM` ran
+  `SEARCH target USING PRIMARY KEY (operation_id=? AND parent_position=?)`
+  with the input probed through a bloom filter and an automatic index:
+  **every child of the parent per window**. A flat directory of 10,000
+  children placed in 314 windows visits about 3.1 million rows; nested
+  directories (100 children, below 512) never place, hence only flat
+  regressed.
+- Fix within I2b's design (one multi-row update per window, same rows,
+  same answers, no constant): the update finds its rows by
+  `target.name IN (SELECT child_name FROM input)` and takes the new values
+  from correlated lookups in the 32-row input. Plan:
+  `SEARCH target USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)`,
+  one probe per child. Statement counts unchanged (pins pass as they are).
+- One release sample each, same load, same probe (`FS818_ARM=sqlite`,
+  `init_flat_10k`): the M1 binary (sha256 `db76b87011816739`) 494.0 ms,
+  the fixed tree (`a99d36b75b0d2b96`) **298.8 ms** (−40% against 494, −41%
+  against the pre-I2b 510.0). Test profile: 1,010.6 ms at M1 → 478.6 ms.
+  Receipts `receipts/I2b-fix/`.
+- New guard in `acquisition_placement.rs`
+  (`sqlite_window_update_probes_each_child_by_key`): the bundled SQLite's
+  plan for `place_children.sql` probes the full key; equivalence (19
+  cases) passes with the new text.
+- Checks: init pins, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `acquisition_placement`,
+  `sqlite_reference_acquisition`, `acquisition_batching`, `init_sqlite`,
+  `backed_acquisition`: pass.
