@@ -179,7 +179,8 @@ first change as a failed read (`Failed`). That change's own walk would also
 read first, but it might have read only paths that answer, and then
 refused or applied itself. A fault can therefore move a failure to an
 earlier change, or replace a change's later refusal; the plan is read once
-and never retried. SQLite plans nothing.
+and never retried (an order change approved by the owner, 2026-11-27).
+SQLite plans nothing.
 
 **Binding by name.** A call on a named Branch other than `main` without
 `expected` binds through `Store::bind_named_private`: on PostgreSQL the

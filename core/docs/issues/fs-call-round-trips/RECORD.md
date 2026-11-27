@@ -362,7 +362,7 @@ R1's −4 control-reader trips do not move the write pins. Production LOC
 | Item | Prediction | Measured (pins) | 15% | Notes |
 |---|---|---|---|---|
 | R1 | −4 trips every read | −4 every read; revision.h10 −6 (makes 3 of the replaced reads) | yes | 2 new statements, drop/kill swept |
-| R2 | −3 reads per read call, −2 blame/diff | exact; SQLite −9 stmts (3-stmt tx per read) | yes | D1 SQLite pins; **fault-path change:** a failed serial read now refuses instead of silently using serial 0 (base `read/snapshot.rs:94-97`); fail-closed per `visibility.rs`'s own rule; healthy answers equal |
+| R2 | −3 reads per read call, −2 blame/diff | exact; SQLite −9 stmts (3-stmt tx per read) | yes | D1 SQLite pins; **fault-path change:** a failed serial read now refuses instead of silently using serial 0 (base `read/snapshot.rs:94-97`); fail-closed per `visibility.rs`'s own rule; healthy answers equal. **Approved by the owner 2026-11-27** as a named order change ("Approve all four", relayed by the parent session). |
 | R3 | SPEC −3 root, −7/component | exact to SPEC; cold stat d7 91 → 34 (−57 vs −56), grep1k 111 → 100 (−11 vs −10) | yes (vs SPEC, cold-delta rule) | walk kept even without markers to keep refusal order |
 | W1 | −6 warm / −10 cold | exact | yes | D16 kept; with kept markers present, the base-tree open happens only on the refusal path |
 | W2 | −4 warm / −7 cold | exact; control reader 0 on all write cases | yes | new named-bind flight, 26 messages drop+kill swept; cold separate-path Commit +1 writer trip |
@@ -535,7 +535,7 @@ cache, launcher records) were left alone.
     read refuses at the window's first change that reads; without the plan that
     change might have answered and the failure surfaced at a later change.
     Matching it would need a re-read after the failure (a retry), so not done.
-    Documented in store-calls `README.md`.
+    Documented in store-calls `README.md`. **Approved by the owner 2026-11-27** as a named order change ("Approve all four", relayed by the parent session).
   - Pre-existing flake noted by lane W: `fused_commit`'s
     `postgresql_cancelled_barrier_is_released` and
     `postgresql_lost_backend_without_start_is_not_terminated` pick the paused
@@ -562,6 +562,7 @@ cache, launcher records) were left alone.
     only a fault exactly on the old marker read refused after `path`.) Removing
     it needs a second statement per read or checking `path` first, which would
     reorder healthy `NoSuchProject`/`NoSuchBranch` vs `InvalidInput`; neither done.
+    **Approved by the owner 2026-11-27** as a named order change ("Approve all four", relayed by the parent session).
   - Ownership of persistence `history/catalog.rs` and
     `sql/postgresql/queries/history/` passed to lane W at this merge.
 - **H5/H6 refusal-order blocker and decision (orchestrator).**
@@ -662,6 +663,7 @@ cache, launcher records) were left alone.
   - **Residual fault-only order difference (H6, batched mode), for the owner:**
     `diff_files` locates the right side before reading the left text, so a
     right-side locate failure comes before the left text's demands.
+    **Approved by the owner 2026-11-27** as a named order change ("Approve all four", relayed by the parent session).
 - Lane W `bd1ee54013`: `postgresql_round_trips` check reverted to the original `round_trips >= statements` (no replacement); the test fails as recorded at Phase 0, and W4's pipelined reservation now also trips it. Lane W complete for M3.
 - Merge `1e77af6757` (lane W M3): Init pin conflict (I3b A vs W4) resolved to
   part A's counts with W4's −6 trips / +1 statement, predicted and measured
@@ -848,3 +850,20 @@ refusal-order changes R5 (context statement failure refuses before an invalid
 `path`), W6 (failed plan read refuses at the window's first reading change),
 H6 (batched `diff_files` locates the right side before the left text) and R2
 (failed serial read refuses instead of falling back to serial 0).
+Superseded below: approved the same day.
+
+### Owner decision 2026-11-27: the four fault-only order changes approved
+
+The owner, quoted by the parent session: "Approve all four". Each is now an
+approved, named refusal-order change (Principle 5), marked at its entry above:
+
+| Change | Approved order | Where recorded |
+|---|---|---|
+| R5 | a failed context statement refuses before an invalid `path` argument | R5 entry; store-calls `reads.md` (history context) |
+| W6 | a failed planned read refuses at the window's first change that reads | W6 entry; store-calls `README.md` (planned paths) |
+| H6 | in batched `diff_files`, the right side is located before the left text, so a right-side locate failure comes first | H6 entry; store-calls `reads.md` (Reads planned ahead) |
+| R2 | a failed history-serial read refuses (at the marker step) instead of falling back to serial 0 | R2 row; store-calls `reads.md` (resolve) |
+
+Tests and docs checked: no test asserts the opposite order (`method_refusal_order`,
+`sdk_write_planned_paths`, `sdk_history_versions_rh` and the read pins test
+healthy orders only); the docs named above now state each approved order.
