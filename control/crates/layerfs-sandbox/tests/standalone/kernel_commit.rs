@@ -24,7 +24,7 @@ mod daemon_binary;
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/installed_store.rs"]
 mod installed;
 #[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/namespace_model.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/rigs/namespace_model.rs"]
 mod model;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/mounted.rs"]
@@ -33,7 +33,7 @@ mod mounted;
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/mounted_commit.rs"]
 mod rig;
 #[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/host.rs"]
 mod support;
 use layerfs_history::{BranchId, CommitOutcome, CommitRecord, WorkspaceId};
 use layerfs_protocol::daemon::{

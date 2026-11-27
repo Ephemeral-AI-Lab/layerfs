@@ -6,7 +6,7 @@
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/mounted.rs"]
 mod mounted;
 #[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/host.rs"]
 mod support;
 use layerfs_daemon::{
     control::{Failure, Success},

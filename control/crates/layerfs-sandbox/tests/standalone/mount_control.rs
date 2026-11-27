@@ -1,10 +1,10 @@
 //! Authenticated control over an actually installed Store and one real owner.
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/control_fixture.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/control_fixture.rs"]
 mod fixture;
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/held_writer.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/gate/held_writer.rs"]
 mod held_writer;
 #[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/host.rs"]
 mod support;
 use layerfs_daemon::control::Service;
 use layerfs_history::{BranchId, CommitOutcome, WorkspaceId};

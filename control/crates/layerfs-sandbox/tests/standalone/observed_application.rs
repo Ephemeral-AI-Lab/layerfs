@@ -4,7 +4,7 @@
 #[path = "../support/daemon_binary.rs"]
 mod daemon_binary;
 #[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
+#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/host.rs"]
 mod support;
 use layerfs_history::WorkspaceId;
 use layerfs_protocol::daemon::{Reply, Request};

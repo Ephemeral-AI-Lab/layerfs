@@ -9,7 +9,7 @@ mod fault_proxy;
 mod fused_refusal_ids;
 mod generation_and_kept_ids;
 #[allow(dead_code)]
-#[path = "../../../layerfs-daemon/tests/support/held_writer.rs"]
+#[path = "../../../layerfs-daemon/tests/support/gate/held_writer.rs"]
 mod held_writer;
 mod interleavings;
 mod kept_ordinals_release;

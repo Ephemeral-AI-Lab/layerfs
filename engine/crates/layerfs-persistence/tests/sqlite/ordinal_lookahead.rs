@@ -222,7 +222,7 @@ fn small_configured_blocks_refill_without_limiting_the_save() {
     println!("SAVE_BLOCK_REFILLS initial={} refill={} ordinal={} publication={} write_transactions={} saved_values=10 reconstructed_leaves=5", counts.initial_reservations, counts.reservation_refills, counts.ordinal_reservations, counts.publish, counts.reserve + counts.publish);
 }
 
-#[path = "../../../layerfs-daemon/tests/support/held_writer.rs"]
+#[path = "../../../layerfs-daemon/tests/support/gate/held_writer.rs"]
 mod held_writer;
 
 #[test]
