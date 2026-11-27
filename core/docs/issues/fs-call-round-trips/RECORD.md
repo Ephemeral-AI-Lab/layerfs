@@ -663,3 +663,28 @@ cache, launcher records) were left alone.
     `diff_files` locates the right side before reading the left text, so a
     right-side locate failure comes before the left text's demands.
 - Lane W `bd1ee54013`: `postgresql_round_trips` check reverted to the original `round_trips >= statements` (no replacement); the test fails as recorded at Phase 0, and W4's pipelined reservation now also trips it. Lane W complete for M3.
+- Merge `1e77af6757` (lane W M3): Init pin conflict (I3b A vs W4) resolved to
+  part A's counts with W4's −6 trips / +1 statement, predicted and measured
+  exactly: **Init 10k PG nested 209, flat 241** (`receipts/M3/merge-W4-*.log`).
+  Production LOC 230,975 -> 231,190 (+215).
+- Lane I `428fc626f3` → merge `71bf02bffc`: I3a acquisition reads now call
+  `read_statement` per site with qualified keys from 9 new
+  `sql/postgresql/queries/history/acquisition_*.sql` files (SQL unchanged but
+  whitespace); `postgresql_statement_schema` green, guard unchanged. Production
+  LOC 231,190 -> 231,247 (+57, SQL text moved into shipped .sql files).
+- `visibility_guard` fails on R5's `read_context_node.sql` (reads `branch` /
+  `layer_stack` without the §4.2 filter) → lane RH to fix (match the one-by-one
+  statements it replaced; never weaken the guard).
+- Lane S `0ad54a7401` (hints follow-up): per-object demands read pages through
+  one `read_groups_classified` call and whole packs through
+  `Fetch::whole_packs_each`, so on the batched PostgreSQL route a refused pack
+  inside a multi-pack group read is the error of exactly the dependent ids, each
+  equal to its point read, requested once; existing callers keep `read_groups`
+  and their counts (no `Fetch::per_object()` guard). Production LOC 231,175 ->
+  231,300 (+125, core layerfs-storage; `read/hints.rs` 684→802,
+  `read/objects.rs` 428→434, `read/fetch.rs` 880→882, `read/prefetch.rs`
+  215→214; no new files). `read/fetch.rs` is at 998 physical lines (ceiling 999).
+  **Recorded edge:** a pack first refused by a reconstruction's own acquisition
+  after the walk (only when the pack cache evicted a group the walk read within
+  one cohort) is acquired again by that reconstruction; the root still gets its
+  point-read error. Corrupt Store + eviction only.
