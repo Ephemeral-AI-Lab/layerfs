@@ -657,7 +657,8 @@ class World:
                 self.kind[ckey] = "path"
             else:
                 sub = own_dir
-                cands = [f"{sub}/{d.name}.rs", f"{sub}/{d.name}/mod.rs"]
+                stem = d.name[2:] if d.name.startswith("r#") else d.name
+                cands = [f"{sub}/{stem}.rs", f"{sub}/{stem}/mod.rs"]
                 child = next((c for c in cands if c in self.files), None)
                 self.kind[ckey] = "conv"
             if child and child in self.files:
@@ -835,7 +836,7 @@ class Plan:
         self.split_targets = []
         for r in self.pending:
             old, new, ch = r.get("old"), r.get("new"), r["change"]
-            if ch in ("move", "rename", "split"):
+            if ch in ("move", "rename", "split", "keep"):
                 self.moves[old] = new
             elif ch == "merge":
                 if old:
@@ -865,7 +866,7 @@ class Plan:
 
     def _pending(self, r):
         old, new, ch = r.get("old"), r.get("new"), r["change"]
-        if ch == "keep":
+        if ch == "keep" and old == new:
             return False
         if ch == "new":
             return new not in self.current
@@ -902,13 +903,15 @@ class Mover:
         cur_crates = package_dirs(self.current)
         new_crates = package_dirs([r["new"] for r in self.rows if r.get("new")])
         self.all_crates = cur_crates | new_crates
+        final_crates = package_dirs([r["new"] for r in self.rows if r.get("new")])
         if args.cross:
             def select(r):
                 o, n = r.get("old"), r.get("new")
+                if o and crate_of_row(o) not in final_crates:
+                    return True  # every row of a crate that dissolves
                 if r["change"] == "new":
-                    return crate_of_row(n) not in cur_crates or any(
-                        x.get("old") and crate_of_row(x["old"]) != crate_of_row(n) and x.get("new", "").startswith(os.path.dirname(n))
-                        for x in [])
+                    # entries of brand-new crates (their lib.rs); Cargo.toml is hand work
+                    return n.endswith("/src/lib.rs") and crate_of_row(n) not in cur_crates
                 return o and n and crate_of_row(o) != crate_of_row(n)
         else:
             def inside(p):
@@ -949,7 +952,7 @@ class Mover:
     def make_new_world(self, newf):
         W, p = self.W, self.plan
         self.newf = set(newf)
-        self.new_crates = package_dirs(self.newf) | package_dirs([r["new"] for r in p.created])
+        self.new_crates = package_dirs(self.newf) | package_dirs([r["new"] for r in self.rows if r.get("new")])
         for r in p.created:
             if r["new"].endswith("Cargo.toml"):
                 self.new_crates.add(r["new"].rsplit("/", 1)[0])
@@ -1021,7 +1024,7 @@ class Mover:
                 if f"{d}/main.rs" not in self.newf and (d not in cur_dirs or f"{d}/main.rs" in self.current):
                     self.newf.add(f"{d}/main.rs")
                     added.append(f"{d}/main.rs")
-        created_rows = {r["new"] for r in self.plan.created}
+        created_rows = {r["new"] for r in self.rows if r.get("new")}
         for a in added:
             if a not in created_rows:
                 self.notes.append(f"created {a} (no mapping row)")
@@ -1031,6 +1034,8 @@ class Mover:
     def new_target_of(self, f, old_key):
         """(tid, path, kind) for new file f, given one of its old inclusions."""
         crate = crate_of(f, self.new_crates)
+        if crate is None:
+            raise SystemExit(f"no crate for new path {f} (old inclusion {old_key})")
         rel = f[len(crate) + 1:]
         parts = rel.split("/")
         old_t = self.W.targets[old_key[0]]
@@ -1158,11 +1163,40 @@ class Mover:
             return rest
         if ups == 0 and not rest:
             return ["self"]
-        if style in ("super", "self", "bare") and ups <= 2:
+        if (style in ("super", "self", "bare") and ups <= 2) or style == "super_any":
             if ups == 0:
                 return ["self"] + rest
             return ["super"] * ups + rest
         return ["crate"] + list(tpath)
+
+    def plan_path(self, f, segs, scopes, in_use=False, leading=False, dollar=False):
+        """Decide one path: ("keep",), ("import", r) or ("spell", new segs, results)."""
+        R = self.R
+        results = []
+        for ok_, nk in scopes:
+            r = R.resolve(ok_, segs, in_use=in_use, leading=leading, dollar=dollar)
+            if not r or nk is None:
+                return ("keep",)
+            if r["start"] == "import":
+                return ("import", r)
+            tm = self.newkey(r["module"])
+            if tm is None:
+                return ("keep",)
+            results.append((r, tm, nk))
+        if not results:
+            return ("keep",)
+        for style in (results[0][0]["start"], "super_any", "crate"):
+            cands = []
+            for r, tm, nk in results:
+                sp = self.spell(tm, nk, style, segs)
+                if sp is None:
+                    cands = None
+                    break
+                cands.append(sp + r["tail"] + segs[r["consumed"]:])
+            if cands and all(c == cands[0] for c in cands):
+                return ("spell", cands[0], results)
+        self.hand.append(f"{f}: no spelling of {'::'.join(segs)} valid in every inclusion")
+        return ("keep",)
 
     # -- rewriting -----------------------------------------------------------
     def follow_reexport(self, key, use, target):
@@ -1185,10 +1219,14 @@ class Mover:
         scope_files = self.rewrite_scope()
         self.edits = defaultdict(list)  # old file -> [(start, end, text)]
         self.renamed_locals = defaultdict(dict)
-        for f in sorted(scope_files):
+        # pieces of one new file share their module-level imports: process them in
+        # file order (primary first) so a merged piece drops an import it repeats
+        order = sorted(scope_files, key=lambda f: (self.fmap.get(f) or "", f in self.plan.appended, f))
+        seen_by_file = defaultdict(dict)
+        for f in order:
             if not f.endswith(".rs") or f not in W.incl:
                 continue
-            self.rewrite_file(f)
+            self.rewrite_file(f, seen_by_file[self.fmap.get(f) or f])
         self.emit()
 
     def rewrite_scope(self):
@@ -1208,7 +1246,7 @@ class Mover:
             out.append((k, self.newkey(k)))
         return out
 
-    def rewrite_file(self, f):
+    def rewrite_file(self, f, seen=None):
         W, R = self.W, self.R
         p = W.parse(f)
         incs = self.inclusions(f)
@@ -1232,37 +1270,32 @@ class Mover:
                 if not segs:
                     new_leaves.append((segs, leaf.alias, leaf.glob))
                     continue
-                spelled = None
-                ok = True
-                for ok_, nk in scope_keys(u.scope):
-                    r = R.resolve(ok_, segs, in_use=True, leading=u.leading)
-                    if not r or r["start"] == "import" and not self._import_renamed(r):
-                        spelled = spelled or None
-                        ok = ok and True
-                        if r is None:
-                            spelled = "keep"
-                        else:
-                            spelled = spelled if spelled not in (None,) else "keep"
-                        continue
-                    tm = self.newkey(r["module"])
-                    if tm is None or nk is None:
-                        spelled = "keep"
-                        continue
-                    if r["start"] == "import":
-                        spelled = "keep"
-                        continue
-                    s = self.spell(tm, nk, r["start"], segs)
-                    if s is None:
-                        self.hand.append(f"{f}: cannot reach {tm} from {nk} ({'::'.join(segs)})")
-                        spelled = "keep"
-                        continue
-                    full = s + r["tail"] + segs[r["consumed"]:]
+                spelled = "keep"
+                is_module = False
+                d = self.plan_path(f, segs, scope_keys(u.scope), in_use=True, leading=u.leading)
+                if d[0] == "spell":
+                    r0_ = d[2][0][0]
+                    is_module = not (r0_["tail"] + segs[r0_["consumed"]:])
+                    full = d[1]
+                    r, tm, nk = d[2][0]
                     if (not leaf.glob and r["consumed"] == len(segs) and not r["tail"] and tm[0] == nk[0]
                             and tm[1] == nk[1] + (leaf.local(),)):
-                        full = ["<drop>"]
-                    if spelled not in (None, "keep") and spelled != full:
-                        self.hand.append(f"{f}: inclusions disagree on {'::'.join(segs)}")
+                        full = ["<drop>"]  # re-export of a child module from its own parent
+                    rest_items = r["tail"] + segs[r["consumed"]:]
+                    if tm == nk and (
+                            (leaf.glob and not rest_items)
+                            or (not leaf.glob and len(rest_items) == 1 and leaf.local() == rest_items[0])):
+                        full = ["<drop>"]  # an item of this very module (files merged)
                     spelled = full
+                if seen is not None and not u.scope and not leaf.glob and spelled != ["<drop>"] and incs:
+                    r0 = R.resolve(incs[0][0], segs, in_use=True, leading=u.leading)
+                    if r0 and r0["start"] != "import":
+                        ident = (self.newkey(r0["module"]), tuple(r0["tail"] + segs[r0["consumed"]:]))
+                        loc = leaf.alias or (spelled[-1] if isinstance(spelled, list) else segs[-1])
+                        if loc in seen and not u.vis and f in self.plan.appended:
+                            spelled = ["<drop>"]
+                        else:
+                            seen.setdefault(loc, ident)
                 if spelled in (None, "keep"):
                     new_leaves.append((segs, leaf.alias, leaf.glob))
                     continue
@@ -1276,8 +1309,9 @@ class Mover:
                         continue
                     if not leaf.glob and alias is None and segs[-1] != spelled[-1] and segs[-1] not in ("self",):
                         # a renamed module import: keep the old local name where it is
-                        # public, otherwise rename its uses in this file
-                        if u.vis:
+                        # public, otherwise rename its uses in this file; an item
+                        # reached through a renaming re-export keeps its local name
+                        if u.vis or not is_module:
                             alias = segs[-1]
                         else:
                             renames[(u.scope, segs[-1])] = spelled[-1]
@@ -1306,30 +1340,13 @@ class Mover:
         for o in p.occs:
             segs = o.segs
             spelled = "keep"
-            for ok_, nk in scope_keys(o.scope):
-                r = R.resolve(ok_, segs, dollar=o.dollar, leading=o.leading)
-                if not r or nk is None:
-                    continue
-                if r["start"] == "import":
-                    key = (o.scope, segs[0])
-                    new = None
-                    for (sc, old), nn in renames.items():
-                        if old == segs[0] and (sc == o.scope[:len(sc)]):
-                            new = nn
-                    if new:
-                        spelled = [new] + segs[1:]
-                    continue
-                tm = self.newkey(r["module"])
-                if tm is None:
-                    continue
-                s = self.spell(tm, nk, r["start"], segs)
-                if s is None:
-                    self.hand.append(f"{f}: cannot reach {tm} from {nk} ({'::'.join(segs)})")
-                    continue
-                full = s + r["tail"] + segs[r["consumed"]:]
-                if spelled != "keep" and spelled != full:
-                    self.hand.append(f"{f}: inclusions disagree on {'::'.join(segs)}")
-                spelled = full
+            d = self.plan_path(f, segs, scope_keys(o.scope), dollar=o.dollar, leading=o.leading)
+            if d[0] == "spell":
+                spelled = d[1]
+            elif d[0] == "import":
+                for (sc, old), nn in renames.items():
+                    if old == segs[0] and sc == o.scope[:len(sc)]:
+                        spelled = [nn] + segs[1:]
             if spelled == "keep" or spelled == segs:
                 continue
             start = toks[o.toks[0]].s
@@ -1367,6 +1384,17 @@ class Mover:
             lit = os.path.relpath(new_abs, os.path.dirname(nf))
             if lit != inc.value:
                 edits.append((tok.s, tok.e, json.dumps(lit)))
+        # plain declarations of shared modules: add #[path] where needed
+        if nf and nf != f:
+            for d in p.decls:
+                if d.inline or d.path_attr or d.scope:
+                    continue
+                okey = (incs[0][0][0], incs[0][0][1] + (d.name,))
+                if self.is_regen(okey):
+                    continue
+                fix = self.path_for_kept_decl(f, nf, okey, d)
+                if fix:
+                    edits.append(fix)
         # #[path] declarations
         for d in p.decls:
             if not d.path_attr or d.path_attr[1] is None:
@@ -1422,12 +1450,16 @@ class Mover:
             f = W.mods[key][0]
             if kind == "path" or (kind == "conv" and len(W.incl.get(f, [])) > 1):
                 continue
-            if f in self.plan.appended or self.fmap.get(f) is None:
+            if self.fmap.get(f) is None:
                 continue
             nk = self.newkey(key)
             if nk is None or not nk[1]:
                 continue
-            want[(nk[0], nk[1][:-1])].setdefault(nk[1][-1], key)
+            slot = want[(nk[0], nk[1][:-1])]
+            name = nk[1][-1]
+            prev = slot.get(name)
+            if prev is None or self._decl_rank(key, nk) > self._decl_rank(prev, nk):
+                slot[name] = key
         # intermediate folders created by the tool
         for nk_parent in list(want):
             tid, path = nk_parent
@@ -1436,6 +1468,17 @@ class Mover:
                 want[up].setdefault(path[-1], None)
                 path = path[:-1]
         return want
+
+    def _decl_rank(self, key, nk):
+        """Prefer the old module that is the same module (same name and parent), then the widest."""
+        W = self.W
+        same = 0
+        par = W.parent(key)
+        if par is not None and key[1] and key[1][-1] == nk[1][-1] and self.newkey(par) == (nk[0], nk[1][:-1]):
+            same = 1
+        vis = W.decl_of[key][1].vis if key in W.decl_of else ""
+        width = {"pub": 3, "pub(crate)": 2}.get(vis, 1 if vis else 0)
+        return (same, width)
 
     def emit(self):
         """Compose new file contents and apply git operations."""
@@ -1471,7 +1514,7 @@ class Mover:
                 file_key[f] = k
         affected = set()
         for key, (f, inline) in W.mods.items():
-            if inline or not key[1]:
+            if inline:
                 continue
             if self.fmap.get(f) == f and f not in p.appended:
                 continue
@@ -1508,9 +1551,87 @@ class Mover:
             key = file_key.get(nf)
             kids = want.get(key, {}) if key else {}
             changes[nf] = self.compose(nf, [], key, kids)
+        if self.args.compat:
+            self.add_compat(changes, file_key)
         self.apply_git(changes, pieces)
         self.cargo_targets()
         self.report()
+
+    def add_compat(self, changes, file_key):
+        """Re-export every old public module path of the selected lib crates whose
+        module moved, from the deepest surviving ancestor (`#828 compat`)."""
+        W = self.W
+        sel_libs = {t.tid for t in W.targets.values() if t.kind == "lib" and t.crate in self.crate_sel}
+        new_mods = {self.newkey(k) for k in W.mods} | set(file_key.values())
+        new_mods.discard(None)
+        need = {}
+        for key in sorted(W.mods, key=lambda k: (k[0], len(k[1]), k[1])):
+            tid, path = key
+            if tid not in sel_libs or not path or not self.publicly_reachable(key):
+                continue
+            nk = self.newkey(key)
+            if nk is None or nk == key:
+                continue
+            # covered by a moved ancestor that carries it along
+            covered = False
+            for k in range(1, len(path)):
+                anc = (tid, path[:k])
+                if anc in need:
+                    na = need[anc]
+                    if nk == (na[0], na[1] + path[k:]):
+                        covered = True
+                        break
+            if not covered:
+                need[key] = nk
+        self.pubmap = {}
+        shims = defaultdict(dict)  # host new key -> trie
+        for (tid, path), nk in need.items():
+            crate = tid.split("::")[0]
+            lib = W.targets[tid].name
+            self.pubmap[f"{lib}::{'::'.join(path)}"] = (
+                f"{self.lib_new.get(nk[0].split('::')[0])}::{'::'.join(nk[1])}")
+            a = len(path) - 1
+            while a > 0 and (tid, path[:a]) not in new_mods:
+                a -= 1
+            host = (tid, path[:a])
+            rest = path[a:]
+            if nk[0] != tid:
+                target = "::".join([self.lib_new.get(nk[0].split("::")[0])] + list(nk[1]))
+            else:
+                target = "::".join(["crate"] + list(nk[1]))
+            node = shims[host]
+            for seg in rest[:-1]:
+                node = node.setdefault(seg, {})
+            node[rest[-1]] = target
+        for host, trie in shims.items():
+            nf = self.file_of_newkey(host)
+            if nf is None:
+                self.hand.append(f"compat: no file for host module {host}")
+                continue
+            text = changes.get(nf)
+            if text is None:
+                src = next((f for f, n in self.fmap.items() if n == nf and f not in self.plan.appended), None)
+                if src is None or not os.path.exists(src):
+                    self.hand.append(f"compat: host file {nf} not found")
+                    continue
+                text = open(src, encoding="utf-8").read()
+            lines = ["", f"// {MARK}: old public module paths, removed in wave 3."]
+
+            def render(trie, indent):
+                out = []
+                for name, sub in sorted(trie.items()):
+                    if isinstance(sub, str):
+                        out.append(f"{indent}#[doc(hidden)]\n{indent}pub use {sub} as {name}; // {MARK}")
+                    else:
+                        out.append(f"{indent}#[doc(hidden)]\n{indent}pub mod {name} {{ // {MARK}")
+                        out.extend(render(sub, indent + "    "))
+                        out.append(f"{indent}}}")
+                return out
+
+            lines += render(trie, "")
+            changes[nf] = text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+        if self.args.report:
+            json.dump(self.pubmap, open(self.args.report.replace(".json", "") + ".pubmap.json", "w"), indent=1)
 
     def key_of_new_file(self, nf, srcs):
         W = self.W
@@ -1650,6 +1771,9 @@ class Mover:
                     if d.inline or d.path_attr or d.scope:
                         continue
                     st, en = self._line_start(text, d.span[0]), self._line_end(text, d.span[1])
+                    okey = (fkeys[0][0], fkeys[0][1] + (d.name,)) if fkeys else None
+                    if okey is not None and not self.is_regen(okey):
+                        continue
                     child_name = None
                     if idx == 0:
                         for fk in fkeys:
@@ -1695,6 +1819,45 @@ class Mover:
         if block:
             body = body[:anchor] + block + body[anchor:]
         return body + "".join(b for b, _ in parts[1:])
+
+    def is_regen(self, key):
+        """A module whose declaration the tool regenerates (conventional, one includer)."""
+        W = self.W
+        if key not in W.mods or W.mods[key][1]:
+            return False
+        f = W.mods[key][0]
+        kind = W.kind.get(key)
+        if kind != "conv" or len(W.incl.get(f, [])) > 1:
+            return False
+        return True
+
+    def path_for_kept_decl(self, s, nf, okey, d):
+        """Edit giving a kept plain declaration a #[path] when its file is no longer
+        where Rust would look from the new file."""
+        W = self.W
+        if d.path_attr or okey not in W.mods:
+            return None
+        child = W.mods[okey][0]
+        nchild = self.fmap.get(child, child)
+        if not nchild:
+            return None
+        root_like = nf.rsplit("/", 1)[1] in ("mod.rs", "lib.rs", "main.rs") or self._is_target_root(nf)
+        base = os.path.dirname(nf) if root_like else nf[:-3]
+        if nchild in (f"{base}/{d.name}.rs", f"{base}/{d.name}/mod.rs"):
+            return None
+        rel = os.path.relpath(nchild, os.path.dirname(nf))
+        text = W.parse(s).text
+        m = re.compile(r"(pub(\([^)]*\))?\s+)?mod\s+" + re.escape(d.name) + r"\s*;").search(text, d.span[0], d.span[1])
+        if not m:
+            return None
+        return (m.start(), m.start(), f"#[path = {json.dumps(rel)}]\n")
+
+    def _is_target_root(self, nf):
+        crate = crate_of(nf, self.new_crates)
+        if not crate:
+            return False
+        rel = nf[len(crate) + 1:].split("/")
+        return (len(rel) == 2 and rel[0] in ("tests", "examples", "benches")) or (len(rel) == 3 and rel[1] == "standalone")
 
     def _drop_decls_text(self, body):
         return body
@@ -1826,10 +1989,234 @@ class Mover:
             open(self.args.report, "w").write(text)
         print(f"moves {len(p.moves)}, appended {len(p.appended)}, removed {len(p.removed)}, "
               f"notes {len(self.notes)}, hand {len(self.hand)}")
-        for h in self.hand[:200]:
+        self.hand = list(dict.fromkeys(self.hand))
+        for h in self.hand[:300]:
             print("HAND", h)
         for n in self.notes[:100]:
             print("NOTE", n)
+
+
+VIS_ERRORS = {"E0603", "E0624", "E0616", "E0451", "E0365", "E0364"}
+
+
+def fixvis(packages, features, max_rounds=12):
+    """Widen to pub(crate) every item rustc reports as private at its use."""
+    env = dict(os.environ)
+    total = 0
+    for rnd in range(max_rounds):
+        cmd = ["cargo", "+1.85.1", "check", "--locked", "--offline", "--all-targets", "--message-format=json"]
+        for p in packages:
+            cmd += ["-p", p]
+        cmd += features
+        out = subprocess.run(cmd, capture_output=True, text=True, env=env).stdout
+        targets = set()
+        errors = 0
+        for line in out.splitlines():
+            try:
+                m = json.loads(line)
+            except ValueError:
+                continue
+            if m.get("reason") != "compiler-message":
+                continue
+            mm = m["message"]
+            code = (mm.get("code") or {}).get("code")
+            if mm["level"] == "warning" and code in ("private_interfaces", "private_bounds"):
+                for ch in mm["children"]:
+                    if "only usable at visibility" in ch["message"]:
+                        for sp in ch["spans"]:
+                            targets.add((sp["file_name"], sp["byte_start"]))
+                continue
+            if mm["level"] != "error":
+                continue
+            errors += 1
+            if code not in VIS_ERRORS:
+                continue
+            spans = [s for s in mm["spans"] if not s["is_primary"] and s.get("label") and "defined here" in s["label"]]
+            for ch in mm["children"]:
+                if "defined here" in ch["message"] or "declared private" in ch["message"]:
+                    spans += ch["spans"]
+            if code in ("E0365", "E0364"):
+                spans = []
+                for ch in mm["children"]:
+                    spans += ch["spans"]
+            if code == "E0616" or (code == "E0451" and "field" in mm["message"]):
+                fm = re.search(r"field `([^`]+)` of (?:struct|union) `([^`<]+)", mm["message"])
+                if fm:
+                    pkg_files = [x for x in subprocess.run(["git", "ls-files", "*.rs"], capture_output=True, text=True).stdout.split()]
+                    prim = mm["spans"][0]["file_name"] if mm["spans"] else ""
+                    crate_dir = "/".join(prim.split("/")[:3])
+                    for f, off in find_field([x for x in pkg_files if x.startswith(crate_dir + "/")],
+                                             fm.group(2).split("::")[-1], fm.group(1)):
+                        targets.add((f, ("char", off)))
+                continue
+            if "tuple struct constructor" in mm["message"]:
+                for sp in spans:
+                    targets.add((sp["file_name"], ("tuple", sp["byte_start"])))
+                continue
+            use_crate = "/".join(mm["spans"][0]["file_name"].split("/")[:3]) if mm["spans"] else ""
+            for sp in spans:
+                cross = "/".join(sp["file_name"].split("/")[:3]) != use_crate
+                targets.add((sp["file_name"], ("pub", sp["byte_start"]) if cross else sp["byte_start"]))
+        if not targets:
+            print(f"fixvis: round {rnd}: {errors} errors, none about visibility")
+            return total
+        by_file = defaultdict(set)
+        for f, b in targets:
+            by_file[f].add(b)
+        n = 0
+        for f, offs in by_file.items():
+            if not os.path.exists(f) or "/registry/" in f or not f.startswith(("core/", "engine/", "control/", "api/")):
+                continue
+            raw = open(f, "rb").read()
+            text = raw.decode("utf-8")
+            edits = []
+            for b in sorted(offs, key=str):
+                if isinstance(b, tuple) and b[0] == "char":
+                    e = widen_at(text, b[1])
+                    if e:
+                        edits.append(e)
+                    continue
+                if isinstance(b, tuple) and b[0] == "pub":
+                    ci = len(raw[:b[1]].decode("utf-8", errors="ignore"))
+                    e = widen_at(text, ci, full=True)
+                    if e:
+                        edits.append(e)
+                    continue
+                if isinstance(b, tuple) and b[0] == "tuple":
+                    ci = len(raw[:b[1]].decode("utf-8", errors="ignore"))
+                    edits.extend(widen_tuple_fields(text, ci))
+                    continue
+                ci = len(raw[:b].decode("utf-8", errors="ignore"))
+                e = widen_at(text, ci)
+                if e:
+                    edits.append(e)
+            if edits:
+                text = apply_edits(text, list({e[0]: e for e in edits}.values()))
+                open(f, "w", encoding="utf-8").write(text)
+                n += len(edits)
+        total += n
+        print(f"fixvis: round {rnd}: {errors} errors, widened {n}")
+        if n == 0:
+            return total
+    return total
+
+
+ITEM_KW = {"fn", "struct", "enum", "trait", "type", "const", "static", "mod", "use", "union", "async", "unsafe", "extern"}
+
+
+def widen_at(text, ci, full=False):
+    """Edit making the item or field starting at char offset ci visible crate-wide
+    (or public with full=True, for a use from another crate)."""
+    toks = [t for t in lex(text[ci:ci + 4000]) if t.k != "com"]
+    k = 0
+    while k < len(toks) and toks[k].v == "#":
+        depth = 0
+        k += 1
+        if k < len(toks) and toks[k].v == "!":
+            k += 1
+        while k < len(toks):
+            if toks[k].v == "[":
+                depth += 1
+            elif toks[k].v == "]":
+                depth -= 1
+                if depth == 0:
+                    k += 1
+                    break
+            k += 1
+    if k >= len(toks):
+        return None
+    t = toks[k]
+    if t.v == "pub":
+        if k + 1 < len(toks) and toks[k + 1].v == "(":
+            j = k + 1
+            while j < len(toks) and toks[j].v != ")":
+                j += 1
+            inner = text[ci + toks[k + 1].s:ci + toks[j].e]
+            if inner.replace(" ", "") == "(crate)" or full:
+                return (ci + t.s, ci + toks[j].e, "pub")
+            return (ci + t.s, ci + toks[j].e, "pub(crate)")
+        return None
+    if t.k == "id" and (t.v in ITEM_KW or (k + 1 < len(toks) and toks[k + 1].v == ":")):
+        return (ci + t.s, ci + t.s, "pub " if full else "pub(crate) ")
+    return None
+
+
+def widen_tuple_fields(text, ci):
+    """Edits making every field of the tuple struct named at char offset ci crate-visible."""
+    toks = [t for t in lex(text[ci:ci + 4000]) if t.k != "com"]
+    k = 0
+    while k < len(toks) and toks[k].v != "struct":
+        k += 1
+    k += 2  # `struct Name`
+    if k < len(toks) and toks[k].v == "<":
+        d = 0
+        while k < len(toks):
+            if toks[k].v == "<":
+                d += 1
+            elif toks[k].v == ">":
+                d -= 1
+                if d == 0:
+                    k += 1
+                    break
+            k += 1
+    if k >= len(toks) or toks[k].v != "(":
+        return []
+    edits, depth, start = [], 0, True
+    while k < len(toks):
+        v = toks[k].v
+        if v in "([<":
+            depth += 1
+            if depth == 1 and v == "(":
+                start = True
+                k += 1
+                continue
+        elif v in ")]>":
+            depth -= 1
+            if depth == 0:
+                break
+        if depth == 1 and v == ",":
+            start = True
+            k += 1
+            continue
+        if start and depth == 1:
+            e = widen_at(text, ci + toks[k].s) if toks[k].v == "pub" else (ci + toks[k].s, ci + toks[k].s, "pub(crate) ")
+            if e:
+                edits.append(e)
+            start = False
+            if toks[k].v == "pub" and k + 1 < len(toks) and toks[k + 1].v == "(":
+                while k < len(toks) and toks[k].v != ")":
+                    k += 1
+        k += 1
+    return edits
+
+
+def find_field(files, struct, field):
+    """(file, char offset) of `field` in every `struct <struct>` definition."""
+    out = []
+    pat = re.compile(r"\bstruct\s+" + re.escape(struct) + r"\b")
+    for f in files:
+        try:
+            text = open(f, encoding="utf-8").read()
+        except OSError:
+            continue
+        for m in pat.finditer(text):
+            body_start = text.find("{", m.end())
+            semi = text.find(";", m.end())
+            if body_start < 0 or (0 <= semi < body_start):
+                continue
+            depth, j = 0, body_start
+            while j < len(text):
+                if text[j] == "{":
+                    depth += 1
+                elif text[j] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            fm = re.compile(r"(?m)^\s*(pub(\([^)]*\))?\s+)?" + re.escape(field) + r"\s*:").search(text, body_start, j)
+            if fm:
+                out.append((f, fm.start() + len(fm.group(0)) - len(fm.group(0).lstrip())))
+    return out
 
 
 def apply_edits(text, edits):
@@ -1887,7 +2274,9 @@ def emit_use_tree(leaves, leading=False):
 
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("apply", "callers", "status"))
+    ap.add_argument("mode", choices=("apply", "callers", "status", "fixvis"))
+    ap.add_argument("-p", "--package", action="append")
+    ap.add_argument("--features", default="")
     ap.add_argument("--crate", action="append")
     ap.add_argument("--cross", action="store_true")
     ap.add_argument("--rewrite", choices=("all", "selected"), default="selected")
@@ -1896,6 +2285,9 @@ def main(argv):
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--report")
     args = ap.parse_args(argv)
+    if args.mode == "fixvis":
+        fixvis(args.package or [], args.features.split() if args.features else [])
+        return 0
     m = Mover(args)
     if args.mode == "status":
         for r in m.plan.pending:
