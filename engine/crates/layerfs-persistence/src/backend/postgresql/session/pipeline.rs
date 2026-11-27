@@ -241,6 +241,7 @@ impl Session {
             nested: turn.nested,
             ready: false,
             unit: None,
+            failed_unit: false,
         };
         let answer = run(&mut decided);
         decided.end_unit();
@@ -411,6 +412,10 @@ pub(crate) struct DecidedTurn<'s> {
     /// The release of the write unit whose transaction a flight of this
     /// turn left open ([`Self::send_in_unit`]), until a flight closes it.
     unit: Option<String>,
+    /// A flight of this turn's write unit failed: its transaction was
+    /// rolled back or never began. No further unit flight is sent in the
+    /// turn ([`Self::send_in_unit`]).
+    failed_unit: bool,
 }
 
 /// The statements of one write unit (#818 I3b), prepared before its
@@ -521,8 +526,11 @@ impl DecidedTurn<'_> {
     /// before `judge` (only `release` after a last flight whose `COMMIT`
     /// was sent and ended the transaction); if that fails the session is
     /// quarantined. The transaction is then closed. Nothing is resent.
-    /// Refused (`Integrity`) inside this thread's held lane, and `Unknown`
-    /// on a session this turn quarantined.
+    /// Refused (`Integrity`) inside this thread's held lane and after a
+    /// failed flight of this turn's unit (its transaction is closed, so a
+    /// later flight would run outside it), and `Unknown` on a session this
+    /// turn quarantined. A first flight that sent nothing began no
+    /// transaction and took no barrier, so it sends no `ROLLBACK`.
     pub(crate) fn send_in_unit<T>(
         &mut self,
         prepared: &UnitStatements,
@@ -531,7 +539,7 @@ impl DecidedTurn<'_> {
         release: &str,
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
-        if self.nested {
+        if self.nested || self.failed_unit {
             return Err(BackendError::Integrity);
         }
         self.ready()?;
@@ -559,9 +567,8 @@ impl DecidedTurn<'_> {
             failed_flight = failed;
             match failed {
                 false => None,
-                true if partial || open || (sent == 0 && was_open) => {
-                    Some(format!("ROLLBACK{release}"))
-                }
+                true if sent == 0 && !was_open => None,
+                true if partial || open || sent == 0 => Some(format!("ROLLBACK{release}")),
                 true if sent > 0 && !release.is_empty() => {
                     Some(release.trim_start_matches("; ").to_owned())
                 }
@@ -574,6 +581,7 @@ impl DecidedTurn<'_> {
         // connection.
         let still_open = answer.is_ok() && open && !failed_flight && !self.state.quarantined;
         self.unit = still_open.then(|| release.to_owned());
+        self.failed_unit |= failed_flight || answer.is_err();
         answer
     }
 

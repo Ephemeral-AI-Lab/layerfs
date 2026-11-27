@@ -834,3 +834,45 @@ and the writer's `s145` at 57.679–57.688 have the same object ids.
   read cache.
 - That is a hand-off from the call's reader to the Save (W6 territory,
   `store/pipeline.rs`), not a join.
+
+## I3b review fixes (M3 independent review)
+
+Fixes to the session capability in
+`backend/postgresql/session/pipeline.rs`:
+
+1. **A unit flight after a rollback.** After a failed flight, a further
+   `send_in_unit` in the turn is now refused as `Integrity`, with nothing
+   sent. A failed flight is one whose transaction was rolled back or never
+   began. The new `DecidedTurn::failed_unit` flag records it. Before this,
+   such a flight would have run in autocommit; no product caller sent one.
+2. **A first flight that sends nothing.** It began no transaction and took
+   no barrier, so it no longer sends `ROLLBACK` plus the barrier release.
+   That saves one counted round trip on this failure path.
+3. **The lane I nit, not fixed here.** The rollback count comes up one
+   short when a queued check fails and a later request in the same flight
+   is refused. This is in lane I's `acquisition/unit.rs` `judge`:
+   - A failed check returns early with `closed = finish || !trusted`, so
+     it never sees the later refusal, after which the session rolled back.
+   - The fix belongs there: also close when any remaining reply is an
+     `Err`.
+   - With fix 1, a further flight in that unit is now refused, not sent
+     outside the transaction.
+
+New guard cases in `postgresql_session_unit.rs`:
+- A flight after a duplicate-key rollback: `Integrity`; 3 round trips
+  (2 flights plus the rollback), 1 rollback, no rows, no barrier key.
+- A first flight that cannot be encoded: 0 round trips, no rollback; the
+  next flight is `Integrity`.
+
+Run once each, all green (`receipts/I3b-review/`):
+- `postgresql_session_unit`: guards, and drop and kill at every message;
+- `postgresql_acquisition_units`;
+- `init_round_trips`;
+- `init_round_trips_10k`.
+
+Clippy `-D warnings` on persistence (all targets) is clean. rustfmt is
+clean on the touched files. The one `--check` diff is in
+`history/admission.rs` (the `Mode` import), which came with the merged base
+and is left alone.
+
+Production LOC: 232,476 → 232,478 (+2, layerfs-persistence).
