@@ -2,7 +2,8 @@
 use super::session::connection::SqlWork;
 use super::session::query;
 use super::session::transaction::Transaction;
-use crate::backend::error::{BackendError, Param, Record};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record};
 use rusqlite::Connection;
 use std::cell::RefCell;
 pub(crate) const APPLICATION_ID: i64 = 1279677264;

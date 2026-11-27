@@ -7,8 +7,7 @@
 //! reports and every row of the Store it leaves are the same as under a
 //! budget far wider than any product run has.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::ObjectId;
 use layerfs_persistence::CompactPath;

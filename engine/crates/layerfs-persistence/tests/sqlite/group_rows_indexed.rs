@@ -1,6 +1,5 @@
 //! Schema3 covering-index creation, integrity and legacy-open behavior.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{

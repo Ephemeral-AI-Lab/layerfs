@@ -1,6 +1,5 @@
 //! Durable bounded physical units exercised through the application-facing port.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles};

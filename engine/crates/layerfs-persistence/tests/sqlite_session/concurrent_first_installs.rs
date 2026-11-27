@@ -9,8 +9,7 @@
 //! Selection refuses that edge (`DepthCache::cost_avoiding`) and stores the
 //! object FULL, so the graph stays acyclic whichever registrations win.
 #![cfg(target_os = "linux")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};

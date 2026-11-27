@@ -16,7 +16,7 @@ use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::port::PersistenceError;
 use layerfs_storage::StoragePolicy;
 
-use super::{name, root, stack};
+use super::super::{name, root, stack};
 
 /// The URL a PostgreSQL-backed test runs against, or `None` with the usual
 /// NOT_RUN note.
@@ -137,7 +137,7 @@ pub fn project_with_genesis(
 }
 
 pub fn branch_id(tag: u8) -> BranchId {
-    super::branch_id(tag)
+    super::super::branch_id(tag)
 }
 
 pub fn commit_request(

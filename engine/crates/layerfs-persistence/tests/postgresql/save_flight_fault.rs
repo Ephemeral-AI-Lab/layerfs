@@ -10,16 +10,14 @@
 //! replays.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::Storage;
 use std::time::{Duration, Instant};
-use support::fault_proxy::{Fault, FaultProxy, Window};
+use support::pg::fault_proxy::{Fault, FaultProxy, Window};
 use support::pg::{url, Schema};
 
 const BINDING: &[u8] = b"save-flight-fault";

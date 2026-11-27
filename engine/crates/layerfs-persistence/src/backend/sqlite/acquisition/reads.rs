@@ -4,9 +4,10 @@
 //! valid empty relation returns one NULL payload sentinel; an absent owner
 //! returns no rows. Two-pass path windows retain their explicit owned snapshot.
 use super::statements::{
-    signed, Failure, BINDINGS_FIRST, BINDINGS_NEXT, DIRECTORIES, DIRECTORY_PATH, DIRECTORY_SIZES,
-    ENTRIES_FIRST, ENTRIES_NEXT, FILE_ROOTS, JOB, JOBS, JOB_SIZES, UNPLACED_FIRST, UNPLACED_NEXT,
+    BINDINGS_FIRST, BINDINGS_NEXT, DIRECTORIES, DIRECTORY_PATH, DIRECTORY_SIZES, ENTRIES_FIRST,
+    ENTRIES_NEXT, FILE_ROOTS, JOB, JOBS, JOB_SIZES, UNPLACED_FIRST, UNPLACED_NEXT,
 };
+use crate::acquisition::failure::{signed, Failure};
 use crate::backend::{error::BackendError, Session, Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{
@@ -317,7 +318,7 @@ fn entry_row(row: &Row<'_>) -> Result<Entry, BackendError> {
         position: number(position)?,
         kind: kind(row, 4)?,
         canonical: get::<Option<i64>>(row, 5)?.map(number).transpose()?,
-        metadata: super::metadata_parse(
+        metadata: crate::acquisition::payload::metadata_parse(
             crate::backend::sqlite::session::rows::blob(row, 6)?,
             kind(row, 4)?,
         )?,

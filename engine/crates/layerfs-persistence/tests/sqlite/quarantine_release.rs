@@ -9,8 +9,7 @@
 //! `SQLITE_ERROR` inside its write transaction, which the Store classes as an
 //! unknown outcome and which leaves SQLite's transaction open.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{port::*, StoragePolicy};

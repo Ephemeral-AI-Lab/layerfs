@@ -1,6 +1,5 @@
 //! Real WAL snapshots across concurrent publication, removal and cancellation.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, StackInitialization};

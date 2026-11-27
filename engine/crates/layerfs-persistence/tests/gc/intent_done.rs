@@ -1,7 +1,6 @@
 //! The bounded retained-`done` audit read: oldest first, page/limit, and
 //! invisible to admission. The live queries keep filtering `state <> 'done'`.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{

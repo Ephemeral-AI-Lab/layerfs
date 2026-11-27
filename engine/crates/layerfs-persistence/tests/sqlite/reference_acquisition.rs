@@ -1,6 +1,5 @@
 //! Logical membership does not require reconstructing unrelated child payloads.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     file::mapping::{encode_chunk_object, encode_node, ExtentNode, ExtentSlice},
     FinalizedObject, ObjectRole,

@@ -8,14 +8,13 @@
 //! one; the session never reconnects or replays.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::port::{acquisition::*, PersistenceError};
 use std::time::{Duration, Instant};
-use support::fault_proxy::{Fault, FaultProxy, Window};
+use support::pg::fault_proxy::{Fault, FaultProxy, Window};
 use support::pg::{url, Schema};
 
 const BINDING: &[u8] = b"placement-fault";

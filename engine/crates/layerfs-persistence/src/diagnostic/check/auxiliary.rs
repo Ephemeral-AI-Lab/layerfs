@@ -1,6 +1,7 @@
 //! Complete auxiliary-block and whole-file-digest verification.
 use super::super::{emit, reader::Reader, view::View, Observation, Options, Outcome};
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use layerfs_content::ObjectId;
 use layerfs_storage::StorageError;
 use layerfs_telemetry::timer::Timing;

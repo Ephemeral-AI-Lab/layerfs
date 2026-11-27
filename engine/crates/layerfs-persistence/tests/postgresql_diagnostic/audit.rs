@@ -12,8 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[path = "../support/pg/conninfo.rs"]
-mod conninfo;
+use crate::pg_doctor::conninfo;
 
 #[test]
 fn tcp_peer_that_stalls_authentication_is_bounded_and_closed() {

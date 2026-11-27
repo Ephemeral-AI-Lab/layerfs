@@ -1,15 +1,15 @@
 //! The `<store>.compact-op` sidecar record, its artifact paths and the crash failpoints.
 
 use super::types::io_error;
-use super::types::CompactFailpoint;
-use super::types::CompactKeptWaste;
-use super::types::CompactRequest;
 use super::types::MarkTuple;
-use super::types::OwnerLiveness;
 use super::types::ARTIFACT_SUFFIXES;
 use super::types::COMPACT_SUFFIX;
 use super::types::OP_SUFFIX;
 use super::types::VISITED_SUFFIX;
+use crate::gc::compact::CompactFailpoint;
+use crate::gc::compact::CompactKeptWaste;
+use crate::gc::compact::CompactRequest;
+use crate::gc::compact::OwnerLiveness;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::collections::BTreeMap;

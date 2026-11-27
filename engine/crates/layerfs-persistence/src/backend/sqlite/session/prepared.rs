@@ -2,7 +2,8 @@
 use super::connection::SqlWork;
 use super::rows;
 use super::statement_work;
-use crate::backend::error::{BackendError, OutcomeError, Record};
+use crate::backend::error::{BackendError, OutcomeError};
+use crate::backend::seam::Record;
 use rusqlite::{CachedStatement, Connection, StatementStatus};
 use std::{
     cell::{Cell, RefCell},

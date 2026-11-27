@@ -8,8 +8,7 @@
 //!
 //! PostgreSQL needs `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it); the
 //! SQLite cases always run.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{CommitMeta, CommitOutcome, CommitRequest, CommitVia};
 use layerfs_history::{BranchSnapshot, CommitAttempt, HistoryName};
@@ -20,7 +19,7 @@ use layerfs_persistence::{
     SqlitePersistenceProfile,
 };
 use std::sync::atomic::AtomicBool;
-use support::pg_fixture::{FixtureDb, SCHEMA};
+use support::pg::fixture::{FixtureDb, SCHEMA};
 use support::upgrade::{sqlite_fixture_copy, SQLITE_V2};
 use support::Temp;
 

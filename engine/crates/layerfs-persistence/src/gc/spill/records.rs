@@ -27,15 +27,15 @@ fn within(value: u64, width: usize) -> bool {
 }
 
 /// The reason an identity was reached.
-pub(in crate::history) const LOGICAL: u8 = 1;
-pub(in crate::history) const BASE: u8 = 2;
+pub(in crate::gc) const LOGICAL: u8 = 1;
+pub(in crate::gc) const BASE: u8 = 2;
 
 /// One identity a wave reached and has not located yet.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Edge {
-    pub(in crate::history) id: ObjectId,
+pub(in crate::gc) struct Edge {
+    pub(in crate::gc) id: ObjectId,
     /// [`LOGICAL`], [`BASE`] or both.
-    pub(in crate::history) kind: u8,
+    pub(in crate::gc) kind: u8,
 }
 
 impl Item for Edge {
@@ -56,22 +56,22 @@ impl Item for Edge {
     }
 }
 
-pub(in crate::history) fn edges_by_bytes(left: &Edge, right: &Edge) -> Ordering {
+pub(in crate::gc) fn edges_by_bytes(left: &Edge, right: &Edge) -> Ordering {
     super::super::mark::table::by_bytes(&left.id, &right.id)
 }
 
-pub(in crate::history) fn edges_by_signed_prefix(left: &Edge, right: &Edge) -> Ordering {
+pub(in crate::gc) fn edges_by_signed_prefix(left: &Edge, right: &Edge) -> Ordering {
     super::super::mark::table::by_signed_prefix(&left.id, &right.id)
 }
 
 /// One located object and its rank in the engine's locator order.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Row {
-    pub(in crate::history) location: ObjectLocation,
-    pub(in crate::history) rank: u64,
+pub(in crate::gc) struct Row {
+    pub(in crate::gc) location: ObjectLocation,
+    pub(in crate::gc) rank: u64,
     /// Why the walk first reached it ([`LOGICAL`], [`BASE`] or both); zero
     /// in a list of what a pack holds.
-    pub(in crate::history) kind: u8,
+    pub(in crate::gc) kind: u8,
 }
 
 // A file holds a locator in the widths the Store's own limits allow: 255
@@ -115,12 +115,12 @@ impl Item for Row {
 }
 
 /// The pack a row is stored in: the key its sealed run is read by.
-pub(in crate::history) fn row_pack(row: &Row) -> i64 {
+pub(in crate::gc) fn row_pack(row: &Row) -> i64 {
     row.location.pack_id
 }
 
 /// Locator order: pack, group, record.
-pub(in crate::history) fn rows_by_locator(left: &Row, right: &Row) -> Ordering {
+pub(in crate::gc) fn rows_by_locator(left: &Row, right: &Row) -> Ordering {
     let key = |row: &Row| {
         (
             row.location.pack_id,
@@ -134,11 +134,11 @@ pub(in crate::history) fn rows_by_locator(left: &Row, right: &Row) -> Ordering {
 /// One record the walk reached: where it is and the stored width a read
 /// charges it.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Kept {
-    pub(in crate::history) pack: i64,
-    pub(in crate::history) group: u64,
-    pub(in crate::history) record: u64,
-    pub(in crate::history) width: u64,
+pub(in crate::gc) struct Kept {
+    pub(in crate::gc) pack: i64,
+    pub(in crate::gc) group: u64,
+    pub(in crate::gc) record: u64,
+    pub(in crate::gc) width: u64,
 }
 
 impl Item for Kept {
@@ -166,9 +166,9 @@ impl Item for Kept {
 /// logical reference: its rank and the stored width a read charges it. If
 /// no logical reference reaches it later either, it is kept only as a base.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Based {
-    pub(in crate::history) rank: u64,
-    pub(in crate::history) width: u64,
+pub(in crate::gc) struct Based {
+    pub(in crate::gc) rank: u64,
+    pub(in crate::gc) width: u64,
 }
 
 impl Item for Based {
@@ -188,13 +188,13 @@ impl Item for Based {
     }
 }
 
-pub(in crate::history) fn based_by_rank(left: &Based, right: &Based) -> Ordering {
+pub(in crate::gc) fn based_by_rank(left: &Based, right: &Based) -> Ordering {
     left.rank.cmp(&right.rank)
 }
 
 /// One number of a list a mark made: a pack it retains.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Number(pub(in crate::history) u64);
+pub(in crate::gc) struct Number(pub(in crate::gc) u64);
 
 impl Item for Number {
     const BYTES: usize = 8;
@@ -209,15 +209,15 @@ impl Item for Number {
     }
 }
 
-pub(in crate::history) fn numbers_ascending(left: &Number, right: &Number) -> Ordering {
+pub(in crate::gc) fn numbers_ascending(left: &Number, right: &Number) -> Ordering {
     left.0.cmp(&right.0)
 }
 
 /// An inclusive run of numbers a mark noted: inode value ordinals it read.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Span {
-    pub(in crate::history) first: u32,
-    pub(in crate::history) last: u32,
+pub(in crate::gc) struct Span {
+    pub(in crate::gc) first: u32,
+    pub(in crate::gc) last: u32,
 }
 
 impl Item for Span {
@@ -239,19 +239,19 @@ impl Item for Span {
     }
 }
 
-pub(in crate::history) fn spans_by_first(left: &Span, right: &Span) -> Ordering {
+pub(in crate::gc) fn spans_by_first(left: &Span, right: &Span) -> Ordering {
     left.first.cmp(&right.first)
 }
 
-pub(in crate::history) fn kept_by_locator(left: &Kept, right: &Kept) -> Ordering {
+pub(in crate::gc) fn kept_by_locator(left: &Kept, right: &Kept) -> Ordering {
     (left.pack, left.group, left.record).cmp(&(right.pack, right.group, right.record))
 }
 
 /// How many records the Store locates in one pack.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Count {
-    pub(in crate::history) pack: i64,
-    pub(in crate::history) records: u64,
+pub(in crate::gc) struct Count {
+    pub(in crate::gc) pack: i64,
+    pub(in crate::gc) records: u64,
 }
 
 impl Item for Count {
@@ -272,16 +272,16 @@ impl Item for Count {
     }
 }
 
-pub(in crate::history) fn counts_by_pack(left: &Count, right: &Count) -> Ordering {
+pub(in crate::gc) fn counts_by_pack(left: &Count, right: &Count) -> Ordering {
     left.pack.cmp(&right.pack)
 }
 
 /// One group extent of a pack whose directory the walk read.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct Layout {
-    pub(in crate::history) pack: i64,
-    pub(in crate::history) number: u64,
-    pub(in crate::history) view: GroupView,
+pub(in crate::gc) struct Layout {
+    pub(in crate::gc) pack: i64,
+    pub(in crate::gc) number: u64,
+    pub(in crate::gc) view: GroupView,
 }
 
 impl Item for Layout {
@@ -325,20 +325,20 @@ impl Item for Layout {
     }
 }
 
-pub(in crate::history) fn layouts_by_group(left: &Layout, right: &Layout) -> Ordering {
+pub(in crate::gc) fn layouts_by_group(left: &Layout, right: &Layout) -> Ordering {
     (left.pack, left.number).cmp(&(right.pack, right.number))
 }
 
 /// One read of pack body bytes, in the order the mark made them.
 #[derive(Clone, Copy)]
-pub(in crate::history) struct BodyRead {
-    pub(in crate::history) pack: i64,
-    pub(in crate::history) sequence: u64,
-    pub(in crate::history) bytes: u64,
+pub(in crate::gc) struct BodyRead {
+    pub(in crate::gc) pack: i64,
+    pub(in crate::gc) sequence: u64,
+    pub(in crate::gc) bytes: u64,
     /// The pack's declared length for a scoped read, which caps the sum.
-    pub(in crate::history) limit: u64,
+    pub(in crate::gc) limit: u64,
     /// Whether the whole body was read.
-    pub(in crate::history) whole: bool,
+    pub(in crate::gc) whole: bool,
 }
 
 impl Item for BodyRead {
@@ -365,6 +365,6 @@ impl Item for BodyRead {
     }
 }
 
-pub(in crate::history) fn reads_in_order(left: &BodyRead, right: &BodyRead) -> Ordering {
+pub(in crate::gc) fn reads_in_order(left: &BodyRead, right: &BodyRead) -> Ordering {
     (left.pack, left.sequence).cmp(&(right.pack, right.sequence))
 }

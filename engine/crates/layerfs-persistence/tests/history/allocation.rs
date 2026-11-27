@@ -1,6 +1,5 @@
 //! Scope-wide reservation arithmetic and the checked terminal endpoint.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::*;
 use support::*;

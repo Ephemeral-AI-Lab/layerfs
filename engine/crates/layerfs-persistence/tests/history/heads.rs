@@ -2,8 +2,7 @@
 //! history and are the same in a snapshot; reading them leaves no sidecar
 //! behind on a Store nobody holds; a snapshot reports its copied bytes.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{
     CommitMeta, CommitOutcome, CommitRequest, CommitVia, ForkRequest, ForkSource,
@@ -286,7 +285,7 @@ fn a_read_only_open_of_an_unheld_store_waits_for_the_lane() {
 /// follows the open rule and waits for the lane, as a read-only open does.
 #[test]
 fn the_structure_probe_of_an_unheld_store_waits_for_the_lane() {
-    use layerfs_persistence::{backend::sqlite::diagnostic::structure, diagnostic::{Options, Outcome}};
+    use layerfs_persistence::diagnostic::{sqlite_structure, Options, Outcome};
     let temp = Temp::new("heads-structure-lane");
     let unheld = temp.join("a");
     drop(create(&unheld));

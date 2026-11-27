@@ -1,6 +1,11 @@
-//! Row conversion and structured PostgreSQL error classification.
-use crate::backend::error::{BackendError, Record, Value};
-use postgres::{types::Type, Row};
+//! Row conversion, parameter binding and structured PostgreSQL error
+//! classification: rows and parameters in and out.
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record, Value};
+use postgres::{
+    types::{ToSql, Type},
+    Row,
+};
 
 /// Classifies one failed call. A server error carries its SQLSTATE and is a
 /// definite outcome; a closed connection or failed I/O may have lost a
@@ -100,8 +105,6 @@ pub(crate) fn record_first(row: &Row, count: usize) -> Result<Record, BackendErr
 }
 
 // Engine-neutral parameters bound to a prepared statement's declared types.
-use crate::backend::error::Param;
-use postgres::types::{ToSql, Type};
 
 pub(crate) type Bound = Box<dyn ToSql + Sync>;
 

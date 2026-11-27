@@ -1,6 +1,5 @@
 //! Unbounded persisted facts are streamed without altering Commit identity.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::{
     CommitMeta, CommitRequest, CommitVia, ForkRequest, ForkSource, HistoryCatalog,
     StackInitialization,

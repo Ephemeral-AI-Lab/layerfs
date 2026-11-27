@@ -5,8 +5,7 @@
 //! file's cold read costs one chain locate whatever its history length.
 //! `SEEDS` is fixed so the target fits its 100 s bound.
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use chains::*;
 use layerfs_content::FinalizedObject;

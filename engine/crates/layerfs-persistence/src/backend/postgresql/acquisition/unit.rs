@@ -21,6 +21,7 @@ use super::{
     flights::{self, divided, opening, refused, text, Identity, CHARGED, OWNER_LIVE},
     placement, writes,
 };
+use crate::acquisition::failure::Failure;
 use crate::backend::{
     error::BackendError,
     postgresql::session::{
@@ -29,7 +30,6 @@ use crate::backend::{
         profile::barrier_leftover,
         transaction::Transaction,
     },
-    sqlite::acquisition::statements::Failure,
 };
 use postgres::{types::ToSql, Row};
 

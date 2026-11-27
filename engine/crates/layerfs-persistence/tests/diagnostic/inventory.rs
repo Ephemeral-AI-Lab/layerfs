@@ -1,6 +1,5 @@
 //! B1 actual acquisition/auxiliary rows, including valid interrupted state.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{filesystem::attributes::PortableMetadata, inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{

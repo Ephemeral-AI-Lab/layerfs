@@ -1,7 +1,6 @@
 //! Admitted runtime objects exercise real Store closure and reconstruction.
 #![cfg(target_os = "macos")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::attributes::{encode_attribute_page, AttributePage};
 use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};

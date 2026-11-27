@@ -1,18 +1,16 @@
 //! §8 Phase M: the `gc_op` row, the mark tuple, the scratch helpers and the run metrics.
 
-use super::receipt::decode_kept_waste;
-use super::receipt::encode_kept_waste;
 use super::types::takes_rebuild_path;
 use super::types::DeadTotals;
 use super::types::OpRow;
 use super::types::SCRATCH_PREFIX;
-use crate::backend::error::Param;
 use crate::backend::postgresql::session::connection::Session;
 use crate::backend::postgresql::session::transaction::Mode;
 use crate::backend::postgresql::session::transaction::Transaction;
-use crate::backend::sqlite::compact::CompactFailpoint;
-use crate::backend::sqlite::compact::CompactKeptWaste;
-use crate::backend::sqlite::compact::CompactRequest;
+use crate::backend::seam::Param;
+use crate::gc::compact::CompactFailpoint;
+use crate::gc::compact::CompactKeptWaste;
+use crate::gc::compact::CompactRequest;
 use crate::history::GcTuple;
 use crate::history::Reach;
 use crate::MarkResult;
@@ -468,4 +466,79 @@ pub(crate) fn history_rows(session: &Arc<Session>, schema: &str) -> HistoryResul
         ),
         Vec::new(),
     )
+}
+
+/// The wire version of [`encode_kept_waste`].
+const KEPT_WASTE_VERSION: u8 = 1;
+
+/// The fixed header of the encoded `keptWaste`: version, three `u64` byte
+/// totals, the capped flag and the reference count.
+const KEPT_WASTE_HEADER: usize = 1 + 8 + 8 + 8 + 1 + 4;
+
+/// Encodes the §11 `keptWaste` into the `gc_op.kept_waste` bytea so a resumed
+/// `G + 1` run reports the mark's accounting instead of a zero placeholder.
+///
+/// The layout is versioned and fixed: one version byte, the three big-endian
+/// `u64` byte totals, the capped flag, a big-endian `u32` reference count and
+/// the identity bytes. The caller's references are already capped by
+/// [`CompactKeptWaste::from_waste`].
+pub fn encode_kept_waste(waste: &CompactKeptWaste) -> Vec<u8> {
+    let mut out = Vec::with_capacity(KEPT_WASTE_HEADER + waste.delta_base_references.len() * 32);
+    out.push(KEPT_WASTE_VERSION);
+    out.extend_from_slice(&waste.dead_in_retained_packs_bytes.to_be_bytes());
+    out.extend_from_slice(&waste.delta_bases_bytes.to_be_bytes());
+    out.extend_from_slice(&waste.inode_blocks_bytes.to_be_bytes());
+    out.push(u8::from(waste.delta_base_references_capped));
+    let count = u32::try_from(waste.delta_base_references.len()).unwrap_or(u32::MAX);
+    out.extend_from_slice(&count.to_be_bytes());
+    for reference in &waste.delta_base_references {
+        out.extend_from_slice(reference);
+    }
+    out
+}
+
+/// Decodes [`encode_kept_waste`]; a malformed blob is `Integrity`, never a
+/// silently zero report.
+pub fn decode_kept_waste(bytes: &[u8]) -> layerfs_history::error::HistoryResult<CompactKeptWaste> {
+    use layerfs_history::error::HistoryError;
+    let header = bytes
+        .get(..KEPT_WASTE_HEADER)
+        .ok_or(HistoryError::Integrity("compaction kept waste"))?;
+    if header[0] != KEPT_WASTE_VERSION {
+        return Err(HistoryError::Integrity("compaction kept waste version"));
+    }
+    let u64_at = |start: usize| -> u64 {
+        let mut value = [0u8; 8];
+        value.copy_from_slice(&header[start..start + 8]);
+        u64::from_be_bytes(value)
+    };
+    let dead_in_retained_packs_bytes = u64_at(1);
+    let delta_bases_bytes = u64_at(9);
+    let inode_blocks_bytes = u64_at(17);
+    let delta_base_references_capped = header[25] != 0;
+    let mut count_bytes = [0u8; 4];
+    count_bytes.copy_from_slice(&header[26..30]);
+    let count = usize::try_from(u32::from_be_bytes(count_bytes))
+        .map_err(|_| HistoryError::Integrity("compaction kept waste count"))?;
+    let references = bytes
+        .get(KEPT_WASTE_HEADER..)
+        .ok_or(HistoryError::Integrity("compaction kept waste references"))?;
+    if references.len() != count.saturating_mul(32) {
+        return Err(HistoryError::Integrity("compaction kept waste references"));
+    }
+    let delta_base_references = references
+        .chunks_exact(32)
+        .map(|chunk| {
+            let mut id = [0u8; 32];
+            id.copy_from_slice(chunk);
+            id
+        })
+        .collect();
+    Ok(CompactKeptWaste {
+        dead_in_retained_packs_bytes,
+        delta_bases_bytes,
+        delta_base_references,
+        delta_base_references_capped,
+        inode_blocks_bytes,
+    })
 }

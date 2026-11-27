@@ -1,7 +1,6 @@
 //! Raw SQLite structural errors remain distinct from unsupported app schemas.
-#[path = "../support/mod.rs"]
-mod support;
-use layerfs_persistence::{backend::sqlite::diagnostic::structure, diagnostic::{Observation, Options, Outcome}};
+use crate::support;
+use layerfs_persistence::diagnostic::{sqlite_structure, Observation, Options, Outcome};
 
 fn probe(path: &std::path::Path, quick: bool) -> (bool, Vec<Observation>) {
     let mut out = Vec::new();

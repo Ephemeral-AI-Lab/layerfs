@@ -5,3 +5,5 @@ mod kept_objects_bounded;
 mod kept_objects_budget;
 mod kept_objects_edges;
 mod kept_objects_sort_files;
+#[path = "../support/mod.rs"]
+mod support;

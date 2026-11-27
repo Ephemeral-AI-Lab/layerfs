@@ -5,8 +5,7 @@
 //! bounds: more locators than one read takes, and more reached objects than
 //! a sorter holds.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     encode_whole_file_payload,

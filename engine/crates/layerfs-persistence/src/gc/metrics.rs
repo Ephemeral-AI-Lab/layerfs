@@ -13,7 +13,7 @@
 //! [`CompactMetricsCapture`], so concurrent work on other threads does not
 //! pollute the observation.
 
-use crate::backend::sqlite::compact::{CompactKeptWaste, CompactPath, CompactReceipt};
+use crate::gc::compact::{CompactKeptWaste, CompactPath, CompactReceipt};
 use layerfs_history::error::{HistoryError, HistoryResult};
 use std::cell::RefCell;
 use std::collections::BTreeMap;

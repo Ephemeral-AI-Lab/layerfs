@@ -11,17 +11,16 @@
 //! answer never claims what did not happen (`Ok` only when upgraded; a
 //! definite refusal only when unchanged; `Unknown` otherwise), and a re-run
 //! converges. NOT_RUN without `LAYERFS_TEST_POSTGRES_URL`.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_persistence::upgrade::{
     upgrade_postgresql, UpgradeError, UpgradeOutcome, UpgradeReport, UpgradeRequest, UpgradeWork,
 };
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
-use support::fault_proxy::{proxied_url, Fault, FaultProxy};
-use support::pg_fixture::{FixtureDb, SCHEMA};
-use support::wire_tap::Tap;
+use support::pg::fault_proxy::{proxied_url, Fault, FaultProxy};
+use support::pg::fixture::{FixtureDb, SCHEMA};
+use support::pg::wire_tap::Tap;
 
 fn run(url: &str) -> Result<UpgradeReport, UpgradeError> {
     let request = UpgradeRequest {

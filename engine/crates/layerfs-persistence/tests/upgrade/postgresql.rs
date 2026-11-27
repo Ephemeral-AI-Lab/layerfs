@@ -4,8 +4,7 @@
 //! admission afterwards (B, D), refusals that change nothing (F), cancel
 //! (H) and the incarnation bump (I). NOT_RUN without
 //! `LAYERFS_TEST_POSTGRES_URL`.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{CommitMeta, CommitOutcome, CommitRequest, CommitVia};
 use layerfs_history::{
@@ -19,7 +18,7 @@ use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use std::net::ToSocketAddrs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use support::pg_fixture::{FixtureDb, SCHEMA};
+use support::pg::fixture::{FixtureDb, SCHEMA};
 use support::upgrade::{fixtures, hex, manifest_branches, unhex};
 
 fn run(

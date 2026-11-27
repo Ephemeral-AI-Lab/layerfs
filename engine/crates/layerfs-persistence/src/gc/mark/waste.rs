@@ -6,7 +6,8 @@
 //! the records the walk reached, the count of records the Store locates in
 //! each pack, and the group extents of the packs whose directory the walk
 //! read. It holds a bounded run of packs at a time.
-use super::super::spill::records::{Based, Count, Kept};
+use super::super::spill::records::{self, Based, Count, Kept};
+use super::edges;
 use super::objects::*;
 use super::table::{Locators, Marks};
 

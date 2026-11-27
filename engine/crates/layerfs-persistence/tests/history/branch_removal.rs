@@ -1,8 +1,7 @@
 //! #41 T3: `branch.remove` markers, visibility, typed `NameTaken` and the
 //! project epoch on SQLite. The catalog fixture uses only the public
 //! `HistoryCatalog` methods.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::{HolderKind, HolderState, Missing, NameSource};
 use layerfs_history::records::{

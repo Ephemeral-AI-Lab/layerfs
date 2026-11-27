@@ -1,8 +1,7 @@
 //! A Store written before the binding hint table existed opens writable and
 //! gains the table (#352 F-011, REBUILD.md kind 2): nothing it holds is
 //! rewritten, and hints are recorded from then on.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::{records::BindingHint, HistoryCatalog};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use support::*;

@@ -15,8 +15,7 @@
 //!   a success; a success matches the clean answer; never replayed.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
@@ -28,7 +27,7 @@ use layerfs_storage::{
     StoragePolicy,
 };
 use std::time::{Duration, Instant};
-use support::fault_proxy::{Fault, FaultProxy};
+use support::pg::fault_proxy::{Fault, FaultProxy};
 use support::{pg, Temp};
 
 const BINDING: &[u8] = b"acquisition-units-818";

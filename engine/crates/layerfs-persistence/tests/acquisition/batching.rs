@@ -1,7 +1,6 @@
 //! Window execution costs, alias identity and atomic root completion.
 #![cfg(target_os = "macos")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{

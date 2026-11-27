@@ -5,7 +5,7 @@ use super::super::counters::position;
 use super::super::statement::rows::{cell, many, one, unsigned};
 use super::super::statement::transaction::Transaction;
 use super::super::{graph::layerstack, params};
-use crate::backend::error::{Record as Row, Value};
+use crate::backend::seam::{Record as Row, Value};
 use layerfs_history::error::{HistoryError, HistoryResult, Missing};
 use layerfs_history::identity::{LayerStackId, NodeId};
 use layerfs_history::path::trace_key;
@@ -136,7 +136,7 @@ pub(crate) fn node_markers(
 
 /// [`node_markers`] from the rows its statement returned.
 pub(crate) fn node_markers_of(
-    rows: Vec<crate::backend::error::Record>,
+    rows: Vec<crate::backend::seam::Record>,
 ) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
     let Some(first) = rows.first() else {
         return Ok(None);

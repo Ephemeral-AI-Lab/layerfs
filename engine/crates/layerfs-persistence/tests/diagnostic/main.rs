@@ -10,3 +10,5 @@ mod schema;
 mod snapshot;
 mod sqlite_structure;
 mod store;
+#[path = "../support/mod.rs"]
+mod support;

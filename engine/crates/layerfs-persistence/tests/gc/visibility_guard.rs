@@ -7,7 +7,7 @@
 //! the filter fails here until it is filtered or allow-listed. The scan also
 //! covers the crate's own Rust source: an inline `SELECT ... FROM`/`JOIN`
 //! literal that names `branch` or `layer_stack` is held to the same filter, so
-//! a read outside the `sql/` directories (such as `backend/sqlite/heads.rs`)
+//! a read outside the `sql/` directories (such as `backend/sqlite/lifecycle/heads.rs`)
 //! cannot bypass the guard. Every allow-list entry carries its reason and is
 //! proved to still be a live statement that reads the table, so the list cannot
 //! rot. The lookup pairs and the snapshot/live statements §4.2 names by hand are
@@ -27,25 +27,26 @@ struct Statement {
 /// The §4.2 statements that must carry the filter: the four Branch lookups,
 /// both snapshots, the GC live set and the roots of the batched §6.1 closure.
 const BRANCH_FILTERED: &[&str] = &[
-    "kept_node_seed.sql",
-    "branch_branch_by_id.sql",
-    "branch_branch_by_name.sql",
-    "branch_branch_first_page.sql",
-    "branch_branch_next_page.sql",
-    "branch_snapshot.sql",
-    "branch_snapshot_named.sql",
-    "gc_live_branches.sql",
+    "gc/kept_node/seed.sql",
+    "history/branch/by_id.sql",
+    "history/branch/by_name.sql",
+    "history/branch/first_page.sql",
+    "history/branch/next_page.sql",
+    "history/branch/snapshot.sql",
+    "history/branch/snapshot_named.sql",
+    "gc/mark/live_branches.sql",
 ];
 
 /// The four project lookups, their live set and the PostgreSQL by-name
 /// override (the reason the guard scans both backends).
 const STACK_FILTERED: &[&str] = &[
-    "kept_node_seed.sql",
-    "layerstack_stack_by_id.sql",
-    "layerstack_stack_by_name.sql",
-    "layerstack_stack_first_page.sql",
-    "layerstack_stack_next_page.sql",
-    "gc_live_stacks.sql",
+    "gc/kept_node/seed.sql",
+    "history/stack/by_id.sql",
+    "history/stack/by_name.sql",
+    "history/layerstack/stack_by_name.sql",
+    "history/stack/first_page.sql",
+    "history/stack/next_page.sql",
+    "gc/mark/live_stacks.sql",
 ];
 
 /// A statement that reads a filtered table without the filter, and why.
@@ -63,7 +64,7 @@ struct Allow {
 /// is the comment and the test proves the entry still reads the table.
 const ALLOWED: &[Allow] = &[
     Allow {
-        file: "kept_node_expand.sql",
+        file: "gc/kept_node/expand.sql",
         markers: &[],
         returns_state: false,
         reason: "§6.1 edges of the batched history closure (#42 item 29). The retained \
@@ -78,7 +79,7 @@ const ALLOWED: &[Allow] = &[
                  tests/kept_node_closure.rs holds the two to the same rows",
     },
     Allow {
-        file: "branch_branch_by_id_any.sql",
+        file: "history/branch/by_id_any.sql",
         markers: &[],
         returns_state: false,
         reason: "§4.2 render/identity for layer.list, layer.get, saved and operator \
@@ -87,14 +88,14 @@ const ALLOWED: &[Allow] = &[
                  the lookup path",
     },
     Allow {
-        file: "branch_branch_name_taken.sql",
+        file: "history/branch/name_taken.sql",
         markers: &["branch_retired"],
         returns_state: true,
         reason: "§4.2 name-collision check: it must see the retired holder and return \
                  its state so branch.fork answers NameTaken with the holder",
     },
     Allow {
-        file: "gc_intent_all_project.sql",
+        file: "gc/intent_scope/all_project.sql",
         markers: &[],
         returns_state: false,
         reason: "§5.1/§8 compaction admission: collects every open intent for a project, \
@@ -102,7 +103,7 @@ const ALLOWED: &[Allow] = &[
                  compaction cannot leak one",
     },
     Allow {
-        file: "gc_intent_ops_project.sql",
+        file: "gc/intent_scope/ops_project.sql",
         markers: &[],
         returns_state: false,
         reason: "§5.1/§8 admission: the operation subset of gc_intent_all_project \
@@ -110,7 +111,7 @@ const ALLOWED: &[Allow] = &[
                  same retired-Branch coverage",
     },
     Allow {
-        file: "history_remove_unreachable_reach.sql",
+        file: "gc/unreachable_removal/reach.sql",
         markers: &[],
         returns_state: false,
         reason: "§4.2 compaction's rebuild: the unreachable-row cleanup reads which Stacks \
@@ -118,7 +119,7 @@ const ALLOWED: &[Allow] = &[
                  one collection under the Store write lane and renders nothing",
     },
     Allow {
-        file: "history_unreachable_count.sql",
+        file: "history/statistics/unreachable_count.sql",
         markers: &[],
         returns_state: false,
         reason: "§4.2 compaction's mark: the count of one Stack's unreachable rows reads \
@@ -127,7 +128,7 @@ const ALLOWED: &[Allow] = &[
                  nothing",
     },
     Allow {
-        file: "layerstack_stack_head.sql",
+        file: "history/stack/head.sql",
         markers: &[],
         returns_state: false,
         reason: "§4 add_layer: the StackMoved report reads the actual head after the \
@@ -135,14 +136,14 @@ const ALLOWED: &[Allow] = &[
                  write lane; filtering would turn StackMoved into Integrity",
     },
     Allow {
-        file: "layerstack_stack_name_taken.sql",
+        file: "history/stack/name_taken.sql",
         markers: &["layer_stack_retired"],
         returns_state: true,
         reason: "§4.2 project name-collision check: it must see the deleted holder and \
                  return its state so project.init answers NameTaken with the holder",
     },
     Allow {
-        file: "read_context_node.sql",
+        file: "history/node/read_context_node.sql",
         markers: &["layer_stack_retired"],
         returns_state: false,
         reason: "§4.2 render/identity, #818 R5: a read call's context by node in one \
@@ -156,19 +157,44 @@ const ALLOWED: &[Allow] = &[
     },
 ];
 
+/// The shipped history and GC statement directories of each backend (#828:
+/// the former `queries/history/` set, grouped by table).
+const STATEMENT_DIRECTORIES: &[(&str, &[&str])] = &[
+    ("sqlite", &["history", "gc"]),
+    ("postgresql", &["history", "gc", "acquisition"]),
+];
+
+/// The `.sql` files under `directory`, recursively.
+fn sql_files(directory: &Path, out: &mut Vec<std::path::PathBuf>) {
+    let entries = fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()));
+    for entry in entries {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            sql_files(&path, out);
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("sql") {
+            out.push(path);
+        }
+    }
+}
+
+/// Every shipped statement, named by its path under `sql/<backend>/`.
 fn read_statements() -> Vec<Statement> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sql");
     let mut statements = Vec::new();
-    for backend in ["sqlite", "postgresql"] {
-        let directory = root.join(backend).join("queries").join("history");
-        let entries = fs::read_dir(&directory)
-            .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()));
-        for entry in entries {
-            let path = entry.unwrap().path();
-            if path.extension().and_then(|extension| extension.to_str()) != Some("sql") {
-                continue;
-            }
-            let file = path.file_name().unwrap().to_str().unwrap().to_owned();
+    for (backend, directories) in STATEMENT_DIRECTORIES {
+        let base = root.join(backend);
+        let mut paths = Vec::new();
+        for directory in *directories {
+            sql_files(&base.join(directory), &mut paths);
+        }
+        for path in paths {
+            let file = path
+                .strip_prefix(&base)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace('\\', "/");
             let sql = fs::read_to_string(&path).unwrap();
             statements.push(Statement { backend, file, sql });
         }
@@ -293,7 +319,7 @@ const INLINE_ALLOWED: &[InlineAllow] = &[
                  exclusive compaction window",
     },
     InlineAllow {
-        file: "src/diagnostic/mounts.rs",
+        file: "src/diagnostic/check/mounts.rs",
         needle: "SELECT g.op_id,g.scope_id,g.workspace,g.sandbox,g.machine",
         markers: &[],
         reason: "the mount_holders diagnostic is the read-only operator holder view; it must \
@@ -659,11 +685,11 @@ fn the_retry_stack_read_is_the_marker_plus_the_filtered_lookup() {
             .unwrap_or_else(|| panic!("missing statement {file}"))
     };
     assert!(has_filter(
-        &find("layerstack_stack_by_id.sql").sql,
+        &find("history/stack/by_id.sql").sql,
         &["layer_stack_retired"]
     ));
     assert!(
-        find("layerstack_deleted_ms.sql")
+        find("history/stack/deleted_ms.sql")
             .sql
             .contains("layer_stack_retired"),
         "the retry's marker read must read layer_stack_retired"
@@ -671,7 +697,7 @@ fn the_retry_stack_read_is_the_marker_plus_the_filtered_lookup() {
     assert!(
         !statements
             .iter()
-            .any(|statement| statement.file == "layerstack_stack_by_id_retired.sql"),
+            .any(|statement| statement.file == "history/stack/by_id_retired.sql"),
         "§4.2's named statement does not exist; #42 A9 records the split"
     );
 }

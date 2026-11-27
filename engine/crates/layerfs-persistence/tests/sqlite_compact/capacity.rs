@@ -33,8 +33,7 @@
 //! object count a little, not the bytes compaction copies.
 #![cfg(target_os = "linux")]
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
@@ -692,7 +691,7 @@ fn capacity_measure() {
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 Path::new(env!("CARGO_MANIFEST_DIR")).join(
-                    "../../../engine/crates/layerfs-persistence/tests/fixtures/\
+                    "../../../engine/crates/layerfs-persistence/tests/support/fixtures/\
                  sqlite_compact_capacity_measure.json",
                 )
             });

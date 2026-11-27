@@ -2,11 +2,7 @@
 //! Object locates, pack reads and inode-value reads see only immutable rows
 //! and run without one (`Session::read_immutable`); every other call keeps
 //! its transaction.
-use crate::{
-    backend::Session,
-    publication,
-    storage::{self, metadata},
-};
+use crate::{backend::Session, publication, storage::metadata};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     location::{InodeValueRow, LocatedObject, SignatureRow},
@@ -22,7 +18,7 @@ impl StorageProvider {
     /// Merge build records over this session (#355); writable sessions only.
     pub fn merge_scratch(&self) -> crate::MergeScratch {
         crate::MergeScratch {
-            session: crate::backend::sqlite::merge_records::Scratch::Sqlite(self.session.clone()),
+            session: crate::storage::merge_records::Scratch::Sqlite(self.session.clone()),
         }
     }
     /// One consistent copy of the live Store to `destination`, which must not
@@ -73,7 +69,7 @@ impl PackPersistence for StorageProvider {
     ) -> Result<(), PersistenceError> {
         out.clear();
         self.session
-            .read_immutable(|tx| storage::read::read(tx, ids, out))
+            .read_immutable(|tx| crate::storage::objects::read(tx, ids, out))
     }
     fn read_pack_selection(
         &self,

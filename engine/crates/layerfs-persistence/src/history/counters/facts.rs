@@ -1,6 +1,6 @@
 //! Persistent history facts and constant-size Store accounting reads.
 use super::super::{provider::HistoryProvider, statement::rows::cell};
-use crate::backend::error::Param;
+use crate::backend::seam::Param;
 use layerfs_content::merge::{LwwDecision, MergeUnit};
 use layerfs_history::{HistoryError, HistoryResult, InitStatistics, StoreStatistics};
 

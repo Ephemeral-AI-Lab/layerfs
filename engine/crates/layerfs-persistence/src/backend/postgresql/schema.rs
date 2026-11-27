@@ -15,7 +15,8 @@
 //! A merge's records live in the writer connection's temporary tables
 //! (`merge_records.rs`), not here.
 use super::session::{connection::Session, transaction::Transaction};
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use crate::PostgresCheck;
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};

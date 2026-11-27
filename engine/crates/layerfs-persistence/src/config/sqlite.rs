@@ -1,7 +1,18 @@
-//! Application-owned physical and history handles over one database session.
-use crate::{AcquisitionProvider, ConnectionProfile, HistoryProvider, SqlWork, StorageProvider};
+//! SQLite Store handles: composition over one database session, explicit
+//! creation/open with binding validation, and the consuming seal handoff.
+use crate::{
+    backend::{error::BackendError, sqlite::lifecycle::identity::FileIdentity, Session},
+    AcquisitionProvider, Committer, ConnectionProfile, HistoryProvider, MergeScratch,
+    PersistenceConfig, SqlWork, SqlitePersistenceProfile, StorageProvider,
+};
+use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::port::PersistenceError;
-use std::sync::Arc;
+use layerfs_storage::StoragePolicy;
+use std::{
+    fs::OpenOptions,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+};
 /// Store composition with no service bootstrap or implicit authority creation.
 pub struct SqliteHandles {
     /// Bounded pack publication/read/allocation port.
@@ -65,17 +76,6 @@ impl SqliteHandles {
 }
 
 // Explicit creation/open, binding validation and read-only authority.
-use crate::{
-    backend::{error::BackendError, sqlite::lifecycle::identity::FileIdentity, Session},
-    Committer, MergeScratch, PersistenceConfig, SqliteHandles,
-};
-use layerfs_history::{CatalogId, HistoryCatalogConfig};
-use layerfs_storage::StoragePolicy;
-use std::{
-    fs::OpenOptions,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
-};
 impl SqliteHandles {
     /// Creates a fresh combined Store, refusing existing files and unsupported engines.
     pub fn create(
@@ -334,8 +334,6 @@ impl DeferredSqliteWriter {
 }
 
 // Consuming host handoff of one closed Store file.
-use crate::SqlitePersistenceProfile;
-use std::{path::PathBuf, sync::Arc};
 
 /// A checked closed Store ready for one explicit installation.
 #[derive(Clone, Debug)]

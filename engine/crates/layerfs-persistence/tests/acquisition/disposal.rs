@@ -1,7 +1,6 @@
 //! Final cleanup acknowledgment, owner release and independent live custody.
 #![cfg(target_os = "macos")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{

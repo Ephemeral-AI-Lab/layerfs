@@ -7,7 +7,7 @@
 //! capacity. A refusal writes nothing and commits the empty transaction. A
 //! lost reply quarantines the session and answers unknown; nothing is
 //! resent.
-use super::fused::nonce;
+use super::super::session::attempt::nonce;
 use crate::backend::{
     error::BackendError,
     postgresql::session::{

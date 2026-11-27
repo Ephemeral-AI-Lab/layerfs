@@ -4,8 +4,7 @@
 //!
 //! One test in its own binary, so no sibling test holds advisory keys while
 //! it counts them. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};

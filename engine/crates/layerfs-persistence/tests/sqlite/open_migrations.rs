@@ -3,8 +3,7 @@
 //! took the writer lane), while a Store an earlier step left behind still
 //! completes.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, Page};
 use layerfs_persistence::{

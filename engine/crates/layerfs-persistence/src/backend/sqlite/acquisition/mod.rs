@@ -11,6 +11,5 @@ mod root_windows;
 pub(crate) mod statements;
 pub(crate) mod writes;
 
-pub(crate) use crate::acquisition::payload::{metadata_blob, metadata_parse};
 mod provider;
 pub use provider::AcquisitionProvider;

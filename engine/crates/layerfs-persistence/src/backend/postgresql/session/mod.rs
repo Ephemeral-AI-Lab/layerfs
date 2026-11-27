@@ -1,4 +1,5 @@
 //! One PostgreSQL connection: settings, transactions, statements and rows.
+pub(crate) mod attempt;
 pub(crate) mod connection;
 pub(crate) mod driver;
 pub(crate) mod pipeline;

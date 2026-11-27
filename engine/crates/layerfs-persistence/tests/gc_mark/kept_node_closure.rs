@@ -8,8 +8,7 @@
 //! wider than those bounds, and the rows are the ones the single recursive
 //! statement writes.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::{
     AddLayerOutcome, AddLayerRequest, BranchId, CommitMeta, CommitOutcome, CommitRecord,
@@ -149,8 +148,11 @@ fn commits(handles: &SqliteHandles, branch: BranchId, seed: u64, count: u64) -> 
 fn one_statement_closure(path: &std::path::Path) -> Vec<(Vec<u8>, String, Vec<u8>, i64)> {
     let sql = rusqlite::Connection::open(path).unwrap();
     sql.execute_batch("BEGIN; DELETE FROM kept_node;").unwrap();
-    sql.execute(include_str!("../support/fixtures/kept_node_one_statement.sql"), [])
-        .unwrap();
+    sql.execute(
+        include_str!("../support/fixtures/kept_node_one_statement.sql"),
+        [],
+    )
+    .unwrap();
     let rows = {
         let mut statement = sql
             .prepare("SELECT layer_stack_id,kind,node_id,serial FROM kept_node ORDER BY layer_stack_id,kind,node_id")

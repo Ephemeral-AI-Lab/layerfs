@@ -22,7 +22,7 @@ use layerfs_history::{ContextTarget, NamedSnapshot, NodeRecord, ReadContext};
 use super::super::statement::rows::{
     branch_row, cell, commit_row, layer_row, many, one, sql, stack_row, unsigned,
 };
-use crate::backend::error::{Record as Row, Value};
+use crate::backend::seam::{Record as Row, Value};
 use layerfs_content::ObjectId;
 use layerfs_history::query::{self, Context, Cursor, Range};
 use layerfs_history::records::{CommitRecord, LayerStackRecord};

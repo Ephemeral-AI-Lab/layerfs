@@ -1,6 +1,7 @@
 //! Durable mount admissions, including those whose runtime records are gone.
 use super::super::view::View;
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use layerfs_history::LayerStackId;
 
 /// Identity and placement as recorded by the Store. Display names are hints.
@@ -73,10 +74,10 @@ pub struct DoneAuditPage {
 
 /// Reads one bounded page of retained `done` rows in the diagnostic
 /// transaction. The live holder query above keeps filtering them out.
-pub(super) fn done(view: &dyn View, page: u32, limit: u32) -> Result<DoneAuditPage, BackendError> {
+pub(crate) fn done(view: &dyn View, page: u32, limit: u32) -> Result<DoneAuditPage, BackendError> {
     let limit = limit.clamp(1, layerfs_history::MAXIMUM_AUDIT_PAGE);
     let offset = i64::from(page) * i64::from(limit);
-    let sql = crate::backend::sqlite::session::query::history("gc_intent_done")?;
+    let sql = crate::backend::sqlite::history::history("gc_intent_done")?;
     let rows = view.query(sql, vec![Param::I64(i64::from(limit)), Param::I64(offset)])?;
     let items = rows
         .iter()
@@ -105,7 +106,7 @@ pub(super) fn done(view: &dyn View, page: u32, limit: u32) -> Result<DoneAuditPa
     })
 }
 
-pub(super) fn read(
+pub(crate) fn read(
     view: &dyn View,
     stack: Option<LayerStackId>,
 ) -> Result<Vec<MountHolder>, BackendError> {

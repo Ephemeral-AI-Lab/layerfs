@@ -3,10 +3,9 @@ use super::{
     history, metadata, objects,
     session::{rows, transaction::Transaction},
 };
-use crate::backend::{
-    error::{BackendError, Param, Record},
-    Column, HistoryStatements, Mechanics,
-};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record};
+use crate::backend::{Column, HistoryStatements, Mechanics};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
@@ -58,23 +57,23 @@ impl HistoryStatements for Transaction<'_> {
 
 impl Mechanics for Transaction<'_> {
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
-        metadata::reads::policy(self)
+        metadata::policy::policy(self)
     }
     fn allocation_cursor(&self) -> Result<(i64, i64), BackendError> {
-        metadata::reads::cursor(self)
+        metadata::allocation::cursor(self)
     }
     fn advance_allocation(&self, pack: i64, ordinal: i64) -> Result<(), BackendError> {
-        metadata::writes::advance(self, pack, ordinal)
+        metadata::allocation::advance(self, pack, ordinal)
     }
     fn allocate(&self, packs: i64, ordinals: i64) -> Result<(i64, i64), BackendError> {
-        metadata::writes::allocate(self, packs, ordinals)
+        metadata::allocation::allocate(self, packs, ordinals)
     }
     fn locate(
         &self,
         ids: &[ObjectId],
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError> {
-        metadata::reads::locate(self, ids, out)
+        metadata::locations::locate(self, ids, out)
     }
     fn locations_after(
         &self,
@@ -82,21 +81,21 @@ impl Mechanics for Transaction<'_> {
         limit: usize,
         out: &mut Vec<ObjectLocation>,
     ) -> Result<(), PersistenceError> {
-        metadata::reads::locations_after(self, after, limit, out)
+        metadata::locations::locations_after(self, after, limit, out)
     }
     fn location(&self, id: &ObjectId) -> Result<Option<ObjectLocation>, PersistenceError> {
-        if let Some(held) = metadata::reads::held_location(self, id) {
+        if let Some(held) = metadata::locations::held_location(self, id) {
             return Ok(Some(held));
         }
         let mut found = Vec::with_capacity(1);
-        metadata::reads::locate(self, std::slice::from_ref(id), &mut found)?;
+        metadata::locations::locate(self, std::slice::from_ref(id), &mut found)?;
         Ok(found
             .first()
             .map(|located| located.location)
             .filter(|location| location.object_id == *id))
     }
     fn expect_locations(&self, ids: &[ObjectId]) -> Result<(), PersistenceError> {
-        metadata::reads::expect_locations(self, ids)
+        metadata::locations::expect_locations(self, ids)
     }
     fn batches_locations(&self) -> bool {
         // An autocommit read keeps nothing between its statements.
@@ -110,10 +109,10 @@ impl Mechanics for Transaction<'_> {
         ordinals: &[u32],
         out: &mut Vec<InodeValueRow>,
     ) -> Result<(), PersistenceError> {
-        metadata::reads::inode_values(self, ordinals, out)
+        metadata::values::inode_values(self, ordinals, out)
     }
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError> {
-        metadata::reads::signatures(self, out)
+        metadata::signatures::signatures(self, out)
     }
     fn read_packs(
         &self,
@@ -160,6 +159,6 @@ impl Mechanics for Transaction<'_> {
         ahead: u32,
         out: &mut Vec<InodeValueRow>,
     ) -> Result<(), PersistenceError> {
-        metadata::reads::inode_values_ahead(self, ordinals, ahead, out)
+        metadata::values::inode_values_ahead(self, ordinals, ahead, out)
     }
 }

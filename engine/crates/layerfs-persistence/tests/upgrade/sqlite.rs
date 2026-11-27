@@ -4,8 +4,7 @@
 //! change nothing (F), cancel in each phase (H), the counts (J, in-process
 //! part) and the two SQLite behaviours the run rests on (L).
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{CommitMeta, CommitOutcome, CommitRequest, CommitVia};
 use layerfs_history::{

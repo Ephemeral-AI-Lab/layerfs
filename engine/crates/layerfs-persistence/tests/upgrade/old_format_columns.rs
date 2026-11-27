@@ -3,8 +3,7 @@
 //! opens writable and gains them (T1.2b, T1.4): the additive steps match the
 //! recorded schema source and definition, give existing rows serial 0, the
 //! Store a random salt and the next serial 1, and record the current schema.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use support::*;
 

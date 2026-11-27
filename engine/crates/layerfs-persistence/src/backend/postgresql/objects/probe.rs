@@ -1,8 +1,8 @@
 //! A test driver for the engine reads a mark makes inside one snapshot
 //! transaction. Nothing in the product calls it; `internals` re-exports it so
 //! an integration test can count the statements each read sends.
+use super::super::metadata;
 use super::super::session::transaction::Transaction;
-use super::{self, super::metadata};
 use crate::PostgresHandles;
 use layerfs_storage::{
     location::{InodeValueRow, PackInfo},
@@ -54,7 +54,7 @@ fn read(tx: &Transaction<'_>, step: &Read) -> Result<Outcome, PersistenceError> 
             outcome.bytes = found.into_iter().flatten().collect();
         }
         Read::Values(ordinals, ahead) => {
-            metadata::reads::inode_values_ahead(tx, ordinals, *ahead, &mut outcome.values)?
+            metadata::values::inode_values_ahead(tx, ordinals, *ahead, &mut outcome.values)?
         }
     }
     Ok(outcome)

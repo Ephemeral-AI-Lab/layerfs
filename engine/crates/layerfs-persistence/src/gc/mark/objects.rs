@@ -19,17 +19,17 @@
 //! ([`spill`]), and so are the retained packs and the inode value ordinals
 //! ([`lists`]). The reached objects, the history nodes, the packs and the
 //! ordinals are listed, when a caller wants them, by reading them once more.
-use super::history::{self, KeptHistory};
-use crate::backend::error::Param;
-use crate::backend::sqlite::session::transaction::Completion;
-use crate::history::provider::HistoryProvider;
-use crate::history::statement::rows::cell;
-use crate::history::statement::transaction::Transaction;
-use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
-use layerfs_content::{ObjectId, ObjectRole};
-use layerfs_history::error::{HistoryError, HistoryResult};
-use layerfs_history::records::GcIntent;
-use layerfs_storage::{
+pub(super) use super::history::{self, KeptHistory};
+pub(super) use crate::backend::seam::Param;
+pub(super) use crate::backend::sqlite::session::transaction::Completion;
+pub(super) use crate::history::provider::HistoryProvider;
+pub(super) use crate::history::statement::rows::cell;
+pub(super) use crate::history::statement::transaction::Transaction;
+pub(super) use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
+pub(super) use layerfs_content::{ObjectId, ObjectRole};
+pub(super) use layerfs_history::error::{HistoryError, HistoryResult};
+pub(super) use layerfs_history::records::GcIntent;
+pub(super) use layerfs_storage::{
     encoding::{delta::edge::RecordDirectory, PackAcquisition, PackUnit},
     location::{ObjectLocation, SignatureRow},
     pack::layout::{self, GroupCodec},
@@ -37,20 +37,20 @@ use layerfs_storage::{
     source::Source,
     StorageCapacities, StorageError,
 };
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+pub(super) use std::path::Path;
+pub(super) use std::sync::{Arc, Mutex};
 
 pub use super::super::spill::lists::{Sequence, Spans};
-use super::super::spill::sort::{Sealed, Sorter, Space};
-use super::ids::IdMap;
-use super::plan::MarkGroups;
-use super::table::Locators;
+pub(super) use super::super::spill::sort::{Sealed, Sorter, Space};
+pub(super) use super::ids::IdMap;
+pub(super) use super::plan::MarkGroups;
+pub(super) use super::table::Locators;
 const LIVE_STACKS: &str = "gc_live_stacks";
 const LIVE_BRANCHES: &str = "gc_live_branches";
-const INODE_BLOCKS: &str = "gc_inode_blocks";
+pub(super) const INODE_BLOCKS: &str = "gc_inode_blocks";
 const TUPLE: &str = "gc_tuple_read";
 /// The reported kept delta-base list is capped here; the byte total is not.
-const MAX_KEPT_WASTE_REFERENCES: usize = 1024;
+pub(super) const MAX_KEPT_WASTE_REFERENCES: usize = 1024;
 
 /// The bytes a mark keeps that no retained root actually needs (§6.2, §11).
 ///
@@ -61,13 +61,13 @@ const MAX_KEPT_WASTE_REFERENCES: usize = 1024;
 /// from the refined live set.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct KeptWaste {
-    dead_in_retained_packs_bytes: u64,
-    delta_bases_bytes: u64,
-    delta_base_references: Vec<ObjectId>,
+    pub(crate) dead_in_retained_packs_bytes: u64,
+    pub(crate) delta_bases_bytes: u64,
+    pub(crate) delta_base_references: Vec<ObjectId>,
     /// Whether [`Self::delta_base_references`] was cut at
     /// [`MAX_KEPT_WASTE_REFERENCES`] before it was stored.
-    delta_base_references_capped: bool,
-    inode_blocks_bytes: u64,
+    pub(crate) delta_base_references_capped: bool,
+    pub(crate) inode_blocks_bytes: u64,
 }
 
 /// The object half of a mark: every object and pack the retained history
@@ -81,31 +81,31 @@ pub struct KeptWaste {
 pub struct KeptObjects {
     /// The reached objects, when the mark listed them: [`HistoryProvider::mark`]
     /// does, a SQLite compaction mark writes them to its scratch instead.
-    objects: Vec<ObjectId>,
+    pub(crate) objects: Vec<ObjectId>,
     /// How many objects the mark reached, listed or not.
-    count: u64,
+    pub(crate) count: u64,
     /// The retained packs: those holding at least one reached object.
-    retained: Sequence,
+    pub(crate) retained: Sequence,
     /// [`Self::retained`] as a slice, when the mark listed them.
-    packs: Vec<i64>,
-    waste: KeptWaste,
+    pub(crate) packs: Vec<i64>,
+    pub(crate) waste: KeptWaste,
     /// Retained packs that hold a record no reached object owns, in ascending
     /// pack order, each with its share of
     /// [`KeptWaste::dead_in_retained_packs_bytes`].
-    partly_dead: PartlyDead,
+    pub(in crate::gc) partly_dead: PartlyDead,
     /// [`Self::partly_dead`] as a list, when the mark listed them.
-    partly_dead_listed: Vec<(i64, u64)>,
+    pub(crate) partly_dead_listed: Vec<(i64, u64)>,
     /// The inode value ordinals the reached leaves read.
-    ordinals: Spans,
+    pub(crate) ordinals: Spans,
     /// [`Self::ordinals`] as inclusive runs, when the mark listed them.
-    inode_ordinals: Vec<(u32, u32)>,
+    pub(crate) inode_ordinals: Vec<(u32, u32)>,
 }
 
 /// The partly dead packs of one mark with their dead bytes, ascending.
 #[derive(Clone, Default)]
-pub(in crate::history) struct PartlyDead {
-    packs: Option<Arc<Mutex<Sorter<super::super::spill::records::Count>>>>,
-    count: u64,
+pub(in crate::gc) struct PartlyDead {
+    pub(crate) packs: Option<Arc<Mutex<Sorter<super::super::spill::records::Count>>>>,
+    pub(crate) count: u64,
 }
 
 impl std::fmt::Debug for PartlyDead {
@@ -122,13 +122,13 @@ impl std::fmt::Debug for PartlyDead {
 /// this value has been compacted or deleted.
 #[derive(Clone, Debug)]
 pub struct MarkResult {
-    history: KeptHistory,
-    objects: KeptObjects,
-    live_heads_digest: [u8; 32],
-    mark_bytes: u64,
+    pub(crate) history: KeptHistory,
+    pub(crate) objects: KeptObjects,
+    pub(crate) live_heads_digest: [u8; 32],
+    pub(crate) mark_bytes: u64,
     /// Where the mark's sort files went, and how much they held together.
     /// A compaction puts its own sort files in the same space.
-    space: Arc<Space>,
+    pub(crate) space: Arc<Space>,
 }
 
 /// The Store tuple a compaction records as its mark's first statement and
@@ -327,7 +327,7 @@ impl HistoryProvider {
 /// One mark that also lists what it kept: every reached object
 /// ([`KeptObjects::objects`], 32 bytes an object, read from the Store's
 /// locators after the walk), every history node and the partly dead packs.
-fn mark(tx: &Transaction<'_>, budget: u64) -> HistoryResult<MarkResult> {
+pub(super) fn mark(tx: &Transaction<'_>, budget: u64) -> HistoryResult<MarkResult> {
     let (mut mark, mut reach) = mark_recorded(tx, true, budget)?;
     let mut objects = Vec::with_capacity(usize::try_from(reach.count).unwrap_or(0));
     reach.each(tx.mechanics(), &mut |row, _| {
@@ -344,13 +344,13 @@ fn mark(tx: &Transaction<'_>, budget: u64) -> HistoryResult<MarkResult> {
 /// reached records by locator, the Store's objects other than file payloads
 /// by locator, and the small per-pack lists.
 const EDGE_SORT_BYTES: usize = 8 * 1024 * 1024;
-const FRONTIER_SORT_BYTES: usize = 8 * 1024 * 1024;
+pub(super) const FRONTIER_SORT_BYTES: usize = 8 * 1024 * 1024;
 const KEPT_SORT_BYTES: usize = 4 * 1024 * 1024;
 const INVENTORY_SORT_BYTES: usize = 4 * 1024 * 1024;
-const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
+pub(super) const PACK_SORT_BYTES: usize = 4 * 1024 * 1024;
 const READ_SORT_BYTES: usize = 1024 * 1024;
 const BASED_SORT_BYTES: usize = 1024 * 1024;
-const PARTLY_DEAD_BYTES: usize = 256 * 1024;
+pub(super) const PARTLY_DEAD_BYTES: usize = 256 * 1024;
 /// Rows one read of the live heads returns.
 const HEADS_PAGE_ROWS: usize = 1024;
 
@@ -547,10 +547,10 @@ struct Here {
 }
 
 /// Physical input for the shared encoding readers over one mark transaction.
-struct ClosureSource<'a> {
-    mechanics: &'a dyn crate::backend::Mechanics,
+pub(super) struct ClosureSource<'a> {
+    pub(crate) mechanics: &'a dyn crate::backend::Mechanics,
     /// Where this mark's sort files go.
-    space: Arc<Space>,
+    pub(crate) space: Arc<Space>,
     /// The pack being walked and what it holds besides file payloads: what a
     /// reference found there is looked up in before the Store is asked.
     here: std::cell::RefCell<Here>,
@@ -561,13 +561,13 @@ struct ClosureSource<'a> {
     reads: std::cell::RefCell<(Sorter<super::super::spill::records::BodyRead>, u64)>,
     /// The group extents of every pack whose directory the walk read, kept so
     /// the kept-waste pass does not read it a second time.
-    layouts: std::cell::RefCell<Sorter<super::super::spill::records::Layout>>,
+    pub(crate) layouts: std::cell::RefCell<Sorter<super::super::spill::records::Layout>>,
     /// The packs the rows being walked decode metadata from, ascending, and
     /// how many of them the engine has been told to expect.
     upcoming: std::cell::RefCell<(Vec<i64>, usize)>,
     /// The pack and group whose delta bases the engine was last told to
     /// expect lookups of ([`walk`]'s `expect_bases`).
-    based: std::cell::Cell<(i64, usize)>,
+    pub(crate) based: std::cell::Cell<(i64, usize)>,
     /// Inode values the engine has returned, asked for or not.
     values: std::cell::RefCell<super::values::HeldValues>,
     /// Every ordinal the walk asked for ([`ordinals`]), whether the engine or
@@ -585,12 +585,12 @@ const AHEAD_PACKS: usize = 128;
 /// every page of its Commit: a base that has left the memo is read from its
 /// own pack again, chain and all. The size is the largest single part of
 /// what a mark holds.
-const CHAIN_MEMO_BYTES: usize = 32 * 1024 * 1024;
+pub(super) const CHAIN_MEMO_BYTES: usize = 32 * 1024 * 1024;
 
 impl ClosureSource<'_> {
     /// Notes the packs `rows`, which are in locator order, decode metadata
     /// from: the packs the walk reads one scoped acquisition at a time.
-    fn expect_rows(&self, rows: &[super::super::spill::records::Row]) {
+    pub(crate) fn expect_rows(&self, rows: &[super::super::spill::records::Row]) {
         let mut packs: Vec<i64> = rows
             .iter()
             .filter(|row| row.location.role.has_references())
@@ -622,7 +622,7 @@ impl ClosureSource<'_> {
     /// file payloads from `inventory`, which finds a pack's rows by its id
     /// and reads on from where it stands when a wave's packs follow each
     /// other.
-    fn enter(
+    pub(crate) fn enter(
         &self,
         pack_id: i64,
         inventory: &mut Sealed<super::super::spill::records::Row>,
@@ -643,13 +643,13 @@ impl ClosureSource<'_> {
     /// file payload: a Commit's root, inode pages, directory pages, file
     /// states and extent pages are written into one pack, so they are read
     /// in one visit of it and not in one visit per tree level.
-    fn held_here(&self, id: &ObjectId) -> Option<super::super::spill::records::Row> {
+    pub(crate) fn held_here(&self, id: &ObjectId) -> Option<super::super::spill::records::Row> {
         self.here.borrow().rows.get(id).copied()
     }
 
     /// The objects of group `group` of the pack being walked that name other
     /// objects: those whose rebuild may look a delta base up.
-    fn held_in_group(&self, group: usize) -> Vec<ObjectLocation> {
+    pub(crate) fn held_in_group(&self, group: usize) -> Vec<ObjectLocation> {
         let here = self.here.borrow();
         let mut rows: Vec<ObjectLocation> = here
             .rows
@@ -662,7 +662,7 @@ impl ClosureSource<'_> {
     }
 
     /// Keeps the group extents the walk read for `pack_id`.
-    fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
+    pub(crate) fn keep_layout(&self, pack_id: i64, views: Vec<layout::GroupView>) {
         let mut layouts = self.layouts.borrow_mut();
         for (number, view) in views.into_iter().enumerate() {
             layouts.hold(super::super::spill::records::Layout {
@@ -696,14 +696,14 @@ impl ClosureSource<'_> {
     /// declared length. The group cache asks for only groups it does not hold,
     /// so the extents are disjoint; the controls each acquisition repeats can
     /// still not make a pack count for more than its body.
-    fn note_scoped_body(&self, pack_id: i64, bytes: u64, length: u64) {
+    pub(crate) fn note_scoped_body(&self, pack_id: i64, bytes: u64, length: u64) {
         self.note(pack_id, bytes, length, false);
     }
 
     /// Writes out what the reads and layouts noted since the last call hold
     /// beyond their bound. The notes themselves never write: they are made
     /// inside the storage readers.
-    fn relieve(&self) -> HistoryResult<()> {
+    pub(crate) fn relieve(&self) -> HistoryResult<()> {
         self.reads.borrow_mut().0.relieve()?;
         self.ordinals.borrow_mut().relieve()?;
         self.layouts.borrow_mut().relieve()
@@ -843,7 +843,7 @@ impl Source for ClosureSource<'_> {
 ///
 /// The rows are read a bounded page at a time, in identity order, and hashed
 /// as they come.
-fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
+pub(super) fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/live-heads/v1\0");
     live_rows(tx, LIVE_STACKS, &mut |row| {
@@ -880,7 +880,7 @@ fn live_heads_digest(tx: &Transaction<'_>) -> HistoryResult<[u8; 32]> {
 fn live_rows(
     tx: &Transaction<'_>,
     key: &str,
-    each: &mut dyn FnMut(&crate::backend::error::Record) -> HistoryResult<()>,
+    each: &mut dyn FnMut(&crate::backend::seam::Record) -> HistoryResult<()>,
 ) -> HistoryResult<()> {
     let mut after: Vec<u8> = Vec::new();
     loop {
@@ -903,7 +903,7 @@ fn live_rows(
 
 /// One physical read failure as a mark failure; an unproven outcome is never
 /// folded into an integrity refusal.
-fn storage(error: impl Into<StorageError>) -> HistoryError {
+pub(super) fn storage(error: impl Into<StorageError>) -> HistoryError {
     let error = error.into();
     if error.is_unknown_outcome() {
         HistoryError::UnknownOutcome

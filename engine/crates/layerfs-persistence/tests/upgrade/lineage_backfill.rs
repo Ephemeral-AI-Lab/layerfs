@@ -1,8 +1,7 @@
 //! A Store written before the lineage tables (#353) opens writable, gains them
 //! and is backfilled at open (REBUILD.md kind 2): ancestry, merge bases and
 //! overwrite counts are the same as before, and publication continues.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::records::{
     AddLayerOutcome, AddLayerRequest, CommitMeta, CommitOutcome, CommitRequest, CommitVia,
     ForkRequest, ForkSource, StackInitialization,

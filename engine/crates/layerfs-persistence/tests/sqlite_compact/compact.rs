@@ -4,8 +4,7 @@
 //! artifact; a recorded leftover is judged by the generation and removed by
 //! the next `store.compact`.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{

@@ -15,13 +15,12 @@
 //!   next reservation starts after every range the scope gave out.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::*;
 use layerfs_persistence::{PostgresHandles, PostgresSelection, SqlWork};
 use std::time::{Duration, Instant};
-use support::fault_proxy::{Fault, FaultProxy};
+use support::pg::fault_proxy::{Fault, FaultProxy};
 use support::pg::{url, Schema};
 use support::root;
 

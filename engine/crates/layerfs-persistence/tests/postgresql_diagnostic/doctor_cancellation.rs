@@ -1,6 +1,5 @@
 //! Cancellation signals interrupt actual connection/preflight work, without sleeps.
-#[path = "../support/pg/doctor.rs"]
-mod pg_doctor;
+use crate::pg_doctor;
 use layerfs_persistence::{
     diagnostic::{Options, Outcome},
     PostgresSelection,

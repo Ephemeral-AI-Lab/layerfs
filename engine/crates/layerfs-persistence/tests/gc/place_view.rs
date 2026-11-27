@@ -2,8 +2,7 @@
 //! the view settles a conflicting mount whose machine incarnation is still
 //! current; a missing or restored place stays conservative live; the view is
 //! scoped to one admission and never leaks.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{

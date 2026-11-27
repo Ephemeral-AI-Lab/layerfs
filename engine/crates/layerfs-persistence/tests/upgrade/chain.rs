@@ -2,8 +2,7 @@
 //! a private SQLite file: steps run in order, a gap or a newer Store is
 //! refused before anything runs, the chain is one transaction, a failing
 //! step leaves nothing behind, and an unrecognized source is refused.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_persistence::internals::{upgrade_check_chain, upgrade_plan, upgrade_run, UpgradeStep};
 use layerfs_persistence::upgrade::UpgradeError;

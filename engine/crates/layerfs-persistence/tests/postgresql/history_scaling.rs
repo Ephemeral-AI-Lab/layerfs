@@ -28,8 +28,7 @@
 //! ```
 //!
 //! The last stage compares every checkpoint's probe and drops both schemas.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use chains::*;
 use layerfs_content::{
@@ -351,7 +350,7 @@ fn explain(store: &Store, heads: &[ObjectId]) {
             })
             .collect::<String>()
     };
-    let locate = explain(&mut admin, &sql("locate.sql"), &[&ids, &keys]);
+    let locate = explain(&mut admin, &sql("metadata/locate.sql"), &[&ids, &keys]);
     assert_indexed(
         "locate",
         &locate,
@@ -360,7 +359,7 @@ fn explain(store: &Store, heads: &[ObjectId]) {
             ("pack", "pack_pkey"),
         ],
     );
-    let roots = explain(&mut admin, &sql("chain_roots.sql"), &[&ids, &keys]);
+    let roots = explain(&mut admin, &sql("metadata/chain/roots.sql"), &[&ids, &keys]);
     assert_indexed(
         "chain statement 1",
         &roots,
@@ -397,14 +396,14 @@ fn explain(store: &Store, heads: &[ObjectId]) {
             .collect::<Vec<_>>()
             .join(",")
     );
-    let packs = explain(&mut admin, &sql("chain_packs.sql"), &[&members]);
+    let packs = explain(&mut admin, &sql("metadata/chain/packs.sql"), &[&members]);
     assert_indexed("chain statement 2", &packs, &[("pack", "pack_pkey")]);
     // The publish statement names no schema (it runs on the session's
     // search_path) and binds 22 arrays; its generic plan is the plan any
     // batch gets. It reads `object_location` only; packs arrive by COPY.
     let generic = explain(
         &mut admin,
-        &format!("{GENERIC}{}", sql("publish_rows.sql")),
+        &format!("{GENERIC}{}", sql("metadata/publish_rows.sql")),
         &[],
     );
     assert_indexed(
@@ -594,7 +593,7 @@ fn stage_1_grow_to_50_and_probe() {
     );
     assert_eq!(
         std::fs::read_to_string(bench).unwrap().trim(),
-        std::fs::read_to_string(format!("{SQL}locate.sql"))
+        std::fs::read_to_string(format!("{SQL}metadata/locate.sql"))
             .unwrap()
             .trim(),
         "b8_locate.sql is the product locate"

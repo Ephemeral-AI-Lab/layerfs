@@ -9,7 +9,7 @@
 //! reaches is kept through that node with its own edges, and a deleted project
 //! is excluded because every history edge is stack-local.
 use super::super::spill::sort::{Item, Sorter, Space};
-use crate::backend::error::{Param, Record};
+use crate::backend::seam::{Param, Record};
 use crate::history::params;
 use crate::history::provider::HistoryProvider;
 use crate::history::statement::rows::cell;
@@ -408,7 +408,7 @@ pub(super) fn each(
 /// deleted Stack has no roots. Node identities are Commits and Layers, so the
 /// Stack and Branch roots the closure also names are represented by the
 /// Layers that reach them.
-pub(super) fn retained_roots(
+pub(crate) fn retained_roots(
     tx: &Transaction<'_>,
     stack: LayerStackId,
 ) -> HistoryResult<Vec<NodeId>> {
@@ -419,7 +419,7 @@ pub(super) fn retained_roots(
 /// The roots a mark recorded in kept_node for one Stack, for a caller that
 /// resolves them separately. A Stack no mark has reached yet falls back to
 /// the live roots.
-pub(super) fn kept_roots(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
+pub(crate) fn kept_roots(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
     let rows = tx.query(KEPT_ROOTS, params![stack.as_slice()])?;
     if rows.is_empty() {
         return retained_roots(tx, stack);
@@ -463,7 +463,7 @@ pub(super) fn unreachable_count(tx: &Transaction<'_>, stack: LayerStackId) -> Hi
 /// rows as unreachable. The logical bytes those rows contributed are
 /// retracted from `store_totals` in the same transaction, while the rows the
 /// statement reads still exist.
-pub(super) fn remove_unreachable(
+pub(crate) fn remove_unreachable(
     tx: &Transaction<'_>,
     stack: LayerStackId,
     dry_run: bool,

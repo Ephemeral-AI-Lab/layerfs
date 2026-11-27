@@ -3,8 +3,7 @@
 //! serials and one `project_epoch` row per project. A Store that already has
 //! the column is left alone, and a serial already recorded is never lowered.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::{
     AddLayerOutcome, AddLayerRequest, BranchId, CommitMeta, CommitOutcome, CommitRecord,

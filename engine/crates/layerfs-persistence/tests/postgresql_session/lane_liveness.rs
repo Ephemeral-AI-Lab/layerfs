@@ -18,8 +18,7 @@
 //! `pg_terminate_backend` of the lane connection.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::HistoryCatalog;
 use layerfs_persistence::PostgresHandles;

@@ -1,7 +1,6 @@
 //! P5: actual Store length facts avoid whole-file payload materialization.
 #![cfg(target_os = "macos")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{construct_bytes, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};

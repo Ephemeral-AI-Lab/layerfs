@@ -1,7 +1,6 @@
 //! #506: a live Store copies to one consistent closed file that opens as a Store.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{construct_bytes, read_range, ObjectId};
 use layerfs_history::HistoryCatalogConfig;

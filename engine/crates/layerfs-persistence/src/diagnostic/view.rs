@@ -1,10 +1,9 @@
 //! Borrowed database mechanics: inventory and decoding share this exact view.
-use crate::backend::{
-    error::{BackendError, Param, Record},
-    HistoryStatements, Mechanics,
-};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record};
+use crate::backend::{HistoryStatements, Mechanics};
 
-pub(super) trait View: Mechanics + HistoryStatements {
+pub(crate) trait View: Mechanics + HistoryStatements {
     fn has_table(&self, name: &str) -> Result<bool, BackendError>;
     fn query(&self, sql: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError>;
 }

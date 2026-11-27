@@ -1,6 +1,5 @@
 //! C08/C09 valid-CID namespace damage and all historical contexts.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     encode_whole_file_payload,
     filesystem::{

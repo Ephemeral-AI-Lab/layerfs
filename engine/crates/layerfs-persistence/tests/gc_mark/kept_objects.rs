@@ -6,8 +6,7 @@
 //! only kept as a delta base, a deleted project and a moved head each move the
 //! answer; nothing is compacted.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     encode_whole_file_payload,

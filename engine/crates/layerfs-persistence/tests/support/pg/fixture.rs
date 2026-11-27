@@ -26,9 +26,10 @@ impl FixtureDb {
             .unwrap();
         let url = format!("{admin} dbname={name}");
         let mut db = postgres::Client::connect(&url, postgres::NoTls).unwrap();
-        let dump =
-            std::fs::read_to_string(super::upgrade::fixtures().join("postgresql/v3/store.sql"))
-                .unwrap();
+        let dump = std::fs::read_to_string(
+            super::super::upgrade::fixtures().join("postgresql/v3/store.sql"),
+        )
+        .unwrap();
         let mut pending = String::new();
         let mut lines = dump.lines();
         while let Some(line) = lines.next() {

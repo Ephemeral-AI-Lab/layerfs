@@ -1,6 +1,5 @@
 //! Independent atomic byte charges and acknowledged reservation-tail ownership.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles};

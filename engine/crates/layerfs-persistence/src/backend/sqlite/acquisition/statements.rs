@@ -1,103 +1,54 @@
-//! Closed statement set and the failure type its units share.
+//! Closed statement set of SQLite acquisition.
 //!
 //! Every window bound is written `LIMIT ?n+0`. The engine's planner reads a
 //! plainly bound LIMIT, which re-prepares the statement on each execution and
 //! lets the plan follow the value. The expression keeps one generic plan: the
 //! one `explain` reports.
-use crate::backend::error::{BackendError, OutcomeError};
-use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
-
 macro_rules! statement {
     ($name:ident, $file:literal) => {
         pub(crate) const $name: &str = include_str!(concat!(
-            "../../../../sql/sqlite/acquisition/queries/",
+            "../../../../sql/sqlite/acquisition/",
             $file,
             ".sql"
         ));
     };
 }
-statement!(BEGIN, "begin");
-statement!(CLAIM_EPOCH, "claim_epoch");
-statement!(OWNER, "owner");
-statement!(CHARGE, "charge");
-statement!(CREDIT, "credit");
-statement!(ADVANCE, "advance");
-statement!(RELEASE, "release");
-statement!(PUT_ENTRY, "put_entry");
-statement!(BIND_HOST_FILE, "bind_host_file");
-statement!(ENTRY_DEPENDENCIES, "entry_dependencies");
-statement!(PUT_ENTRIES, "put_entries");
-statement!(PUT_HOST_FILE, "put_host_file");
-statement!(UNPLACED_FIRST, "unplaced_first");
-statement!(UNPLACED_NEXT, "unplaced_next");
-statement!(PLACE_ENTRY, "place_entry");
-statement!(PLACEMENT_DEPENDENCIES, "placement_dependencies");
-statement!(BIND_HOST_FILES, "bind_host_files");
-statement!(PLACE_CHILDREN, "place_children");
-statement!(DIRECTORIES, "directories");
-statement!(DIRECTORY_SIZES, "directory_sizes");
-statement!(DIRECTORY_PATH, "directory_path");
-statement!(JOBS, "jobs");
-statement!(JOB_SIZES, "job_sizes");
-statement!(JOB, "job");
-statement!(COMPLETE_FILE, "complete_file");
-statement!(FILE_ROOTS, "file_roots");
-statement!(ENTRIES_FIRST, "entries_first");
-statement!(ENTRIES_NEXT, "entries_next");
-statement!(BINDINGS_FIRST, "bindings_first");
-statement!(BINDINGS_NEXT, "bindings_next");
-statement!(SET_DIRECTORY_ROOT, "set_directory_root");
-statement!(DISCARD_ENTRIES, "discard_entries");
-statement!(DISCARD_HOST_FILE, "discard_host_file");
-statement!(DISCARD_ENTRY_KEYS, "discard_entry_keys");
-statement!(DISCARD_HOST_FILE_KEYS, "discard_host_file_keys");
-statement!(DISCARD_ENTRY_TAIL, "discard_entry_tail");
-statement!(DISCARD_HOST_FILE_TAIL, "discard_host_file_tail");
-statement!(ABANDONED, "abandoned");
-statement!(RELEASE_ABANDONED, "release_abandoned");
-
-/// One unit's failure before it is reported through the port.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Failure {
-    Backend(BackendError),
-    /// The Store was created without the acquisition tables.
-    Unavailable,
-    /// The operation still holds working rows.
-    Held,
-    Stale,
-    Bounds,
-    Changed(u64),
-}
-impl From<BackendError> for Failure {
-    fn from(error: BackendError) -> Self {
-        Self::Backend(error)
-    }
-}
-impl OutcomeError for Failure {
-    fn uncertain(&self) -> bool {
-        *self == Self::Backend(BackendError::Unknown)
-    }
-}
-impl From<Failure> for AcquisitionError {
-    fn from(failure: Failure) -> Self {
-        match failure {
-            Failure::Backend(error) => Self::Persistence(error.into()),
-            Failure::Unavailable => Self::Persistence(PersistenceError::BackendUnavailable),
-            Failure::Held => Self::Persistence(PersistenceError::Refused {
-                status: "acquisition working rows remain".to_owned(),
-            }),
-            Failure::Stale => Self::Stale,
-            Failure::Bounds => Self::Bounds,
-            Failure::Changed(position) => Self::Changed { position },
-        }
-    }
-}
-
-/// A position as the engine's signed integer; larger values are out of bounds.
-pub(crate) fn signed(value: u64) -> Result<i64, Failure> {
-    i64::try_from(value).map_err(|_| Failure::Bounds)
-}
-/// A stored non-negative integer.
-pub(crate) fn unsigned(value: i64) -> Result<u64, Failure> {
-    u64::try_from(value).map_err(|_| Failure::Backend(BackendError::Integrity))
-}
+statement!(BEGIN, "operation/begin");
+statement!(CLAIM_EPOCH, "operation/claim_epoch");
+statement!(OWNER, "operation/owner");
+statement!(CHARGE, "operation/charge");
+statement!(CREDIT, "operation/credit");
+statement!(ADVANCE, "operation/advance");
+statement!(RELEASE, "operation/release");
+statement!(PUT_ENTRY, "put/entry");
+statement!(BIND_HOST_FILE, "write/bind_host_file");
+statement!(ENTRY_DEPENDENCIES, "write/entry_dependencies");
+statement!(PUT_ENTRIES, "put/entries");
+statement!(PUT_HOST_FILE, "put/host_file");
+statement!(UNPLACED_FIRST, "page/unplaced_first");
+statement!(UNPLACED_NEXT, "page/unplaced_next");
+statement!(PLACE_ENTRY, "write/place_entry");
+statement!(PLACEMENT_DEPENDENCIES, "queries/placement_dependencies");
+statement!(BIND_HOST_FILES, "queries/bind_host_files");
+statement!(PLACE_CHILDREN, "queries/place_children");
+statement!(DIRECTORIES, "read/directories");
+statement!(DIRECTORY_SIZES, "read/directory_sizes");
+statement!(DIRECTORY_PATH, "read/directory_path");
+statement!(JOBS, "read/jobs");
+statement!(JOB_SIZES, "read/job_sizes");
+statement!(JOB, "read/job");
+statement!(COMPLETE_FILE, "write/complete_file");
+statement!(FILE_ROOTS, "read/file_roots");
+statement!(ENTRIES_FIRST, "page/entries_first");
+statement!(ENTRIES_NEXT, "page/entries_next");
+statement!(BINDINGS_FIRST, "page/bindings_first");
+statement!(BINDINGS_NEXT, "page/bindings_next");
+statement!(SET_DIRECTORY_ROOT, "write/set_directory_root");
+statement!(DISCARD_ENTRIES, "discard/entries");
+statement!(DISCARD_HOST_FILE, "discard/host_file");
+statement!(DISCARD_ENTRY_KEYS, "discard/entry_keys");
+statement!(DISCARD_HOST_FILE_KEYS, "discard/host_file_keys");
+statement!(DISCARD_ENTRY_TAIL, "discard/entry_tail");
+statement!(DISCARD_HOST_FILE_TAIL, "discard/host_file_tail");
+statement!(ABANDONED, "operation/abandoned");
+statement!(RELEASE_ABANDONED, "operation/release_abandoned");

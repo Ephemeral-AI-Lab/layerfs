@@ -2,9 +2,10 @@
 //! body's statements, then `COMMIT`. A lost reply quarantines the session.
 use super::{
     connection::{Session, State},
-    rows::{self, self},
+    rows,
 };
-use crate::backend::error::{BackendError, OutcomeError, Param, Record};
+use crate::backend::error::{BackendError, OutcomeError};
+use crate::backend::seam::{Param, Record};
 use layerfs_telemetry::timer::waits::Wait;
 use postgres::{types::ToSql, types::Type, Row, SimpleQueryMessage};
 use std::{
@@ -74,10 +75,10 @@ pub(crate) struct Transaction<'a> {
     /// (`objects::read::expect`).
     pub(crate) packs: RefCell<super::super::objects::read::HeldPacks>,
     /// Inode value blocks this transaction has read
-    /// (`metadata::reads::inode_values_ahead`).
-    pub(crate) values: RefCell<super::super::metadata::locations::HeldBlocks>,
+    /// (`metadata::values::inode_values_ahead`).
+    pub(crate) values: RefCell<super::super::metadata::values::HeldBlocks>,
     /// Locators this transaction was told to expect lookups of
-    /// (`metadata::reads::expect_locations`).
+    /// (`metadata::locations::expect_locations`).
     pub(crate) located: RefCell<super::super::metadata::locations::HeldLocations>,
 }
 
@@ -166,7 +167,7 @@ impl Transaction<'_> {
         let mut bound = Vec::with_capacity(params.len());
         let mut bytes = 0;
         for (param, ty) in params.into_iter().zip(statement.params()) {
-            let (value, size) = query::bind(param, ty)?;
+            let (value, size) = rows::bind(param, ty)?;
             bound.push(value);
             bytes += size;
         }
@@ -689,7 +690,7 @@ impl Transaction<'_> {
         };
         for row in rows.iter_mut() {
             let actual = match row.cells.pop() {
-                Some(crate::backend::error::Value::Integer(generation)) if generation > 0 => {
+                Some(crate::backend::seam::Value::Integer(generation)) if generation > 0 => {
                     generation as u64
                 }
                 _ => return Err(BackendError::Integrity),

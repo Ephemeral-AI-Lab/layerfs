@@ -1,11 +1,9 @@
 //! Fault each server message of an ordinary captured Save's warm publication.
 //! PostgreSQL may have committed when the reply goes missing, but the earlier
 //! Save's pack and the Branch must survive, and the new batch is atomic.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use layerfs_history::HistoryCatalog;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
@@ -15,7 +13,7 @@ use layerfs_storage::{
     Storage,
 };
 use std::time::{Duration, Instant};
-use support::fault_proxy::{Fault, FaultProxy, Window};
+use support::pg::fault_proxy::{Fault, FaultProxy, Window};
 use support::pg::{project, url, Schema};
 
 const BINDING: &[u8] = b"captured-save-fault";

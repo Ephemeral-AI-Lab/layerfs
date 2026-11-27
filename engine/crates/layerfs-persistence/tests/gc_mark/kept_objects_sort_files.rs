@@ -6,8 +6,7 @@
 //! bounded lists: its history closure in batches, its retained packs as one
 //! bit each and its partly dead packs through a sort file.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{FinalizedObject, ObjectId};
 use layerfs_history::HistoryError;

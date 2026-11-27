@@ -6,8 +6,7 @@
 //! `LAYERFS_TEST_POSTGRES_URL`.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::ObjectId;
 use layerfs_history::catalog::first_parent_window_serial;

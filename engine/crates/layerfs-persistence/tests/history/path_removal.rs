@@ -1,7 +1,6 @@
 //! `project.remove_file`: one marker, its Store-high-water frontier, the
 //! `UpToDate` rule, the `/`-boundary subtree, and the per-project scope.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::Missing;
 use layerfs_history::path::{path_key, trace_key, NormalizedPath};

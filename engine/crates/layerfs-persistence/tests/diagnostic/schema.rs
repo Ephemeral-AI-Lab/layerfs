@@ -1,6 +1,5 @@
 //! Schema claims are checked against shipped DDL, never trusted as authority.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
     diagnostic::{Options, Outcome},

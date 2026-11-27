@@ -29,8 +29,7 @@
 //!   is held is decided by the statement-by-statement registration, once.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};

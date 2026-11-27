@@ -1,40 +1,29 @@
-//! Bounded write units: begin, append, record roots and advance, with the
-//! owner check and exact charges every unit shares (placement, which shares
-//! them too, is in `placement.rs`).
+//! Bounded write units: begin, append, record roots and advance. The owner
+//! check and exact charges every unit shares are in `accounting.rs`.
 //!
 //! A window of entries is appended in array statements once a check over
 //! the whole window shows its rows cannot conflict with each other or with
 //! stored rows; the first row that might conflict runs alone, in order, so
 //! its outcome and failure are exactly a sequential append's.
 use super::{
+    accounting::{charge, identity},
     reads::get,
     unit::{values, Writes},
 };
-use crate::backend::{
-    error::BackendError,
-    postgresql::session::transaction::Transaction,
-    sqlite::acquisition::{
-        accounting::{entry_bytes, host_bytes, HOST_BYTES, ROOT_BYTES},
-        metadata_blob,
-        statements::{signed, unsigned, Failure},
-        writes::{packed, well_formed},
+use crate::acquisition::{
+    failure::{signed, unsigned, Failure},
+    payload::{
+        entry_bytes, host_bytes, metadata_blob, packed, well_formed, HOST_BYTES, ROOT_BYTES,
     },
 };
+use crate::backend::{error::BackendError, postgresql::session::transaction::Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
-use layerfs_storage::port::acquisition::{
-    AcquisitionWork, Begin, HostIdentity, NewEntry, Owner, Phase,
-};
+use layerfs_storage::port::acquisition::{Begin, HostIdentity, NewEntry, Owner, Phase};
 use std::collections::BTreeSet;
 
 /// Parent position stored for the source root, which has no parent.
 const ROOT_PARENT: i64 = -1;
 
-/// The owner row's statement key (`history::statements::qualified`); its
-/// text names the schema, so it also runs alone as a fenced autocommit read
-/// (`reads::work`, #818 I3a).
-const OWNER: &str = "acquisition_owner";
-const CHARGE: &str = "UPDATE init_operation SET held_rows=held_rows+$3::bigint,held_bytes=held_bytes+$4::bigint,peak_rows=greatest(peak_rows,held_rows+$3::bigint),peak_bytes=greatest(peak_bytes,held_bytes+$4::bigint) WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows";
-const CREDIT: &str = "UPDATE init_operation SET held_rows=held_rows-$3::bigint,held_bytes=held_bytes-$4::bigint,removed_rows=removed_rows+$3::bigint,removed_bytes=removed_bytes+$4::bigint WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows";
 const BEGIN: &str = "INSERT INTO init_operation(owner_epoch,phase,source_device,source_inode,stack_id,scope) VALUES(coalesce($1::bigint,1),1,$2::bytea,$3::bytea,$4::bytea,$5::bytea) RETURNING operation_id";
 const CLAIM_EPOCH: &str =
     "UPDATE init_operation SET owner_epoch=operation_id WHERE operation_id=$1::bigint RETURNING owner_epoch";
@@ -51,80 +40,6 @@ pub(super) const PUT_HOST_FILES: &str = "INSERT INTO {s}.init_host_file(operatio
 pub(super) const PUT_ENTRIES: &str = "INSERT INTO {s}.init_entry(operation_id,parent_position,name,position,kind,canonical_position,metadata_root,content_root,host_path,host_identity) SELECT $1::bigint,* FROM unnest($2::bigint[],$3::bytea[],$4::bigint[],$5::bigint[],$6::bigint[],$7::bytea[],$8::bytea[],$9::bytea[],$10::bytea[])";
 const FILE_ROOTS: &str = "UPDATE init_host_file AS t SET file_root=r.root FROM unnest($2::bigint[],$3::bytea[]) AS r(position,root) WHERE t.operation_id=$1::bigint AND t.canonical_position=r.position AND t.file_root IS NULL RETURNING t.canonical_position";
 const DIRECTORY_ROOTS: &str = "UPDATE init_entry AS t SET content_root=r.root FROM unnest($2::bigint[],$3::bytea[]) AS r(position,root) WHERE t.operation_id=$1::bigint AND t.position=r.position AND t.kind=2 AND t.content_root IS NULL RETURNING t.position";
-
-fn identity(owner: Owner) -> Result<(i64, i64), Failure> {
-    Ok((signed(owner.operation)?, signed(owner.epoch)?))
-}
-
-/// The operation's phase and charges; `Stale` when the owner is not live.
-pub(super) fn owner(
-    tx: &Transaction<'_>,
-    owner: Owner,
-) -> Result<(Phase, AcquisitionWork), Failure> {
-    let (operation, epoch) = identity(owner)?;
-    let rows = tx.typed(&super::reads::owned(tx, OWNER)?, &[&operation, &epoch], 16)?;
-    decoded(rows.first().ok_or(Failure::Stale)?, 0)
-}
-
-/// The owner row's phase and charges from its seven columns at `first`:
-/// `Integrity` for an unknown phase or a negative count.
-pub(super) fn decoded(
-    row: &postgres::Row,
-    first: usize,
-) -> Result<(Phase, AcquisitionWork), Failure> {
-    let phase = u8::try_from(get::<i64>(row, first)?)
-        .ok()
-        .and_then(Phase::from_code)
-        .ok_or(BackendError::Integrity)?;
-    let mut counts = [0_u64; 6];
-    for (index, count) in counts.iter_mut().enumerate() {
-        *count = unsigned(get::<i64>(row, first + index + 1)?)?;
-    }
-    let [held_rows, held_bytes, peak_rows, peak_bytes, removed_rows, removed_bytes] = counts;
-    Ok((
-        phase,
-        AcquisitionWork {
-            held_rows,
-            held_bytes,
-            peak_rows,
-            peak_bytes,
-            removed_rows,
-            removed_bytes,
-        },
-    ))
-}
-
-fn adjust(
-    tx: &Transaction<'_>,
-    sql: &str,
-    owner: Owner,
-    rows: i64,
-    bytes: i64,
-) -> Result<u64, Failure> {
-    let (operation, epoch) = identity(owner)?;
-    let updated = tx.typed(sql, &[&operation, &epoch, &rows, &bytes], 32)?;
-    unsigned(get::<i64>(updated.first().ok_or(Failure::Stale)?, 0)?)
-}
-
-/// Adds signed row and byte deltas; returns the rows now held.
-pub(super) fn charge(
-    tx: &Transaction<'_>,
-    owner: Owner,
-    rows: i64,
-    bytes: i64,
-) -> Result<u64, Failure> {
-    adjust(tx, CHARGE, owner, rows, bytes)
-}
-
-/// Moves removed rows and bytes out of the held charge; returns rows now held.
-pub(super) fn credit(
-    tx: &Transaction<'_>,
-    owner: Owner,
-    rows: i64,
-    bytes: i64,
-) -> Result<u64, Failure> {
-    adjust(tx, CREDIT, owner, rows, bytes)
-}
 
 /// Inserts the operation row; the first operation of a session names its epoch.
 pub(super) fn begin(tx: &Transaction<'_>, epoch: u64, facts: &Begin) -> Result<Owner, Failure> {

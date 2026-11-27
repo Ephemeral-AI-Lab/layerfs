@@ -19,7 +19,8 @@
 use super::super::{
     emit, reader::Reader, scratch::Scratch, view::View, Observation, Options, Outcome,
 };
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use layerfs_content::{
     filesystem::{
         qualify::{qualify_root, QualificationWork, RootContext},

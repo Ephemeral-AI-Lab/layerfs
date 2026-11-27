@@ -2,8 +2,7 @@
 //! (#352 F-018). A traced daemon call reads the writer's counters before and
 //! after its operation. When that read queued for the writer's admission, a
 //! traced read waited for whole Commits holding the lane, merges included.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};

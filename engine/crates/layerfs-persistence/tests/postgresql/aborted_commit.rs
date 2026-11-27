@@ -10,8 +10,7 @@
 //! and the session must stay usable (a definite outcome, not a quarantine).
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_persistence::internals::{postgresql_write_ignoring, BackendError};
 use support::pg::{url, Schema};

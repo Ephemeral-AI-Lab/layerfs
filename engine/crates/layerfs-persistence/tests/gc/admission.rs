@@ -1,8 +1,7 @@
 //! #41 T6: admission (`gc_intent`) on SQLite. A mount/Init/merge holds its
 //! scopes, a removal sees `MountsActive`/`Busy`/`Unresolved`, the epoch is
 //! bumped once by the marker and a missing epoch row is `Conflict`.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::{HistoryError, Missing};
 use layerfs_history::records::{

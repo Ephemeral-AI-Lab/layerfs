@@ -5,8 +5,7 @@
 //! has no fixture, the frozen guard when a committed fixture or manifest
 //! changed, and the chain guard when the steps have a gap or a step changes
 //! acquisition or layout.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_persistence::internals::{
     postgresql_target_and_current_source, postgresql_upgrade_steps, sqlite_decode_user_version,

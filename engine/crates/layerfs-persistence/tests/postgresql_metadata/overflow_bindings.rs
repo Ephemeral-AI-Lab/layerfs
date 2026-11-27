@@ -1,6 +1,5 @@
 //! Overflow binding transactions preserve the ordinary append blocks and sequence numbers.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 #[test]
 fn overflow_binding_appends_keep_three_ordered_acknowledgements_in_four_trips() {

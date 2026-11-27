@@ -2,8 +2,7 @@
 //! F-035), each statement in its own snapshot. While another session
 //! reclaims free pages, which moves pages inside the file, a read-only
 //! session's locates and object reads answer exactly as before.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{inode_leaf::InodeKind, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{

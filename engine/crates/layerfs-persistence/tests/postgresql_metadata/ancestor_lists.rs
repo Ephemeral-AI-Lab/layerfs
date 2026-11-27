@@ -7,8 +7,7 @@
 //! entry is a counted stale hint, refused when strict; and a pre-2.0 Store is
 //! refused at open. Every reader here is strict unless a test says otherwise.
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use chains::*;
 use layerfs_content::{FinalizedObject, ObjectId};

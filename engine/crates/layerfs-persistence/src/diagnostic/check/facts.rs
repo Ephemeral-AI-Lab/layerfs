@@ -1,6 +1,7 @@
 //! Snapshot-bound, bounded extraction of unbounded persisted history facts.
 use super::super::{emit, view::View, Observation, Options, Outcome};
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use std::io::Read;
 struct Input<'a> {
     view: &'a dyn View,

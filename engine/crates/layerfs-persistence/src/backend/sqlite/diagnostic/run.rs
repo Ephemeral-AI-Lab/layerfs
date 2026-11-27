@@ -1,9 +1,8 @@
 //! SQLite engine checks on the original file, including its committed WAL.
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use crate::diagnostic::{check::store, emit, Observation, Options, Outcome};
-use crate::{
-    backend::error::{BackendError, Param},
-    SqliteHandles,
-};
+use crate::SqliteHandles;
 use layerfs_storage::port::PersistenceError;
 
 impl SqliteHandles {

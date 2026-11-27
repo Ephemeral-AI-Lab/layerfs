@@ -1,6 +1,5 @@
 //! C01 and losing physical representations: full pack checks are independent.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     filesystem::directory::{encode_directory_page, DirectoryPage},
     ObjectRole,

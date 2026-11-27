@@ -2,8 +2,7 @@
 //! the other whole, frees the name, and takes the removed project's logical
 //! bytes out of the totals. Runs on SQLite; with `LAYERFS_TEST_POSTGRES_URL`
 //! set it also runs on a new PostgreSQL Store given the same two projects.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::Missing;
 use layerfs_history::records::{

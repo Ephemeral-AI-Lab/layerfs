@@ -58,7 +58,7 @@ struct Run {
 /// limit is the Store out of room; a directory that refuses the file is a
 /// Store this process may not write beside; anything else contradicts what
 /// the mark wrote.
-pub(super) fn io_error(error: std::io::Error) -> HistoryError {
+pub(crate) fn io_error(error: std::io::Error) -> HistoryError {
     use std::io::ErrorKind as Kind;
     match error.kind() {
         Kind::StorageFull | Kind::QuotaExceeded | Kind::FileTooLarge => {
@@ -153,33 +153,33 @@ impl Space {
         [0, 1, 2, 3].map(|at| self.paging[at].load(Atomic::Relaxed))
     }
 
-    pub(super) fn asked(&self, times: u64) {
+    pub(crate) fn asked(&self, times: u64) {
         self.paging[3].fetch_add(times, Atomic::Relaxed);
     }
 
-    pub(super) fn missed(&self) {
+    pub(crate) fn missed(&self) {
         self.paging[0].fetch_add(1, Atomic::Relaxed);
     }
 
-    pub(super) fn paged_in(&self) {
+    pub(crate) fn paged_in(&self) {
         self.paging[1].fetch_add(1, Atomic::Relaxed);
     }
 
-    pub(super) fn paged_out(&self) {
+    pub(crate) fn paged_out(&self) {
         self.paging[2].fetch_add(1, Atomic::Relaxed);
     }
 
-    pub(super) fn grow(&self, bytes: u64) {
+    pub(crate) fn grow(&self, bytes: u64) {
         let held = self.held.fetch_add(bytes, Atomic::Relaxed) + bytes;
         self.peak.fetch_max(held, Atomic::Relaxed);
     }
 
-    pub(super) fn shrink(&self, bytes: u64) {
+    pub(crate) fn shrink(&self, bytes: u64) {
         self.held.fetch_sub(bytes, Atomic::Relaxed);
     }
 
     /// A new file with no name, open for reading and writing.
-    pub(super) fn file(&self) -> HistoryResult<File> {
+    pub(crate) fn file(&self) -> HistoryResult<File> {
         if !self.swept.swap(true, Atomic::Relaxed) {
             sweep(&self.directory);
         }

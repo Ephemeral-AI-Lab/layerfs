@@ -1,5 +1,7 @@
 //! Immutable bodies and bounded multi-row locator statements in one transaction.
-use crate::backend::error::{BackendError, Param};
+use super::layout;
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use crate::backend::sqlite::session::transaction::Transaction;
 use layerfs_content::ObjectId;
 use layerfs_storage::{location::PackDomain, port::*};
@@ -147,8 +149,6 @@ fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), Back
 }
 
 // Immutable control/unit INSERTs in the existing publication transaction.
-use super::layout;
-use layerfs_storage::port::PublishedPack;
 pub(crate) fn write(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
     for pack in packs {
         let (header, views) = layout::views(pack).map_err(|_| BackendError::Integrity)?;

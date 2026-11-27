@@ -1,8 +1,7 @@
 //! Live schema objects, independently of the saved source/column fingerprint.
-use crate::backend::{
-    error::{BackendError, Param},
-    postgresql::session::transaction::Transaction,
-};
+use crate::backend::error::BackendError;
+use crate::backend::postgresql::session::transaction::Transaction;
+use crate::backend::seam::Param;
 use crate::diagnostic::{emit, Observation, Options, Outcome};
 
 use super::expected::EXPECTED;

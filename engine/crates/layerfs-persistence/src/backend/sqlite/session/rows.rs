@@ -1,5 +1,6 @@
 //! Engine row conversion and structured SQLite error classification.
-use crate::backend::error::{BackendError, Param, Record, Value};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record, Value};
 use rusqlite::{
     types::{Value as SqlValue, ValueRef},
     Error, ErrorCode, Row,

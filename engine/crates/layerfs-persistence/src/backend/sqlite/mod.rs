@@ -3,6 +3,7 @@
 pub(crate) mod acquisition;
 pub(crate) mod compact;
 pub(crate) mod diagnostic;
+pub(crate) mod history;
 pub(crate) mod lane;
 pub(crate) mod lifecycle;
 mod mechanics;

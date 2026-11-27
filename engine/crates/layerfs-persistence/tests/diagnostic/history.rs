@@ -1,6 +1,5 @@
 //! B3 authoritative history and independently damaged derived families.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{encode_whole_file_payload, ObjectRole};
 use layerfs_history::*;
 use support::doctor::{clean, failure, Fixture};

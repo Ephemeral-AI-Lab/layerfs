@@ -5,8 +5,7 @@
 //! compact. The suite is separate from `sqlite_compact.rs` because the T12.3a
 //! matrix report pins that suite's test count, and this copy changes no report.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{

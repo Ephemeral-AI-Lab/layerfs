@@ -11,8 +11,7 @@
 //! The expectations below are backend-neutral data; a PostgreSQL harness can
 //! reuse the same table with its own failpoints and its own artifact set.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{

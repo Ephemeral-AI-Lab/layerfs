@@ -2,8 +2,7 @@
 //! at most 4,000 bytes per group of 64 serials, a reader merges a group's
 //! blocks and drops repeats, and a hint no table row could hold is refused
 //! before anything is written.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::{records::BindingHint, HistoryCatalog};
 use support::*;
 

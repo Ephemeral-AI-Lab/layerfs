@@ -1,7 +1,6 @@
 //! project.delete: the layer_stack_retired marker, the visibility filter every
 //! project lookup carries, and the retry classification the Store side needs.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::Missing;
 use layerfs_history::{

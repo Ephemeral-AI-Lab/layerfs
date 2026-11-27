@@ -7,8 +7,7 @@
 //! before the checkpoint the WAL holds exactly one commit frame: the
 //! upgrade's one write transaction (J).
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_persistence::read_heads;
 use layerfs_persistence::upgrade::{sqlite_format, upgrade_sqlite, UpgradeOutcome, UpgradeRequest};

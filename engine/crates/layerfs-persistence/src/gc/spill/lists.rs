@@ -102,11 +102,11 @@ impl Spans {
         Self::of(Sorter::new(space, LIST_BYTES, records::spans_by_first))
     }
 
-    pub(super) fn sorter(space: &Arc<Space>) -> Sorter<Span> {
+    pub(in crate::gc) fn sorter(space: &Arc<Space>) -> Sorter<Span> {
         Sorter::new(space, LIST_BYTES, records::spans_by_first)
     }
 
-    pub(super) fn of(spans: Sorter<Span>) -> Self {
+    pub(in crate::gc) fn of(spans: Sorter<Span>) -> Self {
         Self {
             spans: Arc::new(Mutex::new(spans)),
         }
@@ -158,7 +158,7 @@ impl std::fmt::Debug for Spans {
 
 /// Notes `ordinals` in `spans` as runs of consecutive numbers, without
 /// writing: the caller relieves the sorter later.
-pub(super) fn hold_runs(spans: &mut Sorter<Span>, ordinals: &[u32]) {
+pub(in crate::gc) fn hold_runs(spans: &mut Sorter<Span>, ordinals: &[u32]) {
     let mut open: Option<Span> = None;
     for ordinal in ordinals {
         open = Some(match open {

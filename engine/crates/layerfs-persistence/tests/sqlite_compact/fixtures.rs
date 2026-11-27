@@ -17,8 +17,7 @@
 //! layerfs-persistence --test sqlite_compact_fixtures`; the second run checks
 //! the new file.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     encode_whole_file_payload,
@@ -874,8 +873,8 @@ fn mark_json(digest: [u8; 32], objects: usize, packs: &[i64]) -> Json {
 fn check_golden(actual: &Json) {
     let rendered = actual.render();
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
-        let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sqlite_compact_golden.json");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/support/fixtures/sqlite_compact_golden.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &rendered).unwrap();
         eprintln!("updated golden transcript {}", path.display());

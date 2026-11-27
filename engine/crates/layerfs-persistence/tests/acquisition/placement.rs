@@ -18,8 +18,7 @@
 //! the same window, plus kind mismatches, missing names and a large mixed
 //! directory. The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL` and
 //! reports NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;

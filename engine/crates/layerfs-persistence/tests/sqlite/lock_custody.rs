@@ -1,8 +1,7 @@
 //! Cooperative readiness must preserve SQLite's own POSIX lock custody.
 //! Uses public Stores and an independently bounded raw SQLite writer process.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};

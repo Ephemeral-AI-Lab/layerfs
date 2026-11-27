@@ -1,7 +1,6 @@
 //! The captured writer combines two bounded immutable ordinal reads.
 //! Needs LAYERFS_TEST_POSTGRES_URL.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use layerfs_content::{inode_leaf::INODE_VALUE_BYTES, ObjectId};
 use layerfs_storage::{

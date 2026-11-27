@@ -3,8 +3,7 @@
 //! only as a delta base stays, the next compaction finds nothing to do, and a
 //! run stopped before the rename leaves the old Store as it was.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     encode_whole_file_payload,

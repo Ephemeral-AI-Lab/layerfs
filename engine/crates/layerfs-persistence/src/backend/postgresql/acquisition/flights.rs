@@ -19,19 +19,17 @@
 //! write nested in the held lane, or an owner or root position that does not
 //! convert to signed runs today's transaction instead (`writes`, `cleanup`).
 use super::{reads::get, writes::Roots};
+use crate::acquisition::{
+    failure::{signed, unsigned, Failure},
+    payload::ROOT_BYTES,
+};
 use crate::backend::{
     error::BackendError,
-    postgresql::{
-        history::fused::nonce,
-        session::{
-            connection::Session,
-            pipeline::{Refusal, Reply, Request},
-            profile::barrier_leftover,
-        },
-    },
-    sqlite::acquisition::{
-        accounting::ROOT_BYTES,
-        statements::{signed, unsigned, Failure},
+    postgresql::session::{
+        attempt::nonce,
+        connection::Session,
+        pipeline::{Refusal, Reply, Request},
+        profile::barrier_leftover,
     },
 };
 use layerfs_content::ObjectId;
@@ -39,13 +37,13 @@ use layerfs_storage::port::acquisition::{Discarded, Disposal, Phase};
 use postgres::{error::SqlState, types::ToSql, Row};
 use std::{collections::BTreeSet, sync::atomic::Ordering};
 
-/// `writes::owner` as an assertion: `Stale` without the live row,
+/// `accounting::owner` as an assertion: `Stale` without the live row,
 /// `Integrity` for an unknown phase or a negative count.
 pub(super) const OWNER_LIVE: &str = "SELECT CASE WHEN count(*)=0 THEN 1/count(*)::int \
  WHEN bool_and(phase BETWEEN 1 AND 6 AND least(held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes)>=0) THEN 1 \
  ELSE (32768+count(*))::smallint::int END \
  FROM {s}.init_operation WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint";
-/// `writes::CHARGE`: `Stale` without the row, `Integrity` for negative rows.
+/// `accounting::CHARGE`: `Stale` without the row, `Integrity` for negative rows.
 pub(super) const CHARGED: &str = "WITH c AS (UPDATE {s}.init_operation SET held_rows=held_rows+$3::bigint,held_bytes=held_bytes+$4::bigint,peak_rows=greatest(peak_rows,held_rows+$3::bigint),peak_bytes=greatest(peak_bytes,held_bytes+$4::bigint) WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows) \
  SELECT CASE WHEN count(*)=0 THEN 1/count(*)::int WHEN min(held_rows)>=0 THEN 1 ELSE (32768+count(*))::smallint::int END FROM c";
 /// `writes::FILE_ROOTS` returning the recorded positions as one array, with
@@ -62,7 +60,7 @@ const ADVANCED: &str = "WITH a AS (UPDATE {s}.init_operation SET phase=$3::bigin
 /// entry key of at most `$3` lowest keys (the offset key, else the tail) and
 /// those entries deleted; then the last of at most `$3` − (entries deleted)
 /// lowest host positions and those host files deleted; the removed rows and
-/// bytes credited (`writes::CREDIT`). Answers the removed rows and bytes and
+/// bytes credited (`accounting::CREDIT`). Answers the removed rows and bytes and
 /// the rows still held: `Stale` without the record, `Integrity` for
 /// negative held rows.
 const DISCARD: &str = "WITH ek AS (SELECT parent_position,name FROM ((SELECT parent_position,name,0 AS o FROM {s}.init_entry WHERE operation_id=$1::bigint ORDER BY parent_position,name LIMIT 1 OFFSET greatest($3::bigint-1,0)) UNION ALL (SELECT parent_position,name,1 FROM {s}.init_entry WHERE operation_id=$1::bigint ORDER BY parent_position DESC,name DESC LIMIT 1)) k WHERE $3::bigint>0 ORDER BY o LIMIT 1), \

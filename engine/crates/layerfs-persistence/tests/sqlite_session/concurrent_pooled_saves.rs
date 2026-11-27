@@ -1,6 +1,5 @@
 //! Reservation order is independent of publication order across public Saves.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, LEAF_ROW_BYTES,

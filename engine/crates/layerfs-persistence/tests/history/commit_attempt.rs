@@ -3,8 +3,7 @@
 //! (`HistoryCatalog::commit_by_attempt`). Each case runs on SQLite, and on
 //! PostgreSQL when `LAYERFS_TEST_POSTGRES_URL` names a server (else that half
 //! is NOT_RUN).
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{
     CommitMeta, CommitOutcome, CommitRecord, CommitRequest, CommitVia, ForkRequest, ForkSource,

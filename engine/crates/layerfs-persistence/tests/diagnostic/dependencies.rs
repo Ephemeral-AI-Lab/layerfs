@@ -1,6 +1,5 @@
 //! C03/C04: Doctor inventories real persisted physical dependency graphs.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     filesystem::{
         directory::{encode_directory_page, DirectoryPage},

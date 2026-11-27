@@ -4,8 +4,7 @@
 //! owner's later calls fail rather than read its records as absent. Records
 //! stay resident up to `RESIDENT_BYTES` (#364); past it batches wait in a
 //! bounded buffer until it is full or a key window is asked.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, IndexedEditBacking,
 };

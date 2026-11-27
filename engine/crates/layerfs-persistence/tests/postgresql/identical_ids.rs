@@ -5,8 +5,7 @@
 //! Needs a PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for example
 //! `host=127.0.0.1 port=55432 user=postgres password=... dbname=layerfs
 //! sslmode=disable`). Without it the test reports NOT_RUN and passes nothing.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{construct_bytes, read_range, ObjectId};
 use layerfs_history::records::{

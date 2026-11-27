@@ -5,8 +5,7 @@
 //! Routine passes sync with plain fsync; the idle checkpoint and the last
 //! close run on the session's connection with `checkpoint_fullfsync=1`.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{construct_bytes, read_range};
 use layerfs_history::HistoryCatalogConfig;

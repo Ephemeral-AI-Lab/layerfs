@@ -36,7 +36,7 @@ fn fixture() -> Vec<Vec<u8>> {
         })
         .collect()
 }
-fn main() {
+pub(crate) fn main() {
     assert_eq!(
         std::env::var("SCREEN_SCENARIO").as_deref(),
         Ok("issue327-publication-totals-v5")

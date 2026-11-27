@@ -1,7 +1,8 @@
 //! Exact incremental BLOB I/O; C2 plans and authenticates selected acquisition.
+use crate::backend::metadata_locations::info;
+use crate::backend::seam::Param;
 use crate::backend::sqlite::session::rows;
 use crate::backend::sqlite::session::transaction::Transaction;
-use crate::backend::{error::Param, metadata_locations::info};
 use layerfs_storage::{
     location::PackInfo,
     port::{AcquiredPackRead, PackReadPlan, PersistedPackRead, PersistenceError},

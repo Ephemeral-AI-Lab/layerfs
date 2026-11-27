@@ -17,7 +17,8 @@
 //! is not stored; it is never repaired or guessed. A FULL root (`''`) has no
 //! chain.
 use super::super::session::transaction::Transaction;
-use crate::backend::error::{pack_info, BackendError};
+use crate::backend::error::BackendError;
+use crate::backend::seam::pack_info;
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{
     location::{

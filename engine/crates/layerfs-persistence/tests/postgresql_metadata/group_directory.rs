@@ -3,8 +3,7 @@
 //! the schema when it is not that prefix, and returned by the chain locate
 //! for the roots' packs and the members' packs.
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use chains::*;
 use layerfs_storage::{

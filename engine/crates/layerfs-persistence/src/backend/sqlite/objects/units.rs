@@ -1,8 +1,10 @@
-//! Logical pack offsets mapped to independent immutable unit BLOBs, one transaction.
+//! Logical pack offsets mapped to independent immutable unit BLOBs, one
+//! transaction, and the bounded read-only unit cursor one acquisition owns.
 use crate::backend::sqlite::session::rows;
 use crate::backend::sqlite::session::transaction::Transaction;
 use crate::backend::{error::BackendError, metadata_locations::typed_info};
 use layerfs_storage::{location::PackInfo, pack::layout, port::*};
+use std::time::Instant;
 pub(super) struct Unit {
     pub(super) id: i64,
     pub(super) start: usize,
@@ -131,8 +133,6 @@ pub(crate) fn whole(
 }
 
 // One bounded acquisition owns one read-only unit cursor and checked close.
-use layerfs_storage::port::PersistenceError;
-use std::time::Instant;
 pub(super) fn read(
     tx: &Transaction<'_>,
     units: &[Unit],

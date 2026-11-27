@@ -1,6 +1,5 @@
 //! Exact overwrite reconstruction includes late publication and retained history.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::*;
 use layerfs_persistence::{
     diagnostic::{Observation, Options, Outcome},

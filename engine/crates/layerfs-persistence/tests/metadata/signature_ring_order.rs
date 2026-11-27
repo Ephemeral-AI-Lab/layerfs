@@ -7,8 +7,7 @@
 //! returns equal a stamp-ordered read row for row, so the ring a Storage loads
 //! from them is the same slot for slot. A fresh Storage on the Store then
 //! finds an entry written after the wrap as a delta base.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{ConstructionPolicy, ContentResult, FinalizedConsumer, FinalizedObject};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};

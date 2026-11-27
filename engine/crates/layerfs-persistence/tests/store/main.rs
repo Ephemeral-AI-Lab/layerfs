@@ -5,3 +5,5 @@ mod sealed_open;
 mod serverless;
 mod snapshot;
 mod space_reclamation;
+#[path = "../support/mod.rs"]
+mod support;

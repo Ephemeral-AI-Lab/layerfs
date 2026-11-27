@@ -1,8 +1,7 @@
 //! Bounded locator reads and immutable pack descriptor decoding.
-use crate::backend::{
-    error::{BackendError, Param, Record},
-    Transaction,
-};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record};
+use crate::backend::Transaction;
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{
     location::{LocatedObject, ObjectLocation, PackInfo},
@@ -23,7 +22,7 @@ fn locate_sql(count: usize) -> String {
 }
 
 pub(crate) fn info(r: &Record, start: usize) -> Result<PackInfo, BackendError> {
-    crate::backend::error::pack_info(
+    crate::backend::seam::pack_info(
         r.get(start)?,
         r.get(start + 1)?,
         &r.get::<Vec<u8>>(start + 2)?,
@@ -31,7 +30,7 @@ pub(crate) fn info(r: &Record, start: usize) -> Result<PackInfo, BackendError> {
     )
 }
 pub(crate) fn typed_info(r: &rusqlite::Row<'_>, start: usize) -> Result<PackInfo, BackendError> {
-    crate::backend::error::pack_info(
+    crate::backend::seam::pack_info(
         r.get(start)
             .map_err(crate::backend::sqlite::session::rows::error)?,
         r.get(start + 1)

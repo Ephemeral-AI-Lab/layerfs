@@ -1,6 +1,5 @@
 //! Captured Commit's bounded PostgreSQL locate-and-pack read.
-#[path = "../support/pg/chains.rs"]
-mod chains;
+use crate::chains;
 
 use chains::{noise, save, storage, url, whole, Store};
 use layerfs_content::{

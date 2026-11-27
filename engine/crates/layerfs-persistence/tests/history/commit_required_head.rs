@@ -5,8 +5,7 @@
 //! transaction read (`commit_advance_branch`'s head predicate, shared by
 //! both backends). Each case runs on SQLite, and on PostgreSQL when
 //! `LAYERFS_TEST_POSTGRES_URL` names a server (else that half is NOT_RUN).
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{

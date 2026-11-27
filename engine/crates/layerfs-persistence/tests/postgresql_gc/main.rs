@@ -6,3 +6,5 @@ mod fence;
 mod mark;
 mod mark_edges;
 mod sessions;
+#[path = "../support/mod.rs"]
+mod support;

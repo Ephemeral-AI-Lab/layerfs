@@ -1,5 +1,6 @@
 //! One overflow binding batch under the ordinary standalone write lane.
-use super::fused::{nonce, HINTS};
+use super::super::session::attempt::nonce;
+use super::fused::HINTS;
 use crate::{
     backend::{
         error::BackendError,

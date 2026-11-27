@@ -5,7 +5,7 @@ mod scratch;
 pub use super::backend::postgresql::server::reach::ConnectionStep;
 pub use super::backend::sqlite::diagnostic::structure::sqlite_structure;
 pub(crate) mod view;
-pub use super::backend::postgresql::diagnostic::run::connection as postgresql_connection;
+pub use super::backend::postgresql::diagnostic::connection::connection as postgresql_connection;
 pub(crate) use super::backend::postgresql::diagnostic::run::with_cancellation;
 
 pub use check::mounts::{DoneAuditPage, DoneAuditRow, MountHolder};

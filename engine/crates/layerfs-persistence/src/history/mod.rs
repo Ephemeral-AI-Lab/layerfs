@@ -4,7 +4,7 @@ pub(crate) mod counters;
 pub(crate) mod graph;
 pub(crate) mod index;
 pub(crate) mod lineage;
-mod provider;
+pub(crate) mod provider;
 pub(crate) mod statement;
 pub use super::gc::mark::history::{KeptHistory, KeptNode, KeptNodeId};
 pub use super::gc::mark::objects::GcTuple;
@@ -22,8 +22,7 @@ pub(crate) use statement::rows::{
 
 pub use super::gc::mark::objects::{Sequence, Spans};
 pub(crate) use graph::commit::insert_params as commit_insert_params;
-use layerfs_history::query;
-use statement::bindings::params;
+pub(crate) use statement::bindings::params;
 pub(crate) use statement::bindings::{place_evidence, place_tokens};
 
 pub(crate) use counters::facts::validate_stream as validate_facts_stream;

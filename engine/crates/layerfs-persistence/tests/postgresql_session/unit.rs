@@ -21,8 +21,7 @@
 //!   `Unknown`, no reconnect or replay inside the unit.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_persistence::internals::{
     postgresql_unit, BackendError, PipelineRefusal, PipelineReply, PipelineRequest as Request,
@@ -30,7 +29,7 @@ use layerfs_persistence::internals::{
 };
 use layerfs_persistence::{PostgresHandles, PostgresSelection, SqlWork};
 use std::time::{Duration, Instant};
-use support::fault_proxy::{Fault, FaultProxy};
+use support::pg::fault_proxy::{Fault, FaultProxy};
 use support::pg::{url, Schema};
 
 const BINDING: &[u8] = b"session-unit";

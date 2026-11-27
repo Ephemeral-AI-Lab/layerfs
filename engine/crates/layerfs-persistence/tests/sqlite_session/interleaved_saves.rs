@@ -1,7 +1,6 @@
 //! S0: a scoped session registry borrows initialized handles without self-reference.
 #![cfg(target_os = "macos")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{construct_bytes, read_range};
 use layerfs_history::HistoryCatalogConfig;

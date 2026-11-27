@@ -160,7 +160,7 @@ impl KeptObjects {
     }
 
     /// Fills [`Self::packs`].
-    pub(in crate::history) fn list_packs(&mut self) -> HistoryResult<()> {
+    pub(in crate::gc) fn list_packs(&mut self) -> HistoryResult<()> {
         let mut packs = Vec::with_capacity(usize::try_from(self.retained.len()).unwrap_or(0));
         self.retained.each(&mut |pack| {
             packs.push(pack as i64);
@@ -172,7 +172,7 @@ impl KeptObjects {
 
     /// Fills the slices: [`Self::packs`], [`Self::partly_dead_packs`] and
     /// [`Self::inode_ordinals`].
-    pub(in crate::history) fn list(&mut self) -> HistoryResult<()> {
+    pub(in crate::gc) fn list(&mut self) -> HistoryResult<()> {
         self.list_packs()?;
         let mut listed = Vec::with_capacity(usize::try_from(self.partly_dead.count).unwrap_or(0));
         self.each_partly_dead(&mut |pack, bytes| {

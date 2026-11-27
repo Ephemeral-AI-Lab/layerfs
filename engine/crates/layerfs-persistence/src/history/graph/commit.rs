@@ -314,7 +314,7 @@ pub(crate) fn derive_record_at(
 pub(crate) fn insert_params(
     record: &CommitRecord,
     serial: u64,
-) -> HistoryResult<Vec<crate::backend::error::Param>> {
+) -> HistoryResult<Vec<crate::backend::seam::Param>> {
     Ok(params![
         record.id.as_slice(),
         record.stack.as_slice(),

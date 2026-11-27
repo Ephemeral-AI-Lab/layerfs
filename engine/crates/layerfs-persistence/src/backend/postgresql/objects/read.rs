@@ -1,6 +1,7 @@
 //! Whole and ranged pack reads; read budgets are checked before any body.
 use super::super::session::{rows, transaction::Transaction};
-use crate::backend::error::{pack_info, BackendError, Param, Record};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{pack_info, Param, Record};
 use layerfs_storage::{
     location::PackInfo,
     policy,

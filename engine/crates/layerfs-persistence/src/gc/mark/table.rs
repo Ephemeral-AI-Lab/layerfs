@@ -34,13 +34,13 @@ pub(super) const BLOCK: usize = 512;
 const AHEAD_BLOCKS: usize = 16;
 
 /// The order of two identities by their bytes.
-pub(super) fn by_bytes(left: &ObjectId, right: &ObjectId) -> Ordering {
+pub(crate) fn by_bytes(left: &ObjectId, right: &ObjectId) -> Ordering {
     left.cmp(right)
 }
 
 /// The order of two identities by their first eight bytes as a signed
 /// big-endian number, then by their bytes.
-pub(super) fn by_signed_prefix(left: &ObjectId, right: &ObjectId) -> Ordering {
+pub(crate) fn by_signed_prefix(left: &ObjectId, right: &ObjectId) -> Ordering {
     let prefix = |id: &ObjectId| {
         let mut head = [0u8; 8];
         head.copy_from_slice(&id.as_bytes()[..8]);

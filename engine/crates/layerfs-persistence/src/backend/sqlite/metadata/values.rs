@@ -1,9 +1,8 @@
 //! Stored inode values in append-only blocks (#91), read and written in
 //! bounded sets.
-use crate::backend::{
-    error::{BackendError, Param},
-    Transaction,
-};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
+use crate::backend::Transaction;
 use crate::storage::blocks::values::{encode, every, pick};
 use layerfs_storage::{location::InodeValueRow, port::*};
 

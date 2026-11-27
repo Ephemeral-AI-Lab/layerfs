@@ -4,8 +4,7 @@
 //! leftover a stopped run leaves for the next call. The capture is
 //! thread-local, so the other tests in this binary cannot pollute it.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::HistoryCatalog;

@@ -20,8 +20,7 @@
 //! It reports NOT_RUN without `LAYERFS_TEST_POSTGRES_URL`.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::{
     CommitHistoryRequest, ContextTarget, HistoryCatalog, HistoryName, LayerHistoryRequest,
@@ -477,10 +476,11 @@ fn every_one_statement_read_names_the_schema() {
                 !qualified.contains_key(*key) && !arrays.contains_key(*key),
                 "`{key}` has a `{{s}}` body, so it is not PostgreSQL-only"
             );
-            let sqlite = manifest.join(format!("sql/sqlite/queries/history/{key}.sql"));
+            let sqlite = manifest.join("src/backend/sqlite/history.rs");
+            let table = fs::read_to_string(&sqlite).expect("sqlite/history.rs");
             assert!(
-                !sqlite.exists(),
-                "`{key}` is pinned as PostgreSQL-only, but has an unqualified SQLite body at {}",
+                !table.contains(&format!("\"{key}\" =>")),
+                "`{key}` is pinned as PostgreSQL-only, but has an unqualified SQLite body in {}",
                 sqlite.display()
             );
         }

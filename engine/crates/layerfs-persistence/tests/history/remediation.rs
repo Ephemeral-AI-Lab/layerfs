@@ -1,6 +1,5 @@
 //! Regressions for the independently reproduced pair-2 boundary failures.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::*;
 use support::*;
 

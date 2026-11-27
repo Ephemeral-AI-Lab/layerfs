@@ -1,6 +1,6 @@
 //! Typed history record decoding from shared backend columns.
 use super::{bindings::Parameters, transaction::Transaction};
-use crate::backend::error::{FromValue, Record as Row};
+use crate::backend::seam::{FromValue, Record as Row};
 use layerfs_content::ObjectId;
 use layerfs_history::{
     error::{HistoryError, HistoryResult},

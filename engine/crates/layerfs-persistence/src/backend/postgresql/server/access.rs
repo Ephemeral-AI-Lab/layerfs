@@ -5,9 +5,10 @@
 //! compaction needs ([`compaction_missing`], which a compaction checks for
 //! itself). One connection opened for the call and closed after it,
 //! read-only queries only, no retry.
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
 use crate::backend::postgresql::server::status::PostgresStatusError;
 use crate::backend::postgresql::session::connection::{Connector, Session};
+use crate::backend::seam::Param;
 use crate::PostgresSelection;
 use layerfs_history::error::HistoryResult;
 use std::time::{Duration, Instant};

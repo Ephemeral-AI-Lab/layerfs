@@ -12,10 +12,10 @@
 //! `place_entry.sql`, the per-row loop's statements.
 use super::accounting::charge;
 use super::statements::{
-    signed, Failure, BIND_HOST_FILE, BIND_HOST_FILES, PLACEMENT_DEPENDENCIES, PLACE_CHILDREN,
-    PLACE_ENTRY,
+    BIND_HOST_FILE, BIND_HOST_FILES, PLACEMENT_DEPENDENCIES, PLACE_CHILDREN, PLACE_ENTRY,
 };
 use super::writes::bind;
+use crate::acquisition::failure::{signed, Failure};
 use crate::acquisition::placement::{plan, Placement};
 use crate::backend::sqlite::session::{prepared::Prepared, rows};
 use crate::backend::{error::BackendError, Transaction};

@@ -1,6 +1,7 @@
 //! Independent ancestry facts; saved run labels are validated, never invented.
 use super::super::{emit, scratch::Scratch, view::View, Observation, Options, Outcome};
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use rusqlite::{params, OptionalExtension};
 
 pub(super) fn run(

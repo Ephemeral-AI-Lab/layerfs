@@ -5,8 +5,7 @@
 //! once, and an identity the Store does not locate fails the mark instead of
 //! being skipped.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::HistoryError;

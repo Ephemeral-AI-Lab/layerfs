@@ -2,8 +2,7 @@
 //! one row, read in one statement execution, written with the Save's own
 //! publication, never replaced, every 73-byte value back exactly, and
 //! refused rather than misread when the Store predates them.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, LEAF_ROW_BYTES,

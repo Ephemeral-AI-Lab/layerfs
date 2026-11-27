@@ -1,7 +1,6 @@
 //! Owned read snapshots preserve empty/stale distinction and typed windows.
 #![cfg(target_os = "macos")]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{

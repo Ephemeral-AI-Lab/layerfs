@@ -1,6 +1,7 @@
 //! Shared history transaction facade; backend owns acknowledgement and errors.
 use super::{super::provider::HistoryProvider, bindings::Parameters};
-use crate::backend::{error::Record, Column, Engine, HistoryStatements, Mechanics};
+use crate::backend::seam::Record;
+use crate::backend::{Column, Engine, HistoryStatements, Mechanics};
 use layerfs_history::HistoryResult;
 pub(crate) struct Transaction<'a> {
     backend: &'a dyn HistoryStatements,

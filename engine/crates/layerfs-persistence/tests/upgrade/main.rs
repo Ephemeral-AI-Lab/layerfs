@@ -9,3 +9,5 @@ mod postgresql;
 mod postgresql_wire;
 mod sqlite;
 mod sqlite_crash;
+#[path = "../support/mod.rs"]
+mod support;

@@ -1,7 +1,6 @@
 //! #367: a thread's SQL totals hold only the work it ran itself. Threads
 //! sharing one session split the session's counters between them.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, LEAF_ROW_BYTES,

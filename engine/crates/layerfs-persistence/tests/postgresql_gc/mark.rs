@@ -6,8 +6,7 @@
 //! `PostgresHandles`.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{construct_bytes, read_range, ObjectId};
 use layerfs_history::HistoryCatalog;

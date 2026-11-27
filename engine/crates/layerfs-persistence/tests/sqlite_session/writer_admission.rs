@@ -1,6 +1,5 @@
 //! Cooperative Store admission precedes one public transaction attempt.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};

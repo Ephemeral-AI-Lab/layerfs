@@ -1,5 +1,5 @@
 //! Owned scalar bindings for history statements.
-use crate::backend::error::Param;
+use crate::backend::seam::Param;
 use layerfs_history::records::GcIntent;
 pub(crate) trait Parameters {
     fn into_params(self) -> Vec<Param>;
@@ -14,7 +14,7 @@ impl<T: Into<Param>, const N: usize> Parameters for [T; N] {
         self.into_iter().map(Into::into).collect()
     }
 }
-macro_rules! params { ($($value:expr),* $(,)?) => { vec![$(crate::backend::error::Param::from($value)),*] }; }
+macro_rules! params { ($($value:expr),* $(,)?) => { vec![$(crate::backend::seam::Param::from($value)),*] }; }
 pub(crate) use params;
 impl From<&[u8]> for Param {
     fn from(v: &[u8]) -> Self {

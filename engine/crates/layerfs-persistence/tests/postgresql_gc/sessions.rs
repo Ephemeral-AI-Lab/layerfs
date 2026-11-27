@@ -19,8 +19,7 @@
 //!   refuses a compaction and a removal on another session.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};

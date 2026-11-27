@@ -12,11 +12,9 @@
 //! that waits (`put_entries`, `place_children`) is one transaction over
 //! one flight per wait (`unit`, I3b part A). Nothing is created, and
 //! contention is the one-attempt refusal.
-use super::{cleanup, flights, placement, reads, unit, writes};
-use crate::backend::{
-    postgresql::session::{connection::Session, transaction::Transaction},
-    sqlite::acquisition::statements::{signed, Failure},
-};
+use super::{accounting, cleanup, flights, placement, reads, unit, writes};
+use crate::acquisition::failure::{signed, Failure};
+use crate::backend::postgresql::session::{connection::Session, transaction::Transaction};
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
     Abandoned, Acquisition, AcquisitionResult, AcquisitionWork, Begin, Binding, Directory,
@@ -64,7 +62,7 @@ impl PostgresAcquisition {
             return Err(Failure::Stale.into());
         }
         Ok(self.session.run(writable, |tx| {
-            let (_, work) = writes::owner(tx, owner)?;
+            let (_, work) = accounting::owner(tx, owner)?;
             body(tx, work)
         })?)
     }
@@ -345,7 +343,7 @@ impl Acquisition for PostgresAcquisition {
             return Err(Failure::Stale.into());
         }
         Ok(self.session.run(true, |tx| {
-            writes::owner(tx, abandoned)?;
+            accounting::owner(tx, abandoned)?;
             Ok::<_, Failure>(cleanup::dispose(tx, abandoned, budget(rows))?.discarded)
         })?)
     }

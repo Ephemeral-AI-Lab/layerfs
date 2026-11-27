@@ -15,8 +15,7 @@
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL` for the PostgreSQL tests; NOT_RUN
 //! without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{construct_bytes, ObjectId};
 use layerfs_history::records::{

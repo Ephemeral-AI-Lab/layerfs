@@ -1,6 +1,5 @@
 //! Combined Save reservations preserve value reuse and acknowledged gaps.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, LEAF_ROW_BYTES,

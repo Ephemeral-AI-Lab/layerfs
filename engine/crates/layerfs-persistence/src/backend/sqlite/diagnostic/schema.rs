@@ -3,7 +3,8 @@ use super::super::{
     schema,
     session::{connection::SqlWork, query, rows, transaction::Transaction},
 };
-use crate::backend::error::{BackendError, Param, Record};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record};
 use std::cell::RefCell;
 
 /// The scratch database contains only the finite shipped schema, never Store

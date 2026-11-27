@@ -1,6 +1,16 @@
 //! The allocation cursor; a publication's rows are written by `objects::publish`.
 use super::super::session::transaction::Transaction;
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
+
+pub(crate) fn cursor(tx: &Transaction<'_>) -> Result<(i64, i64), BackendError> {
+    let rows = tx.query(
+        "SELECT next_pack_id,next_ordinal FROM store_policy WHERE id=1",
+        vec![],
+    )?;
+    let r = rows.first().ok_or(BackendError::Integrity)?;
+    Ok((r.get(0)?, r.get(1)?))
+}
 
 pub(crate) fn advance(tx: &Transaction<'_>, pack: i64, ordinal: i64) -> Result<(), BackendError> {
     tx.query(
@@ -37,7 +47,7 @@ pub(crate) fn allocate(
     match rows.as_slice() {
         [row] => Ok((row.get(0)?, row.get(1)?)),
         [] => {
-            super::locations::cursor(tx)?;
+            cursor(tx)?;
             Err(BackendError::Capacity)
         }
         _ => Err(BackendError::Integrity),

@@ -26,7 +26,8 @@
 //!
 //! Nothing is resent: an unknown outcome quarantines the session while its
 //! lock is still held (`Session::decided_turn`).
-use super::{fused::nonce, statements};
+use super::super::session::attempt::nonce;
+use super::statements;
 use crate::backend::error::BackendError;
 use crate::backend::postgresql::session::{
     connection::{Session, SessionKey},

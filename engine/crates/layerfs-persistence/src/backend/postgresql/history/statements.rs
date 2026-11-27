@@ -36,7 +36,7 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "gc_advisory_holder" => Ok(include_str!(
             "../../../../sql/postgresql/gc/advisory_holder.sql"
         )),
-        other => crate::backend::sqlite::session::query::history(other),
+        other => crate::backend::sqlite::history::history(other),
     }
 }
 

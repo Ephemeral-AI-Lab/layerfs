@@ -4,8 +4,7 @@
 //! Only an older recorded value is dead. A newer recorded value (a restore)
 //! and an unordered pre-release value that differs are uncertain, never dead;
 //! an uncertain owner, an expired lease and another machine's rows stay.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{

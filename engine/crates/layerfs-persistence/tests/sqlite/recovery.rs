@@ -1,6 +1,5 @@
 //! SIGKILL recovery of acknowledged units; no physical power-loss claim.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles};

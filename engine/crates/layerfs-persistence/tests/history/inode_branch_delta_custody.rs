@@ -10,8 +10,7 @@
 //!   names it. Two Saves begun together on two handles, each choosing the
 //!   same published predecessor as base, both store delta branches and both
 //!   read back, with different changes and with an identical change.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::filesystem::attributes::portable::PortableMetadata;
 use layerfs_content::filesystem::inode::{
     apply_inode_values, lookup_many, InodeReadWork, InodeTable,

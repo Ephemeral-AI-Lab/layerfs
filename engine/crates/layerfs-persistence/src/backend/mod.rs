@@ -4,7 +4,7 @@
 pub(crate) mod admission;
 pub(crate) mod error;
 pub(crate) mod postgresql;
-mod seam;
+pub(crate) mod seam;
 pub(crate) mod sqlite;
 pub(crate) use seam::ORDINAL_END;
 pub(crate) use seam::{Column, Engine, HistoryStatements, Mechanics, Ranked};

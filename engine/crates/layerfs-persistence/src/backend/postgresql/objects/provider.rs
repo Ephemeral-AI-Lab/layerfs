@@ -1,8 +1,5 @@
 //! Bounded pack publication, reads and allocation over one PostgreSQL session.
-use super::{
-    self,
-    super::session::{connection::Session, transaction::Mode},
-};
+use super::super::session::{connection::Session, transaction::Mode};
 use crate::{publication, storage::metadata, SqlWork};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
@@ -53,7 +50,7 @@ impl PostgresStorage {
     /// (#506 d); writable sessions only.
     pub fn merge_scratch(&self) -> crate::MergeScratch {
         crate::MergeScratch {
-            session: crate::backend::sqlite::merge_records::Scratch::Postgres(self.session.clone()),
+            session: crate::storage::merge_records::Scratch::Postgres(self.session.clone()),
         }
     }
     /// Whether this idle session can still serve a mount (#64): it was not
@@ -388,7 +385,7 @@ impl PackPersistence for PostgresStorage {
         }
         out.iter_mut().for_each(Vec::clear);
         self.session.read_immutable(|tx| {
-            super::super::metadata::locations::inode_values_pair(tx, ordinals, out)
+            super::super::metadata::values::inode_values_pair(tx, ordinals, out)
         })?;
         Ok(true)
     }

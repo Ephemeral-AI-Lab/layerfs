@@ -8,8 +8,7 @@
 //! re-read runs; a deleted epoch row stands in for a compacted-away project.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::{HistoryError, Missing};
 use layerfs_history::records::{

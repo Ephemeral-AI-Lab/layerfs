@@ -3,8 +3,9 @@
 //! Each unit is one transaction or single-statement read snapshot on the
 //! session storage and history share. No unit opens, attaches or creates
 //! anything, and contention is the existing one-attempt refusal.
+use crate::acquisition::failure::Failure;
 use crate::backend::{
-    sqlite::acquisition::{accounting, cleanup, reads, statements::Failure, writes},
+    sqlite::acquisition::{accounting, cleanup, reads, writes},
     Session, Transaction,
 };
 use crate::SqliteAcquisitionSchema;

@@ -1,6 +1,5 @@
 //! Actual isolated PostgreSQL authority, privilege, transport and loss matrix.
-#[path = "../support/pg/doctor.rs"]
-mod pg_doctor;
+use crate::pg_doctor;
 use layerfs_persistence::{
     diagnostic::{Options, Outcome},
     PostgresHandles,

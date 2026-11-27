@@ -15,8 +15,8 @@
 //! its binding is the per-row loop's `Changed`. Nothing in a window can raise
 //! a constraint error the loop would not reach first, so its first refusal,
 //! rows and charges are the loop's.
-use super::super::backend::sqlite::acquisition::accounting::{host_bytes, HOST_BYTES};
-use super::super::backend::sqlite::acquisition::statements::{signed, unsigned, Failure};
+use super::failure::{signed, unsigned, Failure};
+use super::payload::{host_bytes, HOST_BYTES};
 use crate::backend::error::BackendError;
 use layerfs_content::inode_leaf::InodeKind;
 use layerfs_storage::port::acquisition::Placed;

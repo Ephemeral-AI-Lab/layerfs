@@ -3,7 +3,8 @@ use super::{
     super::{emit, view::View, Observation, Options, Outcome},
     catalog::check,
 };
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use layerfs_content::{filesystem::PathName, inode_leaf::InodeKind};
 
 pub(super) fn run(
@@ -84,7 +85,7 @@ fn init(
                     .ok()
                     .and_then(|v| InodeKind::from_code(v).ok())
                     .ok_or(BackendError::Integrity)?;
-                crate::backend::sqlite::acquisition::metadata_parse(&row.get::<Vec<u8>>(4)?, kind)?;
+                crate::acquisition::payload::metadata_parse(&row.get::<Vec<u8>>(4)?, kind)?;
                 Ok(())
             })();
             if result.is_err() {

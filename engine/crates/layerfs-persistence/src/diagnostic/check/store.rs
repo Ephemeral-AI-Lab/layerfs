@@ -1,6 +1,7 @@
 //! Bounded keyset scans, including retained rows outside current branch heads.
 use super::super::{emit, reader::Reader, view::View, Observation, Options, Outcome};
-use crate::backend::error::{BackendError, Param};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use layerfs_content::{
     filesystem::{FilesystemRoot, InodeScope},
     FinalizedObject, ObjectId, ObjectRole,
@@ -8,7 +9,7 @@ use layerfs_content::{
 use layerfs_storage::{pack::layout, StorageError, StorageResult};
 use layerfs_telemetry::timer::Timing;
 
-pub(super) fn run(
+pub(crate) fn run(
     view: &dyn View,
     ceiling: i64,
     options: Options,

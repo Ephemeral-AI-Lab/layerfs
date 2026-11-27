@@ -6,8 +6,7 @@
 //! marker (which bumps the epoch in its own transaction) raced the write; a
 //! missing row means the project was deleted and compacted away. Both are
 //! `Conflict`, and the whole transaction rolls back.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::error::{HistoryError, Missing};
 use layerfs_history::records::{

@@ -9,4 +9,6 @@ mod publication;
 mod quarantine_release;
 mod recovery;
 mod reference_acquisition;
+#[path = "../support/mod.rs"]
+mod support;
 mod transaction_units;

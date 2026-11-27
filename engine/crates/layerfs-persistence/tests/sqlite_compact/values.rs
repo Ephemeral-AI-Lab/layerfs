@@ -3,8 +3,7 @@
 //! share is kept whole, every kept leaf reads back, no ordinal is handed out
 //! twice, and the verification refuses a staged file that misses a block.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     encode_whole_file_payload,

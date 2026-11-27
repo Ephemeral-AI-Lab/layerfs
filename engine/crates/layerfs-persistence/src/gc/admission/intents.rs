@@ -35,65 +35,61 @@
 //! machine sees a mount on another. Its `gc_intent` rows carry the same
 //! ownership evidence for `MountsActive`/`Busy`/`Unresolved` reports.
 
-use crate::backend::error::{BackendError, Param};
-use crate::backend::Engine;
-use crate::history::provider::HistoryProvider;
-use crate::history::statement::rows::{cell, one, unsigned};
-use crate::history::statement::transaction::Transaction;
-use crate::history::{
-    counters::position,
-    graph::{branch, layerstack},
-    index::paths,
-    params, place_evidence, place_tokens,
+pub(super) use crate::backend::{error::BackendError, seam::Param, Engine};
+pub(super) use crate::history::provider::HistoryProvider;
+pub(super) use crate::history::statement::{
+    rows::{cell, one, unsigned},
+    transaction::Transaction,
 };
-use layerfs_history::error::{
+pub(super) use crate::history::{counters::position, graph::branch, graph::layerstack};
+pub(super) use crate::history::{index::paths, params, place_evidence, place_tokens};
+pub(super) use layerfs_history::error::{
     GcHolder, HistoryError, HistoryResult, Missing, MountHolders, OpConflict,
 };
-use layerfs_history::identity::CatalogId;
-use layerfs_history::identity::{BranchId, LayerStackId};
-use layerfs_history::path::trace_key;
-use layerfs_history::records::{
+pub(super) use layerfs_history::identity::{BranchId, CatalogId, LayerStackId};
+pub(super) use layerfs_history::path::trace_key;
+pub(super) use layerfs_history::records::{
     GcAuditAfter, GcAuditPage, GcBranchAuditPage, GcDeletion, GcIntent, GcIntentDone, GcIntentKind,
     GcReconcile, GcScopeKind, PathRemovalKind, PathRemovalOutcome, PathRemovalRequest,
 };
-use layerfs_history::{Liveness, MAXIMUM_AUDIT_PAGE};
-use std::time::{SystemTime, UNIX_EPOCH};
+pub(super) use layerfs_history::{Liveness, MAXIMUM_AUDIT_PAGE};
+pub(super) use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::advisory::{session_lock, session_unlock, session_unlock_op};
+pub(super) use super::advisory::{session_lock, session_unlock, session_unlock_op};
 pub(crate) use super::authority::{liveness, reconcile_machine, release, release_done};
 pub(crate) use super::mount::{one_message, register_mount, separately_refuses};
 pub(crate) use super::place::PlaceView;
 pub use super::place::{has_place_view, with_place_view};
 pub(crate) use super::removal::{delete_stack, intents, remove_branch, remove_path};
-use crate::backend::postgresql::session::transaction::Mode;
+pub(super) use crate::backend::postgresql::session::transaction::Mode;
 
 const INSERT: &str = "gc_intent_insert";
 const RELEASE: &str = "gc_intent_release";
-const RELEASE_DONE: &str = "gc_intent_release_done";
+pub(super) const RELEASE_DONE: &str = "gc_intent_release_done";
 const UNCERTAIN: &str = "gc_intent_uncertain";
-const LIST: &str = "gc_intent_list";
+pub(super) const LIST: &str = "gc_intent_list";
 const OPS_BRANCH: &str = "gc_intent_ops_branch";
 const OPS_PROJECT: &str = "gc_intent_ops_project";
 const OPS_STORE: &str = "gc_intent_ops_store";
-const ALL_BRANCH: &str = "gc_intent_all_branch";
-const ALL_PROJECT: &str = "gc_intent_all_project";
+pub(super) const ALL_BRANCH: &str = "gc_intent_all_branch";
+pub(super) const ALL_PROJECT: &str = "gc_intent_all_project";
 const ALL_STORE: &str = "gc_intent_all_store";
-const MACHINE_INTENTS: &str = "gc_intent_list_machine";
+pub(super) const MACHINE_INTENTS: &str = "gc_intent_list_machine";
 const DONE: &str = "gc_intent_done";
 const DONE_BRANCH: &str = "gc_intent_done_branch";
-const DONE_CAP: &str = "gc_intent_done_cap";
-const DONE_NEWEST: &str = "gc_intent_done_newest";
+pub(super) const DONE_CAP: &str = "gc_intent_done_cap";
+pub(super) const DONE_NEWEST: &str = "gc_intent_done_newest";
 
 const EPOCH_LOCK: &str = "gc_epoch_lock";
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
 const LOCK_XACT_EXCLUSIVE: &str = "gc_lock_xact_exclusive";
 
 /// True when this provider is backed by PostgreSQL.
-fn postgres(provider: &HistoryProvider) -> bool {
+pub(super) fn postgres(provider: &HistoryProvider) -> bool {
     matches!(provider.engine, Engine::Postgres(_))
 }
 
-fn now_ms() -> i64 {
+pub(super) fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| {
@@ -101,7 +97,7 @@ fn now_ms() -> i64 {
         })
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(super) fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
@@ -155,7 +151,7 @@ fn workspace_of(text: Option<String>) -> HistoryResult<Option<[u8; 32]>> {
 /// Decodes the fifteen columns every intent query returns, in order: op_id,
 /// kind, scope_kind, scope_id, workspace, sandbox, machine, project, branch,
 /// owner_runtime, owner_boot, state, uncertain, phase, evidence (place tokens).
-fn intent_row(row: &crate::backend::error::Record) -> HistoryResult<GcIntent> {
+fn intent_row(row: &crate::backend::seam::Record) -> HistoryResult<GcIntent> {
     let op_id: Vec<u8> = cell(row, 0)?;
     let op_id: [u8; 16] = op_id
         .as_slice()
@@ -186,7 +182,7 @@ fn intent_row(row: &crate::backend::error::Record) -> HistoryResult<GcIntent> {
 
 /// Decodes one retained `done` row: op_id, kind, scope_kind, scope_id,
 /// project, branch, machine, sandbox, phase, evidence, updated_ms.
-fn done_row(row: &crate::backend::error::Record) -> HistoryResult<GcIntentDone> {
+fn done_row(row: &crate::backend::seam::Record) -> HistoryResult<GcIntentDone> {
     let op_id: Vec<u8> = cell(row, 0)?;
     let op_id: [u8; 16] = op_id
         .as_slice()
@@ -216,7 +212,7 @@ fn entity(intent: &GcIntent) -> String {
     }
 }
 
-fn holder(intent: &GcIntent) -> GcHolder {
+pub(super) fn holder(intent: &GcIntent) -> GcHolder {
     GcHolder {
         kind: intent.kind,
         entity: entity(intent),
@@ -227,7 +223,7 @@ fn holder(intent: &GcIntent) -> GcHolder {
     }
 }
 
-fn conflict(intent: &GcIntent) -> OpConflict {
+pub(super) fn conflict(intent: &GcIntent) -> OpConflict {
     OpConflict::new(
         intent.kind,
         intent.scope_kind,
@@ -337,7 +333,7 @@ impl OwnerView {
     ///   reported as a holder with its `sandbox`, `machine` and `op`, until
     ///   its owner releases it or an operator settles it with
     ///   `gc_mark_uncertain` and `gc_release`.
-    fn dead(&self, intent: &GcIntent, shared_store: bool) -> bool {
+    pub(crate) fn dead(&self, intent: &GcIntent, shared_store: bool) -> bool {
         self.owner_dead(
             intent.owner_runtime.as_deref(),
             intent.owner_boot.as_deref(),
@@ -396,7 +392,7 @@ impl OwnerView {
 /// deleted and does not hold the scope. A place the view finds uncertain is
 /// kept and reported `Unresolved`; an uncertain row stays until its owner
 /// settles it.
-fn settle_dead(
+pub(super) fn settle_dead(
     tx: &Transaction<'_>,
     found: Vec<GcIntent>,
     shared_store: bool,
@@ -420,7 +416,7 @@ fn settle_dead(
 /// The refusal a non-empty conflict set reports: an uncertain owner is
 /// `Unresolved`, a live mount is `MountsActive`, any other live operation is
 /// `Busy`.
-fn classify(found: &[GcIntent]) -> HistoryError {
+pub(super) fn classify(found: &[GcIntent]) -> HistoryError {
     if let Some(dead) = found.iter().find(|intent| intent.uncertain) {
         return HistoryError::Unresolved(Box::new(conflict(dead)));
     }
@@ -440,10 +436,10 @@ fn classify(found: &[GcIntent]) -> HistoryError {
     }
 }
 
-fn query(
+pub(super) fn query(
     tx: &Transaction<'_>,
     key: &str,
-    params: Vec<crate::backend::error::Param>,
+    params: Vec<crate::backend::seam::Param>,
 ) -> HistoryResult<Vec<GcIntent>> {
     tx.query(key, params)?.iter().map(intent_row).collect()
 }
@@ -453,7 +449,10 @@ fn query(
 /// two merges conflict only when they name the same target Branch (#776 G3).
 /// A merge into another Branch is left out before settling, so a dead one is
 /// settled by the next mount, removal or compaction instead.
-fn conflicts_for(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<Vec<GcIntent>> {
+pub(super) fn conflicts_for(
+    tx: &Transaction<'_>,
+    intent: &GcIntent,
+) -> HistoryResult<Vec<GcIntent>> {
     let mut found = scope_conflicts(tx, intent)?;
     if intent.kind == GcIntentKind::Merge && intent.branch.is_some() {
         found.retain(|other| {
@@ -494,7 +493,7 @@ fn scope_conflicts(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<Vec
     }
 }
 
-fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> {
+pub(super) fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> {
     if intent.kind != GcIntentKind::Mount {
         return Ok(());
     }
@@ -520,7 +519,7 @@ fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> 
 }
 
 /// One registration inside the caller's write transaction.
-pub(super) fn register_in(
+pub(crate) fn register_in(
     tx: &Transaction<'_>,
     intent: &GcIntent,
     postgres: bool,
@@ -582,7 +581,7 @@ pub(super) fn register_in(
 /// A Branch-scoped removal keeps the project key shared and takes only the
 /// Branch key exclusively; a project-scoped one takes the project key
 /// exclusively.
-fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>, bool)> {
+pub(super) fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>, bool)> {
     let scope_shared = intent.kind.shared();
     let store_shared = intent.scope_kind != GcScopeKind::Store || scope_shared;
     let mut keys = vec![(1u8, catalog.as_slice().to_vec(), store_shared)];
@@ -606,7 +605,7 @@ pub(crate) fn store_advisory_key(catalog: CatalogId) -> i64 {
     let id = catalog.as_slice().to_vec();
     advisory_key(catalog, 1, &id)
 }
-fn advisory_key(catalog: CatalogId, kind: u8, id: &[u8]) -> i64 {
+pub(super) fn advisory_key(catalog: CatalogId, kind: u8, id: &[u8]) -> i64 {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/advisory/v1\0");
     hasher.update(catalog.as_slice());
@@ -639,7 +638,11 @@ fn xact_lock(tx: &Transaction<'_>, key: i64, shared: bool) -> HistoryResult<()> 
 
 /// The intents one advisory-key scope names, in the vocabulary the shared
 /// lock failure needs to report a holder.
-fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
+pub(super) fn scope_intents(
+    tx: &Transaction<'_>,
+    kind: u8,
+    id: &[u8],
+) -> HistoryResult<Vec<GcIntent>> {
     match kind {
         1 => query(tx, ALL_STORE, params![EMPTY_OP.to_vec()]),
         2 => query(
@@ -661,7 +664,10 @@ fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec
 type AdvisoryHolder = (i64, Option<String>, Option<String>);
 
 /// The live session holding one advisory key.
-fn advisory_holder(tx: &Transaction<'_>, key: i64) -> HistoryResult<Option<AdvisoryHolder>> {
+pub(super) fn advisory_holder(
+    tx: &Transaction<'_>,
+    key: i64,
+) -> HistoryResult<Option<AdvisoryHolder>> {
     // PostgreSQL-only text: `statement()` resolves it through the PG set.
     let rows = tx.query("gc_advisory_holder", params![key])?;
     let Some(row) = rows.first() else {
@@ -715,7 +721,7 @@ fn lock_refusal(
 }
 
 /// PostgreSQL: the Store key a removal shares with every mount, taken first.
-fn lock_store_shared(tx: &Transaction<'_>, catalog: CatalogId) -> HistoryResult<()> {
+pub(super) fn lock_store_shared(tx: &Transaction<'_>, catalog: CatalogId) -> HistoryResult<()> {
     let key = advisory_key(catalog, 1, catalog.as_slice());
     match xact_lock(tx, key, true) {
         Ok(()) => Ok(()),
@@ -724,7 +730,7 @@ fn lock_store_shared(tx: &Transaction<'_>, catalog: CatalogId) -> HistoryResult<
 }
 
 /// PostgreSQL: one project or Branch key.
-fn lock_scope(
+pub(super) fn lock_scope(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     kind: u8,
@@ -749,7 +755,11 @@ fn lock_scope(
 /// the winner's commit, then reads (and bumps) the value the winner wrote.
 /// SQLite's single `BEGIN IMMEDIATE` writer already excludes another marker
 /// transaction, so there the statement only proves the row exists.
-fn epoch_hold(tx: &Transaction<'_>, postgres: bool, stack: LayerStackId) -> HistoryResult<()> {
+pub(super) fn epoch_hold(
+    tx: &Transaction<'_>,
+    postgres: bool,
+    stack: LayerStackId,
+) -> HistoryResult<()> {
     if !postgres {
         return Ok(());
     }
@@ -760,7 +770,7 @@ fn epoch_hold(tx: &Transaction<'_>, postgres: bool, stack: LayerStackId) -> Hist
     Ok(())
 }
 
-fn release_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<()> {
+pub(super) fn release_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<()> {
     tx.execute(RELEASE, [op_id.as_slice()])?;
     Ok(())
 }

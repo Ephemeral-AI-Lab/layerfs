@@ -2,8 +2,7 @@
 //! `backend/sqlite/compact/`: product source holds no tests (the
 //! product-boundary guard).
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_history::HistoryError;
 use layerfs_persistence::internals::{io_error, peak_temp_bytes, receipt};

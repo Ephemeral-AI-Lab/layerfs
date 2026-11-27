@@ -31,8 +31,7 @@
 //! dispositions tracked on layerfs-project#52 win. Where a row is
 //! cross-backend, its PostgreSQL half is deferred by name.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::records::{FileDigest, GcIntent, GcIntentKind, GcScopeKind};
@@ -54,7 +53,7 @@ use support::Temp;
 const BINDING: &[u8] = b"sqlite-compact-matrix-binding";
 const REPORT_RELATIVE: &str = "core/docs/issues/project-41/gc-t12.3a-sqlite-matrix-report.md";
 const MEASURE_RELATIVE: &str =
-    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json";
+    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_measure.json";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
