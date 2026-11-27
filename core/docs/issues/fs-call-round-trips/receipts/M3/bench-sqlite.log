@@ -1,0 +1,115 @@
+=== sqlite fs_calls reads 2026-11-27T02:41:16Z load { 7.07 6.35 7.27 } bin target/debug/deps/fs_call_round_trips-9eab8e660a198019 sha256 698b33db584cdebc src 5af53d4667
+
+running 1 test
+test fs_calls ... FS_RT {"arm":"sqlite","case":"setup.init_nested_1k","method":"project.init","entries":1024,"ms":40.0,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":349,"transactions":34,"returned_rows":9396},"server":null,"logical":28806,"walked":28806,"stored":24234,"canonical":155884,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"setup.history_100_writes_total","ms":255.9,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":3890,"transactions":506,"returned_rows":2909}}
+FS_RT {"arm":"sqlite","case":"stat.depth3","method":"fs.stat","outcome":"ok","ms":0.70,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":35,"transactions":5,"returned_rows":28},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":35,"transactions":5,"returned_rows":28},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"stat.depth7","method":"fs.stat","outcome":"ok","ms":0.52,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":30,"transactions":5,"returned_rows":24},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":30,"transactions":5,"returned_rows":24},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"stat.root","method":"fs.stat","outcome":"ok","ms":0.28,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":21,"transactions":5,"returned_rows":14},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":21,"transactions":5,"returned_rows":14},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"read.small_depth3","method":"fs.read","outcome":"ok","ms":0.40,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":23,"transactions":5,"returned_rows":16},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":23,"transactions":5,"returned_rows":16},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"read.2000_lines","method":"fs.read","outcome":"ok","ms":0.58,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":24,"transactions":5,"returned_rows":17},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":24,"transactions":5,"returned_rows":17},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"read.lines_100_200","method":"fs.read","outcome":"ok","ms":0.35,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":22,"transactions":5,"returned_rows":15},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":22,"transactions":5,"returned_rows":15},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"list.dir_100","method":"fs.list","outcome":"ok","ms":0.55,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":25,"transactions":5,"returned_rows":20},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":25,"transactions":5,"returned_rows":20},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"list.root","method":"fs.list","outcome":"ok","ms":0.27,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":21,"transactions":5,"returned_rows":14},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":21,"transactions":5,"returned_rows":14},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"glob.dir_100","method":"fs.glob","outcome":"ok","ms":0.44,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":22,"transactions":5,"returned_rows":16},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":22,"transactions":5,"returned_rows":16},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"glob.tree","method":"fs.glob","outcome":"ok","ms":0.60,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":26,"transactions":5,"returned_rows":20},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":26,"transactions":5,"returned_rows":20},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"grep.one_file_dir","method":"fs.grep","outcome":"ok","ms":0.41,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":22,"transactions":5,"returned_rows":15},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":22,"transactions":5,"returned_rows":15},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"grep.tree_1k","method":"fs.grep","outcome":"ok","ms":8.81,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":113,"transactions":5,"returned_rows":1101},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":113,"transactions":5,"returned_rows":1101},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"diff_files.h10_vs_h99","method":"fs.diff_files","outcome":"Text","ms":1.13,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":78,"transactions":15,"returned_rows":50},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":78,"transactions":15,"returned_rows":50},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.51s
+
+        1.21 real         0.26 user         0.28 sys
+            30015488  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                4877  page reclaims
+                  15  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  73  voluntary context switches
+                1930  involuntary context switches
+          5394117528  instructions retired
+          1879889485  cycles elapsed
+            15532512  peak memory footprint
+run_bounded: exit 0 after 1.2 s
+exit 0
+=== sqlite fs_calls history 2026-11-27T02:41:18Z load { 7.07 6.35 7.27 } bin target/debug/deps/fs_call_round_trips-9eab8e660a198019 sha256 698b33db584cdebc src 5af53d4667
+
+running 1 test
+test fs_calls ... FS_RT {"arm":"sqlite","case":"setup.init_nested_1k","method":"project.init","entries":1024,"ms":34.1,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":349,"transactions":34,"returned_rows":9395},"server":null,"logical":28806,"walked":28806,"stored":24213,"canonical":155884,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"setup.history_100_writes_total","ms":258.6,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":3890,"transactions":506,"returned_rows":2909}}
+FS_RT {"arm":"sqlite","case":"blame.h10","method":"fs.blame","outcome":"ok","ms":3.99,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":132,"transactions":24,"returned_rows":94},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":132,"transactions":24,"returned_rows":94},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"blame.h100","method":"fs.blame","outcome":"ok","ms":35.88,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":1094,"transactions":205,"returned_rows":774},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":1094,"transactions":205,"returned_rows":774},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"revision.h100","method":"fs.revision","outcome":"ok","ms":33.66,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":769,"transactions":203,"returned_rows":452},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":769,"transactions":203,"returned_rows":452},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"blame.h20","method":"fs.blame","outcome":"ok","ms":7.53,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":167,"transactions":44,"returned_rows":98},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":167,"transactions":44,"returned_rows":98},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"revision.h10","method":"fs.revision","outcome":"ok","ms":3.80,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":106,"transactions":29,"returned_rows":57},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":106,"transactions":29,"returned_rows":57},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"revision.h20","method":"fs.revision","outcome":"ok","ms":7.39,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":188,"transactions":51,"returned_rows":104},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":188,"transactions":51,"returned_rows":104},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0}},"server":null,"load1":"7.07"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.56s
+
+        0.56 real         0.32 user         0.25 sys
+            30605312  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                3883  page reclaims
+                   8  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  71  voluntary context switches
+                1614  involuntary context switches
+          6554257142  instructions retired
+          2018758347  cycles elapsed
+            16089544  peak memory footprint
+run_bounded: exit 0 after 0.6 s
+exit 0
+=== sqlite fs_calls writes 2026-11-27T02:41:18Z load { 7.07 6.35 7.27 } bin target/debug/deps/fs_call_round_trips-9eab8e660a198019 sha256 698b33db584cdebc src 5af53d4667
+
+running 1 test
+test fs_calls ... FS_RT {"arm":"sqlite","case":"setup.init_nested_1k","method":"project.init","entries":1024,"ms":37.4,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":349,"transactions":34,"returned_rows":9394},"server":null,"logical":28806,"walked":28806,"stored":24225,"canonical":155884,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"setup.history_100_writes_total","ms":260.4,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":3890,"transactions":506,"returned_rows":2909}}
+FS_RT {"arm":"sqlite","case":"write.new_file","method":"fs.write","outcome":"Committed","ms":3.88,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":60,"transactions":10,"returned_rows":48},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":42,"transactions":8,"returned_rows":26},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":18,"transactions":2,"returned_rows":22}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"write.overwrite","method":"fs.write","outcome":"Committed","ms":3.00,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":37,"transactions":5,"returned_rows":77},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":26,"transactions":3,"returned_rows":20},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":11,"transactions":2,"returned_rows":57}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"edit.2000_lines","method":"fs.edit","outcome":"Committed","ms":2.89,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":35,"transactions":5,"returned_rows":25},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":25,"transactions":3,"returned_rows":19},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":10,"transactions":2,"returned_rows":6}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"mkdir","method":"fs.mkdir","outcome":"Committed","ms":3.19,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":52,"transactions":9,"returned_rows":39},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":37,"transactions":7,"returned_rows":22},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":15,"transactions":2,"returned_rows":17}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"cp.file","method":"fs.cp","outcome":"Committed","ms":3.44,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":47,"transactions":9,"returned_rows":29},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":35,"transactions":7,"returned_rows":20},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":12,"transactions":2,"returned_rows":9}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"mv.file","method":"fs.mv","outcome":"Committed","ms":2.44,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":43,"transactions":9,"returned_rows":23},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":35,"transactions":7,"returned_rows":19},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":8,"transactions":2,"returned_rows":4}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"rm.file","method":"fs.rm","outcome":"Committed","ms":2.99,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":41,"transactions":8,"returned_rows":22},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":33,"transactions":6,"returned_rows":18},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":8,"transactions":2,"returned_rows":4}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"apply.10_writes","method":"fs.apply","outcome":"Committed","ms":5.89,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":57,"transactions":9,"returned_rows":54},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":39,"transactions":7,"returned_rows":31},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":18,"transactions":2,"returned_rows":23}},"server":null,"load1":"7.07"}
+FS_RT {"arm":"sqlite","case":"rm.dir_100_recursive","method":"fs.rm","outcome":"Committed","ms":18.78,"client":{"connects":0,"round_trips":0,"prepares":0,"statements":63,"transactions":9,"returned_rows":255},"roles":{"writer":{"connects":0,"round_trips":0,"prepares":0,"statements":43,"transactions":7,"returned_rows":129},"control":{"connects":0,"round_trips":0,"prepares":0,"statements":0,"transactions":0,"returned_rows":0},"workspace":{"connects":0,"round_trips":0,"prepares":0,"statements":20,"transactions":2,"returned_rows":126}},"server":null,"load1":"7.07"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.53s
+
+        0.53 real         0.28 user         0.28 sys
+            30343168  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                4355  page reclaims
+                  11  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  77  voluntary context switches
+                2311  involuntary context switches
+          5657865497  instructions retired
+          1943000828  cycles elapsed
+            15876552  peak memory footprint
+run_bounded: exit 0 after 0.6 s
+exit 0

@@ -1,0 +1,11 @@
+   Compiling layerfs-store-service v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/rt818-rollout-c3dbae/engine/crates/layerfs-store-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.90s
+     Running tests/sdk_write_round_trips.rs (target/debug/deps/sdk_write_round_trips-9bf561dc18be2664)
+
+running 2 tests
+test postgresql_write_counts ... ok
+test sqlite_write_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.34s
+
+run_bounded: exit 0 after 6.0 s

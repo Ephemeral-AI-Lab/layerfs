@@ -717,3 +717,23 @@ cache, launcher records) were left alone.
     not built, recorded.**
   Sweeps `sdk_history_fault_rh_{drop,kill}` now cover the live per-object path
   (green). Equivalence, refusal order, both guards green.
+
+## M3 (merged at `5af53d4667`) — benchmark `receipts/M3/REPORT.md`
+
+Production LOC from the M2 record `2c440193d5` (229,872; core 46,302, engine
+108,420) to M3 `5af53d4667` (232,428; core 47,056, engine 110,222): delta
++2,556 (core +754, engine +1,802, control 0, api 0); per-merge crate deltas are
+in each merge commit's LOC block. Every row ran directly at +10 ms.
+Headline PG trips baseline → M3 (+10 ms): blame h100 2,325 → 51 (31.2 s →
+632 ms), revision h100 3,890 → 52 (50.9 s → 831 ms), blame h10 267 → 37, diff
+88 → 35, Init 10k nested 10,952 → 209 (≈141 s → 8.4 s), flat 31,042 → 241 (≈386 s
+→ 9.0 s), Init 1k flat 2,246 → 100.
+
+SPEC §3 exit at M3: reads, grep 1k, recursive rm, Init ≤ 250, rm file, budget,
+SQLite rule and outcomes **met**; blame met on warm pins. **Not met:**
+revision (Layer-chain rows not windowed), diff_files ≤ 15 (per-side row
+re-reads), mkdir/cp/mv ≤ 26 (non-fused Commit path; the staging-limit lever is
+an owner deferral), and the ±10% latency band on 7 rows at +10 ms (new at M3:
+statements equal server top-level calls, so time without statements;
+unattributed — needs a per-statement timing trace). PG local Init 10k time
+(5.9 / 6.0 s) is server foreign-key work, not trips.

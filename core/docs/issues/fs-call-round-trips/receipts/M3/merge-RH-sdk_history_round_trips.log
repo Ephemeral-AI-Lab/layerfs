@@ -1,0 +1,15 @@
+   Compiling layerfs-persistence v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/rt818-rollout-c3dbae/engine/crates/layerfs-persistence)
+   Compiling layerfs-workspace v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/rt818-rollout-c3dbae/engine/crates/layerfs-workspace)
+   Compiling layerfs-bridge v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/rt818-rollout-c3dbae/engine/crates/layerfs-bridge)
+   Compiling layerfs-store-service v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/rt818-rollout-c3dbae/engine/crates/layerfs-store-service)
+   Compiling layerfs-project v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/rt818-rollout-c3dbae/engine/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 22.04s
+     Running tests/sdk_history_round_trips.rs (target/debug/deps/sdk_history_round_trips-1431b882328fa2ee)
+
+running 2 tests
+test postgresql_history_counts ... ok
+test sqlite_history_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.48s
+
+run_bounded: exit 0 after 26.6 s

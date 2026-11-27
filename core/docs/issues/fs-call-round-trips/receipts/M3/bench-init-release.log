@@ -1,0 +1,352 @@
+=== sqlite init_nested_1k  2026-11-27T02:42:35Z load { 7.00 6.34 7.18 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_nested_1k ... FS_RT {"arm":"sqlite","case":"init.nested_1k","method":"project.init","entries":1011,"ms":31.7,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":288,"transactions":24,"returned_rows":9276},"server":null,"logical":9900,"walked":9900,"stored":22156,"canonical":137268,"load1":"7.00"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.19s
+
+        0.74 real         0.03 user         0.16 sys
+            22331392  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                1892  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  21  voluntary context switches
+                 270  involuntary context switches
+          2079293328  instructions retired
+           689411653  cycles elapsed
+            12403144  peak memory footprint
+run_bounded: exit 0 after 0.8 s
+exit 0
+=== sqlite init_flat_1k  2026-11-27T02:42:35Z load { 7.00 6.34 7.18 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_flat_1k ... FS_RT {"arm":"sqlite","case":"init.flat_1k","method":"project.init","entries":1002,"ms":36.8,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":360,"transactions":25,"returned_rows":12267},"server":null,"logical":10890,"walked":10890,"stored":24735,"canonical":137359,"load1":"7.00"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.18s
+
+        0.19 real         0.03 user         0.16 sys
+            22511616  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                1897  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  19  voluntary context switches
+                 405  involuntary context switches
+          1988413870  instructions retired
+           726820676  cycles elapsed
+            12517808  peak memory footprint
+run_bounded: exit 0 after 0.2 s
+exit 0
+=== sqlite init_nested_10k  2026-11-27T02:42:36Z load { 7.00 6.34 7.18 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_nested_10k ... FS_RT {"arm":"sqlite","case":"init.nested_10k","method":"project.init","entries":10101,"ms":267.7,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":1834,"transactions":57,"returned_rows":92327},"server":null,"logical":108000,"walked":108000,"stored":225957,"canonical":1379418,"load1":"7.72"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 1.54s
+
+        1.54 real         0.30 user         1.56 sys
+            34422784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2626  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  81  voluntary context switches
+                1734  involuntary context switches
+         21468428670  instructions retired
+          6647015045  cycles elapsed
+            24429000  peak memory footprint
+run_bounded: exit 0 after 1.6 s
+exit 0
+=== sqlite init_flat_10k  2026-11-27T02:42:38Z load { 7.72 6.50 7.23 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_flat_10k ... FS_RT {"arm":"sqlite","case":"init.flat_10k","method":"project.init","entries":10002,"ms":351.2,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":2497,"transactions":60,"returned_rows":122165},"server":null,"logical":118890,"walked":118890,"stored":253488,"canonical":1380691,"load1":"7.72"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 1.64s
+
+        1.64 real         0.34 user         1.69 sys
+            33816576  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2585  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 145  voluntary context switches
+                2383  involuntary context switches
+         21265190002  instructions retired
+          7255469954  cycles elapsed
+            23773640  peak memory footprint
+run_bounded: exit 0 after 1.7 s
+exit 0
+=== pg init_nested_1k  2026-11-27T02:42:39Z load { 7.72 6.50 7.23 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_nested_1k ... FS_RT {"arm":"pg","case":"init.nested_1k","method":"project.init","entries":1011,"ms":263.8,"client_storage":{"connects":0,"round_trips":93,"prepares":43,"statements":103,"transactions":18,"returned_rows":4143},"server":{"toplevel_calls":238,"nested_calls":3053,"evicted":false,"distinct":56,"top":[[18,"COMMIT"],[18,"SET LOCAL search_path TO lfs818_init_1399"],[16,"BEGIN ISOLATION LEVEL READ COMMITTED"],[16,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[16,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[16,"SET LOCAL lock_timeout TO 30000"]]},"logical":9900,"walked":9900,"stored":22153,"canonical":137268,"load1":"7.72"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.48s
+
+        0.48 real         0.02 user         0.15 sys
+            25329664  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2063  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 181  messages sent
+                 835  messages received
+                   0  signals received
+                   1  voluntary context switches
+                1301  involuntary context switches
+          1885509745  instructions retired
+           655068818  cycles elapsed
+            15860168  peak memory footprint
+run_bounded: exit 0 after 0.5 s
+exit 0
+=== pg init_flat_1k  2026-11-27T02:42:40Z load { 7.72 6.50 7.23 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_flat_1k ... FS_RT {"arm":"pg","case":"init.flat_1k","method":"project.init","entries":1002,"ms":297.3,"client_storage":{"connects":0,"round_trips":100,"prepares":44,"statements":112,"transactions":19,"returned_rows":6125},"server":{"toplevel_calls":254,"nested_calls":3039,"evicted":false,"distinct":58,"top":[[19,"COMMIT"],[19,"SET LOCAL search_path TO lfs818_init_1426"],[17,"BEGIN ISOLATION LEVEL READ COMMITTED"],[17,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[17,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[17,"SET LOCAL lock_timeout TO 30000"]]},"logical":10890,"walked":10890,"stored":24726,"canonical":137359,"load1":"7.72"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.52s
+
+        0.52 real         0.02 user         0.18 sys
+            25493504  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2079  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 187  messages sent
+                 862  messages received
+                   0  signals received
+                   2  voluntary context switches
+                1370  involuntary context switches
+          1896225294  instructions retired
+           736307132  cycles elapsed
+            16024008  peak memory footprint
+run_bounded: exit 0 after 0.5 s
+exit 0
+=== pg init_nested_10k  2026-11-27T02:42:41Z load { 7.72 6.50 7.23 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_nested_10k ... FS_RT {"arm":"pg","case":"init.nested_10k","method":"project.init","entries":10101,"ms":5897.7,"client_storage":{"connects":0,"round_trips":209,"prepares":43,"statements":287,"transactions":33,"returned_rows":40612},"server":{"toplevel_calls":531,"nested_calls":30418,"evicted":false,"distinct":56,"top":[[33,"COMMIT"],[33,"SET LOCAL search_path TO lfs818_init_1456"],[31,"BEGIN ISOLATION LEVEL READ COMMITTED"],[31,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[31,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[31,"SET LOCAL lock_timeout TO 30000"]]},"logical":108000,"walked":108000,"stored":225978,"canonical":1379418,"load1":"7.81"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 10.85s
+
+       10.85 real         0.44 user         1.80 sys
+            38813696  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2889  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+               10618  messages sent
+               12818  messages received
+                   0  signals received
+                   2  voluntary context switches
+               34925  involuntary context switches
+         21438547814  instructions retired
+          7510786015  cycles elapsed
+            29311432  peak memory footprint
+run_bounded: exit 0 after 10.9 s
+exit 0
+=== pg init_flat_10k  2026-11-27T02:42:52Z load { 7.90 6.61 7.26 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_flat_10k ... FS_RT {"arm":"pg","case":"init.flat_10k","method":"project.init","entries":10002,"ms":6000.6,"client_storage":{"connects":0,"round_trips":241,"prepares":44,"statements":327,"transactions":36,"returned_rows":60340},"server":{"toplevel_calls":592,"nested_calls":30267,"evicted":false,"distinct":58,"top":[[36,"COMMIT"],[36,"SET LOCAL search_path TO lfs818_init_1516"],[34,"BEGIN ISOLATION LEVEL READ COMMITTED"],[34,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[34,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[34,"SET LOCAL lock_timeout TO 30000"]]},"logical":118890,"walked":118890,"stored":253480,"canonical":1380691,"load1":"8.02"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 11.24s
+
+       11.24 real         0.47 user         2.05 sys
+            40452096  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                3000  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+               10638  messages sent
+               13274  messages received
+                   0  signals received
+                  15  voluntary context switches
+               35780  involuntary context switches
+         21814257120  instructions retired
+          8439350606  cycles elapsed
+            30933448  peak memory footprint
+run_bounded: exit 0 after 11.3 s
+exit 0
+=== pg10 init_nested_1k  2026-11-27T02:43:03Z load { 8.02 6.67 7.27 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_nested_1k ... FS_RT {"case":"calibration.select1","delay_ms":10,"min_us":10439,"median_us":11055,"p90_us":15948}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":243,"median_us":367,"p90_us":748}
+FS_RT {"arm":"pg10","case":"init.nested_1k","method":"project.init","entries":1011,"ms":1419.9,"client_storage":{"connects":0,"round_trips":93,"prepares":43,"statements":103,"transactions":18,"returned_rows":4143},"server":{"toplevel_calls":238,"nested_calls":3053,"evicted":false,"distinct":56,"top":[[18,"COMMIT"],[18,"SET LOCAL search_path TO lfs818_init_1595"],[16,"BEGIN ISOLATION LEVEL READ COMMITTED"],[16,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[16,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[16,"SET LOCAL lock_timeout TO 30000"]]},"logical":9900,"walked":9900,"stored":22154,"canonical":137268,"load1":"7.65"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":185,"median_us":373,"p90_us":922}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 11.36s
+
+       11.36 real         0.08 user         0.23 sys
+            31277056  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                8767  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 830  messages sent
+                1408  messages received
+                  59  signals received
+                  20  voluntary context switches
+                4907  involuntary context switches
+          2115818941  instructions retired
+           749677449  cycles elapsed
+            16843184  peak memory footprint
+run_bounded: exit 0 after 11.4 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
+=== pg10 init_flat_1k  2026-11-27T02:43:17Z load { 7.76 6.67 7.26 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_flat_1k ... FS_RT {"case":"calibration.select1","delay_ms":10,"min_us":10368,"median_us":11026,"p90_us":12021}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":235,"median_us":384,"p90_us":992}
+FS_RT {"arm":"pg10","case":"init.flat_1k","method":"project.init","entries":1002,"ms":1386.2,"client_storage":{"connects":0,"round_trips":100,"prepares":44,"statements":112,"transactions":19,"returned_rows":6125},"server":{"toplevel_calls":254,"nested_calls":3039,"evicted":false,"distinct":58,"top":[[19,"COMMIT"],[19,"SET LOCAL search_path TO lfs818_init_1673"],[17,"BEGIN ISOLATION LEVEL READ COMMITTED"],[17,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[17,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[17,"SET LOCAL lock_timeout TO 30000"]]},"logical":10890,"walked":10890,"stored":24733,"canonical":137359,"load1":"7.54"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":184,"median_us":377,"p90_us":1052}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 11.14s
+
+       11.14 real         0.09 user         0.23 sys
+            31195136  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                8885  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 836  messages sent
+                1446  messages received
+                  60  signals received
+                  26  voluntary context switches
+                4890  involuntary context switches
+          1969860165  instructions retired
+           755732775  cycles elapsed
+            18366920  peak memory footprint
+run_bounded: exit 0 after 11.2 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
+=== pg10 init_nested_10k  2026-11-27T02:43:30Z load { 7.33 6.62 7.23 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_nested_10k ... FS_RT {"case":"calibration.select1","delay_ms":10,"min_us":10373,"median_us":11007,"p90_us":11990}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":186,"median_us":362,"p90_us":851}
+FS_RT {"arm":"pg10","case":"init.nested_10k","method":"project.init","entries":10101,"ms":8416.6,"client_storage":{"connects":0,"round_trips":209,"prepares":43,"statements":287,"transactions":33,"returned_rows":40612},"server":{"toplevel_calls":531,"nested_calls":30418,"evicted":false,"distinct":56,"top":[[33,"COMMIT"],[33,"SET LOCAL search_path TO lfs818_init_1751"],[31,"BEGIN ISOLATION LEVEL READ COMMITTED"],[31,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[31,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[31,"SET LOCAL lock_timeout TO 30000"]]},"logical":108000,"walked":108000,"stored":225963,"canonical":1379418,"load1":"7.60"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":210,"median_us":326,"p90_us":852}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 24.43s
+
+       24.44 real         0.49 user         1.91 sys
+            41435136  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                9535  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+               11261  messages sent
+               13112  messages received
+                  38  signals received
+                  14  voluntary context switches
+               38535  involuntary context switches
+         21851810797  instructions retired
+          7580896103  cycles elapsed
+            31932872  peak memory footprint
+run_bounded: exit 0 after 24.5 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
+=== pg10 init_flat_10k  2026-11-27T02:43:58Z load { 7.40 6.74 7.26 } bin target/release/deps/fs_call_round_trips-5ae2897f0c20b069 sha256 e75a74a4cc33ccf1 src 5af53d4667
+
+running 1 test
+test init_flat_10k ... FS_RT {"case":"calibration.select1","delay_ms":10,"min_us":10463,"median_us":11021,"p90_us":12011}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":203,"median_us":338,"p90_us":716}
+FS_RT {"arm":"pg10","case":"init.flat_10k","method":"project.init","entries":10002,"ms":9007.1,"client_storage":{"connects":0,"round_trips":241,"prepares":44,"statements":327,"transactions":36,"returned_rows":60340},"server":{"toplevel_calls":592,"nested_calls":30267,"evicted":false,"distinct":58,"top":[[36,"COMMIT"],[36,"SET LOCAL search_path TO lfs818_init_1926"],[34,"BEGIN ISOLATION LEVEL READ COMMITTED"],[34,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[34,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[34,"SET LOCAL lock_timeout TO 30000"]]},"logical":118890,"walked":118890,"stored":253479,"canonical":1380691,"load1":"7.04"}
+FS_RT {"case":"calibration.select1","delay_ms":0,"min_us":185,"median_us":301,"p90_us":499}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 23.25s
+
+       23.25 real         0.41 user         1.92 sys
+            40402944  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                9557  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+               11282  messages sent
+               13326  messages received
+                  33  signals received
+                  11  voluntary context switches
+               37523  involuntary context switches
+         21772573644  instructions retired
+          7859760049  cycles elapsed
+            30900704  peak memory footprint
+run_bounded: exit 0 after 23.3 s
+exit 0
+netem after: qdisc noqueue 0: root refcnt 2 
