@@ -157,3 +157,55 @@ Production LOC: 231,175 -> 231,300 (delta +125)
   api      10,516 -> 10,516 (0)
   reference absent (retired R9c; last counted 65,417 at tree 498dd1917812)
   Method: tools/production_loc.py --detail on parent dec2216e23 (git archive) and the staged tree
+
+## S3 — a deleted pack row fails only the objects located in it (M3 review)
+
+Base: orchestrator tip `f4936e01c8` (fast-forward). RH's ignored
+`a_missing_pack_refuses_only_where_the_walk_reaches_it`
+(`sdk_history_versions_rh.rs`).
+
+**Prediction (written before the code).** Cause: PostgreSQL `locate_chains`
+(`metadata/chains.rs`) refuses the whole page (`BackendError::Integrity` ->
+`Malformed`) when a located row's pack row did not come back; storage cannot
+tie that to an id without a second locate. SQLite's locate joins the pack and
+omits the row (that id's own `ObjectMissing`), so SQLite is unaffected.
+Fix (port, provider, storage): a per-object demand locates with
+`locate_chains_each`, the same `chain_roots.sql` statement, whose answer lists
+the located ids whose pack is gone instead of failing; each such id is that
+id's `Io(Malformed)` (a lone point read's locate fails the same way), never
+cached as located or absent and not located again; a root whose chain reaches
+it as a base gets the same error (its lone read's level locate fails so).
+Trips and statements: 0 delta on every pin and on healthy per-object demands
+(same statement, same count); the damaged window now answers where the lone
+walk answers. No existing caller changes (`locate_chains` still refuses the
+call).
+
+**Built.** Port `PackPersistence::locate_chains_each(roots, rows, chains,
+unpacked)`, default `locate_chains` with nothing listed (SQLite). PostgreSQL
+`locate_root_packs` takes an optional `unpacked` list: `locate_chains` passes
+none (unchanged refusal), `locate_chains_each` passes one, so a located row
+whose pack row is absent is listed and skipped, the others locate and chain as
+before. Storage: `Fetch::locate_page` picks the call (per-object demand or
+not); `Refused.unpacked` holds the listed ids for the demand; `Fetch::unpacked`
+gives such an id `Io(Malformed)` in `read_each`, `chains_each` (an unpacked
+base fails its dependents) and `length::read_each` (which now holds the
+per-object guard itself). `inode_values_found` moved to `read/values.rs`
+(fetch.rs line ceiling; relocation, no change), and the per-object state (`Refused`, the `PerObject` guard and its accessors) moved from hints.rs to `read/per_object.rs` (hints.rs would have reached 1,032 lines; relocation). After that move `per_object_reads` 10/10 and `sdk_history_versions_rh` 5/5 were run again at the final tree.
+
+**Measured (once each, PostgreSQL `rt818_s`).** Receipts in
+`receipts/S3/`. `sdk_history_versions_rh` 5/5 with the un-ignored
+`a_missing_pack_refuses_only_where_the_walk_reaches_it`;
+`sdk_history_fault_rh_drop` 1/1, `_kill` 1/1;
+`sdk_round_trip_equivalence_seeded` 2/2; `method_refusal_order` 2/2;
+`sdk_read_round_trips` 2/2 and `sdk_history_round_trips` 2/2 (SQLite and
+PostgreSQL pins unchanged, matching the 0-delta prediction);
+`postgresql_round_trips` 1/2, the recorded pre-existing
+`workspace_reader_open` failure (11 round trips < 12 statements, see lanes W
+and I), unchanged by S3. Storage `per_object_reads` 10/10 (new
+`a_deleted_pack_row_fails_only_the_objects_located_in_it_and_their_dependents`,
+every route, equal to point reads, no request to the deleted pack).
+Persistence `postgresql_locate_each` 1/1: the deleted pack's row is listed in
+`unpacked`, the other row locates in its own pack, `locate_chains` still
+refuses `Malformed`, a healthy page answers alike either way. Clippy
+`-D warnings` and fmt clean on layerfs-storage, layerfs-persistence,
+layerfs-store-service.

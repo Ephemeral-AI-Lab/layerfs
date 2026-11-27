@@ -9,9 +9,11 @@ mod joined;
 mod length;
 mod locator_cache;
 mod objects;
+mod per_object;
 pub(crate) mod prefetch;
 mod provider;
 mod units;
+mod values;
 
 pub use captured::CapturedLocators;
 pub(crate) use captured::LocatorMode;

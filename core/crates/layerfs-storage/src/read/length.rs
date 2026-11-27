@@ -73,11 +73,16 @@ pub(super) fn read_each(
         });
     }
     storage.source.begin_demand(true);
+    let _per_object = storage.source.per_object();
     storage.source.locate(ids)?;
     let mut lengths = Vec::with_capacity(ids.len());
     let mut states = Vec::new();
     let mut positions = Vec::new();
     for (position, id) in ids.iter().enumerate() {
+        if let Some(error) = storage.source.unpacked(*id) {
+            lengths.push(Err(error));
+            continue;
+        }
         let Some(location) = storage.source.location(*id, i64::MAX)? else {
             lengths.push(Err(StorageError::ObjectMissing(*id)));
             continue;

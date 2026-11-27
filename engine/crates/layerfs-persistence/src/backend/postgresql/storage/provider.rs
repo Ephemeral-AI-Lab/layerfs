@@ -24,6 +24,7 @@ impl PostgresStorage {
         rows: &mut Vec<LocatedObject>,
         chains: &mut LocatedChains,
         joined: Option<(&[i64], &mut Vec<PersistedPack>)>,
+        unpacked: Option<&mut Vec<ObjectId>>,
     ) -> Result<(), PersistenceError> {
         rows.clear();
         chains.chains.clear();
@@ -36,7 +37,7 @@ impl PostgresStorage {
         let kept = (&self.session.chain_packs, incarnation);
         self.session.read_immutable(|tx| {
             super::super::metadata::chains::locate_chains(
-                tx, &policy, kept, roots, rows, chains, joined,
+                tx, &policy, kept, roots, rows, chains, joined, unpacked,
             )
         })
     }
@@ -149,7 +150,7 @@ impl PackPersistence for PostgresStorage {
         rows: &mut Vec<LocatedObject>,
         chains: &mut LocatedChains,
     ) -> Result<(), PersistenceError> {
-        self.locate_root_packs(roots, rows, chains, None)
+        self.locate_root_packs(roots, rows, chains, None, None)
     }
     fn locate_chains_with_packs(
         &self,
@@ -160,7 +161,19 @@ impl PackPersistence for PostgresStorage {
         bodies: &mut Vec<PersistedPack>,
     ) -> Result<(), PersistenceError> {
         bodies.clear();
-        self.locate_root_packs(roots, rows, chains, Some((resident, bodies)))
+        self.locate_root_packs(roots, rows, chains, Some((resident, bodies)), None)
+    }
+    /// The same statements as `locate_chains`; a located root whose pack row
+    /// is gone is listed in `unpacked` instead of refusing the call (#818 H5).
+    fn locate_chains_each(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        unpacked: &mut Vec<ObjectId>,
+    ) -> Result<(), PersistenceError> {
+        unpacked.clear();
+        self.locate_root_packs(roots, rows, chains, None, Some(unpacked))
     }
     /// Group reads (#758): every read's bytes in one statement per 2 MiB of
     /// returned bytes, through the multi-range `substring` reader

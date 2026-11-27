@@ -166,6 +166,20 @@ pub trait PackPersistence: Send + Sync {
         bodies.clear();
         self.locate_chains(roots, rows, chains)
     }
+    /// [`Self::locate_chains`] for a per-object demand (#818 H5): a located
+    /// root whose pack row is gone goes to `unpacked` (that id's failure)
+    /// instead of failing the call; every other row and chain is answered as
+    /// `locate_chains` answers it. Default: `locate_chains`, reporting none.
+    fn locate_chains_each(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        unpacked: &mut Vec<ObjectId>,
+    ) -> Result<(), PersistenceError> {
+        unpacked.clear();
+        self.locate_chains(roots, rows, chains)
+    }
     /// Whole encoded groups of several packs, one answer per read in request
     /// order, at most DEPENDENCY_PACK_CACHE_BYTES requested in all. `Ranges`
     /// answers are unauthenticated physical units, as `read_scoped_pack`

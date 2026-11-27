@@ -18,7 +18,7 @@ use layerfs_storage::{
     location::{InodeValueRow, LocatedChains, LocatedObject, SignatureRow},
     policy::StoragePolicy,
     port::*,
-    ReadCache, Storage, StorageResult,
+    ReadCache, Storage, StorageError, StorageResult,
 };
 use metadata::MemoryMetadata;
 use std::{
@@ -35,6 +35,8 @@ struct Faulty {
     fail_at: Option<usize>,
     /// Takes packs up to 256 KiB whole, as PostgreSQL.
     whole: bool,
+    /// This pack's row is gone: a locate naming it refuses the call.
+    deleted: Option<i64>,
     log: Mutex<Vec<(&'static str, Vec<i64>)>>,
 }
 impl Faulty {
@@ -44,6 +46,7 @@ impl Faulty {
             missing: None,
             fail_at: None,
             whole: false,
+            deleted: None,
             log: Mutex::new(Vec::new()),
         }
     }
@@ -64,6 +67,35 @@ impl Faulty {
         }
         Ok(())
     }
+    /// A chain locate as PostgreSQL answers it with the `deleted` pack row
+    /// gone: a row located in it is listed in `unpacked`, a chain through it
+    /// is left out, and its directory is not returned.
+    fn locate_unpacked(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        unpacked: &mut Vec<ObjectId>,
+    ) -> Result<(), PersistenceError> {
+        self.call("locate_chains", &[])?;
+        unpacked.clear();
+        self.inner.locate_chains(roots, rows, chains)?;
+        let Some(deleted) = self.deleted else {
+            return Ok(());
+        };
+        unpacked.extend(
+            rows.iter()
+                .filter(|row| row.pack.pack_id == deleted)
+                .map(|row| row.location.object_id),
+        );
+        rows.retain(|row| row.pack.pack_id != deleted);
+        chains.chains.retain(|chain| {
+            !unpacked.contains(&chain.root)
+                && chain.members.iter().all(|m| m.pack.pack_id != deleted)
+        });
+        chains.directories.retain(|d| d.pack.pack_id != deleted);
+        Ok(())
+    }
     fn requests_of(&self, pack: i64) -> usize {
         let log = self.log.lock().unwrap();
         log.iter()
@@ -81,7 +113,11 @@ impl PackPersistence for Faulty {
         out: &mut Vec<LocatedObject>,
     ) -> Result<(), PersistenceError> {
         self.call("locate", &[])?;
-        self.inner.locate(ids, out)
+        self.inner.locate(ids, out)?;
+        match out.iter().any(|row| Some(row.pack.pack_id) == self.deleted) {
+            true => Err(PersistenceError::Malformed),
+            false => Ok(()),
+        }
     }
     fn locate_chains(
         &self,
@@ -89,8 +125,21 @@ impl PackPersistence for Faulty {
         rows: &mut Vec<LocatedObject>,
         chains: &mut LocatedChains,
     ) -> Result<(), PersistenceError> {
-        self.call("locate_chains", &[])?;
-        self.inner.locate_chains(roots, rows, chains)
+        let mut unpacked = Vec::new();
+        self.locate_unpacked(roots, rows, chains, &mut unpacked)?;
+        match unpacked.is_empty() {
+            true => Ok(()),
+            false => Err(PersistenceError::Malformed),
+        }
+    }
+    fn locate_chains_each(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        unpacked: &mut Vec<ObjectId>,
+    ) -> Result<(), PersistenceError> {
+        self.locate_unpacked(roots, rows, chains, unpacked)
     }
     fn read_groups(
         &self,
@@ -210,9 +259,13 @@ fn faulty(memory: &MemoryMetadata, route: Route) -> Faulty {
     faulty
 }
 
+/// `missing`: that pack's body is refused; a negative id `-p`: pack `p`'s
+/// row is gone too, as PostgreSQL after `DELETE FROM pack` (its objects
+/// still have location rows).
 fn port(memory: &MemoryMetadata, route: Route, missing: Option<i64>) -> Arc<Faulty> {
     let mut faulty = faulty(memory, route);
-    faulty.missing = missing;
+    faulty.missing = missing.map(i64::abs);
+    faulty.deleted = missing.filter(|id| *id < 0).map(i64::abs);
     Arc::new(faulty)
 }
 
@@ -457,6 +510,37 @@ fn a_missing_pack_fails_only_its_objects_and_is_requested_once() {
             });
             assert!(shared, "{route:?}: refused inside a read of several packs");
         }
+    }
+}
+
+#[test]
+fn a_deleted_pack_row_fails_only_the_objects_located_in_it_and_their_dependents() {
+    let memory = ordinary_history();
+    let ids = stored(&memory);
+    let edges = based(&memory);
+    let pack = {
+        let state = memory.state.lock().unwrap();
+        let (_, base) = edges
+            .into_iter()
+            .find(|(child, base)| state.objects[child].pack_id != state.objects[base].pack_id)
+            .unwrap();
+        state.objects[&base].pack_id
+    };
+    for route in ROUTES {
+        // Its objects fail with the locate's refusal, their dependents
+        // with their base's, the rest are served: as each read alone.
+        let failed = check(&memory, route, Some(-pack), &ids);
+        assert!(failed >= 2, "{route:?}");
+        let (results, port) = each(&memory, route, Some(-pack), &ids);
+        let refused = format!("{:?}", StorageError::from(PersistenceError::Malformed));
+        let state = memory.state.lock().unwrap();
+        for (id, result) in ids.iter().zip(&results) {
+            if state.objects[id].pack_id == pack {
+                assert_eq!(result, &refused, "{route:?} {id}");
+            }
+        }
+        drop(state);
+        assert_eq!(port.requests_of(pack), 0, "{route:?}: never read");
     }
 }
 

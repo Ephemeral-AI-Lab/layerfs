@@ -334,13 +334,11 @@ fn a_damaged_pack_refuses_only_where_the_walk_reaches_it() {
     damaged_version("versions_pack_body_rh", Damage::PackBody);
 }
 
-/// Open (#818 M3 review): with the pack row gone, the storage reader's
-/// locate step (`Fetch::locate`, through the persistence locate of the
-/// window's whole page) fails the per-object demand as a whole
-/// (`Io(Malformed)`), so the window refuses where the lone walk answers.
-/// The fix belongs to the storage reader's per-object locate.
+/// With the pack row gone (#818 M3 review), the per-object demand's locate
+/// (`locate_chains_each`) gives each object located in it that object's own
+/// `Io(Malformed)`, the refusal its lone locate meets, and the rest of the
+/// window is read: the window refuses only where the lone walk does.
 #[test]
-#[ignore = "storage locate fails a per-object demand whole on a missing pack row"]
 fn a_missing_pack_refuses_only_where_the_walk_reaches_it() {
     damaged_version("versions_pack_rh", Damage::Pack);
 }

@@ -262,6 +262,10 @@ impl ReadState {
         // Located roots with their output slots; an absent one is its own result.
         let mut roots = Vec::with_capacity(ids.len());
         for (position, id) in ids.iter().enumerate() {
+            if let Some(error) = source.unpacked(*id) {
+                out[position] = Some(Err(error));
+                continue;
+            }
             match source.location(*id, i64::MAX)? {
                 Some(row) => roots.push((position, row)),
                 None => out[position] = Some(Err(StorageError::ObjectMissing(*id))),
