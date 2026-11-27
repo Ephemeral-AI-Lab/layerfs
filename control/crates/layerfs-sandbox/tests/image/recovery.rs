@@ -339,6 +339,10 @@ fn build_gnu_sparse_tar(
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "Linux only: macOS's host machine runs Sandboxes as host processes and holds no images"
+)]
 fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish() {
     if !docker_available() {
         eprintln!("NOT_RUN: docker unavailable");
@@ -474,6 +478,10 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "Linux only: macOS's host machine runs Sandboxes as host processes and holds no images"
+)]
 fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_use() {
     let scratch = Scratch::new("lp176-rec-prune");
     let home = scratch.base.join("home");
@@ -674,6 +682,10 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "Linux only: macOS's host machine runs Sandboxes as host processes and holds no images"
+)]
 fn interrupted_publish_with_renamed_dir_and_missing_sidecar_recovers_and_prunes() {
     let scratch = Scratch::new("lp176-rec-publish");
     let home = scratch.base.join("home");
@@ -949,6 +961,10 @@ fn ambiguous_ref_is_refused_and_moved_ref_never_selects_old_image() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "Linux only: needs GNU tar --sparse (macOS tar is bsdtar)"
+)]
 fn sparse_files_expand_with_exact_bytes_and_hardlink_to_dropped_target_fails() {
     let scratch = Scratch::new("lp176-rec-sparse-hl");
 
@@ -1142,6 +1158,10 @@ fn sparse_files_expand_with_exact_bytes_and_hardlink_to_dropped_target_fails() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "Linux only: macOS's host machine runs Sandboxes as host processes and holds no images"
+)]
 fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
     let scratch = Scratch::new("lp176-rec-meta");
     let home = scratch.base.join("home");
@@ -1394,6 +1414,10 @@ impl Drop for ModeGuard {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "Linux only: macOS's host machine runs Sandboxes as host processes and holds no images"
+)]
 fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others() {
     use std::os::unix::fs::symlink;
 
