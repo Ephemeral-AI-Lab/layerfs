@@ -1,7 +1,0 @@
-//! Responsibility-scoped implementation modules and reexports.
-pub(crate) mod config;
-pub(crate) mod handles;
-pub(crate) mod open;
-pub(crate) mod postgresql;
-pub(crate) mod seal;
-pub(crate) mod selection;

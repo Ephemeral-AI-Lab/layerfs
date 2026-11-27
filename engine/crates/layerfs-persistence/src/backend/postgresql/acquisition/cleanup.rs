@@ -15,13 +15,10 @@
 //! any refusal rolls back to its savepoint and the release commits as
 //! before, leaving the dead rows to autovacuum. The identity continues, so
 //! an operation id (and epoch) is never reused.
+use super::accounting::credit;
 use super::reads::get;
-use super::writes::credit;
-use crate::backend::{
-    postgresql::session::transaction::Transaction,
-    records::BackendError,
-    sqlite::acquisition::statements::{signed, unsigned, Failure},
-};
+use crate::acquisition::failure::{signed, unsigned, Failure};
+use crate::backend::{error::BackendError, postgresql::session::transaction::Transaction};
 use layerfs_storage::port::acquisition::{
     Abandoned, AcquisitionWork, Discarded, Disposal, Owner, Phase,
 };

@@ -35,7 +35,7 @@ use layerfs_history::{
     CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, HistoryCatalog,
     HistoryCatalogConfig, HistoryName, LayerStackId, StackInitialization,
 };
-use layerfs_persistence::compact_metrics::CompactMetricsCapture;
+use layerfs_persistence::gc::metrics::CompactMetricsCapture;
 use layerfs_persistence::{
     CompactFailpoint, CompactRequest, PostgresHandles, PostgresSelection, SqlWork,
     SynchronousCommit,

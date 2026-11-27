@@ -1,0 +1,13 @@
+mod chain;
+mod fused_commit_upgraded;
+mod guards;
+mod lineage_backfill;
+mod lineage_backfill_measure;
+mod old_format_columns;
+mod old_format_open;
+mod postgresql;
+mod postgresql_wire;
+mod sqlite;
+mod sqlite_crash;
+#[path = "../support/mod.rs"]
+mod support;

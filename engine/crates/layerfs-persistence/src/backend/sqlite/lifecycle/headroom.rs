@@ -6,7 +6,7 @@
 //! while a fixed margin is still free leaves room for small metadata writes
 //! and for later cleanup. The check is best effort: other writers share the
 //! disk, and a miss still ends in SQLite's own full-disk refusal.
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use std::path::Path;
 
 /// Free bytes a pack batch must leave on the Store's filesystem.

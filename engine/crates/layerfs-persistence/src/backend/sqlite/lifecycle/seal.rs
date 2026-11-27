@@ -4,7 +4,7 @@ use crate::backend::sqlite::lifecycle::identity::FileIdentity;
 use crate::backend::sqlite::session::connection::{Session, State};
 use crate::backend::sqlite::session::query;
 use crate::backend::sqlite::session::rows;
-use crate::{backend::records::BackendError, SealedStore};
+use crate::{backend::error::BackendError, SealedStore};
 use layerfs_storage::port::PersistenceError;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};

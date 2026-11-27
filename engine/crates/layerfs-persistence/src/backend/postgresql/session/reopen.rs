@@ -59,8 +59,8 @@
 //! relies on the closed connection.
 use super::connection::{LostBackend, Session, SessionKey, State};
 use super::driver::Driver;
+use crate::backend::error::BackendError;
 use crate::backend::postgresql::history::{mount, statements};
-use crate::backend::records::BackendError;
 use postgres::SimpleQueryMessage;
 use std::{
     cell::{Cell, RefCell},

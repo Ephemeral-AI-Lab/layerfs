@@ -1,0 +1,129 @@
+//! A Normal session's checkpoint thread (owner approval,
+//! 2026-11-07; Normal since 2026-11-17): COMMIT does not checkpoint
+//! (`wal_autocheckpoint=0`); a log longer than 4 MiB is copied into the Store
+//! file while the session stays open, with no idle checkpoint, seal or close.
+//! Routine passes sync with plain fsync; the idle checkpoint and the last
+//! close run on the session's connection with `checkpoint_fullfsync=1`.
+#![cfg(any(target_os = "macos", target_os = "linux"))]
+use crate::support;
+
+use layerfs_content::{construct_bytes, read_range};
+use layerfs_history::HistoryCatalogConfig;
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile, StoreFile};
+use layerfs_storage::{Storage, StoragePolicy};
+use layerfs_telemetry::timer::Timing;
+use std::path::Path;
+use std::time::{Duration, Instant};
+use support::Temp;
+
+const BYTES: usize = 24 << 20;
+
+fn create(path: &Path, profile: SqlitePersistenceProfile) -> SqliteHandles {
+    SqliteHandles::create(
+        PersistenceConfig::sqlite(path).with_sqlite_profile(profile),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: b"background-checkpoint".to_vec(),
+            cursor_key: [47; 32],
+            incarnation: 1,
+        },
+    )
+    .unwrap()
+}
+
+/// Incompressible bytes, so the Store file must grow by about their length.
+fn random(len: usize) -> Vec<u8> {
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut out = Vec::with_capacity(len);
+    while out.len() < len {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        out.extend_from_slice(&x.to_le_bytes());
+    }
+    out.truncate(len);
+    out
+}
+
+fn size(path: &Path) -> u64 {
+    std::fs::metadata(path).map_or(0, |m| m.len())
+}
+
+/// The Store profile: the session and its checkpoint thread run at
+/// `synchronous=1` (NORMAL), and the log is still copied off the commit path.
+#[test]
+fn a_normal_session_copies_its_log_with_normal_synchronization() {
+    copied(SqlitePersistenceProfile::Normal, 1);
+}
+
+fn copied(profile: SqlitePersistenceProfile, synchronous: i64) {
+    let temp = Temp::new("background-checkpoint");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path, profile);
+    assert_eq!(handles.profile().persistence, profile);
+    assert_eq!(handles.profile().journal_mode, "wal");
+    assert_eq!(handles.profile().synchronous, synchronous);
+    assert_eq!(handles.profile().fullfsync, 0);
+    assert_eq!(handles.profile().wal_autocheckpoint, 0);
+    // Routine passes run on the checkpoint thread's connection with plain
+    // fsync; the idle TRUNCATE and the last close run on the session's own
+    // connection with F_FULLFSYNC on macOS (finding #11, narrowed by the
+    // owner 2026-11-23). Neither connection changes its setting after open.
+    assert_eq!(handles.profile().checkpoint_fullfsync, 1);
+    assert_eq!(
+        handles.profile().checkpoint_thread_checkpoint_fullfsync,
+        Some(0)
+    );
+    let storage = Storage::new(handles.storage.clone()).unwrap();
+    let bytes = random(BYTES);
+    let save = storage.begin_save().unwrap();
+    let root = Timing::disabled("construct", |scope| {
+        construct_bytes(
+            storage.policy().construction(),
+            &storage.policy().construction().capacities(),
+            &bytes,
+            &mut save.sink(),
+            scope.child("content"),
+        )
+    })
+    .0
+    .unwrap()
+    .root;
+    save.finish().unwrap();
+    // Readiness wait, bounded: the thread copies the log while nothing else
+    // runs; no idle checkpoint, seal or close is called here.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while size(&path) < BYTES as u64 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        size(&path) >= BYTES as u64,
+        "the Store file holds the saved pages: {} bytes",
+        size(&path)
+    );
+    let mut read = Vec::new();
+    Timing::disabled("read", |scope| {
+        read_range(
+            &storage.reader().unwrap(),
+            root,
+            0..BYTES as u64,
+            &mut read,
+            scope.child("read"),
+        )
+    })
+    .0
+    .unwrap();
+    assert!(read == bytes);
+    // The routine passes above copied the frames but never shrink the log:
+    // PASSIVE neither truncates nor deletes it. The idle checkpoint does, and
+    // only the session's own connection (checkpoint_fullfsync=1) runs it.
+    let mut wal = path.as_os_str().to_os_string();
+    wal.push("-wal");
+    assert!(size(Path::new(&wal)) > 0, "a routine pass leaves the log");
+    assert!(StoreFile::checkpoint(&*handles.storage).unwrap());
+    assert_eq!(size(Path::new(&wal)), 0, "the idle checkpoint truncates it");
+    drop(storage);
+    drop(handles);
+    // The last close leaves no log behind.
+    assert_eq!(size(Path::new(&wal)), 0);
+}

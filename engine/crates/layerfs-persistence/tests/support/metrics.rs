@@ -5,7 +5,7 @@
 //! both read a `CompactMetricsCapture`, so the closed label dimensions and
 //! values are checked once here for both backends.
 
-use layerfs_persistence::compact_metrics::CompactMetrics;
+use layerfs_persistence::gc::metrics::CompactMetrics;
 
 /// The value of one sample, or `None` when this run did not emit it.
 pub fn metric(metrics: &CompactMetrics, name: &str, labels: &[(&str, &str)]) -> Option<u64> {

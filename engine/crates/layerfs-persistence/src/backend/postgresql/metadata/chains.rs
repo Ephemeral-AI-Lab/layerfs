@@ -17,7 +17,8 @@
 //! is not stored; it is never repaired or guessed. A FULL root (`''`) has no
 //! chain.
 use super::super::session::transaction::Transaction;
-use crate::backend::records::{pack_info, BackendError};
+use crate::backend::error::BackendError;
+use crate::backend::seam::pack_info;
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{
     location::{
@@ -36,11 +37,11 @@ use std::collections::{BTreeMap, BTreeSet};
 /// canonical_length, group_number, record_number, pack_id, ancestors`),
 /// rows of kind 1 their packs (`pack_id, directory, domain, digest,
 /// length` from column 6). The bench's B5/B7/B8 rows take the same file.
-pub(crate) const ROOTS: &str = include_str!("../../../../sql/postgresql/chain_roots.sql");
+pub(crate) const ROOTS: &str = include_str!("../../../../sql/postgresql/metadata/chain/roots.sql");
 /// Statement 2, `{schema}` substituted; `$1` member pack ids.
-pub(crate) const PACKS: &str = include_str!("../../../../sql/postgresql/chain_packs.sql");
+pub(crate) const PACKS: &str = include_str!("../../../../sql/postgresql/metadata/chain/packs.sql");
 /// Bounded whole-pack candidates in the same root flight as the locators.
-const WHOLE_PACKS: &str = include_str!("../../../../sql/postgresql/chain_whole_packs.sql");
+const WHOLE_PACKS: &str = include_str!("../../../../sql/postgresql/metadata/chain/whole_packs.sql");
 
 /// Pack rows (descriptor and directory copy) chain locates returned, kept by
 /// one session so statement 2 reads only member packs it has not seen: rows

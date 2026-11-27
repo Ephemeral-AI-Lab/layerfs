@@ -3,23 +3,24 @@
 //!
 //! Nothing in the product calls these; they exist so an integration test can
 //! cover the same §7/§8 helpers the product source used to test in place.
+pub use crate::backend::error::BackendError;
 pub use crate::backend::postgresql::compact::{decode_kept_waste, encode_kept_waste, report};
 pub use crate::backend::postgresql::compact::{
     effective_rank, standby_satisfied, sync_name, sync_rank, takes_rebuild_path, Replica,
 };
-pub use crate::backend::postgresql::probe::{
+pub use crate::backend::postgresql::objects::probe::{
     reads as postgresql_reads, Outcome as PostgresReadOutcome, Read as PostgresRead,
 };
 pub use crate::backend::postgresql::session::pipeline::{
     Refusal as PipelineRefusal, Reply as PipelineReply, Request as PipelineRequest, UnitStatements,
 };
 pub use crate::backend::postgresql::session::rows::sqlstate;
-pub use crate::backend::records::BackendError;
 pub use crate::backend::sqlite::compact::{
-    cap_delta_references, io_error, peak_temp_bytes, receipt, reserve, source_mmap, staged_windows,
-    trim, verify_inode_blocks, windows, PackLengths, PackScan, Rewritten, StagedLocators, Window,
-    DELTA_BASE_REFERENCES_CAP, GAP_BYTES, SRC_MMAP_BYTES, WINDOW_BYTES,
+    io_error, peak_temp_bytes, receipt, reserve, source_mmap, staged_windows, trim,
+    verify_inode_blocks, windows, PackLengths, PackScan, Rewritten, StagedLocators, Window,
+    GAP_BYTES, SRC_MMAP_BYTES, WINDOW_BYTES,
 };
+pub use crate::gc::compact::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};
 pub use crate::history::spill::{Space, BUDGET_BYTES, LEAST_BUDGET_BYTES};
 pub use crate::upgrade::chain::{
     check_chain as upgrade_check_chain, plan as upgrade_plan, run as upgrade_run,
@@ -65,7 +66,7 @@ pub fn decode_value_block(
     last: u32,
     body: &[u8],
 ) -> Result<Vec<[u8; layerfs_content::inode_leaf::INODE_VALUE_BYTES]>, BackendError> {
-    crate::blocks::values::decode(first, last, body)
+    crate::storage::blocks::values::decode(first, last, body)
 }
 
 /// One binding hint block's hints (`blocks::hints::decode`).
@@ -73,7 +74,7 @@ pub fn decode_hint_block(
     group: i64,
     body: &[u8],
 ) -> Result<Vec<layerfs_history::records::BindingHint>, BackendError> {
-    crate::blocks::hints::decode(group, body)
+    crate::storage::blocks::hints::decode(group, body)
 }
 
 /// One pipelined flight on the session of `handles`
@@ -193,7 +194,7 @@ pub fn mount_one_message(
     history: &crate::HistoryProvider,
     intent: &layerfs_history::records::GcIntent,
 ) -> layerfs_history::HistoryResult<bool> {
-    crate::history::admission::one_message(history, intent, None).map(|read| read.is_some())
+    crate::gc::admission::intents::one_message(history, intent, None).map(|read| read.is_some())
 }
 
 /// Whether the statement-by-statement registration's checks refuse
@@ -203,7 +204,7 @@ pub fn mount_separately_refuses(
     history: &crate::HistoryProvider,
     intent: &layerfs_history::records::GcIntent,
 ) -> layerfs_history::HistoryResult<bool> {
-    crate::history::admission::separately_refuses(history, intent)
+    crate::gc::admission::intents::separately_refuses(history, intent)
 }
 
 /// One registration statement by statement, as a refusal of the one
@@ -212,7 +213,7 @@ pub fn register_separately(
     history: &crate::HistoryProvider,
     intent: &layerfs_history::records::GcIntent,
 ) -> layerfs_history::HistoryResult<()> {
-    crate::history::admission::register_separately(history, intent)
+    crate::gc::admission::intents::register_separately(history, intent)
 }
 
 /// The PostgreSQL chain's steps, oldest first, and its floor.

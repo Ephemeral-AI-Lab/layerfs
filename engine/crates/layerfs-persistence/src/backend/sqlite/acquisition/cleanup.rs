@@ -5,10 +5,11 @@
 //! shared tables and indexes are never dropped.
 use super::accounting::{credit, owner};
 use super::statements::{
-    signed, unsigned, Failure, ABANDONED, DISCARD_ENTRIES, DISCARD_ENTRY_KEYS, DISCARD_ENTRY_TAIL,
-    DISCARD_HOST_FILE, DISCARD_HOST_FILE_KEYS, DISCARD_HOST_FILE_TAIL, RELEASE, RELEASE_ABANDONED,
+    ABANDONED, DISCARD_ENTRIES, DISCARD_ENTRY_KEYS, DISCARD_ENTRY_TAIL, DISCARD_HOST_FILE,
+    DISCARD_HOST_FILE_KEYS, DISCARD_HOST_FILE_TAIL, RELEASE, RELEASE_ABANDONED,
 };
-use crate::backend::{records::BackendError, Transaction};
+use crate::acquisition::failure::{signed, unsigned, Failure};
+use crate::backend::{error::BackendError, Transaction};
 use layerfs_storage::port::acquisition::{
     Abandoned, AcquisitionWork, Discarded, Disposal, Owner, Phase,
 };

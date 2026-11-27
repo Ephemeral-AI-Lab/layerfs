@@ -1,12 +1,16 @@
-//! The engine seam (#506): the opened engine behind a history provider and
-//! the two traits through which shared semantics reach an engine.
-use super::records::{BackendError, Param, Record};
+//! The engine seam (#506): the opened engine behind a history provider, the
+//! two traits through which shared semantics reach an engine, and the owned
+//! bounded scalar inputs/results that cross it, independent of database
+//! engines.
+use super::error::BackendError;
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::PackInfo,
     location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
+    location::{PackDomain, PackInfo},
+    policy,
     port::{
-        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistedPack, PersistenceError,
+        AcquiredPackRead, ObjectKey, PackRange, PackReadChoice, PackReadPlan, PersistedPack,
+        PersistenceError,
     },
     StoragePolicy,
 };
@@ -275,4 +279,106 @@ pub(crate) fn ranges_by_acquisition<M: Mechanics + ?Sized>(
         );
     }
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Param {
+    I64(i64),
+    Text(String),
+    Bytes(Vec<u8>),
+    OptionalBytes(Option<Vec<u8>>),
+    OptionalText(Option<String>),
+}
+#[derive(Clone, Debug)]
+pub(crate) enum Value {
+    Null,
+    Integer(i64),
+    Text(String),
+    Bytes(Vec<u8>),
+}
+pub(crate) struct Record {
+    pub(crate) cells: Vec<Value>,
+}
+pub(crate) trait FromValue: Sized {
+    fn from_value(value: &Value) -> Option<Self>;
+}
+impl FromValue for i64 {
+    fn from_value(v: &Value) -> Option<Self> {
+        if let Value::Integer(v) = v {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+}
+impl FromValue for Vec<u8> {
+    fn from_value(v: &Value) -> Option<Self> {
+        if let Value::Bytes(v) = v {
+            Some(v.clone())
+        } else {
+            None
+        }
+    }
+}
+impl FromValue for String {
+    fn from_value(v: &Value) -> Option<Self> {
+        if let Value::Text(v) = v {
+            Some(v.clone())
+        } else {
+            None
+        }
+    }
+}
+impl<T: FromValue> FromValue for Option<T> {
+    fn from_value(v: &Value) -> Option<Self> {
+        match v {
+            Value::Null => Some(None),
+            _ => T::from_value(v).map(Some),
+        }
+    }
+}
+impl Record {
+    pub(crate) fn take_bytes(&mut self, index: usize) -> Result<Vec<u8>, BackendError> {
+        match self
+            .cells
+            .get_mut(index)
+            .map(|v| std::mem::replace(v, Value::Null))
+        {
+            Some(Value::Bytes(v)) => Ok(v),
+            _ => Err(BackendError::Integrity),
+        }
+    }
+    pub(crate) fn get<T: FromValue>(&self, index: usize) -> Result<T, BackendError> {
+        self.cells
+            .get(index)
+            .and_then(T::from_value)
+            .ok_or(BackendError::Integrity)
+    }
+}
+/// One checked pack descriptor from its stored columns, on either engine.
+pub(crate) fn pack_info(
+    pack_id: i64,
+    domain: i64,
+    digest: &[u8],
+    length: i64,
+) -> Result<PackInfo, BackendError> {
+    let domain = match domain {
+        0 => PackDomain::Metadata,
+        1 => PackDomain::Payload,
+        _ => return Err(BackendError::Integrity),
+    };
+    let digest = digest.try_into().map_err(|_| BackendError::Integrity)?;
+    let length = usize::try_from(length).map_err(|_| BackendError::Integrity)?;
+    if pack_id <= 0
+        || !(32..=policy::SINGLETON_PACK_LIMIT).contains(&length)
+        || domain == PackDomain::Metadata && length > policy::PACK_LIMIT
+    {
+        return Err(BackendError::Integrity);
+    }
+    Ok(PackInfo {
+        pack_id,
+        domain,
+        key: ObjectKey::from_bytes(digest),
+        length,
+    })
 }

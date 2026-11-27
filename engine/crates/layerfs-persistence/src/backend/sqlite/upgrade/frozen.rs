@@ -170,7 +170,7 @@ pub(crate) fn recognize_rows(
     let same = live.iter().zip(fresh).zip(migrated).all(|((l, f), m)| {
         l.0 == f.0
             && l.1 == f.1
-            && (l.2 == f.2 || crate::backend::sqlite::schema_diagnostic::same_schema(&l.2, &m.2))
+            && (l.2 == f.2 || crate::backend::sqlite::diagnostic::schema::same_schema(&l.2, &m.2))
     });
     same.then_some("d-appended")
 }

@@ -27,7 +27,7 @@
 //! list`, by recursion over the batch only. The entry being relative to the
 //! row's own pack is what lets a base's list be appended verbatim.
 use super::super::session::transaction::Transaction;
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use layerfs_content::ObjectId;
 use layerfs_storage::{location::PackDomain, pack::layout, port::*};
 use postgres::types::Type;
@@ -106,7 +106,7 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
 /// subquery, so `ancestor_entry` stays inlined. A list over the column's 850
 /// bytes (more entries than any readable chain) is left NULL, unrecorded,
 /// as is one whose base is stored nowhere.
-pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/publish_rows.sql");
+pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/metadata/publish_rows.sql");
 
 /// The index key of an object id: its first eight bytes as a signed
 /// big-endian `bigint`, as the schema's `object_location_prefix` computes it.
@@ -144,7 +144,7 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
         .map(|pack| pack.info().length as i64)
         .sum::<i64>();
     // Blocks are encoded here, before the statement that holds the lane.
-    let values = crate::blocks::values::encode(&batch.inode_values)?;
+    let values = crate::storage::blocks::values::encode(&batch.inode_values)?;
     let ordinals: Vec<i64> = values.iter().map(|b| i64::from(b.first)).collect();
     let lasts: Vec<i64> = values.iter().map(|b| i64::from(b.last)).collect();
     let bodies: Vec<&[u8]> = values.iter().map(|b| b.body.as_slice()).collect();

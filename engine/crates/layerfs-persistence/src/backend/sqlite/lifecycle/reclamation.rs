@@ -1,6 +1,6 @@
 //! Explicit bounded reclamation of free pages in a reclaimable Store.
 use crate::backend::sqlite::session::connection::Session;
-use crate::backend::{records::BackendError, Transaction};
+use crate::backend::{error::BackendError, Transaction};
 
 /// Largest physical page-removal job, independent of total Store size.
 pub const RECLAMATION_PAGE_LIMIT: u32 = 512;

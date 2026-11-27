@@ -26,8 +26,8 @@ impl Scratch {
     pub fn observe<T>(
         &mut self,
         options: super::Options<'_>,
-        run: impl FnOnce(&mut Self) -> Result<T, crate::backend::records::BackendError>,
-    ) -> Result<T, crate::backend::records::BackendError> {
+        run: impl FnOnce(&mut Self) -> Result<T, crate::backend::error::BackendError>,
+    ) -> Result<T, crate::backend::error::BackendError> {
         let interrupt = self.0.get_interrupt_handle();
         let (done, ended) = std::sync::mpsc::channel::<()>();
         std::thread::scope(|scope| {
@@ -54,7 +54,7 @@ impl Scratch {
             let result = run(self);
             let _ = done.send(());
             if watcher.is_some_and(|thread| thread.join().is_err()) {
-                return Err(crate::backend::records::BackendError::Cancelled);
+                return Err(crate::backend::error::BackendError::Cancelled);
             }
             // SQLite interruption itself is never evidence of data corruption.
             options.check()?;

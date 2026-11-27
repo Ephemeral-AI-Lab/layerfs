@@ -2,10 +2,9 @@
 //! built. Shared Metadata, Objects and history semantics reach
 //! an engine only through [`Mechanics`] and [`HistoryStatements`].
 pub(crate) mod admission;
-pub(crate) mod epoch;
+pub(crate) mod error;
 pub(crate) mod postgresql;
-pub(crate) mod records;
-mod seam;
+pub(crate) mod seam;
 pub(crate) mod sqlite;
 pub(crate) use seam::ORDINAL_END;
 pub(crate) use seam::{Column, Engine, HistoryStatements, Mechanics, Ranked};

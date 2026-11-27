@@ -1,10 +1,10 @@
 //! §11 receipt assembly from one run’s metrics.
 
-use super::types::CompactKeptWaste;
-use super::types::CompactPath;
-use super::types::CompactReceipt;
-use super::types::CompactResidue;
-use super::types::CompactZeroReason;
+use crate::gc::compact::CompactKeptWaste;
+use crate::gc::compact::CompactPath;
+use crate::gc::compact::CompactReceipt;
+use crate::gc::compact::CompactResidue;
+use crate::gc::compact::CompactZeroReason;
 
 /// §11: a zero field always carries one word of the closed vocabulary.
 #[allow(clippy::too_many_arguments)]

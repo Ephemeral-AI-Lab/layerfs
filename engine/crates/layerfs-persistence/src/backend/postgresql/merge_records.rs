@@ -1,5 +1,5 @@
 //! Merge build records on a PostgreSQL Store (#506 d): the statements of
-//! `backend/sqlite/storage/merge_records.rs` over temporary tables of the
+//! `backend/sqlite/merge_records.rs` over temporary tables of the
 //! writer's connection.
 //!
 //! The tables are `pg_temp` tables, so they are outside the Store's schema
@@ -13,8 +13,9 @@ use super::session::{
     rows,
     transaction::{Mode, Transaction},
 };
-use crate::backend::records::{BackendError, Param};
-use crate::backend::sqlite::storage::merge_records::Window;
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
+use crate::storage::merge_records::Window;
 use layerfs_content::EditRecordKey;
 use layerfs_storage::port::PersistenceError;
 use std::collections::BTreeMap;

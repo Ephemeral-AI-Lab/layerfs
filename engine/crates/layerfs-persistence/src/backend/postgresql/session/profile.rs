@@ -3,7 +3,7 @@
 //! Every setting is applied with `SET LOCAL` inside the transaction it
 //! governs, in the same round trip as `BEGIN`, so a transaction-pooling proxy
 //! never carries one session's settings to another.
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use crate::{PostgresSelection, SynchronousCommit};
 
 /// The checked settings of one PostgreSQL Store selection.

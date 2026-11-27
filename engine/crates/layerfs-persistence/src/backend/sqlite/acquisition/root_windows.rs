@@ -1,7 +1,8 @@
 //! Indexed root updates over a fixed SQL input, inside the caller's transaction.
-use super::{
-    accounting::{charge, ROOT_BYTES},
-    statements::{signed, Failure},
+use super::accounting::charge;
+use crate::acquisition::{
+    failure::{signed, Failure},
+    payload::ROOT_BYTES,
 };
 use crate::backend::{sqlite::session::rows, Transaction};
 use layerfs_content::ObjectId;

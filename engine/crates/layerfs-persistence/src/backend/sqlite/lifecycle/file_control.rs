@@ -1,6 +1,6 @@
 //! Audited macOS seal-only SQLite file control, authorized 2026-10-07; also
 //! applied to a snapshot's own new destination connection (#506).
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use crate::backend::sqlite::session::rows;
 use rusqlite::{ffi, Connection};
 use std::ffi::c_int;

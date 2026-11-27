@@ -52,7 +52,7 @@ impl HistoryProvider {
     pub(crate) fn sqlite_write_session<'a>(
         &'a self,
         session: &'a std::sync::Arc<crate::backend::Session>,
-    ) -> Result<&'a std::sync::Arc<crate::backend::Session>, crate::backend::records::BackendError>
+    ) -> Result<&'a std::sync::Arc<crate::backend::Session>, crate::backend::error::BackendError>
     {
         match &self.sqlite_writer {
             Some(writer) => Ok(&writer.start_writer()?.storage.session),

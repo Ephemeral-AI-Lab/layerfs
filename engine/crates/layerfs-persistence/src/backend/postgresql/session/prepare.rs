@@ -2,7 +2,7 @@
 //! the texts an operation will send in one flight when it opens, so the
 //! operation itself sends no prepare.
 use super::connection::Session;
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use layerfs_telemetry::timer::waits::Wait;
 
 /// The text an autocommit read sends for `sql` on a session whose open set

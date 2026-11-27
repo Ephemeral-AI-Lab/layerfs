@@ -1,7 +1,8 @@
 //! One-attempt transaction ownership and quarantine on uncertain outcomes.
 use super::connection::{Session, SqlWork};
 use super::query;
-use crate::backend::records::{BackendError, OutcomeError, Param, Record};
+use crate::backend::error::{BackendError, OutcomeError};
+use crate::backend::seam::{Param, Record};
 use rusqlite::Connection;
 use std::{
     cell::{Cell, RefCell},
@@ -57,7 +58,7 @@ impl Transaction<'_> {
         key: &str,
         params: Vec<Param>,
     ) -> Result<Vec<Record>, BackendError> {
-        self.query(query::history(key)?, params)
+        self.query(super::super::history::history(key)?, params)
     }
     pub(crate) fn variable_limit(&self) -> Result<usize, BackendError> {
         self.connection
