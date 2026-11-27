@@ -523,3 +523,25 @@ anonymous volumes, the two finished #818 agent worktrees, archived under
 `refs/cleanup/20261127T011107Z-5c90d6ee436a/*`). Protected/uncertain allocations
 (other sessions' #819 targets and volumes, #816 measurement data, dsh, BuildKit
 cache, launcher records) were left alone.
+
+### M3 merges so far
+
+- Lane W `c3906bd027` (I3b session capability: `prepare_unit` / `send_in_unit` /
+  `count_unit`; 31-message two-flight unit drop+kill swept; existing session,
+  mount and commit fault tests green) and `2bd35e981a` (W6 order fix: a refusal
+  that needs no read comes before the plan; 131-message drop sweep) → merge
+  `34dcec810c`, Production LOC 229,872 -> 230,065 (+193).
+  - **Residual fault-only order difference (W6), for the owner:** a failed plan
+    read refuses at the window's first change that reads; without the plan that
+    change might have answered and the failure surfaced at a later change.
+    Matching it would need a re-read after the failure (a retry), so not done.
+    Documented in store-calls `README.md`.
+  - Pre-existing flake noted by lane W: `fused_commit`'s
+    `postgresql_cancelled_barrier_is_released` and
+    `postgresql_lost_backend_without_start_is_not_terminated` pick the paused
+    backend server-wide, so they can interfere when run in parallel (passed alone).
+- Lane I `24c69d577b`…`8f5c180c6c` (I3a, I2b SQLite fix, I3c, I3b part C) →
+  merge `0ef4c6526b`, Production LOC 230,065 -> 230,428 (+363); doc conflict in
+  `docs/architecture/engine/store/postgresql.md` resolved keeping both lanes'
+  Statement-mode uses. Init pins, write pins and equivalence green on the tip
+  (`receipts/M3/merge-WI-*.log`).
