@@ -99,7 +99,9 @@ jobs:
       - name: Run each mount binary in its own container (each capped at 120 s)
         run: |
           status=0
-          while IFS=$'\t' read -r dir exe; do
+          # filters: empty for a binary that mounts throughout, else the Linux-only
+          # modules of an area binary that also holds portable ones (#828)
+          while IFS=$'\t' read -r dir exe filters; do
             name="$(basename "$exe")"
             echo "::group::$name"
             # A fresh /tmp on the runner's ext4 disk, not the container overlay.
@@ -109,7 +111,7 @@ jobs:
             if ! docker run --rm --device /dev/fuse --cap-add SYS_ADMIN \
                 --security-opt apparmor=unconfined \
                 -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v "$scratch:/tmp" -w "$dir" \
-                layerfs-mount-test timeout 120 "$exe" --test-threads=1; then
+                layerfs-mount-test timeout 120 "$exe" $filters --test-threads=1; then
               echo "::error title=mount test failed::$name"
               status=1
             fi
