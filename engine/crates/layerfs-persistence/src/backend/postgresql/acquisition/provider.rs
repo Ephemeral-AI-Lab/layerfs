@@ -8,9 +8,11 @@
 //! joined in, so a released or foreign operation reads no row and is
 //! `Stale` too (`reads`). A write unit with no wait (root windows,
 //! `advance`, `discard`, `dispose`) is one pipelined message from `BEGIN`
-//! to `COMMIT` when the session is eligible (`flights`, #818 I3b). Nothing
-//! is created, and contention is the one-attempt refusal.
-use super::{cleanup, flights, placement, reads, writes};
+//! to `COMMIT` when the session is eligible (`flights`, #818 I3b); a unit
+//! that waits (`put_entries`, `place_children`) is one transaction over
+//! one flight per wait (`unit`, I3b part A). Nothing is created, and
+//! contention is the one-attempt refusal.
+use super::{cleanup, flights, placement, reads, unit, writes};
 use crate::backend::{
     postgresql::session::{connection::Session, transaction::Transaction},
     sqlite::acquisition::statements::{signed, Failure},
@@ -145,7 +147,15 @@ impl Acquisition for PostgresAcquisition {
             entry.key.name.len() + entry.host_path.as_ref().map_or(0, Vec::len) + WRITE_ROW_BYTES
         });
         bounded(entries.len(), bytes.sum())?;
-        self.unit(owner, true, |tx| writes::put_entries(tx, owner, entries))
+        self.flight(
+            owner,
+            |session, id| {
+                Some(unit::run(session, id, |unit| {
+                    writes::append_entries(unit, id.0, entries)
+                }))
+            },
+            |tx| writes::put_entries(tx, owner, entries),
+        )
     }
 
     fn unplaced_children(
@@ -172,9 +182,20 @@ impl Acquisition for PostgresAcquisition {
                 + WRITE_ROW_BYTES
         });
         bounded(placed.len(), bytes.sum())?;
-        self.unit(owner, true, |tx| {
-            placement::place_children(tx, owner, parent, placed)
-        })
+        self.flight(
+            owner,
+            |session, id| {
+                let signed_parent = signed(parent).ok()?;
+                let state = std::cell::RefCell::new(Default::default());
+                Some(unit::run(session, id, |unit| {
+                    placement::place(unit, id.0, signed_parent, placed, &state)?;
+                    let state: &crate::backend::sqlite::acquisition::placement::Placement =
+                        &state.borrow();
+                    Ok((state.canonical.clone(), state.rows, state.bytes))
+                }))
+            },
+            |tx| placement::place_children(tx, owner, parent, placed),
+        )
     }
 
     fn directories(

@@ -10,6 +10,7 @@ mod flights;
 mod placement;
 mod provider;
 mod reads;
+mod unit;
 mod writes;
 
 pub use provider::PostgresAcquisition;

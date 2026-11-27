@@ -571,3 +571,113 @@ complete_root; check set method_refusal_order, sdk_round_trip_equivalence_seeded
 
 Not built: the waiting units (`put_entries`, `place_children`); see the note
 `I3b-session-capability.md` for lane W.
+
+## I3b part A — the waiting units on lane W's unit capability
+
+Merged `0ef4c6526b` (lane W's `DecidedTurn::prepare_unit` / `send_in_unit`
+/ `count_unit`). `put_entries` and `place_children` become one transaction
+over several flights of one writer turn.
+
+### Prediction (written before coding)
+
+Shape of a unit: `prepare_unit` (one trip on first use, all of the unit's
+texts; 0 when cached), then one flight per **wait** and a closing flight.
+The first flight carries `BEGIN` (`write_begin(true)`: lane row, barrier),
+the generation fence, the attempt token and the owner assertion. Waits are
+only the statements whose reply decides what is sent next: the D17
+dependency check (`DEPENDENCIES`, both units; kept, same order) and a
+dependent row's `BIND_HOST_FILE` (its canonical position is `PUT_ENTRY`'s /
+`PLACE_ENTRY`'s parameter). Everything else is queued and sent in order at
+the head of the next flight: `PUT_HOST_FILES`, `PUT_ENTRIES`, `PUT_ENTRY`,
+and the placement writes (`PLACE_CHILDREN`, `PLACE_ENTRY`) whose replies are
+decoded when their flight returns, in order, before any later reply
+(`Changed` exactly where the per-statement loop found it; the dependency
+read after them is a read and rolls back). The closing flight is the queued
+writes + `CHARGED` + token check + `COMMIT`; `place_children` first settles
+its decoded writes (its charge depends on their replies), so it closes in
+one more flight. A client-side refusal (`Bounds`, a malformed reply) first
+settles what is queued, so an earlier server refusal still wins.
+
+Per unit, old = 4 (BEGIN batch, fence, owner, COMMIT) + statements + charge;
+new = waits + 1 (+1 for a placement unit).
+
+| Shape | Units (from the I3b-C templates) | Old rt | Predicted rt |
+|---|---|---|---|
+| nested_10k | 5 put (1 wait; 1–2 appends) | 245 | 245 − 28 − 4 prepares = **~213** |
+| flat_10k | 5 put (−25), 3 place (7 → 3: −12) | 284 | 284 − 37 − 4 = **~243** |
+| nested_1k | 3 put | 119 | ~99 |
+| flat_1k, dir_600 | 3 put, 1 place | 129 | ~106 |
+| hardlink_window | 102 waits + 50 binds; 152 queued | 468 | ~298 |
+| wide_hardlinks | 299 place windows (PLACE queued) | 1034 | ~707 |
+
+Statements: +2 per unit (each flight counts its `BEGIN`, token check and
+`COMMIT`): nested_10k ~281, flat_10k ~318. Transactions unchanged.
+Prepares: the old lazy per-text prepare trips (owner, dependency, appends,
+charge) become one `prepare_unit` trip per unit kind.
+
+The ≤250 target per 10k: reachable (~213 / ~243).
+
+### First measurement and diagnosis (once)
+
+| Shape | Before | Predicted | Measured |
+|---|---|---|---|
+| nested_10k | [0, 245, 271, 33] | ~213, ~281 stmts | [0, 218, 286, 33] |
+| flat_10k | [0, 284, 302, 36] | ~243, ~318 stmts | [0, 251, 326, 36] |
+| nested_1k | [0, 119, 93, 18] | ~99 | [0, 102, 102, 18] |
+| flat_1k / dir_600 | [0, 129, 99, 19] | ~106 | [0, 110, 111, 19] |
+| hardlink_window | [0, 468, 438, 18] | ~298 | [0, 301, 447, 18] |
+| wide_hardlinks | [0, 1034, 1000, 19] | ~707 | [0, 713, 1012, 19] |
+| mixed | [0, 147, 121, 18] | — | [0, 119, 130, 18] |
+
+Totals within 4%; the 10k deltas are 16% / 20% short. Per-role counts
+(template diff I3b-C → I3b-A, flat_10k): 8 units moved (owner assertion
+9 → 17, `CHARGED` 4 → 12, the old fence read 18 → 10), so the units are as
+designed. The prediction priced the old unit's generation fence as its own
+round trip; it rides in the `BEGIN` batch's trip (part C's table priced it
+right: "2 + owner + …"). Old unit = 6 + h, not 7 + h: −1 per unit, 5 units
+nested (−27 = −23 + −4 prepares, exact), 8 units flat (−33 = −29 + −4,
+exact). Statements: +3 per unit (the old fence was not a counted
+statement): nested +15, flat +24, exact.
+
+flat_10k is 251, one above the ≤250 target. The remaining prepare trips of
+acquisition writes are one per unit kind on first use: `put_entries`,
+`place_children`, and the part C flights' (`complete_files`,
+`set_directory_roots`, `dispose`). **Revised prediction:** the first
+waiting unit's `prepare_unit` prepares every acquisition write text
+(this unit's and the other units'), so later kinds find theirs cached:
+nested_10k 218 → **~215** (complete_files, set_directory_roots, dispose),
+flat_10k 251 → **~247** (those and place_children); 1k shapes −3 (−4 with
+a placement unit). Prepares (count) up by the texts Init never sends
+(`BIND_HOST_FILE`, `PUT_ENTRY`, `PLACE_ENTRY`, `ADVANCED` where unused).
+
+### Measured (receipts `receipts/I3/I3b-A/`)
+
+| Shape (PG) | I3b C pin | Revised prediction | Measured |
+|---|---|---|---|
+| nested_10k | [0, 245, 271, 33] | ~215 | [0, 215, 286, 33] |
+| flat_10k | [0, 284, 302, 36] | ~247 | [0, 247, 326, 36] |
+| nested_1k | [0, 119, 93, 18] | ~99 | [0, 99, 102, 18] |
+| flat_1k / dir_600 | [0, 129, 99, 19] | ~106 | [0, 106, 111, 19] |
+| hardlink_window | [0, 468, 438, 18] | ~298 | [0, 298, 447, 18] |
+| wide_hardlinks | [0, 1034, 1000, 19] | ~709 | [0, 709, 1012, 19] |
+| mixed | [0, 147, 121, 18] | ~116 | [0, 116, 130, 18] |
+
+The ≤250 target per 10k is met: nested_10k 215, flat_10k 247 (from 303 /
+342 at the start of I3, 10,955 / 31,039 at the probe). SQLite pins
+unchanged. (The receipts of the first measurement were overwritten by the
+second run; their counts are in the table above.)
+
+Tests: new `postgresql_acquisition_units` (14 script lines equal SQLite's,
+every tail order of `acquisition_batching`'s refusal-order test included;
+a warm independent window 2 round trips, 1 transaction; drop 156 + kill 156
+over 3 unit kinds). `postgresql_placement_fault` now sweeps the placement
+unit over flights (72 + 72, was 84 + 84: fewer messages); the flights sweep
+is 251 + 251 (was 327 + 327: its setup's `put_entries` unit now prepares the
+flights' texts ahead). Reached and passed: acquisition_placement,
+postgresql_acquisition, postgresql_acquisition_flights,
+postgresql_acquisition_reads, postgresql_acquisition_compaction,
+acquisition_disposal, acquisition_batching, acquisition_reads,
+sqlite_reference_acquisition, postgresql_compact; layerfs-project
+init_postgresql, acquisition_custody, backed_acquisition, init_sqlite,
+init_counters, complete_root, namespace_scaling; check set
+method_refusal_order, sdk_round_trip_equivalence_seeded.

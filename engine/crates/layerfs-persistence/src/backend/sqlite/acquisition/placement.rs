@@ -101,12 +101,12 @@ impl Placement {
 
 /// How a unit runs its children: set windows of `independent` children up to
 /// the first dependent one, which runs alone.
-pub(crate) fn plan(
-    placed: &[Placed],
+pub(crate) fn plan<'p>(
+    placed: &'p [Placed],
     limit: usize,
-    mut dependent: impl FnMut(&[Placed]) -> Result<usize, Failure>,
-    mut one: impl FnMut(&Placed) -> Result<(), Failure>,
-    mut window: impl FnMut(&[Placed]) -> Result<(), Failure>,
+    mut dependent: impl FnMut(&'p [Placed]) -> Result<usize, Failure>,
+    mut one: impl FnMut(&'p Placed) -> Result<(), Failure>,
+    mut window: impl FnMut(&'p [Placed]) -> Result<(), Failure>,
 ) -> Result<(), Failure> {
     let mut offset = 0;
     while offset < placed.len() {
