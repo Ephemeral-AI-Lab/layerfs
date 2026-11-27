@@ -9,3 +9,4 @@ mod sdk_merge_diagnostics;
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 mod unmount_dirty;
+mod unmount_record;

@@ -4,8 +4,11 @@
 //! `ADAPTER`: what is fixed per backend (its stored name, description and
 //! capabilities). Launch and reopen stay on the providers the public
 //! `Runtime` enum holds; `LaunchRequest` binds arrive in a later phase.
-use super::{namespaces, process, Backend};
 use crate::ProviderCapabilities;
+use {
+    super::{namespaces, process},
+    layerfs_machine::table::backend::Backend,
+};
 
 /// What is fixed for one Sandbox backend beyond its name and description,
 /// which the machine crate's [`Backend`] holds.

@@ -2,8 +2,8 @@
 use layerfs_content::merge::{Conflict, ConflictKind, LwwDecision};
 use layerfs_protocol::daemon::ConflictReport;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_sandbox::daemon::values;
-use layerfs_sandbox::daemon::workspace::CommitReply;
+use layerfs_sandbox::route::daemon::refusal;
+use layerfs_sandbox::route::daemon::workspace::CommitReply;
 
 #[test]
 fn sdk_conflict_keeps_its_outcome_and_explicit_byte_window_flags() {
@@ -29,7 +29,7 @@ fn sdk_conflict_keeps_its_outcome_and_explicit_byte_window_flags() {
         written: Vec::new(),
         truncated: false,
     };
-    let error = values::commit(&CommitReply::Conflict(Box::new(report))).unwrap_err();
+    let error = refusal::commit(&CommitReply::Conflict(Box::new(report))).unwrap_err();
     assert_eq!(error.code, "Conflict");
     assert!(error.detail.get_bool("conflictsTruncated"));
     assert!(error.detail.get_bool("lwwTruncated"));
@@ -69,7 +69,7 @@ fn an_uncut_conflict_list_has_no_count() {
         written: Vec::new(),
         truncated: false,
     };
-    let error = values::commit(&CommitReply::Conflict(Box::new(report))).unwrap_err();
+    let error = refusal::commit(&CommitReply::Conflict(Box::new(report))).unwrap_err();
     let next = error.detail.get("next").expect("next fields");
     assert_eq!(
         next.get("conflicts"),

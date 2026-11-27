@@ -16,12 +16,12 @@ use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, with_next, Outcome};
 use layerfs_protocol::daemon::{CommitControl, Reply};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_sandbox::daemon::values;
-use layerfs_sandbox::host::Host;
 use layerfs_sandbox::internal::workspace;
-use layerfs_sandbox::lifecycle::WORKSPACES;
+use layerfs_sandbox::lifecycle::registry::{sandbox, sandbox_live, Mount};
+use layerfs_sandbox::lifecycle::serve::WORKSPACES;
 use layerfs_sandbox::record::{DaemonRecord, WorkspaceRecord};
-use layerfs_sandbox::registry::{sandbox, sandbox_live, Mount};
+use layerfs_sandbox::route::daemon::refusal;
+use layerfs_sandbox::route::machine::Host;
 use layerfs_sandbox::OperationCause;
 use layerfs_sandbox::Unmounted;
 
@@ -63,14 +63,14 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
             "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `layerfs branch fork <project> <name>` and mount that",
         ));
     }
-    let directory = layerfs_sandbox::files::sandbox_dir(host)?;
+    let directory = layerfs_sandbox::record::discovery::sandbox_dir(host)?;
     let missing = || {
         no_sandbox(layerfs_home::outcome::refused(
             "NoSuchSandbox",
             format!("no Sandbox {sandbox} runs on this machine"),
         ))
     };
-    if layerfs_sandbox::files::started(&directory)?.is_none() {
+    if layerfs_sandbox::record::discovery::started(&directory)?.is_none() {
         return Err(missing());
     }
     let name = match name {
@@ -78,7 +78,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         None => None,
     };
     // a name in use is refused before the daemon is reached
-    let recorded = layerfs_sandbox::files::workspaces(&directory)?;
+    let recorded = layerfs_sandbox::record::discovery::workspaces(&directory)?;
     free(sandbox, &recorded, name.as_ref())?;
     let state = sandbox_live(host).map_err(|refusal| match refusal.code.as_str() {
         "NoSuchSandbox" => no_sandbox(refusal),
@@ -86,10 +86,10 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     })?;
     let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // under the Sandbox's guard: a close may have removed it, or mounts filled it
-    let Some(saved) = layerfs_sandbox::files::started(&directory)? else {
+    let Some(saved) = layerfs_sandbox::record::discovery::started(&directory)? else {
         return Err(missing());
     };
-    let workspaces = layerfs_sandbox::files::workspaces(&directory)?;
+    let workspaces = layerfs_sandbox::record::discovery::workspaces(&directory)?;
     // checked again under the guard, where it holds
     free(sandbox, &workspaces, name.as_ref())?;
     if workspaces.len() >= WORKSPACES as usize {
@@ -123,9 +123,9 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
         // the daemon's lookup refusal, nothing bound: the call's answer
         (None, OperationCause::Unexpected(Reply::SdkRefused(refusal))) => refusal.clone(),
-        _ => values::mount_failure(failure),
+        _ => refusal::mount_failure(failure),
     })?;
-    let mut value = values::mounted(&mounted, branch);
+    let mut value = refusal::mounted(&mounted, branch);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
@@ -147,7 +147,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         fields.push(("name".to_owned(), SdkValue::opt_text(shown)));
     }
     let name = name.as_ref().map(WorkspaceName::as_str);
-    layerfs_sandbox::files::save_workspace(&state, &mounted, branch, name)?;
+    layerfs_sandbox::record::discovery::save_workspace(&state, &mounted, branch, name)?;
     lock(&state.mounts)?.insert(
         mounted.ready.directory.clone(),
         Mount {
@@ -186,8 +186,8 @@ pub fn by_name(host: &Host, path: Option<&str>) -> Result<Option<String>, SdkRef
         return Ok(path.map(str::to_owned));
     };
     let name = WorkspaceName::parse(name)?;
-    let directory = layerfs_sandbox::files::sandbox_dir(host)?;
-    let found = (layerfs_sandbox::files::workspaces(&directory)?.into_iter())
+    let directory = layerfs_sandbox::record::discovery::sandbox_dir(host)?;
+    let found = (layerfs_sandbox::record::discovery::workspaces(&directory)?.into_iter())
         .find(|(_, record)| record.name() == Some(name.as_str()));
     let Some((_, record)) = found else {
         let sandbox = host.sandbox.as_deref().unwrap_or("");
@@ -227,9 +227,9 @@ pub fn changed(
 ) -> Outcome {
     let mut args = vec![("path".to_owned(), SdkValue::text(path))];
     args.extend(under.map(|under| ("under".to_owned(), SdkValue::text(under))));
-    let method = layerfs_sandbox::daemon::operator::CHANGED;
-    layerfs_sandbox::daemon::operator::call(control, method, SdkValue::Map(args))
-        .map_err(values::sdk_error)
+    let method = layerfs_sandbox::route::daemon::channel::operator::CHANGED;
+    layerfs_sandbox::route::daemon::channel::operator::call(control, method, SdkValue::Map(args))
+        .map_err(refusal::sdk_error)
 }
 
 /// Reads a Branch's head (Branch id and name), or `None` when it could not.
@@ -247,14 +247,14 @@ pub fn status_with(
     let mut control = state.controls.lend()?;
     let status = workspace(&mut control)
         .status(token)
-        .map_err(values::failure)?;
+        .map_err(refusal::failure)?;
     let changes = changed(&mut control, required(path, "path")?, under)?;
     drop(control);
     let branch = lock(&state.mounts)?
         .get(required(path, "path")?)
         .map(|mount| mount.branch.clone());
     let head = head_of(status.binding.branch.id, branch.as_deref());
-    let mut value = values::status(&status, head);
+    let mut value = refusal::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("branch".to_owned(), SdkValue::opt_text(branch)));
         fields.extend(changes_of(&status, &changes));
@@ -409,7 +409,7 @@ pub fn commit_with(
         Some(_) => Some(
             workspace(&mut control)
                 .status(token)
-                .map_err(values::failure)?,
+                .map_err(refusal::failure)?,
         ),
         None => None,
     };
@@ -455,9 +455,9 @@ pub fn commit_with(
         })
         .map_err(|failure| match moved_from_expected(expected, &failure) {
             Some(refusal) => refusal,
-            None => values::failure(failure),
+            None => refusal::failure(failure),
         })?;
-    let value = values::commit(&reply)?;
+    let value = refusal::commit(&reply)?;
     // the Layer the Branch was forked at, from the mount this process
     // holds (no read): an unchanged fresh fork's head (call surface 2.0)
     let layer = lock(&state.mounts)?.get(path).map(|mount| {
@@ -485,24 +485,24 @@ const UNMOUNT_STATUS_WAIT: std::time::Duration = std::time::Duration::from_secs(
 pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> Outcome {
     let state = sandbox(host)?;
     let path = required(path, "path")?;
-    if let Some(value) = layerfs_sandbox::unmount_guard::find(&state, path)? {
-        if !layerfs_sandbox::unmount_guard::admits(&value, force) {
-            return layerfs_sandbox::unmount_guard::repeat(&value);
+    if let Some(value) = layerfs_sandbox::record::unmount_guard::find(&state, path)? {
+        if !layerfs_sandbox::record::unmount_guard::admits(&value, force) {
+            return layerfs_sandbox::record::unmount_guard::repeat(&value);
         }
     }
     let guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
-    if let Some(value) = layerfs_sandbox::unmount_guard::find(&state, path)? {
-        if !layerfs_sandbox::unmount_guard::admits(&value, force) {
-            return layerfs_sandbox::unmount_guard::repeat(&value);
+    if let Some(value) = layerfs_sandbox::record::unmount_guard::find(&state, path)? {
+        if !layerfs_sandbox::record::unmount_guard::admits(&value, force) {
+            return layerfs_sandbox::record::unmount_guard::repeat(&value);
         }
     }
     let token = state.unmount_token(path)?;
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let wsid = layerfs_protocol::sdk::hex(&token.workspace.to_bytes());
-    let unreached = &mut layerfs_sandbox::exec::cancel::unreached;
-    layerfs_sandbox::exec::cancel::settle(
+    let unreached = &mut layerfs_sandbox::exec::settle::unreached;
+    layerfs_sandbox::exec::settle::settle(
         &state.directory,
         &state.id,
         Some(&wsid),
@@ -512,9 +512,9 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // One short deadline, not the full admission wait: a Workspace unmount
     // must not hold the folder guard while a refusing daemon keeps the
     // ordinary 60 s control wait running (#540).
-    layerfs_sandbox::files::refresh_within(&state, UNMOUNT_STATUS_WAIT)?;
+    layerfs_sandbox::record::discovery::refresh_within(&state, UNMOUNT_STATUS_WAIT)?;
     // the daemon's kernel probe answers Busy for a process still holding it
-    let attempt = layerfs_sandbox::unmount_guard::begin(&state, token, path, force)?;
+    let attempt = layerfs_sandbox::record::unmount_guard::begin(&state, token, path, force)?;
     drop(guard);
     // Only this Workspace's lease remains held. Other Workspaces and
     // processes can take Sandbox ownership while the daemon helper waits.
@@ -529,18 +529,18 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             if matches!(&failure.cause, OperationCause::Exchange(exchange) if !exchange.attempted) {
                 sent = false;
             }
-            values::failure(failure)
+            refusal::failure(failure)
         };
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
         if force {
             match api.unmount(token, true).map_err(&mut answered)? {
-                Some(outcome) => Ok(values::force_unmounted(&outcome)),
-                None => values::unmounted(&Unmounted::Closed),
+                Some(outcome) => Ok(refusal::force_unmounted(&outcome)),
+                None => refusal::unmounted(&Unmounted::Closed),
             }
         } else {
             match api.unmount_checked(token, discard) {
-                Ok(answer) => values::unmounted(&answer),
+                Ok(answer) => refusal::unmounted(&answer),
                 Err(error) => Err(answered(error)),
             }
         }
@@ -554,12 +554,12 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // Preserve the daemon's known outcome before any discovery-lock wait.
     // A file/cleanup failure is separate from an already successful detach.
     let publication = if !sent {
-        layerfs_sandbox::unmount_guard::cancel(&attempt)
+        layerfs_sandbox::record::unmount_guard::cancel(&attempt)
     } else {
-        layerfs_sandbox::unmount_guard::finish(&attempt, path, &outcome)
+        layerfs_sandbox::record::unmount_guard::finish(&attempt, path, &outcome)
     };
     if let Err(error) = publication {
-        return layerfs_sandbox::unmount_guard::cleanup_failure(outcome, error);
+        return layerfs_sandbox::record::unmount_guard::cleanup_failure(outcome, error);
     }
     let outcome = match outcome {
         Err(refusal) if refusal.code == "Dirty" => Err(dirty(&state, path, refusal)),
@@ -569,14 +569,14 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         let cleanup = (|| {
             let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
             let _sandbox = layerfs_sandbox::record::lock_in(&state.directory, &state.id)?;
-            let record = layerfs_sandbox::files::workspace_file(&state, token);
+            let record = layerfs_sandbox::record::discovery::workspace_file(&state, token);
             match std::fs::remove_file(&record) {
                 Ok(()) => layerfs_home::home::generation::moved_above(&record),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
             }
             // its folder, with any command record left in it
-            let folder = layerfs_sandbox::exec::record::workspace_dir(&state.directory, &wsid);
+            let folder = layerfs_sandbox::record::exec::workspace_dir(&state.directory, &wsid);
             match std::fs::remove_dir_all(folder) {
                 Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
                     return Err(failed(error))
@@ -585,7 +585,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             }
             // its commands' output files, beside the daemon's log
             if let Ok(runtime) = state.runtime() {
-                layerfs_sandbox::output::remove(
+                layerfs_sandbox::exec::output::remove(
                     &layerfs_sandbox::backend::select::scratch(runtime),
                     &wsid,
                 )?;
@@ -594,7 +594,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             Ok(())
         })();
         if let Err(error) = cleanup {
-            return layerfs_sandbox::unmount_guard::cleanup_failure(outcome, error);
+            return layerfs_sandbox::record::unmount_guard::cleanup_failure(outcome, error);
         }
     }
     outcome
@@ -603,7 +603,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
 /// A Dirty refusal of the Workspace at `path`, with what [`dirty_fields`]
 /// lists from one bounded overlay read and V22-7's fix.
 fn dirty(
-    state: &layerfs_sandbox::registry::SandboxState,
+    state: &layerfs_sandbox::lifecycle::registry::SandboxState,
     path: &str,
     refusal: SdkRefusal,
 ) -> SdkRefusal {
@@ -668,8 +668,8 @@ fn status_entry(entry: &SdkValue) -> SdkValue {
 
 /// The name of the Workspace at `path` in its Sandbox's records, else its
 /// path.
-fn path_name(state: &layerfs_sandbox::registry::SandboxState, path: &str) -> String {
-    (layerfs_sandbox::files::workspaces(&state.directory)
+fn path_name(state: &layerfs_sandbox::lifecycle::registry::SandboxState, path: &str) -> String {
+    (layerfs_sandbox::record::discovery::workspaces(&state.directory)
         .ok()
         .into_iter()
         .flatten())

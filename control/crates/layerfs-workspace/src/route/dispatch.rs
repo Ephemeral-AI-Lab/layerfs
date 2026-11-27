@@ -8,17 +8,23 @@
 use crate::machine::serve as workspace;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::exec;
-use layerfs_sandbox::host::{Call, Host};
+use layerfs_sandbox::route::machine::{Call, Host};
 
 /// Runs one host operation once: a Workspace operation here, any other in
 /// `sandbox::dispatch`, which checks a Commit `message` first.
 pub fn call(host: Host, call: Call) -> Outcome {
     match call {
         Call::Mount { .. } | Call::Commit { .. } | Call::Unmount { .. } | Call::Exec { .. } => {
-            layerfs_sandbox::dispatch::checked(&host.message)?;
+            layerfs_sandbox::route::machine::dispatch::checked(&host.message)?;
         }
         Call::Status { .. } | Call::ExecCancel { .. } => {}
-        _ => return layerfs_sandbox::dispatch::call(host, call, &crate::machine::drain::Drain),
+        _ => {
+            return layerfs_sandbox::route::machine::dispatch::call(
+                host,
+                call,
+                &crate::machine::drain::Drain,
+            )
+        }
     }
     let path = match call.path() {
         Some(_) => workspace::by_name(&host, call.path())?,
@@ -79,6 +85,10 @@ pub fn call(host: Host, call: Call) -> Outcome {
             (exec_id.as_deref(), grace_ms),
             workspace.as_deref(),
         ),
-        _ => layerfs_sandbox::dispatch::call(host, call, &crate::machine::drain::Drain),
+        _ => layerfs_sandbox::route::machine::dispatch::call(
+            host,
+            call,
+            &crate::machine::drain::Drain,
+        ),
     }
 }

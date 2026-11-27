@@ -17,7 +17,7 @@
 //! is kept as read, and the file's order is kept, so a record read and
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
-use crate::host::Started;
+use crate::route::machine::Started;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
@@ -337,7 +337,7 @@ impl SandboxRecord {
             return Ok(());
         };
         if refusal.code == "Unresolved" {
-            refusal = with_fix(refusal, crate::state::remove_fix(name));
+            refusal = with_fix(refusal, crate::status::state::remove_fix(name));
         }
         Err(with_next(refusal, "op", op.shown()))
     }

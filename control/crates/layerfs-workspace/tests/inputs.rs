@@ -2,7 +2,7 @@
 //! daemon is asked (call surface 2.0): a Workspace's default name from its
 //! Branch, the folder a command starts in, its environment, and a stream
 //! past the 1 MiB inline window spilled to a named file with its tail kept.
-use layerfs_sandbox::output::{self, Place, Spool, INLINE};
+use layerfs_sandbox::exec::output::{self, Place, Spool, INLINE};
 use layerfs_workspace::exec::run::{checked_env, start_folder};
 use layerfs_workspace::route::send::default_name;
 use std::io::Write;

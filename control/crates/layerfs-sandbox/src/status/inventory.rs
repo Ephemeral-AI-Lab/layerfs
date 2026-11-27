@@ -5,7 +5,7 @@
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
-use crate::state::remove_fix;
+use crate::status::state::remove_fix;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, with_next};
 use layerfs_home::state::State;

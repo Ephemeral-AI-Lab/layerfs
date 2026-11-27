@@ -15,7 +15,7 @@ use layerfs_home::json;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::state::State;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_sandbox::files;
+use layerfs_sandbox::record::discovery;
 use layerfs_sandbox::record::{sandboxes, SandboxRecord, WorkspaceRecord};
 use layerfs_store::place::{self, Executor};
 use std::collections::BTreeMap;
@@ -80,7 +80,7 @@ fn row(sandbox: &str, project: Option<&str>, record: &SdkValue) -> Row {
 /// The records a Sandbox folder `dir` holds, each `{ name, branch, path,
 /// created }`.
 fn records_in(dir: &Path) -> Result<Vec<SdkValue>> {
-    let found = files::workspaces(dir)?;
+    let found = discovery::workspaces(dir)?;
     Ok(found.iter().map(|(_, record)| shown(record)).collect())
 }
 
@@ -230,7 +230,7 @@ pub fn list(home: &Path, request: &ListRequest) -> Outcome {
     let mut asked: BTreeMap<String, Vec<&SandboxRecord>> = BTreeMap::new();
     for record in &records {
         let (name, machine) = (record.name(), record.machine());
-        let blocked = layerfs_sandbox::state::machine_state(home, machine)?
+        let blocked = layerfs_sandbox::status::state::machine_state(home, machine)?
             .blocks("machine", machine)
             .or_else(|| record.status(&State::Ready).blocks("sandbox", name));
         if let Some(State::Blocked(by)) = blocked {
@@ -241,7 +241,7 @@ pub fn list(home: &Path, request: &ListRequest) -> Outcome {
             ));
             continue;
         }
-        let local = layerfs_sandbox::direct::forwarded(record)
+        let local = layerfs_sandbox::route::direct::forwarded(record)
             || matches!(place::on_machine_read(home, machine), Ok(Executor::Local));
         if local {
             for value in records_in(&record.dir(home))? {

@@ -1,7 +1,7 @@
 //! A stand-in `docker` CLI for image copy tests: a shell script answering the
 //! few commands the copy runs from files in its own directory, so no test
 //! needs an Engine.
-use layerfs_sandbox::docker::Docker;
+use layerfs_sandbox::image::copy::docker::Docker;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

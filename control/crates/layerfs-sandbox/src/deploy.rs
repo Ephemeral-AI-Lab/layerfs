@@ -8,7 +8,7 @@
 //! This process resolves from the home's records and the sealed bundle in
 //! the user cache (O16); a machine's worker from its own bundle folder (a
 //! guest never reads the home, H §7.7).
-use crate::host::Deploy;
+use crate::route::machine::Deploy;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::{bundle_dir, IMAGE_ARCHIVE};

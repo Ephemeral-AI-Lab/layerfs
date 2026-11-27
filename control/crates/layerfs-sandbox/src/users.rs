@@ -12,13 +12,18 @@ use layerfs_store::StoreUsers;
 use std::path::Path;
 #[cfg(feature = "machine")]
 use {
-    crate::record::SandboxRecord,
-    crate::{direct, files, reopen},
-    layerfs_home::home::{self, lock, paths},
-    layerfs_home::op::Op,
-    layerfs_home::outcome::{failed, refused, Outcome},
-    layerfs_machine::record::MachineRecord,
-    layerfs_machine::{force_record, machine_refusal as refusal, machine_spec, Phases},
+    crate::{
+        record::{discovery, reopen, SandboxRecord},
+        route::direct,
+    },
+    layerfs_home::{
+        home::{self, lock, paths},
+        op::Op,
+        outcome::{failed, refused, Outcome},
+    },
+    layerfs_machine::{
+        force_record, machine_refusal as refusal, machine_spec, record::MachineRecord, Phases,
+    },
     layerfs_protocol::sdk::SdkValue,
 };
 
@@ -114,7 +119,7 @@ fn forget(home: &Path, name: &str) -> Result<()> {
         )
     })?;
     // the home's image copy locks of the machine go with it
-    let locks = crate::image_lock::ImageLock::dir(home, name);
+    let locks = crate::image::copy::lock::ImageLock::dir(home, name);
     match std::fs::remove_dir_all(&locks) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
             Err(layerfs_home::outcome::refused(
@@ -266,7 +271,9 @@ fn force_stop(home: &Path, name: &str, mut phases: Phases<'_, '_>) -> Outcome {
                             continue;
                         }
                         native_attempt = Some(sandbox);
-                        runtime.stop(0).map_err(crate::daemon::values::wire)?;
+                        runtime
+                            .stop(0)
+                            .map_err(crate::route::daemon::refusal::wire)?;
                     }
                 }
                 mark(home, sandbox, true)?;
@@ -421,8 +428,8 @@ fn native_runtime(home: &Path, sandbox: &SandboxRecord) -> Result<Native> {
     if sandbox.machine_stopped() {
         return Ok(Native::Stopped);
     }
-    let host = crate::force::local_host(home, sandbox.name())?;
-    let Some(daemon) = files::started(&sandbox.dir(home))? else {
+    let host = crate::lifecycle::force_remove::local_host(home, sandbox.name())?;
+    let Some(daemon) = discovery::started(&sandbox.dir(home))? else {
         if sandbox.id().is_some() {
             return Err(refused(
                 "Unavailable",
@@ -448,15 +455,15 @@ fn native_runtime(home: &Path, sandbox: &SandboxRecord) -> Result<Native> {
 /// runtime stops (`exec::cancel::settle` with `force`); stale records are
 /// ended and logged. A refusal still precedes the stop's signal.
 fn settle(home: &Path, sandbox: &SandboxRecord) -> Result<()> {
-    let unreached = &mut crate::exec::cancel::unreached;
-    crate::exec::cancel::settle(&sandbox.dir(home), sandbox.name(), None, true, unreached)
+    let unreached = &mut crate::exec::settle::unreached;
+    crate::exec::settle::settle(&sandbox.dir(home), sandbox.name(), None, true, unreached)
 }
 
 #[cfg(feature = "machine")]
 /// These are lost/unknown uncommitted frontiers, never manufactured commits.
 fn workspaces(home: &Path, sandbox: &SandboxRecord) -> Result<Vec<String>> {
     let mut workspaces = Vec::new();
-    for (path, record) in files::workspaces(&sandbox.dir(home))? {
+    for (path, record) in discovery::workspaces(&sandbox.dir(home))? {
         let fallback = path
             .file_name()
             .and_then(|name| name.to_str())
