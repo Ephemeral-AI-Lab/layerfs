@@ -7,10 +7,8 @@
 //! used never enters the ring. Chains grown this way stay
 //! bounded: a proposal whose chain cannot take the new file within the work
 //! budgets is re-based onto that chain's root (#89), never stored FULL.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::{
     filesystem::{

@@ -15,10 +15,8 @@
 //! tip over a budget, is replaced by the FULL root of that chain (#89): the one
 //! trial runs against the root, which is acquired and authenticated, and the
 //! dependent is stored at depth one in the PREFIX form every reader accepts.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::port::ObjectKey;

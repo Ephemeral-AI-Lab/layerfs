@@ -1,6 +1,5 @@
 //! Count-driven read regression across the existing pack-cache byte boundary.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::Storage;
 use std::sync::Arc;

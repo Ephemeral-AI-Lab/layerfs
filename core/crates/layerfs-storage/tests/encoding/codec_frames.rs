@@ -8,8 +8,7 @@
 //! frame the profile's window does not cover, and require a typed refusal rather
 //! than a panic, an overrun or a silent short read.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_storage::encoding::{CodecProfile, CompressionWorkspace, DecompressionWorkspace};
 use layerfs_storage::{StorageCapacities, StorageError, StoragePolicy};

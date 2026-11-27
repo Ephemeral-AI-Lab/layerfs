@@ -8,12 +8,12 @@ use crate::{
 };
 use layerfs_content::{inode_leaf::INODE_VALUE_BYTES, ObjectId};
 use std::{cell::RefCell, collections::BTreeMap};
-pub(super) struct WaveSource<'a> {
-    pub(super) fetch: &'a Fetch,
-    pub(super) packer: &'a Packer,
-    pub(super) signatures: &'a RefCell<BTreeMap<usize, SignatureRow>>,
+pub(crate) struct WaveSource<'a> {
+    pub(crate) fetch: &'a Fetch,
+    pub(crate) packer: &'a Packer,
+    pub(crate) signatures: &'a RefCell<BTreeMap<usize, SignatureRow>>,
     /// Values this Save assigned and has not published yet, by ordinal.
-    pub(super) values: &'a BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
+    pub(crate) values: &'a BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
 }
 impl Source for WaveSource<'_> {
     fn ordered_dependencies(&self) -> bool {

@@ -12,20 +12,20 @@ use crate::{
 };
 use layerfs_content::{ObjectId, ObjectRole};
 
-pub(super) struct Member {
-    pub(super) id: ObjectId,
-    pub(super) role: ObjectRole,
-    pub(super) length: usize,
-    pub(super) references: Vec<ObjectId>,
+pub(crate) struct Member {
+    pub(crate) id: ObjectId,
+    pub(crate) role: ObjectRole,
+    pub(crate) length: usize,
+    pub(crate) references: Vec<ObjectId>,
     /// The record's delta base; `None` for a FULL record.
-    pub(super) base: Option<ObjectId>,
+    pub(crate) base: Option<ObjectId>,
 }
 #[derive(Default)]
-pub(super) struct Group {
-    pub(super) records: Vec<Vec<u8>>,
-    pub(super) members: Vec<Member>,
-    pub(super) payload: usize,
-    pub(super) canonical: usize,
+pub(crate) struct Group {
+    pub(crate) records: Vec<Vec<u8>>,
+    pub(crate) members: Vec<Member>,
+    pub(crate) payload: usize,
+    pub(crate) canonical: usize,
 }
 struct Framed {
     group: EncodedGroup,
@@ -38,18 +38,18 @@ struct Queue {
     bytes: usize,
     rows: usize,
 }
-pub(super) struct Sealed {
-    pub(super) pack: PublishedPack,
+pub(crate) struct Sealed {
+    pub(crate) pack: PublishedPack,
     pub(super) members: Vec<(ObjectLocation, Member)>,
 }
-pub(super) struct Packer {
-    pub(super) groups: [Group; 4],
+pub(crate) struct Packer {
+    pub(crate) groups: [Group; 4],
     queued: [Queue; 4],
-    pub(super) ready: Vec<Sealed>,
-    pub(super) group_ns: u64,
+    pub(crate) ready: Vec<Sealed>,
+    pub(crate) group_ns: u64,
 }
 impl Packer {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             groups: std::array::from_fn(|_| Group::default()),
             queued: std::array::from_fn(|_| Queue::default()),
@@ -57,11 +57,11 @@ impl Packer {
             group_ns: 0,
         }
     }
-    pub(super) fn unfinished(&self) -> bool {
+    pub(crate) fn unfinished(&self) -> bool {
         self.groups.iter().any(|group| !group.records.is_empty())
             || self.queued.iter().any(|queue| queue.lane.is_some())
     }
-    pub(super) fn pending(&self, id: ObjectId) -> bool {
+    pub(crate) fn pending(&self, id: ObjectId) -> bool {
         self.groups
             .iter()
             .any(|g| g.members.iter().any(|m| m.id == id))
@@ -71,14 +71,14 @@ impl Packer {
                 .flat_map(|queue| &queue.groups)
                 .any(|g| g.members.iter().any(|m| m.id == id))
     }
-    pub(super) fn location(&self, id: ObjectId) -> Option<ObjectLocation> {
+    pub(crate) fn location(&self, id: ObjectId) -> Option<ObjectLocation> {
         self.ready
             .iter()
             .flat_map(|p| &p.members)
             .find(|(l, _)| l.object_id == id)
             .map(|(l, _)| *l)
     }
-    pub(super) fn seal(
+    pub(crate) fn seal(
         &mut self,
         lane: PackLane,
         codec: &mut CompressionWorkspace,
@@ -137,7 +137,7 @@ impl Packer {
         }
         Ok(())
     }
-    pub(super) fn seal_pending(
+    pub(crate) fn seal_pending(
         &mut self,
         ids: &[ObjectId],
         codec: &mut CompressionWorkspace,
@@ -158,7 +158,7 @@ impl Packer {
         self.flush_if_contains(ids, next, end)?;
         Ok(forced)
     }
-    pub(super) fn flush_if_contains(
+    pub(crate) fn flush_if_contains(
         &mut self,
         ids: &[ObjectId],
         next: &mut i64,
@@ -175,13 +175,13 @@ impl Packer {
         }
         Ok(())
     }
-    pub(super) fn flush(&mut self, next: &mut i64, end: i64) -> StorageResult<()> {
+    pub(crate) fn flush(&mut self, next: &mut i64, end: i64) -> StorageResult<()> {
         for lane in PackLane::ALL {
             self.flush_lane(lane, next, end)?;
         }
         Ok(())
     }
-    pub(super) fn finish_pack_bound(&self) -> usize {
+    pub(crate) fn finish_pack_bound(&self) -> usize {
         self.groups
             .iter()
             .filter(|group| !group.records.is_empty())

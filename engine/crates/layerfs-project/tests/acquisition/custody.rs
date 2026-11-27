@@ -5,8 +5,7 @@
 //! anything is published; a removal that fails is reported with its own cause
 //! and what is still held; an unknown outcome leaves everything untouched.
 #![cfg(unix)]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{HistoryCatalog, HistoryError, HistoryName, LayerStackId};
 use layerfs_project::{init, InitRequest, Initialized, ProjectError, SourceRefusal};

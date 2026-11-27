@@ -1,6 +1,5 @@
 //! A valid dependent must not hide a corrupt canonical pooled base.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{inode_leaf::*, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::{
     encoding::pool::leaf,

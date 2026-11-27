@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashMap};
 /// What one kept value is charged besides its bytes.
 const ENTRY_CHARGE: usize = 96;
 
-pub(super) struct Resolved {
+pub(crate) struct Resolved {
     values: HashMap<ObjectId, (Vec<u8>, u64)>,
     order: BTreeMap<u64, ObjectId>,
     clock: u64,
@@ -26,7 +26,7 @@ pub(super) struct Resolved {
 
 impl Resolved {
     /// Empty, keeping at most `bound` bytes and charges.
-    pub(super) fn new(bound: usize) -> Self {
+    pub(crate) fn new(bound: usize) -> Self {
         Self {
             values: HashMap::new(),
             order: BTreeMap::new(),
@@ -37,7 +37,7 @@ impl Resolved {
     }
 
     /// A copy of the kept value of `id`, marked as the most recent.
-    pub(super) fn get(&mut self, id: ObjectId) -> Option<Vec<u8>> {
+    pub(crate) fn get(&mut self, id: ObjectId) -> Option<Vec<u8>> {
         let (value, touched) = self.values.get_mut(&id)?;
         self.order.remove(touched);
         self.clock += 1;
@@ -47,18 +47,18 @@ impl Resolved {
     }
 
     /// Whether `id`'s value is kept, without marking it read.
-    pub(super) fn holds(&self, id: ObjectId) -> bool {
+    pub(crate) fn holds(&self, id: ObjectId) -> bool {
         self.values.contains_key(&id)
     }
 
     /// Length of an authenticated value already kept by this Save.
-    pub(super) fn canonical_len(&self, id: ObjectId) -> Option<usize> {
+    pub(crate) fn canonical_len(&self, id: ObjectId) -> Option<usize> {
         self.values.get(&id).map(|(value, _)| value.len())
     }
 
     /// Keeps `value` as `id`'s canonical bytes; a value larger than the whole
     /// bound is not kept.
-    pub(super) fn keep(&mut self, id: ObjectId, value: &[u8]) {
+    pub(crate) fn keep(&mut self, id: ObjectId, value: &[u8]) {
         let charge = value.len() + ENTRY_CHARGE;
         if charge > self.bound || self.values.contains_key(&id) {
             return;

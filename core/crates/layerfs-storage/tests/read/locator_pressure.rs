@@ -1,8 +1,6 @@
 //! Count/cause fixture for locator retention at the existing 4096-entry bound.
-#[path = "../support/chain_provider.rs"]
-mod chains;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::chains;
+use crate::metadata;
 #[path = "../support/mod.rs"]
 mod support;
 use layerfs_content::{

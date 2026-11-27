@@ -20,7 +20,7 @@ impl State<'_> {
     /// until this Save published `base`, its ring proposal
     /// (`save/deferred.rs`), which is then tried after the declared
     /// candidates as the ring's proposal would be.
-    pub(super) fn offer(
+    pub(crate) fn offer(
         &mut self,
         object: &FinalizedObject,
         base: Option<ObjectId>,

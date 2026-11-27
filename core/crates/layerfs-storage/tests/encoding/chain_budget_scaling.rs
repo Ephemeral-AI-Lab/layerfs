@@ -4,10 +4,8 @@
 //! cutoff admits therefore always fits a chain alone, so a Save never meets a
 //! declared base whose own chain a read could not charge; a larger cutoff keeps
 //! whole-file deltas for the larger whole files it creates.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::policy::SINGLETON_FRAMING_SLACK;

@@ -1,6 +1,5 @@
 //! Save must consume bounded physical input before unrelated discovery displaces it.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::Storage;
 use std::sync::Arc;

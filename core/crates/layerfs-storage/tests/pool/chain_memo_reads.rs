@@ -14,8 +14,7 @@
 //! * under a lower depth cap both readers refuse the same objects with the
 //!   same error: a chain that stops at a kept element is still measured to
 //!   its end.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 use layerfs_content::filesystem::attributes::portable::PortableMetadata;
 use layerfs_content::filesystem::inode::apply_inode_values;

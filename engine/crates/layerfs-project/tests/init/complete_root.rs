@@ -1,7 +1,6 @@
 //! Host full-root acquisition over public constructors and real host storage.
 #![cfg(unix)]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{read_all, FilesystemRead, LogicalPath};
 use layerfs_history::HistoryCatalog;

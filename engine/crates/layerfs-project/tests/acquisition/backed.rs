@@ -1,7 +1,6 @@
 //! Backed acquisition yields the root the whole-namespace constructor derives.
 #![cfg(unix)]
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::filesystem::{scope_for_seed, FilesystemRootId};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{

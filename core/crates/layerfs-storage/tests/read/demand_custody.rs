@@ -1,6 +1,5 @@
 //! Public-reader regression: a partial cache hit must survive miss admission.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::Storage;
 use std::sync::Arc;

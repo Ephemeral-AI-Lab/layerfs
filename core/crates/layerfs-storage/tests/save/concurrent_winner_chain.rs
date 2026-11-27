@@ -1,10 +1,8 @@
 //! F-036: a Save that loses a first-wins registration to a concurrent writer
 //! must resolve the winner's whole dependency chain, including a base this
 //! Save's wave located as absent before the other writer published it.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectRole};
 use layerfs_storage::{port::*, Storage};
 use metadata::MemoryMetadata;

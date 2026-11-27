@@ -12,10 +12,8 @@
 //! Both fixtures drift: each version replaces a fresh region of the content
 //! with new incompressible bytes, so the delta against the root covers every
 //! region replaced since the root was written.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::{
     construct_bytes_with_predecessor, AdvisoryPredecessors, ConstructionPolicy, ContentResult,

@@ -21,7 +21,9 @@ pub mod port;
 pub mod read;
 pub mod save;
 pub(crate) use handle as storage;
-pub use location as source;
+// #828 compat: old public module path, removed in wave 3.
+#[doc(hidden)]
+pub use location as source; // #828 compat
 
 pub use error::{StorageError, StorageResult};
 pub use policy::{StorageCapacities, StoragePolicy};

@@ -26,7 +26,7 @@ impl State<'_> {
     /// values are kept as published ones are, so this handle's reads see
     /// them while its caller carries the batch in a transaction of its own
     /// ([`super::PreparedTail`], #768). An empty last batch is not held.
-    pub(super) fn register_ready(&mut self, hold: bool) -> StorageResult<Option<Held>> {
+    pub(crate) fn register_ready(&mut self, hold: bool) -> StorageResult<Option<Held>> {
         let _work = self.storage.work.span(super::super::Stage::Publication);
         // Every reference to an unframed member forces its owning lane to seal.
         // Repeating this bounded closure walk discovers prerequisites of those seals;
@@ -275,7 +275,7 @@ impl State<'_> {
     ) -> StorageResult<()> {
         self.acknowledge_with(batch, members, false)
     }
-    pub(super) fn acknowledge_with(
+    pub(crate) fn acknowledge_with(
         &mut self,
         batch: &mut Publication,
         members: &Members,
@@ -302,7 +302,7 @@ impl State<'_> {
     /// What an acknowledged publication of `batch` leaves: `lost` (ids a
     /// location of which was already stored) compared with the winners, the
     /// rest kept as this Save's, and the outcome counted.
-    pub(super) fn settle(
+    pub(crate) fn settle(
         &mut self,
         batch: &Publication,
         members: &Members,
@@ -366,13 +366,13 @@ impl State<'_> {
 pub(super) type Members = BTreeMap<ObjectId, (ObjectLocation, Vec<ObjectId>, bool)>;
 
 /// A sealed batch held from publication, and its members.
-pub(super) struct Held {
-    pub(super) batch: Publication,
-    pub(super) members: Members,
+pub(crate) struct Held {
+    pub(crate) batch: Publication,
+    pub(crate) members: Members,
 }
 
 /// Adds one acknowledged publication of `batch`, `lost` reused, to `outcome`.
-pub(super) fn counted(
+pub(crate) fn counted(
     outcome: &mut super::super::WriteOutcome,
     batch: &Publication,
     members: &Members,

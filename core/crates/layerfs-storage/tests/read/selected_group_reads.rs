@@ -1,6 +1,5 @@
 //! Whole/range policy, exact output and corruption refusal through ordinary C2.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain},

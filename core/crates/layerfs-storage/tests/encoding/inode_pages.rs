@@ -18,8 +18,7 @@
 //! * the lookup cost bound: one lookup reconstructs exactly one branch chain per
 //!   branch level (counter, not time), and a batched lookup reconstructs each
 //!   branch page it visits once.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 use layerfs_content::filesystem::attributes::portable::PortableMetadata;
 use layerfs_content::filesystem::inode::{

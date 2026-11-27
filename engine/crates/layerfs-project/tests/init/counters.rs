@@ -1,7 +1,6 @@
 //! Init's live counts end at what it imported: every source entry, and each
 //! regular-file identity once with its bytes.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::{HistoryName, LayerStackId};
 use layerfs_project::{init_observed, InitCounters, InitCounts, InitRequest, InitStep};
 use layerfs_telemetry::timer::Timing;

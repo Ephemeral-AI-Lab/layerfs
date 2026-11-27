@@ -1,8 +1,7 @@
 //! F-043: Saves made in turn on a pool of long-lived threads hold one encode
 //! workspace between them, not one per thread's allocator arena.
 #![cfg(all(target_os = "linux", target_env = "gnu"))]
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::Storage;
 use std::sync::{mpsc, Arc};

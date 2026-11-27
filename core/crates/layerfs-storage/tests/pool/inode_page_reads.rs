@@ -26,8 +26,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 const FILES: u64 = 20_000;
 

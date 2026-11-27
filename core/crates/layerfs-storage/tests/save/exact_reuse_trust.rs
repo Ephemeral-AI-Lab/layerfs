@@ -6,10 +6,8 @@
 //! role or length mismatch is still refused at Save. A stored copy that was
 //! corrupted after it was written is therefore accepted by the reusing Save,
 //! and its next read fails authentication against the id.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::inode_leaf::{
     encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata, InodeValue,

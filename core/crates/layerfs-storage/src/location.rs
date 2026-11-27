@@ -1,5 +1,8 @@
-//! Engine-independent physical locations and stored value rows.
+//! Engine-independent physical locations, stored value rows and the bounded
+//! physical input (`Source`) the shared encoding algorithms read through.
 
+use crate::error::StorageResult;
+use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
 use layerfs_content::{ObjectId, ObjectRole};
 
 /// One stored object's descriptor and physical location.
@@ -133,12 +136,6 @@ pub struct LocatedChains {
     pub directories: Vec<PackDirectory>,
 }
 
-// Engine-independent bounded physical input for the shared encoding algorithms.
-
-use crate::error::StorageResult;
-use crate::location::{ObjectLocation, SignatureRow};
-use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
-
 /// Physical input and advisory-index persistence used by unchanged encoding.
 pub trait Source {
     /// Legacy sources require physical allocation order; first-wins sources
@@ -177,7 +174,7 @@ pub trait Source {
         })
     }
     /// Validates a retained descriptor against this Source's immutable view.
-    fn validate_cached_pack(&self, _info: crate::location::PackInfo) -> StorageResult<()> {
+    fn validate_cached_pack(&self, _info: PackInfo) -> StorageResult<()> {
         Ok(())
     }
     /// The stored inode value of every ordinal, in the order asked, for the

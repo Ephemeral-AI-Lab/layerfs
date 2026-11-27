@@ -18,20 +18,20 @@ const ENTRY_CHARGE: usize = 96;
 /// Held objects, each with the base it waits for, in arrival order, within
 /// [`SAVE_DEFERRED_BYTES`].
 #[derive(Default)]
-pub(super) struct Deferred {
+pub(crate) struct Deferred {
     held: Vec<(FinalizedObject, ObjectId)>,
     charged: usize,
 }
 
 impl Deferred {
     /// True when nothing is held.
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.held.is_empty()
     }
 
     /// Holds `object` until `base` is published; false when the bound has no
     /// room, and the caller publishes the base first, as before.
-    pub(super) fn hold(&mut self, object: &FinalizedObject, base: ObjectId) -> bool {
+    pub(crate) fn hold(&mut self, object: &FinalizedObject, base: ObjectId) -> bool {
         let charge = object.canonical_len() + ENTRY_CHARGE;
         if self.charged + charge > SAVE_DEFERRED_BYTES {
             return false;
@@ -42,7 +42,7 @@ impl Deferred {
     }
 
     /// The canonical bytes of held object `id`.
-    pub(super) fn canonical(&self, id: ObjectId) -> Option<&[u8]> {
+    pub(crate) fn canonical(&self, id: ObjectId) -> Option<&[u8]> {
         self.held
             .iter()
             .find(|(object, _)| object.id() == id)
@@ -50,12 +50,12 @@ impl Deferred {
     }
 
     /// True when `id` is held.
-    pub(super) fn holds(&self, id: ObjectId) -> bool {
+    pub(crate) fn holds(&self, id: ObjectId) -> bool {
         self.canonical(id).is_some()
     }
 
     /// Canonical bytes held.
-    pub(super) fn canonical_bytes(&self) -> u64 {
+    pub(crate) fn canonical_bytes(&self) -> u64 {
         self.held
             .iter()
             .map(|(object, _)| object.canonical_len() as u64)

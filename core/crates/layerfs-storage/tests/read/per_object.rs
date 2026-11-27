@@ -2,10 +2,8 @@
 //! is the one its point read returns, healthy objects cost what the batched
 //! read costs, a damaged unit fails only the objects that need it and is not
 //! requested again, and a transport failure fails the whole call.
-#[path = "../support/chain_provider.rs"]
-mod chains;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::chains;
+use crate::metadata;
 
 use chains::{copy, history, ChainProvider, Shape};
 use layerfs_content::{

@@ -2,7 +2,7 @@
 //! libraries, and the projects of a live Store (#506).
 mod init;
 mod install;
-pub(crate) mod install_outcome;
+mod install_outcome;
 mod live;
 mod live_open;
 pub use init::{InitError, InitFailure, InitRequest, ProjectApi, SealedProject};

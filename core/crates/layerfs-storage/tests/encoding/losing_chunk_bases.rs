@@ -3,8 +3,7 @@
 //! by more: chunks appended past the old end of a file are all offered the old
 //! last chunk, which incompressible bytes never beat and text resembling it
 //! does.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::encoding::delta::select::{

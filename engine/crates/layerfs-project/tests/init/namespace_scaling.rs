@@ -1,6 +1,5 @@
 //! Backed-count growth with fixed resident windows; not a whole-importer memory proof.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use std::sync::Arc;
 use support::*;
 #[test]

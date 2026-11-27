@@ -179,7 +179,7 @@ impl PackCache {
         source: &dyn crate::source::Source,
         id: i64,
         number: usize,
-    ) -> StorageResult<Option<super::super::encoding::GroupSlice<'a>>> {
+    ) -> StorageResult<Option<crate::encoding::GroupSlice<'a>>> {
         let entry = self
             .entries
             .get(&(id, None))
@@ -194,7 +194,7 @@ impl PackCache {
         self.clock.set(next);
         entry.touched.set(next);
         if let Some((header, view)) = entry.unit {
-            Ok(Some(super::super::encoding::GroupSlice {
+            Ok(Some(crate::encoding::GroupSlice {
                 header,
                 view,
                 bytes: &entry.body,
@@ -207,7 +207,7 @@ impl PackCache {
                 .body
                 .get(view.start..view.end)
                 .ok_or(StorageError::Integrity("group body range"))?;
-            Ok(Some(super::super::encoding::GroupSlice {
+            Ok(Some(crate::encoding::GroupSlice {
                 header,
                 view,
                 bytes,
@@ -222,13 +222,13 @@ impl PackCache {
         &self,
         id: i64,
         number: usize,
-    ) -> Option<super::super::encoding::GroupSlice<'_>> {
+    ) -> Option<crate::encoding::GroupSlice<'_>> {
         let entry = self
             .entries
             .get(&(id, None))
             .or_else(|| self.entries.get(&(id, Some(number))))?;
         if let Some((header, view)) = entry.unit {
-            return Some(super::super::encoding::GroupSlice {
+            return Some(crate::encoding::GroupSlice {
                 header,
                 view,
                 bytes: &entry.body,
@@ -236,7 +236,7 @@ impl PackCache {
         }
         let header = crate::pack::layout::parse_header(&entry.body).ok()?;
         let view = crate::pack::layout::group_view(&entry.body, header, number).ok()?;
-        Some(super::super::encoding::GroupSlice {
+        Some(crate::encoding::GroupSlice {
             header,
             view,
             bytes: entry.body.get(view.start..view.end)?,
@@ -326,12 +326,7 @@ impl PackCache {
                     || retained_bytes >= info.length.div_ceil(2))
         });
         let acquired = source.acquire_groups(id, &missing, whole_for_reuse)?;
-        if whole_for_reuse
-            && !matches!(
-                &acquired,
-                super::super::encoding::PackAcquisition::Whole { .. }
-            )
-        {
+        if whole_for_reuse && !matches!(&acquired, crate::encoding::PackAcquisition::Whole { .. }) {
             return Err(StorageError::Integrity("whole reuse selection reply"));
         }
         self.admit_groups(source, id, &wanted, &missing, acquired)
@@ -345,11 +340,11 @@ impl PackCache {
         id: i64,
         wanted: &BTreeSet<usize>,
         missing: &[usize],
-        acquired: super::super::encoding::PackAcquisition,
+        acquired: crate::encoding::PackAcquisition,
     ) -> StorageResult<(bool, usize)> {
         let before = self.work;
         let bytes = match acquired {
-            super::super::encoding::PackAcquisition::Whole { info, body } => {
+            crate::encoding::PackAcquisition::Whole { info, body } => {
                 if let Some(info) = info {
                     if info.pack_id != id || info.length != body.len() {
                         return Err(StorageError::Integrity("acquired pack binding"));
@@ -432,7 +427,7 @@ impl PackCache {
                     .info = info;
                 bytes
             }
-            super::super::encoding::PackAcquisition::Units(units) => {
+            crate::encoding::PackAcquisition::Units(units) => {
                 let info = units
                     .first()
                     .ok_or(StorageError::Integrity("empty selected reply"))?

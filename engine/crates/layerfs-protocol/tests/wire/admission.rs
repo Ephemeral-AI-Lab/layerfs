@@ -1,5 +1,6 @@
 //! The advisory pre-handshake capacity notice (#540): one fixed 24-byte body
 //! round-trips, and a record that is anything else is never a notice.
+#![cfg(feature = "duplex")]
 use layerfs_protocol::duplex::admission::{
     classify, encode, AdmissionNotice, AdmissionReason, BODY_LEN, MAGIC,
 };

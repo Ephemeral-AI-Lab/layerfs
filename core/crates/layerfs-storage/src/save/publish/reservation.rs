@@ -1,8 +1,10 @@
-//! One combined initial reservation, explicit bounded refills, and the id
-//! block a handle keeps between its Saves.
+//! One combined initial reservation, explicit bounded refills, the id
+//! block a handle keeps between its Saves, and the startup allocation
+//! windows (independent from total Save size).
 use super::super::state::State;
 use crate::{
     error::{StorageError, StorageResult},
+    policy,
     port::Reserve,
 };
 
@@ -58,7 +60,7 @@ impl IdBlock {
 
 impl State<'_> {
     /// Takes the handle's kept block, or reserves both kinds at once.
-    pub(super) fn reserve_initial(&mut self) -> StorageResult<()> {
+    pub(crate) fn reserve_initial(&mut self) -> StorageResult<()> {
         if let Some(kept) = self.storage.kept.take().filter(|b| !b.is_empty()) {
             self.next_pack = kept.next_pack;
             self.pack_end = kept.pack_end;
@@ -90,7 +92,7 @@ impl State<'_> {
     }
     /// After an acknowledged finish: the unused pack ids and the kept ordinal
     /// prefix go back to the handle for its next Save.
-    pub(super) fn keep_rest(&self) {
+    pub(crate) fn keep_rest(&self) {
         self.storage.kept.set(Some(IdBlock {
             next_pack: self.next_pack,
             pack_end: self.pack_end,
@@ -103,7 +105,7 @@ impl State<'_> {
     /// [`StorageError::is_unknown_outcome`] reports) marks the Save
     /// uncertain, so it never hands its ids on. Every other class is a
     /// definite refusal: the provider's transaction rolled back.
-    pub(super) fn written<T>(
+    pub(crate) fn written<T>(
         &mut self,
         result: Result<T, crate::port::PersistenceError>,
     ) -> StorageResult<T> {
@@ -119,7 +121,7 @@ impl State<'_> {
     /// its reserved ends (the ordinal end of a release not applied yet).
     /// Ids it assigned, published or not, stay below them and are never
     /// reused.
-    pub(super) fn unused_rest(&self) -> Option<IdBlock> {
+    pub(crate) fn unused_rest(&self) -> Option<IdBlock> {
         if self.write_uncertain {
             return None;
         }
@@ -135,7 +137,7 @@ impl State<'_> {
             ordinal_end: ordinal_end.max(self.next_ordinal),
         })
     }
-    pub(super) fn reserve_ordinals(&mut self, block: usize) -> StorageResult<()> {
+    pub(crate) fn reserve_ordinals(&mut self, block: usize) -> StorageResult<()> {
         self.storage.source.note(|c| {
             c.reserve += 1;
             c.reservation_refills += 1;
@@ -162,9 +164,6 @@ impl State<'_> {
         Ok(())
     }
 }
-
-// Startup allocation windows, independent from total Save size.
-use crate::policy;
 
 /// IDs requested in the initial combined reservation and later refills.
 /// A larger bounded demand can request a larger refill within the port limit.

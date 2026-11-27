@@ -1,3 +1,4 @@
+//! `Fetch` (`Storage.source`): its locators, hints, group plans and counters.
 pub(crate) mod captured;
 pub(crate) mod counters;
 pub(crate) mod fetch;

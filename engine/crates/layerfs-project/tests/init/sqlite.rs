@@ -2,8 +2,7 @@
 //!
 //! The same Store opens on macOS/Linux. Unsupported platforms retain
 //! the explicit before-file-creation refusal.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_history::HistoryCatalogConfig;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use layerfs_persistence::SqliteAcquisitionSchema;

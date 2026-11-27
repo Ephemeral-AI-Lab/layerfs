@@ -2,8 +2,7 @@
 //! `SAVE_RESOLVED_CACHE_BYTES`. A merge reads the same pages of its three
 //! trees many times (48,897 reads of 2,444 objects in range 15's slow merge);
 //! each read used to walk the object's chain, decompress it and hash it again.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::{policy::READ_CANONICAL_BYTES_LIMIT, Storage, StorageError};
 use std::sync::Arc;

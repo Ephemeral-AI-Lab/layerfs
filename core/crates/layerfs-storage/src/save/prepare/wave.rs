@@ -14,7 +14,7 @@ use crate::{
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
-    pub(super) fn reserve_packs(&mut self, required: usize) -> StorageResult<()> {
+    pub(crate) fn reserve_packs(&mut self, required: usize) -> StorageResult<()> {
         if required as i64 <= self.pack_end.saturating_sub(self.next_pack) {
             return Ok(());
         }
@@ -42,7 +42,7 @@ impl State<'_> {
             .ok_or(StorageError::Integrity("pack allocation overflow"))?;
         Ok(())
     }
-    pub(super) fn wave(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
+    pub(crate) fn wave(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
         if objects.is_empty() {
             return Ok(());
         }
@@ -51,7 +51,7 @@ impl State<'_> {
     }
 
     /// Publishes ready packs and the acknowledged bases needed to place held objects.
-    pub(super) fn publish_wave(&mut self) -> StorageResult<()> {
+    pub(crate) fn publish_wave(&mut self) -> StorageResult<()> {
         let flush = self.storage.work.span(super::super::Stage::Flush);
         // Keep the existing bounded partial queues until pressure, dependency
         // closure or finish requires them. Ready packs still publish this wave,
@@ -102,7 +102,7 @@ impl State<'_> {
     /// One wave's membership, exact reuse and selection, without publishing
     /// it: `Save::finish` publishes its last wave with the sealed tail, in
     /// one publication rather than two (#768).
-    pub(super) fn prepare(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
+    pub(crate) fn prepare(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
         if objects.is_empty() {
             return Ok(());
         }
@@ -357,7 +357,7 @@ impl State<'_> {
             && !self.depths.knows(base.object_id))
         .then_some(base)
     }
-    pub(super) fn flush_signatures(&mut self) -> StorageResult<()> {
+    pub(crate) fn flush_signatures(&mut self) -> StorageResult<()> {
         let view = WaveSource {
             fetch: &self.storage.source,
             packer: &self.packer,
@@ -474,7 +474,7 @@ impl State<'_> {
     }
 
     /// Prepares the next value window as its first unresolved leaf is read.
-    pub(super) fn resolve_demand(
+    pub(crate) fn resolve_demand(
         &mut self,
         id: ObjectId,
         remaining: &[ObjectId],
@@ -488,7 +488,7 @@ impl State<'_> {
         self.resolve(id)
     }
 
-    pub(super) fn resolve(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
+    pub(crate) fn resolve(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
         if let Some(value) = self.resolved.get(id) {
             return Ok(value);
         }

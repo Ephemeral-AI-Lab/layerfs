@@ -5,10 +5,8 @@
 //! only to rebuild and hash its bases (keeping what passed), a hinted locator
 //! serves one demand, and a Store without chains costs exactly the default
 //! calls.
-#[path = "../support/chain_provider.rs"]
-mod chains;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::chains;
+use crate::metadata;
 
 use chains::{copy, depth, history, history_with, read, ChainProvider, Shape};
 use layerfs_content::filesystem::directory::{apply_bindings, build_directory};

@@ -19,8 +19,7 @@
 #[allow(dead_code)]
 #[path = "../support/edits.rs"]
 mod edits;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

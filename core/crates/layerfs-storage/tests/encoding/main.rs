@@ -7,6 +7,10 @@ mod depth_counts;
 mod inode_pages;
 mod lazy_candidate_ring;
 mod losing_chunk_bases;
+#[path = "../support/memory_metadata.rs"]
+mod metadata;
 mod program_pages;
 mod rebased_fraction;
 mod sparse_edges;
+#[path = "../support/mod.rs"]
+mod support;

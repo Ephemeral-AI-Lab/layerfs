@@ -4,10 +4,8 @@
 //! failed Save; and a pooled leaf's delta chain is read in a bounded number
 //! of provider calls, not one per link. A keeping handle returns its kept
 //! ordinals before an orderly drop; any other handle keeps none.
-#[path = "../support/chain_provider.rs"]
-mod chains;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::chains;
+use crate::metadata;
 
 use chains::{copy, depth, ChainProvider};
 use layerfs_content::{

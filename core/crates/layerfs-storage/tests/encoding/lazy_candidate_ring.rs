@@ -16,10 +16,8 @@
 //! so they hold the same object ids, representations and delta bases. Each
 //! Save reports the same delta outcomes in both arms. A Save that never uses
 //! the ring does not read the table in the lazy arm.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::encoding::delta::select::DeltaCounters;

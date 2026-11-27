@@ -2,10 +2,7 @@
 //! as ranges or whole packs, in request order and within the cache bound; a
 //! cached unit refuses its pack under another digest; ranged bytes are
 //! authenticated by the objects rebuilt from them.
-#[path = "../support/chain_provider.rs"]
-mod chains;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::chains;
 
 use chains::{copy, history, read, ChainProvider, Shape};
 use layerfs_content::ObjectId;

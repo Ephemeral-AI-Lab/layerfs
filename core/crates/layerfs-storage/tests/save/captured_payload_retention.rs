@@ -1,11 +1,8 @@
 //! A captured network Save retains only acknowledged winner bodies, sharing
 //! the existing published-pack byte budget with metadata.
-#[path = "../support/chain_provider.rs"]
-mod chains;
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::chains;
+use crate::metadata;
+use crate::support;
 
 use chains::ChainProvider;
 use layerfs_content::{

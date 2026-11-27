@@ -2,8 +2,7 @@
 //! of reading and saving pooled leaves over them and prove that a wrong or
 //! absent row can only fail a read: the work follows the leaf, never the
 //! number of Saves that came before it.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 use layerfs_content::{
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, LEAF_ROW_BYTES,

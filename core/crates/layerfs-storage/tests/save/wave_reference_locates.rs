@@ -3,8 +3,7 @@
 //! reference still located instead of locating it again alone. An edit that
 //! appends to a large file emits its mapping pages at the end of the Save,
 //! naming every chunk the Save published earlier.
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::{policy, Storage};

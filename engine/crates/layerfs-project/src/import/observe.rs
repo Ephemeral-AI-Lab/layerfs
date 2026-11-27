@@ -2,7 +2,8 @@
 //!
 //! Init updates them as it goes; they are observations for display, not
 //! results. Totals are the caller's to know: the counts say how far Init has
-//! come, not how far it has to go.
+//! come, not how far it has to go. [`NamespaceWork`] holds Init's final
+//! count-driven acquisition diagnostics; it excludes opaque allocator/OS state.
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering::Relaxed};
 
 /// The part of Init that is running.
@@ -80,7 +81,6 @@ impl InitCounters {
     }
 }
 
-// Count-driven acquisition diagnostics; excludes opaque allocator/OS state.
 /// Backed row counts, port unit counts and resident window high-water marks.
 ///
 /// Counts grow with the acquired root because they describe rows held by the

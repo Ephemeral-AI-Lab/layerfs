@@ -7,8 +7,7 @@
 //! deleted file and a replaced one, both give the same size. More changed
 //! files than `LENGTH_WINDOW` are asked in several demands. (The per-file
 //! payload route `logical_size_after` was removed by #364.)
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
+use crate::metadata;
 
 use layerfs_content::filesystem::attributes::portable::PortableMetadata;
 use layerfs_content::filesystem::statistics::{

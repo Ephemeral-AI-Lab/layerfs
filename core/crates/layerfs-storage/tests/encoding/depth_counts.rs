@@ -1,10 +1,8 @@
 //! A Save reports the chain depth of every payload object it stored and why a
 //! declared base was not used: at the role's depth cap, or at the chain-work
 //! budget, where the chain root is the base instead (#352 delta outcomes, #89).
-#[path = "../support/memory_metadata.rs"]
-mod metadata;
-#[path = "../support/mod.rs"]
-mod support;
+use crate::metadata;
+use crate::support;
 
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::{Storage, StoragePolicy, WriteOutcome};
