@@ -1,0 +1,45 @@
+
+running 1 test
+test sqlite_large_counts ... FAILED
+
+failures:
+
+---- sqlite_large_counts stdout ----
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"sqlite","case":"grep.large.cold","outcome":"ok","writer":[0, 0, 0, 0],"control":[0, 0, 292, 4],"workspace":[0, 0, 0, 0],"round_trips":0,"statements":292,"ms":178.83,"server":null}
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"sqlite","case":"grep.large.warm","outcome":"ok","writer":[0, 0, 0, 0],"control":[0, 0, 261, 4],"workspace":[0, 0, 0, 0],"round_trips":0,"statements":261,"ms":174.19,"server":null}
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"sqlite","case":"glob.large.cold","outcome":"ok","writer":[0, 0, 0, 0],"control":[0, 0, 19, 4],"workspace":[0, 0, 0, 0],"round_trips":0,"statements":19,"ms":0.48,"server":null}
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"sqlite","case":"glob.large.warm","outcome":"ok","writer":[0, 0, 0, 0],"control":[0, 0, 14, 4],"workspace":[0, 0, 0, 0],"round_trips":0,"statements":14,"ms":0.19,"server":null}
+
+thread 'sqlite_large_counts' panicked at engine/crates/layerfs-store-service/tests/support/round_trips.rs:744:5:
+[connects, round_trips, statements, transactions] per role:
+sqlite grep.large.cold: measured writer [0, 0, 0, 0] control [0, 0, 292, 4] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+sqlite grep.large.warm: measured writer [0, 0, 0, 0] control [0, 0, 261, 4] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+sqlite glob.large.cold: measured writer [0, 0, 0, 0] control [0, 0, 19, 4] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+sqlite glob.large.warm: measured writer [0, 0, 0, 0] control [0, 0, 14, 4] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sqlite_large_counts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.90s
+
+        0.91 real         0.73 user         0.23 sys
+            51134464  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                3611  page reclaims
+                   1  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  69  voluntary context switches
+                 328  involuntary context switches
+         13883721552  instructions retired
+          3318689887  cycles elapsed
+            37962208  peak memory footprint
+run_bounded: exit 101 after 0.9 s

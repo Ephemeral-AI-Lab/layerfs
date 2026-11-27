@@ -248,20 +248,36 @@ pub fn grep<'a>(
     let top = found(snap, path, entry)?;
     let mut window = Vec::new();
     let excluded = |file: &str| filters.excluded(file);
-    walk::walk_excluding(memo, snap, path, top, None, excluded, |file, entry| {
-        if entry.value.kind == InodeKind::RegularFile
-            && seen.hidden(file).is_none()
-            && filters.included(file)
-        {
-            window.push((file.to_owned(), entry));
-        }
-        if window.len() == cached::ROOTS {
-            page.scan(cached, &mut reuse, &mut window)?;
-        }
-        Ok(!page.more)
-    })?;
+    // Wide windows where a demand costs a round trip (#818 R6).
+    let wide = cached.wide();
+    let files = if wide {
+        cached::WIDE_ROOTS
+    } else {
+        cached::ROOTS
+    };
+    walk::walk_excluding(
+        memo,
+        snap,
+        path,
+        top,
+        None,
+        wide,
+        excluded,
+        |file, entry| {
+            if entry.value.kind == InodeKind::RegularFile
+                && seen.hidden(file).is_none()
+                && filters.included(file)
+            {
+                window.push((file.to_owned(), entry));
+            }
+            if window.len() == files {
+                page.scan(cached, &mut reuse, &mut window, files)?;
+            }
+            Ok(!page.more)
+        },
+    )?;
     if !page.more {
-        page.scan(cached, &mut reuse, &mut window)?;
+        page.scan(cached, &mut reuse, &mut window, files)?;
     }
     let Page {
         items,
@@ -301,6 +317,7 @@ impl Page<'_> {
         cached: &Cached,
         reuse: &mut search::Reuse,
         window: &mut Vec<(String, EntryFacts)>,
+        files: usize,
     ) -> Result<(), SdkRefusal> {
         let mut ids: Vec<_> = window
             .iter()
@@ -309,7 +326,7 @@ impl Page<'_> {
             .collect();
         ids.sort_unstable();
         ids.dedup();
-        let mut views = cached.roots(&ids)?;
+        let mut views = cached.roots(&ids, files)?;
         let (pattern, fold) = (self.pattern, self.fold);
         for (file, entry) in window.drain(..) {
             if self.more {
@@ -363,6 +380,7 @@ pub fn glob<'a>(
     filters: &search::Filters,
     limit: usize,
     pos: u64,
+    wide: bool,
 ) -> Answer {
     let rule = Rule::glob(pattern);
     let (mut items, mut found, mut spent, mut more) = (Vec::new(), 0u64, 0, false);
@@ -370,7 +388,7 @@ pub fn glob<'a>(
     let top = super::snapshot::found(snap, path, entry)?;
     let within = walk::leading(pattern);
     let excluded = |file: &str| filters.excluded(file);
-    walk::walk_excluding(memo, snap, path, top, within, excluded, |file, _| {
+    walk::walk_excluding(memo, snap, path, top, within, wide, excluded, |file, _| {
         if seen.hidden(file).is_some() {
             return Ok(true);
         }

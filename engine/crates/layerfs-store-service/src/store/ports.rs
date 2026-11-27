@@ -253,6 +253,11 @@ impl StorePorts {
     ) -> Result<Vec<ObjectRead>, Arc<PortError>> {
         self.attempt(|| each(ids.len(), self.reader()?.objects_each_with(cache, ids)?))
     }
+    /// Whether the Store pays a round trip per demand and reads a grouped
+    /// demand in one (PostgreSQL; `Store::batched_reads`).
+    pub fn batched_reads(&self) -> bool {
+        self.store.batched_reads()
+    }
     /// Whether [`Self::objects_each_with`] and [`Self::lengths_each_with`]
     /// read their objects in one demand: the storage reader does.
     pub fn reads_each_at_once(&self) -> bool {

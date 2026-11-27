@@ -54,7 +54,17 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
         &saved.record,
         &saved.recorded,
         reads::glob(
-            memo, &snap, pattern, &path, entry, &seen, &filters, limit, pos,
+            memo,
+            &snap,
+            pattern,
+            &path,
+            entry,
+            &seen,
+            &filters,
+            limit,
+            pos,
+            // Wide windows where a demand costs a round trip (#818 R6).
+            cached.wide(),
         )
         .map(|value| visibility::settle(value, &seen, removed)),
     )

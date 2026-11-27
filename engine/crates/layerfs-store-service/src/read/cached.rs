@@ -138,6 +138,12 @@ impl<'a> Cached<'a> {
         ids.iter().map(|id| held.0.get(id).cloned()).collect()
     }
 
+    /// Whether the Store pays a round trip per demand (PostgreSQL), where
+    /// `fs.grep` and `fs.glob` take wide windows (#818 R6).
+    pub fn wide(&self) -> bool {
+        self.ports.batched_reads()
+    }
+
     /// The call's directory memo, for a window of versions (#818 H5).
     pub fn memo(&self) -> RefMut<'_, DirectoryMemo> {
         self.directories.borrow_mut()
@@ -208,7 +214,11 @@ impl<'a> Cached<'a> {
     /// canonical size is bounded from its file length, read first: a
     /// whole-file root is its payload plus a fixed overhead, a chunked or
     /// empty file's root is its fixed-size state.
-    pub fn roots(&self, ids: &[ObjectId]) -> Result<HashMap<ObjectId, FileView>, SdkRefusal> {
+    pub fn roots(
+        &self,
+        ids: &[ObjectId],
+        count: usize,
+    ) -> Result<HashMap<ObjectId, FileView>, SdkRefusal> {
         if ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -217,7 +227,7 @@ impl<'a> Cached<'a> {
             return Err(args::failed("file length cardinality"));
         }
         let mut views = HashMap::with_capacity(ids.len());
-        for batch in batches(&lengths) {
+        for batch in batches_of(&lengths, count) {
             self.open(&ids[batch], &mut views)?;
         }
         Ok(views)
@@ -271,6 +281,10 @@ impl<'a> Cached<'a> {
 /// of the storage reader's per-demand limit, so a batch holds little.
 pub const ROOTS: usize = 64;
 pub const ROOT_BYTES: usize = 4 * 1024 * 1024;
+/// A wide window's files and roots a demand at most (#818 R6): where the
+/// Store pays a round trip per demand (PostgreSQL), `fs.grep` lets
+/// [`ROOT_BYTES`] decide, up to this many.
+pub const WIDE_ROOTS: usize = 256;
 
 /// The most canonical bytes a regular file's root of `length` has.
 pub fn root_bound(length: u64) -> usize {
@@ -284,10 +298,15 @@ pub fn root_bound(length: u64) -> usize {
 /// most [`ROOTS`] files and [`ROOT_BYTES`] of bounded root bytes, except a
 /// single file over that bound, which goes alone.
 pub fn batches(lengths: &[u64]) -> Vec<std::ops::Range<usize>> {
+    batches_of(lengths, ROOTS)
+}
+
+/// [`batches`] of at most `count` files each.
+pub fn batches_of(lengths: &[u64], count: usize) -> Vec<std::ops::Range<usize>> {
     let (mut runs, mut from, mut bytes) = (Vec::new(), 0, 0usize);
     for (at, &length) in lengths.iter().enumerate() {
         let size = root_bound(length);
-        if at > from && (at - from == ROOTS || bytes.saturating_add(size) > ROOT_BYTES) {
+        if at > from && (at - from == count || bytes.saturating_add(size) > ROOT_BYTES) {
             runs.push(from..at);
             (from, bytes) = (at, 0);
         }

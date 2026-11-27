@@ -1,0 +1,45 @@
+
+running 1 test
+test postgresql_large_counts ... FAILED
+
+failures:
+
+---- postgresql_large_counts stdout ----
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"postgresql","case":"grep.large.cold","outcome":"ok","writer":[0, 0, 0, 0],"control":[1, 321, 316, 0],"workspace":[0, 0, 0, 0],"round_trips":321,"statements":316,"ms":367.32,"server":{"toplevel_calls":316,"nested_calls":0,"evicted":false,"distinct":6,"top":[[179,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[114,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[20,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[1,"SELECT octet_length(h.schema_source),(to_regclass($1) IS NOT NULL)::int+(to_regclass($2) IS NOT NULL)::int+(to"],[1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT $3, s.layer_stack_id, s.name, s.scope_id, s.profile_id, s.head"],[1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT p.pack_id,p.directory,p.domain,CASE WHEN octet_length(p.digest"]]}}
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"postgresql","case":"grep.large.warm","outcome":"ok","writer":[0, 0, 0, 0],"control":[0, 280, 280, 0],"workspace":[0, 0, 0, 0],"round_trips":280,"statements":280,"ms":350.76,"server":{"toplevel_calls":280,"nested_calls":0,"evicted":false,"distinct":4,"top":[[145,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[114,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[20,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT $3, s.layer_stack_id, s.name, s.scope_id, s.profile_id, s.head"]]}}
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"postgresql","case":"glob.large.cold","outcome":"ok","writer":[0, 0, 0, 0],"control":[1, 21, 16, 0],"workspace":[0, 0, 0, 0],"round_trips":21,"statements":16,"ms":18.74,"server":{"toplevel_calls":16,"nested_calls":0,"evicted":false,"distinct":6,"top":[[9,"SELECT q.*,f.__layerfs_incarnation FROM (WITH o AS MATERIALIZED (SELECT x.object_id,x.role,x.canonical_length,"],[2,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[2,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[1,"SELECT octet_length(h.schema_source),(to_regclass($1) IS NOT NULL)::int+(to_regclass($2) IS NOT NULL)::int+(to"],[1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT $3, s.layer_stack_id, s.name, s.scope_id, s.profile_id, s.head"],[1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT p.pack_id,p.directory,p.domain,CASE WHEN octet_length(p.digest"]]}}
+RT_COUNTS {"pins":"sdk_read_large_rh","backend":"postgresql","case":"glob.large.warm","outcome":"ok","writer":[0, 0, 0, 0],"control":[0, 5, 5, 0],"workspace":[0, 0, 0, 0],"round_trips":5,"statements":5,"ms":3.48,"server":{"toplevel_calls":5,"nested_calls":0,"evicted":false,"distinct":3,"top":[[2,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) "],[2,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO"],[1,"SELECT q.*,f.__layerfs_incarnation FROM (SELECT $3, s.layer_stack_id, s.name, s.scope_id, s.profile_id, s.head"]]}}
+
+thread 'postgresql_large_counts' panicked at engine/crates/layerfs-store-service/tests/support/round_trips.rs:744:5:
+[connects, round_trips, statements, transactions] per role:
+postgresql grep.large.cold: measured writer [0, 0, 0, 0] control [1, 321, 316, 0] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+postgresql grep.large.warm: measured writer [0, 0, 0, 0] control [0, 280, 280, 0] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+postgresql glob.large.cold: measured writer [0, 0, 0, 0] control [1, 21, 16, 0] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+postgresql glob.large.warm: measured writer [0, 0, 0, 0] control [0, 5, 5, 0] workspace [0, 0, 0, 0], pinned [0, 0, 0, 0] [0, 0, 0, 0] [0, 0, 0, 0]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    postgresql_large_counts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 2.17s
+
+        2.87 real         0.94 user         0.37 sys
+           242237440  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               15197  page reclaims
+                   1  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                1125  messages sent
+                4183  messages received
+                   0  signals received
+                 214  voluntary context switches
+                9117  involuntary context switches
+         16407039317  instructions retired
+          4346911178  cycles elapsed
+           227328648  peak memory footprint
+run_bounded: exit 101 after 2.9 s

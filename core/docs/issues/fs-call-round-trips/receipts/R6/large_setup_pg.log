@@ -1,0 +1,25 @@
+
+running 1 test
+test postgresql_large_counts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.78s
+
+        0.78 real         0.35 user         0.20 sys
+            53411840  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                3712  page reclaims
+                   1  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 372  messages sent
+                 967  messages received
+                   0  signals received
+                   1  voluntary context switches
+                1768  involuntary context switches
+          7916584733  instructions retired
+          1967464309  cycles elapsed
+            40452576  peak memory footprint
+run_bounded: exit 0 after 0.8 s

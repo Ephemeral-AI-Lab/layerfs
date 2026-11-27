@@ -129,6 +129,11 @@ const SQLITE: &[Pin] = &[
 ///   Branch reads are one context statement: −4 round trips and statements
 ///   warm (`stat.root` 8 → 4); cold −8, four prepares fewer too;
 ///   `hidden.stat.removed` −6 cold (it reads no recorded Branch).
+/// - #818 R6 (batch): `fs.grep` and `fs.glob` take folder pages of up to
+///   256 names and `fs.grep` windows of up to 256 files, roots in demands of
+///   at most 256 and the existing 4 MiB (byte bounds unchanged):
+///   `grep.tree_1k` cold 92 → 62, warm 24 → 15; the globs and
+///   `grep.one_file_dir` unchanged. SQLite unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe stat.root: 18 trips
     pin("stat.root.cold", NONE, [1, 16, 11, 0], NONE),
@@ -164,8 +169,8 @@ const POSTGRESQL: &[Pin] = &[
     pin("grep.one_file_dir.cold", NONE, [1, 20, 15, 0], NONE),
     pin("grep.one_file_dir.warm", NONE, [0, 5, 5, 0], NONE),
     // probe grep.tree_1k: 78
-    pin("grep.tree_1k.cold", NONE, [1, 92, 87, 0], NONE),
-    pin("grep.tree_1k.warm", NONE, [0, 24, 24, 0], NONE),
+    pin("grep.tree_1k.cold", NONE, [1, 62, 57, 0], NONE),
+    pin("grep.tree_1k.warm", NONE, [0, 15, 15, 0], NONE),
     // Markers present.
     pin("hidden.stat.depth3.cold", NONE, [1, 22, 17, 0], NONE),
     pin("hidden.list.dir_100.cold", NONE, [1, 23, 18, 0], NONE),
