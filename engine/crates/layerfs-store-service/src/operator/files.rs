@@ -1,5 +1,7 @@
 //! File revisions from persisted first-parent facts. No reconstructed UI history.
 use super::args::{paging, text};
+use crate::history::rows::{Revision, Rows};
+use crate::read::cached::Cached;
 use crate::{
     history::lookup::{self as args, Answer},
     read::snapshot,
@@ -14,37 +16,10 @@ use layerfs_content::{
 use layerfs_history::NodeId;
 use std::sync::Arc;
 
-pub fn revision(
-    store: &Arc<Store>,
-    node: NodeId,
-) -> Result<(layerfs_content::ObjectId, Option<NodeId>, SdkValue), SdkRefusal> {
-    Ok(match node {
-        NodeId::Commit(id) => {
-            let r = args::commit(store, id)?;
-            let branch = r
-                .meta
-                .branch
-                .map(|id| store.history().branch_any(id))
-                .transpose()
-                .map_err(args::history)?
-                .flatten();
-            (
-                r.root,
-                Some(r.parent.map_or(NodeId::Layer(r.base_layer), NodeId::Commit)),
-                args::commit_value(&r, branch.as_ref().map(|branch| branch.name.as_str())),
-            )
-        }
-        NodeId::Layer(id) => {
-            let r = args::layer(store, id)?;
-            (
-                r.root,
-                r.source_commit
-                    .map(NodeId::Commit)
-                    .or(r.parent.map(NodeId::Layer)),
-                args::layer_value(&r, None),
-            )
-        }
-    })
+/// The node's root, parent and record value, read on their own; a walk
+/// reads them through one [`Rows`] (#818 H1).
+pub fn revision(store: &Arc<Store>, node: NodeId) -> Result<Revision, SdkRefusal> {
+    Rows::new(store).revision(node)
 }
 
 pub fn entry(
@@ -56,19 +31,48 @@ pub fn entry(
     snapshot::entry(reader, &tree, path)
 }
 
+/// A walk's parent side: the node and the path's entry there.
+type Carried = Option<(NodeId, Option<EntryFacts>)>;
+
+/// The path's entry at `node` (its `root`) and at its `parent`. The parent's
+/// is kept in `carried`: it is the next node's own, read once (#818 H2).
+#[allow(clippy::type_complexity)]
+fn sides(
+    reader: &Cached<'_>,
+    rows: &mut Rows<'_>,
+    carried: &mut Carried,
+    node: NodeId,
+    root: layerfs_content::ObjectId,
+    parent: Option<NodeId>,
+    path: &str,
+) -> Result<(Option<EntryFacts>, Option<EntryFacts>), SdkRefusal> {
+    let now = match carried.take() {
+        Some((held, found)) if held == node => found,
+        _ => reader.entry(root, path)?,
+    };
+    let before = match parent {
+        Some(parent) => {
+            let found = reader.entry(rows.record(parent)?.root(), path)?;
+            *carried = Some((parent, found));
+            found
+        }
+        None => None,
+    };
+    Ok((now, before))
+}
+
 pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (_, reader, snap) = super::args::snapshot(store, args)?;
+    // Every version's objects through the call's caches (#818 H3).
+    let cached = Cached::new(&reader)?;
     let path = checked(text(args, "path")?)?;
     let (limit, pos) = paging(args)?;
     let (mut next, mut seen, mut items, mut spent, mut more) =
         (Some(snap.node), 0u64, Vec::new(), 0, false);
+    let (mut rows, mut carried) = (Rows::new(store), None);
     while let Some(node) = next {
-        let (root, parent, record) = revision(store, node)?;
-        let now = entry(&reader, root, &path)?;
-        let before = match parent {
-            Some(parent) => entry(&reader, revision(store, parent)?.0, &path)?,
-            None => None,
-        };
+        let (root, parent, record) = rows.revision(node)?;
+        let (now, before) = sides(&cached, &mut rows, &mut carried, node, root, parent, &path)?;
         next = parent;
         let same = match (now, before) {
             (None, None) => true,
@@ -106,7 +110,7 @@ pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
             ),
             (
                 "size",
-                now.map(|e| snapshot::size(&reader, &e))
+                now.map(|e| snapshot::size_in(&cached, &e))
                     .transpose()?
                     .map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
             ),
@@ -130,29 +134,27 @@ pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
 
 pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (_, reader, snap) = super::args::snapshot(store, args)?;
+    let cached = Cached::new(&reader)?;
     let path = checked(text(args, "path")?)?;
     let current = snapshot::entry(&reader, &snap.tree, &path)?;
     let size = current
-        .map(|entry| snapshot::size(&reader, &entry))
+        .map(|entry| snapshot::size_in(&cached, &entry))
         .transpose()?;
     // The operator explicitly caps this diagnostic, never silently reports a total.
     let mut count = 0i64;
     let mut logical = 0u64;
     let mut next = Some(snap.node);
+    let (mut rows, mut carried) = (Rows::new(store), None);
     while let Some(node) = next {
-        let (root, parent, _) = revision(store, node)?;
-        let now = entry(&reader, root, &path)?;
-        let before = match parent {
-            Some(p) => entry(&reader, revision(store, p)?.0, &path)?,
-            None => None,
-        };
+        let (root, parent, _) = rows.revision(node)?;
+        let (now, before) = sides(&cached, &mut rows, &mut carried, node, root, parent, &path)?;
         next = parent;
         if now.map(|e| e.value.content_root) == before.map(|e| e.value.content_root) {
             continue;
         }
         count += 1;
         if let Some(e) = now {
-            logical = logical.saturating_add(snapshot::size(&reader, &e)?);
+            logical = logical.saturating_add(snapshot::size_in(&cached, &e)?);
         }
         if count == 1000 {
             break;

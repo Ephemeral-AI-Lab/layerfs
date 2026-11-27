@@ -5,12 +5,13 @@
 //! was. An argument the engine uses only after a lookup travels as an
 //! [`Arg`], read but not yet refused.
 use crate::read::compare::{Request, Selector};
-use crate::read::snapshot::Snap;
+use crate::read::snapshot::{Named, Saved, Snap};
 use crate::store::StorePorts;
 use crate::write::files::{self, Change};
 use crate::StoreService;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_history::LayerStackRecord;
+use layerfs_content::AuthenticatedObjects;
+use layerfs_history::{ContextTarget, HistoryName, LayerStackRecord, NodeId};
 use std::sync::Arc;
 
 pub use crate::history::lookup::{invalid, Answer, Arg};
@@ -26,17 +27,99 @@ pub fn project(service: &StoreService, args: &SdkValue) -> Result<LayerStackReco
 /// id prefix (8 to 65 hex characters) is resolved to its Commit first, a
 /// prefix more than one Commit starts with refused `InvalidInput` with
 /// `matches`.
-pub fn snapshot_full(
+///
+/// A read naming `main`, a Branch by a valid name or a node by its full
+/// identity reads its history context in one call (#818 R5): the stack,
+/// the Branch, the node's record and, on PostgreSQL, its markers and
+/// recorded Branch, all in one statement. Any other read keeps the reads
+/// one by one, so each refuses where it did.
+///
+/// The snapshot itself resolves in [`snapshot_in`], once the call has built
+/// its caches over the reader (#818 R4).
+pub fn snapshot_target(
     service: &StoreService,
     args: &SdkValue,
-) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap), SdkRefusal> {
+) -> Result<(LayerStackRecord, Arc<StorePorts>, Named), SdkRefusal> {
+    if let Some((project, name, target)) = context_target(args) {
+        let context = service
+            .store
+            .published(|history| history.read_context(&project, &target))
+            .map_err(crate::history::lookup::published)?;
+        let stack = context
+            .stack
+            .clone()
+            .ok_or_else(|| crate::history::lookup::no_project(project.as_str()))?;
+        let reader = crate::read::snapshot::reader(&service.store, &stack);
+        let named = Named {
+            name,
+            context: Some(context),
+        };
+        return Ok((stack, reader, named));
+    }
     let stack = project(service, args)?;
     let name = match pinned(service, &stack, args)? {
         Some(full) => full,
         None => crate::operator::args::snapshot_name(args)?.to_owned(),
     };
-    let (reader, snap) = crate::read::snapshot::open(&service.store, &stack, &name)?;
-    Ok((stack, reader, snap))
+    let reader = crate::read::snapshot::reader(&service.store, &stack);
+    Ok((
+        stack,
+        reader,
+        Named {
+            name,
+            context: None,
+        },
+    ))
+}
+
+/// The project and target of a read whose history context one call reads
+/// (#818 R5): a valid project name with `main`, a valid Branch name or a
+/// full node identity, named as [`snapshot_target`] reads them. `None` for
+/// any other read: a missing or invalid argument, a `commit` prefix, an
+/// invalid name or an identity that does not parse.
+fn context_target(args: &SdkValue) -> Option<(HistoryName, String, ContextTarget)> {
+    use crate::history::resolve::FULL;
+    let project = HistoryName::new(args.get_text("project")?).ok()?;
+    let name = match args.get_text("commit") {
+        Some(text)
+            if text.len() == FULL
+                && text.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f')) =>
+        {
+            text
+        }
+        Some(_) => return None,
+        None => args.get_text("branch")?,
+    };
+    let target = if name == crate::history::MAIN {
+        ContextTarget::Main
+    } else if name.len() == FULL && crate::history::lookup::unhex(name).is_some() {
+        ContextTarget::Node(NodeId::from_slice(&crate::history::lookup::unhex(name)?).ok()?)
+    } else {
+        ContextTarget::Branch(HistoryName::new(name).ok()?)
+    };
+    Some((project, name.to_owned(), target))
+}
+
+/// The snapshot `named` resolves to, its root opened through `pages` (the
+/// call's caches), with what the resolve read on the way ([`Saved`]): the
+/// node's record for the answer's `at`, and its markers for the visibility
+/// step.
+pub fn snapshot_in(
+    service: &StoreService,
+    stack: &LayerStackRecord,
+    pages: &dyn AuthenticatedObjects,
+    named: Named,
+) -> Result<(Snap, Saved), SdkRefusal> {
+    match named.context {
+        Some(context) => crate::read::snapshot::resolve_context(
+            &service.store,
+            stack,
+            pages,
+            &named.name,
+            context,
+        ),
+        None => crate::read::snapshot::resolve_saved(&service.store, stack, pages, &named.name),
+    }
 }
 
 /// The full identity of the read's `commit` when it is an id prefix. A

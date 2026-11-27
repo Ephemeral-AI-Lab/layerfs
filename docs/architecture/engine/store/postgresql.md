@@ -163,7 +163,39 @@ caller's to classify. A prepare flight follows the same rule. The fused Workspac
 ([Fused Commit](#fused-commit), #768 stage 2), sending every request of its
 one transaction in one flight; `postgresql_pipeline.rs` proves that a flight is one network wait by
 holding every server byte at a proxy until the server shows the whole
-flight ran. `sslmode` is used exactly as given: the driver's default `prefer`
+flight ran.
+
+A writer turn (`Session::decided_turn`) can also carry one write unit
+(#818 I3b): one transaction spread over several flights of the turn, each
+sent once the previous flight's replies are read, so a later flight can use
+an earlier one's answers. `DecidedTurn::prepare_unit` prepares the unit's
+statements in one flight before the transaction opens, outside any
+transaction, and the turn holds their handles, so a statement-cache clear
+between flights cannot drop one. `DecidedTurn::send_in_unit` sends one
+flight that binds only those handles (any other statement, or a parameter
+count that differs, is refused as `Integrity` before anything is sent). The
+first flight carries the unit's `BEGIN` with the lane row
+(`write_begin(true)`). `open` keeps the transaction open after a flight, and
+the last flight ends with the unit's own `COMMIT`. The flights are counted
+as ordinary flights; the caller counts the unit's one transaction
+(`count_unit`). One attempt: a lost reply quarantines the session, and
+nothing is resent. A refused or unsent request is followed by `ROLLBACK`
+and the leftover barrier release in one more round trip. The exception is a
+first flight that sent nothing: it began no transaction and took no
+barrier, so nothing more is sent. After a failed flight, a further
+`send_in_unit` in the turn is refused as `Integrity` with nothing sent,
+because it would run outside the closed transaction. A turn that ends
+with the unit still open rolls it back the same way and counts it as rolled
+back; it never commits. A panic between the unit's flights closes the
+connection instead. While a unit is open, the turn's ordinary `send`, a
+second `prepare_unit` and a call inside the thread's held lane are refused
+as `Integrity`. `postgresql_session_unit.rs` covers a committed unit, a
+refused unit, the guards (including a flight after a rollback and a first
+flight that sent nothing), and drop and kill sweeps at every message of a
+two-flight unit: the rows are either the committed result or untouched. No
+product path opens a unit yet.
+
+`sslmode` is used exactly as given: the driver's default `prefer`
 costs one extra round trip per connection on a server without TLS, so a
 loopback or private route can give `sslmode=disable`; other routes give
 `require`, which verifies the server's certificate chain and host name (the
@@ -259,7 +291,7 @@ order, before the new connection serves anything:
 | 2. Read the new backend | The Store's generation, `pg_backend_pid()` and the backend start in one statement | a moved generation `Stale` |
 | 3. Take held keys again | The advisory keys of every intent the session still holds (`held_ops`: its live mounts) went with the old connection. They are taken again, all or none, in the statement a registration uses (`gc_lock_session`, generation and backend checked) | a refused key `Busy`, a moved generation `Stale`, a key on another backend (a transaction-pooling proxy) `Integrity`: the new connection is closed, the writer stays quarantined and the call fails. The intent rows were never touched, so they kept refusing removals and compaction |
 | 4. Release orphaned rows | Two kinds of intent row no caller will release: a mount whose admission reply was lost (it may have committed its row and never reached its caller), and an op whose release found the writer quarantined and could not be sent (its owner has closed; the closed connection gave its keys back, so it left `held_ops` and step 3 does not take them again). Each was recorded inside the turn that found it; its row is deleted by the owner release's generation-checked statement, by op id (token `reopen`). This step runs only when step 1 proved every closed connection's backend gone, so no admission `COMMIT` can land after the delete; otherwise every orphan waits for a later reopen | An orphan whose delete was answered is forgotten (a definite refusal leaves the row). One whose delete may not have run (a lost reply, its prepare's included) stays, with those not yet attempted, and the reopen fails. The delete names one op and is a no-op once the row is gone, so sending it at a later reopen never touches another op's row |
-| 5. Prepare again | The daemon's mount statements prepared at open (`prepare_mounts`) are prepared on the new connection | as any prepare |
+| 5. Prepare again | The statements prepared at open, the daemon's mount statements (`prepare_mounts`) and the SDK's create statements (`prepare_sdk_writes`, #818 W4), are prepared on the new connection in one flight | as any prepare |
 
 **Custody never straddles a reopen.** Every change to `held_ops` and the
 orphans happens inside a writer turn, together with the statement that
@@ -339,7 +371,7 @@ role that can read its own backends' starts (the default) never meets it.
 | `Publish` | as `Write` | `FOR UPDATE` and the lane barrier after the pack bodies; nested: as a nested `Write` | one Save publication, up to 16 MiB − 1 |
 | `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values |
-| `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Commit or Layer by id, a LayerStack by name, `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
+| `Statement` | none; exactly one autocommit statement | no | Init's acquisition reads (owner joined), `branch_snapshot`, a Branch by name, a Commit or Layer by id, a LayerStack by name, a project's `project.remove_file` markers (alone or with a node's serial), a read call's context (`read_context_*`), `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
 | `Admit` | as `Publish`: `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | never | a mount's GC registration ([GC admission](#gc-admission)) |
 | `Bare` | none; exactly one autocommit statement that may write, sent as written | no | the GC session keys and the owner's release; each carries its own generation check ([GC admission](#gc-admission)) |
 | Fused | as `Write`, sent in one pipelined message with the generation fence and a per-attempt token | `FOR UPDATE` and the lane barrier in the transaction itself, never nested in a held lane | a Workspace Commit over its bound head ([Fused Commit](#fused-commit)) |
@@ -347,7 +379,27 @@ role that can read its own backends' starts (the default) never meets it.
 Source: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs),
 [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs).
 A single statement sees one snapshot, so `Statement` reads a Branch and the
-rows it resolves to coherently. Statements outside a transaction name the
+rows it resolves to coherently. A read call's Branch-by-name and marker reads
+are each one such statement (#818 R1): one round trip, where a `Read`
+transaction costs three (its `BEGIN` and fence, the statement, `COMMIT`).
+Each still sees a snapshot of its own, as the separate transactions did, and
+the markers are still read after the head resolves, so a later read can only
+hide more. A read call naming `main`, a Branch or a full node identity
+reads all of that in one statement instead (#818 R5, `read_context_named` or
+`read_context_node`): its stack, Branch, node record with its serial, the
+Commit's recorded Branch and the project's markers come from one snapshot,
+one context row then one row per marker (records carry no arrays). The
+markers are those `path_removals` already loads; nothing caps them. A
+history walk (`fs.blame`, `fs.revision`) reads its first-parent Commits in
+windows of 16, 32, 64 then 128, each one such statement
+(`lineage_chain_window`, #818 H4): it follows the Commits' run segments
+through the `commit_runs` (run, depth) index, a run being one first-parent
+path whose first Commit's parent lies in another run, and returns each
+Commit's row and `history_serial` with its segment and depth, so the order
+is checked in Rust. A row is that Commit's read: one that fails to decode
+refuses only when the walk reaches it, and a gap ends the window so the walk
+reads the next Commit itself. SQLite reads no window (the catalog's default,
+one Commit and serial at a time, is not sent there). Statements outside a transaction name the
 schema (`{s}` in [`queries/history`](../../../../engine/crates/layerfs-persistence/sql/postgresql/queries/history)).
 Writes are never `SERIALIZABLE` and never retried.
 
@@ -907,6 +959,21 @@ prepared before the mount, in one flight each
   deleted the four in-place migration probes, 2 round trips each). A mount on a service that did not prepare
   them prepares the message's statements at first use, in the message's
   own turn ([Mount admission in one message](#mount-admission-in-one-message)).
+- **The writer, when the SDK opens a Store** (#818 W4,
+  `StoreService::open_postgres` → `OpenedStore::prepare_sdk_writes`): the
+  statements a first create sends after its bind (`mount::create_texts`).
+  A create is an SDK write that does not take the fused Commit. The texts
+  are:
+  - the serial reservation's one message (`allocation_reserve`);
+  - the Save's block allocation, pack `COPY` and object rows;
+  - the bindings' insert;
+  - the statements of the Commit's write transaction (`commit_branch`).
+
+  They go in one flight, one read transaction like the daemon's. Reads sent
+  as autocommit statements are not in it. One round trip per SDK open; a
+  first create then saves 16 round trips (`write.new_file` cold 96 → 80).
+  A reopened writer prepares them again with the mount statements, in one
+  flight (step 5 below).
 - **A Workspace reader**, when it opens (at the mount that opens it, or
   after readiness for the idle reader, `Store::prefill_reader`): the
   snapshot by Branch id and by name, the markers, and the root's first
@@ -1169,8 +1236,12 @@ measured with `log_statement=all` on the private test server, and pinned):
   back, and the built bytes reach the shared cache only after publication.
 - (g) `logical.known`: the Workspace keeps one node's recorded logical size,
   the one it last read or published (`BoundWorkspace::known_logical`); a
-  Commit over its own last Commit reads nothing. The bind snapshot carries
-  no size, so the first Commit after a mount still reads it.
+  Commit over its own last Commit reads nothing. Its Store keeps one more,
+  the size any of its Workspaces last read or published
+  (`Store::last_logical`, #818 W3), so a Workspace bound to the Commit
+  another one just published (sequential SDK file calls on one Branch)
+  reads nothing either. The bind snapshot carries no size, so the first
+  Commit after a mount over any other node still reads it.
 - (h) The whiteout step reuses the bound node's serial and markers that the
   mount read (`KnownRemovals`), and a Commit this Workspace published hides
   nothing: its serial is above every marker's frontier, and while the mount
@@ -1355,8 +1426,18 @@ A captured Commit whose binding blocks overflow one transaction may also
 publish its held Save tail through this flight before recording the
 bindings. That tail settles through the ordinary Save path. Untrusted
 completion or rollback and lane cleanup withhold unused allocations. Save
-finish, final fused history publication and Namespace Init use their
-respective existing registration paths.
+finish and final fused history publication use their respective existing
+registration paths.
+
+**Namespace Init's Saves (#818 I3c).** Init's three Saves (prerequisite,
+files, tree) are built with `Save::publishing_in_flights`, a flag of their
+own apart from captured output: every publication, finish included, goes
+through the same flight where eligible (`publish_captured_tail`: an
+untrusted completion is uncertain, the ordinary publication's custody) and
+through ordinary publication otherwise. No payload is kept, as for any
+non-captured Save. A publication then costs one round trip instead of
+`BEGIN`, the pack `COPY` (two), the lane and the rows and `COMMIT` (Init
+10k: 8 publications, 36 round trips fewer).
 
 After the tail acknowledges, each eligible overflow binding batch can send
 its existing sorted block append in one fenced write flight. The continuation
@@ -1658,7 +1739,7 @@ authoritative row ([physical storage](../../core/physical-storage/README.md)).
 | `object_location.ancestors` | The record's chain, nearest base first, ending at a FULL record: per base `varint(zigzag(pack - previous)) \|\| u8 group \|\| varint(record) \|\| varint(canonical_length - 1)`, `previous` starting at the row's own pack, so a child's list is its base's entry followed by the base's list verbatim. A FULL row stores `''`; `NULL` means unrecorded (never read as a chain). At most 850 bytes (50 entries of at most 17) | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | `ancestor_varint`, `ancestor_entry`, `ancestor_entries` | SQL functions: the first two build an entry (inlinable SQL, not `STRICT`, operands passed as columns of `OFFSET 0` subqueries so they stay inlined); `ancestor_entries` decodes a list, answering one row with a NULL pack for a malformed list. They serve publication, compaction verification and the doctor; the read path decodes lists in Rust | same |
 | Publication | The rows statement ([`publish_rows.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/publish_rows.sql)) derives each new row's list from `ObjectLocation.base`: a base stored earlier gives its stored list (one more prefix probe); a base in the same batch is resolved by a recursive CTE over the batch, children after their base, at most 64 levels. A row whose base is stored nowhere, or whose list would pass 850 bytes, is left `NULL`. A lost row keeps the winner's list. The pack COPY writes `directory` with the body; rows and packs are only inserted, never updated | [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs) |
-| `locate_chains` | Two autocommit statements. Statement 1 ([`chain_roots.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_roots.sql), `$1` ids `bytea[]`, `$2` prefix keys `bigint[]`) probes each root through `object_location_prefix` as `locate` does and returns the rows with their raw lists, plus the roots' own pack rows with directories by `pack_pkey`. The lists are decoded in Rust ([`metadata/chains.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/chains.rs)): `NULL`, `''`, malformed lists and lists deeper than the role's depth cap are dropped (the root still locates). Statement 2 ([`chain_packs.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_packs.sql), `$1` member pack ids `bigint[]`) reads, by `pack_pkey`, only the member packs statement 1 did not return; it is skipped when there are none. The session keeps the pack rows both statements returned (`ChainPacks`: rows of immutable packs, per catalog incarnation, within 2 MiB of directories, cleared whole at the bound), so statement 2 reads only member packs the session has not seen; every pack a retained row's list names stays stored. A chain whose member pack is absent is dropped | [`storage/provider.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/storage/provider.rs) |
+| `locate_chains` | Two autocommit statements. Statement 1 ([`chain_roots.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_roots.sql), `$1` ids `bytea[]`, `$2` prefix keys `bigint[]`) probes each root through `object_location_prefix` as `locate` does and returns the rows with their raw lists, plus the roots' own pack rows with directories by `pack_pkey`. The lists are decoded in Rust ([`metadata/chains.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/chains.rs)): `NULL`, `''`, malformed lists and lists deeper than the role's depth cap are dropped (the root still locates). Statement 2 ([`chain_packs.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_packs.sql), `$1` member pack ids `bigint[]`) reads, by `pack_pkey`, only the member packs statement 1 did not return; it is skipped when there are none. The session keeps the pack rows both statements returned (`ChainPacks`: rows of immutable packs, per catalog incarnation, within 2 MiB of directories, cleared whole at the bound), so statement 2 reads only member packs the session has not seen; every pack a retained row's list names stays stored. A chain whose member pack is absent is dropped; a located row whose own pack row is absent refuses the call `Integrity`. `locate_chains_each` (#818 H5) sends the same statements and lists such a row as unpacked instead, answering the others | [`storage/provider.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/storage/provider.rs) |
 | Captured Commit joined metadata read (#815 Stage 1 experiment) | The Save canonical-object read can append [a whole-pack selection](../../../../engine/crates/layerfs-persistence/sql/postgresql/chain_whole_packs.sql) to a root locate for two or more uncached object IDs. A candidate pack has only requested FULL inode/directory metadata rows, uses ordinary sized or pages framing, and has no resident groups or body. PostgreSQL returns at most 256 KiB of deduplicated whole bodies per root statement. The client verifies each descriptor and whole-pack digest, validates the requested group framing, and checks decoded canonical identities as in the original body path. Pack formats outside the selection, remaining bodies and pooled inode values use their ordinary reads. A failed joined statement ends the attempt. The same Save read barrier and existing connection are used. | [Storage admission](../../../../core/crates/layerfs-storage/src/read/joined.rs) |
 | Group reads | `read_groups` answers every read in one statement per 2 MiB of returned bytes through the multi-range `substring` reader (`objects::read::ranges`; ranges under 8 KiB apart are fetched as one span and cut in the statement): a ranged read's ranges, and a whole read's body as one range, authenticated against the descriptor it named; answers in request order, an absent pack `Missing`. `batched_chain_reads` is true, so core pages every demand (reads and Save slices) into such calls, with a handle's own published chains in the same pages | same |
 | Locate | the plain locate statement is [`locate.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/locate.sql); the bench's `b8_locate.sql` is the same text | [`metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
@@ -1677,16 +1758,87 @@ authoritative row ([physical storage](../../core/physical-storage/README.md)).
 ## Acquisition
 
 `PostgresAcquisition` implements SQLite's acquisition port with the same row
-encodings, charges, refusal order and failures. Each unit is one transaction;
-reads are index range scans in one `REPEATABLE READ` snapshot after the owner
-check; writes are lane-ordered. A released or foreign operation is `Stale`
-before any row is read. A schema without the acquisition tables refuses every
-unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
+encodings, charges, refusal order and failures. Each write unit is one
+lane-ordered transaction that matches the owner first. Each read unit is one
+fenced autocommit statement (`Statement` mode, #818 I3a): its index range
+scan is joined `LATERAL` to the owner's live row, so a released or foreign
+operation reads no row and is `Stale`, the owner columns every row carries decode as the owner select did (an unknown phase or a negative count is `Integrity`), and an empty window answers one row
+with a NULL marker; a path window (jobs, directories) sums its rows' sizes
+over the rows it read and keeps the leading rows that fit in the same
+statement, where a sizing read and a second read did before. One round trip
+per read instead of four or five. Each read's text (and the owner row's) is a `qualified` statement key naming the schema (`sql/postgresql/queries/history/acquisition_*.sql`), pinned by the one-statement schema guard (`postgresql_statement_schema`). A schema without the acquisition tables
+refuses every unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
 same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 `begin` waiting for the lane blocks no live owner's unit.
 
+**Write units with no wait (#818 I3b, part C).** `complete_files`,
+`set_directory_roots`, `advance`, `discard` and `dispose` send their
+transaction as one pipelined flight: the `BEGIN` text (the lane row and
+barrier as before) with the generation fence and an attempt token, the owner
+check, the unit's statements, the token check and `COMMIT` as a request of
+its own. Every check the unit made between statements is a server assertion
+before `COMMIT`: a division by zero for `Stale` (a missing owner or charge
+row) and for a root window that missed an input position (the client reads
+`Changed`, the first input position missing from that window's returned
+positions); a `smallint` overflow where the unit read `Integrity` (an unknown
+phase, a negative count). A removal job is one statement (data-modifying
+CTEs: the entry key, the entry delete, the host-file key, the host-file
+delete and the credit); `dispose` adds the release, which deletes the record
+only at zero held rows and flags the last record, and the compaction below as
+a `DO` block that swallows its own refusal. The first refusal decides; a lost
+reply, or a committed reply that does not validate, is `Uncertain` and
+quarantines the session; nothing is resent. A session without a generation,
+a write nested in the held lane, or a position that does not convert to
+signed runs the ordinary transaction instead
+([`flights.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/flights.rs)).
+A warm unit is one round trip instead of five to thirteen.
+
+**Write units that wait (#818 I3b, part A).** `put_entries` and
+`place_children` read a reply before they know what to send next: the D17
+dependency check of each window, and a dependent row's `BIND_HOST_FILE`
+(its canonical position is the entry's parameter). Each is one transaction
+over several flights of one writer turn (`DecidedTurn::prepare_unit`,
+`send_in_unit`): the unit's statements are prepared before `BEGIN` in one
+flight (the first unit prepares every acquisition write text, so later unit
+kinds find theirs cached); each wait ends a flight; every other statement is
+queued and sent, in order, at the head of the next flight. A queued
+placement (`PLACE_CHILDREN`, `PLACE_ENTRY`) is decoded when its flight
+returns, in request order before any later reply, so its `Changed` comes
+where the per-statement loop found it. The first flight opens as a flight
+above does (lane row, barrier, fence, attempt token, owner assertion); the
+last sends what is queued, `CHARGED`, the token check and `COMMIT`
+(`place_children` first reads its placements back, since its charge depends
+on them). A refusal from the client (`Bounds`, a malformed reply) first sends
+what is queued, so an earlier server refusal still wins; a refusal or lost
+reply in a flight rolls back (or quarantines) as the session's unit rules
+say, and a unit left open is rolled back by the turn's end. Same refusal
+order, rows and charges as the ordinary transaction, which still runs when
+the session is not eligible
+([`unit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/unit.rs)).
+An independent window is two round trips (dependency check; inserts, charge
+and `COMMIT`) instead of six; a placement unit of one set window is three.
+
+**Wide-directory placement (#818 I2a).** A `place_children` unit (one write
+window: at most 4,096 children or 1 MiB) binds and places its children in
+set windows instead of two statements per child. The window rule is shared
+with SQLite (`sqlite/acquisition/placement.rs`, I2b) and mirrors `put_entries`'
+`independent`: a window ends before a repeated name, position or
+(device, inode), and before a child a statement could refuse alone (a
+position that does not convert to signed, a host path out of bounds, a bound
+child at position 0). A one-child window runs the per-row `BIND_HOST_FILE`
+and `PLACE_ENTRY`. A longer window first runs one indexed check for its first
+child a stored row could refuse (a stored identity at its canonical position,
+a stored directory at its position; D17), which then runs per row after the
+children before it; the rest go in one statement (`PLACE_CHILDREN`: the
+upsert and the update as data-modifying CTEs over `unnest` arrays, answering
+each slot's binding and kind). The first slot with no binding, no placed row
+or a kind that disagrees is the loop's `Changed`, and the unit rolls back as
+before. A flat directory of 10,000 files places in 3 units of 3 round trips
+(part A) instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/placement.rs)).
+
 ```text
  release of the last operation                    one Write transaction
+                                                  (a flight: `dispose`)
    SELECT 1 FROM store_lane ... FOR UPDATE
    DELETE the record; no other record left?
      SAVEPOINT; SET LOCAL lock_timeout 2 s
@@ -1707,6 +1859,12 @@ reuses an operation id
 | --- | --- | --- |
 | [`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_open_check` | `Full` and `Light` refusals |
 | [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
+| [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
+| [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (72 + 72): the unit is atomic, never replayed |
+| [`postgresql_save_flight_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_save_flight_fault.rs) | same, `--test postgresql_save_flight_fault` | A Save publishing in flights stores the ordinary Save's rows in fewer round trips; drop and kill at every server message of its finish (68 + 68): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_flights.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_flights.rs) | same, `--test postgresql_acquisition_flights` | The no-wait write units give SQLite's answers and charges (recorded, repeated, missing, filled and unconvertible root positions, every phase, removal budgets, disposal with another operation live and of the last one, stale owners); a warm unit is one round trip and one transaction; drop and kill at every server message of each unit kind (251 + 251): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_units.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_units.rs) | same, `--test postgresql_acquisition_units` | `put_entries` over flights gives SQLite's answers, charges and rows (independent windows, aliases in and across units, the first refusal of every tail order: `Changed`, `Bounds`, a stored key, a repeated position; stale owners); a warm independent window is two round trips and one transaction; drop and kill at every server message of three unit kinds (156 + 156): atomic, never replayed |
+| [`postgresql_acquisition_reads.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_reads.rs) | same, `--test postgresql_acquisition_reads` | Every read window, paged under row and byte limits, equals SQLite's; empty, released, missing and foreign owners stay distinct; drop and kill at every server message of each read kind (78 + 78): never a wrong answer, no row changed, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check
 nothing.

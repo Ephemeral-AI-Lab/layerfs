@@ -129,7 +129,7 @@ references belong to [Objects](../objects/README.md).
 
 | Function | Reads | Used by |
 | --- | --- | --- |
-| `logical_size` | every inode leaf, one window at a time, and each file's state | Project Init ([`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs)) |
+| `logical_size` | every inode leaf, one window at a time, and each file's state | tests, as the oracle for Project Init's logical bytes, which Init sums from its scan instead ([`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs), #818 I1) |
 | `logical_size_after_with` | only inode pages that differ between the two tables | Commit and Branch history ([`store/commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 
 A hard-linked file counts once per binding; directories and symlinks count

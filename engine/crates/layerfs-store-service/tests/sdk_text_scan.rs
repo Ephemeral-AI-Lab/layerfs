@@ -451,10 +451,16 @@ fn grep_and_read_give_the_window_scan_results() {
                 fields.push(("endLine", SdkValue::Int(end as i64)));
             }
             let public = fixture.try_call("fs.read", fields);
+            // The call's caches and its one path lookup, as `fs.read` makes
+            // them (#818 R3).
+            let cached = layerfs_store_service::read::cached::Cached::new(&reader).unwrap();
+            let entry =
+                layerfs_store_service::read::snapshot::lookup(&cached, &snap.tree, path).unwrap();
             let got = layerfs_store_service::read::reads::read(
-                &reader,
+                &cached,
                 &snap,
                 path,
+                entry,
                 Ok(start),
                 Ok(end.unwrap_or(9_007_199_254_740_991)),
                 false,

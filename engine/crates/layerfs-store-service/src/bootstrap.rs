@@ -125,6 +125,18 @@ impl OpenedStore {
             Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
         }
     }
+    /// Prepares the writer's create statements in one flight (#818 W4): on
+    /// PostgreSQL one round trip and one read transaction, so a first create
+    /// (an SDK write that does not take the fused Commit) prepares none of
+    /// them, and its serial reservation is one message. The SDK's Store open
+    /// calls it (`StoreService::open_postgres`); the daemon does not.
+    /// Nothing on SQLite.
+    pub fn prepare_sdk_writes(&self) -> StorageResult<()> {
+        match &self.writer {
+            Writer::Sqlite(_) => Ok(()),
+            Writer::Postgres(storage) => storage.prepare_sdk_writes().map_err(StorageError::from),
+        }
+    }
     /// The Store-file operations of a SQLite session (`None` for a
     /// PostgreSQL Store, which has no file).
     pub fn file(&self) -> Option<&dyn layerfs_persistence::StoreFile> {

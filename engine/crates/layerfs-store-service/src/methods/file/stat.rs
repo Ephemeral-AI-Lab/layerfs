@@ -1,20 +1,30 @@
 //! `fs.stat`.
-use crate::methods::args::{path, snapshot_full, Answer};
+use crate::methods::args::{path, snapshot_in, snapshot_target, Answer};
+use crate::read::cached::Cached;
 use crate::{
-    read::{paged_reads, reads, snapshot, visibility},
+    read::{paged_reads, reads, visibility},
     StoreService,
 };
 use layerfs_bridge::control::SdkValue;
+use layerfs_content::compare::memo::Memo;
 
 /// `stat(path, { branch, commit? })`: type, inode, size and mode of one path.
 pub fn stat(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap) = snapshot_full(service, args)?;
+    let (stack, reader, name) = snapshot_target(service, args)?;
+    // The call's caches, from the root's open on (#818 R4).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let path = path(args, "path")?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
-    if snapshot::entry(&reader, &snap.tree, &path)?.is_some() {
-        if let Some(refusal) = visibility::refuse(&path, &seen) {
-            return Err(refusal);
-        }
-    }
-    paged_reads::pin(&service.store, &snap, reads::stat(&reader, &snap, &path))
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
+    // One path walk for the call (#818 R3), through its caches and memo.
+    let memo = Memo::new(&cached);
+    let entry = visibility::checked(&memo, &snap, &path, &seen)?;
+    let answer = reads::stat(&cached, &snap, &path, entry);
+    paged_reads::pin(
+        &service.store,
+        &snap,
+        &saved.record,
+        &saved.recorded,
+        answer,
+    )
 }

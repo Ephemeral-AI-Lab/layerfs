@@ -141,6 +141,19 @@ const ALLOWED: &[Allow] = &[
         reason: "§4.2 project name-collision check: it must see the deleted holder and \
                  return its state so project.init answers NameTaken with the holder",
     },
+    Allow {
+        file: "read_context_node.sql",
+        markers: &["layer_stack_retired"],
+        returns_state: false,
+        reason: "§4.2 render/identity, #818 R5: a read call's context by node in one \
+                 statement. Its project lookup and marker rows keep the \
+                 layer_stack_retired filter (a deleted project is no project); its one \
+                 `branch` read is the node's recorded Branch name (`commit.branch_id`), \
+                 which replaces branch_branch_by_id_any and is unfiltered for the same \
+                 reason: a collected Branch's own row is still rendered in a ref. \
+                 read_context_named.sql makes the same unfiltered recorded-Branch join \
+                 beside its filtered by-name Branch lookup",
+    },
 ];
 
 fn read_statements() -> Vec<Statement> {

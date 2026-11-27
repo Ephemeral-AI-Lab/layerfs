@@ -104,6 +104,10 @@ SLOW = {
     ("layerfs-store-service", "commit_fault_race_custody"): 22.2,
     # #816 captured Save publication, all 34 messages per fault mode.
     ("layerfs-persistence", "postgresql_captured_save_fault"): 19.10,
+    # #818 Phase 0 round-trip pins, both backends, macOS with PostgreSQL,
+    # 2026-11-27 (the probe fs_call_round_trips runs only with FS818_ARM).
+    ("layerfs-store-service", "init_round_trips_10k"): 38.8,
+    ("layerfs-store-service", "sdk_history_round_trips"): 9.7,
     # #810 read batching pins and fault sweeps, macOS with PostgreSQL.
     ("layerfs-store-service", "commit_batched_base_files"): 8.48,
     ("layerfs-store-service", "commit_batched_reads"): 21.07,

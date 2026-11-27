@@ -25,13 +25,13 @@ use std::{
 /// A Save that does not finish clears them (#768): the next Save starts from
 /// the Store. Any other reader still acquires every body it needs.
 #[derive(Default)]
-struct Published {
+pub(super) struct Published {
     bodies: VecDeque<(PackInfo, Arc<Vec<u8>>)>,
     bytes: usize,
     payload_bytes: usize,
     /// Pooled inode values it published, oldest first, at most
     /// [`PUBLISHED_VALUES`] of them.
-    values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
+    pub(super) values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
     order: VecDeque<u32>,
 }
 
@@ -40,7 +40,7 @@ struct Published {
 const PUBLISHED_VALUES: usize = crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES;
 
 impl Published {
-    fn value(&mut self, ordinal: u32, value: [u8; INODE_VALUE_BYTES]) {
+    pub(super) fn value(&mut self, ordinal: u32, value: [u8; INODE_VALUE_BYTES]) {
         if self.values.insert(ordinal, value).is_none() {
             self.order.push_back(ordinal);
         }
@@ -103,7 +103,7 @@ pub(crate) struct Fetch {
     pub(super) absent: RefCell<BTreeSet<ObjectId>>,
     pub(super) descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     signatures: RefCell<Option<Vec<SignatureRow>>>,
-    published: RefCell<Published>,
+    pub(super) published: RefCell<Published>,
     /// A Save's last publication held for its caller's transaction
     /// (`held.rs`), served to every read before the caches and the Store.
     pub(super) held: RefCell<Option<super::held::Held>>,
@@ -112,7 +112,7 @@ pub(crate) struct Fetch {
     /// Set only during a remote Save's canonical reads.
     pub(super) compact_inode_packs: Cell<bool>,
     /// Remote value requests may share a flight while a captured Save runs.
-    paired_inode_values: Cell<bool>,
+    pub(super) paired_inode_values: Cell<bool>,
     pub(super) captured_locators: RefCell<Option<super::LocatorMode>>,
     counters: Cell<Diagnostics>,
     /// Chain hints from chain locates (#758).
@@ -131,6 +131,8 @@ pub(crate) struct Fetch {
     saving: Cell<bool>,
     /// Cleared by a failure a hint may have caused, until the next demand.
     pub(super) trust_hints: Cell<bool>,
+    /// A per-object demand's refused packs (`hints.rs`, #818 H5); else None.
+    pub(super) refused: RefCell<Option<super::per_object::Refused>>,
 }
 impl Fetch {
     pub(crate) fn retain_inode_locators(&mut self) {
@@ -183,6 +185,7 @@ impl Fetch {
             bind_pages: Cell::new(false),
             saving: Cell::new(false),
             trust_hints: Cell::new(true),
+            refused: RefCell::new(None),
         }
     }
     pub(crate) fn note(&self, change: impl FnOnce(&mut Diagnostics)) {
@@ -290,7 +293,7 @@ impl Fetch {
     /// A body a Save of this handle published, to a Save or a reader that
     /// continues one, validated as a fetched one would be.
     /// A held body (`held.rs`) is served to every read.
-    fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
+    pub(super) fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
         let found = match self.held_body(id) {
             Some(held) => Some(held),
             None if self.serve_published.get() => self.published.borrow().get(id).cloned(),
@@ -367,7 +370,11 @@ impl Fetch {
     ) -> StorageResult<()> {
         let mut missing = BTreeSet::new();
         for id in ids {
-            if self.locators.borrow().contains_key(id) || self.absent.borrow().contains(id) {
+            // An id a per-object demand found unpacked is not located again.
+            if self.locators.borrow().contains_key(id)
+                || self.absent.borrow().contains(id)
+                || self.unpacked(*id).is_some()
+            {
                 self.note(|c| c.locator_hits += 1);
             } else {
                 self.note(|c| c.locator_misses += 1);
@@ -434,7 +441,7 @@ impl Fetch {
                 self.note(|c| c.joined_pack_locates += 1);
             } else {
                 self.note(|c| c.locate += 1);
-                self.metadata.locate_chains(page, &mut rows, &mut chains)?;
+                self.locate_page(page, &mut rows, &mut chains)?;
             }
             if rows.len() > page.len() {
                 return Err(StorageError::Integrity("locator cardinality"));
@@ -487,7 +494,10 @@ impl Fetch {
                 });
             }
             let mut absent = self.absent.borrow_mut();
-            for id in page.iter().filter(|id| !seen.contains_key(id)) {
+            let absent_ids = page
+                .iter()
+                .filter(|id| !seen.contains_key(id) && self.unpacked(**id).is_none());
+            for id in absent_ids {
                 if absent.len() >= READ_OBJECT_LIMIT {
                     absent.clear();
                 }
@@ -807,87 +817,7 @@ impl Source for Fetch {
         }
     }
     fn inode_values(&self, ordinals: &[u32]) -> StorageResult<Vec<[u8; INODE_VALUE_BYTES]>> {
-        if ordinals.contains(&0) {
-            return Err(StorageError::Integrity("metadata ordinal"));
-        }
-        let wanted: Vec<u32> = ordinals
-            .iter()
-            .copied()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        let mut found = BTreeMap::new();
-        // Held values first: the Store does not have them yet.
-        let wanted: Vec<u32> = wanted
-            .into_iter()
-            .filter(|ordinal| match self.held_value(*ordinal) {
-                Some(value) => {
-                    found.insert(*ordinal, value);
-                    false
-                }
-                None => true,
-            })
-            .collect();
-        let wanted: Vec<u32> = if self.serve_published.get() {
-            let published = self.published.borrow();
-            wanted
-                .into_iter()
-                .filter(|ordinal| match published.values.get(ordinal) {
-                    Some(value) => {
-                        found.insert(*ordinal, *value);
-                        false
-                    }
-                    None => true,
-                })
-                .collect()
-        } else {
-            wanted
-        };
-        // A paired read answers exactly the two pages `chunks` makes below,
-        // and its second half stays within one provider page.
-        const _: () = assert!(
-            crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES <= 2 * READ_OBJECT_LIMIT
-        );
-        let mut batches = [Vec::new(), Vec::new()];
-        let paired = if self.paired_inode_values.get()
-            && wanted.len() > READ_OBJECT_LIMIT
-            && wanted.len() <= crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES
-        {
-            let (first, last) = wanted.split_at(READ_OBJECT_LIMIT);
-            self.metadata
-                .inode_values_pair([first, last], &mut batches)?
-        } else {
-            false
-        };
-        let mut ordinary = Vec::new();
-        for (index, page) in wanted.chunks(READ_OBJECT_LIMIT).enumerate() {
-            self.note(|c| c.value_groups += 1);
-            let rows = if paired {
-                &batches[index]
-            } else {
-                self.metadata.inode_values(page, &mut ordinary)?;
-                &ordinary
-            };
-            // The reply may omit an ordinal but never add, repeat or reorder one.
-            let mut asked = page.iter();
-            for row in rows {
-                if !asked.any(|ordinal| *ordinal == row.ordinal) {
-                    return Err(StorageError::Integrity("unrequested inode value"));
-                }
-                found.insert(row.ordinal, row.value);
-            }
-            // A stored ordinal's value never changes: values a Save (or a
-            // reader continuing one) read are kept beside the ones it
-            // published, within the same bound, so the next Save of this
-            // handle and a Commit's logical count read the base leaf's
-            // values once (#768 stage 2).
-            if self.serve_published.get() {
-                let mut published = self.published.borrow_mut();
-                for row in rows {
-                    published.value(row.ordinal, row.value);
-                }
-            }
-        }
+        let found = self.inode_values_found(ordinals)?;
         ordinals
             .iter()
             .map(|ordinal| {

@@ -2,6 +2,7 @@
 //!
 //! Entry module: declarations and re-exports only.
 
+pub mod across;
 pub mod bytes;
 pub mod changes;
 pub mod memo;
@@ -10,6 +11,7 @@ pub mod sorted;
 pub mod text;
 pub mod tree;
 
+pub use across::{AcrossWork, DirectoryMemo, PathAcross, PathAnswer, VersionPath};
 pub use bytes::{same_content, same_file_bytes, same_file_bytes_within};
 pub use changes::{BindingHints, ChangeWalk, Pair, Plan, MAXIMUM_CHANGED};
 pub use memo::{Memo, MEMO_PAGES};

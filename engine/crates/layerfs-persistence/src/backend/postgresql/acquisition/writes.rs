@@ -1,11 +1,15 @@
-//! Bounded write units: begin, append, place, record roots and advance, with
-//! the owner check and exact charges every unit shares.
+//! Bounded write units: begin, append, record roots and advance, with the
+//! owner check and exact charges every unit shares (placement, which shares
+//! them too, is in `placement.rs`).
 //!
 //! A window of entries is appended in array statements once a check over
 //! the whole window shows its rows cannot conflict with each other or with
 //! stored rows; the first row that might conflict runs alone, in order, so
 //! its outcome and failure are exactly a sequential append's.
-use super::reads::get;
+use super::{
+    reads::get,
+    unit::{values, Writes},
+};
 use crate::backend::{
     postgresql::session::transaction::Transaction,
     records::BackendError,
@@ -18,31 +22,33 @@ use crate::backend::{
 };
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{
-    AcquisitionWork, Begin, HostIdentity, NewEntry, Owner, Phase, Placed,
+    AcquisitionWork, Begin, HostIdentity, NewEntry, Owner, Phase,
 };
 use std::collections::BTreeSet;
 
 /// Parent position stored for the source root, which has no parent.
 const ROOT_PARENT: i64 = -1;
 
-const OWNER: &str = "SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint";
+/// The owner row's statement key (`history::statements::qualified`); its
+/// text names the schema, so it also runs alone as a fenced autocommit read
+/// (`reads::work`, #818 I3a).
+const OWNER: &str = "acquisition_owner";
 const CHARGE: &str = "UPDATE init_operation SET held_rows=held_rows+$3::bigint,held_bytes=held_bytes+$4::bigint,peak_rows=greatest(peak_rows,held_rows+$3::bigint),peak_bytes=greatest(peak_bytes,held_bytes+$4::bigint) WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows";
 const CREDIT: &str = "UPDATE init_operation SET held_rows=held_rows-$3::bigint,held_bytes=held_bytes-$4::bigint,removed_rows=removed_rows+$3::bigint,removed_bytes=removed_bytes+$4::bigint WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows";
 const BEGIN: &str = "INSERT INTO init_operation(owner_epoch,phase,source_device,source_inode,stack_id,scope) VALUES(coalesce($1::bigint,1),1,$2::bytea,$3::bytea,$4::bytea,$5::bytea) RETURNING operation_id";
 const CLAIM_EPOCH: &str =
     "UPDATE init_operation SET owner_epoch=operation_id WHERE operation_id=$1::bigint RETURNING owner_epoch";
 const ADVANCE: &str = "UPDATE init_operation SET phase=$3::bigint WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING phase";
-const BIND_HOST_FILE: &str = "INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) VALUES($1::bigint,$2::bigint,$3::bytea,$4::bytea,$5::bytea,$6::bytea) ON CONFLICT(operation_id,device,inode) DO UPDATE SET aliases=init_host_file.aliases+1 WHERE init_host_file.evidence=excluded.evidence RETURNING canonical_position";
-const PUT_ENTRY: &str = "INSERT INTO init_entry(operation_id,parent_position,name,position,kind,canonical_position,metadata_root,content_root,host_path,host_identity) VALUES($1::bigint,$2::bigint,$3::bytea,$4::bigint,$5::bigint,$6::bigint,$7::bytea,$8::bytea,$9::bytea,$10::bytea)";
-const PLACE_ENTRY: &str = "UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=NULL WHERE operation_id=$1::bigint AND parent_position=$2::bigint AND name=$3::bytea AND position IS NULL RETURNING kind";
+pub(super) const BIND_HOST_FILE: &str = "INSERT INTO {s}.init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) VALUES($1::bigint,$2::bigint,$3::bytea,$4::bytea,$5::bytea,$6::bytea) ON CONFLICT(operation_id,device,inode) DO UPDATE SET aliases=init_host_file.aliases+1 WHERE init_host_file.evidence=excluded.evidence RETURNING canonical_position";
+pub(super) const PUT_ENTRY: &str = "INSERT INTO {s}.init_entry(operation_id,parent_position,name,position,kind,canonical_position,metadata_root,content_root,host_path,host_identity) VALUES($1::bigint,$2::bigint,$3::bytea,$4::bigint,$5::bigint,$6::bigint,$7::bytea,$8::bytea,$9::bytea,$10::bytea)";
 /// The first slot of a window whose row a stored row could refuse or change.
-const DEPENDENCIES: &str = "SELECT min(s.slot) FROM unnest($2::bigint[],$3::bigint[],$4::bytea[],$5::bigint[],$6::bigint[],$7::bytea[],$8::bytea[]) AS s(slot,parent,name,position,kind,device,inode) \
- WHERE EXISTS(SELECT 1 FROM init_entry e WHERE e.operation_id=$1::bigint AND e.parent_position=s.parent AND e.name=s.name) \
- OR (s.kind=2 AND s.position IS NOT NULL AND EXISTS(SELECT 1 FROM init_entry e WHERE e.operation_id=$1::bigint AND e.kind=2 AND e.position=s.position)) \
- OR (s.device IS NOT NULL AND (EXISTS(SELECT 1 FROM init_host_file h WHERE h.operation_id=$1::bigint AND h.device=s.device AND h.inode=s.inode) \
-  OR EXISTS(SELECT 1 FROM init_host_file h WHERE h.operation_id=$1::bigint AND h.canonical_position=s.position)))";
-const PUT_HOST_FILES: &str = "INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) SELECT $1::bigint,* FROM unnest($2::bigint[],$3::bytea[],$4::bytea[],$5::bytea[],$6::bytea[])";
-const PUT_ENTRIES: &str = "INSERT INTO init_entry(operation_id,parent_position,name,position,kind,canonical_position,metadata_root,content_root,host_path,host_identity) SELECT $1::bigint,* FROM unnest($2::bigint[],$3::bytea[],$4::bigint[],$5::bigint[],$6::bigint[],$7::bytea[],$8::bytea[],$9::bytea[],$10::bytea[])";
+pub(super) const DEPENDENCIES: &str = "SELECT min(s.slot) FROM unnest($2::bigint[],$3::bigint[],$4::bytea[],$5::bigint[],$6::bigint[],$7::bytea[],$8::bytea[]) AS s(slot,parent,name,position,kind,device,inode) \
+ WHERE EXISTS(SELECT 1 FROM {s}.init_entry e WHERE e.operation_id=$1::bigint AND e.parent_position=s.parent AND e.name=s.name) \
+ OR (s.kind=2 AND s.position IS NOT NULL AND EXISTS(SELECT 1 FROM {s}.init_entry e WHERE e.operation_id=$1::bigint AND e.kind=2 AND e.position=s.position)) \
+ OR (s.device IS NOT NULL AND (EXISTS(SELECT 1 FROM {s}.init_host_file h WHERE h.operation_id=$1::bigint AND h.device=s.device AND h.inode=s.inode) \
+  OR EXISTS(SELECT 1 FROM {s}.init_host_file h WHERE h.operation_id=$1::bigint AND h.canonical_position=s.position)))";
+pub(super) const PUT_HOST_FILES: &str = "INSERT INTO {s}.init_host_file(operation_id,canonical_position,device,inode,evidence,host_path) SELECT $1::bigint,* FROM unnest($2::bigint[],$3::bytea[],$4::bytea[],$5::bytea[],$6::bytea[])";
+pub(super) const PUT_ENTRIES: &str = "INSERT INTO {s}.init_entry(operation_id,parent_position,name,position,kind,canonical_position,metadata_root,content_root,host_path,host_identity) SELECT $1::bigint,* FROM unnest($2::bigint[],$3::bytea[],$4::bigint[],$5::bigint[],$6::bigint[],$7::bytea[],$8::bytea[],$9::bytea[],$10::bytea[])";
 const FILE_ROOTS: &str = "UPDATE init_host_file AS t SET file_root=r.root FROM unnest($2::bigint[],$3::bytea[]) AS r(position,root) WHERE t.operation_id=$1::bigint AND t.canonical_position=r.position AND t.file_root IS NULL RETURNING t.canonical_position";
 const DIRECTORY_ROOTS: &str = "UPDATE init_entry AS t SET content_root=r.root FROM unnest($2::bigint[],$3::bytea[]) AS r(position,root) WHERE t.operation_id=$1::bigint AND t.position=r.position AND t.kind=2 AND t.content_root IS NULL RETURNING t.position";
 
@@ -56,15 +62,23 @@ pub(super) fn owner(
     owner: Owner,
 ) -> Result<(Phase, AcquisitionWork), Failure> {
     let (operation, epoch) = identity(owner)?;
-    let rows = tx.typed(OWNER, &[&operation, &epoch], 16)?;
-    let row = rows.first().ok_or(Failure::Stale)?;
-    let phase = u8::try_from(get::<i64>(row, 0)?)
+    let rows = tx.typed(&super::reads::owned(tx, OWNER)?, &[&operation, &epoch], 16)?;
+    decoded(rows.first().ok_or(Failure::Stale)?, 0)
+}
+
+/// The owner row's phase and charges from its seven columns at `first`:
+/// `Integrity` for an unknown phase or a negative count.
+pub(super) fn decoded(
+    row: &postgres::Row,
+    first: usize,
+) -> Result<(Phase, AcquisitionWork), Failure> {
+    let phase = u8::try_from(get::<i64>(row, first)?)
         .ok()
         .and_then(Phase::from_code)
         .ok_or(BackendError::Integrity)?;
     let mut counts = [0_u64; 6];
     for (index, count) in counts.iter_mut().enumerate() {
-        *count = unsigned(get::<i64>(row, index + 1)?)?;
+        *count = unsigned(get::<i64>(row, first + index + 1)?)?;
     }
     let [held_rows, held_bytes, peak_rows, peak_bytes, removed_rows, removed_bytes] = counts;
     Ok((
@@ -147,9 +161,10 @@ pub(super) fn begin(tx: &Transaction<'_>, epoch: u64, facts: &Begin) -> Result<O
 }
 
 /// Binds one positioned path to its host identity and returns the canonical
-/// position with whether this path created the identity's row.
-fn bind(
-    tx: &Transaction<'_>,
+/// position with whether this path created the identity's row: a wait (its
+/// answer is the entry's parameter).
+pub(super) fn bind<'a>(
+    w: &mut impl Writes<'a>,
     operation: i64,
     position: u64,
     host: &HostIdentity,
@@ -157,7 +172,7 @@ fn bind(
 ) -> Result<(i64, bool), Failure> {
     let own = signed(position)?;
     let (device, inode) = (host.device.to_be_bytes(), host.inode.to_be_bytes());
-    let bound = tx.typed(
+    let bound = w.ask(
         BIND_HOST_FILE,
         &[
             &operation,
@@ -181,16 +196,29 @@ pub(super) fn put_entries(
     entries: &[NewEntry],
 ) -> Result<Vec<u64>, Failure> {
     let operation = signed(owner.operation)?;
+    let (canonical, rows, bytes) = append_entries(&mut &*tx, operation, entries)?;
+    charge(tx, owner, rows, bytes)?;
+    Ok(canonical)
+}
+
+/// `put_entries` without its charge, on either route (`unit::Writes`):
+/// answers the canonical positions and the rows and bytes to charge. The
+/// dependency check and a dependent row's binding are its waits.
+pub(super) fn append_entries<'a>(
+    w: &mut impl Writes<'a>,
+    operation: i64,
+    entries: &[NewEntry],
+) -> Result<(Vec<u64>, i64, i64), Failure> {
     let (mut offset, mut rows, mut bytes) = (0, 0_i64, 0_i64);
     let mut canonical = Vec::new();
     while offset < entries.len() {
         let window = &entries[offset..];
         let mut count = independent(window);
         if count != 0 {
-            count = first_dependent(tx, operation, &window[..count])?;
+            count = first_dependent(w, operation, &window[..count])?;
         }
         if count != 0 {
-            append(tx, operation, &window[..count])?;
+            append(w, operation, &window[..count])?;
             for entry in &window[..count] {
                 rows += 1;
                 bytes += entry_bytes(entry);
@@ -203,14 +231,13 @@ pub(super) fn put_entries(
             offset += count;
             continue;
         }
-        let (first, added_rows, added_bytes) = put_one(tx, operation, &entries[offset])?;
+        let (first, added_rows, added_bytes) = put_one(w, operation, &entries[offset])?;
         canonical.extend(first);
         rows += added_rows;
         bytes += added_bytes;
         offset += 1;
     }
-    charge(tx, owner, rows, bytes)?;
-    Ok(canonical)
+    Ok((canonical, rows, bytes))
 }
 
 /// The leading rows no statement can refuse and no other row of the window
@@ -252,8 +279,8 @@ fn independent(entries: &[NewEntry]) -> usize {
 
 /// The number of leading rows of an independent window that no stored row
 /// conflicts with, by one indexed check in this transaction.
-fn first_dependent(
-    tx: &Transaction<'_>,
+fn first_dependent<'a>(
+    w: &mut impl Writes<'a>,
     operation: i64,
     window: &[NewEntry],
 ) -> Result<usize, Failure> {
@@ -277,7 +304,7 @@ fn first_dependent(
     let devices: Vec<Option<&[u8]>> = devices.iter().map(|d| d.as_ref().map(|d| &d[..])).collect();
     let inodes: Vec<Option<&[u8]>> = inodes.iter().map(|d| d.as_ref().map(|d| &d[..])).collect();
     let bytes = 8 + names.iter().map(|n| 48 + n.len() as u64).sum::<u64>();
-    let found = tx.typed(
+    let found = w.ask(
         DEPENDENCIES,
         &[
             &operation, &slots, &parents, &names, &positions, &kinds, &devices, &inodes,
@@ -301,8 +328,9 @@ fn parents(window: &[NewEntry]) -> Vec<i64> {
         .collect()
 }
 
-/// Inserts an independent window: its first-path host files, then its entries.
-fn append(tx: &Transaction<'_>, operation: i64, window: &[NewEntry]) -> Result<(), Failure> {
+/// Inserts an independent window: its first-path host files, then its
+/// entries; neither is a wait.
+fn append<'a>(w: &mut impl Writes<'a>, operation: i64, window: &[NewEntry]) -> Result<(), Failure> {
     let hosts: Vec<(i64, [u8; HOST_BYTES as usize], &[u8])> = window
         .iter()
         .filter_map(|e| match (e.position, e.host, e.host_path.as_deref()) {
@@ -312,19 +340,22 @@ fn append(tx: &Transaction<'_>, operation: i64, window: &[NewEntry]) -> Result<(
         .collect();
     if !hosts.is_empty() {
         let positions: Vec<i64> = hosts.iter().map(|h| h.0).collect();
-        let devices: Vec<&[u8]> = hosts.iter().map(|h| &h.1[..8]).collect();
-        let inodes: Vec<&[u8]> = hosts.iter().map(|h| &h.1[8..16]).collect();
-        let evidence: Vec<&[u8]> = hosts.iter().map(|h| &h.1[16..]).collect();
-        let paths: Vec<&[u8]> = hosts.iter().map(|h| h.2).collect();
+        let column = |range: std::ops::Range<usize>| -> Vec<Vec<u8>> {
+            hosts.iter().map(|h| h.1[range.clone()].to_vec()).collect()
+        };
+        let (devices, inodes, evidence) =
+            (column(0..8), column(8..16), column(16..HOST_BYTES as usize));
+        let paths: Vec<Vec<u8>> = hosts.iter().map(|h| h.2.to_vec()).collect();
         let bytes = 8 + hosts.iter().map(|h| 68 + h.2.len() as u64).sum::<u64>();
-        tx.typed(
+        w.queue(
             PUT_HOST_FILES,
-            &[&operation, &positions, &devices, &inodes, &evidence, &paths],
+            values![operation, positions, devices, inodes, evidence, paths],
             bytes,
+            None,
         )?;
     }
     let regular = |e: &NewEntry| e.kind == InodeKind::RegularFile;
-    let names: Vec<&[u8]> = window.iter().map(|e| e.key.name.as_slice()).collect();
+    let names: Vec<Vec<u8>> = window.iter().map(|e| e.key.name.clone()).collect();
     let positions: Vec<Option<i64>> = window
         .iter()
         .map(|e| e.position.map(|p| p as i64))
@@ -334,58 +365,56 @@ fn append(tx: &Transaction<'_>, operation: i64, window: &[NewEntry]) -> Result<(
         .iter()
         .map(|e| e.position.filter(|_| regular(e)).map(|p| p as i64))
         .collect();
-    let metadata: Vec<[u8; 32]> = window.iter().map(|e| metadata_blob(&e.metadata)).collect();
-    let metadata: Vec<&[u8]> = metadata.iter().map(|m| &m[..]).collect();
-    let targets: Vec<Option<&[u8]>> = window
+    let metadata: Vec<Vec<u8>> = window
         .iter()
-        .map(|e| {
-            e.target_root
-                .as_ref()
-                .map(|root| root.as_bytes().as_slice())
-        })
+        .map(|e| metadata_blob(&e.metadata).to_vec())
         .collect();
-    let paths: Vec<Option<&[u8]>> = window
+    let targets: Vec<Option<Vec<u8>>> = window
+        .iter()
+        .map(|e| e.target_root.as_ref().map(|root| root.as_bytes().to_vec()))
+        .collect();
+    let paths: Vec<Option<Vec<u8>>> = window
         .iter()
         .map(|e| {
             e.host_path
-                .as_deref()
+                .clone()
                 .filter(|_| e.kind == InodeKind::Directory)
         })
         .collect();
-    let unplaced: Vec<Option<[u8; HOST_BYTES as usize]>> = window
+    let unplaced: Vec<Option<Vec<u8>>> = window
         .iter()
-        .map(|e| e.host.filter(|_| e.position.is_none()).map(packed))
-        .collect();
-    let unplaced: Vec<Option<&[u8]>> = unplaced
-        .iter()
-        .map(|h| h.as_ref().map(|h| &h[..]))
+        .map(|e| {
+            e.host
+                .filter(|_| e.position.is_none())
+                .map(|h| packed(h).to_vec())
+        })
         .collect();
     let bytes = 8 + window
         .iter()
         .map(|e| 48 + entry_bytes(e) as u64)
         .sum::<u64>();
-    tx.typed(
+    w.queue(
         PUT_ENTRIES,
-        &[
-            &operation,
-            &parents(window),
-            &names,
-            &positions,
-            &kinds,
-            &canonical,
-            &metadata,
-            &targets,
-            &paths,
-            &unplaced,
+        values![
+            operation,
+            parents(window),
+            names,
+            positions,
+            kinds,
+            canonical,
+            metadata,
+            targets,
+            paths,
+            unplaced
         ],
         bytes,
-    )?;
-    Ok(())
+        None,
+    )
 }
 
 /// One entry alone, in the original host-then-entry order.
-fn put_one(
-    tx: &Transaction<'_>,
+fn put_one<'a>(
+    w: &mut impl Writes<'a>,
     operation: i64,
     entry: &NewEntry,
 ) -> Result<(Option<u64>, i64, i64), Failure> {
@@ -401,7 +430,7 @@ fn put_one(
     }
     let mut first = None;
     if let (Some(own), Some(host), Some(path)) = (entry.position, &entry.host, path) {
-        let (bound, created) = bind(tx, operation, own, host, path)?;
+        let (bound, created) = bind(w, operation, own, host, path)?;
         first = Some(bound);
         if created {
             rows += 1;
@@ -411,73 +440,29 @@ fn put_one(
     // A regular file's path lives with its identity; only directories keep one.
     let stored_path = path.filter(|_| entry.kind == InodeKind::Directory);
     let unplaced = entry.host.filter(|_| entry.position.is_none()).map(packed);
-    tx.typed(
+    w.queue(
         PUT_ENTRY,
-        &[
-            &operation,
-            &parent,
-            &entry.key.name.as_slice(),
-            &position,
-            &i64::from(entry.kind.code()),
-            &first,
-            &metadata_blob(&entry.metadata).as_slice(),
-            &entry
+        values![
+            operation,
+            parent,
+            entry.key.name.clone(),
+            position,
+            i64::from(entry.kind.code()),
+            first,
+            metadata_blob(&entry.metadata).to_vec(),
+            entry
                 .target_root
                 .as_ref()
-                .map(|root| root.as_bytes().as_slice()),
-            &stored_path,
-            &unplaced.as_ref().map(|host| host.as_slice()),
+                .map(|root| root.as_bytes().to_vec()),
+            stored_path.map(<[u8]>::to_vec),
+            unplaced.map(|host| host.to_vec())
         ],
         entry_bytes(entry) as u64 + 40,
+        None,
     )?;
     rows += 1;
     bytes += entry_bytes(entry);
     Ok((first.map(unsigned).transpose()?, rows, bytes))
-}
-
-/// Assigns positions to one window of unpositioned children of `parent`.
-pub(super) fn place_children(
-    tx: &Transaction<'_>,
-    owner: Owner,
-    parent: u64,
-    placed: &[Placed],
-) -> Result<Vec<u64>, Failure> {
-    let (operation, parent) = (signed(owner.operation)?, signed(parent)?);
-    let (mut rows, mut bytes) = (0_i64, 0_i64);
-    let mut canonical = Vec::new();
-    for child in placed {
-        let position = signed(child.position)?;
-        let mut first = None;
-        if let Some((host, path)) = &child.host {
-            let (bound, created) = bind(tx, operation, child.position, host, path)?;
-            first = Some(bound);
-            canonical.push(unsigned(bound)?);
-            if created {
-                rows += 1;
-                bytes += host_bytes(path);
-            }
-            bytes -= HOST_BYTES;
-        }
-        let updated = tx.typed(
-            PLACE_ENTRY,
-            &[
-                &operation,
-                &parent,
-                &child.name.as_slice(),
-                &position,
-                &first,
-            ],
-            32 + child.name.len() as u64,
-        )?;
-        // The child must exist unpositioned, and be regular exactly when bound.
-        let kind: i64 = get(updated.first().ok_or(Failure::Changed(child.position))?, 0)?;
-        let regular = kind == i64::from(InodeKind::RegularFile.code());
-        if regular != child.host.is_some() {
-            return Err(Failure::Changed(child.position));
-        }
-    }
-    charge(tx, owner, rows, bytes)?;
-    Ok(canonical)
 }
 
 /// Which roots a window records.
@@ -550,3 +535,12 @@ pub(super) fn advance(tx: &Transaction<'_>, owner: Owner, phase: Phase) -> Resul
     }
     Ok(())
 }
+
+/// Every statement `append_entries` may send, for a unit's one prepare.
+pub(super) const TEXTS: &[&str] = &[
+    DEPENDENCIES,
+    PUT_HOST_FILES,
+    PUT_ENTRIES,
+    BIND_HOST_FILE,
+    PUT_ENTRY,
+];

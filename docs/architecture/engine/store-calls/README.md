@@ -114,8 +114,14 @@ meets: `fs.list { path: "/absent", pageSize: 0 }` is `NoSuchPath`, not
 
 ```text
 files::commit(service, project, branch, changes, message)
-  resolve  branch "main" -> ReadOnly; unknown -> NoSuchBranch
-  bind     fresh WorkspaceId; private Workspace (never listed or mounted)
+  bind     fresh WorkspaceId; private Workspace (never listed or mounted),
+           found by project and Branch name with its snapshot in one read:
+           unknown project -> NoSuchProject; unknown -> NoSuchBranch
+  resolve  only when the bind cannot run by name or refused before reading:
+           project, branch argument, "main" -> ReadOnly, Branch by name
+  hidden   bound node's serial + markers kept by the bind; else read them
+  plan     PostgreSQL: before each 1,024 changes (PLAN_PATHS), their paths'
+           base reads level by level, one page demand + one inode wave
   change   Mutation per change, in order; first refusal stops, {index}
   commit   commit_captured_via(message, CommitVia::Files)
            head moved -> merged in the same Save; conflict -> Conflict
@@ -134,12 +140,76 @@ files::commit(service, project, branch, changes, message)
 A path is absolute, at most 4096 bytes, without NUL, trailing `/`, empty,
 `.` or `..` components; a mode is 0..=0o7777, and set-ID or sticky bits on a
 file are refused ([`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs)).
-Recursive walks hold one directory page per level, and the copy's hard-link
+Recursive walks hold one directory page per level and take the page's
+kinds in one demand (`SourceView::kinds`: the overlay's own inodes, then one
+`BaseView::values` inode lookup for the rest; no metadata or length, #818
+W5); the copy still stats each entry it copies. The copy's hard-link
 map lives in the private overlay's indexed operation records (kind
 `0x53444b43`), not in memory. Each change runs as short locked jobs on the
 private overlay; serials come from the Store's pooled reservation
 ([`store/ports.rs`](../../../../engine/crates/layerfs-store-service/src/store/ports.rs)).
 The Commit itself is the Workspace Commit; see [Commit](../commit/README.md).
+
+**Path walks.** A change resolves its paths from the root, overlay first,
+with a full stat of each component on a Store that plans no reads (SQLite:
+a directory's stat reads its children's values, which the lookup below it
+reuses). On a Store whose provider pays a round trip per demand
+(PostgreSQL), the directories a walk passes are bound by kind only
+(`SourceView::lookup_kind`: serial and kind, no metadata, length or
+child-directory count); only the last component of a path the change reads
+gets a full stat, and a parent only its serial (#818 W6). The checks keep
+their order either way: the name's grammar, then `NotDirectory` at the
+entry before it, then `NoSuchPath`. On that Store (PostgreSQL,
+`batched_chain_reads`), the call first plans its paths' base reads
+([`write/plan.rs`](../../../../engine/crates/layerfs-store-service/src/write/plan.rs)):
+the change list's paths, `PLAN_PATHS` (1,024) changes at a time, are
+walked level by level, each level's directory pages read as one grouped
+demand (at most 128 directories, 1 MiB of names) and the children found,
+with all children of each directory whose root page holds its entries and
+whose count is not remembered (the count is then remembered, as the
+directory's full stat would derive it), as one inode wave of at most
+`BaseView::PLAN_SERIALS` (1,024) serials (`BaseView::plan_level`). The plan
+only fills the Workspace client's caches; every change still resolves on
+its own, so answers are unchanged. A window's plan stops at its first
+change that is refused before any read: its arguments, an empty `oldText`,
+a `mkdir` mode, `rm` of the root, or an overlapping `cp` or `mv`. That
+change answers its own refusal, and nothing is planned when it is the
+window's first change. A failed plan read refuses the call at the window's
+first change as a failed read (`Failed`). That change's own walk would also
+read first, but it might have read only paths that answer, and then
+refused or applied itself. A fault can therefore move a failure to an
+earlier change, or replace a change's later refusal; the plan is read once
+and never retried (an order change approved by the owner, 2026-11-27).
+SQLite plans nothing.
+
+**Binding by name.** A call on a named Branch other than `main` without
+`expected` binds through `Store::bind_named_private`: on PostgreSQL the
+writer's one named snapshot statement and the admission message, on SQLite
+the Workspace reader's named snapshot, with no control-reader read (#818
+W2). The refusal order stays the lookups': a refused `branch` argument,
+`main` (`ReadOnly`) and an `expected` Commit (which needs the project
+record) take the lookups on the control reader first, as do a missing
+Workspace key and a Store that refuses the bind before reading (overlay
+maintenance stopped, call capacity full, a Workspace reader that does not
+open), so `NoSuchProject` and `NoSuchBranch` still come first and such a
+refusal is `Failed` with the bind's text. The bind reports whether it read
+the project and Branch; only then do its `NoSuchProject` /
+`NoSuchBranch` answer with the lookups' texts, and its snapshot read
+failure as a lookup read failure, also when the reader's close after it
+failed.
+
+**Hidden paths.** The private overlay already whiteouts a path a
+`project.remove_file` marker hides, so `edit` and a `cp` source that come
+back `NoSuchPath` ask the base tree whether the path exists there and is
+hidden (`Removed`, with its frontier) or never existed (`NoSuchPath`). The
+check uses the bound node's `history_serial` and markers that the bind kept
+under its mount admission (`BoundWorkspace::kept_markers`, the
+`KnownRemovals` of [PostgreSQL](../store/postgresql.md) (h), on both
+backends), with no read; the base tree is opened on the control reader only
+when such a refusal asks (#818 W1). When the bind kept none (no admission,
+or markers charging over `KEPT_REMOVAL_BYTES`), the call reads the markers
+and the node's serial and opens the tree first, as before, so a failed
+marker read still refuses every change (SPEC D16).
 
 ### Branch history
 

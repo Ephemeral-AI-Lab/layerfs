@@ -1,13 +1,15 @@
 //! Shared saved-file facts and independent byte, metadata and identity changes.
+use super::cached::Cached;
 use super::{compare, snapshot};
 use crate::history::lookup as args;
-use crate::store::StorePorts;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{tree::same_metadata, EntryFacts};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 
 /// Metadata for a present file; a missing side remains a literal null.
-pub fn facts(reader: &StorePorts, entry: Option<EntryFacts>) -> Result<SdkValue, SdkRefusal> {
+///
+/// Every fact reads through the call's caches (#818 H3).
+pub fn facts(reader: &Cached<'_>, entry: Option<EntryFacts>) -> Result<SdkValue, SdkRefusal> {
     let Some(entry) = entry else {
         return Ok(SdkValue::Null);
     };
@@ -26,7 +28,7 @@ pub fn facts(reader: &StorePorts, entry: Option<EntryFacts>) -> Result<SdkValue,
         ("inode", SdkValue::Int(entry.serial as i64)),
         (
             "size",
-            SdkValue::Int(snapshot::size(reader, &entry)? as i64),
+            SdkValue::Int(snapshot::size_in(reader, &entry)? as i64),
         ),
         ("mode", SdkValue::Int(i64::from(metadata.mode))),
     ]))
@@ -34,7 +36,7 @@ pub fn facts(reader: &StorePorts, entry: Option<EntryFacts>) -> Result<SdkValue,
 
 /// Absent sides are explained by Added/Removed; pairwise flags stay false.
 pub fn changes(
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     left: Option<EntryFacts>,
     right: Option<EntryFacts>,
 ) -> Result<(bool, bool, bool), SdkRefusal> {
@@ -63,7 +65,7 @@ pub const CONTENT_QUERY_BYTES: u64 = 64 * 1024 * 1024;
 /// Reserve payload work before an exact different-root byte comparison. Capacity
 /// is unknown/refused work, never a false content change as a root-only fallback.
 pub fn changes_bounded(
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     left: Option<EntryFacts>,
     right: Option<EntryFacts>,
     remaining: &mut u64,
@@ -73,8 +75,8 @@ pub fn changes_bounded(
             && right.value.kind == left.value.kind
             && left.value.content_root != right.value.content_root
         {
-            let a = snapshot::size(reader, &left)?;
-            let b = snapshot::size(reader, &right)?;
+            let a = snapshot::size_in(reader, &left)?;
+            let b = snapshot::size_in(reader, &right)?;
             if a == b {
                 let required = a.saturating_add(b);
                 if required > *remaining {

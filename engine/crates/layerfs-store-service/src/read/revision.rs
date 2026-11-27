@@ -3,29 +3,29 @@ use super::{
     file_facts, query,
     revision_pages::{self, Boundary, Key},
     snapshot,
+    versions::{Ahead, Batching, Versions},
     visibility::Visibility,
 };
-use crate::history::{lookup as args, saved};
-use crate::operator::files::{entry, revision};
+use crate::history::{lookup as args, rows::Rows};
 use crate::store::{Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::compare::EntryFacts;
 use layerfs_history::{LayerStackId, NodeId};
 use std::sync::Arc;
 
 fn parent(
-    store: &Arc<Store>,
+    rows: &mut Rows<'_>,
     node: NodeId,
     provenance: bool,
 ) -> Result<Option<NodeId>, SdkRefusal> {
     if provenance {
-        return Ok(revision(store, node)?.1);
+        return Ok(rows.revision(node)?.1);
     }
-    Ok(match node {
-        NodeId::Commit(id) => {
-            let r = args::commit(store, id)?;
+    Ok(match rows.record(node)? {
+        args::NodeRecord::Commit(r) => {
             Some(r.parent.map_or(NodeId::Layer(r.base_layer), NodeId::Commit))
         }
-        NodeId::Layer(id) => args::layer(store, id)?.parent.map(NodeId::Layer),
+        args::NodeRecord::Layer(r) => r.parent.map(NodeId::Layer),
     })
 }
 
@@ -42,9 +42,17 @@ pub struct Request<'a> {
     pub branch: &'a str,
     pub continuation: Option<&'a str>,
     pub stack: LayerStackId,
+    /// Whether the walk looks its versions up in windows (#818 H5).
+    pub batching: Batching,
 }
 
 /// A complete page or Capacity: never advance past unreturned matches.
+///
+/// The walk reads each node's row once, as the previous node's parent, and
+/// builds each item's `ref`, `comparedTo` and record from the rows it holds,
+/// each Branch name read once per call (#818 H1). Each node's path entry and
+/// serial are read once too: a node's parent side is the next node's own
+/// (#818 H2).
 pub fn list(
     store: &Arc<Store>,
     reader: &StorePorts,
@@ -58,6 +66,7 @@ pub fn list(
         branch,
         continuation,
         stack,
+        batching,
     } = request;
     let provenance = match traversal {
         "provenance" => true,
@@ -67,7 +76,15 @@ pub fn list(
     // §4.3: a hidden anchor refuses; a hidden older version ends the walk
     // instead of being skipped over.
     let visibility = Visibility::for_stack(store, stack, Visibility::node_serial(store, start)?)?;
-    if entry(reader, args::root(store, start)?, path)?.is_some() {
+    let mut rows = Rows::new(store);
+    // Every node's objects go through the call's caches and directory memo
+    // (#818 H3).
+    let reader = &super::cached::Cached::new(reader)?;
+    let mut lookups = Versions::new(store, reader, path, batching);
+    let anchor = rows.record(start)?.clone();
+    // The walk's Commits in windows where the Store batches reads (#818 H4).
+    rows.walk(query::MAXIMUM_QUERY_WORK as usize + 1);
+    if reader.entry(anchor.root(), path)?.is_some() {
         if let Some(frontier) = visibility.hidden_at(path, visibility.serial()) {
             return Err(Visibility::refusal(path, frontier));
         }
@@ -126,6 +143,9 @@ pub fn list(
         candidate,
     };
     let mut content_budget = file_facts::CONTENT_QUERY_BYTES;
+    // The previous node's parent side, which is this node's own (#818 H2):
+    // its entry before the hidden filter, and its serial when it exists.
+    let mut carried: Option<(NodeId, Option<EntryFacts>, Option<u64>)> = None;
     while let Some(node) = next {
         if examined as u64 == query::MAXIMUM_QUERY_WORK {
             return Err(args::refuse(
@@ -135,26 +155,33 @@ pub fn list(
             ));
         }
         examined += 1;
-        let previous = parent(store, node, provenance)?;
-        let now = entry(reader, args::root(store, node)?, path)?;
+        let previous = parent(&mut rows, node, provenance)?;
+        let (now, serial) = match carried.take() {
+            Some((held, found, serial)) if held == node => (found, serial),
+            _ => {
+                let root = rows.record(node)?.root();
+                (lookups.entry(&rows, node, root, Ahead::Facts)?, None)
+            }
+        };
         // A node the marker hides is never a returned version: the walk stops
         // at the first one rather than listing it or walking past it.
-        if now.is_some()
-            && visibility
-                .hidden_at(path, Visibility::node_serial(store, node)?)
-                .is_some()
-        {
-            break;
+        if now.is_some() {
+            let serial = match serial {
+                Some(serial) => serial,
+                None => rows.serial(node)?,
+            };
+            if visibility.hidden_at(path, serial).is_some() {
+                break;
+            }
         }
         let mut hidden_before = false;
         let before = previous
             .map(|p| {
-                let found = entry(reader, args::root(store, p)?, path)?;
-                if found.is_some()
-                    && visibility
-                        .hidden_at(path, Visibility::node_serial(store, p)?)
-                        .is_some()
-                {
+                let root = rows.walked(p)?.root();
+                let found = lookups.entry(&rows, p, root, Ahead::Facts)?;
+                let serial = found.map(|_| rows.serial(p)).transpose()?;
+                carried = Some((p, found, serial));
+                if serial.is_some_and(|serial| visibility.hidden_at(path, serial).is_some()) {
                     hidden_before = true;
                     Ok(None)
                 } else {
@@ -189,17 +216,17 @@ pub fn list(
             };
             break;
         }
-        let record = saved::record(store, node)?;
+        let record = rows.details(node)?;
         let item = SdkValue::map([
             (
                 "candidateIndex",
                 SdkValue::Int((candidate + examined as u64 - 1) as i64),
             ),
-            ("ref", saved::reference(store, node)?),
+            ("ref", rows.reference(node)?),
             (
                 "comparedTo",
                 previous
-                    .map(|p| saved::reference(store, p))
+                    .map(|p| rows.reference(p))
                     .transpose()?
                     .unwrap_or_default(),
             ),
@@ -274,7 +301,10 @@ pub fn list(
     let answer = snapshot::answer(vec![
         ("continuation", continuation),
         ("kind", SdkValue::text("ok")),
-        ("at", saved::reference(store, start)?),
+        ("at", {
+            rows.hold(start, anchor, None);
+            rows.reference(start)?
+        }),
         ("path", SdkValue::text(path)),
         ("traversal", SdkValue::text(traversal)),
         ("items", SdkValue::List(items)),

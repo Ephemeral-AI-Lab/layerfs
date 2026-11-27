@@ -5,11 +5,13 @@
 use super::mutation::Mutation;
 use crate::history::lookup::{self as args, Answer, Arg};
 use crate::read::{snapshot, visibility::Visibility};
+use crate::store::{BindError, BindPhase};
+use crate::store_service::NamedBindFailure;
 use crate::StoreService;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::TreeTable;
 use layerfs_content::filesystem::FilesystemRootId;
-use layerfs_history::{CommitOutcome, CommitVia, WorkspaceId};
+use layerfs_history::{BranchRecord, CommitOutcome, CommitVia, LayerStackRecord, WorkspaceId};
 use std::sync::Arc;
 
 pub fn path(value: &str) -> Result<String, SdkRefusal> {
@@ -76,42 +78,36 @@ pub fn commit(
     expected: Option<&str>,
 ) -> Answer {
     let store = &service.store;
-    let (branch_name, branch, stack) = crate::telemetry::timed("files.resolve", |_| {
-        let stack = args::project(store, project)?;
-        let branch_name = branch?;
-        if branch_name == "main" {
-            return Err(args::refuse(
-                "ReadOnly",
-                "main changes only through publish",
-                SdkValue::Null,
-            ));
+    let (branch_name, workspace) = match (branch, expected) {
+        // #818 W2: the bind finds the project and Branch by name with its
+        // snapshot, in one read.
+        (Ok(name), None) if name != crate::history::MAIN => {
+            (name, bind_named(service, project, name)?)
         }
-        let branch = args::branch(store, &stack, branch_name)?;
-        Ok((branch_name, branch, stack))
-    })?;
-    let id = WorkspaceId::from_authority(
-        layerfs_bridge::duplex::generate_keypair()
-            .map_err(args::failed)?
-            .public,
-    )
-    .map_err(args::history)?;
-    let workspace =
-        crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
-            .map_err(args::failed)?;
-    if let Some(expected) = expected {
-        let bound = workspace
-            .snapshot()
-            .map_err(crate::write::mutation::failure);
-        let guard = bound.and_then(|base| {
-            let head = crate::removal::node_of(&base);
-            let what = format!("Branch {branch_name}");
-            crate::history::resolve::expect(store, &stack, Some(expected), &what, head)
-        });
-        if let Err(refusal) = guard {
-            close(service, &workspace)?;
-            return Err(refusal);
+        (branch, expected) => {
+            let (branch_name, branch, stack) =
+                crate::telemetry::timed("files.resolve", |_| resolve(store, project, branch))?;
+            let id = workspace_id()?;
+            let workspace =
+                crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
+                    .map_err(args::failed)?;
+            if let Some(expected) = expected {
+                let bound = workspace
+                    .snapshot()
+                    .map_err(crate::write::mutation::failure);
+                let guard = bound.and_then(|base| {
+                    let head = crate::removal::node_of(&base);
+                    let what = format!("Branch {branch_name}");
+                    crate::history::resolve::expect(store, &stack, Some(expected), &what, head)
+                });
+                if let Err(refusal) = guard {
+                    close(service, &workspace)?;
+                    return Err(refusal);
+                }
+            }
+            (branch_name, workspace)
         }
-    }
+    };
     let result = crate::telemetry::timed("files.change", |_| change(&workspace, changes))?;
     if result.as_ref().is_err_and(|e| e.code == "Unknown") {
         return result.map(|_| SdkValue::Null);
@@ -222,6 +218,89 @@ pub fn commit(
     })
 }
 
+/// The project and Branch by name on the control reader, with the call's
+/// refusals in their order: `NoSuchProject`, a refused `branch` argument,
+/// `ReadOnly` for `main`, `NoSuchBranch`.
+fn resolve<'a>(
+    store: &Arc<crate::store::Store>,
+    project: &str,
+    branch: Arg<&'a str>,
+) -> Result<(&'a str, BranchRecord, LayerStackRecord), SdkRefusal> {
+    let stack = args::project(store, project)?;
+    let branch_name = branch?;
+    if branch_name == crate::history::MAIN {
+        return Err(args::refuse(
+            "ReadOnly",
+            "main changes only through publish",
+            SdkValue::Null,
+        ));
+    }
+    let branch = args::branch(store, &stack, branch_name)?;
+    Ok((branch_name, branch, stack))
+}
+
+/// A fresh identity for the call's private Workspace.
+fn workspace_id() -> Result<WorkspaceId, SdkRefusal> {
+    let key = layerfs_bridge::duplex::generate_keypair().map_err(args::failed)?;
+    WorkspaceId::from_authority(key.public).map_err(args::history)
+}
+
+/// The private Workspace on Branch `branch` of `project`, bound by name
+/// (#818 W2) with the refusals [`resolve`] gives, in its order: a refusal
+/// the call meets before the bind reads the project and Branch (no
+/// Workspace key, overlay maintenance stopped, call capacity full, a
+/// reader that did not open) comes after the lookups, as before, and is
+/// `Failed` when they pass.
+fn bind_named(
+    service: &StoreService,
+    project: &str,
+    branch: &str,
+) -> Result<Arc<crate::store::BoundWorkspace>, SdkRefusal> {
+    let lookups_first = |refusal: SdkRefusal| {
+        let resolved = crate::telemetry::timed("files.resolve", |_| {
+            resolve(&service.store, project, Ok(branch))
+        });
+        resolved.err().unwrap_or(refusal)
+    };
+    let id = workspace_id().map_err(lookups_first)?;
+    let bound = crate::telemetry::timed("files.bind", |timing| {
+        service.bind_named(id, project, branch, timing)
+    });
+    bound.map_err(|failure| match failure {
+        NamedBindFailure::Admission(message) => lookups_first(args::failed(message)),
+        NamedBindFailure::Bind {
+            refusal,
+            looked_up: false,
+        } => lookups_first(args::failed(refusal)),
+        NamedBindFailure::Bind { refusal, .. } => {
+            lookup_answer(&refusal, project, branch).unwrap_or_else(|| args::failed(refusal))
+        }
+    })
+}
+
+/// The answer of a named bind's own lookup, as [`resolve`] gives it: no
+/// such project or Branch, or its failed read, also under a cleanup failure
+/// that followed it (the lookup answered first). `None` for a later step.
+fn lookup_answer(
+    refusal: &crate::store::BindRefusal,
+    project: &str,
+    branch: &str,
+) -> Option<SdkRefusal> {
+    let mut error = &refusal.error;
+    while let BindError::Cleanup { original, .. } = error {
+        error = original;
+    }
+    match error {
+        BindError::NoSuchProject(_) => Some(args::no_project(project)),
+        BindError::NoSuchBranch(_) => Some(args::no_branch(branch)),
+        // In phase Snapshot after the lookup began, a read is the lookup's.
+        BindError::Read(error) if matches!(refusal.phase, BindPhase::Snapshot) => {
+            Some(args::published(error.clone()))
+        }
+        _ => None,
+    }
+}
+
 /// Applies `changes` to the private Workspace: how many texts its edits
 /// replaced, or the first refused change's refusal, after the changes
 /// before it are finished in the overlay.
@@ -240,16 +319,32 @@ fn change(
         .snapshot()
         .map_err(crate::write::mutation::failure)?;
     let node = crate::removal::node_of(&base);
-    let visibility = Visibility::for_stack(
-        &workspace.store,
-        base.branch.stack,
-        Visibility::node_serial(&workspace.store, node)?,
-    )?;
-    let reader: Arc<crate::store::StorePorts> = workspace.store.ports(base.scope);
-    let tree =
-        TreeTable::open(&*reader, FilesystemRootId(base.effective_root)).map_err(args::content)?;
+    // #818 W1: the bound node's markers the bind kept answer without a read,
+    // and the base tree opens only when a refusal asks. Without kept markers
+    // the call reads both first, as before, so a failed read still refuses
+    // every change (SPEC D16). The control reader opens with the tree.
+    let tree = std::cell::OnceCell::new();
+    let visibility = match workspace.kept_markers(node) {
+        Some((serial, markers)) => Visibility::from_markers(serial, markers),
+        None => {
+            let visibility = Visibility::for_stack(
+                &workspace.store,
+                base.branch.stack,
+                Visibility::node_serial(&workspace.store, node)?,
+            )?;
+            let _ = tree.set(open_tree(workspace, &base)?);
+            visibility
+        }
+    };
     let removed = |path: &str| -> Result<Option<SdkRefusal>, SdkRefusal> {
-        let exists = snapshot::entry(&reader, &tree, path)?.is_some();
+        let (reader, tree) = match tree.get() {
+            Some(opened) => opened,
+            None => {
+                let opened = open_tree(workspace, &base)?;
+                tree.get_or_init(|| opened)
+            }
+        };
+        let exists = snapshot::entry(reader, tree, path)?.is_some();
         Ok(exists
             .then(|| visibility.hidden(path))
             .flatten()
@@ -258,7 +353,17 @@ fn change(
     let mut mutation = Mutation::new(workspace)?;
     let (mut result, mut replaced) = (Ok(()), 0u64);
     for (index, change) in changes.iter().enumerate() {
-        result = (|| match change.as_ref().map_err(Clone::clone)? {
+        result = (|| {
+            // #818 W6: the next window's paths are planned before its first
+            // change; a failed plan read refuses at that change. A change
+            // refused before any read is never planned over (`Mutation::plan`).
+            if index % super::plan::PLAN_PATHS == 0 {
+                let end = changes.len().min(index + super::plan::PLAN_PATHS);
+                mutation.plan(&changes[index..end])?;
+            }
+            Ok(())
+        })()
+        .and_then(|()| match change.as_ref().map_err(Clone::clone)? {
             Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
             Change::Edit {
                 path,
@@ -291,7 +396,7 @@ fn change(
             // `NoSuchPath` (see the `NotFound` mapping above); unlike
             // `edit`/`cp`-from it does not consult the base view.
             Change::Mv { from, to } => mutation.rename(from, to),
-        })()
+        })
         .map_err(|mut e| {
             if let SdkValue::Map(fields) = &mut e.detail {
                 fields.push(("index".into(), SdkValue::Int(index as i64)));
@@ -309,6 +414,16 @@ fn change(
     }
     mutation.finish()?;
     Ok(result.map(|()| replaced))
+}
+
+/// The bound node's raw tree on the control reader, for the hidden-path check.
+fn open_tree(
+    workspace: &crate::store::BoundWorkspace,
+    base: &layerfs_history::BranchSnapshot,
+) -> Result<(Arc<crate::store::StorePorts>, TreeTable), SdkRefusal> {
+    let reader = workspace.store.ports(base.scope);
+    let tree = TreeTable::open(&*reader, FilesystemRootId(base.effective_root));
+    Ok((reader, tree.map_err(args::content)?))
 }
 
 /// Closes the call's private Workspace and discards its overlay.

@@ -25,12 +25,20 @@ use layerfs_content::{
 };
 use std::sync::Arc;
 
-/// Every saved read publishes its exact immutable anchor, including legacy calls.
-pub fn pin(store: &Arc<Store>, snap: &Snap, answer: args::Answer) -> args::Answer {
+/// Every saved read publishes its exact immutable anchor, including legacy
+/// calls, built from the node's record the resolve kept (#818 R2).
+pub fn pin(
+    store: &Arc<Store>,
+    snap: &Snap,
+    record: &args::NodeRecord,
+    recorded: &Option<Option<String>>,
+    answer: args::Answer,
+) -> args::Answer {
     let SdkValue::Map(mut fields) = answer? else {
         return Err(args::failed("saved read response must be a map"));
     };
-    fields.push(("at".into(), saved::reference(store, snap.node)?));
+    let at = saved::reference_of(store, snap.node, record, recorded.as_ref())?;
+    fields.push(("at".into(), at));
     super::read_reply::finish(fields)
 }
 

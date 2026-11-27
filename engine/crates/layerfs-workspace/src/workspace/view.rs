@@ -37,15 +37,19 @@ impl ViewStat {
         }
     }
 }
+/// The content kind of an overlay inode.
+fn kind_of(kind: layerfs_overlay::InodeKind) -> InodeKind {
+    match kind {
+        layerfs_overlay::InodeKind::File => InodeKind::RegularFile,
+        layerfs_overlay::InodeKind::Directory => InodeKind::Directory,
+        layerfs_overlay::InodeKind::Symlink => InodeKind::Symlink,
+    }
+}
 impl From<Inode> for ViewStat {
     fn from(v: Inode) -> Self {
         Self {
             serial: v.serial,
-            kind: match v.kind {
-                layerfs_overlay::InodeKind::File => InodeKind::RegularFile,
-                layerfs_overlay::InodeKind::Directory => InodeKind::Directory,
-                layerfs_overlay::InodeKind::Symlink => InodeKind::Symlink,
-            },
+            kind: kind_of(v.kind),
             metadata: PortableMetadata {
                 mode: u32::from(v.mode),
                 mtime_seconds: v.mtime_seconds,
@@ -107,6 +111,37 @@ impl SourceView {
         }
         inherited.ok_or(ContentError::PathNotFound.into())
     }
+    /// The kinds [`Self::stat`] reports for `serials` (a listed page), with
+    /// no metadata, length or sub-directory read: the overlay's own inodes
+    /// first, then one [`BaseView::values`] for the rest, the overlay asked
+    /// again after it as `stat` does (#818 W5). A serial neither holds is
+    /// `PathNotFound`. Bounded by the page: one value per serial.
+    pub fn kinds(
+        &self,
+        overlay: &impl OverlayRead,
+        serials: &[u64],
+    ) -> WorkspaceResult<Vec<InodeKind>> {
+        let mut kinds = Vec::with_capacity(serials.len());
+        let mut inherited = Vec::new();
+        for (index, serial) in serials.iter().enumerate() {
+            let local = overlay.inode(self.source, *serial)?;
+            if local.is_none() {
+                inherited.push(index);
+            }
+            kinds.push(local.map(|row| kind_of(row.kind)));
+        }
+        let wanted: Vec<u64> = inherited.iter().map(|index| serials[*index]).collect();
+        for (index, value) in inherited.into_iter().zip(self.base.values(&wanted)?) {
+            kinds[index] = match overlay.inode(self.source, serials[index])? {
+                Some(row) => Some(kind_of(row.kind)),
+                None => value.map(|value| value.kind),
+            };
+        }
+        kinds
+            .into_iter()
+            .map(|kind| kind.ok_or(ContentError::PathNotFound.into()))
+            .collect()
+    }
     /// Canonical root directory serial of the owned base; never rebound.
     pub fn root_serial(&self) -> u64 {
         self.base.root().root_inode().serial()
@@ -135,30 +170,56 @@ impl SourceView {
         parent: u64,
         name: &PathName,
     ) -> WorkspaceResult<ViewStat> {
+        // A walk stats names in listing order: remember the lengths of the
+        // files listed after this one with its own (F-032).
+        let serial = self.bound(overlay, parent, name, |value| {
+            self.base.sibling_lengths_for(parent, name, value)
+        })?;
+        self.stat(overlay, serial)
+    }
+    /// What [`Self::lookup`] binds `name` under `parent` to, with the kind
+    /// [`Self::stat`] reports and no metadata, length or sub-directory read:
+    /// a path walk needs no more of the directories it passes (#818 W6).
+    pub fn lookup_kind(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+    ) -> WorkspaceResult<(u64, InodeKind)> {
+        let serial = self.bound(overlay, parent, name, |_| Ok(()))?;
+        let kind = self.kinds(overlay, &[serial])?;
+        Ok((serial, kind[0]))
+    }
+    /// The serial `name` binds under `parent`: the overlay's entry, else the
+    /// base child (`found` sees it), the overlay asked again after the base.
+    fn bound(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+        found: impl FnOnce(&layerfs_content::filesystem::Resolved) -> WorkspaceResult<()>,
+    ) -> WorkspaceResult<u64> {
         let local = overlay.inode(self.source, parent)?;
         let inherits = self.inherits(parent, local.as_ref())?;
         if let Some(local) = overlay.directory_entry(self.source, parent, name.as_bytes())? {
-            return self.stat(overlay, local.serial.ok_or(ContentError::PathNotFound)?);
+            return local.serial.ok_or(ContentError::PathNotFound.into());
         }
         if !inherits {
             return Err(ContentError::PathNotFound.into());
         }
         let inherited = match self.base.child(parent, name) {
             Ok(value) => {
-                // A walk stats names in listing order: remember the lengths
-                // of the files listed after this one with its own (F-032).
-                self.base.sibling_lengths_for(parent, name, &value)?;
+                found(&value)?;
                 Some(value.serial)
             }
             Err(ContentError::PathNotFound) => None,
             Err(error) => return Err(error.into()),
         };
-        let serial = match overlay.directory_entry(self.source, parent, name.as_bytes())? {
+        match overlay.directory_entry(self.source, parent, name.as_bytes())? {
             Some(local) => local.serial,
             None => inherited,
         }
-        .ok_or(ContentError::PathNotFound)?;
-        self.stat(overlay, serial)
+        .ok_or(ContentError::PathNotFound.into())
     }
     /// Effective local symlink layers, followed by exact immutable demand.
     pub fn readlink(

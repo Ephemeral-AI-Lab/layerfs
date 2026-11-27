@@ -151,7 +151,52 @@ fn reader_texts(schema: &str) -> Vec<String> {
     ]
 }
 
+/// The writer's statements a first create sends after its bind (#818 W4;
+/// a create is an SDK write that does not take the fused Commit): the serial
+/// reservation's one message (`reserve`), the Save's block allocation, pack
+/// `COPY` and object rows, the bindings' insert, and the statements
+/// of the Commit's write transaction (`commit::commit_branch`). Reads sent
+/// as autocommit statements are not here.
+pub(crate) fn create_texts(schema: &str) -> Result<Vec<String>, BackendError> {
+    let mut texts = vec![
+        super::reserve::text(schema),
+        crate::backend::postgresql::metadata::writes::ALLOCATE.to_owned(),
+        crate::backend::postgresql::objects::publish::COPY.to_owned(),
+        crate::backend::postgresql::objects::publish::ROWS.to_owned(),
+        // As `Mechanics::history_arrays` sends it.
+        statements::arrays("hint_insert_blocks")
+            .ok_or(BackendError::Integrity)?
+            .replace("{s}", schema),
+    ];
+    for key in [
+        "commit_snapshot_epoch",
+        "position_next_serial",
+        "commit_insert_commit",
+        "lineage_parent",
+        "lineage_insert_commit",
+        "commit_advance_branch",
+        "gc_epoch_share",
+    ] {
+        // As a write transaction sends it (`Mechanics::history`).
+        texts.push(match statements::qualified(key) {
+            Some(sql) => sql.replace("{s}", schema),
+            None => statements::statement(key)?.to_owned(),
+        });
+    }
+    Ok(texts)
+}
+
 impl Session {
+    /// Prepares the writer's create statements ([`create_texts`]) in one
+    /// flight: the SDK's Store open sends it (#818 W4), so a first create
+    /// prepares none of them.
+    pub(crate) fn prepare_sdk_writes(&self) -> Result<(), BackendError> {
+        self.prepare(&create_texts(&self.settings.schema)?)?;
+        // A reopened writer prepares them again (`Session::reopen`).
+        self.sdk_writes.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
     /// Prepares the writer's mount and unmount statements in one flight.
     pub(crate) fn prepare_mount_writes(&self) -> Result<(), BackendError> {
         self.prepare(&writer_texts(&self.settings.schema)?)?;

@@ -6,8 +6,11 @@
 //! unit's outcome does not depend on the engine. Windows bind whole columns
 //! as arrays, so a window costs a fixed number of round trips.
 mod cleanup;
+mod flights;
+mod placement;
 mod provider;
 mod reads;
+mod unit;
 mod writes;
 
 pub use provider::PostgresAcquisition;

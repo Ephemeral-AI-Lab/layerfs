@@ -1,9 +1,8 @@
 //! Bounded write units: begin, append, place, record roots and advance.
-use super::accounting::{charge, entry_bytes, host_bytes, HOST_BYTES};
+use super::accounting::{entry_bytes, host_bytes, HOST_BYTES};
 use super::metadata_blob;
 use super::statements::{
-    signed, unsigned, Failure, ADVANCE, BEGIN, BIND_HOST_FILE, CLAIM_EPOCH, COMPLETE_FILE,
-    PLACE_ENTRY, SET_DIRECTORY_ROOT,
+    signed, unsigned, Failure, ADVANCE, BEGIN, CLAIM_EPOCH, COMPLETE_FILE, SET_DIRECTORY_ROOT,
 };
 use crate::backend::sqlite::session::prepared::Prepared;
 use crate::backend::{records::BackendError, Transaction};
@@ -51,7 +50,7 @@ pub(crate) fn begin(tx: &Transaction<'_>, epoch: u64, facts: &Begin) -> Result<O
 
 /// Binds one positioned path to its host identity and returns the canonical
 /// position with whether this path created the identity's row.
-fn bind(
+pub(super) fn bind(
     statement: &mut Prepared<'_>,
     operation: i64,
     position: u64,
@@ -172,47 +171,7 @@ pub(crate) fn place_children(
     parent: u64,
     placed: &[Placed],
 ) -> Result<Vec<u64>, Failure> {
-    let (operation, parent) = (signed(owner.operation)?, signed(parent)?);
-    let (mut rows, mut bytes) = (0_i64, 0_i64);
-    let mut canonical = Vec::new();
-    let mut host_statement = tx.prepare(BIND_HOST_FILE)?;
-    let mut placed_statement = tx.prepare(PLACE_ENTRY)?;
-    for child in placed {
-        let position = signed(child.position)?;
-        let mut first = None;
-        if let Some((host, path)) = &child.host {
-            let (bound, created) =
-                bind(&mut host_statement, operation, child.position, host, path)?;
-            first = Some(bound);
-            canonical.push(unsigned(bound)?);
-            if created {
-                rows += 1;
-                bytes += host_bytes(path);
-            }
-            bytes -= HOST_BYTES;
-        }
-        let updated = placed_statement.borrowed(
-            &[
-                &operation,
-                &parent,
-                &child.name.as_slice(),
-                &position,
-                &first,
-            ],
-            32 + child.name.len() as u64,
-        )?;
-        // The child must exist unpositioned, and be regular exactly when bound.
-        let kind = updated
-            .first()
-            .ok_or(Failure::Changed(child.position))?
-            .get::<i64>(0)?;
-        let regular = kind == i64::from(InodeKind::RegularFile.code());
-        if regular != child.host.is_some() {
-            return Err(Failure::Changed(child.position));
-        }
-    }
-    charge(tx, owner, rows, bytes)?;
-    Ok(canonical)
+    super::child_windows::place_children(tx, owner, parent, placed)
 }
 
 pub(crate) fn complete_files(

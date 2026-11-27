@@ -105,6 +105,12 @@ pub struct Store {
     /// (#768 step B, PostgreSQL): with its admission and markers it is then
     /// two writer messages and no reader round trip.
     pub(super) mount_on_writer: bool,
+    /// The recorded logical size of the node any of this Store's
+    /// Workspaces last read or published (#818 W3), so a Workspace bound
+    /// to the Commit another one just published reads none. A node's
+    /// recorded size never changes. Bound: one `(NodeId, u64)`; a poisoned
+    /// slot keeps nothing.
+    pub(super) last_logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
 }
 impl Store {
     /// Takes the control reader and a mount-time factory under explicit capacity.
@@ -197,6 +203,7 @@ impl Store {
             committer: None,
             fused: Default::default(),
             mount_on_writer: false,
+            last_logical: Mutex::default(),
         })
     }
     /// Makes each Workspace Commit over an unmoved head in one write
@@ -363,6 +370,12 @@ impl Store {
     /// The daemon calls it after it reported ready, on a thread of its own.
     pub fn prefill_reader(&self) -> Option<StorageResult<()>> {
         self.readers.prefill()
+    }
+    /// Whether the Store's provider pays a round trip per demand and reads
+    /// a grouped demand in one (PostgreSQL): a planned read pays only there
+    /// (#818 W6).
+    pub(crate) fn batched_reads(&self) -> bool {
+        self.writer.batched_chain_reads()
     }
     pub fn mount_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
         self.readers.mount(workspace, false)

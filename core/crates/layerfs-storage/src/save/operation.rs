@@ -40,6 +40,16 @@ impl<'a> Save<'a> {
         self.join_metadata_reads = true;
         self
     }
+    /// Publishes every batch of this Save through the provider's fenced
+    /// flight where it is eligible (`PackPersistence::publish_captured_tail`:
+    /// one message on PostgreSQL, with the ordinary publication's outcome
+    /// and custody), and as an ordinary publication otherwise. Payloads are
+    /// not kept, as for any non-captured Save. Used by Namespace Init
+    /// (#818 I3c).
+    pub fn publishing_in_flights(self) -> Self {
+        self.state.borrow_mut().flights = true;
+        self
+    }
     /// Accepts a finalized object, preparing the preceding bounded wave as needed.
     pub fn accept(&self, object: FinalizedObject) -> StorageResult<()> {
         self.accept_output(object, false)

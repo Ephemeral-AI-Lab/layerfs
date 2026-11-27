@@ -12,7 +12,8 @@
 //!
 //! The PostgreSQL test below proves the pinned keys answer: it creates a
 //! Store, commits and publishes, then reads it back through every
-//! one-statement catalog read: `branch_any`, `published_layer`,
+//! one-statement catalog read: `branch_any`, `branch_named`, `path_removals`,
+//! `published_layer`,
 //! `node_history_serial`, `layer` (layer.get), `layer_history` (layer.list),
 //! `branch_snapshot`/`branch_snapshot_named` (the saved heads),
 //! `commit_history` (a historical read), the project lookup and `statistics`.
@@ -22,7 +23,8 @@
 mod support;
 
 use layerfs_history::{
-    CommitHistoryRequest, HistoryCatalog, LayerHistoryRequest, NamedSnapshot, NodeId,
+    CommitHistoryRequest, ContextTarget, HistoryCatalog, HistoryName, LayerHistoryRequest,
+    NamedSnapshot, NodeId, NodeRecord, ReadContext,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -56,6 +58,11 @@ const READS: &[Read] = &[
     Read {
         called: "branch_any",
         keys: &["branch_branch_by_id_any"],
+        pg_only: false,
+    },
+    Read {
+        called: "branch_named",
+        keys: &["branch_branch_by_name"],
         pg_only: false,
     },
     Read {
@@ -94,6 +101,11 @@ const READS: &[Read] = &[
         pg_only: false,
     },
     Read {
+        called: "markers",
+        keys: &["paths_markers"],
+        pg_only: false,
+    },
+    Read {
         called: "node_markers",
         keys: &["paths_node_markers"],
         pg_only: false,
@@ -101,6 +113,65 @@ const READS: &[Read] = &[
     Read {
         called: "stored",
         keys: &["digest_roots"],
+        pg_only: false,
+    },
+    Read {
+        called: "read_context",
+        keys: &["read_context_named", "read_context_node"],
+        pg_only: false,
+    },
+    // First-parent windows (#818 H4); `first_parent_window` runs it on a
+    // real server.
+    Read {
+        called: "chain_window",
+        keys: &["lineage_chain_window"],
+        pg_only: false,
+    },
+    // Init's acquisition reads (#818 I3a); `postgresql_acquisition_reads`
+    // runs each one on a real server against SQLite's answers.
+    Read {
+        called: "unplaced_children",
+        keys: &["acquisition_unplaced"],
+        pg_only: false,
+    },
+    Read {
+        called: "directories",
+        keys: &["acquisition_directories"],
+        pg_only: false,
+    },
+    Read {
+        called: "directory_path",
+        keys: &["acquisition_directory_path"],
+        pg_only: false,
+    },
+    Read {
+        called: "jobs",
+        keys: &["acquisition_jobs"],
+        pg_only: false,
+    },
+    Read {
+        called: "job",
+        keys: &["acquisition_job"],
+        pg_only: false,
+    },
+    Read {
+        called: "file_roots",
+        keys: &["acquisition_file_roots"],
+        pg_only: false,
+    },
+    Read {
+        called: "entries",
+        keys: &["acquisition_entries"],
+        pg_only: false,
+    },
+    Read {
+        called: "bindings",
+        keys: &["acquisition_bindings"],
+        pg_only: false,
+    },
+    Read {
+        called: "work",
+        keys: &["acquisition_owner"],
         pg_only: false,
     },
     // The shared facade forwards its caller's closure; the call sites above
@@ -500,6 +571,24 @@ fn postgresql_one_statement_reads_answer() {
         None
     );
 
+    // path_removals: the stack's markers alone, one statement (#818 R1).
+    let alone = history.path_removals(stack).expect("the markers alone");
+    assert_eq!(alone, markers);
+
+    // branch_named: the by-name read with the visibility filter (#818 R1); a
+    // name the stack does not hold is none.
+    let named = history
+        .branch_named(stack, &support::name("work"))
+        .expect("branch_named")
+        .expect("the Branch row");
+    assert_eq!((named.id, named.head_commit), (branch, Some(record.id)));
+    assert_eq!(
+        history
+            .branch_named(stack, &support::name("absent"))
+            .expect("a missing name"),
+        None
+    );
+
     // layer.get and layer.list.
     assert_eq!(
         history
@@ -562,6 +651,70 @@ fn postgresql_one_statement_reads_answer() {
         history.statistics().expect("statistics").file > 0,
         "the Store's page total"
     );
+
+    // read_context: one statement, decoded to what the default's reads and
+    // the markers and recorded-Branch reads beside them find (#818 R5).
+    let project = support::name("project-1");
+    let targets = [
+        ContextTarget::Main,
+        ContextTarget::Branch(support::name("work")),
+        ContextTarget::Branch(support::name("absent")),
+        ContextTarget::Node(NodeId::Commit(record.id)),
+        ContextTarget::Node(NodeId::Layer(layer.id)),
+        ContextTarget::Node(NodeId::Commit(absent_commit())),
+    ];
+    for target in &targets {
+        let found = history
+            .read_context(&project, target)
+            .expect("read_context");
+        assert_eq!(
+            found,
+            expected(history, stack, &project, target),
+            "{target:?}"
+        );
+    }
+    let work = history
+        .read_context(&project, &targets[1])
+        .expect("read_context");
+    let removals = work.removals.expect("read").expect("decoded");
+    assert_eq!(removals.expect("the node").1, markers);
+    assert_eq!(
+        work.recorded.expect("read").expect("decoded").map(|b| b.id),
+        Some(branch)
+    );
+    assert_eq!(
+        history
+            .read_context(&support::name("absent"), &ContextTarget::Main)
+            .expect("no such project"),
+        ReadContext::default()
+    );
+}
+
+/// What `read_context` must answer: the default's reads, then the node's
+/// markers and a Commit's recorded Branch, read one by one.
+fn expected(
+    history: &dyn HistoryCatalog,
+    stack: layerfs_history::LayerStackId,
+    project: &HistoryName,
+    target: &ContextTarget,
+) -> ReadContext {
+    let mut context = layerfs_history::catalog::read_context_serial(history, project, target)
+        .expect("the reads one by one");
+    if let Some(node) = &context.node {
+        let id = match node {
+            NodeRecord::Commit(record) => NodeId::Commit(record.id),
+            NodeRecord::Layer(record) => NodeId::Layer(record.id),
+        };
+        context.removals = Some(Ok(history.node_path_removals(stack, id).expect("markers")));
+        context.recorded = Some(Ok(match node {
+            NodeRecord::Commit(record) => record
+                .meta
+                .branch
+                .and_then(|id| history.branch_any(id).expect("branch_any")),
+            NodeRecord::Layer(_) => None,
+        }));
+    }
+    context
 }
 
 /// A Commit id no Store holds.
