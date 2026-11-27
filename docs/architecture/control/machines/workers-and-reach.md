@@ -8,7 +8,7 @@ boundary, within [Machines](README.md).
 
 | | |
 | --- | --- |
-| Source | [`layerfs-machine/src/route/`](../../../../control/crates/layerfs-machine/src/route), [`src/worker/serve.rs`](../../../../api/crates/layerfs-api/src/worker/serve.rs) and [`worker_server/`](../../../../control/crates/layerfs-inspect/src/worker_server), [`layerfs-machine/src/setup/`](../../../../control/crates/layerfs-machine/src/setup), [`reach.rs`](../../../../control/crates/layerfs-machine/src/table/reach.rs), [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| Source | [`layerfs-machine/src/route/`](../../../../control/crates/layerfs-machine/src/route), [`src/worker/serve.rs`](../../../../api/crates/layerfs-api/src/worker/serve.rs) and [`worker_server/`](../../../../api/crates/layerfs-api/src/worker), [`layerfs-machine/src/setup/`](../../../../control/crates/layerfs-machine/src), [`reach.rs`](../../../../control/crates/layerfs-machine/src/table/reach.rs), [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 A worker is one `layerfs worker` process per machine whose kernel the
 caller cannot open a sqlite Store on. It runs the library's host
@@ -287,8 +287,9 @@ which is now the lock of such a table and never refuses. Recovery does not
 undo what a panic leaves outside a guard: a Store that `with_service` opened
 stays counted as open, and a pool slot counted before a dial stays counted.
 
-The fault tests use the `worker-fault` cargo feature of `layerfs-control`
-(`worker_server::fault`: the next accept or thread fails, an operation
+The fault tests use the `worker-fault` cargo feature of `layerfs-api`
+(`worker::fault`, forwarded to `layerfs-store` for the host worker's write
+faults: the next accept or thread fails, an operation
 panics, hangs or floods events, shorter waits). No shipped build turns it
 on and no environment variable stands in for it; the boundary guard allows
 it in the worker server's files alone and refuses a manifest that enables it.

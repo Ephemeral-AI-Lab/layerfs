@@ -7,7 +7,7 @@ Capturing a Workspace's published frontier, constructing it, publishing a Commit
 | | |
 | --- | --- |
 | Layer | [Engine](../README.md) |
-| Crates | `layerfs-workspace`, `layerfs-store-service`, `layerfs-overlay` |
+| Crates | `layerfs-vfs`, `layerfs-store-service`, `layerfs-overlay` |
 | Source | [`layerfs-vfs/src/construction`](../../../../engine/crates/layerfs-vfs/src/construction), [`layerfs-vfs/src/binding/install.rs`](../../../../engine/crates/layerfs-vfs/src/binding/install.rs), [`layerfs-store-service/src/store`](../../../../engine/crates/layerfs-store-service/src/store) (`commit*.rs`, `captured.rs`, `pipeline.rs`, `producer.rs`, `settle.rs`, `bind.rs`), [`layerfs-overlay/src/generation/capture.rs`](../../../../engine/crates/layerfs-overlay/src/generation/capture.rs) |
 | Uses | [Workspace](../workspace/README.md), [Overlay](../overlay/README.md), [Store](../store/README.md), [Core: Compare and merge](../../core/compare-and-merge/README.md), [Core: Physical storage](../../core/physical-storage/README.md), [Core: History](../../core/history/README.md) |
 | Used by | [Daemon](../daemon/README.md), [Store calls](../store-calls/README.md) (SDK `file.*` writes) |

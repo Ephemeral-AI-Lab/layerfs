@@ -13,35 +13,47 @@ nothing in engine or core depends on it, and the API layer calls it.
 
 ## Picture
 
-Each entity crate keeps records and calls; its driver does the work on a
-kernel, a provider or a bucket, takes every input as an argument and
-writes no record.
+Each entity crate keeps records and calls; its driver module
+(`layerfs-machine` `platform/`, `layerfs-store` `backup/`,
+`layerfs-sandbox` `backend/`) does the work on a kernel, a provider or a
+bucket, takes every input as an argument and writes no record.
 
 ```text
-                     layerfs-control
-          worker server, inventory, doctor, migrate,
-          machine/Store/project/backup calls + checks
+                     layerfs-inspect             layerfs-workspace
+          worker server, inventory, doctor,      Workspace calls, exec,
+          machine/Store/project/backup calls     unmount guard
+          + checks                                      |
+                            |                           |
+                            v                           |
+              +----> layerfs-sandbox <------------------+
+              |      records, launch, exec, daemon channel;
+              |      backend/: how a Sandbox runs (process, namespaces)
+              |             |
+              |             v
+              +----> layerfs-store
+              |      Store and project records and calls;
+              |      backup/: how a Store is backed up
+              |      (local_folder, minio, r2)
+              |             |
+              |             v
+              +----> layerfs-machine
+                     machine records and calls; platform/ (feature
+                     machine): where Sandboxes run (host, docker,
+                     apple_container, lima)
                             |
                             v
-  entity crates             |              drivers
-  -------------             v              -------
-              +----> layerfs-sandbox ----> layerfs-sandbox-backend
-              |             |               (how a Sandbox runs:
-              |             v                process, namespaces)
-              |      layerfs-store ------> layerfs-bucket
-              |             |               (how a Store is backed up:
-              |             v                local_folder, minio, r2)
-              +----> layerfs-machine ----> layerfs-platform
-                            |   (feature    (where Sandboxes run:
-                            v    machine)    host, docker,
-                      layerfs-home           apple_container, lima)
+                      layerfs-home
                  (home, records, locks,
                   op, names, secrets, logs)
 ```
 
-Arrows follow each crate's `[dependencies]`; edges may skip down the chain,
-never up. `layerfs-machine` reaches `layerfs-platform` only through its
-`machine` feature, which the guest worker's build leaves off
+Arrows follow each crate's `[dependencies]`; edges may skip down the chain
+(`layerfs-workspace` also reaches `layerfs-store` and `layerfs-machine`
+directly), never up. What a machine or a Store reads of the Sandboxes that
+use it comes through a trait, `layerfs_machine::MachineUsers` or
+`layerfs_store::StoreUsers`, implemented in `layerfs_sandbox::users`.
+`layerfs-machine` builds its platform adapters only with its `machine`
+feature, which the guest worker's build leaves off
 ([`layerfs-machine/Cargo.toml`](../../../control/crates/layerfs-machine/Cargo.toml)).
 
 ## Topics
@@ -49,11 +61,11 @@ never up. `layerfs-machine` reaches `layerfs-platform` only through its
 | Topic | Crates | What it covers | Pages |
 | --- | --- | --- | --- |
 | [Home](home/README.md) | `layerfs-home` | Opening a home, layout, record files, locks, the `op` intent, names, secrets, traces and the call log; the inventory of relationships | none |
-| [Machines](machines/README.md) | `layerfs-machine`, `layerfs-platform` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
+| [Machines](machines/README.md) | `layerfs-machine` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
 | [Stores and projects](stores-and-projects/README.md) | `layerfs-store` (but `backup/`) | Store and project records, placement, leases, the open-Store cache, Store calls | [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md), [Projects](stores-and-projects/projects.md) |
-| [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |
-| [Backups](backups/README.md) | `layerfs-store` `backup/`, `layerfs-bucket` | Whole-Store backup to a bucket and restore | [Buckets](backups/buckets.md) |
-| [Doctor](doctor/README.md) | `layerfs-control` `doctor/` | Read-only home, host, machine, Sandbox, Store and backup checks | [Checks](doctor/checks.md) |
+| [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-workspace` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |
+| [Backups](backups/README.md) | `layerfs-store` `backup/` | Whole-Store backup to a bucket and restore | [Buckets](backups/buckets.md) |
+| [Doctor](doctor/README.md) | `layerfs-inspect` `doctor/` | Read-only home, host, machine, Sandbox, Store and backup checks | [Checks](doctor/checks.md) |
 
 ## Where each call runs
 

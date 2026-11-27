@@ -156,7 +156,7 @@ Sandboxes) are derived when needed, never stored
 
 The relationships no record stores, read when a call needs them
 ([`inventory.rs`](../../../../control/crates/layerfs-sandbox/src/status/inventory.rs),
-in `layerfs-control`):
+in `layerfs-sandbox`):
 
 | Read or check | Answers |
 | --- | --- |
@@ -431,9 +431,9 @@ independent of `LAYERFS_TRACE`.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| `layerfs-control/tests/home_layout.rs` | `cargo +1.85.1 test --locked -p layerfs-inspect --test doctor home_layout` | macOS, Linux | an empty or missing home (a lone `layerfs.lock` and the temporary included) gets a layout and id; a stray file with no `layerfs.json`, and a `layerfs.json` of layout 1, 2 or 4, is `Foreign`, refused with the fix and left byte-identical; a broken `layerfs.json` is `Failed` |
-| `layerfs-control/tests/op_intent.rs` | `cargo +1.85.1 test --locked -p layerfs-home --test records op_intent` | macOS, Linux | `Busy`, `Unresolved` and stale intents; the per-entity lock |
-| `layerfs-control/tests/typed_names.rs` | `cargo +1.85.1 test --locked -p layerfs-home --test records typed_names` | macOS, Linux | each name kind's refusals and texts |
-| `layerfs-control/tests/typed_records.rs` | `cargo +1.85.1 test --locked -p layerfs-sandbox --test users typed_records` | macOS, Linux | typed records answer their stable shape and read past `"v"` |
+| `layerfs-inspect/tests/doctor/home_layout.rs` | `cargo +1.85.1 test --locked -p layerfs-inspect --test doctor home_layout` | macOS, Linux | an empty or missing home (a lone `layerfs.lock` and the temporary included) gets a layout and id; a stray file with no `layerfs.json`, and a `layerfs.json` of layout 1, 2 or 4, is `Foreign`, refused with the fix and left byte-identical; a broken `layerfs.json` is `Failed` |
+| `layerfs-home/tests/records/op_intent.rs` | `cargo +1.85.1 test --locked -p layerfs-home --test records op_intent` | macOS, Linux | `Busy`, `Unresolved` and stale intents; the per-entity lock |
+| `layerfs-home/tests/records/typed_names.rs` | `cargo +1.85.1 test --locked -p layerfs-home --test records typed_names` | macOS, Linux | each name kind's refusals and texts |
+| `layerfs-sandbox/tests/users/typed_records.rs` | `cargo +1.85.1 test --locked -p layerfs-sandbox --test users typed_records` | macOS, Linux | typed records answer their stable shape and read past `"v"` |
 | `layerfs-home/tests/json_codec.rs` | `cargo +1.85.1 test --locked -p layerfs-home --test call json_codec` | macOS, Linux | base64 and quoted strings round-trip exactly |
 | `layerfs-api/tests/logs.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test calls log` | macOS, Linux | the call log's lines, rotation and reset |

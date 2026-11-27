@@ -139,7 +139,7 @@ See [SQLite open](../store/sqlite.md) and
 
 `methods::call` runs one public method once. `read`, `write` and `history`
 take typed values and know no method name; only `methods/` turns an
-`SdkValue` map into them. `layerfs-control` re-exports `methods::call`.
+`SdkValue` map into them. `layerfs-inspect` re-exports `methods::call`.
 
 | Family | Methods | Engine call | Source |
 | --- | --- | --- | --- |

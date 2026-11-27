@@ -2,23 +2,23 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-How `layerfs-sandbox-backend` starts one daemon on a machine's kernel and runs
+How `layerfs-sandbox` (`backend/`; was `layerfs-sandbox-backend`) starts one daemon on a machine's kernel and runs
 commands beside it, for the two backends [Sandboxes](README.md) use:
 `process` (macOS) and `namespaces` (Linux).
 
 | | |
 | --- | --- |
-| Source | [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src): [`runtime/`](../../../../control/crates/layerfs-sandbox/src/runtime), [`shared/`](../../../../control/crates/layerfs-sandbox/src/shared), [`backend/`](../../../../control/crates/layerfs-sandbox/src/backend), [`support/`](../../../../control/crates/layerfs-sandbox/src/support), [`layerfs-sandbox-helper/layerfs-sandbox-helper`](../../../../control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper/layerfs-sandbox-helper) |
+| Source | [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src): [`runtime/`](../../../../control/crates/layerfs-sandbox/src), [`spawn/`](../../../../control/crates/layerfs-sandbox/src/spawn), [`backend/`](../../../../control/crates/layerfs-sandbox/src/backend), [`bin/layerfs-sandbox-helper`](../../../../control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper) |
 
 The crate is grouped by owner:
 
 | Folder | What it holds |
 | --- | --- |
 | [`runtime/`](../../../../control/crates/layerfs-sandbox/src/runtime) | The backend-neutral surface: `dispatch.rs` (`Runtime`, `Sandbox`, matched over the backends), `cancel.rs` (one command's stop handle), `trace.rs` (a traced command's step times) and `types/` (what the backends share). |
-| [`shared/`](../../../../control/crates/layerfs-sandbox/src/shared) | The process lifecycle both backends use: the daemon start (`daemon.rs`), its listener, the search path, streams and confined reads. |
+| [`spawn/`](../../../../control/crates/layerfs-sandbox/src/spawn) | The process lifecycle both backends use: the daemon start (`daemon.rs`), its listener, the search path, streams and confined reads. |
 | [`backend/process/`](../../../../control/crates/layerfs-sandbox/src/backend/process) | Everything only `process` uses, its OS facts included: the provider and Sandbox, process groups (`groups.rs`) and `macos/` (the `mount` table, `umount -f`, confined reads). macOS runs only `process`. |
 | [`backend/namespaces/`](../../../../control/crates/layerfs-sandbox/src/backend/namespaces) | Everything only `namespaces` uses, its OS facts included: the provider and Sandbox, the cgroup, the helper spec (`spec.rs`), host checks (`host_checks.rs`), the command filter (`seccomp.rs`), the root (`rootfs/`), the Sandbox's network (`network/`) and `linux/` (`mountinfo`, confined reads). Linux runs only `namespaces`. |
-| [`support/`](../../../../control/crates/layerfs-sandbox/src/support) | Small formats other crates read: `json/`, `postgres_url.rs`, `removed_platforms.rs`. |
+| `support/` (before #828) | Small formats other crates read, now elsewhere: `json/` in `layerfs-home`, `postgres_url.rs` and `removed_platforms.rs` in `layerfs-machine` `table/` (see [Shared types and formats](#shared-types-and-formats)). |
 
 A machine's platform fixes its backend and callers never choose it: `host`
 on macOS runs `Process`; `host` on Linux and every `lima`,
@@ -236,7 +236,7 @@ sink's error. End of stream is never the exit. Stdin is refused
 (`Unsupported`); there is no timeout. The exit is the root process's; it does
 not prove descendants ended.
 
-## `shared/`: one daemon process on this kernel
+## `spawn/`: one daemon process on this kernel
 
 ```text
  <root>/<name>/                0755  one directory per Sandbox
@@ -270,7 +270,7 @@ not prove descendants ended.
 | Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; it lives in the bridge's `process` module. | [`process/identity.rs`](../../../../engine/crates/layerfs-os/src/process/identity.rs) |
 | `daemon.log` | Made new (`O_EXCL`) with the Sandbox's directory by each start, which refuses a directory that exists, and removed with it at close: a daemon never opens a log an earlier one wrote, so there is no `daemon.1.log`. Nothing rotates it while the daemon runs (a rename would not move the daemon's descriptor, and its launcher waits for the listener line from the file's start); it grows until the Sandbox closes. With tracing off the daemon writes one line for each control connection that ends without `EndSession` (a caller that closes it) and for each reclaimed slot or expired request, none for a mount, exec or Commit itself. Rotating it while the daemon runs is not built in 2.0 (layerfs-project#180, live writers). | [`spawn/daemon.rs`](../../../../control/crates/layerfs-sandbox/src/spawn/daemon.rs), [`namespaces/instance/create.rs`](../../../../control/crates/layerfs-sandbox/src/backend/namespaces/instance/create.rs) |
 | Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`spawn/search_path.rs`](../../../../control/crates/layerfs-sandbox/src/spawn/search_path.rs) |
-| OS facts | Each lives in the one backend that runs on its OS; `shared/` reaches it as `os`. `backend/namespaces/linux/`: `mountinfo`, lazy `MNT_DETACH`. `backend/process/macos/`: the `mount` table, `umount -f`. The seccomp filter is `backend/namespaces/seccomp.rs`, the crate's only `unsafe`. | [`spawn/mod.rs`](../../../../control/crates/layerfs-sandbox/src/spawn/mod.rs), [`namespaces/linux/`](../../../../control/crates/layerfs-sandbox/src/backend/namespaces/linux), [`process/macos/`](../../../../control/crates/layerfs-sandbox/src/backend/process/macos), [`lib.rs`](../../../../control/crates/layerfs-sandbox/src/lib.rs) |
+| OS facts | Each lives in the one backend that runs on its OS; `spawn/` reaches it as `os`. `backend/namespaces/linux/`: `mountinfo`, lazy `MNT_DETACH`. `backend/process/macos/`: the `mount` table, `umount -f`. The seccomp filter is `backend/namespaces/seccomp.rs`, the crate's only `unsafe`. | [`spawn/mod.rs`](../../../../control/crates/layerfs-sandbox/src/spawn/mod.rs), [`namespaces/linux/`](../../../../control/crates/layerfs-sandbox/src/backend/namespaces/linux), [`process/macos/`](../../../../control/crates/layerfs-sandbox/src/backend/process/macos), [`lib.rs`](../../../../control/crates/layerfs-sandbox/src/lib.rs) |
 
 ### The run folder
 
@@ -446,11 +446,11 @@ here times a command out
 
 | Module | What | Source |
 | --- | --- | --- |
-| `runtime/types/` | `LaunchRequest`, `ProviderLaunchOptions`, `LocalRecord`, `NamespaceRecord`, `SandboxRecord`, `ExecRequest`, `ExecExit`, `SandboxInspection`, `CommandIdentity`, `Bind`, `Image`, `ContainerId` (a random 64-hex id per Sandbox), `RuntimeError` (`Io`, `Protocol`, `Unsupported`, `Unavailable`: the machine cannot give a Sandbox its network, answered `Unavailable` once the start is undone), `WireFailure` (whether attempted). They compile on Windows too. | [`src/types/`](../../../../control/crates/layerfs-sandbox/src/types) |
+| `runtime/types/` | `LaunchRequest`, `ProviderLaunchOptions`, `LocalRecord`, `NamespaceRecord`, `SandboxRecord`, `ExecRequest`, `ExecExit`, `SandboxInspection`, `CommandIdentity`, `Bind`, `Image`, `ContainerId` (a random 64-hex id per Sandbox), `RuntimeError` (`Io`, `Protocol`, `Unsupported`, `Unavailable`: the machine cannot give a Sandbox its network, answered `Unavailable` once the start is undone), `WireFailure` (whether attempted). They compile on Windows too. | [`runtime/`](../../../../control/crates/layerfs-sandbox/src) |
 | `runtime/trace.rs` | Step times of a traced command (`exec.*`, and the helper's `helper.*` via `--trace <file>`). | [`runtime/trace.rs`](../../../../control/crates/layerfs-sandbox/src/runtime/trace.rs) |
-| `support/postgres_url.rs` | Reads every server host a `postgres://` URL names, as its client (tokio-postgres) reads them (`url_hosts`: the host list and `host`/`hostaddr` parameters, percent-decoded), and says which name this host's loopback (`loopback`, with `ip` reading every IPv4 form `inet_aton` reads and IPv6 zone ids), so a machine that does not share it can refuse it; the URL is never rewritten and never in a message. | [`table/postgresql_url.rs`](../../../../control/crates/layerfs-machine/src/table/postgresql_url.rs) |
-| `support/removed_platforms.rs` | Platforms removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): a record naming one is refused, never run. | [`table/removed.rs`](../../../../control/crates/layerfs-machine/src/table/removed.rs) |
-| `support/json/` | A small streaming JSON reader (`read.rs`: image manifests) and the quoting `SUPPORT.json` is written with (`strings.rs`). | [`json/json/`](../../../../control/crates/layerfs-home/src/json/json) |
+| `layerfs-machine` `table/postgresql_url.rs` | Reads every server host a `postgres://` URL names, as its client (tokio-postgres) reads them (`url_hosts`: the host list and `host`/`hostaddr` parameters, percent-decoded), and says which name this host's loopback (`loopback`, with `ip` reading every IPv4 form `inet_aton` reads and IPv6 zone ids), so a machine that does not share it can refuse it; the URL is never rewritten and never in a message. | [`table/postgresql_url.rs`](../../../../control/crates/layerfs-machine/src/table/postgresql_url.rs) |
+| `layerfs-machine` `table/removed.rs` | Platforms removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): a record naming one is refused, never run. | [`table/removed.rs`](../../../../control/crates/layerfs-machine/src/table/removed.rs) |
+| `layerfs-home` `json/` | A small streaming JSON reader (`read.rs`: image manifests) and the quoting `SUPPORT.json` is written with (`strings.rs`). | [`json/`](../../../../control/crates/layerfs-home/src/json) |
 
 ## Adding a backend
 
@@ -466,7 +466,7 @@ compiler lists every place that still needs it.
 | 3 | A `ProviderLaunchOptions` variant if it needs its own inputs, and a `SandboxRecord` variant, so no other provider reopens it. | [`src/runtime/options.rs`](../../../../control/crates/layerfs-sandbox/src/runtime/options.rs) | provider refusals |
 | 4 | Provider (`launch` or `launch_with_binds`, `reopen`, `reopen_stopped`) and owner (`identity`, `endpoint`, `run_in`, `track`, `log_tail`, `stop`, `delete`, ...); reuse `shared/` for a process on this kernel; keep what only it uses, OS facts included, in its folder. | `backend/<b>/` | — |
 | 5 | `Runtime::<B>` and `Sandbox::<B>` with every arm; refuse binds before any effect if it takes none; its `Stop` form. | [`backend/dispatch.rs`](../../../../control/crates/layerfs-sandbox/src/backend/dispatch.rs), [`runtime/stop.rs`](../../../../control/crates/layerfs-sandbox/src/runtime/stop.rs) | every `match self` |
-| 6 | Platforms that use it (`backend` in each `profile.rs`) and their support rows; regenerate `control/SUPPORT.json`. | [`platforms/`](../../../../control/crates/layerfs-machine/src/platforms), [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs) | `SUPPORT.json` comparison |
+| 6 | Platforms that use it (`backend` in each `profile.rs`) and their support rows; regenerate `control/SUPPORT.json`. | [`platform/`](../../../../control/crates/layerfs-machine/src/platform), [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs) | `SUPPORT.json` comparison |
 | 7 | The caller: `deploy.sandbox` value, launch options, recorded `runtime` name and reopen by it. | [`layerfs-sandbox runtime.rs`](../../../../control/crates/layerfs-sandbox/src/backend/select.rs), [`lifecycle/boot.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/boot.rs), [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/record/reopen.rs) | follow the compiler from `Runtime` |
 
 Each backend keeps: one attempt per operation; a launch failure after an

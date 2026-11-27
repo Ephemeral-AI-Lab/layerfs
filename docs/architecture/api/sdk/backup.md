@@ -6,7 +6,7 @@ The `backup` calls: connect r2 or S3-endpoint buckets, list the Store files on t
 
 | | |
 | --- | --- |
-| Source | [`crates/layerfs-api/src/families/backup`](../../../../api/crates/layerfs-api/src/families/backup) (one file per call), [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`backup/jobs/restore.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/restore.rs), [`layerfs-bucket`](../../../../control/crates/layerfs-store/src) |
+| Source | [`crates/layerfs-api/src/families/backup`](../../../../api/crates/layerfs-api/src/families/backup) (one file per call), [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`backup/jobs/restore.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/restore.rs), [`backup/bucket`](../../../../control/crates/layerfs-store/src/backup/bucket) |
 | Runs by default | the caller's process (records, bucket I/O); `backup.create` stages its snapshot on the Store's machine (here for the host machine, else in its worker) and the bytes go machine → this computer → bucket |
 | Design | [Backups](../../control/backups/README.md), [buckets](../../control/backups/buckets.md) |
 

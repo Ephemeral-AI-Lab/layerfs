@@ -7,8 +7,8 @@ The wire contract between a controller and a Workspace daemon: the authenticated
 | | |
 | --- | --- |
 | Layer | [Engine](../README.md) |
-| Crates | `layerfs-bridge` |
-| Source | [`engine/crates/layerfs-protocol/src`](../../../../engine/crates/layerfs-protocol/src), [`duplex/`](../../../../engine/crates/layerfs-protocol/src/duplex), [`process/`](../../../../engine/crates/layerfs-protocol/src/process) |
+| Crates | `layerfs-protocol` (the wire), `layerfs-os` (process identity, host-name resolution) |
+| Source | [`engine/crates/layerfs-protocol/src`](../../../../engine/crates/layerfs-protocol/src), [`duplex/`](../../../../engine/crates/layerfs-protocol/src/duplex), [`layerfs-os/src`](../../../../engine/crates/layerfs-os/src), [`process/`](../../../../engine/crates/layerfs-os/src/process) |
 | Uses | [Core: History](../../core/history/README.md) (ids, Branch and Commit records), [Core: Objects](../../core/objects/README.md) (node ids) |
 | Used by | [Daemon](../daemon/README.md) (responder), [Project Init](../project-init/README.md) (installer), [Store calls](../store-calls/README.md) (values, record window), [Control: Sandboxes](../../control/sandboxes/README.md) (initiator, `DaemonSetup`), [Control: Home](../../control/home/README.md) (keys, process identity), [Control: Stores and projects](../../control/stores-and-projects/README.md) (manifest, resolver), [Control: Doctor](../../control/doctor/README.md) (channel probe, capacity model) |
 | Flows | [A call, end to end](../../flows/call.md), [A Workspace session](../../flows/workspace.md), [Project Init](../../flows/init.md) |
@@ -177,7 +177,7 @@ files are not removed. Source:
 | --- | --- | --- |
 | `LocalProcess` | `observe` reads pid, kernel start time and boot once; `alive` needs all three to match and the process not a zombie; `signal` sends once, only to an observed live process, never to one recorded without a boot | [`process/identity.rs`](../../../../engine/crates/layerfs-os/src/process/identity.rs) |
 | Linux | `/proc/<pid>/stat`, `/proc/sys/kernel/random/boot_id`, the `/proc` table | [`process/linux.rs`](../../../../engine/crates/layerfs-os/src/process/linux.rs) |
-| macOS | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse); `kern.bootsessionuuid`, else `kern.boottime`, read with `sysctlbyname` (no `sysctl` process is started). The crate's only `unsafe` | [`process/darwin.rs`](../../../../engine/crates/layerfs-os/src/process/darwin.rs), [`lib.rs`](../../../../engine/crates/layerfs-protocol/src/lib.rs) |
+| macOS | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse); `kern.bootsessionuuid`, else `kern.boottime`, read with `sysctlbyname` (no `sysctl` process is started). The crate's only `unsafe` | [`process/darwin.rs`](../../../../engine/crates/layerfs-os/src/process/darwin.rs), [`lib.rs`](../../../../engine/crates/layerfs-os/src/lib.rs) |
 
 It lives here so `layerfs-home` and the Sandbox driver share it without
 either reaching the other.

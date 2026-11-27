@@ -272,7 +272,7 @@ and its `os/` files: the confined open, the `stat`, and the mount table.
 | Mount table (`confined::mounts`, `parse_mounts`) | `/proc/self/mountinfo`, read as a file: each mount's id, point and type | one run of `/sbin/mount` per files request with a path: fixed path, no environment but `LC_ALL=C`, no input, 500 ms, then killed and reaped (`darwin::mount_table`). A run that fails or is late answers no table, and a mount is then told by its device after a `stat` |
 
 `getfsstat(MNT_NOWAIT)`, the system call under `mount`, is not called: no
-dependency of `layerfs-sandbox-backend` wraps it without `unsafe`, and the
+dependency of `layerfs-sandbox` wraps it without `unsafe`, and the
 crate's one `unsafe` module stays `seccomp.rs`. `mount` reads the same
 table and asks no mounted server. `rustix` is a Linux-only dependency of
 the crate for `statx`, which `nix` does not wrap, and for `RawDir`.

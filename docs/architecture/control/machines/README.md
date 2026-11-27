@@ -3,14 +3,14 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 A machine is a kernel Sandboxes run on: `layerfs-machine` keeps its record
-and calls, and `layerfs-platform` makes, starts, stops and removes it
-through one adapter per platform.
+and calls, and its `platform/` module (was `layerfs-platform`) makes,
+starts, stops and removes it through one adapter per platform.
 
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-machine` (records, calls, worker client), `layerfs-platform` (driver: profiles, adapters, setup, support table) |
-| Source | [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src) |
+| Crates | `layerfs-machine`: records, calls, worker client; the driver modules `platform/` (adapters), `setup/` and `table/` (profiles, support table) |
+| Source | [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src): [`platform/`](../../../../control/crates/layerfs-machine/src/platform), [`setup/`](../../../../control/crates/layerfs-machine/src/setup), [`table/`](../../../../control/crates/layerfs-machine/src/table) |
 | Uses | [Home](../home/README.md), [Sandboxes: backends](../sandboxes/backends.md) (`Backend`, `removed_platforms`) |
 | Used by | [Stores and projects](../stores-and-projects/README.md), [Sandboxes](../sandboxes/README.md), [Doctor](../doctor/README.md), [API: machine](../../api/sdk/machine.md) |
 | Flows | [Call](../../flows/call.md), [Workspace](../../flows/workspace.md) |
@@ -22,10 +22,10 @@ through one adapter per platform.
                   platforms: records, home lock, op intent, InUse
       |  Spec (every path and setting) + Bundle + Tools
       v
- layerfs-platform setup/calls.rs: spec.validate(), check_bundle()
+ layerfs-machine  setup/:   spec.validate(), check_bundle()
       |                               (before any effect)
-      +--> adapter(platform)  one match -> platforms/<p>/adapter.rs ADAPTER
-      +--> Platform::profile() one match -> platforms/<p>/profile.rs PROFILE
+      +--> adapter(platform)  one match -> platform/<p>/adapter.rs ADAPTER
+      +--> Platform::profile() one match -> platform/<p>/profile.rs PROFILE
       |                                       |
       |                                       v
       |                               support.rs rows -> SUPPORT.json
@@ -39,7 +39,7 @@ through one adapter per platform.
       --> layerfs-machine writes worker.json and record.json
 ```
 
-`layerfs-platform` knows nothing of the home: the caller passes every path
+The `platform/` adapters know nothing of the home: the caller passes every path
 and setting in a `Spec` and writes every record
 ([`spec.rs`](../../../../control/crates/layerfs-machine/src/setup/spec.rs)).
 
@@ -55,7 +55,7 @@ and setting in a `Spec` and writes every record
 | `machine.remove` | `op` in the record, VM deleted under `start.lock`, folder removed; refused `InUse` while it holds Stores or Sandboxes; `outcome: removed`. Of a removed platform's machine only its record is removed (`{ok: true}`, `message` "only its record was removed (<reason>); nothing on its host was touched") | [`remove.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/remove.rs) |
 | `machine.update` | changes settings; refused `InUse` while Sandboxes run on it. A resize (`cpus`, `memory`) is not built: on a VM machine it is refused `Unsupported` ("resizing a <platform> machine is not built yet; nothing was changed"), after the `InUse` check; on a built-in machine `InvalidInput` | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
 | `machine.list`, `machine.get` | records and the row's `supports`; with `--with live` one probe of each machine's provider and one hello to its worker (at most 10 s, else `unknown`), starting nothing; the record is written only when the observed state word or reason changed | [`list.rs`](../../../../control/crates/layerfs-machine/src/status/list.rs) `list`, `get`; [`live.rs`](../../../../control/crates/layerfs-machine/src/status/live.rs); [`with_users.rs`](../../../../control/crates/layerfs-machine/src/with_users.rs) |
-| `home.get --with platforms` | this host's support rows plus live `ready`, `missing`, `version` from `probe`; starts nothing (`layerfs_machine::platforms`, called from `layerfs-control` `home.rs`) | [`available.rs`](../../../../control/crates/layerfs-machine/src/platform/available.rs), [`probe.rs`](../../../../control/crates/layerfs-machine/src/setup/probe.rs) |
+| `home.get --with platforms` | this host's support rows plus live `ready`, `missing`, `version` from `probe`; starts nothing (`layerfs_machine::platforms`, called from `layerfs-inspect` `home.rs`) | [`available.rs`](../../../../control/crates/layerfs-machine/src/platform/available.rs), [`probe.rs`](../../../../control/crates/layerfs-machine/src/setup/probe.rs) |
 | Docker default image | with no image named, the bundle's `sandbox-image.tar` is loaded into Docker once; the record keeps `loaded_image: {id, bundle}`, and an Engine tag `layerfs-cache/sandbox:<config hex>` reuses it across homes after `docker image inspect` | [`default_image.rs`](../../../../control/crates/layerfs-machine/src/setup/default_image.rs), [`docker/image_cache.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/image_cache.rs) |
 | Finds the bundle | `LAYERFS_BUNDLE`, else the installed runtime's `bundle/linux-<arch>/` beside its `bin/layerfs`, else `<cache>/layerfs/bundle/<version>/linux-<arch>/`, each with `bundle.json`; none is `Unsupported` naming `tools/linux_bundle.py`; one sealed from another commit than this build's (`source.head`, when the build names its commit) is `Unavailable` | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/setup/bundle.rs) |
 | Bundle contents | `layerfs` (guest worker), `layerfs-daemon`, `layerfs-sandbox-helper`, `sandbox-image.tar`, and the Sandbox runtime layer `runtime/` (R5): `lib/` the loader and every library `ldd layerfs-daemon` lists, copied from the daemon's build image, and `bin/` that image's `getent` and Debian's static `bash` and `busybox`; `licenses/` holds the Debian copyright files of each package they come from. `bundle.json` lists every file's sha256 in `files` (so the bundle `hash` covers the runtime) and `sandbox_runtime: {hash, loader, glibc, packages}`; `seal` refuses a library `ldd` lists that it did not copy | [`tools/linux_bundle.py`](../../../../tools/linux_bundle.py), [Sandboxes: backends](../sandboxes/backends.md) |
@@ -65,8 +65,8 @@ and setting in a `Spec` and writes every record
 
 ```text
  Platform::ALL = [Host, Docker, AppleContainer, Lima]
-   profile() -> &'static Profile     (platforms/<p>/profile.rs PROFILE)
-   adapter() -> &'static dyn Adapter (platforms/<p>/adapter.rs ADAPTER)
+   profile() -> &'static Profile     (platform/<p>/profile.rs PROFILE)
+   adapter() -> &'static dyn Adapter (platform/<p>/adapter.rs ADAPTER)
 ```
 
 | `Profile` field | Meaning |
@@ -151,7 +151,7 @@ through `with_worker`, where running with no worker hello is `broken`
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Host-only build | `layerfs-platform` is `#![cfg(unix)]`; `layerfs-machine` builds its calls only with the `machine` feature, which the guest worker lacks | [`src/platform/mod.rs`](../../../../control/crates/layerfs-machine/src/platform/mod.rs), [`layerfs-machine/src/lib.rs`](../../../../control/crates/layerfs-machine/src/lib.rs) |
+| Host-only build | `platform/` is `#![cfg(unix)]`; `layerfs-machine` builds its calls only with the `machine` feature, which the guest worker lacks | [`src/platform/mod.rs`](../../../../control/crates/layerfs-machine/src/platform/mod.rs), [`layerfs-machine/src/lib.rs`](../../../../control/crates/layerfs-machine/src/lib.rs) |
 | Missing tool or host fact | probe pushes `tool:<cli>` or `host:<fact>`; create refuses `Unsupported` with `missing`; version query 10 s | [`probe.rs`](../../../../control/crates/layerfs-machine/src/setup/probe.rs) |
 | VM size | at least 1 CPU, 256 MiB memory, 1 GiB disk (`InvalidInput`) | [`spec.rs`](../../../../control/crates/layerfs-machine/src/setup/spec.rs) `validate` |
 | Names | machine and VM names are plain names; `work_dir` absolute (`InvalidInput`) | same |
@@ -170,9 +170,9 @@ scripts on `Spec.tools.path` that log and refuse): no VM, Engine or root.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| `layerfs-platform/tests/conformance.rs` | `cargo +1.85.1 test --locked -p layerfs-sandbox --test runtime platform_conformance` | macOS, Linux | over `Platform::ALL`: profile against the support rows and `SUPPORT.json`; each lifecycle call through its tool or fixed refusal; `reach`, `forward`; options against `Spec::validate` |
-| `layerfs-platform/tests/machine_adapter.rs` | `cargo +1.85.1 test --locked -p layerfs-machine --features machine --test platform adapter` | macOS, Linux | built-in machines refuse create and remove before any tool runs |
-| `layerfs-platform/tests/machine_platform.rs` | `cargo +1.85.1 test --locked -p layerfs-machine --features machine --test table platform` | macOS, Linux | names, backend, route, bind and options per platform and host |
+| `layerfs-sandbox/tests/runtime/platform_conformance.rs` | `cargo +1.85.1 test --locked -p layerfs-sandbox --test runtime platform_conformance` | macOS, Linux | over `Platform::ALL`: profile against the support rows and `SUPPORT.json`; each lifecycle call through its tool or fixed refusal; `reach`, `forward`; options against `Spec::validate` |
+| `layerfs-machine/tests/platform/adapter.rs` | `cargo +1.85.1 test --locked -p layerfs-machine --features machine --test platform adapter` | macOS, Linux | built-in machines refuse create and remove before any tool runs |
+| `layerfs-machine/tests/table/platform.rs` | `cargo +1.85.1 test --locked -p layerfs-machine --features machine --test table platform` | macOS, Linux | names, backend, route, bind and options per platform and host |
 | `layerfs-machine/tests/bundle_preflight.rs` | `cargo +1.85.1 test --locked -p layerfs-machine --features machine --test bundle_preflight` | macOS, Linux | a bad bundle is refused before any effect |
 
 ## Pages

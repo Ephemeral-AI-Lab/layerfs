@@ -8,8 +8,8 @@ that know nothing about Stores.
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-store` (the `backup` calls), `layerfs-bucket` |
-| Source | [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`layerfs-store/src/bucket`](../../../../control/crates/layerfs-store/src/bucket) |
+| Crates | `layerfs-store` (`backup/`: the `backup` calls and the bucket drivers) |
+| Source | [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup): [`jobs/`](../../../../control/crates/layerfs-store/src/backup/jobs), [`copy/`](../../../../control/crates/layerfs-store/src/backup/copy), [`bucket/`](../../../../control/crates/layerfs-store/src/backup/bucket), [`providers/`](../../../../control/crates/layerfs-store/src/backup/providers) |
 | Uses | [Engine: Store](../../engine/store/README.md), [Engine: Store, SQLite](../../engine/store/sqlite.md), [Stores and projects](../stores-and-projects/README.md), [Home](../home/README.md), [Machines: workers and reach](../machines/workers-and-reach.md) |
 | Used by | [SDK: backup](../../api/sdk/backup.md), [Doctor](../doctor/README.md) (bucket diagnostics) |
 | Flows | [Flows](../../flows/README.md): backup and restore |
@@ -19,7 +19,7 @@ that know nothing about Stores.
 ```text
  caller process: holds the bucket key; every bucket request is sent from here
 +----------------------------------------------------------------------------+
-| layerfs-store backup/       layerfs-bucket backup/   layerfs-bucket bucket/ |
+| layerfs-store backup/       backup/copy/             backup/bucket/         |
 |  connect, disconnect        copies: check, list --->  Driver (sealed)       |
 |  list (states) ---------->  heads digest              pieces: whole, or     |
 |  create: stage on the Store's machine (store.file)    pieces + manifest     |
@@ -33,10 +33,12 @@ that know nothing about Stores.
      bucket: <prefix>/<file>/store.sqlite  [ .piece-000000 ... ]
 ```
 
-`layerfs-bucket/src/bucket` holds files by name and nothing else; its drivers,
-pieces and manifest are on [Buckets](buckets.md). `layerfs-bucket/src/backup`
-turns a Store file into one bucket file and back; `layerfs-store/src/backup`
-is the `backup` call family, its records and its locks. Where each call runs
+The bucket drivers in `backup/bucket/` (with `providers/` and `s3_api/`)
+hold files by name and nothing else; the drivers, pieces and manifest are
+on [Buckets](buckets.md). `backup/copy/` turns a Store file into one bucket
+file and back; `backup/jobs/` runs the `backup` call family, and the bucket
+records are `backup/bucket/record.rs`. Before #828 the drivers and copies
+were the `layerfs-bucket` crate. Where each call runs
 is in the [control layer table](../README.md).
 
 ## What it does

@@ -30,8 +30,8 @@ assignment. Earlier wording of these guides is in the
 | Layer | Crates (root manifest) | Guide |
 | --- | --- | --- |
 | core | `layerfs-content`, `layerfs-history`, `layerfs-storage`, `layerfs-telemetry` | [core](core/AGENTS.md) |
-| engine | `layerfs-bridge`, `layerfs-daemon`, `layerfs-fuse`, `layerfs-mount-ports`, `layerfs-nfs`, `layerfs-overlay`, `layerfs-persistence`, `layerfs-project`, `layerfs-store-service`, `layerfs-workspace` | [engine](engine/AGENTS.md) |
-| control | entities `layerfs-home`, `layerfs-machine`, `layerfs-store`, `layerfs-sandbox` (with its `workspace/` module); drivers `layerfs-platform`, `layerfs-bucket`, `layerfs-sandbox-backend`; and `layerfs-control` | [control](control/AGENTS.md) |
+| engine | `layerfs-daemon`, `layerfs-fuse`, `layerfs-nfs`, `layerfs-os`, `layerfs-overlay`, `layerfs-persistence`, `layerfs-project`, `layerfs-protocol`, `layerfs-store-service`, `layerfs-vfs` | [engine](engine/AGENTS.md) |
+| control | entities `layerfs-home`, `layerfs-machine` (with its platform adapters), `layerfs-store` (with its backup buckets), `layerfs-sandbox` (with its backends), `layerfs-workspace`; and `layerfs-inspect` | [control](control/AGENTS.md) |
 | api | the call surface `layerfs-api`, the `layerfs` command `layerfs-cli`, the Node binding `layerfs-node`, the PyO3 module `layerfs-python`; the JavaScript and Python packages under `api/` | [API](api/AGENTS.md) |
 
 - **Dependencies point down:** `core < engine < control < api`, including dev
@@ -214,7 +214,7 @@ workers in [Workers and reach](docs/architecture/control/machines/workers-and-re
   2026-11-03, #535 D9): a sqlite Store is on exactly one machine, and a
   PostgreSQL Store is usable from the machines it is attached to
   (`store.attach`, each checked from that machine; supersedes #535 G3) where
-  the support table (`layerfs-platform` `support.rs`, `control/SUPPORT.json`)
+  the support table (`layerfs-machine` `table/support.rs`, `control/SUPPORT.json`)
   allows, and refused elsewhere with the table's reason.
 - **Workers** listen on loopback only, behind a secret; one attempt per call,
   no retry and no replay; an uncertain outcome is reported, never resent.

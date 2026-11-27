@@ -7,8 +7,8 @@ The filesystem semantics of a mounted Workspace: a complete mutable view of one 
 | | |
 | --- | --- |
 | Layer | [Engine](../README.md) |
-| Crates | `layerfs-workspace` (its `construction/` belongs to [Commit](../commit/README.md)) |
-| Source | [`base`](../../../../engine/crates/layerfs-vfs/src/base), [`operations`](../../../../engine/crates/layerfs-vfs/src/operations), [`mutation`](../../../../engine/crates/layerfs-vfs/src/mutation), [`workspace`](../../../../engine/crates/layerfs-vfs/src/workspace), [`ports`](../../../../engine/crates/layerfs-vfs/src/ports) under `engine/crates/layerfs-vfs/src` |
+| Crates | `layerfs-vfs` (its `construction/` belongs to [Commit](../commit/README.md)) |
+| Source | [`base`](../../../../engine/crates/layerfs-vfs/src/base), [`operations`](../../../../engine/crates/layerfs-vfs/src/operations), [`mutation`](../../../../engine/crates/layerfs-vfs/src/job), [`workspace`](../../../../engine/crates/layerfs-vfs/src/binding), [`ports`](../../../../engine/crates/layerfs-vfs/src/ports) under `engine/crates/layerfs-vfs/src` |
 | Uses | [Overlay](../overlay/README.md), [Core: Objects](../../core/objects/README.md), [Core: Files](../../core/files/README.md), [Core: Filesystem trees](../../core/filesystem-trees/README.md) |
 | Used by | [Store calls](../store-calls/README.md), [Commit](../commit/README.md), [Kernel routes](../kernel-routes/README.md), [Daemon](../daemon/README.md) |
 | Flows | [A Workspace session](../../flows/workspace.md), [A Commit](../../flows/commit.md) |

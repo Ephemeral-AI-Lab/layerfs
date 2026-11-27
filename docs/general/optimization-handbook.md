@@ -299,7 +299,7 @@ Slow on first touch, fast afterwards.
 - **Do not.** Enable kernel writeback or acknowledge a write before it is
   published.
 - **Proofs.** `native_mutation`, `native_coherence`, `edit_backing`, the
-  `layerfs-workspace` write and truncate tests.
+  `layerfs-vfs` write and truncate tests.
 
 ### H. Commit: capture and namespace construction
 

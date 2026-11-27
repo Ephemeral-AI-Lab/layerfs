@@ -6,7 +6,7 @@ The `file` calls: read a Branch's files at its head or at a Commit without a mou
 
 | | |
 | --- | --- |
-| Source | [`crates/layerfs-api/src/families/file`](../../../../api/crates/layerfs-api/src/families/file) (one file per call), [`crates/layerfs-store/src/file`](../../../../control/crates/layerfs-store/src/file), [`families/file`](../../../../engine/crates/layerfs-store-service/src/families/file), [`filesystem/`](../../../../engine/crates/layerfs-store-service/src/filesystem), [`change/`](../../../../engine/crates/layerfs-store-service/src/filesystem/change) |
+| Source | [`crates/layerfs-api/src/families/file`](../../../../api/crates/layerfs-api/src/families/file) (one file per call), [`crates/layerfs-store/src/file`](../../../../control/crates/layerfs-store/src/data/file), [`families/file`](../../../../engine/crates/layerfs-store-service/src/families/file), [`filesystem/`](../../../../engine/crates/layerfs-store-service/src/filesystem), [`change/`](../../../../engine/crates/layerfs-store-service/src/filesystem/change) |
 | Runs by default | where the Store's calls run: the caller's process for PostgreSQL and for sqlite on a locally executing machine, else the Store machine's worker (`store.call`). No daemon serves them |
 | Design | [Store calls](../../engine/store-calls/README.md), [reads](../../engine/store-calls/reads.md) |
 
@@ -42,7 +42,7 @@ The `file` calls: read a Branch's files at its head or at a Commit without a mou
 | [`file.apply`](#fileapply) | write | `commit` | `admin` |
 
 Each call file builds one request and calls
-[`layerfs_store::calls::file`](../../../../control/crates/layerfs-store/src/file)
+[`layerfs_store::calls::file`](../../../../control/crates/layerfs-store/src/data/file)
 (`read.rs` for the reads, `write.rs` for the writes), which sends one
 `StoreOp::File` operation on the project's Store and maps its answer to the
 call's long form. Shared rules:

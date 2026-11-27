@@ -9,8 +9,8 @@ carries its Workspace calls.
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-sandbox`, `layerfs-sandbox-backend` |
-| Source | [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src), [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src) |
+| Crates | `layerfs-sandbox` (with `backend/`, was `layerfs-sandbox-backend`), `layerfs-workspace` (the Workspace calls) |
+| Source | [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src), [`layerfs-workspace/src`](../../../../control/crates/layerfs-workspace/src) |
 | Uses | [Engine: Bridge](../../engine/bridge/README.md) (wire records), [Engine: Daemon](../../engine/daemon/README.md) (the process started), [Machines](../machines/README.md) (worker route, a platform's backend), [Stores and projects](../stores-and-projects/README.md) (resolve, lease, open Store), [Home](../home/README.md) (records, locks, secrets) |
 | Used by | [API: `sandbox` calls](../../api/sdk/sandbox.md), [API: `workspace` calls](../../api/sdk/workspace.md), [Machines: workers and reach](../machines/workers-and-reach.md) (a worker runs `sandbox.host`), [Doctor](../doctor/README.md) |
 | Flows | [A call](../../flows/call.md), [A Workspace session](../../flows/workspace.md) |
@@ -33,7 +33,7 @@ runtime owns command launch, streams, exit status and cancel
         v
  lifecycle.rs, launch/, reopen.rs, remove.rs     exec/: run, record, cancel
         |                                            |
- ======= layerfs-sandbox-backend ====================|=================
+ ======= layerfs-sandbox backend/ ===================|=================
         v                                            v
  Runtime --launch_with_binds--> Sandbox --run_in--> bash -c <command>
    Process     (macOS)            endpoint            as uid:gid, in its
@@ -153,4 +153,4 @@ home's call log (`trace/calls.jsonl`).
 | Page | What it covers |
 | --- | --- |
 | [Daemon channel and exec](daemon-channel-and-exec.md) | The caller side of `layerfs-sandbox`: the daemon control pool and Workspace calls, exec records and cancel, the host operation's route and the direct route. |
-| [Backends](backends.md) | `layerfs-sandbox-backend`: the sealed adapter, `Runtime` and `Sandbox`, the `process` and `namespaces` backends, stop handles, the docker machine, and adding a backend. |
+| [Backends](backends.md) | `layerfs-sandbox` `backend/`: the sealed adapter, `Runtime` and `Sandbox`, the `process` and `namespaces` backends, stop handles, the docker machine, and adding a backend. |

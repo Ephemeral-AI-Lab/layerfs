@@ -9,7 +9,7 @@ this process has open, and moves or removes a sqlite Store's file.
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-store` (everything but `backup/`); `layerfs-control` [`with_users.rs`](../../../../control/crates/layerfs-store/src/admin/with_users.rs) and [`with_users.rs`](../../../../control/crates/layerfs-store/src/data/project/with_users.rs) add the checks that read Sandbox records |
+| Crates | `layerfs-store` (everything but `backup/`); [`with_users.rs`](../../../../control/crates/layerfs-store/src/admin/with_users.rs) and [`with_users.rs`](../../../../control/crates/layerfs-store/src/data/project/with_users.rs) run the calls whose checks read Sandbox records, through `StoreUsers` (implemented in `layerfs-sandbox` `users.rs`) |
 | Source | [`layerfs-store/src`](../../../../control/crates/layerfs-store/src) |
 | Uses | [Home](../home/README.md), [Machines: workers](../machines/workers-and-reach.md), [Store calls](../../engine/store-calls/README.md), [Store](../../engine/store/README.md), [Project Init](../../engine/project-init/README.md) |
 | Used by | [Sandboxes](../sandboxes/README.md), [Backups](../backups/README.md), [Doctor](../doctor/README.md), [API: store](../../api/sdk/store.md), [branch](../../api/sdk/branch.md), [commit](../../api/sdk/commit.md), [file](../../api/sdk/file.md), [project](../../api/sdk/project.md) |
@@ -63,7 +63,7 @@ full per-call table is "Where each call runs" in [Control](../README.md).
 | Store service | one engine `StoreService` per Store path per process, opened by the first client and closed by the last; its private overlays live under a random name in the temp directory | [`service.rs`](../../../../control/crates/layerfs-store/src/admin/open/service.rs) |
 | State | `store.list`, `store.get`, `home.get --with tree`: from the records only, `busy` (live `op`), `broken` `unresolved` (gone owner), `blocked` (machine not ready, `blocked_by`), `broken` with the reason the last live read recorded, else `ready`; `store.get --with live` reads the Store where it lives and writes the record only when that reason changes; reads leave stale leases | [`state.rs`](../../../../control/crates/layerfs-store/src/admin/status/state.rs) `recorded`, [`live.rs`](../../../../control/crates/layerfs-store/src/admin/status/live.rs), [`list.rs`](../../../../control/crates/layerfs-store/src/admin/status/list.rs) |
 | Stats, diagnostics | Store-wide counters on the ordinary route; read-only engine entry points without leases or writable opens | [`stats.rs`](../../../../control/crates/layerfs-store/src/admin/status/stats.rs), [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/backend/sqlite/diagnostic.rs) |
-| Who uses a Store | `store_idle`, `can_remove_project` read Sandbox records in `layerfs-control` and are passed in as `Related` | [`users.rs`](../../../../control/crates/layerfs-store/src/users.rs), [`src/admin/with_users.rs`](../../../../control/crates/layerfs-store/src/admin/with_users.rs) |
+| Who uses a Store | `store_idle`, `can_remove_project` read Sandbox records in `layerfs-sandbox` (`status/inventory.rs`) and are passed in through `StoreUsers` (`layerfs_sandbox::users::STORE`) | [`users.rs`](../../../../control/crates/layerfs-store/src/users.rs), [`src/admin/with_users.rs`](../../../../control/crates/layerfs-store/src/admin/with_users.rs) |
 
 ### Store family
 
@@ -158,7 +158,7 @@ of the recorded worker. It never sends the previous close again.
 | --- | --- | --- | --- |
 | `layerfs-api/tests/store_routes.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store routes` | Linux (ext4, xfs, btrfs), macOS (apfs) | a call goes where its records say, a worker gets the records, leases are held, read and cleaned |
 | `layerfs-api/tests/store_family.rs` | `cargo +1.85.1 test --locked -p layerfs-api --test store family` | same | create on the host machine, move to a worker machine and back with equal heads; move and remove refusals |
-| `layerfs-control/tests/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-sandbox --test users store_reads` | macOS, Linux | `store.list`, `get` take no lock and leave a stale lease as it was |
+| `layerfs-sandbox/tests/users/store_reads.rs` | `cargo +1.85.1 test --locked -p layerfs-sandbox --test users store_reads` | macOS, Linux | `store.list`, `get` take no lock and leave a stale lease as it was |
 | `layerfs-store/tests/kind_isolation.rs` | `cargo +1.85.1 test --locked -p layerfs-store --test sqlite kind_isolation` | any | `sqlite/` and `postgresql/` never import each other |
 
 ## Pages

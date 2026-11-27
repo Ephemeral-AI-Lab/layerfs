@@ -114,7 +114,7 @@ stay. The Stack's marker (`mark_stack_deleted`) is the commit point, so a
 lost reply is finished by a same-home retry of the durable intent, whose
 Store side classifies the marker as `Marked`, `Retired` or `Absent`. It is
 refused `Busy` while a Sandbox of the project is recorded
-(`layerfs-control` passes that check in), and `MountsActive`/`Busy`/
+(`layerfs-sandbox` passes that check in, through `StoreUsers`), and `MountsActive`/`Busy`/
 `Unresolved` while a live mount or operation holds the project scope
 ([`run.rs`](../../../../control/crates/layerfs-store/src/data/project/init/run.rs),
 [`run.rs`](../../../../control/crates/layerfs-store/src/data/project/delete/run.rs),

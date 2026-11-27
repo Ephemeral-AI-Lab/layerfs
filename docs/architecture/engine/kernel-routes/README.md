@@ -7,8 +7,8 @@ How the kernel reaches a mounted Workspace: route-neutral mount ports, then FUSE
 | | |
 | --- | --- |
 | Layer | [Engine](../README.md) |
-| Crates | `layerfs-mount-ports`, `layerfs-fuse`, `layerfs-nfs` |
-| Source | [`src/src`](../../../../engine/crates/layerfs-vfs/src/src), [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src), [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), [pinned fuser fork](fuse.md#fuser-git-dependency) |
+| Crates | `layerfs-vfs` (the mount ports, `ports/`), `layerfs-fuse`, `layerfs-nfs` |
+| Source | [`layerfs-vfs/src/ports`](../../../../engine/crates/layerfs-vfs/src/ports), [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src), [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), [pinned fuser fork](fuse.md#fuser-git-dependency) |
 | Uses | [Workspace](../workspace/README.md), [Overlay](../overlay/README.md) |
 | Used by | [Daemon](../daemon/README.md) |
 | Flows | [A Workspace session](../../flows/workspace.md) |
@@ -30,7 +30,7 @@ How the kernel reaches a mounted Workspace: route-neutral mount ports, then FUSE
  +-------+-----------+     +-------+-------------+
          +-----------+-------------+
  +-------------------v--------------------------------+
- | layerfs-mount-ports                                |
+ | layerfs-vfs ports                                  |
  |  MountServices -> RequestServices, Fence           |
  |  KernelRead KernelData KernelMutation              |
  |  DirectoryStream            Phase timing           |

@@ -9,11 +9,11 @@ public surface:
   speaks the SDK (layerfs-project#107): the call table, argument checks,
   scopes, the dispatcher and the JSON text form; each call is one direct
   call of a control crate's function. It depends only on the control crates
-  (`layerfs-control`, `layerfs-home`, `layerfs-machine`, `layerfs-store`,
-  `layerfs-sandbox`, and `layerfs-sandbox-backend` for the platform policy) and
-  `layerfs-bridge` and re-exports
+  (`layerfs-inspect`, `layerfs-home`, `layerfs-machine`, `layerfs-store`,
+  `layerfs-sandbox`, `layerfs-workspace`) and the engine's
+  `layerfs-protocol` and `layerfs-store-service`, and re-exports
   what the front ends use (#536). The
-  management library `layerfs-control` it calls is a control crate
+  management library `layerfs-inspect` (was `layerfs-control`) it calls is a control crate
   (`control/crates/layerfs-inspect`; layerfs-project#101 D-2 supersedes
   #536 C1, which placed it here); see the [control guide](../control/AGENTS.md).
 - `crates/layerfs-cli`: the `layerfs` command and the machine worker.
@@ -30,8 +30,8 @@ The packages are thin shells over the table: each function is one library
 call, made once. API crates may depend on control, engine and core crates,
 including dev dependencies and test includes; nothing in core, engine or
 control may depend on anything here. Layers are
-`core < engine < control < api` (#535 D4, #101 D-6); `layerfs-control` reaches
-`layerfs-platform` only through its optional `machine` feature, which
+`core < engine < control < api` (#535 D4, #101 D-6); `layerfs-machine` builds its
+platform adapters only with its optional `machine` feature, which
 `layerfs-api` passes through.
 
 Tests that drive the call surface live in `crates/layerfs-api/tests`;

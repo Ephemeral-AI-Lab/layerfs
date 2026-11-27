@@ -13,8 +13,8 @@ user-facing contract is [calls.md: The doctors](../../../versioned/2.0.0/calls.m
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-control` (`doctor/`), `layerfs-api` (`calls/doctor/`, each family's `doctor.rs`), `layerfs-cli` (`output.rs` `doctor` for `--text`) |
-| Source | [`layerfs-inspect/src/doctor`](../../../../control/crates/layerfs-inspect/src/doctor), [`layerfs-api/src/dispatch/doctor`](../../../../api/crates/layerfs-api/src/dispatch/doctor), [`layerfs-cli/src/output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) |
+| Crates | `layerfs-inspect` (`doctor/`), `layerfs-api` (`calls/doctor/`, each family's `doctor.rs`), `layerfs-cli` (`output.rs` `doctor` for `--text`) |
+| Source | [`layerfs-inspect/src/doctor`](../../../../control/crates/layerfs-inspect/src/doctor), [`layerfs-api/src/dispatch/answer`](../../../../api/crates/layerfs-api/src/dispatch/answer), [`layerfs-cli/src/output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) |
 | Uses | [Home](../home/README.md), [Machines](../machines/README.md) and [workers](../machines/workers-and-reach.md), [Stores and projects](../stores-and-projects/README.md), [Sandboxes](../sandboxes/README.md), [Backups](../backups/README.md), [Store diagnostics](../../engine/store/diagnostics.md), [Daemon control calls](../../engine/daemon/control-calls.md), [Bridge](../../engine/bridge/README.md) |
 | Used by | [SDK](../../api/sdk/README.md): [`home.doctor`](../../api/sdk/home.md#homedoctor), [`machine.doctor`](../../api/sdk/machine.md#machinedoctor), [`store.doctor`](../../api/sdk/store.md#storedoctor), [`project.doctor`](../../api/sdk/project.md#projectdoctor), [`sandbox.doctor`](../../api/sdk/sandbox.md#sandboxdoctor), [`backup.doctor`](../../api/sdk/backup.md#backupdoctor) |
 | Flows | each is a table call of its family, dispatched like any other; every doctor is `unopened` (it never creates the home) |
@@ -30,7 +30,7 @@ user-facing contract is [calls.md: The doctors](../../../versioned/2.0.0/calls.m
  layerfs backup doctor <b> [--full]
           |  call table: <family>/doctor.rs -> calls/doctor/answer.rs run
           v
- layerfs_control::doctor::run(home, Thing {kind, name}, Options {full, build, machine})
+ layerfs_inspect::doctor::runner::run(home, Thing {kind, name}, Options {full, build, machine})
    frame.rs  locate(thing) in the home's records (kinds.rs, home_tree)
                not there -> NotFound
              visit(thing)       its kind's checks, its own budget

@@ -139,7 +139,7 @@ ran) and `helper.exit`
 Untraced, a step mark is one thread-local check: nothing is timed or sent,
 and the helper gets no file. A step line that cannot be written changes no
 outcome. Written by `layerfs-home/src/trace.rs` (`stepped`, `step`),
-`layerfs-sandbox-backend/src/runtime/trace.rs` and the helper's `exec.rs`.
+`layerfs-sandbox/src/runtime/trace.rs` and the helper's `exec.rs`.
 
 ## Where it stands
 

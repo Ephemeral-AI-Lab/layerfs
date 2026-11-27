@@ -7,9 +7,9 @@ may run, and how to add one, within [Machines](README.md).
 
 | | |
 | --- | --- |
-| Source | [`platforms/`](../../../../control/crates/layerfs-machine/src/platforms), [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs), [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`removed.rs`](../../../../control/crates/layerfs-machine/src/table/removed.rs), [`socket.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/socket.rs) |
+| Source | [`platform/`](../../../../control/crates/layerfs-machine/src/platform), [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs), [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`removed.rs`](../../../../control/crates/layerfs-machine/src/table/removed.rs), [`socket.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/socket.rs) |
 
-## Profiles (`platforms/<p>/profile.rs`)
+## Profiles (`platform/<p>/profile.rs`)
 
 | Platform | How | Tool | Hosts | Backend | Kernel | sqlite calls | Worker binds | Options |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ prepared one exists and records none
 | The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); else the automatic choice (`env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); no older record is given a fixed socket. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`adapter_spec.rs`](../../../../control/crates/layerfs-machine/src/record/adapter_spec.rs) `docker_socket`, [`boot.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/boot.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/image/copy/docker.rs) `Docker::of` |
 | Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `home.get --with platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/adapter.rs) |
 
-## host (`platforms/host/`)
+## host (`platform/host/`)
 
 Sandboxes on the host's own OS, with no VM: one per home, never created or
 removed. The host machine (`macos-host` or `linux-host`) is a machine, not the host: this computer is the control
@@ -73,7 +73,7 @@ other machine.
 | `reach` | the URL as given (`Loopback::Shared`) |
 | `forward` | `127.0.0.1:<guest port>`, no pid |
 
-## docker (`platforms/docker/`)
+## docker (`platform/docker/`)
 
 Docker's kernel (Docker Desktop's VM or the Linux host). The machine is one
 privileged worker container, `spec.vm_name`, that `start` runs; its worker
@@ -141,7 +141,7 @@ socket is chosen: [Tools and the docker socket](#tools-and-the-docker-socket)). 
 recorded under the retired docker backend is refused, asking to recreate
 it ([Sandboxes: backends](../sandboxes/backends.md)).
 
-## apple-container (`platforms/apple_container/`)
+## apple-container (`platform/apple_container/`)
 
 One container of Apple's `container` CLI (macOS, Apple silicon). Its main
 process is a shell that sleeps and ends on SIGTERM; its data disk is a
@@ -175,7 +175,7 @@ setting `user.max_user_namespaces=0`. A host PostgreSQL server is reached
 through the gateway only when it listens on that bridge (`0.0.0.0`), not
 on `127.0.0.1` alone.
 
-## lima (`platforms/lima/`)
+## lima (`platform/lima/`)
 
 One Lima instance (`vmType: vz`, macOS), made from a template written to
 `limactl create`'s stdin.
@@ -309,7 +309,7 @@ A Lima machine that an old Firecracker record names as its host is refused
  platform.rs       + Platform variant, in ALL, profile() arm
  adapter.rs        + adapter() arm
  support.rs        + host_refusal() arm (and postgresql_refusal if needed)
- platforms/<p>/    mod.rs (declarations only), profile.rs PROFILE,
+ platform/<p>/    mod.rs (declarations only), profile.rs PROFILE,
                    adapter.rs ADAPTER (every method), observe.rs,
                    create.rs, power.rs
  setup/guest.rs    + Guest variant only for a new shell transport

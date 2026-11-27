@@ -10,43 +10,45 @@ behalf of the engine:
 - `crates/layerfs-home`: the home and its records, knowing no entity and
   no driver (#103, #112): layout, paths, record files, locks, the `op`
   intent, typed names, outcomes, secrets, the call trace and the process
-  identity records name (over `layerfs_bridge::process`).
+  identity records name (over `layerfs_os::process`).
 - `crates/layerfs-machine`: machine records, their lifecycle, the sealed
   bundle and the worker protocol and client (#104). What a machine holds
-  comes from its caller (`Related`).
+  comes from its caller (`Related`). Since #828 it also holds *where*
+  Sandboxes can run (was `layerfs-platform`): one folder per platform under
+  `src/platform/` (`native`, `docker`, `apple_container`, `lima`), built
+  only with the `machine` feature (host builds), and the tables machines and
+  Sandboxes read, the support table included, under `src/table/`.
 - `crates/layerfs-store`: Store records and calls (#105): the kind-neutral
   root (records, Store calls, placement, leases), `sqlite/` and
   `postgresql/` (which never import each other; a test checks it),
   `backup/` and `project/`. Who uses a Store comes from its caller
-  (`Related`).
-- `crates/layerfs-sandbox`: Sandboxes and their Workspaces (#106): records,
-  launch, host operations, exec, the daemon channel (`daemon/`) and the
-  `workspace/` module. Sandbox modules never import `workspace/` (a test
-  checks it); a host operation's local runner is passed in (`route::Local`).
-- `crates/layerfs-control`: what spans entities (#536; moved here from
-  `api/crates` by #101 D-2): the worker server, `inventory`, `doctor`,
-  and the machine, Store, project and backup calls with the
-  `Related` reads they need from other entities. The call machinery
-  (`calls/`) and `Context` are `layerfs-api`'s (#107): control functions
-  take the home and, when they emit, `layerfs-home`'s `Events`.
-- `crates/layerfs-platform` (was `layerfs-machine`): *where* Sandboxes can
-  run. One folder per platform under `src/platforms/` (`native`, `docker`,
-  `apple_container`, `lima`). Host builds only.
-- `crates/layerfs-sandbox-backend` (was `layerfs-isolation`, D-9; before
-  #101 `layerfs-sandbox`): *how* a Sandbox runs on that machine's kernel.
+  (`Related`). Since #828 `src/backup/` also holds *how* a Store is backed
+  up to a bucket (was `layerfs-bucket`): `bucket/` and one folder per
+  provider under `providers/`.
+- `crates/layerfs-sandbox`: Sandboxes (#106): records, launch, host
+  operations, exec and the daemon channel (`daemon/`). Since #828 it also
+  holds *how* a Sandbox runs on that machine's kernel (was
+  `layerfs-sandbox-backend`; before that `layerfs-isolation`, D-9):
   `src/runtime/` is the backend-neutral surface (`Runtime`, `Sandbox`,
-  cancel, trace, shared types); `src/shared/` the process lifecycle both
-  backends use; one folder per backend under `src/backend/` (`native`,
-  `namespaces`) holds everything only that backend uses, its OS facts
-  included (macOS runs only `native`, Linux only `namespaces`); and
-  `src/support/` small formats (`json/`, `postgres_url.rs`,
-  `removed_platforms.rs`).
-  The docker backend and its Engine client were retired by D-8
-  (layerfs-project#111): the `docker` platform runs `namespaces` in its
-  worker container.
-  Host and guest builds. Its `layerfs-sandbox-helper` binary keeps its name.
-- `crates/layerfs-bucket` (was `layerfs-store-backup`): *how* a Store is
-  backed up to a bucket (`src/backup/` and `src/bucket/<provider>/`).
+  cancel, trace, shared types); `src/spawn/` the process lifecycle both
+  backends use; one folder per backend under `src/backend/` (`process`,
+  the `native` backend, and `namespaces`) holds everything only that
+  backend uses, its OS facts included (macOS runs only `native`, Linux only
+  `namespaces`). The docker backend and its Engine client were retired by
+  D-8 (layerfs-project#111): the `docker` platform runs `namespaces` in its
+  worker container. Host and guest builds. Its `layerfs-sandbox-helper`
+  binary (`src/bin/`) keeps its name.
+- `crates/layerfs-workspace` (#828; was `layerfs-sandbox`'s `workspace/`
+  module): a Sandbox's Workspaces: the `workspace` calls, their executing
+  side (`machine/`) and the unmount guard. `layerfs-sandbox` never depends
+  on it; a host operation's local runner is passed in
+  (`route::machine::send::Local`).
+- `crates/layerfs-inspect` (was `layerfs-control`, #828): what spans
+  entities (#536; moved here from `api/crates` by #101 D-2): the worker
+  server, `inventory`, `doctor`, and the machine, Store, project and backup
+  calls with the `Related` reads they need from other entities. The call
+  machinery (`calls/`) and `Context` are `layerfs-api`'s (#107): control
+  functions take the home and, when they emit, `layerfs-home`'s `Events`.
 
 See the [control README](README.md) for the layout and how to read
 `SUPPORT.json`, [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md) for the drivers'
@@ -60,21 +62,25 @@ design and the [compute plane 2.0 spec](https://github.com/Ephemeral-AI-Lab/laye
   **Nothing in `engine/` or `core/` may depend on `control/`**; the
   [boundary guard](../tools/check_product_boundary.py) refuses the edge, and
   unknown crates fail closed. `api/` depends on control, never the reverse.
-- Inside control: `layerfs-control ──► layerfs-sandbox ──► layerfs-store
-  ──► layerfs-machine ──► layerfs-home`; `layerfs-sandbox ──►
-  layerfs-sandbox-backend`; `layerfs-store ──► layerfs-bucket`. Edges that skip
-  down the chain are allowed (`layerfs-control` and `layerfs-sandbox` reach
-  `layerfs-machine` and `layerfs-store` directly, and `layerfs-control`
-  reaches `layerfs-bucket` for the backup doctor);
-  nothing points up. `layerfs-machine
-  ──► layerfs-platform` only through its optional `machine` feature, which
-  `layerfs-control` and `layerfs-api` pass through; `layerfs-platform ──►
-  layerfs-sandbox-backend ──► layerfs-bridge`; `layerfs-bucket ──►
-  layerfs-store-service, layerfs-persistence, layerfs-storage`.
+- Inside control the order is `layerfs-home < layerfs-machine <
+  layerfs-store < layerfs-sandbox < layerfs-workspace < layerfs-inspect`:
+  `layerfs-workspace ──► layerfs-sandbox ──► layerfs-store ──►
+  layerfs-machine ──► layerfs-home`, and `layerfs-inspect ──►
+  layerfs-sandbox`. Edges that skip down the chain are allowed
+  (`layerfs-workspace`, `layerfs-inspect` and `layerfs-sandbox` reach
+  `layerfs-machine`, `layerfs-store` and `layerfs-home` directly); nothing
+  points up. What an entity reads from the entities above it comes through
+  a trait: `layerfs_machine::MachineUsers` and `layerfs_store::StoreUsers`,
+  implemented in `layerfs_sandbox::users` (`MACHINE`, `STORE`); callers
+  take `&dyn MachineUsers` and `&dyn StoreUsers`. `layerfs-machine`'s
+  platform adapters build only with its optional `machine` feature, which
+  `layerfs-store`, `layerfs-sandbox`, `layerfs-workspace`,
+  `layerfs-inspect` and `layerfs-api` pass through.
   `layerfs-home` reaches no driver (#112): the process identity it and the
-  Sandbox driver share (`LocalProcess` and its `/proc` and `proc_pidinfo`
-  probe) is `layerfs_bridge::process`, in the engine crate below both.
-- Drivers take every input as arguments, know nothing of the home and write
+  Sandbox backends share (`LocalProcess` and its `/proc` and `proc_pidinfo`
+  probe) is `layerfs_os::process`, in the engine crate below both.
+- The driver modules (`layerfs-machine` `platform/`, `layerfs-sandbox`
+  `backend/`, `layerfs-store` `backup/`) take every input as arguments, know nothing of the home and write
   no records (#101 rule 6).
 
 ## Extension points
@@ -83,12 +89,12 @@ Each extension point is **one crate-private, sealed trait with no default
 methods, reached through one exhaustive `match`** (#535 G2): `Adapter` for a
 platform, `BackendAdapter` for a Sandbox backend. There is no public provider
 trait, registry, factory or service locator. Adding a platform is one new
-folder under `platforms/`, one `Platform` variant and one `adapter()` arm;
+folder under `platform/`, one `Platform` variant and one `adapter()` arm;
 adding a backend is one folder under `backend/`, one `Backend` variant and one
 arm. Every refusal of a platform, host or Store combination comes from the one
-support table (`layerfs-platform` `support.rs`), which consumes the shared permanent restrictions in
-`layerfs-sandbox-backend/src/support/removed_platforms.rs` (also available without machine
-adapters); `SUPPORT.json` is generated
+support table (`layerfs-machine` `table/support.rs`), which consumes the shared permanent restrictions in
+`layerfs-machine/src/table/removed.rs` (also built without the `machine`
+feature); `SUPPORT.json` is generated
 from it and a test compares them.
 
 ## Rules that stay
@@ -107,5 +113,6 @@ and [checks](../engine/AGENTS.md#checks-and-completion), and the root guide's
 [rules you must not break](../AGENTS.md#rules-you-must-not-break). The unsafe
 allowance in control stays the one file
 the guard names: the Linux `backend/namespaces/seccomp.rs` of
-`layerfs-sandbox-backend`. The macOS process facts (`proc_pidinfo`) moved
-with `LocalProcess` to the bridge's audited `process/darwin.rs` (#112).
+`layerfs-sandbox`. The macOS process facts (`proc_pidinfo`) moved
+with `LocalProcess` to the audited `process/darwin.rs` of the bridge (#112),
+now `layerfs-os` (#828).

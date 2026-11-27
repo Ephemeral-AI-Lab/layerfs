@@ -93,12 +93,15 @@ def main(argv):
             if p in fmap:
                 total += 1
                 return fmap[p] + tail
+            if p in dmap:
+                total += 1
+                return dmap[p] + tail
             segs = p.split("/")
             for k in range(len(segs) - 1, 1, -1):
                 head = "/".join(segs[:k])
                 if head in fmap or head in dmap:
                     new = (fmap.get(head) or dmap[head]) + "/" + "/".join(segs[k:])
-                    if os.path.exists(new) or head in dmap and os.path.exists(dmap[head]):
+                    if os.path.exists(new):
                         total += 1
                         return new + tail
             if p in dmap:

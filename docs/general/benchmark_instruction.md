@@ -273,7 +273,7 @@ the edit, and the sample only confirms it.
 
 ```bash
 RX_ONLY=costs,compound,transactions,native_visit_fence,native_visit_cost,job_cost \
-  python3 -B target/rx-suite.py host <summary-file> layerfs-overlay layerfs-workspace layerfs-daemon
+  python3 -B target/rx-suite.py host <summary-file> layerfs-overlay layerfs-vfs layerfs-daemon
 ```
 
 Restage a count test with the true new number in the same commit; never

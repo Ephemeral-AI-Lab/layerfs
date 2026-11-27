@@ -31,7 +31,7 @@ folders it covers. That row is the ownership record:
 
 - Every crate and every major `src/` folder has exactly one owning topic. A
   topic may span crates when one operation does (Commit spans
-  `layerfs-workspace` and `layerfs-store-service`).
+  `layerfs-vfs` and `layerfs-store-service`).
 - To find the owner of a file, use the topic table in the
   [architecture README](../architecture/README.md#every-topic), then the
   topic's Source row.

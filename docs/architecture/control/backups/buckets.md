@@ -7,7 +7,7 @@ checked and reported, within [Backups](README.md).
 
 | | |
 | --- | --- |
-| Source | [`control/crates/layerfs-store/src/bucket`](../../../../control/crates/layerfs-store/src/bucket); features in [`Cargo.toml`](../../../../control/crates/layerfs-store/Cargo.toml) |
+| Source | [`control/crates/layerfs-store/src/backup/bucket`](../../../../control/crates/layerfs-store/src/backup/bucket) and [`providers/`](../../../../control/crates/layerfs-store/src/backup/providers); features in [`Cargo.toml`](../../../../control/crates/layerfs-store/Cargo.toml) |
 
 ## Driver
 
@@ -25,7 +25,7 @@ checked and reported, within [Backups](README.md).
 
 | Rule | Value | Source |
 | --- | --- | --- |
-| Sealed | Only this crate's providers implement `Driver`; a new provider is a folder under `bucket/`. | [`driver.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/driver.rs) |
+| Sealed | Only this crate's providers implement `Driver`; a new provider is a folder under `backup/providers/`. | [`driver.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/driver.rs) |
 | One attempt | Each call sends each of its requests once; a sent request with an unknown outcome is `Uncertain`. | same |
 | Names | Slash-separated segments of `[A-Za-z0-9._-]`, none empty or starting with `.`, at most 512 bytes (`check_name`). | same |
 | Metadata | Keys 1 to 64 of `[a-z0-9-]`; values at most 256 printable ASCII bytes, no space (`check_metadata`). | same |
