@@ -1,12 +1,8 @@
 //! Copying an image from (a stand-in) Docker into a machine's image cache,
 //! on the local side: resolve, refuse, export, send, unpack once, reuse,
 //! resume; then prune.
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::fixture;
+use crate::standin;
 use fixture::{Scratch, Tar};
 use layerfs_home::events::Events;
 use layerfs_protocol::sdk::SdkValue;
@@ -14,6 +10,7 @@ use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::image::cache::{self as cache, architecture, Sidecar};
 use layerfs_sandbox::image::copy::load::{load, Loaded, Target};
 use layerfs_sandbox::image::list;
+use layerfs_sandbox::image::prune;
 use layerfs_sandbox::image::tar::Filtered;
 use layerfs_sandbox::{rootfs, Image};
 use standin::Standin;
@@ -468,7 +465,7 @@ fn prune(
     unused: bool,
     default: Option<&str>,
 ) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
-    list::prune_in_worker(
+    prune::prune_in_worker(
         root,
         SdkValue::map([
             ("machine", SdkValue::text("docker")),

@@ -6,7 +6,7 @@
 //! before it stops the runtime. On `native` the side that runs the Sandbox
 //! adds what reopens it (`daemon`) to the same file; its daemon keys are in
 //! `control.json` beside it. The name is the folder's: one read finds it.
-//! Its state is derived (`crate::state`, call surface 2.0); the one part a
+//! Its state is derived (`crate::status::state`, call surface 2.0); the one part a
 //! live read writes is why it is broken (`reason`, with the sentence in
 //! `error`) when `sandbox get` found it lost or not answering.
 //!

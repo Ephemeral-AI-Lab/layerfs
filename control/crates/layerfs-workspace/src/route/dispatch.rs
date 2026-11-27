@@ -7,7 +7,6 @@
 //! (`host::Call`, R1).
 use crate::machine::serve as workspace;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::exec;
 use layerfs_sandbox::route::machine::{Call, Host};
 
 /// Runs one host operation once: a Workspace operation here, any other in
@@ -79,7 +78,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
             grace_ms,
             workspace,
             ..
-        } => exec::cancel::call(
+        } => crate::exec::cancel::call(
             &host,
             path.as_deref(),
             (exec_id.as_deref(), grace_ms),

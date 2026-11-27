@@ -6,6 +6,7 @@
 use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(target_os = "macos")]
 use crate::backend::process;
+use crate::backend::{adapter, Backend};
 #[cfg(target_os = "macos")]
 use crate::process::ProcessProvider;
 use crate::{
@@ -14,7 +15,6 @@ use crate::{
 };
 use crate::{ContainerId, ExecRequest, ExecSlot, RuntimeError, Stop, WireFailure};
 use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
-use {crate::backend::adapter, layerfs_machine::table::backend::Backend};
 
 /// One deployment's runtime choice, kept for every Sandbox it starts.
 ///

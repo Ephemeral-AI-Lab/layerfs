@@ -54,14 +54,14 @@ pub fn machine_free(home: &Path, machine: &str) -> Result<(), SdkRefusal> {
 /// Forced `sandbox.remove` of the Sandbox `host` names, on this process's
 /// kernel: no daemon control call, Store open, active-Workspace refusal or
 /// retry. Its running commands are cancelled first, as every forced close
-/// does (`crate::exec::cancel::settle`). The backend's Stop checks the runtime identity and ends its
+/// does (`crate::exec::settle::settle`). The backend's Stop checks the runtime identity and ends its
 /// mounts and processes; its Delete independently checks the physical
 /// detach before the runtime goes. Answers each recorded or `held`
 /// Workspace as `unknown`: its uncommitted changes end with the Sandbox.
 /// Once the runtime is stopped, each Workspace's mount intent is ended
-/// once (`crate::mount_intents`); one it could not end is in `left`.
+/// once (`crate::lifecycle::mount_intents`); one it could not end is in `left`.
 /// A record this build does not read never reaches it: `sandbox.remove`
-/// forgets it first (`crate::reopen::unread`).
+/// forgets it first (`crate::record::reopen::unread`).
 pub fn close(host: &Host, held: &[String]) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::record::discovery::sandbox_dir(host)?;

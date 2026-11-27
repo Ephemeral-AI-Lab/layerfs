@@ -1,5 +1,6 @@
-//! Cancel (compute-plane 2.0 §5.1, §5.4): `workspace.cancel` on the
-//! side that keeps the command's record ([`cancel`]), and what `sandbox.remove`
+//! Cancel (compute-plane 2.0 §5.1, §5.4): one command's cancel on the
+//! side that keeps the command's record ([`cancel`]; the `workspace.cancel`
+//! call is the workspace crate's `exec/cancel.rs`), and what `sandbox.remove`
 //! and `workspace.unmount` do with the records of theirs ([`settle`]): refuse
 //! `Busy` while one is live, or with `force` cancel each first. A record
 //! whose owner is gone is stale: it is ended through its stop handle if its
@@ -9,7 +10,7 @@
 //! replay. An outcome that cannot be confirmed (a worker that does not
 //! answer) is `unknown`, and the record stays until its owner ends or a
 //! close clears it; a stale one whose end is not confirmed stays as it was.
-use super::super::record::exec::{self, ExecRecord, Route};
+use crate::record::exec::{self, ExecRecord, Route};
 use crate::record::lock_in;
 use crate::{Cancelled, Stop};
 use layerfs_home::home::{log_line, now_ms, write_entity};
@@ -310,86 +311,4 @@ fn unconfirmed_refusal(whose: &str, unconfirmed: Vec<SdkValue>) -> Result<()> {
 /// [`Remote`] on a side that reaches no worker: never confirmed.
 pub fn unreached(_: &ExecRecord, _: Duration) -> Outcome {
     Outcome::Unknown
-}
-
-/// `workspace.cancel(ws, { exec })` on the side that runs the Workspace at
-/// `path`. With the Workspace's id (`workspace`) from a caller that keeps
-/// the command's record (#535 G4), this side keeps none: the command's
-/// group follows from the Sandbox and the ids, and the answer is that one
-/// command's `{ outcome, signal? }`. Otherwise this side keeps the records:
-/// the command `exec_id` names, or with none every command recorded for the
-/// Workspace, is cancelled, and the answer is `{ commands: [{ exec,
-/// outcome, signal }] }`. A Workspace that is not mounted is refused
-/// `NotMounted`.
-pub fn call(
-    host: &crate::route::machine::Host,
-    path: Option<&str>,
-    (exec_id, grace_ms): (Option<&str>, Option<i64>),
-    workspace: Option<&str>,
-) -> layerfs_home::outcome::Outcome {
-    let id = exec_id.map(super::id::ExecId::parse).transpose()?;
-    let grace = grace(grace_ms)?;
-    let state = crate::lifecycle::registry::sandbox(host)?;
-    if let Some(workspace) = workspace {
-        let id = id.ok_or_else(|| refused("InvalidInput", "a forwarded cancel names its exec"))?;
-        let handle = state.runtime()?.exec_stop(workspace, id.as_str());
-        let handle = handle.ok_or_else(|| {
-            refused(
-                "Unsupported",
-                "a command of this Sandbox is cancelled by the caller that keeps its record",
-            )
-        })?;
-        return Ok(stop(&handle, grace)?.answer());
-    }
-    let path = layerfs_home::helpers::required(path, "path")?;
-    let token = state.token(path)?;
-    let workspace = layerfs_protocol::sdk::hex(&token.workspace.to_bytes());
-    let commands = every(
-        &state.directory,
-        &state.id,
-        &workspace,
-        id.as_ref(),
-        &mut unreached,
-    )?;
-    Ok(listed_answer(&commands))
-}
-
-/// Cancels, in Sandbox `sandbox`'s folder `dir`, command `id` of Workspace
-/// `workspace` or with none every command recorded for it, each once with
-/// the default grace: each command's id and outcome, in record order.
-pub fn every(
-    dir: &Path,
-    sandbox: &str,
-    workspace: &str,
-    id: Option<&super::id::ExecId>,
-    remote: &mut Remote<'_>,
-) -> Result<Vec<(String, Outcome)>> {
-    let grace = Duration::from_millis(GRACE_MS as u64);
-    if let Some(id) = id {
-        let file = exec::file(dir, workspace, id.as_str());
-        let outcome = cancel(dir, sandbox, &file, grace, remote)?;
-        return Ok(vec![(id.to_string(), outcome)]);
-    }
-    let mut commands = Vec::new();
-    for (file, found) in exec::listed(dir, Some(workspace))? {
-        commands.push((
-            found.id.clone(),
-            cancel(dir, sandbox, &file, grace, remote)?,
-        ));
-    }
-    Ok(commands)
-}
-
-/// `{ commands: [{ exec, outcome, signal }] }`.
-pub fn listed_answer(commands: &[(String, Outcome)]) -> SdkValue {
-    let rows = (commands.iter())
-        .map(|(id, outcome)| {
-            SdkValue::map([
-                ("exec", SdkValue::text(id)),
-                ("outcome", SdkValue::text(outcome.word())),
-                ("signal", SdkValue::opt_text(outcome.signal())),
-            ])
-        })
-        .collect();
-    SdkValue::map([("commands", SdkValue::List(rows))])
 }

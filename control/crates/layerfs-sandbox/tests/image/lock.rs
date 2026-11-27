@@ -10,9 +10,7 @@
 //! The Docker here is a stand-in shell script (no Engine, no root); one test
 //! holds its `docker export` until the test lets it go, so a second copy is
 //! really waiting while the first is really sending.
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod fixture;
+use crate::fixture;
 use fixture::{Scratch, Tar};
 use layerfs_home::events::Events;
 use layerfs_home::home;

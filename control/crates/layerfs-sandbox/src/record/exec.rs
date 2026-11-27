@@ -402,7 +402,7 @@ impl Running {
             }
         }
         let mut record = record.clone();
-        record.cancel = super::super::exec::pending::consume(&path)?.or(record.cancel);
+        record.cancel = crate::exec::pending::consume(&path)?.or(record.cancel);
         write_entity(&path, &record.encode())?;
         drop(lock);
         Ok(Self {

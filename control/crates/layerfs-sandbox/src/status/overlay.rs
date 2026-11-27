@@ -25,7 +25,7 @@ const MOST: usize = 1024;
 /// workspace_usage_reason? }`, `bytes` null for
 /// a Workspace that has no overlay file there, with what that side sees
 /// of the Sandbox's daemon process (layerfs-project#164;
-/// [`crate::run_folder::observed`]). `namespaces` may be empty. Refusals
+/// [`crate::status::run_folder::observed`]). `namespaces` may be empty. Refusals
 /// are an inspect request's: `Busy`, `Unavailable`, `NoSuchSandbox`.
 pub fn overlay_sizes(
     home: &std::path::Path,

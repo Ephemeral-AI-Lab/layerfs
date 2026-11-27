@@ -43,7 +43,7 @@ pub(crate) fn sweep(docker: &Docker, target: &mut Target<'_>, own: &str) {
     exports(docker, &home, (&machine, own), deadline);
     // every copy that holds its lock now is left alone, and none starts
     // writing while the gate is held; a lock that cannot be read is held
-    let locked = match crate::image::list::scan_image_locks(&lock_dir) {
+    let locked = match crate::image::prune::scan_image_locks(&lock_dir) {
         Ok((locked, errors)) => (locked.into_iter())
             .chain(errors.into_keys())
             .filter(|id| id != own)

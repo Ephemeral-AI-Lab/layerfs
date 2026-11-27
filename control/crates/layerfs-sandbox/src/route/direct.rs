@@ -318,7 +318,7 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
 /// cgroup `usage`: one bounded inspect
 /// request to that machine's worker ([`crate::inspect::overlay_sizes`], no
 /// lease, no daemon), sent for a Sandbox with no Workspace too, put on the
-/// list with [`crate::run_folder::merged`]. A worker that refuses or does
+/// list with [`crate::status::run_folder::merged`]. A worker that refuses or does
 /// not answer leaves the sizes null and the process not observed; the list
 /// is answered either way.
 pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome, Unreached> {

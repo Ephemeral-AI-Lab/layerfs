@@ -2,9 +2,9 @@
 //! `machine.load`; R1, R3): the image named by digest, Docker Id or Docker
 //! reference is resolved, and when the machine does not hold it yet, it is
 //! exported from the host's Docker as one flat root filesystem tar
-//! ([`crate::image_tar`], init-layer directory mtimes set to epoch 0 so exports
+//! ([`crate::image::tar`], init-layer directory mtimes set to epoch 0 so exports
 //! >=2 s apart are byte-identical for resume), sent in 1 MiB frames and unpacked
-//! once there ([`crate::image_artifact`]). The machine is asked first, so an
+//! once there ([`crate::image::cache`]). The machine is asked first, so an
 //! image it holds needs neither Docker nor a byte sent. One copy per image and
 //! machine at a time: the second one waits in [`ImageLock`], and a copy whose
 //! owner died is taken over at once (#175 R01). Each export uses its own
@@ -13,7 +13,7 @@
 //! anonymous volumes on exit or error. What killed copies left (their export
 //! containers, and unpack temporaries on the machine) is swept by the next
 //! copy to a machine, of every image whose lock is free
-//! ([`crate::image_sweep`], spec v20). Progress
+//! ([`crate::image::copy::sweep`], spec v20). Progress
 //! phases are `inspect`, `lock` (`{phase: "lock"}` once a second while another
 //! copy holds it), `export`, `send` (`done`/`total` bytes) and `unpack`; a copy
 //! records the phase it is in beside its lock ([`ImageLock::at`]).

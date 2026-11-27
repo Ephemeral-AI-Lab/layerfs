@@ -8,7 +8,4 @@
 pub(crate) mod confined;
 pub(crate) mod mount_table;
 pub(crate) mod mounts;
-pub(crate) use {
-    layerfs_os::process::mount_table,
-    mount_table::{force_unmount, mount_line, mount_points},
-};
+pub(crate) use mount_table::{force_unmount, mount_line, mount_points, mount_table};

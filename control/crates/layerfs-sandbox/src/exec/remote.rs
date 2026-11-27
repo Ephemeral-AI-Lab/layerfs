@@ -4,8 +4,8 @@
 //! `sandbox.host` there (D-11) and a worker that does not answer gives
 //! `unknown`. A worker that answers that the Sandbox does not run there
 //! (`NoSuchSandbox`) confirms its commands ended with it: `ended`.
-use super::super::record::exec::ExecRecord;
 use super::settle::{self, Outcome};
+use crate::record::exec::ExecRecord;
 use crate::record::SandboxRecord;
 use crate::route::machine::send::reach;
 use crate::route::machine::Call;
@@ -56,5 +56,5 @@ pub fn settle(
 ) -> Result<(), SdkRefusal> {
     let dir = record.dir(home);
     let mut remote = |found: &ExecRecord, grace| remote(events, (home, record), found, grace);
-    cancel::settle(&dir, record.name(), workspace, force, &mut remote)
+    settle::settle(&dir, record.name(), workspace, force, &mut remote)
 }

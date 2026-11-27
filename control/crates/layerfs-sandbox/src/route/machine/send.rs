@@ -14,9 +14,9 @@ use layerfs_store::open_args::PgSelection;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::postgresql::connect::dialled;
 use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::record::{StoreKind, StoreRecord};
 use layerfs_store::resolve;
 use std::path::{Path, PathBuf};
-use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -465,7 +465,7 @@ fn host_op(
 }
 
 /// Runs a Sandbox host operation in a worker for its caller (`sandbox.host`,
-/// decoded by [`crate::host::decode`]): the caller sends the Store's and
+/// decoded by [`crate::route::machine::decode`]): the caller sends the Store's and
 /// project's records; the worker keeps a thin record of the Store (#536 §6)
 /// and the project's record under its root, with the Store on this
 /// machine's own `native`. An operation that only asks the daemon

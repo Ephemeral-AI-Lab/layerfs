@@ -6,7 +6,7 @@
 pub mod id;
 #[doc(hidden)]
 pub mod output;
-mod pending;
+pub(crate) mod pending;
 pub mod remote;
 pub mod settle;
 

@@ -68,7 +68,7 @@ impl crate::lifecycle::serve::WorkspaceDrain for Unclosing {
 /// `directory` gives it, or null; the
 /// commands `running` in it, from the exec records of that folder (null
 /// when they cannot be read); and its `overlay_bytes`, read by path where
-/// this side has the Sandbox's run folder, else null (`crate::run_folder`;
+/// this side has the Sandbox's run folder, else null (`crate::status::run_folder`;
 /// layerfs-project#178); and its cgroup's `usage` with `usage_reason`,
 /// read with them. None asks the daemon, takes a lock or writes.
 fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {

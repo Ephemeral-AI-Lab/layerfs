@@ -23,17 +23,14 @@
 //! backend does not compile here until it states them.
 #![cfg(unix)]
 use crate::support_json;
+use layerfs_sandbox::{
+    Backend, Bind, CommandIdentity, ContainerId, HelperSpec, Image, LaunchPhase, LaunchRequest,
+    LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime, RuntimeError,
+    SandboxRecord,
+};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use {
-    layerfs_machine::table::backend::Backend,
-    layerfs_sandbox::{
-        Bind, CommandIdentity, ContainerId, HelperSpec, Image, LaunchPhase, LaunchRequest,
-        LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime, RuntimeError,
-        SandboxRecord,
-    },
-};
 
 // ---------------------------------------------------------------------------
 // What each backend declares

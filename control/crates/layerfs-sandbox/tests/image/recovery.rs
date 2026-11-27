@@ -2,9 +2,7 @@
 //! recovery, moved/ambiguous ref handling, sparse tar expansion, hardlink to
 //! dropped target refusal, declared-loss metadata/SHA verification, and
 //! record-only variant/config (#176 I03).
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod fixture;
+use crate::fixture;
 use fixture::{pax_record, Scratch, Tar};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, write_record};
@@ -15,6 +13,7 @@ use layerfs_sandbox::image::cache::{self as cache, architecture, Sidecar, CHUNK}
 use layerfs_sandbox::image::copy::docker::Docker;
 use layerfs_sandbox::image::copy::load::{load, ImageLock, Loaded, Target};
 use layerfs_sandbox::image::list;
+use layerfs_sandbox::image::prune;
 use layerfs_sandbox::image::tar::{Filtered, TarReport, EXTENDED_TOTAL_MAX, SPARSE_MAX};
 use layerfs_sandbox::{rootfs, Image};
 use layerfs_store::place::{self, Executor};
@@ -634,7 +633,7 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
 
     // Targeted prune: a live copy's image is Busy with its op, an image a
     // Sandbox uses is InUse with sandbox_count.
-    let busy = list::prune(&home, &native_name(), Some(&id_locked), false).unwrap_err();
+    let busy = prune::prune(&home, &native_name(), Some(&id_locked), false).unwrap_err();
     assert_eq!(busy.code, "Busy");
     assert_eq!(
         (busy.detail.get("next"))
@@ -643,13 +642,13 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
         Some("load_image"),
         "{busy:?}"
     );
-    let inuse = list::prune(&home, &native_name(), Some(&id_inuse), false).unwrap_err();
+    let inuse = prune::prune(&home, &native_name(), Some(&id_inuse), false).unwrap_err();
     assert_eq!(inuse.code, "InUse");
     assert_eq!(inuse.detail.get_int("sandbox_count"), Some(1));
 
     // Unused prune must clean unheld part, unheld temp, stranded image, dangling sidecar
     // and the in-use image's part (v19), while leaving live-locked and InUse images untouched.
-    let swept = list::prune(&home, &native_name(), None, true).unwrap();
+    let swept = prune::prune(&home, &native_name(), None, true).unwrap();
     assert!(
         cache::texts(swept.get("removed")).contains(&id_inuse),
         "the in-use image's part is removed: {swept:?}"
@@ -673,19 +672,19 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
     fs::remove_dir_all(cache_dir.parent().unwrap().join("sb-active")).unwrap();
 
     // Targeted prune can remove a part-only digest and then reports NotFound once gone.
-    let single = list::prune(&home, &native_name(), Some(&id_locked), false).unwrap();
+    let single = prune::prune(&home, &native_name(), Some(&id_locked), false).unwrap();
     assert_eq!(
         single.get("removed"),
         Some(&SdkValue::List(vec![SdkValue::text(&id_locked)]))
     );
     assert_eq!(
-        list::prune(&home, &native_name(), Some(&id_locked), false)
+        prune::prune(&home, &native_name(), Some(&id_locked), false)
             .unwrap_err()
             .code,
         "NotFound"
     );
 
-    list::prune(&home, &native_name(), None, true).unwrap();
+    prune::prune(&home, &native_name(), None, true).unwrap();
     let leftovers: Vec<String> = fs::read_dir(&cache_dir)
         .unwrap()
         .filter_map(|e| e.ok())
@@ -1450,7 +1449,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     let _mode_guard = ModeGuard(lock_dir1.clone(), 0o700);
     fs::set_permissions(&lock_dir1, fs::Permissions::from_mode(0o555)).unwrap();
 
-    let out1 = list::prune(&home1, &native_name(), None, true).unwrap();
+    let out1 = prune::prune(&home1, &native_name(), None, true).unwrap();
     let removed1 = cache::texts(out1.get("removed"));
     assert_eq!(
         removed1,
@@ -1502,7 +1501,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     symlink(&dummy_target, cache2.join(format!("{hex_bad_hold}.2.lock"))).unwrap();
 
     // Targeted prune of an unrelated healthy hex succeeds despite bad sibling locks.
-    let targeted = list::prune(&home2, &native_name(), Some(&id_good_target), false).unwrap();
+    let targeted = prune::prune(&home2, &native_name(), Some(&id_good_target), false).unwrap();
     assert_eq!(
         cache::texts(targeted.get("removed")),
         vec![id_good_target.clone()]
@@ -1512,11 +1511,11 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
         .exists());
 
     // Targeted prune of the bad-lock hexes returns an error.
-    assert!(list::prune(&home2, &native_name(), Some(&id_bad_lock), false).is_err());
-    assert!(list::prune(&home2, &native_name(), Some(&id_bad_hold), false).is_err());
+    assert!(prune::prune(&home2, &native_name(), Some(&id_bad_lock), false).is_err());
+    assert!(prune::prune(&home2, &native_name(), Some(&id_bad_hold), false).is_err());
 
     // Unused prune reclaims healthy hex and records skip reasons for both bad-lock hexes.
-    let out2 = list::prune(&home2, &native_name(), None, true).unwrap();
+    let out2 = prune::prune(&home2, &native_name(), None, true).unwrap();
     assert_eq!(
         cache::texts(out2.get("removed")),
         vec![id_good_unused.clone()],

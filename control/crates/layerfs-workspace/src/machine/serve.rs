@@ -9,6 +9,7 @@
 //! recorded in its Sandbox's folder, `workspace/<id>.json`, with the name
 //! its mount gave it, if any (unique in the Sandbox; the other calls take
 //! it in place of the path, [`by_name`]).
+use super::values;
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
 use layerfs_home::helpers::{lock, random, required};
 use layerfs_home::names::WorkspaceName;
@@ -125,7 +126,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         (None, OperationCause::Unexpected(Reply::SdkRefused(refusal))) => refusal.clone(),
         _ => refusal::mount_failure(failure),
     })?;
-    let mut value = refusal::mounted(&mounted, branch);
+    let mut value = values::mounted(&mounted, branch);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
@@ -254,7 +255,7 @@ pub fn status_with(
         .get(required(path, "path")?)
         .map(|mount| mount.branch.clone());
     let head = head_of(status.binding.branch.id, branch.as_deref());
-    let mut value = refusal::status(&status, head);
+    let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("branch".to_owned(), SdkValue::opt_text(branch)));
         fields.extend(changes_of(&status, &changes));
@@ -457,7 +458,7 @@ pub fn commit_with(
             Some(refusal) => refusal,
             None => refusal::failure(failure),
         })?;
-    let value = refusal::commit(&reply)?;
+    let value = values::commit(&reply)?;
     // the Layer the Branch was forked at, from the mount this process
     // holds (no read): an unchanged fresh fork's head (call surface 2.0)
     let layer = lock(&state.mounts)?.get(path).map(|mount| {
@@ -535,12 +536,12 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         // unmount stalled at Join; uncommitted changes are dropped.
         if force {
             match api.unmount(token, true).map_err(&mut answered)? {
-                Some(outcome) => Ok(refusal::force_unmounted(&outcome)),
-                None => refusal::unmounted(&Unmounted::Closed),
+                Some(outcome) => Ok(values::force_unmounted(&outcome)),
+                None => values::unmounted(&Unmounted::Closed),
             }
         } else {
             match api.unmount_checked(token, discard) {
-                Ok(answer) => refusal::unmounted(&answer),
+                Ok(answer) => values::unmounted(&answer),
                 Err(error) => Err(answered(error)),
             }
         }

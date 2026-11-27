@@ -106,7 +106,7 @@ pub fn create(
 }
 
 /// [`create`], whose start runs through `local` on a machine whose calls
-/// run in this process (`crate::dispatch::unclosing` in [`create`]; a test may
+/// run in this process (`crate::route::machine::dispatch::unclosing` in [`create`]; a test may
 /// stand in for the Sandbox's own side there).
 pub fn create_on(
     home: &Path,

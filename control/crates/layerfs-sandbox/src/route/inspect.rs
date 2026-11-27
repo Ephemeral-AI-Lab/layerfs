@@ -9,7 +9,11 @@ use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::place::{self, Executor};
 use std::io::ErrorKind;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::time::{Duration, Instant};
 
 /// The worker operation every inspect request is sent as.
 pub const OP: &str = "inspect";
@@ -100,11 +104,6 @@ pub fn run_folder(side: &Side<'_>, name: &str) -> Result<PathBuf, SdkRefusal> {
 // and a hard deadline ([`HARD`]), after which its caller is answered
 // `Unavailable` and the helper is left to end by itself, still holding
 // its permit.
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::time::{Duration, Instant};
 
 /// How many inspect requests run at once in one process.
 pub const PERMITS: usize = 2;

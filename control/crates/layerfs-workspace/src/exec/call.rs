@@ -19,8 +19,8 @@ use layerfs_home::outcome::{with_fix, with_next, Outcome as Answer};
 use layerfs_machine::worker::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::id::ExecId;
-use layerfs_sandbox::exec::settle::{self, Outcome};
-use layerfs_sandbox::record::exec::{self, ExecRecord, Route, Running};
+use layerfs_sandbox::exec::settle::Outcome;
+use layerfs_sandbox::record::exec::{self as record, ExecRecord, Route, Running};
 use layerfs_sandbox::route::machine::send::{on_machine, reach, Asked};
 use layerfs_sandbox::route::machine::{Call, Message};
 use layerfs_sandbox::Stop;
@@ -214,7 +214,8 @@ pub fn cancel_call(home: &Path, events: &mut Events<'_>, request: &CancelRequest
         let mut remote = |found: &ExecRecord, grace| {
             layerfs_sandbox::exec::remote::remote(events, (&at.home, &at.record), found, grace)
         };
-        let commands = settle::every(&dir, at.record.name(), wsid, id.as_ref(), &mut remote)?;
+        let commands =
+            super::cancel::every(&dir, at.record.name(), wsid, id.as_ref(), &mut remote)?;
         return Ok(cancelled(&commands, false));
     }
     let call = Call::ExecCancel {
@@ -265,7 +266,7 @@ fn cancelled(commands: &[(String, Outcome)], unreached: bool) -> SdkValue {
         true => Some("SIGKILL"),
         false => signals.first().copied(),
     };
-    let listed = match settle::listed_answer(commands) {
+    let listed = match super::cancel::listed_answer(commands) {
         SdkValue::Map(mut fields) => fields.pop().map(|(_, rows)| rows).unwrap_or_default(),
         _ => SdkValue::Null,
     };

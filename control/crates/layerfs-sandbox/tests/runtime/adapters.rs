@@ -2,10 +2,7 @@
 //! capabilities), and the Runtime enum's refusal of a bind where the backend
 //! does not bind. The docker backend is retired (D-8, layerfs-project#111).
 #![cfg(unix)]
-use {
-    layerfs_machine::table::backend::Backend,
-    layerfs_sandbox::{IsolationModel, MountDriver},
-};
+use layerfs_sandbox::{Backend, IsolationModel, MountDriver};
 
 /// Records keep their values: `Backend::Process` is stored as `"native"` (G6).
 #[test]

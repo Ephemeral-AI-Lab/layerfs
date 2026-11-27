@@ -510,7 +510,7 @@ fn forget(
 /// and the Sandbox may go by its records alone: its runtime a forced
 /// `machine.stop` ended (`machine_stopped`), or the remove is forced. The
 /// worker's own record and run folder of it stay on the machine until its
-/// worker next starts, which removes them (`crate::sweep::worker_start`).
+/// worker next starts, which removes them (`crate::record::sweep::worker_start`).
 /// `None` on a machine whose calls run in this process, which this
 /// process closes itself, and on a machine not recorded stopped; refused `Unavailable` on a stopped machine
 /// without either, naming both ways on.

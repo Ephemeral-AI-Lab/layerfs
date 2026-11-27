@@ -6,6 +6,7 @@ use super::{
     tar::{path_of, Kind, Tape, Time},
     PATH_MAX,
 };
+use crate::{json::Json, Image, RuntimeError};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -13,10 +14,6 @@ use std::{
     io::{self, BufReader, Read, Seek, SeekFrom},
     os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
-};
-use {
-    crate::{Image, RuntimeError},
-    layerfs_home::json::Json,
 };
 
 /// The largest `manifest.json` accepted: it names a config and a few layers.

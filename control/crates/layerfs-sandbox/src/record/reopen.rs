@@ -203,7 +203,7 @@ fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Resul
 /// none) beside the record's own directory, which must still carry a
 /// name this deployment gives Sandbox `id`
 /// ([`crate::lifecycle::sandbox_name`]) and be owned by this record
-/// ([`crate::launch::local::owned`]).
+/// ([`crate::lifecycle::boot::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);

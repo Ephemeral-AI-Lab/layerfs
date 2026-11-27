@@ -10,6 +10,9 @@ pub(crate) mod create;
 pub mod force_remove;
 #[cfg(unix)]
 pub(crate) mod launch;
+/// The Sandbox side of `machine stop --force`.
+#[cfg(feature = "machine")]
+pub(crate) mod machine_stop;
 #[doc(hidden)]
 pub mod mount_intents;
 pub mod network;
@@ -27,3 +30,7 @@ pub use launch::{ProviderCreate, ProviderFailure, ProviderSandbox};
 pub use startup::SandboxApi;
 #[cfg(unix)]
 pub use startup::{SandboxCause, SandboxPhase};
+
+// #828 compat: the old `lifecycle` module (now `serve`), removed in wave 3.
+#[doc(hidden)]
+pub use serve::*; // #828 compat

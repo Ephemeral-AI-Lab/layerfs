@@ -11,7 +11,8 @@
 //! the copy's own lock in the home (`image_lock::ImageLock`), never the
 //! staged file's age.
 use crate::deploy::{self, Side};
-use crate::image::list::{lowers, refused_with};
+use crate::image::list::refused_with;
+use crate::image::prune::lowers;
 use crate::rootfs;
 use crate::route::machine::Deploy;
 use crate::Image;
@@ -332,7 +333,7 @@ pub fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
 }
 
 /// One step of an image copy on `side`: `probe`, `write`, `publish`,
-/// `discard`, or `sweep` (what killed copies left, [`crate::image_sweep`]).
+/// `discard`, or `sweep` (what killed copies left, [`crate::image::copy::sweep`]).
 pub fn step(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let root = match side {
         Side::Home(root) | Side::Worker(root) => *root,

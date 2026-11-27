@@ -26,11 +26,13 @@ pub mod deploy;
 pub mod exec;
 #[doc(hidden)]
 pub mod family;
+/// A machine's Sandbox images: cache, copy, list, prune and tar reader.
 pub mod image;
 #[doc(hidden)]
 pub mod lifecycle;
 #[doc(hidden)]
 pub mod record;
+/// How a Sandbox call reaches where it runs.
 pub mod route;
 #[doc(hidden)]
 pub mod runtime;
@@ -101,24 +103,42 @@ pub use runtime::{
 // #828 compat: old public module paths, removed in wave 3.
 #[doc(hidden)]
 pub mod daemon {
-    // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::daemon::channel::exchange as channel; // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::daemon::channel::fence; // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::daemon::channel::internal; // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::daemon::channel::operator; // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::daemon::channel::pool; // #828 compat
-    #[doc(hidden)]
+    //! #828 compat: the old `daemon` module.
+    pub use crate::route::daemon::channel::exchange as channel;
+    pub use crate::route::daemon::channel::{fence, internal, operator, pool};
     pub use crate::route::daemon::refusal as values;
-    #[allow(unused_imports)]
-    pub use crate::route::daemon::*; // #828 compat
-    #[doc(hidden)]
-    pub use crate::status::capacity; // #828 compat // #828 compat
+    pub use crate::route::daemon::{call, failure, workspace};
+    pub use crate::status::capacity;
 }
+#[doc(hidden)]
+pub mod images {
+    //! #828 compat: the old `images` module.
+    pub use crate::image::list::*;
+    pub use crate::image::prune::{prune, prune_in_worker};
+}
+#[doc(hidden)]
+pub mod inspect {
+    //! #828 compat: the old `inspect` module.
+    pub use crate::route::inspect as owner;
+    pub use crate::route::inspect as route;
+    pub use crate::status::overlay;
+    pub use crate::status::stats as process;
+}
+#[doc(hidden)]
+pub mod launch {
+    //! #828 compat: the old `launch` module.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub use crate::lifecycle::boot as local;
+    pub use crate::lifecycle::network;
+    #[cfg(unix)]
+    pub use crate::lifecycle::startup as create;
+    #[cfg(unix)]
+    pub use crate::lifecycle::{
+        ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause, SandboxPhase,
+    };
+}
+#[doc(hidden)]
+pub use crate::exec::output; // #828 compat
 #[doc(hidden)]
 pub use crate::image::cache as image_artifact; // #828 compat
 #[doc(hidden)]
@@ -128,62 +148,20 @@ pub use crate::image::copy::load as image_load; // #828 compat
 #[doc(hidden)]
 pub use crate::image::copy::lock as image_lock; // #828 compat
 #[doc(hidden)]
-pub use crate::image::list as images;
-#[doc(hidden)]
 pub use crate::image::tar as image_tar; // #828 compat
 #[doc(hidden)]
 pub use crate::lifecycle::force_remove as force; // #828 compat
 #[doc(hidden)]
+pub use crate::lifecycle::{mount_intents, registry}; // #828 compat
+#[doc(hidden)]
 pub use crate::record::discovery as files; // #828 compat
+#[doc(hidden)]
+pub use crate::record::{reopen, sweep, unmount_guard}; // #828 compat
 #[doc(hidden)]
 pub use crate::route::direct; // #828 compat
 #[doc(hidden)]
 pub use crate::route::machine as host; // #828 compat
 #[doc(hidden)]
-pub use crate::route::machine::dispatch; // #828 compat // #828 compat
+pub use crate::route::machine::dispatch; // #828 compat
 #[doc(hidden)]
-pub mod inspect {
-    // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::inspect as owner; // #828 compat
-    #[doc(hidden)]
-    pub use crate::route::inspect as route;
-    #[doc(hidden)]
-    pub use crate::status::overlay; // #828 compat
-    #[doc(hidden)]
-    pub use crate::status::stats as process; // #828 compat
-    #[allow(unused_imports)]
-    pub use layerfs_inspect::*; // #828 compat // #828 compat
-}
-#[doc(hidden)]
-pub mod launch {
-    // #828 compat
-    #[doc(hidden)]
-    pub use crate::lifecycle::boot as local;
-    #[doc(hidden)]
-    pub use crate::lifecycle::startup as create; // #828 compat
-    #[allow(unused_imports)]
-    pub use crate::lifecycle::*; // #828 compat // #828 compat
-}
-#[doc(hidden)]
-pub use crate::exec::output; // #828 compat
-#[doc(hidden)]
-pub use crate::lifecycle::mount_intents; // #828 compat
-#[doc(hidden)]
-pub use crate::lifecycle::registry; // #828 compat
-#[doc(hidden)]
-pub use crate::lifecycle::serve as lifecycle; // #828 compat
-#[doc(hidden)]
-pub use crate::record::reopen; // #828 compat
-#[doc(hidden)]
-pub use crate::record::sweep; // #828 compat
-#[doc(hidden)]
-pub use crate::record::unmount_guard;
-#[doc(hidden)]
-pub use crate::route::machine::send as route; // #828 compat
-#[doc(hidden)]
-pub use crate::status::list; // #828 compat
-#[doc(hidden)]
-pub use crate::status::run_folder; // #828 compat
-#[doc(hidden)]
-pub use crate::status::state; // #828 compat // #828 compat
+pub use crate::status::{list, run_folder, state}; // #828 compat

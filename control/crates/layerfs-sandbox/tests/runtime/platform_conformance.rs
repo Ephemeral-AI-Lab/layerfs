@@ -31,16 +31,13 @@
 #[path = "../../../layerfs-machine/tests/support/standin.rs"]
 mod standin;
 use crate::support_json;
+use layerfs_machine::platform::{
+    self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
+    Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, StoreKind,
+};
 use layerfs_sandbox::MountDriver;
 use standin::Scratch;
 use std::collections::BTreeSet;
-use {
-    layerfs_machine::platform::{
-        self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code,
-        ExecutorKind, Forward, HostOs, How, MachineError, OptKind, Platform, Route, Spec,
-    },
-    layerfs_protocol::{KernelRoute, StoreKind},
-};
 
 // ---------------------------------------------------------------------------
 // Profile facts, the support table and SUPPORT.json

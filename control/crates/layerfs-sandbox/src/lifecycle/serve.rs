@@ -37,7 +37,7 @@ const CLOSE_STATUS_WAIT: Duration = Duration::from_secs(2);
 /// `Capacity`.
 pub const WORKSPACES: u32 = 16;
 
-/// Control connections a Sandbox's daemon admits: [`crate::daemon::pool::CONNECTIONS`]
+/// Control connections a Sandbox's daemon admits: [`crate::route::daemon::channel::pool::CONNECTIONS`]
 /// for this process and the rest for others (#352 F-017).
 pub const DAEMON_CONNECTIONS: u16 = 8;
 
@@ -190,7 +190,7 @@ fn repaired(
 /// (`deploy.sandbox`: native or namespaces), its daemon on `store`. Called
 /// under the guard of its folder `directory`, so no other call on it runs
 /// meanwhile. `place`, the machine and generation the caller's home minted,
-/// is written with its record ([`crate::files::save_sandbox`]).
+/// is written with its record ([`crate::record::discovery::save_sandbox`]).
 pub fn start(
     (host, platform, place): (&Host, &str, Option<&(String, String)>),
     directory: &Path,
@@ -226,7 +226,7 @@ pub fn start(
 /// checked against that backend and recorded.
 /// `place`, the machine and generation the caller's home minted, goes into
 /// a worker's own record in the same write that records it started
-/// ([`crate::files::save_sandbox`]).
+/// ([`crate::record::discovery::save_sandbox`]).
 /// The only call that starts a Sandbox. Failures are `Failed` or
 /// `Unknown`, never retried.
 pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>) -> Outcome {
@@ -324,7 +324,7 @@ pub trait WorkspaceDrain {
 /// ended once (`left` names each one not ended); on a PostgreSQL Store
 /// whose URL this machine cannot dial, those bound by id go back to the
 /// caller in `ending` instead, which ends them
-/// (`crate::mount_intents::end_handed`).
+/// (`crate::lifecycle::mount_intents::end_handed`).
 pub fn close(host: &Host, force: bool, held: &[String], drain: &dyn WorkspaceDrain) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::record::discovery::sandbox_dir(host)?;
@@ -531,7 +531,7 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
 }
 
 /// Forgets Sandbox `id`, recorded in `directory` by a local record this
-/// build does not read (`why`, [`crate::reopen::unread`]; RV3 FAIL 2, 3):
+/// build does not read (`why`, [`crate::record::reopen::unread`]; RV3 FAIL 2, 3):
 /// its identity cannot be checked, so nothing is signalled. Its folder goes
 /// under its guard, and the answer (`Forgotten`, with `left`) says what may
 /// remain: its daemon or init process and its run folder. No retired

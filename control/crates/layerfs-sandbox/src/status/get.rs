@@ -1,5 +1,5 @@
 //! `sandbox.get`: a Sandbox's state and its Workspaces, a live read (call
-//! surface 2.0). Its state starts from records (`crate::state`); a Sandbox
+//! surface 2.0). Its state starts from records (`crate::status::state`); a Sandbox
 //! its records say is ready, or lost or not answering, is then asked for
 //! its Workspaces by its daemon, on the route its other calls take. What the
 //! answer says decides the state: a list is `ready`, a machine that says the
@@ -40,7 +40,7 @@ pub struct ListedWorkspace {
     /// `name` and `created` (when it was mounted), the commands `running`
     /// in it and its `overlay_bytes`, and, from the side that runs the
     /// Sandbox, its own cgroup's `usage` with `usage_reason`
-    /// (`crate::run_folder::workspace_usage`). A worker from before those
+    /// (`crate::status::run_folder::workspace_usage`). A worker from before those
     /// fields answers none of them, and the item then has none.
     pub item: SdkValue,
     /// Its kernel path: the item's `path`, or the daemon's `directory`
@@ -114,7 +114,7 @@ pub struct Got {
     /// ready Sandbox that answered the bounded read (#543).
     pub daemon_capacity: Option<CapacityModel>,
     /// How many Workspaces a Sandbox holds at once: control's own constant
-    /// ([`crate::lifecycle::WORKSPACES`]), not a daemon setting, so it is
+    /// ([`crate::lifecycle::serve::WORKSPACES`]), not a daemon setting, so it is
     /// there whatever the Sandbox's state (layerfs-project#178, D10).
     pub workspace_capacity: u32,
     /// Its daemon process as the side that runs it saw it

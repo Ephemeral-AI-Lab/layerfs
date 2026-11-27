@@ -2,9 +2,7 @@
 //! exports (>=2 s apart for resume), anonymous volume cleanup on `VOLUME`
 //! images, and home-scoped owned-container recovery under `ImageLock`
 //! (#176 I02).
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod fixture;
+use crate::fixture;
 use fixture::{pax_record, Scratch, Tar};
 use layerfs_home::events::Events;
 use layerfs_home::home;

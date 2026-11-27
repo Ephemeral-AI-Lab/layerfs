@@ -15,9 +15,9 @@ pub(crate) mod streams;
 #[cfg(target_os = "linux")]
 pub(crate) use crate::backend::namespaces::linux as os;
 #[cfg(target_os = "macos")]
-pub(crate) use crate::backend::process::macos as os;
+pub use crate::backend::process::instance::create::LocalCreateFailure;
 #[cfg(target_os = "macos")]
-pub use daemon::LocalCreateFailure;
+pub(crate) use crate::backend::process::macos as os;
 #[cfg(target_os = "macos")]
 pub(crate) use daemon::LOG;
 pub use daemon::{Local, LocalPaths, LocalPhase};

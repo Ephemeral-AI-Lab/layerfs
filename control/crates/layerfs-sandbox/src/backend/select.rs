@@ -234,7 +234,7 @@ pub fn scratch(runtime: &Sandbox) -> String {
 }
 
 /// One command to its end: exit code, stdout, stderr. A stream past the
-/// inline window spills to its file at `place` (`crate::output`); `stdin`
+/// inline window spills to its file at `place` (`crate::exec::output`); `stdin`
 /// is given to the command whole. `slot` names the command for its stop
 /// handle and is told it at spawn.
 pub fn run(
