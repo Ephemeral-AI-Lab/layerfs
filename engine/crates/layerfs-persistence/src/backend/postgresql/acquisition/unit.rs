@@ -320,6 +320,9 @@ fn judge(
 ) -> (Result<Vec<Row>, Failure>, bool) {
     let mut checks = checks.into_iter().peekable();
     let count = replies.len();
+    // A refused or unsent request ends the transaction (the session rolls
+    // it back), even after an earlier queued check failed.
+    let failed = count != total || replies.iter().any(Result::is_err);
     let mut last = None;
     for (index, reply) in replies.into_iter().enumerate() {
         let reply = match reply {
@@ -339,7 +342,7 @@ fn judge(
                 return (Err(BackendError::Unknown.into()), true);
             };
             if let Err(failure) = check(rows) {
-                return (Err(failure), finish || !trusted);
+                return (Err(failure), finish || failed || !trusted);
             }
         }
         last = Some(reply);

@@ -63,14 +63,22 @@ pub(super) fn owner(
 ) -> Result<(Phase, AcquisitionWork), Failure> {
     let (operation, epoch) = identity(owner)?;
     let rows = tx.typed(&super::reads::owned(tx, OWNER)?, &[&operation, &epoch], 16)?;
-    let row = rows.first().ok_or(Failure::Stale)?;
-    let phase = u8::try_from(get::<i64>(row, 0)?)
+    decoded(rows.first().ok_or(Failure::Stale)?, 0)
+}
+
+/// The owner row's phase and charges from its seven columns at `first`:
+/// `Integrity` for an unknown phase or a negative count.
+pub(super) fn decoded(
+    row: &postgres::Row,
+    first: usize,
+) -> Result<(Phase, AcquisitionWork), Failure> {
+    let phase = u8::try_from(get::<i64>(row, first)?)
         .ok()
         .and_then(Phase::from_code)
         .ok_or(BackendError::Integrity)?;
     let mut counts = [0_u64; 6];
     for (index, count) in counts.iter_mut().enumerate() {
-        *count = unsigned(get::<i64>(row, index + 1)?)?;
+        *count = unsigned(get::<i64>(row, first + index + 1)?)?;
     }
     let [held_rows, held_bytes, peak_rows, peak_bytes, removed_rows, removed_bytes] = counts;
     Ok((

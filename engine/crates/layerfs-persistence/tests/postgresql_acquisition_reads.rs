@@ -7,7 +7,9 @@
 //!   same single reads and work counts.
 //! - **Owners.** A live owner's empty read is empty; a released owner, a
 //!   missing operation under the session's epoch and a foreign epoch are
-//!   `Stale` for every read.
+//!   `Stale` for every read; a corrupt owner row (an unknown phase, a
+//!   negative count) refuses every read and write unit `Integrity`, as the
+//!   owner select did.
 //! - **Sweeps.** A drop or a kill at every server message of each read
 //!   kind (its prepare included) is answered `Uncertain` or a definite
 //!   refusal, never a read; the rows are unchanged and the session never
@@ -405,6 +407,70 @@ fn empty_released_missing_and_foreign_owners_stay_distinct() {
         for (name, answer) in reads(port, owner) {
             assert_eq!(answer, Err(AcquisitionError::Stale), "{name} {owner:?}");
         }
+    }
+}
+
+#[test]
+fn a_corrupt_owner_row_refuses_every_unit_integrity() {
+    let Some(url) = pg::url() else { return };
+    let schema = pg::Schema::new(url, "i3a_corrupt");
+    let handles = schema.create(BINDING, CURSOR);
+    let port = &handles.acquisition;
+    let owner = begun(port);
+    fill(port, owner);
+    let mut admin = schema.admin();
+    // The table's checks keep these values out; a corrupt row is one that
+    // got past them, so this test Store drops them.
+    admin
+        .batch_execute(
+            "DO $$DECLARE c text; BEGIN FOR c IN SELECT conname FROM pg_constraint \
+             WHERE conrelid='init_operation'::regclass AND contype='c' LOOP \
+             EXECUTE format('ALTER TABLE init_operation DROP CONSTRAINT %I', c); END LOOP; END$$",
+        )
+        .unwrap();
+    let malformed = format!(
+        "{:?}",
+        Err::<(), _>(AcquisitionError::Persistence(PersistenceError::Malformed))
+    );
+    for corrupt in [
+        "UPDATE init_operation SET phase=99",
+        "UPDATE init_operation SET peak_bytes=-1",
+        "UPDATE init_operation SET removed_rows=-1",
+    ] {
+        admin.batch_execute("BEGIN").unwrap();
+        admin.batch_execute(corrupt).unwrap();
+        admin.batch_execute("COMMIT").unwrap();
+        let mut answers: Vec<(&str, String)> = reads(port, owner)
+            .into_iter()
+            .map(|(name, answer)| (name, format!("{:?}", answer.map(drop))))
+            .collect();
+        let root = [(100, ObjectId::for_bytes(b"x"))];
+        let unit = |answer: AcquisitionResult<()>| format!("{answer:?}");
+        answers.extend([
+            ("put_entries", unit(port.put_entries(owner, &[]).map(drop))),
+            (
+                "place_children",
+                unit(port.place_children(owner, 1, &[]).map(drop)),
+            ),
+            ("complete_files", unit(port.complete_files(owner, &root))),
+            (
+                "set_directory_roots",
+                unit(port.set_directory_roots(owner, &root)),
+            ),
+            ("advance", unit(port.advance(owner, Phase::Tree))),
+            ("discard", unit(port.discard(owner, 1).map(drop))),
+            ("dispose", unit(port.dispose(owner, 1).map(drop))),
+            ("release", unit(port.release(owner))),
+        ]);
+        for (name, answer) in answers {
+            assert_eq!(answer, malformed, "{name} after {corrupt}");
+        }
+        admin
+            .batch_execute(
+                "UPDATE init_operation SET phase=1,peak_bytes=greatest(peak_bytes,0),\
+                 removed_rows=greatest(removed_rows,0)",
+            )
+            .unwrap();
     }
 }
 

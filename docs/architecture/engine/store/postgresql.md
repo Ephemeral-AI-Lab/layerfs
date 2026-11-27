@@ -1762,7 +1762,7 @@ encodings, charges, refusal order and failures. Each write unit is one
 lane-ordered transaction that matches the owner first. Each read unit is one
 fenced autocommit statement (`Statement` mode, #818 I3a): its index range
 scan is joined `LATERAL` to the owner's live row, so a released or foreign
-operation reads no row and is `Stale`, and an empty window answers one row
+operation reads no row and is `Stale`, the owner columns every row carries decode as the owner select did (an unknown phase or a negative count is `Integrity`), and an empty window answers one row
 with a NULL marker; a path window (jobs, directories) sums its rows' sizes
 over the rows it read and keeps the leading rows that fit in the same
 statement, where a sizing read and a second read did before. One round trip

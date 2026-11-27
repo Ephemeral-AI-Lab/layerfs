@@ -223,6 +223,70 @@ fn a_warm_window_is_two_round_trips() {
     assert_eq!(after.write_commits - before.write_commits, 1, "commits");
 }
 
+/// A queued placement whose decode is `Changed`, then a binding the server
+/// refuses in the same flight: the answer is the placement's `Changed`, as
+/// the per-statement loop found it first, and the unit is counted once, as
+/// rolled back.
+#[test]
+fn a_failed_check_then_a_refusal_counts_one_rollback() {
+    let Some(url) = pg::url() else { return };
+    let schema = pg::Schema::new(url, "i3b_units_count");
+    let handles = schema.create(BINDING, CURSOR);
+    let port = &handles.acquisition;
+    let owner = begun(port);
+    let unplaced = |name: &str, inode: u64| {
+        let mut entry = file(0, inode);
+        entry.key.name = name.as_bytes().to_vec();
+        entry.position = None;
+        entry
+    };
+    port.put_entries(
+        owner,
+        &[
+            directory(None, "", 0),
+            file(5, 1),
+            unplaced("u1", 10),
+            unplaced("u2", 12),
+        ],
+    )
+    .unwrap();
+    let placed = |name: &str, position: u64, inode: u64| Placed {
+        name: name.as_bytes().to_vec(),
+        position,
+        host: Some((
+            HostIdentity {
+                device: 1,
+                inode,
+                evidence: [9; EVIDENCE_BYTES],
+            },
+            format!("/source/{name}").into_bytes(),
+        )),
+    };
+    // `missing` has no unplaced row (its decode is `Changed`); `u2` takes
+    // the stored file's canonical position, so it binds alone and the
+    // server refuses its binding.
+    let children = [
+        placed("u1", 10, 10),
+        placed("missing", 11, 11),
+        placed("u2", 5, 12),
+    ];
+    let before = handles.diagnostics().unwrap();
+    let answer = port.place_children(owner, 0, &children);
+    let after = handles.diagnostics().unwrap();
+    assert_eq!(answer, Err(AcquisitionError::Changed { position: 11 }));
+    assert_eq!(after.transactions - before.transactions, 1, "one unit");
+    assert_eq!(after.rollbacks - before.rollbacks, 1, "rolled back");
+    assert_eq!(
+        after.write_commits, before.write_commits,
+        "nothing committed"
+    );
+    let unplaced = port
+        .unplaced_children(owner, 0, None, Limits::MAXIMUM)
+        .unwrap();
+    let names: Vec<&[u8]> = unplaced.iter().map(|child| child.name.as_slice()).collect();
+    assert_eq!(names, [&b"u1"[..], &b"u2"[..]], "the unit placed nothing");
+}
+
 fn wait_backend_gone(admin: &mut postgres::Client, pid: i32) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
